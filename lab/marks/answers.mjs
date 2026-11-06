@@ -1,5 +1,6 @@
 // lab/marks/answers.mjs: today's prepare front for each corpus paper, from the lanes' cached compiles alone (no TeX run): the
-// probe's answers and the complete macros the marked original took (markedOfPaper's `options`), and the job's .bbl where the
+// probe's answers and the complete macros the marked original took (markedOfPaper's `options`: the switches, the inkless
+// macros, the texts the probe showed macros set), and the job's .bbl where the
 // bibliography draft made one, into <out>/answers.json and <out>/bbl/<id>.bbl; a paper whose compiles no cache holds is listed.
 //   node --experimental-strip-types lab/marks/answers.mjs --papers=<papers.json> --set=87 --out=<dir> [--only=…]
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -41,7 +42,7 @@ for (const p of papers) {
     const day = await baseM.creationEpochOf(arxiv)
     const made = await paperM.markedOfPaper(paper, { compile, compileBudgetMs: null, engines: HOST_ENGINES, pages: async () => arxiv.numPages, ...(day ? { sourceDate: day } : {}), textOf: async () => '' })
     const o = made.options ?? {}
-    out[p.id] = { year, image, compiler: paper.meta.compiler ?? 'pdflatex', sourceDate: day ?? null, bbl: !!bbl, refused: made.refused ?? null, guard: made.guard ?? null, switches: o.switches ?? null, inkless: o.inkless ?? null, complete: o.complete instanceof Map ? [...o.complete] : (o.complete ?? null), apart: o.apart ?? null }
+    out[p.id] = { year, image, compiler: paper.meta.compiler ?? 'pdflatex', sourceDate: day ?? null, bbl: !!bbl, refused: made.refused ?? null, guard: made.guard ?? null, switches: o.switches ?? null, inkless: o.inkless ?? null, complete: o.complete instanceof Map ? [...o.complete] : (o.complete ?? null), apart: o.apart ?? null, texts: o.texts instanceof Map ? [...o.texts].flat() : (o.texts ?? null) }
     await task.destroy()
     console.log(p.id, made.refused ? `refused ${made.refused}` : 'ok', Object.keys(o.switches ?? {}).length)
   } catch (e) {

@@ -75,6 +75,9 @@ export interface PlanMark {
   piece: number
   pieceId: string | null
   file: string
+  /** a closing mark written after the punctuation its piece's command sets before its own ink (TeX's answer 3: cite.sty's
+   *  superscripts, natmove): that punctuation */
+  moved?: string
   /** where it is written: its offset in the file's text as the reader read it, and in the file's bytes (the main file's
    *  bytes after `Plan.head` bytes of ours) */
   at: number
@@ -443,7 +446,9 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       const open = mark(`${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}`, `${name}a`, 'open', k, true)
       if (said === '3') {
-        movedAt.set(k, mark(`${lead}\\axtpm{${name}b}`, `${name}b`, 'close', k))
+        const moved = mark(`${lead}\\axtpm{${name}b}`, `${name}b`, 'close', k)
+        if (next?.t === 'text' && next.s[0]) moved.mark.moved = next.s[0]
+        movedAt.set(k, moved)
         return [open, p]
       }
       if (cls === 'macro') opened.add(p)
@@ -516,6 +521,7 @@ interface Insert {
   name: string
   kind: MarkKind
   piece: number
+  moved?: string
 }
 /** a unit's marks placed: its start, end and line probe as patch puts them, its placeholders' marks where they stand */
 function place(
@@ -645,6 +651,7 @@ function place(
         name: p.mark.name,
         kind: p.mark.kind,
         piece: piece(p),
+        ...(p.mark.moved ? { moved: p.mark.moved } : {}),
       })
   }
   if (m?.before && beforeAt === ps.length && beforeCut === -1)
@@ -905,6 +912,7 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
       unit,
       piece: x.piece,
       pieceId: x.piece >= 0 ? ((pieceIds[unit] as (string | null)[])[x.piece] ?? null) : null,
+      ...(x.moved ? { moved: x.moved } : {}),
       file: u.file,
       at: x.at,
       byte: (f.map as Uint32Array)[x.at] ?? f.bytes.length,

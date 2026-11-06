@@ -30,7 +30,7 @@ export interface Mark {
   t: 'ph'
   src: string
   /** the mark's name (`p3.4a`), its kind and the piece it brackets (an index in its unit's pieces), -1 none */
-  mark: { name: string; kind: MarkKind; piece: number }
+  mark: { name: string; kind: MarkKind; piece: number; moved?: string }
   /** it opens the piece after it (an opening mark): the unit's start mark goes before it */
   opens?: true
   at?: undefined

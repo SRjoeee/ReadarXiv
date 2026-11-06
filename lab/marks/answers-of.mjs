@@ -8,4 +8,6 @@ export const answersOf = a => ({
   inkless: a?.inkless?.map(unicodeOf) ?? null,
   complete: a?.complete ?? null,
   apart: a?.apart?.map(unicodeOf) ?? null,
+  /** the text the probe showed each macro sets (readInkTexts' pairs, flat): a Map, source -> text */
+  texts: Array.isArray(a?.texts) ? new Map(Array.from({ length: Math.floor(a.texts.length / 2) }, (_, j) => [unicodeOf(a.texts[2 * j]), unicodeOf(a.texts[2 * j + 1])])) : null,
 })

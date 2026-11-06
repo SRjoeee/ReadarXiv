@@ -2,21 +2,38 @@
 // streams, its log's channels — joined to the units through the plan (markSource's), never by running the marking again or
 // reading our own TeX: a point's name is looked up in the plan, which says which unit and which piece it brackets.
 //
-// The ownership rules are today's (layout/own.mjs MR 1-6), the ones the marks state: a unit's text from its start point to its
-// end point in the start's region (a column's body or not, a depth of floats: the bracket points), across pages inside the
-// bodies; an element's from its opening point to its closing one, or to the next point in its region where it has none; a
-// label, the glyphs on the start's line between the unit before and the start; the closing punctuation set right after the
-// end point on its line; a babel name's between its two points; the thin rules TeX painted on the text's own lines. Not here:
-// what no source unit owns (today's ink units, kept blocks and figure texts: the ledger's and figure-text.mjs's readings of
-// the rest, which the design gives to `locate`), and own.mjs's follows (the marking's rebuilt reading of an opening alone).
+// The ownership is today's (layout/own.mjs MR 1-7, stream.mjs ownedOf: the per-unit erasure's reading), ported where the
+// marks state it, each rule with its source:
+//   1. a region is a column's body or not × a depth of floats (the bracket points);
+//   2. a unit's text: from its start point to its end point, in the start's region; across pages inside the bodies; 2a: a
+//      range outside the bodies from a page to the next at one depth (a footnote run on) is the first page's from its start
+//      to the next unit's start there, and the next page's from after the last other unit's end there to its end point;
+//      a unit's text owns glyphs and painted paths (an image, a turned glyph's box, a shading are no text's);
+//   3. an end point alone (a title TeX sets in vertical mode): from the point before it on its page, its glyphs alone; a unit
+//      whose points TeX set more than once is its first occurrence where that is an end point alone and every later one a pair;
+//   4. a placeholder's ink: stream.ts (the plan's Follow of each opening mark); a text symbol's glyphs that set its character
+//      are its unit's text; 4b: a footnote's call TeX gave no mark after the unit's last word, the raised glyphs right after its
+//      end point on that line; 4c: the closing punctuation TeX sets right after the end point, abutting, on its line;
+//   5. a label: the glyphs on the start's first glyph's baseline, in its region, back to the last end point before the start,
+//      the placeholders' and names' ranges passed over; the closing punctuation a head sets abutting the unit before it, that
+//      unit's text; none for a cell;
+//   6. a babel name: between its two points; 7. an image painted between a placeholder's points, bounded on both sides by TeX's
+//      facts (its closing point, or the text after it), is the placeholder's.
+// A glyph is one claim's: the text's first (in the units' order), a label's where none is, a placeholder's and a name's over
+// both. What the lane file lists as not ported (the spell check's releases, the label's form, own.mjs's thresholds) is not here.
 //
 // TRANSITION: `Instrument`, `Owners`, `ROLE` are copied from lane L1's packages/engine/src/instrument.ts (branch
 // rebuild/prepare); at the merge this module imports them from there and the copies go.
-import type { SourceDoc } from '../source/read.ts'
 import { unitId } from '../source/id.ts'
+import type { SourceDoc } from '../source/read.ts'
 import type { Piece } from '../source/types.ts'
 import { classOf, symbolText } from './classes.ts'
-import type { Plan, PlanMark } from './mark.ts'
+import { followsOf, writtenOf } from './follows.ts'
+import type { Plan } from './mark.ts'
+import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
+import { type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
+
+export type { PageGlyph, PagePoint, PageRead } from './page.ts'
 
 // ---------------------------------------------------------------- L1's seam (copied: see the header)
 export const ROLE = Object.freeze({ none: 0, text: 1, element: 2, label: 4, name: 8 })
@@ -45,6 +62,7 @@ export interface Instrument<Doc = unknown> {
   glyphs: Owners[]
   boxes: Owners[]
   turned?: Owners[]
+  places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   tex: { lineskip?: [number, number]; paragraphEnds?: number[][] }
   made: { compiler: string; tree: string; front: string }
 }
@@ -54,31 +72,9 @@ export const ownersOf = (n: number): Owners => ({
   piece: new Int32Array(n).fill(-1),
 })
 
-// ---------------------------------------------------------------- B's pages as pageInk reads them
-export interface PageGlyph {
-  u?: string
-  x0: number
-  x1: number
-  y: number
-  size: number
-}
-export interface PagePoint {
-  name: string
-  /** the glyphs and the boxes shown before it on its page */
-  glyph: number
-  box: number
-}
-export interface PageRead {
-  glyphs: readonly PageGlyph[]
-  /** four numbers a box: x0, y0, x1, y1 */
-  boxes: ArrayLike<number>
-  points: readonly PagePoint[]
-  paraEnds?: readonly { glyph: number }[]
-}
-
 const BRACKET = /^([bf])([se])\d+$/
 /** each glyph's, box's and point's region: a column's body or not, a depth of floats (stream.mjs regionsOf) */
-function regionsOf(pg: PageRead): { glyph: Int32Array; box: Int32Array; at: Int32Array } {
+function regionsOf(pg: PageRead): Regions {
   const nBoxes = Math.floor(pg.boxes.length / 4)
   const glyph = new Int32Array(pg.glyphs.length)
   const box = new Int32Array(nBoxes)
@@ -156,66 +152,25 @@ export function readLineskip(log: string): [number, number] | null {
     : null
 }
 
-// ---------------------------------------------------------------- the text after a piece (marks.mjs followsOf's `want`)
-/** source text as TeX's ligatures and LaTeX's quotes set it, white space and ties none (marks.mjs asSet) */
-const asSet = (s: string) =>
-  s
-    .replace(/---/g, '\u2014')
-    .replace(/--/g, '\u2013')
-    .replace(/``/g, '\u201c')
-    .replace(/''/g, '\u201d')
-    .replace(/`/g, '\u2018')
-    .replace(/'/g, '\u2019')
-    .replace(/[~\s]/g, '')
-/** a glyph's text as the stream reads it (stream.mjs charOf) */
-const charOf = (u: string) =>
-  u
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/\s|\p{Variation_Selector}/gu, '')
-const WANT = 8
-/** what TeX sets after piece k of a unit, up to its next visible piece, as its first WANT letters (followsOf's `want`): a
- *  text's text, a symbol's character before any text, nothing for a piece of no class or a macro TeX said sets no ink */
-function wantAfter(
-  pieces: readonly SourceDoc['units'][number]['pieces'][number][],
-  k: number,
-  inkless: ReadonlySet<string>,
-  marked: (q: number) => boolean,
-): string {
-  let after = ''
-  for (let q = k + 1; q < pieces.length; q++) {
-    const p = pieces[q] as (typeof pieces)[number]
-    const c = classOf(p)
-    if (!c) {
-      if (p.t === 'text') after += p.s
-      continue
-    }
-    if (c !== 'macro') break
-    if (p.t === 'ph' && inkless.has(p.src)) continue
-    const sym = p.t === 'ph' ? symbolText(p.src) : null
-    if (sym !== null && asSet(sym) === sym && !marked(q) && !/\S/.test(after)) {
-      after += sym
-      continue
-    }
-    break
-  }
-  return asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
-}
-
 // ---------------------------------------------------------------- ownership
+/** the closing punctuation glued past a unit's end mark on its line that is the unit's text (own.mjs MR 4c, TAIL_PUNCT) */
 const TAIL_PUNCT = /^[.,;:!?)\]]$/
+/** a head macro's closing punctuation after the unit before a start (own.mjs MR 5, HEAD_PUNCT) */
+const HEAD_PUNCT = /^[)\]}.,:;!?’”]$/u
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
 const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
-interface At {
-  page: number
-  q: number
-  point: PagePoint
-}
-const before = (a: At, b: At) => a.page < b.page || (a.page === b.page && a.point.glyph <= b.point.glyph)
+/** a word's space at a glyph's size (TeX's interword space is a third of an em in Computer Modern, fontdimen 2: a gap of a
+ *  fifth of an em or more is one; a kern between letters, an italic correction, is less) */
+const WORD_SPACE = 0.2
+/** the same baseline: two glyphs whose baselines are within half the larger size */
+const onLine = (a: PageGlyph, b: PageGlyph) => Math.abs(a.y - b.y) < 0.5 * Math.max(a.size, b.size)
+type At = [number, number]
+const before = (a: At, b: At) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 
 /**
  * The instrument of a marked compile: `pages` B's pages as pageInk read them (the reading `ink` is of, handed through), `plan`
- * and `doc` what markSource wrote and what it wrote it from, `log` the marked compile's last pass's log
+ * and `doc` what markSource wrote and what it wrote it from, `log` the marked compile's last pass's log, `inkless` the macros
+ * TeX said set no ink and `texts` the text the probe showed each macro sets (the probe's answers markSource took)
  */
 export function instrumentFromPlan<Doc>({
   ink,
@@ -225,10 +180,11 @@ export function instrumentFromPlan<Doc>({
   log = '',
   made,
   inkless = [],
+  texts = null,
 }: {
   ink: Doc
-  /** the macros TeX said set no ink (the probe's answer, as markSource took it) */
   inkless?: readonly string[]
+  texts?: ReadonlyMap<string, string> | null
   pages: readonly PageRead[]
   plan: Plan
   doc: SourceDoc
@@ -236,18 +192,21 @@ export function instrumentFromPlan<Doc>({
   made: { compiler: string; tree: string }
 }): Instrument<Doc> {
   const noInk = new Set(inkless)
-  const byName = new Map<string, PlanMark>()
-  for (const m of plan.marks) byName.set(m.name, m)
-  // (every point of a mark the plan names, in document order)
-  const seen = new Map<string, At[]>()
-  pages.forEach((pg, page) => {
-    pg.points.forEach((point, q) => {
-      if (!byName.has(point.name) && !NAME_START.test(point.name) && !NAME_END.test(point.name)) return
-      const list = seen.get(point.name) ?? (seen.set(point.name, []).get(point.name) as At[])
-      list.push({ page, q, point })
+  // (every point by its name: [page, index])
+  const where = new Map<string, At[]>()
+  pages.forEach((pg, p) => {
+    pg.points.forEach((pt, q) => {
+      const l = where.get(pt.name)
+      if (l) l.push([p, q])
+      else where.set(pt.name, [[p, q]])
     })
   })
+  const read = new Set(where.keys())
+  const w = writtenOf(plan, read)
+  const byName = new Map(plan.marks.map((m) => [m.name, m]))
+  const pt = ([p, q]: At) => (pages[p] as PageRead).points[q] as PagePoint
   const regions = pages.map(regionsOf)
+  const at = ([p, q]: At) => (regions[p] as Regions).at[q] as number
   const glyphs = pages.map((pg) => ownersOf(pg.glyphs.length))
   const boxes = pages.map((pg) => ownersOf(Math.floor(pg.boxes.length / 4)))
   const units: InstrumentUnit[] = doc.units.map((u) => ({
@@ -256,139 +215,144 @@ export function instrumentFromPlan<Doc>({
     content: u.content,
     ...(u.depth !== undefined ? { depth: u.depth } : {}),
   }))
-  const align = readAlign(log)
-  align.forEach((code, i) => {
+  readAlign(log).forEach((code, i) => {
     if (units[i]) (units[i] as InstrumentUnit).align = code
   })
-  /** a unit's own marks: start and end names by kind */
-  const startOf = new Map<number, string>()
-  const endOf = new Map<number, string>()
-  for (const m of plan.marks) {
-    if (m.kind === 'start' || m.kind === 'cell-start' || m.kind === 'heading-start') startOf.set(m.unit, m.name)
-    if (m.kind === 'end' || m.kind === 'cell-end' || m.kind === 'heading-end') endOf.set(m.unit, m.name)
-  }
+  const marksOf = (u: number) => units[u] as InstrumentUnit
+  const glyphOf = (p: number, g: number) => (pages[p] as PageRead).glyphs[g] as PageGlyph
+  const pathOf = (p: number, b: number) => ((pages[p] as PageRead).paths?.[b] as number | undefined) ?? 0
+  const ownerAt = (p: number, g: number) => (glyphs[p] as Owners).unit[g] as number
+  const roleAt = (p: number, g: number) => (glyphs[p] as Owners).role[g] as number
   const set = (O: Owners, j: number, unit: number, role: number, piece = -1) => {
     O.unit[j] = unit
     O.role[j] = role
     O.piece[j] = piece
   }
-  /** glyphs [from, to) of a page in a region (all regions where `region` is null) */
-  const range = (page: number, from: number, to: number, region: number | null, f: (j: number) => void) => {
-    const R = regions[page]?.glyph as Int32Array
-    for (let j = Math.max(0, from); j < to; j++) if (region === null || R[j] === region) f(j)
+  /** a text's claim: glyphs and painted paths where nothing is (the first text's) */
+  const claimText = (unit: number, gs: readonly At[], bs: readonly At[] = []) => {
+    for (const [p, g] of gs) if (ownerAt(p, g) < 0) set(glyphs[p] as Owners, g, unit, ROLE.text)
+    for (const [p, b] of bs) {
+      const O = boxes[p] as Owners
+      if (pathOf(p, b) >= 0 && (O.unit[b] as number) < 0) set(O, b, unit, ROLE.text)
+    }
   }
-  const boxRange = (page: number, from: number, to: number, region: number | null, f: (j: number) => void) => {
-    const R = regions[page]?.box as Int32Array
-    for (let j = Math.max(0, from); j < to; j++) if (region === null || R[j] === region) f(j)
+  /** a placeholder's claim, over a text's and a label's: glyphs, painted paths, and images where its reading is bounded */
+  const claimPiece = (unit: number, piece: number, gs: readonly At[], bs: readonly At[], images: boolean) => {
+    for (const [p, g] of gs) set(glyphs[p] as Owners, g, unit, ROLE.element, piece)
+    for (const [p, b] of bs) {
+      const path = pathOf(p, b)
+      if (path < 0 && !(images && path === IMAGE_BOX)) continue
+      set(boxes[p] as Owners, b, unit, ROLE.element, piece)
+    }
   }
-  // ---- the units' text, the longest ranges first so that a unit inside another's range keeps its own
-  const spans: { unit: number; s: At | null; e: At; length: number }[] = []
-  for (const [unit, endName] of endOf) {
-    const ends = seen.get(endName) ?? []
-    const starts = seen.get(startOf.get(unit) ?? '') ?? []
-    const s = starts[0] ?? null
-    const e = s ? ends.find((x) => before(s, x)) : ends[0]
-    if (!e) {
-      if (units[unit]) (units[unit] as InstrumentUnit).why = 'marks'
+  /** a range's glyphs and boxes of region r from point A to point B (pages between whole) */
+  const take = (A: At, B: At, r: number) => {
+    const gs: At[] = []
+    const bs: At[] = []
+    for (let p = A[0]; p <= B[0]; p++) {
+      const pg = pages[p] as PageRead
+      const R = regions[p] as Regions
+      const g0 = p === A[0] ? pt(A).glyph : 0
+      const g1 = p === B[0] ? pt(B).glyph : pg.glyphs.length
+      const b0 = p === A[0] ? pt(A).box : 0
+      const b1 = p === B[0] ? pt(B).box : Math.floor(pg.boxes.length / 4)
+      for (let g = g0; g < g1; g++) if (R.glyph[g] === r) gs.push([p, g])
+      for (let b = b0; b < b1; b++) if (R.box[b] === r) bs.push([p, b])
+    }
+    return { gs, bs }
+  }
+  const takeToEnd = (A: At, r: number) => {
+    const gs: At[] = []
+    const bs: At[] = []
+    const pg = pages[A[0]] as PageRead
+    const R = regions[A[0]] as Regions
+    for (let g = pt(A).glyph; g < pg.glyphs.length; g++) if (R.glyph[g] === r) gs.push([A[0], g])
+    for (let b = pt(A).box; b < Math.floor(pg.boxes.length / 4); b++) if (R.box[b] === r) bs.push([A[0], b])
+    return { gs, bs }
+  }
+  const takeFromStart = (B: At, r: number) => {
+    const gs: At[] = []
+    const bs: At[] = []
+    const R = regions[B[0]] as Regions
+    for (let g = 0; g < pt(B).glyph; g++) if (R.glyph[g] === r) gs.push([B[0], g])
+    for (let b = 0; b < pt(B).box; b++) if (R.box[b] === r) bs.push([B[0], b])
+    return { gs, bs }
+  }
+  const startUnit = new Map<string, number>()
+  const endUnit = new Map<string, number>()
+  doc.units.forEach((_, i) => {
+    const s = w.start(i)
+    const e = w.end(i)
+    if (s) startUnit.set(s, i)
+    if (e) endUnit.set(e, i)
+  })
+
+  // ---- the text of each unit (MR 1-3, 2a), in the units' order: the first text's claim stands
+  const textOf = new Map<number, { s: At | null; e: At }>()
+  for (let id = 0; id < units.length; id++) {
+    const S = where.get(w.start(id) ?? '') ?? []
+    const E = where.get(w.end(id) ?? '') ?? []
+    let s: At | null = S[0] ?? null
+    const e: At | null = E[0] ?? null
+    if (S.length > 1 || E.length > 1) {
+      // (points TeX set more than once: the first occurrence where that is an end point alone and every later one a pair, a
+      // title its class sets again in a line (acmart's ACM Reference Format); anything else is not delimited)
+      const startsIn = (k: number) =>
+        S.filter((y) => before(y, E[k] as At) && (k === 0 || before(E[k - 1] as At, y))).length
+      if (startsIn(0) !== 0 || S.length !== E.length - 1 || E.some((_, k) => k > 0 && startsIn(k) !== 1)) {
+        marksOf(id).why = 'marks'
+        continue
+      }
+      s = null
+    }
+    if (!e || (s && before(e, s))) {
+      marksOf(id).why = 'marks'
       continue
     }
-    const length = s ? (e.page - s.page) * 1e6 + e.point.glyph - s.point.glyph : 0
-    spans.push({ unit, s, e, length })
-  }
-  for (const u of units) if (!endOf.has(units.indexOf(u)) && !u.why) u.why = 'unmarked'
-  spans.sort((a, b) => b.length - a.length)
-  for (const { unit, s, e } of spans) {
-    if (!s) {
-      // (an end mark alone, a title TeX sets in vertical mode: from the point before it on its page, its glyphs alone)
-      const pg = pages[e.page] as PageRead
-      const from = e.q > 0 ? (pg.points[e.q - 1] as PagePoint).glyph : 0
-      range(e.page, from, e.point.glyph, null, (j) => set(glyphs[e.page] as Owners, j, unit, ROLE.text))
-      continue
-    }
-    const region = regions[s.page]?.at[s.q] as number
-    for (let page = s.page; page <= e.page; page++) {
-      const pg = pages[page] as PageRead
-      const from = page === s.page ? s.point.glyph : 0
-      const to = page === e.page ? e.point.glyph : pg.glyphs.length
-      // (across pages only inside the bodies: a region outside one is the start page's alone)
-      if (page !== s.page && region % 2 === 0) break
-      range(page, from, to, region, (j) => set(glyphs[page] as Owners, j, unit, ROLE.text))
-      const bFrom = page === s.page ? s.point.box : 0
-      const bTo = page === e.page ? e.point.box : Math.floor(pg.boxes.length / 4)
-      boxRange(page, bFrom, bTo, region, (j) => set(boxes[page] as Owners, j, unit, ROLE.text))
-    }
-    // (the closing punctuation TeX sets right after the end point, on its line, abutting: the unit's text)
-    const pg = pages[e.page] as PageRead
-    const last = pg.glyphs[e.point.glyph - 1]
-    for (let j = e.point.glyph; j < pg.glyphs.length && last; j++) {
-      const g = pg.glyphs[j] as PageGlyph
-      const prev = pg.glyphs[j - 1] as PageGlyph
-      if (
-        !TAIL_PUNCT.test(g.u ?? '') ||
-        Math.abs(g.y - last.y) > 0.5 * Math.max(g.size, last.size) ||
-        g.x0 - prev.x1 > 0.2 * g.size
-      )
-        break
-      if (((glyphs[e.page] as Owners).unit[j] as number) >= 0) break
-      set(glyphs[e.page] as Owners, j, unit, ROLE.text)
-    }
-  }
-  // ---- the elements: opening to closing point, or to the next point in its region
-  for (const m of plan.marks) {
-    if (m.kind !== 'open') continue
-    const close = m.name.replace(/a$/, 'b')
-    for (const a of seen.get(m.name) ?? []) {
-      const pg = pages[a.page] as PageRead
-      const region = regions[a.page]?.at[a.q] as number
-      const b = (seen.get(close) ?? []).find((x) => x.page === a.page && x.point.glyph >= a.point.glyph)
-      let to = b?.point.glyph
-      let bTo = b?.point.box
-      if (to === undefined) {
-        // (an opening alone: to where the text TeX sets after the piece begins, before the next point of its region)
-        const next = pg.points.find((x, q) => q > a.q && regions[a.page]?.at[q] === region)
-        to = next?.glyph ?? pg.glyphs.length
-        bTo = next?.box ?? Math.floor(pg.boxes.length / 4)
-        const u = doc.units[m.unit]
-        const want = u ? wantAfter(u.pieces, m.piece, noInk, (q) => byName.has(`p${m.unit}.${q}a`)) : ''
-        if (want) {
-          const R = regions[a.page]?.glyph as Int32Array
-          for (let j = a.point.glyph; j < to; j++) {
-            if (R[j] !== region) continue
-            let s = ''
-            for (let g = j; g < to && s.length < want.length; g++) {
-              if (R[g] !== region) continue
-              const G = pg.glyphs[g] as PageGlyph
-              // (a hyphen TeX set at a line's end is no letter of the text: the next glyph stands on another line)
-              const N = pg.glyphs[g + 1]
-              if (g > j && /^[-‐]$/.test(G.u ?? '') && N && Math.abs(N.y - G.y) > 0.5 * Math.max(N.size, G.size))
-                continue
-              s += charOf(G.u ?? '')
-            }
-            if (s.startsWith(want)) {
-              to = j
-              break
-            }
-          }
+    let list: { gs: At[]; bs: At[] }
+    if (s) {
+      const r = at(s)
+      if (s[0] === e[0] || r % 2 === 1) list = take(s, e, r)
+      else if (e[0] === s[0] + 1 && at(e) === r) {
+        // 2a: the start's page to the next unit's start in its region, the next page from after the last other unit's end
+        const P1 = (pages[s[0]] as PageRead).points
+        let stop: At | null = null
+        for (let q = s[1] + 1; q < P1.length && !stop; q++) {
+          const u = startUnit.get((P1[q] as PagePoint).name)
+          if ((regions[s[0]] as Regions).at[q] === r && u !== undefined && u !== id) stop = [s[0], q]
         }
+        let from: At | null = null
+        for (let q = 0; q < e[1]; q++) {
+          const u = endUnit.get(((pages[e[0]] as PageRead).points[q] as PagePoint).name)
+          if ((regions[e[0]] as Regions).at[q] === r && u !== undefined && u !== id) from = [e[0], q]
+        }
+        const a = stop ? take(s, stop, r) : takeToEnd(s, r)
+        const b = from ? take(from, e, r) : takeFromStart(e, r)
+        list = { gs: [...a.gs, ...b.gs], bs: [...a.bs, ...b.bs] }
+      } else {
+        marksOf(id).why = 'marks'
+        continue
       }
-      // (a text symbol sets its character and nothing else: where its reading begins with it, those glyphs are its unit's text and
-      // nothing past them is its ink: own.mjs settingOf)
-      const piece = doc.units[m.unit]?.pieces[m.piece]
-      const sym = piece?.t === 'ph' ? symbolText(piece.src) : null
-      if (sym !== null) {
-        const want = charOf(sym)
-        let spelled = ''
-        for (let g = a.point.glyph; g < to && spelled.length < want.length; g++)
-          spelled += charOf((pg.glyphs[g] as PageGlyph).u ?? '')
-        if (want && spelled.startsWith(want)) continue
+    } else {
+      // MR 3: from the point before the end point on its page (its own placeholders' points passed over), its glyphs alone
+      const P1 = (pages[e[0]] as PageRead).points
+      let q0 = e[1] - 1
+      for (; q0 >= 0; q0--) {
+        const m = byName.get((P1[q0] as PagePoint).name)
+        if (!m || m.unit !== id || (m.kind !== 'open' && m.kind !== 'close')) break
       }
-      range(a.page, a.point.glyph, to, region, (j) => set(glyphs[a.page] as Owners, j, m.unit, ROLE.element, m.piece))
-      boxRange(a.page, a.point.box, bTo ?? a.point.box, region, (j) =>
-        set(boxes[a.page] as Owners, j, m.unit, ROLE.element, m.piece),
-      )
+      list = q0 >= 0 ? take([e[0], q0], e, at(e)) : takeFromStart(e, at(e))
+      list = { gs: list.gs, bs: [] }
     }
+    textOf.set(id, { s, e })
+    claimText(id, list.gs, list.bs)
   }
-  /** the piece of ink at a unit's head that the marking passed over (no mark of its own), before its first text: -1 none */
+  for (let id = 0; id < units.length; id++) if (!textOf.has(id) && !marksOf(id).why) marksOf(id).why = 'marks'
+
+  // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
+  const openOf = new Map<string, string>()
+  for (const m of plan.marks) if (m.kind === 'close') openOf.set(m.name, m.name.replace(/b$/, 'a'))
+  /** a unit's head piece of ink with no mark of its own, before its first text (-1 none) */
   const headPiece = (unit: number): number => {
     const ps = doc.units[unit]?.pieces ?? []
     for (let k = 0; k < ps.length; k++) {
@@ -397,68 +361,212 @@ export function instrumentFromPlan<Doc>({
         if (/\S/.test(p.s)) return -1
         continue
       }
-      if (p.t !== 'ph' || !classOf(p)) continue
-      return byName.has(`p${unit}.${k}a`) ? -1 : k
+      const c = classOf(p)
+      if (!c || (c === 'macro' && p.t === 'ph' && noInk.has(p.src))) continue
+      if (c === 'footnote') continue
+      return w.opening(unit, k) || w.closing(unit, k) ? -1 : k
     }
     return -1
   }
-  // ---- the labels: on the start's line, between the last end point before it and the start (none for a cell)
-  for (const { unit, s } of spans) {
-    if (!s || doc.units[unit]?.kind === 'cell') continue
-    const pg = pages[s.page] as PageRead
-    const first = pg.glyphs[s.point.glyph]
-    if (!first) continue
-    let from = 0
-    for (let q = s.q - 1; q >= 0; q--) {
-      const m = byName.get((pg.points[q] as PagePoint).name)
-      if (m && (m.kind === 'end' || m.kind === 'cell-end' || m.kind === 'heading-end')) {
-        from = (pg.points[q] as PagePoint).glyph
-        break
+  for (const [id, { s }] of textOf) {
+    if (!s || doc.units[id]?.kind === 'cell') continue
+    const [p, q] = s
+    const pg = pages[p] as PageRead
+    const S = pt(s)
+    const r = at(s)
+    const R = regions[p] as Regions
+    const F = pg.glyphs[S.glyph]
+    if (!F) continue
+    const lead: number[] = []
+    let g = S.glyph - 1
+    const glyphAt = (i: number) => {
+      if (R.glyph[i] !== r || ownerAt(p, i) >= 0) return
+      if (onLine(glyphOf(p, i), F)) lead.push(i)
+    }
+    const passed: { unit: number; from: number; to: number }[] = []
+    let qq = q - 1
+    for (; qq >= 0; qq--) {
+      const X = pg.points[qq] as PagePoint
+      for (; g >= X.glyph; g--) glyphAt(g)
+      if (endUnit.has(X.name)) break
+      const open = openOf.get(X.name) ?? (NAME_END.test(X.name) ? X.name.replace(/\.e$/, '.s') : null)
+      const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : undefined
+      const c = open && !NAME_END.test(X.name) ? byName.get(X.name) : undefined
+      if (o && c) passed.push({ unit: c.unit, from: pt(o).glyph, to: X.glyph })
+      if (o) {
+        qq = o[1]
+        g = Math.min(g, (pg.points[qq] as PagePoint).glyph - 1)
       }
     }
-    const O = glyphs[s.page] as Owners
-    const run: number[] = []
-    for (let j = s.point.glyph - 1; j >= from; j--) {
-      const g = pg.glyphs[j] as PageGlyph
-      if (Math.abs(g.y - first.y) > 0.5 * Math.max(g.size, first.size)) break
-      if ((O.unit[j] as number) >= 0) continue
-      run.unshift(j)
+    if (qq < 0) for (; g >= 0; g--) glyphAt(g)
+    if (!lead.length) continue
+    lead.reverse()
+    // (the closing punctuation a head macro sets after the unit before it, abutting that unit's last glyph on this line, is
+    // that unit's text: amsthm's "(Note).")
+    const prevEnd = qq >= 0 ? endUnit.get((pg.points[qq] as PagePoint).name) : undefined
+    if (prevEnd !== undefined && prevEnd !== id) {
+      const L = lead[0] as number
+      const its =
+        (L > 0 && ownerAt(p, L - 1) === prevEnd && roleAt(p, L - 1) === ROLE.text) ||
+        (L > 0 && ownerAt(p, L - 1) < 0 && passed.some((x) => x.unit === prevEnd && L - 1 >= x.from && L - 1 < x.to))
+      let k = 0
+      let left = its ? glyphOf(p, L - 1) : null
+      while (left && k < lead.length) {
+        const G = glyphOf(p, lead[k] as number)
+        if (
+          !HEAD_PUNCT.test((G.u ?? '').normalize('NFKC')) ||
+          G.x0 - left.x1 >= WORD_SPACE * Math.max(G.size, left.size) ||
+          !onLine(G, left)
+        )
+          break
+        left = G
+        k++
+      }
+      if (k) {
+        claimText(
+          prevEnd,
+          lead.slice(0, k).map((j) => [p, j] as At),
+        )
+        lead.splice(0, k)
+      }
+      if (!lead.length) continue
     }
-    // (a unit whose head is a piece of ink the marking passed over, before its first text (a heading's `\sys{} Framework`):
-    // that piece's ink stands between the label and the start, after the label's first word space; it is the piece's)
-    const head = headPiece(unit)
-    let cut = run.length
-    if (head >= 0)
-      for (let r = 1; r < run.length; r++) {
-        const a = pg.glyphs[run[r - 1] as number] as PageGlyph
-        const b = pg.glyphs[run[r] as number] as PageGlyph
-        if (b.x0 - a.x1 > 0.2 * Math.max(a.size, b.size)) {
-          cut = r
+    // (a unit whose head is a piece of ink the marking passed over, before its first text: that piece's ink stands between the
+    // label and the start; the label ends at the first word space, and with none the run is the piece's)
+    const head = headPiece(id)
+    let cut = lead.length
+    if (head >= 0) {
+      cut = 0
+      for (let j = 1; j < lead.length; j++) {
+        const a = glyphOf(p, lead[j - 1] as number)
+        const b = glyphOf(p, lead[j] as number)
+        if (b.x0 - a.x1 >= WORD_SPACE * Math.max(a.size, b.size)) {
+          cut = j
           break
         }
       }
-    run.forEach((j, r) => {
-      if (r < cut) set(O, j, unit, ROLE.label)
-      else set(O, j, unit, ROLE.element, head)
+    }
+    lead.forEach((j, x) => {
+      if (x < cut) set(glyphs[p] as Owners, j, id, ROLE.label)
+      else set(glyphs[p] as Owners, j, id, ROLE.element, head)
     })
   }
-  // ---- babel's names: one unit a key, its occurrences its own
-  const keyUnit = new Map<string, number>()
-  pages.forEach((pg, page) => {
-    pg.points.forEach((pt, q) => {
-      const m = NAME_START.exec(pt.name)
-      if (!m) return
-      const end = pg.points.find((x, r) => r > q && x.name === `n${m[1]}.${m[2]}.e`)
-      if (!end) return
-      const key = m[2] as string
-      if (!keyUnit.has(key)) {
-        keyUnit.set(key, units.length)
-        const content: Piece[] = [{ t: 'text', s: key }]
-        units.push({ id: unitId('name', content), kind: 'name', content, name: key, kept: true })
+
+  // ---- the placeholders (MR 4, 7)
+  const follows = followsOf(doc, plan, w, { texts, inkless: noInk })
+  const owned = piecesInk(pages, regions, follows, {
+    startUnit,
+    endName: (u) => w.end(u),
+    startName: (u) => w.start(u),
+  })
+  for (const [name, e0] of owned) {
+    const f = follows.get(name)
+    if (!f) continue
+    let e: Ink | null = e0.how < OWNED ? e0 : null
+    // (a text symbol's glyphs that set its character are its unit's text: the layer draws it as its character; nothing past
+    // them is its ink)
+    const piece = doc.units[f.unit]?.pieces[f.piece]
+    const sym = piece?.t === 'ph' ? symbolText(piece.src) : null
+    if (e && sym !== null) {
+      const n = settingOf(pages, e.glyphs, sym)
+      if (n > 0) {
+        for (const [p, g] of e.glyphs.slice(0, n)) set(glyphs[p] as Owners, g, f.unit, ROLE.text)
+        e = null
       }
-      const unit = keyUnit.get(key) as number
-      range(page, pt.glyph, end.glyph, null, (j) => set(glyphs[page] as Owners, j, unit, ROLE.name))
-    })
+    }
+    if (e) claimPiece(f.unit, f.piece, e.glyphs, e.boxes, e.how <= 1)
+    else if (e0.how >= OWNED && textOf.has(f.unit) && !marksOf(f.unit).why) marksOf(f.unit).why = 'marks'
+  }
+
+  // ---- a footnote's call after the unit's last word that TeX gave no mark (MR 4b): the raised glyphs right after its end
+  // point, on that line, in its region, in no claim (a raised mark stands a fifth of its line's size or more above it: make.mjs
+  // SHIFT; within six tenths of an em of the glyph before: CELL_ABUT)
+  for (const [id, { e }] of textOf) {
+    const ps = doc.units[id]?.pieces ?? []
+    const last = ps.findLastIndex((x) => x.t === 'text' && /\S/.test(x.s))
+    const tails = ps.map((x, k) => [x, k] as const).filter(([x, k]) => k > last && classOf(x) !== null)
+    if (
+      last < 0 ||
+      !tails.length ||
+      !tails.every(([x, k]) => classOf(x) === 'footnote' && !w.opening(id, k) && !w.closing(id, k))
+    )
+      continue
+    const [p] = e
+    const pg = pages[p] as PageRead
+    const E = pt(e)
+    const r = at(e)
+    const L = pg.glyphs[E.glyph - 1]
+    if (!L) continue
+    let edge = L.x1
+    for (let g = E.glyph; g < pg.glyphs.length; g++) {
+      const G = glyphOf(p, g)
+      if (
+        (regions[p] as Regions).glyph[g] !== r ||
+        ownerAt(p, g) >= 0 ||
+        !(G.y - L.y >= 0.2 * L.size) ||
+        G.y - L.y > L.size ||
+        G.x0 - edge > 0.6 * L.size
+      )
+        break
+      set(glyphs[p] as Owners, g, id, ROLE.element, (tails[0] as readonly [unknown, number])[1])
+      edge = G.x1
+    }
+  }
+
+  // ---- the closing punctuation TeX sets after a unit's end point (MR 4c): right of the glyph before it, abutting, on its
+  // line, in its region, in no claim, the first after the unit's own
+  for (const [id, { e }] of textOf) {
+    const [p] = e
+    const pg = pages[p] as PageRead
+    const E = pt(e)
+    const r = at(e)
+    let left = E.glyph - 1
+    if (left < 0 || ownerAt(p, left) !== id || (roleAt(p, left) !== ROLE.text && roleAt(p, left) !== ROLE.element))
+      continue
+    for (let g = E.glyph; g < pg.glyphs.length; g++) {
+      const A = glyphOf(p, g)
+      const L = glyphOf(p, left)
+      if (
+        (regions[p] as Regions).glyph[g] !== r ||
+        ownerAt(p, g) >= 0 ||
+        !TAIL_PUNCT.test(A.u ?? '') ||
+        (A.x0 + A.x1) / 2 <= L.x1 ||
+        A.x0 - L.x1 >= WORD_SPACE * A.size ||
+        !onLine(A, L)
+      )
+        break
+      set(glyphs[p] as Owners, g, id, ROLE.text)
+      left = g
+    }
+  }
+
+  // ---- babel's names (MR 6): one unit a key, its occurrences its own (over a text's and a label's, not a placeholder's)
+  const keyUnit = new Map<string, number>()
+  for (const [name, list] of where) {
+    const m = NAME_START.exec(name)
+    if (!m || list.length !== 1) continue
+    const close = where.get(`n${m[1]}.${m[2]}.e`) ?? []
+    const A = list[0] as At
+    if (close.length !== 1 || before(close[0] as At, A) || at(close[0] as At) !== at(A)) continue
+    const key = m[2] as string
+    if (!keyUnit.has(key)) {
+      keyUnit.set(key, units.length)
+      const content: Piece[] = [{ t: 'text', s: key }]
+      units.push({ id: unitId('name', content), kind: 'name', content, name: key, kept: true })
+    }
+    const unit = keyUnit.get(key) as number
+    for (const [p, g] of take(A, close[0] as At, at(A)).gs)
+      if (roleAt(p, g) !== ROLE.element) set(glyphs[p] as Owners, g, unit, ROLE.name)
+  }
+
+  // ---- where each element begins and ends in B's stream (its points)
+  const places: NonNullable<Instrument['places']> = []
+  pages.forEach((pg, p) => {
+    for (const x of pg.points) {
+      const m = byName.get(x.name)
+      if (!m || (m.kind !== 'open' && m.kind !== 'close') || m.pieceId === null) continue
+      places.push({ unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: m.kind === 'close' })
+    }
   })
   const lineskip = readLineskip(log)
   return {
@@ -466,10 +574,27 @@ export function instrumentFromPlan<Doc>({
     units,
     glyphs,
     boxes,
+    places,
     tex: {
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),
     },
     made: { compiler: made.compiler, tree: made.tree, front: 'marks' },
   }
+}
+
+/** how many of `gs` (a reading's, in stream order) from the first set `text` exactly, character for character (NFKC, white
+ *  space out, a blank glyph passed over); 0 where they do not begin so (own.mjs settingOf) */
+function settingOf(pages: readonly PageRead[], gs: readonly At[], text: string): number {
+  const want = text.normalize('NFKC').replace(/\s/g, '')
+  let n = 0
+  for (let j = 0; j < gs.length && n < want.length; j++) {
+    const [p, i] = gs[j] as At
+    const t = ((pages[p] as PageRead).glyphs[i]?.u ?? '').normalize('NFKC').replace(/\s/g, '')
+    if (!t) continue
+    if (!want.startsWith(t, n)) return 0
+    n += t.length
+    if (n === want.length) return j + 1
+  }
+  return 0
 }

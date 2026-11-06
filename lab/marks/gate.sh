@@ -12,7 +12,7 @@ while IFS=$'\t' read -r id dir; do
   if [ $# -gt 0 ] && ! printf '%s\n' "$@" | grep -qx "$id"; then continue; fi
   free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
   if [ "$free" -lt 12 ]; then printf '%s\trefused\t%s GiB free\n' "$id" "$free" >> "$OUT/log.tsv"; continue; fi
-  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/gate.mjs" --id="$id" --dir="$dir" --out="$OUT" --defs="$B/lanes/L2/defs" --answers="$B/lanes/L2/marks/answers.json" --bbl="$B/lanes/L2/marks/bbl" --compiles="$B/lanes/L2/marks/compiles") > "$OUT/logs/$id.log" 2>&1
+  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/gate.mjs" --id="$id" --dir="$dir" --out="$OUT" --defs="$B/lanes/L2/defs" --answers="$B/lanes/L2/marks/answers.json" --bbl="$B/lanes/L2/marks/bbl" --compiles="$B/lanes/L2/marks/compiles" --keep="$OUT/keep") > "$OUT/logs/$id.log" 2>&1
   printf '%s\t%s\t%s\n' "$id" "$?" "$(tail -1 "$OUT/logs/$id.log" | cut -c1-300)" >> "$OUT/log.tsv"
 done < "$OUT/papers.tsv"
 echo "gate: $(awk -F'\t' '$2==0' "$OUT/log.tsv" | wc -l | tr -d ' ') papers run, $(awk -F'\t' '$2!=0' "$OUT/log.tsv" | wc -l | tr -d ' ') failed"
