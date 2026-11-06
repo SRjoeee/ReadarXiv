@@ -184,7 +184,7 @@ export async function provePixels({ W, original, pagesA, located, addOn, scratch
   }
   const filesOf = (dir, tag) => { const m = new Map(); for (const f of readdirSync(dir)) { const x = new RegExp(`^${tag}-0*(\\d+)\\.ppm$`).exec(f); if (x) m.set(Number(x[1]), join(dir, f)) } return m }
   const N = pagesA.length
-  const out = { pages: N, dpi, onFailed: [], offOutside: Object.fromEntries(kinds.map(k => [k, []])), changed: Object.fromEntries(kinds.map(k => [k, 0])), groupsOff: offs }
+  const out = { pages: N, dpi, onFailed: [], offOutside: Object.fromEntries(kinds.map(k => [k, []])), changed: Object.fromEntries(kinds.map(k => [k, 0])), inklessType3: {}, groupsOff: offs }
   const r = join(scratch, 'r')
   for (let f = 1; f <= N; f += chunk) {
     const l = Math.min(N, f + chunk - 1)
@@ -205,26 +205,49 @@ export async function provePixels({ W, original, pagesA, located, addOn, scratch
       for (const k of kinds) {
         const o = ppm(fk[k].get(p))
         const mask = new Uint8Array(a.w * a.h)
+        // (each hidden ink's box grown to whole pixels and one more, as the spike's proof; and, to tell how far a pixel outside
+        // stands, the same grown by two more: a reading, not the proof)
+        const wide = new Uint8Array(a.w * a.h)
         const box = (x0, y0, x1, y1) => {
           const X0 = Math.max(0, Math.floor((x0 - view[0]) * s) - 1), X1 = Math.min(a.w, Math.ceil((x1 - view[0]) * s) + 1)
           const Y0 = Math.max(0, Math.floor((view[3] - y1) * s) - 1), Y1 = Math.min(a.h, Math.ceil((view[3] - y0) * s) + 1)
           for (let y = Y0; y < Y1; y++) mask.fill(1, y * a.w + X0, y * a.w + X1)
+          for (let y = Math.max(0, Y0 - 2); y < Math.min(a.h, Y1 + 2); y++) wide.fill(1, y * a.w + Math.max(0, X0 - 2), y * a.w + Math.min(a.w, X1 + 2))
         }
         const P = planned[p - 1], kind = g => g !== null && g.endsWith(`.${k}`)
         raw.glyphs.forEach((g, j) => { if (kind(P.glyphs[j]) && g.top > g.bottom) box(Math.min(g.x0, g.ix0), g.bottom, Math.max(g.x1, g.ix1), g.top) })
+        // (and apart, a hidden glyph pageInk calls inkless (its outline of nothing drawn: top = bottom) that paints all the same,
+        // a Type 3 glyph whose procedure the outline reading does not see: its em box over its advance, counted on its own)
+        const mask2 = new Uint8Array(a.w * a.h)
+        raw.glyphs.forEach((g, j) => {
+          if (!kind(P.glyphs[j]) || g.top > g.bottom) return
+          const X0 = Math.max(0, Math.floor((Math.min(g.x0, g.ix0) - view[0]) * s) - 1), X1 = Math.min(a.w, Math.ceil((Math.max(g.x1, g.ix1) - view[0]) * s) + 1)
+          const Y0 = Math.max(0, Math.floor((view[3] - (g.y + g.size)) * s) - 1), Y1 = Math.min(a.h, Math.ceil((view[3] - (g.y - 0.3 * g.size)) * s) + 1)
+          for (let y = Y0; y < Y1; y++) mask2.fill(1, y * a.w + X0, y * a.w + X1)
+        })
         ;(raw.paths ?? []).forEach((_, b) => { if (kind(P.boxes[b])) box(raw.boxes[4 * b], raw.boxes[4 * b + 1], raw.boxes[4 * b + 2], raw.boxes[4 * b + 3]) })
-        ;(raw.turned ?? []).forEach((t, j) => { if (kind(P.turned[j]) && t.box >= 0) box(raw.boxes[4 * t.box], raw.boxes[4 * t.box + 1], raw.boxes[4 * t.box + 2], raw.boxes[4 * t.box + 3]) })
-        let inside = 0, outside = 0
+        // (a turned glyph's ink: its band from its origin to its advance's end, its own ink up and down across it (its outline's,
+        // else its font's: pageInk's `up`, `down`), the box of those corners on the page)
+        ;(raw.turned ?? []).forEach((t, j) => {
+          if (!kind(P.turned[j])) return
+          const nx = -t.uy, ny = t.ux, c = []
+          for (const [x, y] of [[t.ox, t.oy], [t.ex, t.ey]]) for (const e of [t.up, t.down]) c.push([x + nx * e * t.size, y + ny * e * t.size])
+          box(Math.min(...c.map(q => q[0])), Math.min(...c.map(q => q[1])), Math.max(...c.map(q => q[0])), Math.max(...c.map(q => q[1])))
+        })
+        let inside = 0, outside = 0, inkless = 0, far = 0
+        const at = []
         for (let q = 0, i = 0; q < mask.length; q++, i += 3) {
           if (a.data[i] === o.data[i] && a.data[i + 1] === o.data[i + 1] && a.data[i + 2] === o.data[i + 2]) continue
           if (mask[q]) inside++
-          else outside++
+          else if (mask2[q]) inkless++
+          else { outside++; if (!wide[q]) far++; if (at.length < 6 && outside % 37 === 1) at.push([+((q % a.w) / s + view[0]).toFixed(1), +(view[3] - Math.floor(q / a.w) / s).toFixed(1)]) }
         }
         out.changed[k] += inside
-        if (outside) out.offOutside[k].push([p, outside])
+        if (inkless) (out.inklessType3[k] ??= []).push([p, inkless])
+        if (outside) out.offOutside[k].push([p, outside, at, far])
       }
     }
   }
-  rmSync(scratch, { recursive: true, force: true })
+  if (!process.env.KEEP_SCRATCH) rmSync(scratch, { recursive: true, force: true })
   return out
 }
