@@ -845,7 +845,8 @@ export function createComposer(o: ComposerOptions): Composer {
       layNear()
     },
     setLayer(next, nextRows) {
-      if (layer !== next) {
+      // (the same layer whatever object carries it: its parts are read once)
+      if (layer?.part !== next?.part) {
         parts.clear()
         members.clear()
         kindOf.clear()
