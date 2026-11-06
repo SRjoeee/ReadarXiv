@@ -154,7 +154,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     reads: ['words', 'captions'],
     file: 'unit/label.ts',
-    state: open,
+    state: { is: 'ported', replay: "samples/U.label.json.gz (+ today's rules/tex-names.json)", cases: 15 },
   },
   {
     id: 'U.lead',

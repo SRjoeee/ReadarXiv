@@ -42,3 +42,16 @@ export {
   type Gap,
   type Res,
 } from './unit/elements.ts'
+export {
+  type Glyph,
+  type HeadLabel,
+  headInTarget,
+  headLabelInTarget,
+  type LabelInput,
+  type LabelPart,
+  type Labelled,
+  label,
+  labelInTarget,
+  spacedText,
+  type UnitLabel,
+} from './unit/label.ts'

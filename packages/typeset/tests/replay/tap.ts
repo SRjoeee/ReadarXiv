@@ -10,6 +10,10 @@ export const TAP = join(LAB, 'refactor-2026-11', 'baseline', 'tap')
 /** the inputs lane L3's lab tools derive from the tap with today's own code (lab/typeset/), beside the tap */
 export const DERIVED = join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'replay')
 export const hasTap = existsSync(join(TAP, 'samples'))
+/** today's engine (065c1d973), read-only: its data files (the rule set, tex-names.json) until Rules' own data files exist */
+export const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
+export const todayFile = (path: string) => join(TODAY, 'src', 'pdf-reader', 'engine', path)
+export const hasToday = existsSync(todayFile('rules/tex-names.json'))
 export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.json.gz`))
 
 export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileSync(file)).toString('utf8'))
