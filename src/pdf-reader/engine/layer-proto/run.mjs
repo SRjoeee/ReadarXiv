@@ -2254,11 +2254,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // where it fits: its further steps and passes then lay the tokens it holds)
     ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
     // (laid on from the line before, none of it there (its first line a pitch under that line): kept so only where its last line
-    // stands no lower than laid from TeX's shared row as before (`onLead`'s corner); else laid there, as before)
-    if (onLeadOf && p.layout.lines[0] && p.layout.lines[0].baseline < p.blocks[0].startY - 0.05) {
+    // stands no lower than laid from TeX's shared row as before (`onLead`'s corner), and where it sets a line on that row's page
+    // when laid so sets one there; else laid there, as before. A line on a later page stands lower than any of the page before:
+    // 2501.14787v1 p57's u423, its first block the row alone at p57's foot, its line a pitch under u422's last one stood 0.6 pt
+    // under the row at its leading of 1.3, past the block's foot, and so none of it was on p57, its row erased and drawn empty
+    // and its text all on p58, where its last line stood as it does laid from the row: its first line, on p58, was read as
+    // higher than u422's last line on p57)
+    const lowerThan = (a, b) => a.page > b.page || (a.page === b.page && a.baseline < b.baseline - 0.05)
+    if (onLeadOf && p.layout.lines[0] && lowerThan(p.layout.lines[0], { page: p.blocks[0].page, baseline: p.blocks[0].startY })) {
       const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.start, startY: onLeadOf.startY, onLead: undefined }, ...p.blocks.slice(1)]
-      const was = L2.layoutCut(tokens, before, s, p.P), lastOf = l => l.layout.lines.at(-1)?.baseline ?? Infinity
-      if (lastOf(was) > lastOf({ layout: p.layout }) + 0.05) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
+      const was = L2.layoutCut(tokens, before, s, p.P), lw = was.layout.lines.at(-1), lc = p.layout.lines.at(-1)
+      const onPage = lines => lines.some(l => l.page === b0.page)
+      if (!lw || lowerThan(lc, lw) || (!onPage(p.layout.lines) && onPage(was.layout.lines))) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
     }
     // (clipped, the fit's walk at p.P over the unit's tokens and blocks: layoutCut's first, which fitFurther goes on from)
     const walked = { layout: p.layout, blocks: p.blocks, P: p.P }

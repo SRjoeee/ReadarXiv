@@ -4613,7 +4613,14 @@ its fit's pitch where spreading moves the line: 2608.16117v1's u57, the paragrap
 18 and 19 where its fill set 23.1, its frame on page 18 ending 17.4 pt higher (the rules gate's three pages that move, pages 17 to
 19 of that paper in Chinese: its blank lines a frame a little worse, its wide paragraph gaps fewer); where none of the next unit's
 text fits after it, its first line stands a pitch under it, unless its last line then ends lower than laid as before, where it is
-laid as before. Over the release sweep's 88 pass-papers (1,308 shared rows): `keptBetween` refused 83 rows and refuses 52, the 31
+laid as before. Lower is read across pages, a line on a later page lower than any of the page before. And where that leaves none of
+the unit on its first row's page while laid as before it has a line there, it is laid as before (2026-11-06; the release sweep of
+e4be8723, its first follow-up): 2501.14787v1 p57's u423 ("So here, we aren't thinking of a, b as numbers…") shares p57's last line
+with u422 ("…as seen in the diagram below:"), whose Chinese ends on the line over it, 14.9 pt up, with no room after it. A pitch
+under that line stood 0.6 pt under the row at u423's leading of 1.3, past the foot of its block on p57, the row alone. So none of
+u423 was laid on p57, its row was erased and drawn empty, and all its text went to p58, ending where it ends laid from the row.
+The check read its first line, on p58, as higher than the line before on p57 (its baseline the greater number). It is laid from
+TeX's row again, as production drew it: 27 characters on p57, p58's two lines as production's. Over the release sweep's 88 pass-papers (1,308 shared rows): `keptBetween` refused 83 rows and refuses 52, the 31
 that go each a unit's own label between it and the unit before (11 inline items of 2610.21085v1 and 2610.21098v1, a sub-caption's
 "(d)", 3 paragraph footnotes' marks, and 16 author lines' affiliation marks, which are drawn pixel for pixel as before); 28 next
 units are laid anew (their lines in reading order): 15 go on on the line before, the translation before them ending over the row;
