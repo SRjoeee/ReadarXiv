@@ -13,6 +13,8 @@ export const MARKS_FILES = [
   `${SRC}marks/mark.ts`,
   `${SRC}marks/classes.ts`,
   `${SRC}marks/tex.ts`,
+  `${SRC}marks/statements.ts`,
+  `${SRC}compile/recover.ts`,
 ].sort()
 export function marksCode() {
   const h = createHash('sha256')

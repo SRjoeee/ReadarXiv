@@ -51,7 +51,11 @@ export function framedOf(pg) {
   }
   return { glyph, box }
 }
-const boxKey = (B, b) => [0, 1, 2, 3].map(i => Math.round(B[4 * b + i] * 100)).join('|')
+/** a place the same in two compiles: within 0.01 pt (the design's tolerance; a key rounded to 0.01 splits 452.845 from
+ *  452.844) */
+const TOL = 0.011
+const sameGlyph = (a, b) => a.u === b.u && Math.abs(a.x0 - b.x0) <= TOL && Math.abs(a.y - b.y) <= TOL
+const sameBox = (A, a, B, b) => [0, 1, 2, 3].every(i => Math.abs(A[4 * a + i] - B[4 * b + i]) <= TOL)
 /**
  * The final pass's page against the draft's (deliverable 1: B is the draft): each one's glyphs and boxes outside the frames,
  * in order; the page is the same where those hold the same glyphs (Unicode, place to 0.01 pt) and the same boxes. `map`:
@@ -64,9 +68,18 @@ export function draftPage(fin, dra) {
   dra.glyphs.forEach((_, j) => { if (!D.glyph[j]) dg.push(j) })
   for (let b = 0; b < F.box.length; b++) if (!F.box[b]) fb.push(b)
   for (let b = 0; b < D.box.length; b++) if (!D.box[b]) db.push(b)
-  const same = fg.length === dg.length && fg.every((j, i) => keyOf(fin.glyphs[j]) === keyOf(dra.glyphs[dg[i]]))
-  const sameBoxes = same && fb.length === db.length && fb.every((b, i) => boxKey(fin.boxes, b) === boxKey(dra.boxes, db[i]))
-  return { same, sameBoxes, glyphs: [fg, dg], boxes: [fb, db], framed: { final: F, draft: D } }
+  const same = fg.length === dg.length && fg.every((j, i) => sameGlyph(fin.glyphs[j], dra.glyphs[dg[i]]))
+  // (boxes: the draft's, in order, among the final's: a figure in a running head that the final pass's head did not bracket
+  // leaves its paths among the final's)
+  const fb2 = []
+  let j = 0
+  for (const b of db) {
+    while (j < fb.length && !sameBox(fin.boxes, fb[j], dra.boxes, b)) j++
+    if (j === fb.length) break
+    fb2.push(fb[j++])
+  }
+  const sameBoxes = same && fb2.length === db.length
+  return { same, sameBoxes, glyphs: [fg, dg], boxes: [fb2, db], extra: fb.filter(b => !fb2.includes(b)), framed: { final: F, draft: D } }
 }
 
 /**
@@ -116,6 +129,8 @@ export function compare({ today, mine, same, chars, guarded = [], maps = null })
       // (a frame's own: the draft's frame glyphs a source unit owns, the final's figure glyphs today gave a source unit)
       m.framed.draft.glyph.forEach((f, j) => { if (f && ownerOf(mine, M, j).id) add('draft: a frame\'s glyph a source unit owns', { page: p + 1, draft: j }) })
       m.framed.final.glyph.forEach((f, j) => { if (f && ownerOf(today, T, j).id) add('draft: a figure\'s glyph today gave a source unit (the draft prints a frame)', { page: p + 1, glyph: j, u: chars?.[p]?.[j], today: ownerOf(today, T, j).s }) })
+      if (today.boxes[p]) for (const j of m.extra ?? []) if (ownerOf(today, today.boxes[p], j).id) add('draft: a box of the final today gave a source unit that the draft does not hold', { page: p + 1, box: j, today: ownerOf(today, today.boxes[p], j).s })
+      if (today.boxes[p]) m.framed.final.box.forEach((f, j) => { if (f && ownerOf(today, today.boxes[p], j).id) add('draft: a figure\'s box today gave a source unit (the draft prints a frame)', { page: p + 1, box: j, today: ownerOf(today, today.boxes[p], j).s }) })
     }
     const TB = today.boxes[p], MB = mine.boxes[p]
     const bt = m ? m.boxes[0] : null, bm = m ? m.boxes[1] : null

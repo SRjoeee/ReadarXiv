@@ -75,6 +75,10 @@ export interface CompileRun {
   ms?: number
   passes?: number
   ok: boolean
+  /** why it failed, the units it left unmarked, its errors the unmarked pass has not (the recovery's steps) */
+  why?: string
+  unmarked?: number
+  errors?: number
 }
 /** what the store keeps of a paper's instrument */
 export interface StoredInstrument {

@@ -52,7 +52,7 @@ const FRAME = /^g(\d+)[abt]$/
 const BEGINS_KEY = /^n\d+\.(abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s$/i
 const BIB_START = /^bi\d+$/
 /** a draft image frame's glyphs and boxes (g<n>a to g<n>b on a page): graphicx's draft, no reading's */
-function framedOf(pg: PageRead): { glyph: Uint8Array; box: Uint8Array } | null {
+export function framedOf(pg: PageRead): { glyph: Uint8Array; box: Uint8Array } | null {
   let out: { glyph: Uint8Array; box: Uint8Array } | null = null
   const open = new Map<string, { glyph: number; box: number }>()
   const nBoxes = Math.floor(pg.boxes.length / 4)
@@ -88,6 +88,8 @@ export function piecesInk(
     startUnit: ReadonlyMap<string, number>
     endName: (unit: number) => string | null
     startName: (unit: number) => string | null
+    /** the work of each range taken (glyphs and boxes visited), counted against the instrument's bound */
+    spend?: (n: number) => void
   },
 ): Map<string, Ink> {
   const framed = pages.map(framedOf)
@@ -140,6 +142,7 @@ export function piecesInk(
     ) => {
       const R = regions[p] as Regions
       const F = framed[p]?.glyph
+      o.spend?.(Math.max(0, g1 - g0) + Math.max(0, b1 - b0))
       for (let g = g0; g < g1; g++) if (R.glyph[g] === rA && !F?.[g]) glyphs.push([p, g])
       for (let b = b0; b < b1; b++) if (R.box[b] === rA) boxes.push([p, b])
     }

@@ -32,7 +32,8 @@ import { classOf, symbolText } from './classes.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
 import type { Plan } from './mark.ts'
 import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
-import { type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
+import { readStates, type TexState } from './statements.ts'
+import { framedOf, type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
 
 export type { PageGlyph, PagePoint, PageRead } from './page.ts'
 
@@ -64,8 +65,23 @@ export interface Instrument<Doc = unknown> {
   boxes: Owners[]
   turned?: Owners[]
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
-  tex: { lineskip?: [number, number]; paragraphEnds?: number[][] }
+  tex: {
+    lineskip?: [number, number]
+    paragraphEnds?: number[][]
+    /** TeX's state where a unit (piece null) or a placeholder (its content id) opens (marks/statements.ts STATE_TEX) */
+    states?: { unit: number; piece: string | null; state: TexState }[]
+  }
   made: { compiler: string; tree: string; front: string }
+}
+/** the instrument's bound on its work: the glyphs, boxes and lines its readings visit in all (today's own.mjs OWN_WORK and
+ *  stream.mjs WORK, 20 million each). Real ranges never overlap and cost the paper's ink a few times over; a paper past it
+ *  (points that delimit nothing, ranges each running to the document's end) has no layer and says why, it never hangs */
+export const OWN_WORK = 20_000_000
+export class WorkBound extends Error {
+  constructor(bound: number) {
+    super(`the instrument's reading passed its bound of ${bound} glyphs, boxes and lines visited`)
+    this.name = 'WorkBound'
+  }
 }
 export const ownersOf = (n: number): Owners => ({
   unit: new Int32Array(n).fill(-1),
@@ -182,8 +198,11 @@ export function instrumentFromPlan<Doc>({
   made,
   inkless = [],
   texts = null,
+  work = OWN_WORK,
 }: {
   ink: Doc
+  /** the bound on the readings' work (OWN_WORK); past it WorkBound is thrown */
+  work?: number
   inkless?: readonly string[]
   texts?: ReadonlyMap<string, string> | null
   pages: readonly PageRead[]
@@ -193,6 +212,11 @@ export function instrumentFromPlan<Doc>({
   made: { compiler: string; tree: string }
 }): Instrument<Doc> {
   const noInk = new Set(inkless)
+  let spent = 0
+  const spend = (n: number) => {
+    spent += n
+    if (spent > work) throw new WorkBound(work)
+  }
   // (every point by its name: [page, index])
   const where = new Map<string, At[]>()
   pages.forEach((pg, p) => {
@@ -257,6 +281,7 @@ export function instrumentFromPlan<Doc>({
       const g1 = p === B[0] ? pt(B).glyph : pg.glyphs.length
       const b0 = p === A[0] ? pt(A).box : 0
       const b1 = p === B[0] ? pt(B).box : Math.floor(pg.boxes.length / 4)
+      spend(Math.max(0, g1 - g0) + Math.max(0, b1 - b0))
       for (let g = g0; g < g1; g++) if (R.glyph[g] === r) gs.push([p, g])
       for (let b = b0; b < b1; b++) if (R.box[b] === r) bs.push([p, b])
     }
@@ -267,6 +292,7 @@ export function instrumentFromPlan<Doc>({
     const bs: At[] = []
     const pg = pages[A[0]] as PageRead
     const R = regions[A[0]] as Regions
+    spend(pg.glyphs.length - pt(A).glyph + Math.floor(pg.boxes.length / 4) - pt(A).box)
     for (let g = pt(A).glyph; g < pg.glyphs.length; g++) if (R.glyph[g] === r) gs.push([A[0], g])
     for (let b = pt(A).box; b < Math.floor(pg.boxes.length / 4); b++) if (R.box[b] === r) bs.push([A[0], b])
     return { gs, bs }
@@ -275,6 +301,7 @@ export function instrumentFromPlan<Doc>({
     const gs: At[] = []
     const bs: At[] = []
     const R = regions[B[0]] as Regions
+    spend(pt(B).glyph + pt(B).box)
     for (let g = 0; g < pt(B).glyph; g++) if (R.glyph[g] === r) gs.push([B[0], g])
     for (let b = 0; b < pt(B).box; b++) if (R.box[b] === r) bs.push([B[0], b])
     return { gs, bs }
@@ -346,7 +373,7 @@ export function instrumentFromPlan<Doc>({
       list = { gs: list.gs, bs: [] }
     }
     textOf.set(id, { s, e })
-    claimText(id, list.gs, lineRules(pages, list.gs, list.bs))
+    claimText(id, list.gs, lineRules(pages, list.gs, list.bs, spend))
   }
   for (let id = 0; id < units.length; id++) if (!textOf.has(id) && !marksOf(id).why) marksOf(id).why = 'marks'
 
@@ -528,6 +555,7 @@ export function instrumentFromPlan<Doc>({
     startUnit,
     endName: (u) => w.end(u),
     startName: (u) => w.start(u),
+    spend,
   })
   for (const [name, e0] of owned) {
     const f = follows.get(name)
@@ -637,6 +665,18 @@ export function instrumentFromPlan<Doc>({
   // (amsart's date above its title). Not ported: own.mjs's slotted reading (a wrapper's own words, OPEN_WORDS letters at most:
   // a threshold), which only says a unit spells; a unit that does not spell is not refused here (the instrument states its
   // ink; whether a unit is drawn is locate's)
+  // (an \includegraphics frame's glyphs and boxes, g<n>a to g<n>b: on the draft its frame and file name, on a final pass the
+  // figure's own; no unit's either way, and kept out of the alignment's sequence: the figure's text is read from A)
+  pages.forEach((pg, p) => {
+    const F = framedOf(pg)
+    if (!F) return
+    F.glyph.forEach((f, g) => {
+      if (f) set(glyphs[p] as Owners, g, -1, ROLE.none)
+    })
+    F.box.forEach((f, b) => {
+      if (f) set(boxes[p] as Owners, b, -1, ROLE.none)
+    })
+  })
   const textGlyphs = new Map<number, At[]>()
   glyphs.forEach((O, p) => {
     for (let g = 0; g < O.unit.length; g++)
@@ -772,6 +812,14 @@ export function instrumentFromPlan<Doc>({
       places.push({ unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: m.kind === 'close' })
     }
   })
+  // ---- TeX's state where each unit, cell, heading and placeholder opens (STATE_TEX: its font, \baselineskip and measure)
+  const told = readStates(log)
+  const states: NonNullable<Instrument['tex']['states']> = []
+  for (const m of plan.marks) {
+    if (m.kind !== 'start' && m.kind !== 'cell-start' && m.kind !== 'heading-start' && m.kind !== 'open') continue
+    const state = told.get(m.name)
+    if (state) states.push({ unit: m.unit, piece: m.kind === 'open' ? m.pieceId : null, state })
+  }
   const lineskip = readLineskip(log)
   return {
     ink,
@@ -782,6 +830,7 @@ export function instrumentFromPlan<Doc>({
     tex: {
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),
+      states,
     },
     made: { compiler: made.compiler, tree: made.tree, front: 'marks' },
   }
@@ -838,7 +887,12 @@ const RULE_EM = 0.1
  * extent and half a size past it; and no part of a frame: no other thin box of the range meets it within its own thickness
  * (amsthm's \openbox, an \fbox: their upright sides). A line: a page's glyphs on one baseline
  */
-function lineRules(pages: readonly PageRead[], gs: readonly At[], bs: readonly At[]): At[] {
+function lineRules(
+  pages: readonly PageRead[],
+  gs: readonly At[],
+  bs: readonly At[],
+  spend: (n: number) => void = () => {},
+): At[] {
   const pathOf = (p: number, b: number) => ((pages[p] as PageRead).paths?.[b] as number | undefined) ?? 0
   const painted = bs.filter(([p, b]) => pathOf(p, b) >= 0)
   if (!painted.length) return []
@@ -848,7 +902,9 @@ function lineRules(pages: readonly PageRead[], gs: readonly At[], bs: readonly A
     const G = (pages[p] as PageRead).glyphs[g] as PageGlyph
     if (!/\S/.test(G.u ?? '') || !(G.size > 0)) continue
     const on = (l: (typeof lines)[number]) => l.p === p && Math.abs(l.y - G.y) < 0.5 * Math.max(l.size, G.size)
-    const l: (typeof lines)[number] | null = last && on(last) ? last : (lines.find(on) ?? null)
+    const again: boolean = !!last && on(last)
+    if (!again) spend(lines.length)
+    const l: (typeof lines)[number] | null = again ? last : (lines.find(on) ?? null)
     if (l) {
       l.x0 = Math.min(l.x0, G.x0)
       l.x1 = Math.max(l.x1, G.x1)
@@ -866,6 +922,7 @@ function lineRules(pages: readonly PageRead[], gs: readonly At[], bs: readonly A
   const ruled = new Map<At, number>()
   let most = 0
   for (const x of painted) {
+    spend(lines.length)
     const [x0, y0, x1, y1] = box(x)
     const mid = (y0 + y1) / 2
     const h = y1 - y0
@@ -891,6 +948,7 @@ function lineRules(pages: readonly PageRead[], gs: readonly At[], bs: readonly A
   })
   const out: At[] = []
   for (const [x, size] of ruled) {
+    spend(others.length)
     const [x0, y0, x1, y1] = box(x)
     const e = y1 - y0
     const framed = others.some((o) => {

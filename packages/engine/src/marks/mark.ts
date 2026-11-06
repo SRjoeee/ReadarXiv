@@ -26,6 +26,7 @@ import {
   prefixWord,
   READS_NOTHING,
 } from './classes.ts'
+import { FRAMES_TEX, STATE_TEX } from './statements.ts'
 import * as X from './tex.ts'
 
 export const PLAN_FORMAT = 'readarxiv-plan 1'
@@ -973,7 +974,7 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
       X.REGIONS_TAIL
     : ''
   const head =
-    X.DRAFT +
+    FRAMES_TEX +
     X.MARK_DEF +
     (dvi ? X.DVI_MARK_DEF : '') +
     X.LAYOUT_TEX +
@@ -981,7 +982,8 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
     (opts.names ? '' : X.NAMES_OFF) +
     regions +
     X.END_TEX +
-    (opts.lines ? X.LINES_TEX : '')
+    (opts.lines ? X.LINES_TEX : '') +
+    STATE_TEX
   const mainBytes = out.get(doc.main) as Uint8Array
   out.set(doc.main, concat([latin1Bytes(head), mainBytes]))
   if (!written.includes(doc.main)) written.push(doc.main)

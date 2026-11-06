@@ -37,6 +37,8 @@ describe('the instrument cache', () => {
       'marks/mark.ts',
       'marks/classes.ts',
       'marks/tex.ts',
+      'marks/statements.ts',
+      'compile/recover.ts',
     ]
       .map((f) => `packages/engine/src/${f}`)
       .sort()

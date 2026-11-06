@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { markSource } from '../../src/marks/mark.ts'
-import { DRAFT, LAYOUT_TEX } from '../../src/marks/tex.ts'
+import { FRAMES_TEX, STATE_TEX } from '../../src/marks/statements.ts'
+import { LAYOUT_TEX } from '../../src/marks/tex.ts'
 import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
 import { readSource } from '../../src/source/read.ts'
 
@@ -19,7 +20,8 @@ describe('markSource: the marks written into the paper’s own bytes, and the pl
     const { tree, doc } = paper('We see $x$ here % a comment\nand more words.')
     const { tree: marked, plan } = markSource(tree, doc)
     const text = dec.decode(marked.files.get('main.tex'))
-    expect(text.startsWith(DRAFT)).toBe(true)
+    expect(text.startsWith(FRAMES_TEX)).toBe(true)
+    expect(text).toContain(STATE_TEX)
     expect(text).toContain(LAYOUT_TEX)
     expect(text).toContain(
       '\\axtlines{0}\\leavevmode\\axtmark{0s}We see \\axtpmm{p0.1a}$x$\\axtpm{p0.1b} here % a comment\nand more words.\\axtend{0e}',

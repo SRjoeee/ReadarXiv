@@ -18,8 +18,8 @@ import { pathToFileURL } from 'node:url'
 import { deserialize, serialize } from 'node:v8'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { decodeStored, encodeStored, instrumentKey } from '../../packages/engine/src/compile/cache.ts'
+import { compileMarked } from '../../packages/engine/src/compile/recover.ts'
 import { instrumentFromPlan } from '../../packages/engine/src/marks/instrument.ts'
-import { markSource } from '../../packages/engine/src/marks/mark.ts'
 import { readDefinitions } from '../../packages/engine/src/source/definitions.ts'
 import { sha256Hex } from '../../packages/engine/src/source/id.ts'
 import { readSource } from '../../packages/engine/src/source/read.ts'
@@ -40,7 +40,10 @@ globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () =
 const arg = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = arg('id'), DIR = arg('dir'), OUT = arg('out'), STORE = arg('store')
 /** the compile plan's name, a key input: drafts only (stage 1b deliverable 1) */
-const STEPS = 'drafts: latexmk over the marked tree, graphicx draft; no final pass'
+const STEPS = 'drafts: latexmk over the marked tree, graphicx draft; no final pass; the bounded recovery'
+/** --probe=off: the placement without the probe's answers (stage 1b's count) */
+const PROBE = arg('probe') !== 'off'
+let attempts = null
 mkdirSync(OUT, { recursive: true })
 mkdirSync(STORE, { recursive: true })
 const NM = `${L1}node_modules/pdfjs-dist/`
@@ -72,7 +75,7 @@ const stem = main.split('/').pop().replace(/\.[^.]+$/, '')
 let t = lap('source', t0)
 
 // ---- the key, and the store
-const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: STEPS, answers: A ?? null })
+const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: STEPS, answers: PROBE ? (A ?? null) : null })
 const file = join(STORE, `${key}.axti`)
 t = lap('key', t)
 const made = { compiler: compilerName, tree: year }
@@ -99,17 +102,29 @@ else {
   const madeFiles = !source.has(`${stem}.bbl`) && existsSync(bblPath) ? [[`${stem}.bbl`, new Uint8Array(readFileSync(bblPath))]] : []
   const tree = treeWith(madeFiles)
   const doc = readSource(tree, readDefinitions(definitions))
-  const { tree: marked, plan } = markSource(tree, doc, { compiler: compilerName, answers: answersOf(A) })
-  const overrides = new Map(plan.files.map(p => [p, marked.files.get(p)]))
-  for (const [p, b] of tree.files) if (!source.has(p) && !overrides.has(p)) overrides.set(p, b)
   t = lap('marks', t)
-  const markedC = await compileMine({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides, files: true, ...(sourceDate !== null ? { sourceDate } : {}) })
+  // (the marked compile with its bounded recovery, packages/engine/src/compile/recover.ts; the unmarked first pass's log is
+  // the dump's, lanes/L2/defs/<id>.log)
+  const unmarkedLog = existsSync(join(arg('defs'), `${id}.log`)) ? readFileSync(join(arg('defs'), `${id}.log`), 'latin1') : ''
+  const rec = await compileMarked({
+    tree, doc, unmarkedLog,
+    options: { compiler: compilerName, ...(PROBE ? { answers: answersOf(A) } : {}) },
+    compile: async (marked, plan) => {
+      const overrides = new Map(plan.files.map(p => [p, marked.files.get(p)]))
+      for (const [p, b] of tree.files) if (!source.has(p) && !overrides.has(p)) overrides.set(p, b)
+      const c = await compileMine({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides, files: true, ...(sourceDate !== null ? { sourceDate } : {}) })
+      return { pdf: c.pdf, log: c.log ?? '', ...(Number.isFinite(c.ms) ? { ms: c.ms } : {}) }
+    },
+  })
   t = lap('tex', t)
-  if (!markedC.pdf?.length) {
-    writeFileSync(join(OUT, `${id}.json`), JSON.stringify({ id, why: 'the marked draft did not compile', log: String(markedC.log ?? '').slice(-2000) }))
+  if (!rec.ok) {
+    writeFileSync(join(OUT, `${id}.json`), JSON.stringify({ id, why: rec.why, attempts: rec.attempts, compiles: { mine: statsMine } }))
     process.exit(0)
   }
-  fresh = { key, definitions, made: madeFiles, answers: A ?? null, plan, pdf: markedC.pdf, log: markedC.log ?? '', compiles: [{ step: 'marked draft', ok: true, ...(Number.isFinite(markedC.ms) ? { ms: markedC.ms } : {}) }], doc }
+  const { plan } = rec
+  const markedC = { pdf: rec.pdf, log: rec.log }
+  attempts = rec.attempts
+  fresh = { key, definitions, made: madeFiles, answers: PROBE ? (A ?? null) : null, plan, pdf: markedC.pdf, log: markedC.log ?? '', compiles: attempts.map(x => ({ step: x.step, ok: x.ok, ...(x.why ? { why: x.why } : {}), unmarked: x.unmarked.length, errors: x.errors, ...(x.ms !== undefined ? { ms: x.ms } : {}) })), doc }
   const { doc: _d, ...entry } = fresh
   writeFileSync(`${file}.tmp`, encodeStored(entry))
   renameSync(`${file}.tmp`, file)
@@ -118,7 +133,11 @@ else {
 }
 const sDoc = readSource(treeWith(stored.made), readDefinitions(stored.definitions))
 t = lap('source', t)
-const mine = await instrumentOf({ doc: sDoc, plan: stored.plan, pdf: stored.pdf, log: stored.log, answers: stored.answers })
+const mine = await instrumentOf({ doc: sDoc, plan: stored.plan, pdf: stored.pdf, log: stored.log, answers: stored.answers }).catch(e => {
+  if (e?.name !== 'WorkBound') throw e
+  writeFileSync(join(OUT, `${id}.json`), JSON.stringify({ id, why: e.message, attempts: stored.compiles }))
+  process.exit(0)
+})
 const cache = { hit, key, digest: digestOf(mine.ins) }
 if (fresh) {
   const f = await instrumentOf(fresh)
@@ -149,6 +168,6 @@ if (arg('keep')) {
   const slim = mine.pages.map(pg => ({ ...pg, glyphs: pg.glyphs.map(g => ({ u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, ...(g.blank ? { blank: true } : {}) })) }))
   writeFileSync(join(arg('keep'), `${id}.v8`), serialize({ id, out: k6.out, key, mine: { pages: slim, plan: stored.plan, doc: sDoc, log: stored.log, inkless: mine.a.inkless ?? [], texts: mine.a.texts, made } }))
 }
-const result = { id, year, compiler: compilerName, guard: k6.out.guard ?? null, ms: Math.round(performance.now() - t0), stages: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])), cache, compiles: { mine: statsMine, stored: stored.compiles }, draftDiffer, ...cmp, units: { mine: mine.ins.units.length, unplacedMine: stored.plan.units.filter(u => u.why).length } }
+const result = { id, year, compiler: compilerName, probe: PROBE, attempts: stored.compiles, guard: k6.out.guard ?? null, ms: Math.round(performance.now() - t0), stages: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])), cache, compiles: { mine: statsMine, stored: stored.compiles }, draftDiffer, ...cmp, units: { mine: mine.ins.units.length, unplacedMine: stored.plan.units.filter(u => u.why).length } }
 writeFileSync(join(OUT, `${id}.json`), JSON.stringify(result, null, 1))
 console.log(id, JSON.stringify({ pages: result.pages, glyphs: result.glyphs, boxes: result.boxes, cache, draftDiffer: draftDiffer.length }))

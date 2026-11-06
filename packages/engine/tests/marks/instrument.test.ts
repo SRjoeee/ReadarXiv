@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { instrumentFromPlan, type PageRead, ROLE, readAlign } from '../../src/marks/instrument.ts'
+import { instrumentFromPlan, type PageRead, ROLE, readAlign, WorkBound } from '../../src/marks/instrument.ts'
 import { markSource } from '../../src/marks/mark.ts'
 import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
 import { readSource } from '../../src/source/read.ts'
@@ -175,5 +175,51 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     ])
     const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
     expect(roles(ins).slice(0, 3)).toEqual([1, 1, 1])
+  })
+  it('ends a pathological paper in no layer and why (WorkBound), never in a hang: ranges each running to the page’s end', () => {
+    // (400 paragraphs whose start points TeX set on one page of 40,000 glyphs and whose end points all stand at its end:
+    // each text range is the rest of the page, 16 million glyphs visited against a bound of 2 million)
+    const { doc, plan } = paper(Array.from({ length: 400 }, (_, i) => `Words ${i} here.`).join('\n\n'))
+    const text = 'x'.repeat(40_000)
+    const points: [string, number][] = [['bs1', 0]]
+    for (let i = 0; i < 400; i++) points.push([`${i}s`, i])
+    for (let i = 0; i < 400; i++) points.push([`${i}e`, 40_000])
+    const t0 = performance.now()
+    expect(() =>
+      instrumentFromPlan({
+        ink: null,
+        pages: [page(text, points)],
+        plan,
+        doc,
+        made: { compiler: 'pdflatex', tree: '2025' },
+        work: 2_000_000,
+      }),
+    ).toThrow(WorkBound)
+    expect(performance.now() - t0).toBeLessThan(5_000)
+    // (the same paper with each range its own: well under the bound)
+    const fair: [string, number][] = [['bs1', 0]]
+    for (let i = 0; i < 400; i++) fair.push([`${i}s`, i * 100], [`${i}e`, i * 100 + 90])
+    const ins = instrumentFromPlan({
+      ink: null,
+      pages: [page(text, fair)],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+      work: 2_000_000,
+    })
+    expect(ins.glyphs[0]?.unit[150]).toBe(1)
+  })
+  it('owns nothing inside an \\includegraphics frame: the draft’s file name is no unit’s text', () => {
+    const { doc, plan } = paper('We see here.')
+    // "We see a.png here." with the frame's points around "a.png" (the draft prints the file's name in its frame)
+    const pg = page('We see a.png here.', [
+      ['bs1', 0],
+      ['0s', 0],
+      ['g1a', 7],
+      ['g1b', 12],
+      ['0e', 18],
+    ])
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect(roles(ins)).toEqual([1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
   })
 })
