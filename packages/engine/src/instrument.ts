@@ -50,6 +50,10 @@ export interface Instrument {
   boxes: Owners[]
   /** the owners of each page's turned glyphs (DocPage.turned), where any is owned */
   turned?: Owners[]
+  /** where each element of a source unit begins (`end` false) and ends in B's stream: its unit, its piece id, its B page
+   *  (1-based) and the count of that page's glyphs shown before the point (the marked compile's points around a
+   *  placeholder), where the marked compile has them. A forced break's, which sets no ink, says which line TeX ended at it */
+  places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
   tex: { lineskip?: [number, number]; paragraphEnds?: number[][] }

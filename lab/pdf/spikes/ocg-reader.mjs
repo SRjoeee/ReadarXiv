@@ -19,6 +19,7 @@ import { extname, join, normalize, resolve } from 'node:path'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { chromium } from 'playwright'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { packageFile } from '../packages-route.mjs'
 
 const arg = (k, d = null) => process.argv.find(a => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d
 const REPO = resolve(new URL('../../..', import.meta.url).pathname)
@@ -105,6 +106,13 @@ const server = createServer((req, res) => {
     const code = readFileSync(found, 'utf8')
     res.writeHead(200, { 'content-type': 'text/javascript' })
     res.end(found.endsWith('.ts') ? ESBUILD.transformSync(code, { loader: 'ts', format: 'esm', target: 'es2022', sourcefile: found }).code : code)
+    return
+  }
+  // (the workspace packages the engine imports (`@readarxiv/engine`, `@readarxiv/format`), TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) {
+    const f = packageFile(REPO, path)
+    res.writeHead(f ? 200 : 404, { 'content-type': f ? f.type : 'text/plain' })
+    res.end(f ? f.body : 'not found')
     return
   }
   if (path.startsWith('/hyph/')) { const j = HYPH.get(path.slice(6, -5)); res.writeHead(j ? 200 : 404, { 'content-type': 'application/json' }); res.end(j ?? 'null'); return }

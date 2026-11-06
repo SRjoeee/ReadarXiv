@@ -159,3 +159,15 @@ CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the dou
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
+packages/translate/tests/accept.test.ts 34  # 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
+packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
+packages/translate/src/adapters/chrome.ts 2  # 2026-11-07: CJK punctuation the built-in translator sets a space after, the table it is taken off by, and its quoted example
+packages/translate/src/testing/suite.ts 1  # 2026-11-07: full-width brackets, one way the conformance suite mangles a reply
+packages/translate/src/wire/align.ts 2  # 2026-11-07: the scripts' sentence ends and closers a boundary is snapped onto (Biome's formatter writes them as characters)
+packages/translate/src/wire/markers.ts 7  # 2026-11-07: the scripts' stops and marks the markers wire reads (punctuation tables), and a Microsoft reply quoted as evidence
+packages/translate/src/wire/tags.ts 2  # 2026-11-07: the scripts' stops and marks the tags wire reads (punctuation tables)
+packages/translate/src/wire/text.ts 1  # 2026-11-07: the Microsoft endpoint's fused reply quoted as evidence
+packages/translate/tests/adapters/chrome.test.ts 3  # 2026-11-07: Chinese replies with the built-in translator's spacing, inputs and expectations
+packages/translate/tests/adapters/fixtures.ts 33  # 2026-11-07: Microsoft's Chinese and Japanese replies quoted as they came (tests/pdf-reader/mt-wire.test.ts, readarxiv-web's reading table) and Chinese replies for the adapters' fixture units
+packages/translate/tests/adapters/google.test.ts 3  # 2026-11-07: Chinese replies with boundary markers, inputs and expectations
+packages/translate/tests/adapters/microsoft.test.ts 13  # 2026-11-07: Chinese replies, the inputs and expectations of the markers wire's reading

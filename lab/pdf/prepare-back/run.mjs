@@ -20,7 +20,11 @@ import { instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
-const CACHES = (argOf('caches') ?? '').split(':').filter(Boolean)
+// (--front=<dir>: the instrument from lane L2's rebuilt front half (front-new.mjs), its data under --l2data (defs/,
+// marks/answers.json, marks/bbl/, marks/compiles/: its compiles join the caches); --baseline=<dir> the baseline's prepare
+// dumps, whose units the new front half does not make the dump states, by its paper's stage 1c class where it has one)
+const FRONT = argOf('front'), L2DATA = argOf('l2data'), BASELINE = argOf('baseline')
+const CACHES = [...(argOf('caches') ?? '').split(':').filter(Boolean), ...(FRONT && L2DATA ? [join(L2DATA, 'marks/compiles')] : [])]
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 'utf8'))
 const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(pathToFileURL(join(E, f)).href)
@@ -97,8 +101,16 @@ if (!refusal) {
   const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
   paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
   if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
-  const r = await instrumentOf({ paper, finalPdf, options: made.options ?? {}, log: made.log ?? '', pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, made: { compiler: paperOut.tex.compiler, tree: year, front: 'today' } })
-  ins = r.instrument
+  if (FRONT) {
+    const { newInstrument } = await import('./front-new.mjs')
+    const { readPdf } = await import('@readarxiv/engine')
+    const r = await newInstrument({ front: FRONT, id, paper, source, compile, year, day, defs: join(L2DATA, 'defs'), answers: join(L2DATA, 'marks/answers.json'), bbl: join(L2DATA, 'marks/bbl'), pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, readPdf })
+    if (r.refused) paperOut.front = r.refused
+    else ins = r.instrument
+  } else {
+    const r = await instrumentOf({ paper, finalPdf, options: made.options ?? {}, log: made.log ?? '', pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, made: { compiler: paperOut.tex.compiler, tree: year, front: 'today' } })
+    ins = r.instrument
+  }
   if (process.env.DEBUG_B) console.error('B', ins.ink.pages.slice(0, 3).map(pg => [pg.glyphs.length, pg.glyphs.filter(g => g.form).length, pg.unread]))
 }
 const tIns = performance.now()
@@ -113,7 +125,20 @@ if (ins) {
   }
 }
 const tBack = performance.now()
-// ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's, all
+// ---- (--claims) the A glyphs a unit holds with no partner on B, classed (claims.mjs)
+if (tally && process.argv.includes('--claims')) {
+  const { claimsOf } = await import('./claims.mjs')
+  mkdirSync(join(OUT, 'claims'), { recursive: true })
+  writeFileSync(join(OUT, 'claims', `${id}.json`), `${JSON.stringify(claimsOf(ins, tally))}\n`)
+}
+// ---- (--review) the corpus counts of pull request #605's review findings (review.mjs)
+if (tally && process.argv.includes('--review')) {
+  const { reviewOf } = await import('./review.mjs')
+  mkdirSync(join(OUT, 'review'), { recursive: true })
+  writeFileSync(join(OUT, 'review', `${id}.json`), `${JSON.stringify(reviewOf(ins, tally))}\n`)
+}
+// ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
+// --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)
 let proofs = null
 if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') || process.argv.includes('--pixels'))) {
@@ -126,7 +151,7 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   proofs.glyphs.ms = Math.round(performance.now() - tp)
   if (process.argv.includes('--pixels')) {
     const tq = performance.now()
-    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL })
+    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
     proofs.pixels.ms = Math.round(performance.now() - tq)
   }
 }
@@ -153,6 +178,7 @@ const memberOf = new Map()
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) memberOf.set(mem.unit, mem)
 const unitsList = ins?.units ?? U.bundleUnitsOf(paper).map(u => null)
 let ord = 0
+const dumpOrds = [] // [the dump's ord, the member's ord]: what the comparison with the tap joins by
 const states = { drawn: 0, laid: 0, unlaid: 0 }
 // (the dump's order: the instrument's, but a figure unit the bundle does not lay after every one it lays, as today's page pass
 // leaves such a unit out of its bundle and the baseline lists it after the bundle's: its ord-join pairs equal texts so)
@@ -165,6 +191,7 @@ order.map(i => [ins.units[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
+  if (mem) dumpOrds.push([ord, mem.ord])
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
@@ -181,7 +208,22 @@ if (located) for (const [o, b] of located.born) {
   const st = stateOf(mem, addOn)
   const pieces = flat(b.content)
   states[st.drawn ? 'drawn' : 'laid']++
+  dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
+}
+// (--front: each unit of the baseline's the new front half does not make, stated as the candidate's: its paper's stage 1c class)
+if (FRONT && BASELINE) {
+  const { STAGE_1C } = await import('./front-new.mjs')
+  const have = new Map()
+  for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
+  for (const u of JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units) {
+    if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
+    // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
+    // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
+    const why = /^ink/.test(u.kind) ? `no source unit owns it: ${u.kind} (today's ledger or figure text)` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
+    states.unlaid++
+  }
 }
 const N = paperOut.pages
 const pages = []
@@ -202,7 +244,7 @@ mkdirSync(join(OUT, 'located'), { recursive: true })
 writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tIns0), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
   bytes: { arxiv: arxivBytes.length, addOn: addOn && !('refused' in addOn) ? addOn.bytes.length : 0, units: unitsBytes, parts: parts.reduce((n, p) => n + p.bytes, 0), head: head ? Buffer.byteLength(JSON.stringify(head)) : 0 },
-  parts, places: placeOf, proofs,
+  parts, places: placeOf, dumpOrds, proofs,
   wrapPages: addOn && !('refused' in addOn) ? [...addOn.pages].map(([p, x]) => [p, x.ok, x.why ?? null, !!x.merged]) : null,
   moves: tally?.mapping.moves.length ?? 0, stretches: tally?.mapping.stretches ?? [],
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,

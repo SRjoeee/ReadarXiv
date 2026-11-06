@@ -33,6 +33,9 @@ export interface DocGlyph {
   pid?: number | undefined
   clipped?: true | undefined
   unseen?: true | undefined
+  /** its Unicode is no reading of it (A17, today's `nu`): no character of its font's own map, or none Unicode stands for; read
+   *  where the document was read `mapped` */
+  nu?: true | undefined
 }
 
 /** a point of a marked compile (`/axt-<name> ri`): its name, and the glyphs and boxes the page showed before it */

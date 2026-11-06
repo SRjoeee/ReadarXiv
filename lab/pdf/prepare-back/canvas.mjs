@@ -25,6 +25,8 @@ const SELF = process.argv.includes('--self')
 const ROWS = process.argv.includes('--rows')
 // (--crop=<page>,<x0>,<y0>,<x1>,<y1>: that box of A's and W's renders (PDF units) written beside the outputs, 8 times larger)
 const NORMALIZE = process.argv.includes('--normalize')
+// (--flush: every draw call on the page's canvas rasterised at once, in both renders: see the page's `flush`)
+const FLUSH = process.argv.includes('--flush')
 const CROP = process.argv.find(a => a.startsWith('--crop='))?.slice(7).split(',').map(Number) ?? null
 const dirs = new Map(readFileSync(LIST, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t')))
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
@@ -48,11 +50,24 @@ if (new URLSearchParams(location.search).get('normalize') === '1') {
     this.restore()
   }
 }
+// (?flush=1: the canvas made to rasterise after every draw call on the page's canvas (a one-pixel read back), in A's render and
+// W's alike. Chromium records a 2D canvas's calls and rasterises them in batches whose ends fall where the page's task yields
+// (PDF.js's operator list arrives in chunks, W's longer by its marked content); the pixels of the same calls depend on where a
+// batch ends (A against itself, flushed after every call or not: 7,566 pixels on 2610.20030v1 p10). Flushed after every call,
+// the same calls give the same pixels, so what is left between A and W is what their calls differ by)
+if (new URLSearchParams(location.search).get('flush') === '1') {
+  const P = CanvasRenderingContext2D.prototype
+  for (const name of ['drawImage', 'fillText', 'strokeText', 'fill', 'stroke', 'fillRect', 'strokeRect', 'clearRect', 'putImageData']) {
+    const f = P[name]
+    P[name] = function (...a) { const r = f.apply(this, a); if (this.canvas?.axtPage) this.getImageData(0, 0, 1, 1); return r }
+  }
+}
 window.gate = {
   async open(id, name) { const data = new Uint8Array(await (await fetch('/pdf/' + name)).arrayBuffer()); docs.set(id, await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', enableHWA: hwa, isImageDecoderSupported: false }).promise) },
   async render(id, n, key, off) {
     const doc = docs.get(id), page = await doc.getPage(n), vp = page.getViewport({ scale: 2 })
     const canvas = document.createElement('canvas'); canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height)
+    canvas.axtPage = true
     const ctx = canvas.getContext('2d', { willReadFrequently: !hwa })
     const cfg = await doc.getOptionalContentConfig({ intent: 'display' })
     if (off) for (const [gid, g] of cfg) if (off.includes(g.name)) cfg.setVisibility(gid, false, false)
@@ -146,7 +161,7 @@ try {
       const f = join(PDFJS, path.slice('/pdfjs/'.length))
       return existsSync(f) ? route.fulfill({ contentType: f.endsWith('.mjs') ? 'text/javascript' : 'application/octet-stream', body: readFileSync(f) }) : route.fulfill({ status: 404 })
     })
-    await page.goto(`http://canvas.local/?hwa=${CANVAS === 'gpu' ? 1 : 0}${NORMALIZE ? '&normalize=1' : ''}`)
+    await page.goto(`http://canvas.local/?hwa=${CANVAS === 'gpu' ? 1 : 0}${NORMALIZE ? '&normalize=1' : ''}${FLUSH ? '&flush=1' : ''}`)
     await page.waitForFunction(() => window.gate)
     const call = (fn, ...a) => page.evaluate(([f, x]) => window.gate[f](...x), [fn, a])
     await call('open', 'A', 'a.pdf')
@@ -164,7 +179,7 @@ try {
           writeFileSync(join(OUT, `crop-${id}-p${p}-${key}.png`), Buffer.from(url.split(',')[1], 'base64'))
         }
       }
-      const row = { p, outside: c.outside, splitShows, share: inSplit.region ? inSplit.inside / inSplit.region : 0, max: inSplit.maxIn, ...(ROWS && inSplit.at?.length ? { at: inSplit.at.map(([x, y, d]) => [+(x / 2).toFixed(1), +(rects[p - 1].h - y / 2).toFixed(1), d]) } : {}) }
+      const row = { p, outside: c.outside, any: c.inside + c.outside, splitShows, share: inSplit.region ? inSplit.inside / inSplit.region : 0, max: inSplit.maxIn, ...(ROWS && inSplit.at?.length ? { at: inSplit.at.map(([x, y, d]) => [+(x / 2).toFixed(1), +(rects[p - 1].h - y / 2).toFixed(1), d]) } : {}) }
       const fig = figs.get(p)
       if (FIGURES_OFF && fig?.names.length) {
         await call('render', 'W', p, 'f', fig.names)
@@ -177,6 +192,6 @@ try {
     }
     await page.close()
     if (ROWS) for (const r of rows) if (r.outside || r.share) console.log(JSON.stringify({ id, ...r }))
-    console.log(JSON.stringify({ id, canvas: CANVAS, ...(SELF ? { self: true } : {}), ...(NORMALIZE ? { normalize: true } : {}), pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length, ...(FIGURES_OFF ? { figuresOff: { pages: rows.filter(r => r.figOff).length, outsidePages: rows.filter(r => r.figOff?.outside).map(r => [r.p, r.figOff.outside]), inside: rows.reduce((n, r) => n + (r.figOff?.inside ?? 0), 0) } } : {}) }))
+    console.log(JSON.stringify({ id, canvas: CANVAS, ...(SELF ? { self: true } : {}), ...(NORMALIZE ? { normalize: true } : {}), ...(FLUSH ? { flush: true } : {}), pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), differingPages: rows.filter(r => r.any).map(r => [r.p, r.any]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length, ...(FIGURES_OFF ? { figuresOff: { pages: rows.filter(r => r.figOff).length, outsidePages: rows.filter(r => r.figOff?.outside).map(r => [r.p, r.figOff.outside]), inside: rows.reduce((n, r) => n + (r.figOff?.inside ?? 0), 0) } } : {}) }))
   }
 } finally { await browser.close() }

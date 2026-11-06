@@ -6,7 +6,16 @@ import { ORIGINAL_CHUNK, type Piece } from './schema.ts'
 /** a piece as the id's hash reads it (the baseline's FORMAT.md §2): ["t", s] a text, ["p", src] an element, ["o", open] and
  *  ["c", close] around a span's content (either absent where the unit's edge cuts the group), ["n", pre, unit, post] a nested unit */
 function tagged(content: readonly Piece[], out: unknown[]): unknown[] {
-  for (const p of content) {
+  // (an explicit stack, not recursion: spans nest as deep as a source's groups do; lane L2's walk, rebuild/source c26d4bf7a)
+  const stack: { list: readonly Piece[]; k: number; close?: string }[] = [{ list: content, k: 0 }]
+  while (stack.length) {
+    const top = stack[stack.length - 1] as { list: readonly Piece[]; k: number; close?: string }
+    if (top.k >= top.list.length) {
+      stack.pop()
+      if (top.close !== undefined) out.push(['c', top.close])
+      continue
+    }
+    const p = top.list[top.k++] as Piece
     switch (p.t) {
       case 'text':
         out.push(['t', p.s])
@@ -16,8 +25,7 @@ function tagged(content: readonly Piece[], out: unknown[]): unknown[] {
         break
       case 'span':
         if (p.open !== undefined) out.push(['o', p.open])
-        tagged(p.content, out)
-        if (p.close !== undefined) out.push(['c', p.close])
+        stack.push(p.close !== undefined ? { list: p.content, k: 0, close: p.close } : { list: p.content, k: 0 })
         break
       case 'unit':
         out.push(['n', p.pre, p.unit, p.post])

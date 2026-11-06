@@ -1,8 +1,8 @@
 import { read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
-import { bundle } from '../src/bundle/bundle.ts'
-import type { Doc } from '../src/doc.ts'
+import { bundle, stateOf } from '../src/bundle/bundle.ts'
+import type { Doc, DocTurned } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
@@ -46,6 +46,7 @@ const addOnOf = (located: ReturnType<typeof locate>, pages: number, refuse: numb
     located.groups.flatMap((g, i) => (refuse.includes(i + 1) ? [] : g.glyphs.filter((x): x is string => x !== null))),
   ),
   ocgs: new Map(),
+  lost: new Set(),
   stats: {} as AddOn['stats'],
 })
 
@@ -91,6 +92,7 @@ describe('locate', () => {
     expect(L.members[0]!.located).toBe(true)
     expect(L.groups[1]!.glyphs.filter((g) => g?.startsWith('2.'))).toEqual([])
     expect(L.stats.unlocated).toEqual({ 'content difference: char': 1 })
+    expect(L.born.size).toBe(0)
   })
   it('makes a unit of text B never printed, born on A', () => {
     const A = docOf([pages[0]!, pages[1]!, { lines: ['a supplement page', 'of its own'] }])
@@ -104,6 +106,47 @@ describe('locate', () => {
     const L = locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
+  })
+})
+
+describe('locate: the glyphs of A with no partner on B inside a unit', () => {
+  const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+  const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+  it('claims a line-end hyphen arXiv sets where our compile does not break the word', () => {
+    const A = docOf([{ lines: ['a paragraph whose word con-', 'tinues on its last line'] }])
+    const L = locate(ins, A, align(B, A))
+    const hyphen = 'a paragraph whose word con'.length
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.members[0]!.text).toContain(hyphen)
+    expect(L.groups[0]!.glyphs[hyphen]).toBe('0.1.t')
+    expect(L.born.size).toBe(0)
+  })
+  it('leaves an included figure that only A draws between two lines of a unit to the figure, not to the unit', () => {
+    // (a float set "here" inside a paragraph: TeX puts it after the current line, and where B is a draft, its figure's own
+    // glyphs are A's alone)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'Loss', y: 640, form: true },
+          { text: 'continues on its last line', y: 600 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A))
+    const fig = ['a paragraph whose word'.length, 'a paragraph whose word'.length + 3]
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.members[0]!.text).not.toContain(fig[0])
+    expect(L.groups[0]!.glyphs[fig[0]!]).not.toBe('0.1.t')
+    expect([...L.born.values()]).toEqual([{ kind: 'inkfigures', content: [text('Loss')] }])
+  })
+  it('leaves a unit the original’s where A sets text inside it that our compile does not', () => {
+    const A = docOf([{ lines: ['a paragraph whose (X) word', 'continues on its last line'] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'content difference: aonly' })
+    expect(L.groups[0]!.glyphs.every((g) => g === null || !g.startsWith('0.'))).toBe(true)
+    // (its A-only glyphs stay A's ink inside it: no unit is born of them)
+    expect(L.born.size).toBe(0)
   })
 })
 
@@ -166,5 +209,124 @@ describe('bundle', () => {
     const head = (refused.at(-1) as Extract<(typeof refused)[number], { kind: 'head' }>).head
     expect(head.refused).toEqual([[3, 'page']])
     expect(head.parts[2]).toBeNull()
+  })
+})
+
+describe('locate: the room under a unit', () => {
+  it('reads the next line under a unit across its last block, which spans both columns where its short last line does not', () => {
+    // (a caption across the page whose last line keeps to the left column; under it the right column's text begins 14 pt
+    // lower, the left column's 30 pt lower)
+    const wide = 'w'.repeat(78)
+    const B = docOf([
+      {
+        lines: [
+          { text: wide, y: 700 },
+          { text: wide, y: 688 },
+          { text: 'short end', y: 676 },
+          ...[662, 650, 638].map((y) => ({ text: 'right column text one', x: 320, y })),
+          ...[646, 634, 622].map((y) => ({ text: 'left column text one', y })),
+        ],
+      },
+    ])
+    const units = [unitOf('caption', 'a caption'), unitOf('para', 'right'), unitOf('para', 'left')]
+    const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
+    expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
+    expect(L.members[0]!.room.next).toBe(14)
+  })
+})
+
+describe('review of #605', () => {
+  const original = new Uint8Array(70000).map((_, i) => i & 255)
+  it('places a unit of turned glyphs alone (a figure’s y-axis title) on its page, in that page’s part', () => {
+    const withTurned = () => {
+      const d = docOf([{ lines: ['a caption under it'] }])
+      d.pages[0]!.turned = [...'Loss'].map(
+        (u, j): DocTurned => ({
+          u,
+          code: u.codePointAt(0) as number,
+          base: 'CMR10',
+          n: 1,
+          k: j,
+          at: 18,
+          ox: 60,
+          oy: 400 + 6 * j,
+          ex: 60,
+          ey: 406 + 6 * j,
+          ux: 0,
+          uy: 1,
+          size: 10,
+          ascent: 0.7,
+          descent: -0.2,
+          form: false,
+        }),
+      )
+      return d
+    }
+    const B = withTurned()
+    const A = withTurned()
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Loss', { figure: { set: 0, dir: [0, 1] } }),
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[1]).toMatchObject({ located: true, pages: [1] })
+    expect(L.members[1]!.lines).toHaveLength(1)
+    expect(L.groups[0]!.turned).toEqual(['1.1.t', '1.1.t', '1.1.t', '1.1.t'])
+    const addOn = {
+      ...addOnOf(L, 1),
+      groups: new Set([...L.groups[0]!.glyphs, ...L.groups[0]!.turned].filter((g): g is string => g !== null)),
+    }
+    expect(stateOf(L.members[1]!, addOn)).toMatchObject({ drawn: true })
+    const objs = [
+      ...bundle({ ins, located: L, addOn, original, paper: { id: '2501.00001', version: 1, pages: 1 }, made: 't' }),
+    ]
+    const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
+    expect(
+      read('part', part.bytes)
+        .flows.flat()
+        .map((x) => x.ord),
+    ).toEqual([0, 1])
+  })
+  it('lays no member one of whose images the wrap could not group (planOf’s lost)', () => {
+    const B = docOf([{ lines: ['a unit with an image'] }])
+    const L = locate(instrumentOf(B, [unitOf('para', 'a unit with an image')], [[0]]), B, align(B, B))
+    const addOn = addOnOf(L, 1)
+    expect(stateOf(L.members[0]!, addOn)).toMatchObject({ drawn: true })
+    expect(stateOf(L.members[0]!, { ...addOn, lost: new Set(['0.1.e']) })).toEqual({
+      why: 'unwrapped',
+      drawn: false,
+      fixed: 0,
+    })
+  })
+  it('says a unit that owns an image and no glyph has no text: it stays the original’s, its image A’s ink in no group', () => {
+    const B = docOf([{ lines: ['a paragraph'], boxes: [[11, -3, 72, 600, 172, 680]] }])
+    const units = [unitOf('para', 'a paragraph'), unitOf('cell', 'x')]
+    const ins = instrumentOf(B, units, [[0]])
+    ins.boxes[0]!.unit[0] = 1
+    ins.boxes[0]!.role[0] = ROLE.element
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]).toMatchObject({ located: false, cause: 'no text' })
+    expect(L.groups[0]!.boxes).toEqual([null])
+  })
+  it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
+    // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see', x: 72 },
+          { text: 'Figure 12', x: 96, y: 700 },
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'see'), unitOf('para', 'Figure 12')]
+    const link = { annotationType: 2, rect: [89, 695, 151, 708], dest: 'figure.12' }
+    const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
+    expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
   })
 })

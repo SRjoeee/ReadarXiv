@@ -206,8 +206,12 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const lineskip = readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
+  // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
+  // and ends in B's stream)
+  const places = []
+  pages.forEach((pg, i) => { for (const pt of pg.points) { const m = /^p(\d+)\.(\d+)([ab])$/.exec(pt.name); if (m && Number(m[1]) < units.length) places.push({ unit: Number(m[1]), piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' }) } })
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, fig, ink, kept, inkBase, figBase },
   }
 }
