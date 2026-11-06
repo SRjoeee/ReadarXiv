@@ -18,6 +18,9 @@ export interface AddOn {
   /** every group the document holds, by name (`<ord>.<page>.<t|e|l>`), and each one's object number */
   groups: Set<string>
   ocgs: Map<string, number>
+  /** the groups that owned an image the wrap could not tell apart (planOf's `lost`: the page's images painted are not as many
+   *  as PDF.js's reading of them), none of which is wrapped: their members stay the original's (today's wrapFinal, `unhidden`) */
+  lost: Set<string>
   stats: Wrap['stats']
 }
 
@@ -37,12 +40,14 @@ export async function wrap(
   deps: WrapDeps,
 ): Promise<AddOn | { refused: string; why: string }> {
   const plans = new Map<number, WrapPlan>()
+  const lost = new Set<string>()
   const isFigure = (g: string) => located.figureGroups.has(g)
   pagesA.forEach((pg, i) => {
     const groups = located.groups[i]
     if (!pg.raw || !pg.extra || !groups) return
     if (![groups.glyphs, groups.boxes, groups.turned].some((l) => l.some((g) => g !== null))) return
     const plan = planOf(pg.raw.glyphs, groups.glyphs, pg.raw.paths ?? [], groups.boxes, pg.extra)
+    for (const g of plan.lost) lost.add(g)
     // (a turned glyph's group by its place in its show, as a level one's (wrapFinal's way); and one of no group is read as
     // its own, none, so that a show it shares with a group's glyphs is split at it rather than giving it their group: the
     // proof that each group encloses exactly its ink found 3 such glyphs on 2 papers of the corpus)
@@ -63,6 +68,7 @@ export async function wrap(
     pages: made.pages,
     groups: new Set(made.groups.keys()),
     ocgs: made.groups,
+    lost,
     stats: made.stats,
   }
 }

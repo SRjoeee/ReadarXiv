@@ -266,8 +266,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.bLast = list.at(-1) as number
     }
     mem.align = unit.align ?? 'j'
+    // (no glyph of its own: nothing a translation replaces and no line to lay it on. Where it owns rules or images alone, they
+    // stay A's ink, in no group, as a kept element's: `no text`)
     if (!list.length && !turnedB.length) {
-      mem.cause = unit.why ?? 'no ink'
+      mem.cause = unit.why ?? (boxes.length ? 'no text' : 'no ink')
       return mem
     }
     let bad: string | null = null
@@ -699,14 +701,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     for (const ords of sets.values()) if (ords.length > 1) ties.push({ rule: 'size', ords })
   }
 
-  // ---- links: A's annotations, each owned by the element or the text its rectangle lies over
+  // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
+  // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
+  // them), and within it by the element that owns more than half of them, else its text. A glyph point is a glyph's advance
+  // centre on its baseline strictly inside the annotation's rectangle or one of its quads (PDF.js's overlaidText rule, today's
+  // pointsOf). A link over no glyph: the member one of whose lines or elements holds its rectangle's centre
   const links: Located['links'] = new Map()
   ;(o.annotations ?? []).forEach((list, p) => {
     if (!list?.length) return
     const out: NonNullable<ReturnType<typeof links.get>> = []
+    const pg = inkA.pages[p]!
+    const off = m.offA[p] as number
     for (const an of list as {
       annotationType?: number
       rect?: number[]
+      quadPoints?: ArrayLike<number> | null
       url?: string
       unsafeUrl?: string
       dest?: unknown
@@ -720,29 +729,36 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
             : null
       if (!to) continue
       const [x0, y0, x1, y1] = an.rect.map(r2) as [number, number, number, number]
+      const boxes = quadBoxesOf(an.quadPoints) ?? [
+        [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)],
+      ]
+      const inside = (x: number, y: number) => boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
+      const pts: number[] = []
+      pg.glyphs.forEach((g, j) => {
+        if (/\S/.test(g.u) && inside((g.x0 + g.x1) / 2, g.y)) pts.push(off + j)
+      })
       let owner: [number, string] | undefined
-      let best = 0
-      const area = (a: number, b: number, c: number, d: number) =>
-        Math.max(0, Math.min(c, x1) - Math.max(a, x0)) * Math.max(0, Math.min(d, y1) - Math.max(b, y0))
-      for (const mem of members) {
-        if (!mem.pages.includes(p + 1)) continue
-        for (const [id, el] of mem.elements)
-          for (const k of el.ink) {
-            if (k[0] !== p + 1) continue
-            const s = area(k[1], k[2], k[3], k[4])
-            if (s > best) {
-              best = s
-              owner = [mem.ord, id]
-            }
-          }
-        if (owner) continue
-        for (const l of mem.lines) {
-          if (l[0] !== p + 1) continue
-          const s = area(l[2], l[6], l[3], l[5])
-          if (s > best) {
-            best = s
-            owner = [mem.ord, '']
-          }
+      if (pts.length) {
+        const by = new Map<number, number>()
+        for (const a of pts)
+          if ((claimedA[a] as number) >= 0) by.set(claimedA[a] as number, (by.get(claimedA[a] as number) ?? 0) + 1)
+        const top = [...by].find(([, n]) => 2 * n > pts.length)
+        if (top) {
+          const mem = members[top[0]]!
+          const els = [...mem.els].map(([id, l]) => [id, pts.filter((a) => l.includes(a)).length] as const)
+          const el = els.find(([, n]) => 2 * n > pts.length)
+          owner = [mem.ord, el ? el[0] : '']
+        }
+      } else {
+        const cx = (x0 + x1) / 2
+        const cy = (y0 + y1) / 2
+        const holds = (a: number, b: number, c: number, d: number) => cx >= a && cx <= c && cy >= b && cy <= d
+        for (const mem of members) {
+          if (!mem.pages.includes(p + 1)) continue
+          const el = mem.elements.find(([, e]) => e.ink.some((k) => k[0] === p + 1 && holds(k[1], k[2], k[3], k[4])))
+          if (el) owner = [mem.ord, el[0]]
+          else if (mem.lines.some((l) => l[0] === p + 1 && holds(l[2], l[6], l[3], l[5]))) owner = [mem.ord, '']
+          if (owner) break
         }
       }
       out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}) })
@@ -796,6 +812,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
   return { members, born, flows, ties, links, groups, figureGroups, stats }
+}
+
+/** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed
+ *  (today's links.mjs quadBoxes) */
+function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, number, number][] | null {
+  if (!q || typeof q.length !== 'number' || !q.length) return null
+  const flat = Array.from(q)
+  if (flat.length % 8 || !flat.every(Number.isFinite)) return null
+  const out: [number, number, number, number][] = []
+  for (let i = 0; i < flat.length; i += 8) {
+    const xs = [flat[i]!, flat[i + 2]!, flat[i + 4]!, flat[i + 6]!]
+    const ys = [flat[i + 1]!, flat[i + 3]!, flat[i + 5]!, flat[i + 7]!]
+    out.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)])
+  }
+  return out
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line

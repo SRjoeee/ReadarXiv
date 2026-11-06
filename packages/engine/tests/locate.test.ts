@@ -1,8 +1,8 @@
 import { read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
-import { bundle } from '../src/bundle/bundle.ts'
-import type { Doc } from '../src/doc.ts'
+import { bundle, stateOf } from '../src/bundle/bundle.ts'
+import type { Doc, DocTurned } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
@@ -46,6 +46,7 @@ const addOnOf = (located: ReturnType<typeof locate>, pages: number, refuse: numb
     located.groups.flatMap((g, i) => (refuse.includes(i + 1) ? [] : g.glyphs.filter((x): x is string => x !== null))),
   ),
   ocgs: new Map(),
+  lost: new Set(),
   stats: {} as AddOn['stats'],
 })
 
@@ -205,5 +206,101 @@ describe('bundle', () => {
     const head = (refused.at(-1) as Extract<(typeof refused)[number], { kind: 'head' }>).head
     expect(head.refused).toEqual([[3, 'page']])
     expect(head.parts[2]).toBeNull()
+  })
+})
+
+describe('review of #605', () => {
+  const original = new Uint8Array(70000).map((_, i) => i & 255)
+  it('places a unit of turned glyphs alone (a figure’s y-axis title) on its page, in that page’s part', () => {
+    const withTurned = () => {
+      const d = docOf([{ lines: ['a caption under it'] }])
+      d.pages[0]!.turned = [...'Loss'].map(
+        (u, j): DocTurned => ({
+          u,
+          code: u.codePointAt(0) as number,
+          base: 'CMR10',
+          n: 1,
+          k: j,
+          at: 18,
+          ox: 60,
+          oy: 400 + 6 * j,
+          ex: 60,
+          ey: 406 + 6 * j,
+          ux: 0,
+          uy: 1,
+          size: 10,
+          ascent: 0.7,
+          descent: -0.2,
+          form: false,
+        }),
+      )
+      return d
+    }
+    const B = withTurned()
+    const A = withTurned()
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Loss', { figure: { set: 0, dir: [0, 1] } }),
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[1]).toMatchObject({ located: true, pages: [1] })
+    expect(L.members[1]!.lines).toHaveLength(1)
+    expect(L.groups[0]!.turned).toEqual(['1.1.t', '1.1.t', '1.1.t', '1.1.t'])
+    const addOn = {
+      ...addOnOf(L, 1),
+      groups: new Set([...L.groups[0]!.glyphs, ...L.groups[0]!.turned].filter((g): g is string => g !== null)),
+    }
+    expect(stateOf(L.members[1]!, addOn)).toMatchObject({ drawn: true })
+    const objs = [
+      ...bundle({ ins, located: L, addOn, original, paper: { id: '2501.00001', version: 1, pages: 1 }, made: 't' }),
+    ]
+    const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
+    expect(
+      read('part', part.bytes)
+        .flows.flat()
+        .map((x) => x.ord),
+    ).toEqual([0, 1])
+  })
+  it('lays no member one of whose images the wrap could not group (planOf’s lost)', () => {
+    const B = docOf([{ lines: ['a unit with an image'] }])
+    const L = locate(instrumentOf(B, [unitOf('para', 'a unit with an image')], [[0]]), B, align(B, B))
+    const addOn = addOnOf(L, 1)
+    expect(stateOf(L.members[0]!, addOn)).toMatchObject({ drawn: true })
+    expect(stateOf(L.members[0]!, { ...addOn, lost: new Set(['0.1.e']) })).toEqual({
+      why: 'unwrapped',
+      drawn: false,
+      fixed: 0,
+    })
+  })
+  it('says a unit that owns an image and no glyph has no text: it stays the original’s, its image A’s ink in no group', () => {
+    const B = docOf([{ lines: ['a paragraph'], boxes: [[11, -3, 72, 600, 172, 680]] }])
+    const units = [unitOf('para', 'a paragraph'), unitOf('cell', 'x')]
+    const ins = instrumentOf(B, units, [[0]])
+    ins.boxes[0]!.unit[0] = 1
+    ins.boxes[0]!.role[0] = ROLE.element
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]).toMatchObject({ located: false, cause: 'no text' })
+    expect(L.groups[0]!.boxes).toEqual([null])
+  })
+  it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
+    // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see', x: 72 },
+          { text: 'Figure 12', x: 96, y: 700 },
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'see'), unitOf('para', 'Figure 12')]
+    const link = { annotationType: 2, rect: [89, 695, 151, 708], dest: 'figure.12' }
+    const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
+    expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
   })
 })

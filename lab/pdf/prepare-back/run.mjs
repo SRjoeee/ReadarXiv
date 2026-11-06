@@ -119,6 +119,12 @@ if (tally && process.argv.includes('--claims')) {
   mkdirSync(join(OUT, 'claims'), { recursive: true })
   writeFileSync(join(OUT, 'claims', `${id}.json`), `${JSON.stringify(claimsOf(ins, tally))}\n`)
 }
+// ---- (--review) the corpus counts of pull request #605's review findings (review.mjs)
+if (tally && process.argv.includes('--review')) {
+  const { reviewOf } = await import('./review.mjs')
+  mkdirSync(join(OUT, 'review'), { recursive: true })
+  writeFileSync(join(OUT, 'review', `${id}.json`), `${JSON.stringify(reviewOf(ins, tally))}\n`)
+}
 // ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
 // --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)
