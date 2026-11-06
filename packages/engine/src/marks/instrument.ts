@@ -240,13 +240,13 @@ export function instrumentFromPlan<Doc>({
   for (const m of plan.marks) byName.set(m.name, m)
   // (every point of a mark the plan names, in document order)
   const seen = new Map<string, At[]>()
-  pages.forEach((pg, page) =>
+  pages.forEach((pg, page) => {
     pg.points.forEach((point, q) => {
       if (!byName.has(point.name) && !NAME_START.test(point.name) && !NAME_END.test(point.name)) return
       const list = seen.get(point.name) ?? (seen.set(point.name, []).get(point.name) as At[])
       list.push({ page, q, point })
-    }),
-  )
+    })
+  })
   const regions = pages.map(regionsOf)
   const glyphs = pages.map((pg) => ownersOf(pg.glyphs.length))
   const boxes = pages.map((pg) => ownersOf(Math.floor(pg.boxes.length / 4)))
@@ -437,11 +437,14 @@ export function instrumentFromPlan<Doc>({
           break
         }
       }
-    run.forEach((j, r) => (r < cut ? set(O, j, unit, ROLE.label) : set(O, j, unit, ROLE.element, head)))
+    run.forEach((j, r) => {
+      if (r < cut) set(O, j, unit, ROLE.label)
+      else set(O, j, unit, ROLE.element, head)
+    })
   }
   // ---- babel's names: one unit a key, its occurrences its own
   const keyUnit = new Map<string, number>()
-  pages.forEach((pg, page) =>
+  pages.forEach((pg, page) => {
     pg.points.forEach((pt, q) => {
       const m = NAME_START.exec(pt.name)
       if (!m) return
@@ -455,8 +458,8 @@ export function instrumentFromPlan<Doc>({
       }
       const unit = keyUnit.get(key) as number
       range(page, pt.glyph, end.glyph, null, (j) => set(glyphs[page] as Owners, j, unit, ROLE.name))
-    }),
-  )
+    })
+  })
   const lineskip = readLineskip(log)
   return {
     ink,
