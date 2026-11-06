@@ -9,7 +9,7 @@
 // faces). The characters are read here under two stand-ins for it (`a`: every character alike; `b`: widths that vary by
 // character), and a name's facts are taken only where both readings give the same (names.ts): there they are decided by the
 // draw's items alone (each item's start, width, size and font, exact). Where a page's characters are in the tap
-// (samples/pages, pass 2's own reading), those are read instead.
+// (samples/pages, pass 2's own reading), they are read too, as a cross-check.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
@@ -182,12 +182,13 @@ const tapPages = new Map<string, Record<string, PageChar[]> | null>()
 export function tapChars(pair: string, page: number): PageChar[] | null {
   if (!tapPages.has(pair)) {
     const f = join(TAP, 'samples', 'pages', `${pair}.pages.json.gz`)
+    // (each page's characters serialized apart, their shared styles named by ids of their own: decoded a page at a time)
+    const raw = existsSync(f)
+      ? (JSON.parse(gunzipSync(readFileSync(f)).toString('utf8')) as { pages: Record<string, unknown> }).pages
+      : null
     tapPages.set(
       pair,
-      existsSync(f)
-        ? ((unser(JSON.parse(gunzipSync(readFileSync(f)).toString('utf8'))) as { pages: Record<string, PageChar[]> })
-            .pages ?? null)
-        : null,
+      raw ? Object.fromEntries(Object.entries(raw).map(([q, v]) => [q, unser(v) as PageChar[]])) : null,
     )
   }
   return tapPages.get(pair)?.[String(page)] ?? null

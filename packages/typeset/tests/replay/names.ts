@@ -6,7 +6,7 @@
 // The page's characters: today's reading of the page's draw (the left part's, the reader's own input) under two stand-ins for
 // the design widths the tap does not record (today-names.ts); a name whose answer differs between the two is not compared and is
 // counted (`widths`: it needs the design widths). The tap's own characters of a page (samples/pages, 30 pages) are a cross-check
-// only (`tapOther`): pass 2 kept a page's characters as a later read gave them. A name that leads a unit is that unit's lead: its word is
+// (`tapOther`: they give another answer). A name that leads a unit is that unit's lead: its word is
 // compared with the unit's U.lead slot, and whether it is drawn with the unit's lay (its lead taken, the unit laid).
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -131,8 +131,7 @@ export async function namesOf(pair: string): Promise<NamesResult> {
       records.push({ ...got.rec, drawn: false })
       continue
     }
-    // (the tap's own reading of the page, where pass 2 kept it: a cross-check, not the input; a page read again after it was
-    // let go may class a font otherwise)
+    // (the tap's own reading of the page, where pass 2 kept it: a cross-check of the draw's reading, which is the reader's input)
     const exact = tapChars(pair, nm.page)
     const tapOther = exact && !same(set(nm, exact), got) ? true : undefined
     records.push(got.rec)
