@@ -435,7 +435,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? ins.units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
-    // (an element whose ink stands on none of the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
+    // (an element whose ink stands apart from the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
     // and no line of the unit's)
     const textCut = cutLines(
       [...mem.text].sort((x, y) => x - y),
@@ -447,7 +447,17 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         if (
           kindOf(id) !== 'display' &&
           l.length &&
-          l.every((a) => !textCut.some((t) => t.page === pageA[a] && gA(a).y <= t.top && gA(a).y >= t.bottom))
+          // (beside its text lines: within two sizes over their first and under their last on a page, a line of formulas alone at
+          // its end or a script between two of them; outside, only ink apart from all of them: a mark set in a margin, a float)
+          l.every((a) => {
+            const g = gA(a)
+            const on = textCut.filter((t) => t.page === pageA[a])
+            return (
+              !on.length ||
+              g.y > Math.max(...on.map((t) => t.top)) + 2 * g.size ||
+              g.y < Math.min(...on.map((t) => t.bottom)) - 2 * g.size
+            )
+          })
         )
           outside.add(id)
     const inline: number[] = [...mem.text]
