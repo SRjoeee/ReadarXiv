@@ -15,7 +15,7 @@ const ROOT = join(import.meta.dirname, '../..')
 const DIR = join(ROOT, 'packages/typeset/src/data/rules')
 
 /** a value as TypeScript source, every character outside ASCII as an escape */
-const lit = v => JSON.stringify(v, null, 2).replace(/[^\x00-\x7f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+const lit = v => JSON.stringify(v, null, 2).replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
 const fileOf = tag => `${tag.toLowerCase()}.ts`
 const varOf = tag => tag.replace(/-/g, '_').toUpperCase()
 const files = new Map()

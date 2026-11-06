@@ -15,8 +15,8 @@ export function runsOfTokens(tokens: readonly Token[]): { face: Face; font: Face
     const face = t.face as (Face & { ids?: unknown }) | undefined
     if (!face?.ids || !(t.s || t.space)) continue
     const font = fontString(face, 100)
-    let r = by.get(font)
-    if (!r) by.set(font, (r = { face, chars: new Set() }))
+    const r = by.get(font) ?? { face, chars: new Set<string>() }
+    by.set(font, r)
     for (const ch of t.s ?? ' ') r.chars.add(ch)
     if (t.hyph) r.chars.add('-')
   }

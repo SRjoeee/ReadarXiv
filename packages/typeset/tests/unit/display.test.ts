@@ -43,8 +43,8 @@ describe('D.display: lineRuns', () => {
       {
         baseline: 700,
         items: [
-          item({ s: '中', cls: 'cjk', face: CJK }, 72),
-          item({ s: '文', cls: 'cjk', face: CJK }, 82),
+          item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 72),
+          item({ s: '\u6587', cls: 'cjk', face: CJK }, 82),
           item({ space: true, face: CJK }, 92),
           item({ s: 'ab', cls: 'latin', face: SERIF }, 95),
           item({ s: 'c', cls: 'latin', face: SERIF }, 105),
@@ -53,7 +53,7 @@ describe('D.display: lineRuns', () => {
     ]).lines[0]!
     const runs = lineRuns(line, layoutOf([]))
     expect(runs.map((r) => ('crop' in r ? 'crop' : [r.text, r.chars, r.xs]))).toEqual([
-      ['中文 ', true, [72, 82, 92]],
+      ['\u4e2d\u6587 ', true, [72, 82, 92]],
       // (a word glued to the one before it flows on in its run; the line's last Latin word copies a space)
       ['abc ', false, [95]],
     ])
@@ -80,7 +80,7 @@ describe('D.display: runEdge', () => {
     const L = layoutOf([
       {
         baseline: 700,
-        items: [item({ s: 'ab', cls: 'latin', face: SERIF }, 72), item({ s: '中', cls: 'cjk', face: CJK }, 90, 8)],
+        items: [item({ s: 'ab', cls: 'latin', face: SERIF }, 72), item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 90, 8)],
       },
     ])
     const [word, chars] = lineRuns(L.lines[0]!, L) as TextRun[]

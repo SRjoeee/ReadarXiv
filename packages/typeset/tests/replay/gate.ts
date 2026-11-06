@@ -1,7 +1,8 @@
 // The gate's runner over one pair, its members as today prepared them (lab/typeset/gate.mjs runs it on the corpus): every
 // unit of the pair's ledger prepared from its last laid round (round.ts prepare: the tap's tokens, blocks, size, parameters,
 // its row's start), and each page laid by the package's composition (src/lay/page.ts layPagePrepared: L8-L11, E1) from that
-// page's own part, design-a §1.3: the flows with a line on the page and the flows of every page one of its members begins on.
+// page's own part, design-a §1.3: the flows with a line on the page, the flows of every page one of its members begins on,
+// and every member of a tie holding one of them.
 // Answers the pair's laid units in the baseline's reader-dump format (FORMAT.md §4: size, leading, lines with their text,
 // crops), and risk 1 of the page decision: whether a member on two pages is laid alike from each page's part.
 import { layPagePrepared } from '../../src/lay/page.ts'
@@ -63,6 +64,13 @@ export function gatePair(pair: string): GatePair {
     const part = new Map<number, FlowMember>()
     for (const f of [pg, ...new Set(onPage.get(pg)!.map((m) => m.pages[0]!))])
       for (const m of onPage.get(f) ?? []) part.set(m.ord, m)
+    // (and every member of a tie that holds one of them: a table group is decided whole, design-a §1.3 (c))
+    for (const t of ties)
+      if (t.cells.some((o) => part.has(o)))
+        for (const o of t.cells) {
+          const m = members.get(o)
+          if (m) part.set(o, m)
+        }
     const flows = [...part.values()].sort((a, b) => a.ord - b.ord).map((m) => [m])
     const got = layPagePrepared(
       pg,

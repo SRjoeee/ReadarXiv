@@ -173,6 +173,28 @@ export {
 } from './shared/fill-page.types.ts'
 export { type Filled, fillPass, type PassUnit } from './shared/fill-pass.ts'
 export {
+  counterOf,
+  type NameDrawn,
+  type NameInput,
+  type NameLeads,
+  type NameRecord as BabelNameRecord,
+  type NameRow as BabelNameRow,
+  type NameRun,
+  nameChars,
+  nameInTarget,
+  nameRoom,
+  nameRuns,
+  nameScriptRuns,
+  nameStyleOf,
+  type PageChar,
+  runsWidth,
+  SMALL_CAPS_RATIO,
+  SMALL_CAPS_SHARE,
+  type SetName,
+  setName,
+} from './shared/names.ts'
+export { type LedBlock, nameLed } from './shared/name-led.ts'
+export {
   type Figure,
   type FigureRow,
   type FigureRun,

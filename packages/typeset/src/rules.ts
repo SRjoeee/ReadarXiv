@@ -587,7 +587,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: 'babel names wherever TeX identified them (D1a I4)',
     reads: ['words', 'fit.floorMin'],
-    state: open,
+    file: 'shared/names.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "every babel name of the corpus against the baseline's reader dumps (tests/replay/names.ts, lab/typeset/replay-names.mjs): 503 of 503 (206 drawn on their own, line x0/baseline/text; 297 leading a unit, its word against U.lead's slot); the names' rows, the page's draw and the rule set's labels from today's bundle and code (tests/replay/today-names.ts)",
+      cases: 503,
+    },
   },
   {
     id: 'S.figures',
@@ -638,7 +644,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2184-2192'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/name-led.ts',
+    state: {
+      is: 'ported',
+      replay: 'its F1 slots of the corpus, 9 of 9, and no start on the 31,231 other laid rounds',
+      cases: 9,
+    },
   },
   {
     id: 'S.onLeadRetry',
