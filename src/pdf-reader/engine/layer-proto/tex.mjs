@@ -199,6 +199,59 @@ export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
 }
 
 /**
+ * Where TeX set a group of the unit's source as a paragraph of its own: a box a command makes of its argument, under the
+ * unit's text (2608.25210v2 p3, units 55 to 57: an item's text, then `\mypython{…}`, its prompt in a frame at another size and
+ * measure). The front end ends a unit where TeX's source ends a paragraph (a blank line, \par), never inside a command's
+ * argument, so the unit holds both; laid as one paragraph, its translation ran on from the item's short last line over the
+ * frame's top and past its edge. Where TeX set the unit justified (the file's UNIT_FLAG.JUSTIFIED: none of its lines ends
+ * short of its measure but a paragraph's last and a forced break's), a line of the file (not held) that ends short of its
+ * frame's measure (forcedBreaks' SHORT) ends a paragraph there where the next line holds first the words of a group the
+ * source opens after the words the short line holds last: by the alignment (`pieceLines`, prepareUnit's: each source piece's
+ * first and last line its words stand on), two text pieces next to each other in the source, the first's last line the
+ * short one and the second's first the line after it, the group opened between them and closed after the second, and no
+ * forced break of the source nor a display between the two lines (forcedBreaks' own: `forced`, by their next lines). The
+ * group's open piece, where the row holds it between texts, breaks the translation there, and the text after it starts on
+ * that next line in a block of its own, its measure and pitch its lines', its first line at its indent (`room` null, as a
+ * forced break's whose next line opens another frame: finishUnit, blocksOf2's `opens`). Returns a Map like forcedBreaks',
+ * the open piece's index in the row to { next, room: null, pitch: null }; empty for a unit set centred, flush or as nothing
+ * tells.
+ */
+export function paragraphBreaks(lu, unit, pieceLines, forced = null) {
+  const out = new Map()
+  const source = Array.isArray(unit?.source) ? unit.source : null
+  if (!lu || !source || !pieceLines?.size || lu.centred !== false || lu.flush) return out
+  const L = lu.lines, F = lu.frames, held = new Set(lu.held ?? []), n = L.length / 8
+  const frameOf = new Int32Array(n).fill(-1), right = new Map()
+  for (let f = 0; f < F.length; f += 6) for (let j = F[f + 2]; j < F[f + 2] + F[f + 3]; j++) {
+    frameOf[j] = f
+    if (!held.has(j)) right.set(f, Math.max(right.get(f) ?? -Infinity, L[8 * j + 2]))
+  }
+  const displays = []
+  for (const row of lu.ph.values()) if (row.kind === 'display' && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY))) for (let s = 0; s + 5 < row.segs.length; s += 6) displays.push([row.segs[s], row.segs[s + 2], row.segs[s + 4], row.segs[s + 5]])
+  const forcedNext = new Set([...(forced?.values() ?? [])].map(b => b.next))
+  const located = [...pieceLines].filter(([k]) => source[k]?.t === 'text').sort((a, b) => a[0] - b[0])
+  for (let q = 0; q + 1 < located.length; q++) {
+    const [ka, [, j]] = located[q], [kb, [lo]] = located[q + 1]
+    if (lo !== j + 1 || j + 1 >= n || held.has(j) || held.has(j + 1) || forcedNext.has(j + 1) || frameOf[j] < 0) continue
+    if (!(L[8 * j + 2] < right.get(frameOf[j]) - SHORT * L[8 * j + 6])) continue
+    const page = L[8 * j], hi = L[8 * j + 3], low = L[8 * (j + 1) + 3]
+    if (L[8 * (j + 1)] === page && displays.some(([pg, base]) => pg === page && base < hi && base > low)) continue
+    if (displays.some(([pg, , top, bottom]) => pg === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5]))) continue
+    // (the group: the first opened between the two pieces, no forced break among them, closed after the second)
+    const between = source.slice(ka + 1, kb)
+    if (between.some(p => p.t === 'ph' && FORCED_BREAK.test(p.src ?? ''))) continue
+    const g = ka + 1 + between.findIndex(p => p.t === 'open')
+    if (g <= ka) continue
+    const open = source[g], closes = source.findIndex((p, k) => k > kb && p.t === 'close' && p.id === open.id)
+    if (open.id === undefined || closes < 0) continue
+    // (where the row holds it between texts of its own: a piece the translator did not place stands at the row's end)
+    const i = unit.pieces.indexOf(open), said = p => p.t === 'text' && /\S/.test(p.s ?? '')
+    if (i > 0 && !out.has(i) && unit.pieces.slice(0, i).some(said) && unit.pieces.slice(i + 1).some(said)) out.set(i, { next: j + 1, room: null, pitch: null })
+  }
+  return out
+}
+
+/**
  * The unit's lines from the file, on the pages up to `maxPage`, as v0's rectangles [page, x0, y0, x1, y1]: across their
  * words' ink, and up and down an anchors' rectangle's band from their exact baselines (the file's top and bottom are its
  * fonts' declared boxes, which reach a line lower under CMSY's descent, and v0 reads a line's extent from its characters
@@ -454,8 +507,13 @@ export function texParts(lu, kOf, { lines, extents = 'v0', shown = Infinity, lin
     return { uc, extents: ext, lineInfo, held }
   }
   // (and where its forced breaks end the file's lines, which its rectangles are: forcedBreaks, by TeX's rule between two
-  // lines where the file gives its values)
-  parts.breaks = unit => forcedBreaks(lu, unit, kOf, lineskip)
+  // lines where the file gives its values; and where it set a group of the source as a paragraph of its own: paragraphBreaks, by
+  // the lines the alignment found each source piece's words on)
+  parts.breaks = (unit, pieceLines = null) => {
+    const out = forcedBreaks(lu, unit, kOf, lineskip)
+    for (const [i, b] of paragraphBreaks(lu, unit, pieceLines, out)) if (!out.has(i)) out.set(i, b)
+    return out
+  }
   if (extents === 'tex') {
     parts.extents = (_lines, rects) => {
       const out = new Map()

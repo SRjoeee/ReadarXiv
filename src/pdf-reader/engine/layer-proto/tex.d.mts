@@ -30,6 +30,10 @@ export interface ForcedBreak { next: number; room: number | null; pitch: number 
 /** where each forced break of the unit's row ends a line of the file: each piece of a break group paired with TeX's breaks
  *  in order (the lines ended short of their frame's measure), by its index, to its break; empty where nothing pairs */
 export declare function forcedBreaks(lu: LayoutUnit | null, unit: Unit, kOf?: readonly number[] | null, lineskip?: readonly [skip: number, limit: number] | null): Map<number, ForcedBreak>
+/** where TeX set a group of the unit's source as a paragraph of its own (a box a command makes of its argument), in a unit set
+ *  justified: the group's open piece, by its index in the row, to the line its text starts on (`room` and `pitch` null: a block
+ *  of its own), by the lines the alignment found each source piece's words on (`pieceLines`); empty where none */
+export declare function paragraphBreaks(lu: LayoutUnit | null, unit: Unit, pieceLines: Map<number, [number, number]> | null, forced?: Map<number, ForcedBreak> | null): Map<number, ForcedBreak>
 /** the unit's lines from the file, on the pages up to maxPage; `held` those its source does not write, kept */
 export declare function texRects(lu: LayoutUnit, maxPage?: number): TexLines
 /** a segment of a row in the file: its page, its extent across, its baseline, and its box's top and bottom */

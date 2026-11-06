@@ -4629,6 +4629,31 @@ none lost. The run-in census (1,043 heads, every pass of the sweep): every measu
 headings whose translation ends a line over their shared row (2610.20808v1 p26's u729, 2608.23393v1 p13's u159), which the census
 does not measure, their text now on that line after the original's separation. A drawing rule, no version (§18.3).
 
+**A group TeX set as a paragraph of its own (2026-11-06; the release sweep of e4be8723, its item 2).** The front end ends a unit
+where the source ends a paragraph (a blank line, `\par`), never inside a command's argument; so a box a command makes of its
+argument under a paragraph's text is the same unit as that text. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
+text, "response_equal_llm.: [sentence_1] and [sentence_2] are placeholders for two test sentences.", then `\mypython{…}`, the
+prompt in a frame at 7.97 pt where the item is 8.97, its lines 8.3 pt further in. Laid as one paragraph, one block of all its
+lines, the translation ran on from the item's short last line to the column's edge, over the frame's top border and past its right
+edge, and the frame's first row stood empty. The units had stayed English (their item's label a placeholder whose ink was not
+known) until PIPELINE 73 moved the start mark past `\topic{\code{…}}` (#596), which drew them. TeX's file and the alignment tell
+where the paragraph ends (`tex.mjs` `paragraphBreaks`). In a unit TeX set justified (UNIT_FLAG.JUSTIFIED: none of its lines ends
+short of its measure but a paragraph's last and a forced break's), a line of the file that ends short of its frame's measure
+(`forcedBreaks`' SHORT) ends a paragraph where the next line holds first the words of a group the source opens after the words
+the short line holds last. The alignment reads each source piece's first and last line (`layer2.mjs` `pieceLinesOf`, over the
+words it pairs). There must be no forced break of the source nor a display between the two lines, and the group must close after
+those words. The group's open piece, where the row holds it between texts of its own, breaks the translation there
+(`finishUnit`'s `openBreaks`, `tokensOf2`), and the text after it starts on the line TeX set the group's from, in a block of its
+own: its measure and pitch its own lines', its first line at its indent (`blocksOf2`: a line a referenced break's region opens
+starts a block, `opens`; before, a forced break's region split a block later, keeping the whole block's bounds). A centred or flush
+unit, and one whose alignment the file does not tell, is laid as before: its short lines may end no paragraph. The unit is still
+laid at one size, the group's where it holds most of the lines (the item's text at 7.97 pt on p3). Over the 83 of the release
+sweep's 87 papers whose layers and rows staging's cache holds (2,267 pages, next's door against this one): 5 pages move. They are
+2608.25210v2 p3 (its three prompt boxes, and the page's fill, which evens its other units' leading by about a point a line),
+2501.14787v1 p57 and p58 (u423, the shared line's rule above), and two SIAM title pages, 2610.20266v1 and 2610.20285v1. There
+`\funding{…}` sets its own paragraph under "Submitted to the editors …" in the same note, and the translation had run the two
+on one line; the funding now starts on TeX's next line, at its indent.
+
 **What TeX sets after a bibliography, and an appendix's own contents (PIPELINE 64, LAYOUT 33, REMOVAL 23; the owner's report of
 2026-11-03 on 2610.42112v1 p16).** The references' zone that a bibliography's entries open ends with its last entry: on the line
 its end mark stands on and the lines right below it at an entry's leading (`ledger.mjs` `lastEntriesOf`, `ENTRY_DY`: what a style

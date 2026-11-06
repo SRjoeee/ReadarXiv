@@ -118,9 +118,16 @@ export interface Prepared extends Map<number, Resolved> {
   /** the finish: each kept line's region (a run of kept lines), and the regions a kept placeholder holds */
   regionOf: Map<string, number>
   referenced: Set<number>
-  /** a source's forced breaks (tex.mjs forcedBreaks): each break piece's index to the file's line TeX set after it and
-   *  TeX's room between the two (null: that line opens another frame) */
+  /** the file's lines each source piece's words stand on, by the alignment: its index in `unit.source` to [first, last]
+   *  (tex.mjs paragraphBreaks) */
+  pieceLines?: Map<number, [number, number]> | null
+  /** a source's forced breaks (tex.mjs forcedBreaks), and the open pieces of the groups TeX set as paragraphs of their own
+   *  (paragraphBreaks): each break piece's index to the file's line TeX set after it and TeX's room between the two (null:
+   *  that line opens another frame, or another paragraph) */
   breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
+  /** the finish: a group TeX set as a paragraph of its own, its open piece's index to its region (tokensOf2: the laid line
+   *  ends before it) */
+  openBreaks?: Map<number, number>
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
   breakAt?: Map<string, number>
@@ -182,9 +189,9 @@ export interface UnitParts {
   /** part 5: a rendering page text cannot be is its segments' crops (mutates the crops); the k of a placeholder the file
    *  cannot draw, or -1 */
   crops: (out: Prepared) => number
-  /** where the unit's forced breaks end its lines (the file's): each break piece's index to the line set after it, by its
-   *  index in the file (LineInfo.j) */
-  breaks: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
+  /** where the unit's forced breaks end its lines (the file's), and where TeX set a group of it as a paragraph of its own (by
+   *  `pieceLines`, the alignment's): each break piece's index to the line set after it, by its index in the file (LineInfo.j) */
+  breaks: (unit: Unit, pieceLines?: Map<number, [number, number]> | null) => Map<number, { next: number; room: number | null; pitch: number | null }>
   /** each placeholder's fill by the file's row, by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
   fillOf: (k: number) => number | null
   /** each colour piece's run's fill by the file (its `colours`), by piece index: 0xRRGGBB or null */
@@ -203,7 +210,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; onLead?: boolean; flowX?: { y: number; lead: Block2 }; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); onLead: its lines flow on from that line, at their own pitch; flowX: for those of them laid over the rows the unit before left, down to the shared row (y), that unit's block that holds the row (`lead`): each takes the measure TeX set at its height, that unit's rows' and on the row both units' (slotsAt's flowMeasureAt); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; onLead?: boolean; flowX?: { y: number; lead: Block2 }; opens?: boolean; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); onLead: its lines flow on from that line, at their own pitch; flowX: for those of them laid over the rows the unit before left, down to the shared row (y), that unit's block that holds the row (`lead`): each takes the measure TeX set at its height, that unit's rows' and on the row both units' (slotsAt's flowMeasureAt); opens: a forced break's region starts it (blocksOf2: a paragraph TeX set of a group of the unit's, tex.mjs paragraphBreaks), its first line at its indent (slotsAt); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number

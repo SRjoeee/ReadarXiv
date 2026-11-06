@@ -83,3 +83,63 @@ describe('a forced break inside a frame: its room is the unit\'s own, and the pa
     for (const p of ALL) expect((await ask([p])).snaps.get(p), `page ${p} alone`).toEqual(wanted.get(p))
   })
 })
+
+// A group TeX set as a paragraph of its own inside a unit (tex.mjs paragraphBreaks): 2608.25210v2 p3's prompt boxes, each unit an
+// item's text and then `\mypython{…}`, the prompt in a frame at another size and measure. The front end cuts units at the source's
+// paragraph ends, never inside a command's argument, so the unit holds both; laid as one paragraph, the translation ran on from
+// the item's short last line over the frame's top and past its edge. Here: two lines of 10 pt type, the second short, then the
+// box's three at 9 pt, 10 pt further in on both sides; the unit set justified (UNIT_FLAG.JUSTIFIED), as the file has these
+describe('a group TeX set as a paragraph of its own: its text starts on the line TeX set it from, in a block of its own', () => {
+  const ITEM = 'Placeholders hold the two test sentences of the prompt. '
+  const BOX = 'Determine whether the two sentences are equivalent in their meaning and return it.'
+  const OPEN = { t: 'open', id: 1, src: '\\mybox{', k: 1 }, CLOSE = { t: 'close', id: 1, src: '}', k: 3 }
+  const boxed: Paper = {
+    name: 'a box under the text', pages: 1,
+    specs: [{
+      id: 0, kind: 'para', chars: 0, at: 0,
+      lines: [line(1, 250, 'Placeholders hold the two test', 20, 280), line(1, 238, 'sentences of the prompt.', 20, 150), line(1, 222, 'Determine whether the two', 30, 270), line(1, 211, 'sentences are equivalent in', 30, 270), line(1, 200, 'their meaning and return it.', 30, 230)],
+    }],
+  }
+  function boxedBuilt(flags: number): Built {
+    const P = build(boxed)
+    const row = P.rows.get(0) as unknown as { src: string; pieces: unknown[] }
+    // (the source: the item's text, the box's group around its text; the translation: the item's twelve characters, the group's
+    // open piece, the box's thirty, its close)
+    const source = [{ t: 'text', s: ITEM }, OPEN, { t: 'text', s: BOX }, CLOSE]
+    Object.defineProperty(row, 'source', { value: source, enumerable: false })
+    row.src = `${ITEM}${BOX}`.trim()
+    row.pieces = [{ t: 'text', tr: true, s: CJK(12, 0x4e00) }, OPEN, { t: 'text', tr: true, s: CJK(30, 0x5100) }, CLOSE]
+    const layout = P.layout as unknown as { units: number[][]; lines: [number, number[]][]; frames: [number, number[]][] }
+    layout.units = layout.units.map(u => [...u.slice(0, 3), flags, source.length])
+    // (the box's lines at 9 pt; the unit's lines one frame)
+    layout.lines = layout.lines.map(([id, rows]) => [id, rows.map((v, i) => (i % 8 === 6 && i >= 16 ? 9 : v))])
+    layout.frames = layout.frames.map(([id]) => [id, [1, 0, 0, 5, -1, 0]])
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    return P
+  }
+
+  it('the item\'s text stays on its lines and the box\'s starts on the box\'s first, within its measure', async () => {
+    const run = await openRun(boxedBuilt(32))
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length, JSON.stringify(run.skipped)).toBeGreaterThan(1)
+    // (the box's lines a block of their own, the first on the box's first row; none of them past the box's measure)
+    const box = lines.filter(l => l[8] === 1)
+    expect(box.length, `the lines' blocks ${lines.map(l => `${l[1]}:${l[8]}`)}`).toBeGreaterThan(0)
+    expect(box[0]![1]).toBe(222)
+    expect(box.every(l => l[6]! >= 30 - 0.01 && l[7]! <= 270 + 0.01), `the box's lines ${box.map(l => `${l[6]}-${l[7]}`)}`).toBe(true)
+    // (the item's text on its own lines, above the box)
+    const item = lines.filter(l => l[8] === 0)
+    expect(item.length).toBeGreaterThan(0)
+    expect(item.every(l => l[1]! >= 238), `the item's lines ${item.map(l => l[1])}`).toBe(true)
+  })
+
+  it('control: a unit TeX\'s file does not say it set justified is laid as before, one paragraph', async () => {
+    // (a short line of a ragged or centred unit, or one whose alignment nothing tells, may end no paragraph)
+    const run = await openRun(boxedBuilt(0))
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every(l => l[8] === 0)).toBe(true)
+  })
+})
