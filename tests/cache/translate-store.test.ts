@@ -81,6 +81,16 @@ describe("today's bounds, per table", () => {
     expect(await db.answers.count()).toBeLessThanOrEqual(3)
     expect((await store.stats()).entries).toBe(await db.answers.count())
   })
+  it('a write that holds one key twice keeps one entry and counts one, the last value', async () => {
+    const db = createTranslateDb(name(), options)
+    const store = createTranslateStore({ db })
+    // rows are keyed by a unit's content: equal plain units of one call write one key twice, new or already kept
+    await store.rows.write([['r', 'first'], ['r', 'second'], ['s', '1']])
+    await store.rows.write([['s', 'again'], ['s', 'last']])
+    const kept = await db.rows.toArray()
+    expect(kept.map(e => [e.key, e.value])).toEqual([['r', 'second'], ['s', 'last']])
+    expect(await store.stats()).toEqual({ entries: 2, bytes: kept.reduce((n, e) => n + e.bytes, 0) })
+  })
   it('a value over its cap is not kept; an OCR reading may be larger than an answer', async () => {
     const store = createTranslateStore({ db: createTranslateDb(name(), options) })
     const big = 'x'.repeat(100 * 1024)

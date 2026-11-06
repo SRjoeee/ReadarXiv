@@ -88,7 +88,9 @@ class Bounded implements KeyValues {
 
   async write(entries: readonly (readonly [key: string, value: string])[]): Promise<void> {
     const now = this.now()
-    const rows = entries.flatMap(([key, value]): Entry[] => {
+    // one entry a key, the last: the put keeps one, and the totals count what it keeps (equal plain units of one call
+    // write one row key twice)
+    const rows = [...new Map(entries.map(([key, value]) => [key, value]))].flatMap(([key, value]): Entry[] => {
       const bytes = bytesOf(key) + bytesOf(value)
       return bytes > this.limits.maxValueBytes ? [] : [{ key, value, made: now, used: now, bytes }]
     })
