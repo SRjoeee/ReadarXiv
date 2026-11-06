@@ -208,7 +208,13 @@ async function fillQueue(page, stall, { slots = GOOGLE_SLOTS, timeoutMs = 40_000
   const items = stall.held.reduce((n, h) => n + h.items, 0)
   const requests = stall.held.length
   const known = new Set(stall.held.map(h => h.body))
-  await stall.held[0]?.route.abort().catch(() => undefined)
+  // One slot freed by **answering** its request (each text back as it went), not by failing it: the chain retries a failed
+  // request in its own slot (packages/translate chain.ts `run`, "one request and its retries, in its slot"), so an abort
+  // would bring back the same body and prove nothing; an answered one gives the slot to the next queued batch
+  const first = stall.held[0]
+  const texts = (() => { try { return JSON.parse(first?.body || 'null')?.[0]?.[0] } catch { return null } })()
+  if (Array.isArray(texts)) await first?.route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([texts]) }).catch(() => undefined)
+  else await first?.route.abort().catch(() => undefined)
   const isNew = () => stall.held.some(h => h.body && !known.has(h.body))
   for (let i = 0; i < 40 && !isNew(); i++) await sleep(200)
   return { requests, items, pending, confirmed: isNew(), extra: stall.held.length - requests }
