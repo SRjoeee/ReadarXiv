@@ -9,7 +9,7 @@ import { type Composer, createComposer, type RowsSource } from '../../src/compos
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import type { Page } from '../../src/compose/page.ts'
-import { fixtureLay, pagesOf, type ReaderDump } from './convert.ts'
+import { fixtureLay, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
@@ -298,6 +298,87 @@ const h = {
       .sort((a, b) => a.at - b.at)
       .map((x) => x.t)
     return { spans: spans.length, text: spans.join(''), copied, laid }
+  },
+  /**
+   * The split residue and I1 on pages `pages` (all where none) at `scale` and the device's ratio, each rendered as the page views
+   * render (a GPU-backed 2D canvas, the optional content configuration given): arXiv's page (A), A again (the canvas's own
+   * noise), the composed page with every group on (W: I1), and on a page with a translation the composed page with its laid
+   * groups off (L): the pixels it differs from A outside the laid members' regions are what a laid page shows of the residue.
+   * Way (a), a page not laid drawn from A: only L's residue shows, on laid pages; way (b), both panes the composed document:
+   * W's residue shows on every page, on both panes alike
+   */
+  async residue(o: { pages?: number[]; scale?: number } = {}) {
+    const A = h.doc as import('pdfjs-dist').PDFDocumentProxy, W = h.composed as import('pdfjs-dist').PDFDocumentProxy, g = h.groups as Groups
+    const scale = (o.scale ?? 1.5) * (96 / 72), dpr = devicePixelRatio
+    for (const p of h.pages.values()) g.set(p)
+    const draw = async (doc: import('pdfjs-dist').PDFDocumentProxy, n: number, config: Promise<unknown> | null) => {
+      const page = await doc.getPage(n)
+      const vp = page.getViewport({ scale })
+      const c = document.createElement('canvas')
+      c.width = Math.floor(vp.width * dpr)
+      c.height = Math.floor(vp.height * dpr)
+      const ctx = c.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
+      const t = performance.now()
+      await page.render({ canvas: c, canvasContext: ctx, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined, ...(config ? { optionalContentConfigPromise: config } : {}) } as never).promise
+      const ms = performance.now() - t
+      const data = ctx.getImageData(0, 0, c.width, c.height).data
+      c.width = 0
+      c.height = 0
+      return { data, ms, vp }
+    }
+    const diff = (x: Uint8ClampedArray, y: Uint8ClampedArray, keep: (i: number) => boolean = () => true) => {
+      let px = 0, max = 0
+      for (let i = 0; i < x.length; i += 4) {
+        const d = Math.max(Math.abs((x[i] as number) - (y[i] as number)), Math.abs((x[i + 1] as number) - (y[i + 1] as number)), Math.abs((x[i + 2] as number) - (y[i + 2] as number)))
+        if (d && keep(i / 4)) { px++; max = Math.max(max, d) }
+      }
+      return { px, max }
+    }
+    const out = []
+    const all = membersOf(h.parts.values())
+    const list = o.pages ?? Array.from({ length: A.numPages }, (_, i) => i + 1)
+    for (const n of list) {
+      const a = await draw(A, n, null), a2 = await draw(A, n, null), w = await draw(W, n, g.allOn)
+      const row: Record<string, unknown> = { n, pixels: a.data.length / 4, self: diff(a.data, a2.data), all: diff(a.data, w.data), msA: Math.round(a.ms), msW: Math.round(w.ms) }
+      const page = h.pages.get(n)
+      if (page?.members.some(m => m.state === 'laid')) {
+        const l = await draw(W, n, g.laid)
+        const W0 = Math.floor(l.vp.width * dpr)
+        const boxes: number[][] = []
+        for (const m of page.members) {
+          if (m.state !== 'laid' || !m.off) continue
+          const pl = all.get(m.ord)
+          const inks = [...(pl?.lines.filter(x => x[0] === n).map(x => [x[2], x[6], x[3], x[5]]) ?? []), ...(pl?.els ?? []).flatMap(([, e]) => e.ink.filter(i => i[0] === n).map(i => [i[1], i[2], i[3], i[4]])), ...(pl?.label?.ink[0] === n ? [[pl.label.ink[1], pl.label.ink[2], pl.label.ink[3], pl.label.ink[4]]] : [])]
+          for (const [x0, y0, x1, y1] of inks as number[][]) {
+            const [ax, ay] = l.vp.convertToViewportPoint(x0 as number, y1 as number) as [number, number], [bx, by] = l.vp.convertToViewportPoint(x1 as number, y0 as number) as [number, number]
+            boxes.push([Math.floor(Math.min(ax, bx) * dpr) - 2, Math.floor(Math.min(ay, by) * dpr) - 2, Math.ceil(Math.max(ax, bx) * dpr) + 2, Math.ceil(Math.max(ay, by) * dpr) + 2])
+          }
+        }
+        const outside = (i: number) => { const x = i % W0, y = Math.floor(i / W0); return !boxes.some(b => x >= (b[0] as number) && y >= (b[1] as number) && x <= (b[2] as number) && y <= (b[3] as number)) }
+        row.laid = diff(a.data, l.data, outside)
+        row.msL = Math.round(l.ms)
+      }
+      out.push(row)
+    }
+    for (const p of h.pages.keys()) g.clear(p)
+    return { scale: o.scale ?? 1.5, dpr, pages: out }
+  },
+  /** a language switch: the same layer, other rows (`target`): what it reuses (the composed document, the parts, the store),
+   *  where the reader stays, and the pages laid again */
+  async retarget(target: string, name: string) {
+    const before = { composed: h.composed, place: (h.panes as Panes).reading(), laid: (h.composer as Composer).probe() }
+    const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const all = ((await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }).rows
+    const given = new Map(all.map(r => [r.id, r]))
+    const rows = { target, done: true, get: (id: string) => given.get(id), on: () => () => {}, give() {}, rowsCount: given.size }
+    h.rows = rows
+    ;(h.composer as Composer).setLayer({ part: async n => h.parts.get(n) ?? null, pages: (h.head as Head).paper.pages }, rows)
+    return { before: { place: before.place, laidPages: before.laid.laidPages }, sameComposed: before.composed === h.composed }
+  },
+  /** the anchors of the right's laid page n: their names, hrefs and boxes */
+  linksOf(n: number) {
+    const slot = (h.panes as Panes).right.page(n) as HTMLElement
+    return [...slot.querySelectorAll('.axt-over a.axt-link')].map(a => ({ href: a.getAttribute('href'), name: a.getAttribute('aria-label'), rect: a.getBoundingClientRect().toJSON() }))
   },
   /** each page's box on both panes: [width, height, top in the pane's scroll] */
   boxes() {
