@@ -4615,7 +4615,14 @@ its fit's pitch where spreading moves the line: 2608.16117v1's u57, the paragrap
 18 and 19 where its fill set 23.1, its frame on page 18 ending 17.4 pt higher (the rules gate's three pages that move, pages 17 to
 19 of that paper in Chinese: its blank lines a frame a little worse, its wide paragraph gaps fewer); where none of the next unit's
 text fits after it, its first line stands a pitch under it, unless its last line then ends lower than laid as before, where it is
-laid as before. Over the release sweep's 88 pass-papers (1,308 shared rows): `keptBetween` refused 83 rows and refuses 52, the 31
+laid as before. Lower is read across pages, a line on a later page lower than any of the page before. And where that leaves none of
+the unit on its first row's page while laid as before it has a line there, it is laid as before (2026-11-06; the release sweep of
+e4be8723, its first follow-up): 2501.14787v1 p57's u423 ("So here, we aren't thinking of a, b as numbers…") shares p57's last line
+with u422 ("…as seen in the diagram below:"), whose Chinese ends on the line over it, 14.9 pt up, with no room after it. A pitch
+under that line stood 0.6 pt under the row at u423's leading of 1.3, past the foot of its block on p57, the row alone. So none of
+u423 was laid on p57, its row was erased and drawn empty, and all its text went to p58, ending where it ends laid from the row.
+The check read its first line, on p58, as higher than the line before on p57 (its baseline the greater number). It is laid from
+TeX's row again, as production drew it: 27 characters on p57, p58's two lines as production's. Over the release sweep's 88 pass-papers (1,308 shared rows): `keptBetween` refused 83 rows and refuses 52, the 31
 that go each a unit's own label between it and the unit before (11 inline items of 2610.21085v1 and 2610.21098v1, a sub-caption's
 "(d)", 3 paragraph footnotes' marks, and 16 author lines' affiliation marks, which are drawn pixel for pixel as before); 28 next
 units are laid anew (their lines in reading order): 15 go on on the line before, the translation before them ending over the row;
@@ -4630,6 +4637,37 @@ float that split it, by 17.9, to 22.5). 18 other units on those pages are laid a
 none lost. The run-in census (1,043 heads, every pass of the sweep): every measured head's gap as before; the two that change are
 headings whose translation ends a line over their shared row (2610.20808v1 p26's u729, 2608.23393v1 p13's u159), which the census
 does not measure, their text now on that line after the original's separation. A drawing rule, no version (§18.3).
+
+**A group TeX set as a paragraph of its own (2026-11-06; the release sweep of e4be8723, its item 2).** The front end ends a unit
+where the source ends a paragraph (a blank line, `\par`), never inside a command's argument; so a box a command makes of its
+argument under a paragraph's text is the same unit as that text. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
+text, "response_equal_llm.: [sentence_1] and [sentence_2] are placeholders for two test sentences.", then `\mypython{…}`, the
+prompt in a frame at 7.97 pt where the item is 8.97, its lines 8.3 pt further in. Laid as one paragraph, one block of all its
+lines, the translation ran on from the item's short last line to the column's edge, over the frame's top border and past its right
+edge, and the frame's first row stood empty. The units had stayed English (their item's label a placeholder whose ink was not
+known) until PIPELINE 73 moved the start mark past `\topic{\code{…}}` (#596), which drew them. TeX's file and the alignment tell
+where the paragraph ends (`tex.mjs` `paragraphBreaks`). In a unit TeX set justified (UNIT_FLAG.JUSTIFIED: none of its lines ends
+short of its measure but a paragraph's last and a forced break's), a line of the file that ends short of its own measure
+(`forcedBreaks`' SHORT) ends a paragraph where the next line holds first the words of a group the source opens after the words
+the short line holds last. Its own measure is the one TeX set at its height as the door lays it (`layer2.mjs` `measureOf` over
+its block: `measuresOf`' runs, else the block's edges), never the frame's widest edge: a full row of a narrower measure beside a
+wrapped figure is no paragraph's end, and a group on the row after it is no paragraph of its own (the review of #603). A wrapped
+paragraph too short for `measuresOf` to read its measures (under four lines) is read as one measure here, as its slots are. The alignment reads each source piece's first and last line (`layer2.mjs` `pieceLinesOf`, over the
+words it pairs). There must be no forced break of the source nor a display between the two lines, and the group must close after
+those words. The group's open piece, where the row holds it between texts of its own, breaks the translation there
+(`finishUnit`'s `openBreaks`, `tokensOf2`), and the text after it starts on the line TeX set the group's from, in a block of its
+own: its measure and pitch its own lines', its first line at its indent (`blocksOf2`: a line such a paragraph opens starts a
+block, `paraAt`, `opens`). An ordinary forced break's region still splits its block later, keeping the measure the unit's lines
+share: a unit of two lines ended by `\\` after its first lays its first part on to the second line's measure, as before (the review
+of #603; a line a forced break opened had started a block too, its own measure the first line's 20 to 130 where the two shared 20
+to 280, which the door's widening of a one-line block mostly hid). A centred or flush
+unit, and one whose alignment the file does not tell, is laid as before: its short lines may end no paragraph. The unit is still
+laid at one size, the group's where it holds most of the lines (the item's text at 7.97 pt on p3). Over the 83 of the release
+sweep's 87 papers whose layers and rows staging's cache holds (2,267 pages, next's door against this one): 5 pages move. They are
+2608.25210v2 p3 (its three prompt boxes, and the page's fill, which evens its other units' leading by about a point a line),
+2501.14787v1 p57 and p58 (u423, the shared line's rule above), and two SIAM title pages, 2610.20266v1 and 2610.20285v1. There
+`\funding{…}` sets its own paragraph under "Submitted to the editors …" in the same note, and the translation had run the two
+on one line; the funding now starts on TeX's next line, at its indent.
 
 **What TeX sets after a bibliography, and an appendix's own contents (PIPELINE 64, LAYOUT 33, REMOVAL 23; the owner's report of
 2026-11-03 on 2610.42112v1 p16).** The references' zone that a bibliography's entries open ends with its last entry: on the line

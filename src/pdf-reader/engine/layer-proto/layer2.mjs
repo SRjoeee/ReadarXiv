@@ -580,8 +580,9 @@ function measureAt(b, y, k) {
   const at = i => b.measures.get(rectKey(b.rects[i])) ?? [b.x0, b.x1]
   return k >= 0 && k < b.rects.length ? at(k) : measureOn(b.G ?? b.B, at, y)
 }
-/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges */
-const measureOf = (b, y, k) => (b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1])
+/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges (slotsAt; tex.mjs
+ *  paragraphBreaks reads a line's so) */
+export const measureOf = (b, y, k) => (b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1])
 /** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)`: a line's own on its baseline (and over
  *  the first, under the last), between two the narrower of both (measureAt) */
 function measureOn(Y, at, y) {
@@ -622,7 +623,7 @@ function flowMeasureAt(b, y) {
  * by the key of the line TeX set after it (finishUnit): that line goes on the block of the line before it, whatever the
  * gap TeX's room opened between them (blocks2 closes it), and the gap is no pitch the next line is read by.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null, centred = undefined) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null, centred = undefined, paraAt = null) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
@@ -630,9 +631,15 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const prev = cur?.rects.at(-1)
     const pitchSoFar = cur && cur.rects.length > 1 && !joinAt?.has(rectKey(prev)) ? cur.rects.at(-2)[4] - prev[4] : prev ? (prev[4] - prev[2]) * 1.4 : 0
     const joined = !!cur && cur.page === page && !!joinAt?.has(rectKey([page, x0, y0, x1, y1]))
-    const follows = joined || (cur && cur.page === page && x0 < prev[3] && x1 > prev[1] && y1 < prev[4] && prev[2] - y1 < Math.max(pitchSoFar, (prev[4] - prev[2]) * 1.4) * 0.9)
+    // (a line a paragraph TeX set of a group opens (`paraAt`, finishUnit's: tex.mjs paragraphBreaks, its region referenced) starts
+    // a block of its own, its measure and pitch its own lines': its box's narrower measure follows the unit's text's last line
+    // nearer than a pitch, 2608.25210v2 p3's prompt boxes. A forced break's next line keeps the unit's measure, its block split
+    // below with the whole block's bounds: a unit of two lines, the first ended by `\\`, lays its first part on to the measure
+    // its second line holds, the review of #603)
+    const key = rectKey([page, x0, y0, x1, y1]), opens = !!paraAt?.has(key) && !!referenced?.has(breakAt?.get(key))
+    const follows = !opens && (joined || (cur && cur.page === page && x0 < prev[3] && x1 > prev[1] && y1 < prev[4] && prev[2] - y1 < Math.max(pitchSoFar, (prev[4] - prev[2]) * 1.4) * 0.9))
     if (!follows) {
-      cur = { page, rects: [] }
+      cur = { page, rects: [], ...(opens ? { opens: true } : {}) }
       blocks.push(cur)
     }
     cur.rects.push([page, x0, y0, x1, y1])
@@ -673,6 +680,7 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
       } else {
         if (!run) {
           run = { ...b, rects: [], indent: i === 0 ? b.indent : 0, after }
+          if (i > 0) delete run.opens
           runs.push(run)
         }
         run.rects.push(r)
@@ -1032,8 +1040,11 @@ export function prepareUnit(unit, rects, charsByPage, citeMap, deny, parts) {
   resolvePlaceholders(out, { unit, phs, rects, charsByPage, citeMap, gaps }, parts.renderings)
   const unproven = parts.crops(out)
   if (unproven >= 0) out.unproven = unproven
-  // (where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it)
-  out.breaks = parts.breaks(unit)
+  // (where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it; and where it set a group
+  // of the source as a paragraph of its own, by the lines the alignment found its words on: the group's open piece)
+  out.breaks = parts.breaks(unit, out.pieceLines ?? null)
+  // (read here alone: no unit keeps it, the speed check's heap a laid page)
+  out.pieceLines = null
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -1088,6 +1099,9 @@ function alignUnit(out, unit, rects, deny) {
     if (out.orig && sc.upper.size > 0 && 2 * sc.upper.size > sc.lower.size) out.orig = { ...out.orig, st: { ...out.orig.st, upper: true } }
     // (its base style and its pieces' colours as its glyphs hold them, where its source pieces tell what each word is inside: E1)
     out.measured = measuredOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair, sc)
+    // (the file's lines each source piece's words stand on: where TeX set a group of the source as a paragraph of its own,
+    // tex.mjs paragraphBreaks)
+    out.pieceLines = pieceLinesOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair, out.lineInfo)
     // where the unit's first word starts on the page: its line is erased from there (the anchors share an item's
     // width evenly between its characters, so a line's rectangle may start inside its first glyph: "1. Introduction")
     const q0 = matched.findIndex(m => m)
@@ -1471,13 +1485,16 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.regionOf = new Map()
   out.breakAt = new Map()
   out.joinAt = new Map()
-  const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set()
-  for (const { next, room, pitch } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch) }
+  const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set(), paraNext = new Set()
+  for (const { next, room, pitch, paragraph } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch); if (paragraph) paraNext.add(next) }
+  // (the lines a paragraph TeX set of a group opens (tex.mjs paragraphBreaks), each a block of its own (blocksOf2's `opens`); a
+  // forced break's next line keeps the unit's measure, its block split later, as before)
+  out.paraAt = null
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
     const j = breakNext.size || joinNext.size ? out.lineInfo.get(k)?.j : undefined
-    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
+    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region); if (paraNext.has(j)) (out.paraAt ??= new Set()).add(k) }
     if (j !== undefined && joinNext.has(j) && !keepSet.has(k) && !joined.has(j)) { out.joinAt.set(k, joinNext.get(j)); joined.add(j) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
     else inRun = false
@@ -1489,9 +1506,16 @@ function finishUnit(out, unit, rects, charsByPage) {
     const regs = [...r.gap.chars.filter(c => !c.sep && !c.space).map(c => `${c.page}|${c.rect.join()}`), ...(r.gap.held ?? [])].map(k => out.regionOf.get(k)).filter(g => g !== undefined)
     if (regs.length) { r.region = Math.max(...regs); out.referenced.add(r.region) }
   }
+  // (a group TeX set as a paragraph of its own, tex.mjs paragraphBreaks: its open piece, which no rendering is, holds the region
+  // before the line TeX set its text from, `openBreaks` by its index, tokensOf2)
+  out.openBreaks = null
   for (const [i, { next, room }] of out.breaks ?? []) {
     const r = out.get(i)
-    if (!r) continue
+    if (!r) {
+      const g = room === null && unit.pieces[i]?.t === 'open' ? breakOf.get(next) : undefined
+      if (g !== undefined) { (out.openBreaks ??= new Map()).set(i, g); out.referenced.add(g) }
+      continue
+    }
     // (inside a frame: its room, and the line after it, by which its group's pieces are one break, tokensOf2)
     if (room !== null) { if (joined.has(next)) Object.assign(r, { brk: true, room, brkAt: next }); continue }
     const g = breakOf.get(next)
@@ -2130,6 +2154,17 @@ export function sourceScopes(unit) {
     if (p.t === 'ph') { const b = switchSets(p.src ?? ''); if (b) { top.sets |= b; if (b & COLOUR) top.chain = [...top.chain, k]; if (togglesSlant(p.src ?? '')) top.flip ^= 1 } return }
     if (p.t === 'text') scopes[k] = { sets: top.sets, chain: top.chain, flip: top.flip }
   })
+  const of = sourceOwners(unit)
+  if (!of) return null
+  const none = { sets: 0, chain: [], flip: 0 }
+  return of.map(k => (k >= 0 ? scopes[k] ?? none : none))
+}
+/** each code point of the unit's plain source text (`unit.src`, mt.mjs plainSource's) by the source piece that writes it, its
+ *  index in `unit.source` (-1 for the space another piece or a run of white space is), or null where the unit carries no source
+ *  pieces or their text is not `unit.src` */
+function sourceOwners(unit) {
+  const pieces = unit?.source
+  if (!Array.isArray(pieces) || typeof unit.src !== 'string') return null
   // (the plain text as plainSource makes it: a text piece's characters, a space for any other piece, white space runs one, trimmed)
   const cps = [], owner = []
   pieces.forEach((p, k) => { for (const ch of p.t === 'text' ? utf8(p.s ?? '') : ' ') { cps.push(ch); owner.push(p.t === 'text' ? k : -1) } })
@@ -2139,9 +2174,32 @@ export function sourceScopes(unit) {
     out.push(cps[i]); of.push(owner[i])
   }
   while (out.length && out.at(-1) === ' ') { out.pop(); of.pop() }
-  if (out.join('') !== unit.src) return null
-  const none = { sets: 0, chain: [], flip: 0 }
-  return of.map(k => (k >= 0 ? scopes[k] ?? none : none))
+  return out.join('') === unit.src ? of : null
+}
+/** the file's lines each source piece's words were found on (the alignment's words `O`, paired `pair` with the source's `S`;
+ *  each character's line its `lineInfo`'s `j`): its index in `unit.source` to [first, last], or null where the source pieces
+ *  do not spell `unit.src` */
+function pieceLinesOf(unit, uc, O, S, pair, lineInfo) {
+  const of = pair && lineInfo ? sourceOwners(unit) : null
+  if (!of) return null
+  const out = new Map()
+  O.forEach((o, q) => {
+    const w = pair[q] >= 0 ? S[pair[q]] : null
+    if (!w) return
+    let lo = Infinity, hi = -Infinity
+    for (const c of uc.slice(o.start, o.end + 1)) {
+      const j = c.sep ? undefined : lineInfo.get(`${c.page}|${c.rect.join()}`)?.j
+      if (j !== undefined) { lo = Math.min(lo, j); hi = Math.max(hi, j) }
+    }
+    if (lo > hi) return
+    for (let i = w.start; i <= w.end; i++) {
+      const k = of[i]
+      if (k === undefined || k < 0) continue
+      const e = out.get(k)
+      if (e) { e[0] = Math.min(e[0], lo); e[1] = Math.max(e[1], hi) } else out.set(k, [lo, hi])
+    }
+  })
+  return out
 }
 /** the value most of `xs` hold (`valueOf`), its ties to `base` where it is among them, else to the one met first; undefined for none */
 function majorityOf(xs, valueOf, base) {
@@ -2660,6 +2718,13 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     plain?.gap()
     if (p.t === 'open') {
+      // (a group TeX set as a paragraph of its own (finishUnit's `openBreaks`): the laid line ends before it, and its text starts
+      // on the line TeX set it from, in a block of its own, as after a forced break whose next line opens another frame)
+      const g = resolved.openBreaks?.get(k)
+      if (g !== undefined && resolved.referenced?.has(g)) {
+        while (tokens.at(-1)?.space) tokens.pop()
+        if (tokens.at(-1)?.blockTo !== g) tokens.push({ blockTo: g, w100: 0, brk: true })
+      }
       const next = applyCmd(p.src, style(), designs)
       // (a link's text, \href's, \hyperref's or \hyperlink's: each token of it tells its pair by `link`, the open's id, which the
       // engine's links read (links.mjs) and no drawing does)
@@ -2898,8 +2963,8 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
  * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
  * The block's pitch is its grid's.
  */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null, centred = undefined) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred)
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null, centred = undefined, paraAt = null) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))
@@ -3181,7 +3246,8 @@ function slotsAt(blocks, st, P, s) {
       // own rows')
       const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? flowMeasureAt(b, y) : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
-      const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : firstBlock && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      // (and a block a forced break's region opens, `opens` (blocksOf2): its first line TeX's paragraph's, at its indent)
+      const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
       // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
       // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,

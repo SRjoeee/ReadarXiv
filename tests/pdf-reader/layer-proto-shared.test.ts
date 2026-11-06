@@ -382,6 +382,28 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(over.every(l => l[7] <= 150 + 0.01), `their ends ${over.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
   })
 
+  it('a shared row at a page\'s foot, no room on the line before it: the part after it keeps a line on that page, laid from TeX\'s row', async () => {
+    // (2501.14787v1 p57's u423, "So here, we aren't thinking of a, b as numbers…" after u422's "…as seen in the diagram below:" on
+    // p57's last line. u422's translation ended on the line over the row with no room after it, so u423 flowed on a pitch under
+    // that line, which at its leading stood under the row, past the foot of its block on p57, the row alone: none of it was laid
+    // on p57, its row was erased and drawn empty, and all its text went to p58. The check that lays it from TeX's row as before
+    // read its first line, on p58, as higher than the line before on p57. Here the row is page 1's foot, the part's other rows
+    // at the top of page 2, its rows 14 pt apart: the paragraph's 50 characters two lines, the second 11.7 pt over the row, more
+    // than an em, and ending at 260)
+    const overPage: Paper = {
+      name: 'a shared row at a page\'s foot', pages: 2, specs: [
+        { id: 0, kind: 'para', lines: [line(1, 254, 'Uniaxial tension experiments', 20, 280), line(1, 240, 'usually consider traction-free', 20, 280), line(1, 226, 'conditions. The', 20, 150)], chars: 50, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 226, 'increasing trend', 160, 280), line(2, 270, 'of the volumetric stretch can', 20, 280), line(2, 258, 'be tuned by the slenderness', 20, 280)], chars: 40, at: 0x5100 },
+      ],
+    }
+    const run = await laid(overPage)
+    const a = linesOf(run, 0)!, b = linesOf(run, 1)!
+    expect(a.every(l => l[0] === 1 && l[1] > 226 + 0.05), `the paragraph's lines ${a.map(l => `${l[0]}/${l[1]}`)}`).toBe(true)
+    const onPage1 = b.filter(l => l[0] === 1)
+    expect(onPage1.map(l => l[1]), `the part's lines ${b.map(l => `${l[0]}/${l[1]}`)}`).toEqual([226])
+    expect(onPage1[0]![6]).toBe(20)
+  })
+
   it('a paragraph whose translation fills the shared row: the part after it starts on its next row', async () => {
     const run = await laid(split(51))
     const a = linesOf(run, 0)!, b = linesOf(run, 1)!

@@ -118,9 +118,19 @@ export interface Prepared extends Map<number, Resolved> {
   /** the finish: each kept line's region (a run of kept lines), and the regions a kept placeholder holds */
   regionOf: Map<string, number>
   referenced: Set<number>
-  /** a source's forced breaks (tex.mjs forcedBreaks): each break piece's index to the file's line TeX set after it and
-   *  TeX's room between the two (null: that line opens another frame) */
+  /** the file's lines each source piece's words stand on, by the alignment: its index in `unit.source` to [first, last]
+   *  (tex.mjs paragraphBreaks), null once the breaks have read it */
+  pieceLines?: Map<number, [number, number]> | null
+  /** a source's forced breaks (tex.mjs forcedBreaks), and the open pieces of the groups TeX set as paragraphs of their own
+   *  (paragraphBreaks): each break piece's index to the file's line TeX set after it and TeX's room between the two (null:
+   *  that line opens another frame, or another paragraph) */
   breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
+  /** the finish: the lines a paragraph TeX set of a group opens (tex.mjs paragraphBreaks), by their keys, each the first of a
+   *  block of its own (blocksOf2's `opens`); null where none */
+  paraAt?: Set<string> | null
+  /** the finish: a group TeX set as a paragraph of its own, its open piece's index to its region (tokensOf2: the laid line
+   *  ends before it) */
+  openBreaks?: Map<number, number> | null
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
   breakAt?: Map<string, number>
@@ -182,9 +192,9 @@ export interface UnitParts {
   /** part 5: a rendering page text cannot be is its segments' crops (mutates the crops); the k of a placeholder the file
    *  cannot draw, or -1 */
   crops: (out: Prepared) => number
-  /** where the unit's forced breaks end its lines (the file's): each break piece's index to the line set after it, by its
-   *  index in the file (LineInfo.j) */
-  breaks: (unit: Unit) => Map<number, { next: number; room: number | null; pitch: number | null }>
+  /** where the unit's forced breaks end its lines (the file's), and where TeX set a group of it as a paragraph of its own (by
+   *  `pieceLines`, the alignment's): each break piece's index to the line set after it, by its index in the file (LineInfo.j) */
+  breaks: (unit: Unit, pieceLines?: Map<number, [number, number]> | null) => Map<number, { next: number; room: number | null; pitch: number | null }>
   /** each placeholder's fill by the file's row, by piece index: 0xRRGGBB, MIXED_FILL (-1) or null */
   fillOf: (k: number) => number | null
   /** each colour piece's run's fill by the file (its `colours`), by piece index: 0xRRGGBB or null */
@@ -203,7 +213,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; onLead?: boolean; flowX?: { y: number; lead: Block2 }; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); onLead: its lines flow on from that line, at their own pitch; flowX: for those of them laid over the rows the unit before left, down to the shared row (y), that unit's block that holds the row (`lead`): each takes the measure TeX set at its height, that unit's rows' and on the row both units' (slotsAt's flowMeasureAt); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; onLead?: boolean; flowX?: { y: number; lead: Block2 }; opens?: boolean; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); onLead: its lines flow on from that line, at their own pitch; flowX: for those of them laid over the rows the unit before left, down to the shared row (y), that unit's block that holds the row (`lead`): each takes the measure TeX set at its height, that unit's rows' and on the row both units' (slotsAt's flowMeasureAt); opens: a paragraph TeX set of a group of the unit's starts it (blocksOf2's `paraAt`, tex.mjs paragraphBreaks), its first line at its indent (slotsAt); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
@@ -281,7 +291,10 @@ export declare function extendRects2(rects: Rect[], charsByPage: readonly (reado
 /** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
  *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */
 export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<string> | null): Map<string, [number, number]> | null
-export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): (Block & { measures?: Map<string, [number, number]> | null })[]
+/** a block's measure at slot `k` of its lines or at baseline `y`, as its lines are laid (slotsAt): the measure TeX set there where it
+ *  changed it within the paragraph (measuresOf), else the block's edges; [x0, x1] */
+export declare function measureOf(b: Block2 | Block, y: number | null, k: number): [number, number]
+export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean, paraAt?: ReadonlySet<string> | null): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in the layout file's parts (the per-unit reading's contract above) */
 /** a fill (0xRRGGBB) as the drawing writes it, `#rrggbb` */
@@ -368,7 +381,7 @@ export declare function styleOfChars(cs: readonly Pick<Char, 'st'>[], serif: str
 /** the target's likely faces measured once each, a task apart, the CJK ones too where `cjk` (the run's P.cjk); `ready(face, text)`
  *  is awaited before each measure (a face served in slices has the slice of the text by then) */
 export declare function warmFaces(to: string, cjk: boolean, designs: { serif: string }, yieldNow: () => Promise<unknown>, ready?: (face: Face, text: string) => Promise<unknown>): Promise<void>
-export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): Block2[]
+export declare function blocks2(rects: readonly Rect[], pageViews: readonly number[][], keep: ReadonlySet<string> | null, lineInfo: Prepared['lineInfo'], regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, lineskip?: readonly [skip: number, limit: number] | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean, paraAt?: ReadonlySet<string> | null): Block2[]
 export declare function inkMapOf(canvas: HTMLCanvasElement | OffscreenCanvas, factor?: number): InkMap
 export declare function freeBelow(map: InkMap | undefined, toDev: ToDev, k: number, x0: number, x1: number, yStart: number, yLimit: number): number
 export declare const setHyphenData: (lang: string, data: Patterns | true | null) => Map<string, Patterns | true | null>
