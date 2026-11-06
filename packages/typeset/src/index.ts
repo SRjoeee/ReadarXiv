@@ -75,6 +75,23 @@ export {
   shortSkipsTo,
   widen,
 } from './unit/decor.ts'
+export {
+  type Band,
+  baseStyleOf,
+  CJK_CAPS_SIZE,
+  cellBands,
+  cjkAdvance,
+  type HalfLead,
+  leadOf,
+  type Original,
+  type Params,
+  type ParamsInput,
+  type ParamsRules,
+  params,
+  SOLID,
+  sizeOf,
+  unitSizeOf,
+} from './unit/params.ts'
 export { droppedHeld, dropMarks, type MarksAfter, type MarksTrace, markKind, mergeTail } from './unit/marks.ts'
 export {
   jointOf,
@@ -128,6 +145,7 @@ export { type CatalogueFace, FACES, HOLDS, SMCP } from './data/faces.ts'
 export { CJK, cjkClassRe, keptPair, kinsokuOf, noStart, SPACELESS } from './breaker/script.ts'
 export { drawnText, plainTracker, shown, transformMap } from './breaker/text.ts'
 export {
+  baseOf,
   caseRuns,
   cropPartsOf,
   type Face,

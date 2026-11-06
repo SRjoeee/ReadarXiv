@@ -273,7 +273,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-24 CJK_CAPS_SIZE 1',
     reads: ['fit.leadBase', 'cells.clear', 'cells.capMin', 'k.SOLID 1.25'],
-    state: open,
+    file: 'unit/params.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "samples/U.params.json.gz (27: P, clear, fillable; its edges read from the captured page) and every sampled reading's s and base against the ledger's U.params slot (98)",
+      cases: 125,
+    },
   },
   // ---------------------------------------------------------------- the breaker (L7, inside the fit)
   {

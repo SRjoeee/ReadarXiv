@@ -207,7 +207,7 @@ function nonSpace(s: string): number {
   return n
 }
 /** the unit's base style without what its own groups set (L2:2253 baseOf) */
-function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
+export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   let total = 0,
     capsAfter = false,
     inItalic = 0,
