@@ -4,12 +4,12 @@
 
 /** a piece of a unit, in the source's order; a piece's id is its place in its unit, so equal units are equal piece for
  *  piece. `el`: what travels with the text untranslated (a formula, a citation, …), `src` its TeX source, for identity
- *  only. `span`: a group of the source around text, styled; `must` its style must come back (a link, a run-in label);
+ *  only; `stop` the punctuation a display sets at its end that is its sentence's (`x = y.`). `span`: a group of the source around text, styled; `must` its style must come back (a link, a run-in label);
  *  `open`/`close` its TeX source, either absent where the unit's edge cuts the group. `unit`: a unit nested in this one (a
  *  footnote set inside a paragraph), by its id, with the source around it */
 export type Piece =
   | { t: 'text'; s: string }
-  | { t: 'el'; id: string; kind: string; src: string; keys?: string[] }
+  | { t: 'el'; id: string; kind: string; src: string; keys?: string[]; stop?: string }
   | { t: 'span'; id: string; style: string; must?: 1; open?: string; close?: string; content: Piece[] }
   | { t: 'unit'; id: string; unit: string; pre: string; post: string }
 

@@ -295,3 +295,18 @@ describe('readSource: the paper’s own words, as TeX holds them', () => {
     ])
   })
 })
+
+describe('readSource: a display’s own stop', () => {
+  it('states on the display’s element the punctuation it sets at its end that is its sentence’s', () => {
+    const [u] = doc(
+      'We have\n\\begin{equation}\nx = y.\\label{e}\n\\end{equation}\nand\n\\[ a = \\left. b \\right. \\]\nand\n\\[ c,\\quad \\]\nso.',
+      '\\usepackage{amsmath}\n',
+    ).units
+    const els = (u as SourceUnit).content.filter((p) => p.t === 'el')
+    expect(els.map((p) => (p.t === 'el' ? [p.kind, p.stop] : []))).toEqual([
+      ['display', '.'],
+      ['display', undefined],
+      ['display', ','],
+    ])
+  })
+})

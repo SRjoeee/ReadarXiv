@@ -5854,3 +5854,8 @@ export const TEXT_SYMBOLS: Readonly<Record<string, string>> = {
   '\\L': 'Ł',
   '\\slash': '/',
 }
+/** a display's opening (translate/mt.mjs DISPLAY), and the spaces TeX sets in math (rules/tex-kernel.mjs spaceSource) */
+export const DISPLAY_SOURCE =
+  '^(?:\\\\\\[|\\$\\$|\\\\begin\\s*\\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\\*?\\})'
+export const MATH_SPACE_SOURCE =
+  '(?:(?:~|(?<!\\\\)\\\\\\s|(?<!\\\\)\\\\,|(?<!\\\\)\\\\:|(?<!\\\\)\\\\;|(?<!\\\\)\\\\!|(?<!\\\\)\\\\>|\\\\(?:enspace|quad|qquad|thinspace|nobreakspace)(?![A-Za-z@]))(?:\\{\\})?|\\\\(?:hspace)\\*?\\s*\\{[^{}]*\\})'

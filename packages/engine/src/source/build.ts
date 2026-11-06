@@ -3,6 +3,7 @@
 // elements, an accent's letter joined with its word, a unit of fewer than two letters dropped, and its pieces typed into the
 // translation's grammar (spans paired, elements and spans numbered by their place) with its id.
 import { unitId } from './id.ts'
+import { DISPLAY_SOURCE, MATH_SPACE_SOURCE } from './tables.ts'
 import type { Piece } from './types.ts'
 
 export type Raw =
@@ -201,6 +202,37 @@ function joinLetters(pieces: Raw[]): Raw[] {
   return out
 }
 
+// ---------------------------------------------------------------- a display's own stop (translate/mt.mjs displayStop)
+const DISPLAY = new RegExp(DISPLAY_SOURCE)
+/** the math environments a display holds, which end inside it before its own end: a display's, an alignment's, a case
+ *  split's, an array's or a matrix's. No other (a picture, `\end{tikzpicture}`, whose `;` is its own syntax) */
+const MATH_INNER = String.raw`(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations|split|aligned|alignedat|gathered|multlined|cases|dcases|rcases|array|subarray|[pbBvV]?matrix|smallmatrix)\*?`
+/** one thing at a display's end that sets none of its sentence's punctuation, read from the end: white space, a comment,
+ *  the display's close and an inner math environment's, a label, a tag, a number's switch, `\qedhere`, a line break, a
+ *  space or a fill of TeX's, an empty group, plain TeX's \eqno and what it numbers */
+const DISPLAY_TAIL = new RegExp(
+  String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|${MATH_SPACE_SOURCE}|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`,
+)
+/** the punctuation at that end: a stop, a comma, a semicolon or a colon, bare or alone in a group that sets it (`\text{.}`,
+ *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space) */
+const DISPLAY_STOP =
+  /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
+/** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or
+ *  null; read in its last 2,000 characters, where a display's end lies whatever its length. The translator sets a display's
+ *  stand-in with it (the el's `stop`): a display's end punctuation goes after its marker (0 of 444 before it, 1,357 of 1,357
+ *  after it, the translate lane's measure) */
+export function displayStop(src: string): string | null {
+  if (!DISPLAY.test(src)) return null
+  let s = src.length > 2000 ? src.slice(-2000) : src
+  for (let n = 0; n < 64; n++) {
+    const m = DISPLAY_TAIL.exec(s)
+    if (!m) break
+    s = s.slice(0, m.index)
+  }
+  const m = DISPLAY_STOP.exec(s)
+  return m ? ((m[1] ?? m[2]) as string) : null
+}
+
 /** a closed unit's pieces typed: spans paired by their open and close (an open the unit's end cuts has no close, a close
  *  whose open came before the unit none), elements and spans numbered by their place */
 export function typed(pieces: readonly Raw[]): Piece[] {
@@ -213,9 +245,15 @@ export function typed(pieces: readonly Raw[]): Piece[] {
       case 'text':
         into.push({ t: 'text', s: p.s })
         break
-      case 'ph':
-        into.push({ t: 'el', id: `e${n++}`, kind: p.kind, src: p.src })
+      case 'ph': {
+        const stop = displayStop(p.src)
+        into.push(
+          stop
+            ? { t: 'el', id: `e${n++}`, kind: p.kind, src: p.src, stop }
+            : { t: 'el', id: `e${n++}`, kind: p.kind, src: p.src },
+        )
         break
+      }
       case 'open': {
         const span: Piece & { t: 'span' } = { t: 'span', id: `s${n++}`, style: p.style, open: p.src, content: [] }
         if (p.must) span.must = 1
