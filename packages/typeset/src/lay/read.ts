@@ -260,13 +260,16 @@ function readingsOf(
     // (texParts' fixed, TEX:487-495: a text macro of no ink drawn as nothing (inklessOf), one of the classes that draw ink
     // TeX set none for (emptyOf, EMPTY), ink outside the unit's lines left where it stands (OUTSIDE))
     let fixed: Res | null = null
+    // (a text macro whose glyphs are the unit's text, its text stated (El.text, the probe's): drawn as that text, as today's
+    // reader draws the rendering it finds by it among the unit's characters; with none, nothing, inklessOf)
+    const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined
     if (MACRO_CLASSES.has(cls) && !el) fixed = { mode: 'none', text: '', proof: true }
-    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length)
+    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
       fixed = { mode: 'none', text: '', proof: true, empty: true }
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null
-    if (cls !== 'zero' && cls !== 'symbol' && ink.length && !(cls === 'space' && !ink.length)) {
+    if (cls !== 'zero' && cls !== 'symbol' && (ink.length || textOnly) && !(cls === 'space' && !ink.length)) {
       const lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
       const text = el?.text ?? ''
       gap = { text, lines, nu: el?.text === undefined, proof: true, box: boxOf(S), n: [...text].length }

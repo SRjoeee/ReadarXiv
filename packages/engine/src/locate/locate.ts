@@ -22,7 +22,7 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, ROLE } from '../instrument.ts'
-import { bracketsOf, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
+import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
@@ -606,13 +606,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
     // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
-    const read = unitSize(txt)
+    // (its faked small capitals aside, as today's originalStyle reads its size: smallCapsOf's, facts.ts fakedCaps; their share
+    // Style.sc)
+    const caps = fakedCaps(txt, unit ? sourceText(unit.content) : null, mem.kind.startsWith('ink'))
+    const read = unitSize(caps.small.size ? txt.filter((g) => !caps.small.has(g)) : txt)
     const size =
       read ??
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
     if (read === undefined && mem.lines.length) mem.read.push('size:lines')
-    mem.style = { ...styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null), size }
+    mem.style = {
+      ...styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null),
+      size,
+      ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
+    }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)

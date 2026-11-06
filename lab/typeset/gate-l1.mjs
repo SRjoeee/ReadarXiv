@@ -32,6 +32,9 @@ const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 // (--subst=free,measure,next,side,all: a named correction's effect, today's value of those inputs in each member (gate-l1.ts
 // substitute); then lab/typeset/effect.mjs compares the dumps with those of a run without it)
 const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
+// (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
+const ENTRY = args.includes('--entry')
+const entry = { alike: 0, differ: 0, ex: [], ms: [] }
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
@@ -64,11 +67,12 @@ for (const pair of pairs) {
   count.pairs++
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST, entry: ENTRY }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`) }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -180,6 +184,10 @@ console.log(`E2, equal inputs on a page whose every unit's are equal: ${E2.alike
 console.log(`E3, equal inputs on a page another unit of which differs: ${E3.alike} laid alike, ${E3.changed} changed; the changed traced to their pages' differing units, by those units' classes:`)
 for (const [k, n] of [...E3by].sort((a, b) => b[1] - a[1]).slice(0, 25)) { console.log(`  ${n} ${k}`); for (const x of E3ex.get(k) ?? []) console.log(`      ${x}`) }
 console.log(`the reading (L5, L7 from the part) ${Math.round(readMs)} ms in all`)
+if (ENTRY) {
+  const q = [...entry.ms].sort((a, b) => a - b), at = f => Math.round(q[Math.min(q.length - 1, Math.floor(f * q.length))] * 100) / 100
+  console.log(`the entry (layPage over each part and its rows): ${entry.alike} of the runner's members laid alike, ${entry.differ} not${entry.ex.length ? `: ${entry.ex.join(' | ')}` : ''}; a page, ms: p50 ${at(0.5)}, p90 ${at(0.9)}, p99 ${at(0.99)}, max ${at(1)} over ${q.length} pages`)
+}
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)
 console.log(`dumps: ${join(OUT, 'reader')}`)

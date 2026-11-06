@@ -47,6 +47,18 @@ const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
   })
 
 describe('the reading from the part', () => {
+  it('draws a text macro whose glyphs are the unit’s text as its stated text, and one with none as nothing', () => {
+    // (1810.04805v2's \\bert{}: "BERT" set as the unit's own text, no ink of the element's; the marking probe's text stated)
+    const pieces = [{ t: 'ph', src: '\\bert', k: 0 } as V0Piece, { t: 'text', tr: true, s: ' ist' } as V0Piece]
+    const got = read(
+      member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [], text: 'BERT' }]] }),
+      pieces,
+    )
+    expect(got.resolutions.get(0)).toMatchObject({ mode: 'orig-text', text: 'BERT' })
+    expect((got.tokens as unknown as { s?: string }[])[0]!.s).toBe('BERT')
+    const none = read(member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [] }]] }), pieces)
+    expect(none.resolutions.get(0)!.mode).toBe('none')
+  })
   it('reads a unit’s tree of pieces back as today’s flat ones, a group an open and a close', () => {
     const got = sourcePieces([
       { t: 'text', s: 'a ' },

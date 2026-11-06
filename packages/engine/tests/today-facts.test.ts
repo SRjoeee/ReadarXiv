@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import type { DocGlyph } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { unitSize } from '../src/locate/facts.ts'
+import { fakedCaps, unitSize } from '../src/locate/facts.ts'
 import { cutLines, lineSize } from '../src/locate/lines.ts'
 import { locate } from '../src/locate/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
@@ -92,6 +92,28 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
     )
     expect(lines.map((l) => [l.base, l.x0])).toEqual([[692.64, 61]])
   })
+  it('keeps a big delimiter on its line, its origin at its top: its ink crosses the baseline', () => {
+    // (2610.21026v1 p20: a 10 pt line, then \left( with its origin 17 pt over the baseline and its ink from 12 pt under to it,
+    // then the formula's numerator and the rest on the baseline: one line; the next line's first glyph, back left and a
+    // baselineskip under, a line of its own though a tall glyph of it crossed this baseline)
+    const big = g('(', 120, 683.92, 10, { bottom: 654.44, top: 684.32 })
+    const gs = [
+      ...[...'text'].map((u, i) => g(u, 72 + 5 * i, 666.89, 10)),
+      big,
+      ...[...'ab'].map((u, i) => g(u, 128 + 5 * i, 674.56, 7)),
+      ...[...'=x'].map((u, i) => g(u, 140 + 5 * i, 666.89, 10)),
+      g('(', 72, 671.89, 10, { bottom: 642.44, top: 672.32 }),
+      ...[...'next'].map((u, i) => g(u, 80 + 5 * i, 654.89, 10)),
+    ]
+    const lines = cutLines(
+      gs.map((_, i) => i),
+      (i) => ({ page: 1, g: gs[i]! }),
+    )
+    expect(lines.map((l) => [l.base, l.x0, l.gs.length])).toEqual([
+      [666.89, 72, 9],
+      [654.89, 72, 5],
+    ])
+  })
 })
 
 describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pageChars2)', () => {
@@ -102,6 +124,20 @@ describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pa
     const math = [...'xyzw'].map((u, i) => g(u, 120 + 5 * i, 688, 7, { base: 'CMMI7' }))
     expect(unitSize([...wide, ...plain, ...math])).toBe(10.13)
     expect(unitSize(math)).toBeUndefined()
+    // (faked small capitals aside: IEEEtran's "Experiments" as "E" at 9.96 and "XPERIMENTS" at 7.97 is set at 9.96, its share
+    // 0.8; an ink unit's, whose source is its own text, by its capitals' sizes alone)
+    const head = [g('E', 72, 700, 9.96), ...[...'XPERIMENTS'].map((u, i) => g(u, 80 + 5 * i, 700, 7.97))]
+    const caps = fakedCaps(head, 'Experiments')
+    expect(caps.small.size).toBe(10)
+    expect(caps.ratio).toBe(0.8)
+    expect(unitSize(head.filter((x) => !caps.small.has(x)))).toBe(9.96)
+    expect(fakedCaps(head, null, true).ratio).toBe(0.8)
+    expect(
+      fakedCaps(
+        [...'Experiments'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),
+        'Experiments',
+      ).small.size,
+    ).toBe(0)
     // (as the page states it: pdfTeX's 10 pt is 9.9626 bp, which every width the lay sets is scaled by; no 1/100 grid)
     expect(unitSize([...'ten'].map((u, i) => g(u, 72 + 5 * i, 700, 9.9626)))).toBe(9.9626)
   })

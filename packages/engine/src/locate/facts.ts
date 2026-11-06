@@ -128,6 +128,65 @@ export function unitSize(gs: readonly DocGlyph[]): number | undefined {
   return sizes.length ? (sizes[sizes.length >> 1] as number) : undefined
 }
 
+// ---------------------------------------------------------------- faked small capitals (C7)
+/** a faked small capital is set at most this share of the size the unit's letters of the source's case are (today's
+ *  SMALL_CAPS_SHARE, L2:808: a fact of the classes that fake them) */
+export const SMALL_CAPS_SHARE = 0.9
+const casedChar = (ch: string) => ch.toLowerCase() !== ch.toUpperCase()
+const medianOf = (xs: readonly number[]) => {
+  const s = [...xs].sort((a, b) => a - b)
+  return s.length ? ((s[(s.length - 1) >> 1] as number) + (s[s.length >> 1] as number)) / 2 : 0
+}
+/**
+ * A unit's faked small capitals, as today's reader reads them (smallCapsOf L2:837, inkSmallCaps L2:910): its text glyphs on
+ * A walked in order against its source's letters (each glyph's letter the source's next one of the same letter, case aside);
+ * a capital whose source letter is lowercase and whose size is at most SMALL_CAPS_SHARE of the size its letters of the
+ * source's own case are set at is a faked small capital; `ratio` their median size over that, to the hundredth (Style.sc, the
+ * share the typesetter fakes its own at). An ink unit, whose source is the page's own text: where every cased glyph is a
+ * capital, those at most SMALL_CAPS_SHARE of its full letters' size (the letters past SMALL_CAPS_SHARE of its largest). A
+ * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (today's shortcut)
+ */
+export function fakedCaps(
+  gs: readonly DocGlyph[],
+  source: string | null,
+  ink = false,
+): { small: Set<DocGlyph>; ratio?: number } {
+  const none = { small: new Set<DocGlyph>() }
+  const t = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math' && g.size > 0)
+  if (!t.length) return none
+  let big = 0
+  for (const g of t) if (g.size > big) big = g.size
+  if (ink || source === null) {
+    if (!ink || t.some((g) => casedChar(g.u) && g.u !== g.u.toUpperCase())) return none
+    const ref = medianOf(t.filter((g) => g.size > SMALL_CAPS_SHARE * big).map((g) => g.size))
+    const small = new Set(t.filter((g) => casedChar(g.u) && g.size <= SMALL_CAPS_SHARE * ref))
+    return small.size ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 } : none
+  }
+  const isLow = (ch: string) => /\p{Ll}/u.test(ch)
+  const lows = t.filter((g) => isLow(g.u)).length
+  const anySmall = t.some((g) => g.size <= SMALL_CAPS_SHARE * big && g.u !== g.u.toLowerCase())
+  const src = [...source]
+  if (!anySmall && 2 * lows >= src.filter(isLow).length) return none
+  // (each glyph's letter the source's next one that spells it, case aside: the walk today makes over a word's characters)
+  const changed: DocGlyph[] = []
+  const same: number[] = []
+  let at = 0
+  for (const g of t) {
+    const key = g.u.normalize('NFKD').toLowerCase()
+    let k = at
+    while (k < src.length && src[k]!.normalize('NFKD').toLowerCase() !== key) k++
+    if (k >= src.length) continue
+    at = k + 1
+    const s0 = src[k]!
+    if (casedChar(s0) && s0 === s0.toLowerCase() && casedChar(g.u) && g.u === g.u.toUpperCase()) changed.push(g)
+    else same.push(g.size)
+  }
+  if (!same.length) return none
+  const ref = medianOf(same)
+  const small = new Set(changed.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
+  return small.size ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 } : none
+}
+
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
  *  not black; undefined else */
 export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {

@@ -79,6 +79,8 @@ export interface PieceClass {
   colour?: number
   /** a nested unit's mark (a footnote set inside the unit), not a placeholder */
   nested?: true
+  /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
+  text?: string
 }
 
 export interface Instrument {

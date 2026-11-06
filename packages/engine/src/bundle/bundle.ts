@@ -90,6 +90,8 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (c.same !== undefined) out.same = c.same
   if (c.colour !== undefined) out.colour = c.colour
   if (c.nested) out.nested = 1
+  // (a text macro's text, where its own glyphs gave it none: the probe's, what TeX sets for it)
+  if (c.text !== undefined && out.text === undefined && !out.ink.length) out.text = c.text
   return out
 }
 

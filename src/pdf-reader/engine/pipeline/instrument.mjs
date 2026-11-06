@@ -221,7 +221,7 @@ export function spansOf(pieces, colours = null) {
 /** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
  *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id;
  *  and what the rest of the rules read of its source (sourceFactsOf), `colours` the unit's colour pieces' fills by index */
-export function classesOf(pieces, colours = null) {
+export function classesOf(pieces, colours = null, texts = null) {
   const out = []
   const first = new Map()
   pieces.forEach((p, k) => {
@@ -241,6 +241,10 @@ export function classesOf(pieces, colours = null) {
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
     if (textPieceOf(src)) x.literal = true
+    // (a text macro's text, the marking's probe's: what TeX sets for it (the marks file's `texts`), which today's reader finds
+    // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
+    const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
+    if (typeof t === 'string' && /\S/.test(t)) x.text = t
     Object.assign(x, sourceFactsOf(src, k, first, colours))
     out.push([String(k), x])
   })
@@ -316,7 +320,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
     out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {

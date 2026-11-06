@@ -5,7 +5,8 @@
 // baseline's reader-dump format, the members the adapter did not set by what stops them, and, per adapted member, the first
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
-import type { OutPiece } from '@readarxiv/format'
+import type { OutPiece, Part, Row } from '@readarxiv/format'
+import { layPage } from '../../src/lay/entry.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { readFileSync } from 'node:fs'
 import { adapt, rectOf } from '../../src/lay/adapt.ts'
@@ -24,7 +25,7 @@ import { doorRows } from './rows.ts'
 import { todayFile } from './tap.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
 import { fitMeasure } from '../../src/breaker/measure.ts'
-import type { Metrics, RuleParams } from '../../src/types.ts'
+import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
@@ -69,6 +70,9 @@ export type GateL1 = {
   readMs: number
   /** E1's reading level alone (with the reading from the part): per member, the first difference of its tokens from today's */
   tokens: Map<number, string>
+  /** the entry's check (o.entry): the runner's laid members laid alike by layPage, those not, examples; each page's time by the
+   *  entry (the reading, the adapter and the lay: what a reader pays a page), ms */
+  entry?: { alike: number; differ: number; ex: string[]; ms: number[] }
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
@@ -180,7 +184,7 @@ const r2 = (v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : 
 
 /** a door row's pieces (a translated text, or a source piece by its index) as the translation package's Result holds a row:
  *  its texts (a source's text piece by its text), the source's elements (and nested units) by id, its groups as spans of
- *  their content; null where a piece is no source piece or a group does not close */
+ *  their content; null where a piece is no source piece */
 export function outOfDoor(row: readonly (string | number)[], source: readonly V0Piece[]): OutPiece[] | null {
   const top: OutPiece[] = []
   const stack: { id: string; content: OutPiece[] }[] = []
@@ -198,9 +202,14 @@ export function outOfDoor(row: readonly (string | number)[], source: readonly V0
       const sp = { t: 'span' as const, id: String(q), content: [] as OutPiece[] }
       at().push(sp)
       stack.push(sp)
-    } else if (!stack.pop()) return null
+    } else if (!stack.pop()) {
+      // (a close with no open: the group began before the unit, and wraps what came before it at its level, as the
+      // instrument's contentOf reads the source; an open with no close runs to the end)
+      const content = top.splice(0)
+      top.push({ t: 'span', id: String((p as { id?: unknown }).id ?? q), content })
+    }
   }
-  return stack.length ? null : top
+  return top
 }
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
@@ -376,7 +385,13 @@ export function substitute(mem: FlowMember, td: FlowMember, what: readonly Subst
  *  (default: the tap's table of today's measures, which throws MissingMeasure for a measure today never made) */
 export function gateL1Pair(
   pair: string,
-  o: { metricsOf?: (pair: string) => Metrics; reading?: 'today' | 'part'; substitute?: readonly Substitute[] } = {},
+  o: {
+    metricsOf?: (pair: string) => Metrics
+    reading?: 'today' | 'part'
+    substitute?: readonly Substitute[]
+    /** each page laid again by design-a's entry (layPage over the part and the rows), compared with the runner's lay */
+    entry?: boolean
+  } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
   const metrics = o.metricsOf?.(pair) ?? null
@@ -396,6 +411,7 @@ export function gateL1Pair(
     inputs: new Map(),
     readMs: 0,
     tokens: new Map(),
+    ...(o.entry ? { entry: { alike: 0, differ: 0, ex: [], ms: [] } } : {}),
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -461,6 +477,7 @@ export function gateL1Pair(
     if (u) unitOf.set(ord, u)
   }
   const adapted = new Map<number, FlowMember>()
+  let patternsSeen: Record<string, unknown> | undefined
   for (const [ord, x] of byOrd) {
     const u = unitOf.get(ord)
     if (typeof x.m.text !== 'string') {
@@ -481,6 +498,7 @@ export function gateL1Pair(
       stop(`today's round: ${c}`)
       continue
     }
+    patternsSeen ??= (c.P as Raw).patterns as Record<string, unknown> | undefined
     const label = c.slot('U.label', 'label')?.label as { drawn?: string } | null | undefined
     const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
@@ -662,6 +680,21 @@ export function gateL1Pair(
         for (const o of cells) tieHeld.add(o)
     }
   for (const o of tieHeld) if (adapted.has(o)) out.tieHeld.add(adapted.get(o)!.ord)
+  // (the entry's rows: each member's door row as the translation package's Result, by its unit's id)
+  let entryRows: Rows | null = null
+  if (out.entry && doors) {
+    const byId = new Map<string, Row>()
+    for (const [ord, x] of byOrd) {
+      const u = unitOf.get(ord)
+      const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
+      const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined
+      if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
+      if (!(row[2] === 'whole' || row[2] === 'partial')) continue
+      const content = outOfDoor(row[1], sourcePieces(src.content))
+      if (content) byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), content })
+    }
+    entryRows = { get: (k) => byId.get(k), done: true }
+  }
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
@@ -695,6 +728,42 @@ export function gateL1Pair(
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
     if (got) invariantsOf(pg, got.members, R, out.inv)
+    if (got && out.entry && entryRows && metrics) {
+      const t1 = performance.now()
+      const page = layPage(
+        part as Part,
+        entryRows,
+        { ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} },
+        metrics,
+        {
+          heads: heads?.[L.target]?.heads ?? null,
+        },
+      )
+      out.entry.ms.push(performance.now() - t1)
+      const mine = new Map(page.members.map((m) => [unitOf.get(m.ord)?.ord ?? m.ord, m]))
+      for (const pm of got.members) {
+        const e = mine.get(pm.ord)
+        const same =
+          !!e &&
+          e.state === pm.state &&
+          e.lines.length === pm.lines.length &&
+          e.lines.every(
+            (l, j) =>
+              Math.abs(l[0] - pm.lines[j]![0]) <= 0.01 &&
+              Math.abs(l[1] - pm.lines[j]![1]) <= 0.01 &&
+              Math.abs(l[2] - pm.lines[j]![2]) <= 0.01 &&
+              l[3].length === pm.lines[j]![3].length,
+          )
+        if (same) out.entry.alike++
+        else {
+          out.entry.differ++
+          if (out.entry.ex.length < 5)
+            out.entry.ex.push(
+              `p${pg} ord ${pm.ord}: ${e ? `${e.state} ${e.lines.length} lines` : 'none'} against ${pm.state} ${pm.lines.length}`,
+            )
+        }
+      }
+    }
     for (const pm of got?.members ?? [])
       if (pm.error && !out.thrown.has(pm.ord))
         out.thrown.set(pm.ord, pm.error.replace(/^MissingMeasure:.*/, 'MissingMeasure'))
