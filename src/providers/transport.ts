@@ -220,12 +220,16 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   let inFlight = 0
   /** the hand-overs in force, by service id, and the service that answered last (the popup's `engine`) */
   const demoted = new Map<string, { kind: ProviderErrorKind; message: string; status?: number; until: number }>()
-  for (const t of translators) {
-    const a = built.answerers.get(t.identity)
-    if (a && rejected(a.id)) demoted.set(a.id, { kind: 'auth', message: 'the endpoint refused this key before', status: 401, until: Number.POSITIVE_INFINITY })
-  }
   let lastAnswer: string = built.primary.id
   let lastDemoted: { id: string; kind: ProviderErrorKind; message: string } | undefined
+  for (const t of translators) {
+    const a = built.answerers.get(t.identity)
+    if (!a || !rejected(a.id)) continue
+    demoted.set(a.id, { kind: 'auth', message: 'the endpoint refused this key before', status: 401, until: Number.POSITIVE_INFINITY })
+    // the seeded hand-over names the refused service from the first status, not only once a call has met it: a chain
+    // made after the record changed is the one a page's popup asks (the popup's note under the card, UI.md S-P-30)
+    lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
+  }
 
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
     `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
@@ -309,6 +313,9 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: info.kind, message: info.message }
     // a refused key of a stored service of the reader's (a 401): the health record's (background/health-guard.ts)
     if (info.kind === 'auth' && info.status === 401 && serviceOf(config, a.id)) deps.onFailure?.({ id: a.id, kind: 'auth', message: info.message, status: 401 })
+    // the worker's console says it too, the moment the chain learnt it, as the queues it replaced did (`[axt] batch
+    // failed`): pnpm e2e takes this line as the boundary no request of a session stopped by it may cross (#96, #223)
+    console.warn(`[axt] ${a.id} passed over (${info.kind}): ${redact(info.message)}`)
     deps.warn?.(`[axt] ${a.id} passed over: ${redact(info.message)}`)
   }
   const answered = (id: string) => {

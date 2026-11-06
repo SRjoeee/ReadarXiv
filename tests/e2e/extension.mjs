@@ -1165,7 +1165,8 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // **A few requests were out already at the moment** the 401 arrived. Cut by sequence number, not by time (Codex on #95):
   // any tolerance in time puts the ones “resent the moment a slot frees” before the 401, out of reach of both criteria.
   //
-  // The boundary is **the extension's own report of the failure** — the service worker's `[axt] batch failed` line —
+  // The boundary is **the extension's own report of the failure** — the service worker's `[axt] <service> passed over`
+  // line, the chain's hand-over as the transport hears it (`[axt] batch failed` before the chain, stage 4b) —
   // not the network's `response` event (issue #223). The response event is the browser's network layer receiving the
   // headers; the extension's code learns of the 401 some milliseconds later, once the body is read and the error
   // classified, and a batch-delay timer firing inside that gap sends one more wave nothing could have held back:
@@ -1187,7 +1188,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   let sent = 0
   const onEndpointRequest = request => { if (request.url().includes('openrouter.ai')) sent += 1 }
   const onWorkerConsole = message => {
-    if (sentAtAuth < 0 && sent > 0 && message.text().includes('[axt] batch failed')) sentAtAuth = sent
+    if (sentAtAuth < 0 && sent > 0 && / passed over \(/.test(message.text()) && message.text().startsWith('[axt] ')) sentAtAuth = sent
   }
   // The extension's worker as it is now — an earlier block replaced the one the suite started with — and never a
   // worker a page registered

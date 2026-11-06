@@ -211,6 +211,13 @@ describe("the session router's contract", () => {
     expect(s.available).toBe(false)
     expect(s.fallback).toEqual({ id: 'google-web' })
     expect(s.demotions).toContainEqual({ id: SVC.id, kind: 'auth', status: 401 })
+    expect(s.engine).toMatchObject({ id: 'google-web', demoted: { id: SVC.id, kind: 'auth' } })
+  })
+  it('the seeded hand-over names the refused service from the first status, before any call has met it (the popup\'s note)', async () => {
+    const h = harness({ provider: SVC.id, services: [SVC] }, { rejected: new Set([SVC.id]) })
+    const s = await (await h.make()).status()
+    expect(s.engine.id).toBe('google-web')
+    expect(s.engine.demoted).toMatchObject({ id: SVC.id, kind: 'auth' })
   })
 })
 
