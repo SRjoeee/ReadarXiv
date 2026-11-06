@@ -11,8 +11,9 @@
 // - Everything geometric is A's: lines cut in its own glyph run (lines.ts), elements' ink per line, its label, its room, its
 //   style's size and fill; TeX's statements where the instrument has them (its alignment). Where it stands on A against B:
 //   `same` (every pair within 0.01 pt on its page), `shifted` (each of B's lines moved whole), `respaced`, `rebroken`.
-// - Members: one placement per unit, a babel name's every occurrence its own; then the units born on A (born.ts) from the
-//   glyphs B never printed. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
+// - Members: one placement per unit, a babel name's every occurrence its own; then the units no source unit is, made on A by
+//   today's rule where A's pages are given (ink.ts: ink units, kept blocks, figure texts, of A's glyphs no source unit owns, B's
+//   marks carried onto A); then the units born on A (born.ts) from the glyphs B never printed that today's rule makes nothing of. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
 // - Groups (design §4.5): per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
@@ -21,10 +22,12 @@ import type { Mapping } from '../align/align.ts'
 import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
-import { type Instrument, ROLE } from '../instrument.ts'
+import type { PageInk } from '../ink.types.ts'
+import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
 import { bracketsOf, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
+import { type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 
@@ -77,6 +80,9 @@ export interface Member {
 }
 
 export interface Located {
+  /** the units the members are of (a member's `unit` its index here): the instrument's, then those locate made on A (ink.ts:
+   *  its ink units, kept blocks and figure texts) */
+  units: InstrumentUnit[]
   members: Member[]
   /** the units born on A (their content, for Units) by member ord */
   born: Map<number, { kind: string; content: Piece[] }>
@@ -97,6 +103,8 @@ export interface Located {
     places: Record<Place, number>
     born: number
     bornGlyphs: number
+    /** the units made on A by today's rule (ink.ts), where A's pages were given */
+    made?: InkStats
   }
 }
 
@@ -146,6 +154,10 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
 export interface LocateOptions {
   /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
   annotations?: (unknown[] | null)[]
+  /** each A page as pageInk read it (read.ts `raw`): given, locate makes the units no source unit is on A (ink.ts) */
+  pages?: readonly (PageInk | null)[]
+  /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
+  classesOf?: InkInput['classesOf']
 }
 
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
@@ -222,6 +234,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   })
   const claimedA = new Int32Array(NA).fill(FREE)
+  /** the instrument's units, then those made on A */
+  const units: InstrumentUnit[] = [...ins.units]
   const members: Member[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
@@ -452,6 +466,51 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     for (const r of runs) members.push(place(u, r, [], unit.name))
   }
 
+  // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
+  // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
+  // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
+  if (o.pages) {
+    const owned = (a: number) => {
+      const c = claimedA[a] as number
+      const b = m.aToB[a] as number
+      return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
+    }
+    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    for (const x of made) {
+      const u = units.length
+      units.push(x.unit)
+      const mem = empty(u, x.unit.kind, x.unit.id)
+      mem.fixed = !!x.unit.fixed
+      mem.figure = !!x.unit.figure
+      if (x.unit.figure?.dir) mem.dir = x.unit.figure.dir
+      mem.align = x.unit.align ?? 'j'
+      members.push(mem)
+      if (!x.text.length && !x.ph.length && !x.turned.length) {
+        mem.cause = 'no ink'
+        continue
+      }
+      mem.located = true
+      mem.place = 'same'
+      mem.text = x.text
+      if (x.phId !== null && x.ph.length)
+        mem.els.set(
+          x.phId,
+          [...x.ph].sort((p, q) => p - q),
+        )
+      mem.turned = x.turned
+      mem.textBoxes = x.textBoxes
+      if (x.phId !== null && x.elBoxes.length) mem.elBoxes.set(x.phId, x.elBoxes)
+      for (const a of [...x.text, ...x.ph]) {
+        claimedA[a] = mem.ord
+        const b = m.aToB[a] as number
+        if (b < 0) continue
+        if (mem.bFirst < 0 || b < mem.bFirst) mem.bFirst = b
+        if (b > mem.bLast) mem.bLast = b
+      }
+    }
+    stats.made = st
+  }
+
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
   for (const b of bornOf(inkA, m, claimedA, pageA)) {
@@ -470,7 +529,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // ---- geometry: lines, columns and measures, elements, labels, style, lead, room
   for (const mem of members) {
     if (!mem.located && !mem.text.length) continue
-    const unit = mem.unit >= 0 ? ins.units[mem.unit]! : null
+    const unit = mem.unit >= 0 ? units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
     const classOf = new Map(unit?.classes ?? [])
@@ -714,7 +773,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   columnsAndMeasures(members, inkA, gA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
-  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB })
+  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
 
   // ---- flows: a member whose first line is the one before's last line, on its baseline after its end, in one paragraph of
   // TeX's (no paragraph end of B's between the one's last glyph and the other's first, where the instrument states them); a
@@ -794,7 +853,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const heads = new Set<number>()
     const sets = new Map<number, number[]>()
     for (const mem of members) {
-      const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
+      const unit = mem.unit >= 0 ? units[mem.unit] : undefined
       if (!unit || !mem.located) continue
       if (unit.cell) {
         const t = tables.get(unit.cell.table) ?? tables.set(unit.cell.table, new Map()).get(unit.cell.table)!
@@ -897,7 +956,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   for (const mem of members) {
     if (!mem.located || mem.fixed) continue
-    const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
+    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const name = (a: number, c: string) => `${mem.ord}.${pageA[a]}.${c}`
     // (an element whose ink stays, a display's, one outside the unit or on a held line: in no group)
@@ -923,13 +982,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
 
   for (const mem of members) {
-    if (mem.unit < 0) continue
+    if (mem.unit < 0 || mem.unit >= ins.units.length) continue
     if (mem.located) {
       stats.located++
       if (mem.place) stats.places[mem.place]++
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { members, born, flows, ties, links, groups, figureGroups, stats }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats }
 }
 
 /** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed

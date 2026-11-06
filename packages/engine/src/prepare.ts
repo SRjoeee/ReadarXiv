@@ -5,7 +5,7 @@
 import { align, type Mapping } from './align/align.ts'
 import { type BundleObject, bundle } from './bundle/bundle.ts'
 import type { Instrument } from './instrument.ts'
-import { type Located, locate } from './locate/locate.ts'
+import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { type PdfJs, type ReadPage, readPdf } from './read.ts'
 import { type AlignFacts, alignOf, type PdfLib } from './remove.types.ts'
 import { type AddOn, wrap } from './wrap/wrap.ts'
@@ -22,6 +22,9 @@ export interface PrepareDeps {
   made: string
   /** a clock for the tally (none: no times) */
   now?: () => number
+  /** what the front half reads of an ink unit's pieces (its elements' classes: the instrument adapter's classesOf), for the units
+   *  locate makes on A; none: their elements carry the kinds alone */
+  classesOf?: LocateOptions['classesOf']
 }
 
 export type Tally = {
@@ -62,7 +65,12 @@ export async function* prepareBack(
   })
   const mapping = align(ins.ink, read.doc, { owners })
   const t2 = now()
-  const located = locate(ins, read.doc, mapping, { annotations: read.pages.map((p) => p.annotations) })
+  const located = locate(ins, read.doc, mapping, {
+    annotations: read.pages.map((p) => p.annotations),
+    // (A's pages as pageInk read them: locate makes the ink units, kept blocks and figure texts there, ink.ts)
+    pages: read.pages.map((p) => p.raw),
+    classesOf: deps.classesOf,
+  })
   const t3 = now()
   const addOn = await wrap(original, located, read.pages, deps)
   const t4 = now()

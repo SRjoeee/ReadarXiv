@@ -511,3 +511,6 @@ export declare function clearLines(lines: { block: number; baseline: number }[],
 /** the characters a target's rules set in its CJK face: the CJK blocks, and with `quotes` (the rules' cjkQuotes) the curly quotes,
  *  dashes, ellipsis and middle dot too */
 export declare const cjkClassRe: (quotes: boolean) => RegExp
+
+/** explicit glue as TeX sets it (L2:2406): { em } or { bp }, and whether a line may break at it */
+export declare function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null

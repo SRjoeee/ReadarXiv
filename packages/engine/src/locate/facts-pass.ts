@@ -6,7 +6,7 @@ import type { El, Line, Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
-import { type Instrument, ROLE } from '../instrument.ts'
+import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
 import {
   alignOf,
   bandOf,
@@ -41,6 +41,8 @@ export interface FactsInput {
   unitB: Int32Array
   roleB: Uint8Array
   pieceB: Int32Array
+  /** the units the members are of: the instrument's, then those locate made on A (its ink units, kept blocks and figure texts) */
+  units?: readonly InstrumentUnit[]
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -66,7 +68,18 @@ function elsOf(content: readonly Piece[], out = new Map<string, Extract<Piece, {
   return out
 }
 
-export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB }: FactsInput): void {
+export function factsOf({
+  ins,
+  inkA,
+  m,
+  members,
+  claimedA,
+  pageA,
+  unitB,
+  roleB,
+  pieceB,
+  units = ins.units,
+}: FactsInput): void {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
@@ -138,7 +151,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
   // (a table column's cells, for a single-line cell's centring)
   const column = new Map<string, Member[]>()
   for (const mem of members) {
-    const c = mem.unit >= 0 ? ins.units[mem.unit]?.cell : undefined
+    const c = mem.unit >= 0 ? units[mem.unit]?.cell : undefined
     if (!c || !mem.located) continue
     // (today's column of a cell: the cells of its table, column and span, RUN:1508 columnKey)
     const k = `${c.table}|${c.col}|${c.span ?? 1}`
@@ -147,7 +160,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
 
   for (const mem of members) {
     if (!mem.located || !mem.lines.length) continue
-    const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
+    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
     const lineOf = new Map<number, number>()
     mem.lineGlyphs.forEach((gs, j) => {
       for (const a of gs) lineOf.set(a, j)

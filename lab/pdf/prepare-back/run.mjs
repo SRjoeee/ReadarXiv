@@ -16,7 +16,7 @@ import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:z
 import * as PL from '@cantoo/pdf-lib'
 import { prepareBack, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
@@ -31,7 +31,7 @@ const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(pathToFileURL(jo
 const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfjs.mjs')).href)
 // (layer2.mjs makes a measuring canvas at its load: a stub, nothing here measures)
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => ({ width: 0 }), font: '' } } }
-const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs'), U = await im('layer-proto/units.mjs')
+const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs')
 const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs')
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
 const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
@@ -116,7 +116,7 @@ if (!refusal) {
 const tIns = performance.now()
 if (ins) {
   const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
-  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now() })) {
+  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })
@@ -176,18 +176,20 @@ const LABEL_KIND = { float: 'caption', head: 'number', number: 'number', mark: '
 const units = []
 const memberOf = new Map()
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) memberOf.set(mem.unit, mem)
-const unitsList = ins?.units ?? U.bundleUnitsOf(paper).map(u => null)
+// (the units the members are of: the instrument's, then those locate made on arXiv's page, its ink units, kept blocks and
+// figure texts, in today's bundle's order)
+const allUnits = located?.units ?? ins?.units ?? []
 let ord = 0
 const dumpOrds = [] // [the dump's ord, the member's ord]: what the comparison with the tap joins by
 const states = { drawn: 0, laid: 0, unlaid: 0 }
 // (the dump's order: the instrument's, but a figure unit the bundle does not lay after every one it lays, as today's page pass
 // leaves such a unit out of its bundle and the baseline lists it after the bundle's: its ord-join pairs equal texts so)
 const laysFigure = i => { const mem = memberOf.get(i); return !!mem?.located && stateOf(mem, addOn).drawn }
-const order = (ins?.units ?? []).map((_, i) => i)
-const figs = order.filter(i => ins.units[i].kind === 'inkfigures')
+const order = allUnits.map((_, i) => i)
+const figs = order.filter(i => allUnits[i].kind === 'inkfigures')
 const figsSorted = [...figs].sort((a, b) => (laysFigure(a) ? 0 : 1) - (laysFigure(b) ? 0 : 1) || a - b)
 figs.forEach((at, q) => { order[at] = figsSorted[q] })
-order.map(i => [ins.units[i], i]).forEach(([u, i]) => {
+order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
@@ -220,7 +222,7 @@ if (FRONT && BASELINE) {
     if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
     // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
     // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
-    const why = /^ink/.test(u.kind) ? `no source unit owns it: ${u.kind} (today's ledger or figure text)` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    const why = /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }
@@ -239,7 +241,7 @@ mkdirSync(join(OUT, 'prepare'), { recursive: true })
 writeFileSync(join(OUT, 'prepare', `${id}.prepare.json`), `${JSON.stringify({ format: 'readarxiv-baseline/prepare 1', engine: 'rebuild/prepare (stage 1a)', paper: paperOut, refused: refusal, pages, counts, units })}\n`)
 // what the gate reads beside the dump
 const placeOf = {}
-if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) placeOf[ins.units[mem.unit].id] = (placeOf[ins.units[mem.unit].id] ?? []).concat([[mem.ord, mem.located ? mem.place : null, mem.cause ?? null, mem.lines.length]])
+if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) placeOf[allUnits[mem.unit].id] = (placeOf[allUnits[mem.unit].id] ?? []).concat([[mem.ord, mem.located ? mem.place : null, mem.cause ?? null, mem.lines.length]])
 mkdirSync(join(OUT, 'located'), { recursive: true })
 writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tIns0), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
@@ -250,6 +252,6 @@ writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
-console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
+console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
 process.exit(0)

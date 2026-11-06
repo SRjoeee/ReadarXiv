@@ -1,5 +1,6 @@
 // The units born on arXiv's page: text of A that B never printed (no partner on B) and that no located unit claimed inside its
-// span (a supplement our compile did not set, a figure's text where B is a draft). The one heuristic part of locate (design
+// span, and that today's rule run on A (ink.ts: the ink units, kept blocks and figure texts, which take a supplement our compile
+// did not set and a figure's text where B is a draft) makes no unit of. The one heuristic part of locate (design
 // §4.3), kept in a file of its own so that it can be replaced (OCR lines will take this shape): A's unclaimed glyphs in stream
 // order (those no unit holds: claimedA -1, locate's FREE) cut into lines by the line rule (lines.ts), and consecutive lines of one page gathered into a block where the next one
 // stands under the one before within 1.75 of its size and overlaps it across; a block's text is its glyphs' Unicode, a space

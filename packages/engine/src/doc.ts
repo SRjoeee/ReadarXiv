@@ -70,6 +70,16 @@ export interface DocTurned {
   form: boolean
 }
 
+/** the points pageInk keeps apart from the marks' (`points`): TeX's paragraphs' (`q<n>`) and their ends (`qe<n><code>`, with the
+ *  counts of the page's points and paragraph points before each), its regions (a code region's glyphs, regionsOfPoints) and its
+ *  pictures' (`zs`, `ze`): what today's ledger, ink units and figure texts read of a marked compile's page besides its points */
+export interface DocMarks {
+  paras: DocPoint[]
+  paraEnds: (DocPoint & { point: number; para: number })[]
+  regions: { kind: string; from: number; to: number }[]
+  pictures: DocPoint[]
+}
+
 export interface DocPage {
   glyphs: DocGlyph[]
   /** the glyphs set turned, in stream order (none where the page was read without `turned`) */
@@ -82,6 +92,8 @@ export interface DocPage {
   /** each glyph's boxes before it */
   boxAt: number[]
   points: DocPoint[]
+  /** the page's other points, where it has any (a marked compile's: B's) */
+  marks?: DocMarks
   view: [number, number, number, number]
   rotate: number
   /** why the page's ink is not read whole (rotated, capped, timedOut, degraded), null where it is */
