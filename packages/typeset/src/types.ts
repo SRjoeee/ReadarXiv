@@ -2,6 +2,7 @@
 // design-a.md §1.2; the inside and the ledger are design B's, design-b.md §1.5 to §1.7). Types only: the composition
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
+import type { ScriptRules } from './data/rules/types.ts'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
 export type Lang = string
@@ -50,57 +51,34 @@ export type Hyphenation = {
 }
 
 /**
- * Everything typographic the typesetter reads, for one target: the rule set's fields (inventory §4.1) resolved for it
- * (rules/layout.mjs resolveRules), the approved rulings and the TeX facts it still applies (§4.2's classes R, T, I), the
- * reader's choices. Data, not a seam (design-a §4): tests pass edited values
+ * Everything typographic the typesetter reads, for one target (design-b §1.4's shape): the rule set's fields resolved for it
+ * (`set`: today's resolveRules params, by the names every ported rule reads them by; design-a's grouping of them by use is a
+ * rename for after the port), its labels and babel's names, the hyphenation patterns the host handed in (never fetched by
+ * the typesetter), the reader's choices. Built by `rulesFor` (rules-for.ts) from one data file a language
+ * (src/data/rules/). Data, not a seam (design-a §4): tests pass edited values
  */
 export type Rules = Readonly<{
   target: Lang
   script: Script
-  fit: {
-    order: readonly ('track' | 'borrow' | 'lead' | 'shrink')[]
-    leadBase: number
-    leadFloor: number
-    trackMin: number
-    compressMax: number
-    borrow: number
-    borrowGap: number
-    floor: number
-    floorMin: number
-    step: number
-    further: readonly ('widen' | 'shrink')[]
-    cjkJust: number
-    spaceMax: number
-    spaceMin: number
-    autospace: number
-  }
-  fill: {
-    band: number
-    track: number
-    size: number
-    lead: number | null
-    leadRel: number | null
-    kinds: readonly string[]
-  }
-  breaking: {
-    keepAll: boolean
-    cjkQuotes: boolean
-    centredPunct: boolean
-    noStart: string
-    noEnd: string
-    hyphen: boolean
-    hyphenation: readonly Hyphenation[]
-  }
-  cells: { clear: number; capMin: number; namesShare: number }
-  /** babel's names and the float labels in the target (A5) */
-  words: Readonly<Record<string, string>>
-  /** style × script → face, and the faces' size corrections (rules/font-roles.mjs), resolved for the paper's family */
-  faces: FaceTable
-  /** TeX facts the typesetter still applies (inventory §4.2, class T/I) */
-  tex: { predisplay: number; copySpace: number }
+  set: RuleParams
+  /** the float labels and babel's names in the target (A5) */
+  labels: Readonly<Record<string, string>>
+  /** the languages whose hyphenation patterns it reads: English's for every Latin word, the target's own Latin and Cyrillic */
+  patterns: readonly string[]
+  /** each of those languages' patterns, as the host loaded them (hyph.ts hyphenationOf); a language absent has none */
+  hyph: Readonly<Record<string, unknown>>
+  /** the CJK font group the target's text is set in */
+  cjkFaces: { group: string } | null
+  /** the rule set's version */
+  version: number
   captions: NonNullable<Choices['captions']>
   leave: readonly string[]
 }>
+/** the rule set's fields as resolved for a target (rules/layout.mjs resolveRules' params): the script's, the language's over
+ *  them, `cjk` from the script, babel's hyphenation minimums */
+export type RuleParams = Readonly<
+  Omit<ScriptRules, 'cjkFaces'> & { cjk: boolean; hyphenation: Readonly<Record<string, unknown>> }
+>
 
 /** the faces the typesetter sets text in: by role, weight, slant and script class; with each face's size correction */
 export type FaceTable = Readonly<{

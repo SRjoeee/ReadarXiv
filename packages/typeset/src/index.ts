@@ -4,6 +4,8 @@ export const TYPESET_PURPOSE =
 
 export { type MeasureTable, MissingMeasure, tableMetrics } from './metrics/table.ts'
 export { RULE_LIST, RULES, type RuleSpec, type RuleState } from './rules.ts'
+export { NoRules, resolveRules, rulesFor } from './rules-for.ts'
+export { HYPHENATION, LANGUAGES, type LanguageRules, SCRIPTS, type ScriptRules } from './data/rules/index.ts'
 export type {
   Choices,
   Decided,
@@ -23,6 +25,7 @@ export type {
   Page,
   PageLedger,
   RuleId,
+  RuleParams,
   Rows,
   Rules,
   Script,

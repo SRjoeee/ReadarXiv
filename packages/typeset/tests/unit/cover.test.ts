@@ -30,14 +30,14 @@ describe('B.cover', () => {
   const toks: Token[] = [
     { s: 'ab', face: SERIF },
     { space: true, face: SERIF },
-    { s: '中', face: CJK, hyph: 'en' },
+    { s: '\u4e2d', face: CJK, hyph: 'en' },
     { s: 'x', face: face('serif') },
     { crop: {} } as Token,
   ] as Token[]
   it('reads each role face once with every character it sets, a space and a cut word’s hyphen', () => {
     expect(runsOfTokens(toks).map((r) => [r.font, r.text])).toEqual([
       ['400 100px "axt-nimbus-roman"', 'ab '],
-      ['400 100px "axt-shs-sc"', '中-'],
+      ['400 100px "axt-shs-sc"', '\u4e2d-'],
     ])
   })
   it('is ready where every face is, waits for one not loaded, and leaves the unit where no slice holds a character', () => {
@@ -52,7 +52,7 @@ describe('B.cover', () => {
         toks,
         metricsOf((f) => !f.includes('shs')),
       ),
-    ).toEqual({ wait: [['400 100px "axt-shs-sc"', '中-']] })
+    ).toEqual({ wait: [['400 100px "axt-shs-sc"', '\u4e2d-']] })
     expect(
       cover(
         toks,
