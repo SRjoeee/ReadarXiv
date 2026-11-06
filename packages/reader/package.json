@@ -7,7 +7,8 @@
   "description": "the page stack, composing, session, highlight and the Host a reader runs in",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./vite": "./src/vite.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
