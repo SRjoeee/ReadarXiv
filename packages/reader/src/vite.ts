@@ -19,6 +19,8 @@ export function assetFiles(fs: NodeFs, root: string, legacy: boolean): [string, 
   for (const dir of ['cmaps', 'standard_fonts', 'wasm']) {
     for (const f of fs.readdirSync(`${root}${dir}`, { recursive: true }).sort()) {
       const from = `${root}${dir}/${f}`
+      // (not PDF.js's scripting engine: only its sandbox loads QuickJS, and the reader runs no script a PDF carries)
+      if (dir === 'wasm' && f.startsWith('quickjs')) continue
       if (fs.statSync(from).isFile()) out.push([`${dir}/${f}`, from])
     }
   }
