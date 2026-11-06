@@ -480,7 +480,10 @@ export function instrumentFromPlan<Doc>({
     // (a cell carries no label: what stands before it on its line is another cell's; nor does an author: LaTeX's \author
     // sets no counter before a name, and what stands between two names is the separator \and sets and the marks after the
     // name before it)
-    if (!s || doc.units[id]?.kind === 'cell' || doc.units[id]?.kind === 'author') continue
+    // (none for a figure's text either: a TikZ node or an axis label sets no counter, and the glyphs on its baseline before
+    // it are the figure's other texts)
+    const kind = doc.units[id]?.kind
+    if (!s || kind === 'cell' || kind === 'author' || kind === 'figure') continue
     const [p, q] = s
     const pg = pages[p] as PageRead
     const S = pt(s)
