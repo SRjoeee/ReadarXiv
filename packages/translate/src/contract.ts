@@ -6,7 +6,8 @@
 export type Lang = string
 
 /** An element's kind, as the source reader typed it: an open string (`math`, `display`, `cite`, `ref`, `url`, `code`,
- *  `note-mark`, `other`, …). Only `display` changes how a wire is written (it ends a stretch of joined elements) */
+ *  `note-mark`, `other`, …). A wire reads it for two things only: what the element reads as to a sentence cutter where the
+ *  host says nothing (`reads`), and, for `display`, that it keeps a marker of its own (`alone`) */
 export type ElKind = string
 /** A span's style: an open string (`bold`, `italic`, `mono`, `link`, `label`, …). The wire reads `must`, never the style */
 export type SpanStyle = string
@@ -20,7 +21,18 @@ export type SpanStyle = string
  */
 export type Piece =
   | { t: 'text'; s: string }
-  | { t: 'el'; id: string; kind: ElKind; stop?: string | undefined }
+  | {
+      t: 'el'
+      id: string
+      kind: ElKind
+      stop?: string | undefined
+      /** a marker of its own: never joined with the elements beside it on a wire that joins them (Microsoft's). A
+       *  `display` is, whatever this says */
+      alone?: boolean | undefined
+      /** what the element reads as to a sentence cutter, where the host knows it (the HTML page: its visible text); else
+       *  its kind decides (a formula a word, a reference a number, a citation's or a note's mark an annotation) */
+      reads?: string | undefined
+    }
   | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
 
 /** What a translator is given: the unit's id (a label, never a key), its content, and whether it lights by sentence */
@@ -29,6 +41,12 @@ export interface UnitIn {
   kind?: string | undefined
   content: readonly Piece[]
   sentences?: boolean | undefined
+  /** a reply is taken only where each element's placeholder came back whole: one a reading would have to repair by
+   *  guessing where the element stands (Microsoft's marker without its `#`) refuses it, to the next translator. The HTML
+   *  page states it: over 87 live Microsoft replies taken only so, an element stood glued inside a word, jammed against
+   *  another with the words between them lost, or away from its `#` beside stray characters (lane L6, stage 4b). A
+   *  doubled `#` is no such repair: the marker stands where it stood */
+  strict?: boolean | undefined
 }
 
 /** A translation's content: the unit's elements and spans by their ids, text in between */
@@ -44,11 +62,15 @@ export interface Sentences {
   tr: readonly number[]
 }
 
-/** The paper's context, one per paper version; it reaches only a translator whose replies depend on it */
+/** The paper's context, one per paper version; it reaches only a translator whose replies depend on it. `section` (the
+ *  heading the units sit under, or an image's caption) and `glossary` (the reader's term table) are a host's where its
+ *  prompt reads them; like the rest, they enter the key of a translator whose replies depend on the context */
 export interface PaperContext {
   title?: string
   abstract?: string
   terms?: readonly string[]
+  section?: string
+  glossary?: readonly { readonly term: string; readonly translation: string }[]
 }
 
 /** What the caller does next, never an HTTP cause */
@@ -69,8 +91,12 @@ export type Result =
   | { id: string; ok: true; content: OutPiece[]; by: string; sentences?: Sentences }
   | { id: string; ok: false; why: Why }
 
-/** What a host may count or tell a reader: a request sent, a translator passed over for a unit and why */
-export type Note = { kind: 'sent'; by: string; chars: number; units: number } | { kind: 'passed'; by: string; why: Why }
+/** What a host may count or tell a reader: a request sent; a translator passed over for a unit (`id`: the unit's, or
+ *  `<id>~<k>` for a stretch of the runs floor) and why, told for every translator of the call the unit did not get an
+ *  answer from, the ones that do not serve the target or are off included */
+export type Note =
+  | { kind: 'sent'; by: string; chars: number; units: number }
+  | { kind: 'passed'; by: string; id: string; why: Why }
 
 // ---------------------------------------------------------------- the platform's members the package uses
 

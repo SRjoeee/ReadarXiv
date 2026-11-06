@@ -49,14 +49,26 @@ type Item =
 /** A unit's tags wire */
 export function planTags(unit: UnitIn): TagsPlan {
   const items: Item[] = []
-  const kinds = new Map<number, { kind: string; stop: string | undefined }>()
+  const kinds = new Map<number, { kind: string; stop: string | undefined; reads: string | undefined }>()
+  /** the elements of pieces that go as one void, by their projection offsets: what each reads as to the cutter */
+  const readsOf = (ps: readonly Piece[], at0: number): number => {
+    let at = at0
+    for (const p of ps) {
+      if (p.t === 'text') at += p.s.length
+      else if (p.t === 'el') {
+        kinds.set(at, { kind: p.kind, stop: p.stop, reads: p.reads })
+        at += 1
+      } else at = readsOf(p.content, at)
+    }
+    return at
+  }
   const walk = (ps: readonly Piece[], at: number, depth: number): number => {
     for (const p of ps) {
       if (p.t === 'text') {
         items.push({ t: 'text', s: p.s, at })
         at += p.s.length
       } else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: p.stop })
+        kinds.set(at, { kind: p.kind, stop: p.stop, reads: p.reads })
         items.push({ t: 'void', out: [{ t: 'el', id: p.id }], at, len: 1, stop: p.stop })
         at += 1
       } else if (SOLID.test(textOf(p.content))) {
@@ -66,6 +78,8 @@ export function planTags(unit: UnitIn): TagsPlan {
       } else {
         const len = projectionOf(p.content).length
         const last = [...p.content].reverse().find((q) => q.t === 'el')
+        // (one void on the wire, but each element inside reads to the sentence cutter as itself)
+        readsOf(p.content, at)
         items.push({
           t: 'void',
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
@@ -130,7 +144,9 @@ export function planTags(unit: UnitIn): TagsPlan {
     // (an element that sets its sentence's own stop reads with it: the sentence ends there)
     const standIn = (p: number) => {
       const k = kinds.get(p)
-      const s = standInOf(k?.kind ?? 'other')
+      // (what the host says it reads as, but an annotation is one whatever its text: it belongs to the sentence before)
+      const byKind = standInOf(k?.kind ?? 'other')
+      const s = byKind !== 'annotation' && k?.reads !== undefined ? k.reads : byKind
       return k?.stop ? `${s === undefined || s === 'annotation' ? 'Xx' : s}${k.stop}` : s
     }
     for (const c of sentenceCuts(projection, standIn)) {

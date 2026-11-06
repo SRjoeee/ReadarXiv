@@ -56,6 +56,8 @@ const REWRITE: Record<string, string> = {
   lg: 'lug',
 }
 export const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
+/** whether the endpoint serves a target, synchronously (a host's settings say it before any call) */
+export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
 
@@ -122,12 +124,12 @@ function sentencesOf(
   return out.src.length ? out : undefined
 }
 
-/** read a raw reply against a unit's plan: strictly, else tolerantly */
+/** read a raw reply against a unit's plan: strictly, else tolerantly, but for a unit stated `strict` */
 export function readMicrosoft(unit: UnitIn, raw: string): { content: OutPiece[]; sentences?: Sentences } | null {
   const r = readJson(raw) as { text?: unknown; src?: unknown; tr?: unknown } | null
   if (!r || typeof r.text !== 'string') return null
   const plan = planMarkers(unit)
-  for (const tolerant of [false, true]) {
+  for (const tolerant of unit.strict ? [false] : [false, true]) {
     const toks = readMarkers(r.text, plan, tolerant)
     if (!toks) continue
     const filled = refill(toks, plan.refill)
@@ -146,7 +148,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
     digest: MICROSOFT_DIGEST,
     context: false,
     limits,
-    supports: async (target) => SUPPORTED.has(microsoftTarget(target)),
+    supports: async (target) => microsoftServesTarget(target),
     write: (unit) => planMarkers(unit).wire,
     read: readMicrosoft,
     async *send(wires, call, signal) {

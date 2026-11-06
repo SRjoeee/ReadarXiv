@@ -205,13 +205,22 @@ async function fillQueue(page, stall, { slots = GOOGLE_SLOTS, timeoutMs = 40_000
     samples = [...samples.slice(-2), pending]
     if (stall.held.length >= slots && samples.length === 3 && samples.every(n => n === pending) && pending > 0) break
   }
-  const items = stall.held.reduce((n, h) => n + h.items, 0)
-  const requests = stall.held.length
   const known = new Set(stall.held.map(h => h.body))
-  await stall.held[0]?.route.abort().catch(() => undefined)
+  // Batches, not requests: a stalled request past Google's request time (10 s, the chain's `callMs`) is sent again, the
+  // same body, in its own slot — a paper that takes longer to scroll than that holds its slots' retries too
+  const requests = known.size
+  const items = [...known].reduce((n, body) => n + (stall.held.find(h => h.body === body)?.items ?? 0), 0)
+  // One slot freed by **answering** its request (each text back as it went), not by failing it: the chain retries a failed
+  // request in its own slot (packages/translate chain.ts `run`, "one request and its retries, in its slot"), so an abort
+  // would bring back the same body and prove nothing; an answered one gives the slot to the next queued batch. The
+  // newest held request is a live one (an earlier one may have been cut at its request time and sent again)
+  const first = stall.held.at(-1)
+  const texts = (() => { try { return JSON.parse(first?.body || 'null')?.[0]?.[0] } catch { return null } })()
+  if (Array.isArray(texts)) await first?.route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([texts]) }).catch(() => undefined)
+  else await first?.route.abort().catch(() => undefined)
   const isNew = () => stall.held.some(h => h.body && !known.has(h.body))
   for (let i = 0; i < 40 && !isNew(); i++) await sleep(200)
-  return { requests, items, pending, confirmed: isNew(), extra: stall.held.length - requests }
+  return { requests, items, pending, confirmed: isNew(), extra: new Set(stall.held.map(h => h.body)).size - requests, known }
 }
 
 /** The most requests in any 1-second window */
@@ -927,11 +936,14 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await sleep(500)
   await stall.release() // free the slots: if the queue is still alive the next batch goes out at once
   await sleep(6_000)
-  const late = stall.held.length - before
+  // a batch not seen before the close: work the session still had queued (a held request sent again before the
+  // withdrawal reached it, at its request time, is no new work)
+  const seen = new Set(stall.held.slice(0, before).map(h => h.body))
+  const late = stall.held.slice(before).filter(h => !seen.has(h.body)).length
   await stall.off()
   check('after closing the tab the background sends no new request (the session withdrawn with the tab)',
     q.confirmed && q.requests === GOOGLE_SLOTS && late === 0,
-    `${q.pending} blocks pending, only ${q.requests} requests (${q.items} passages) ever reached the endpoint; after freeing one slot the queue filled in ${q.extra}, ${q.confirmed ? 'among them a body never seen (a queued new batch for certain, not the same batch resent)' : 'all the same batch resent — no queued work, this assertion is void'}; after closing the tab and freeing every slot ${late} more`)
+    `${q.pending} blocks pending, only ${q.requests} batches (${q.items} passages) ever reached the endpoint; after freeing one slot the queue filled in ${q.extra}, ${q.confirmed ? 'among them a body never seen (a queued new batch for certain, not the same batch resent)' : 'all the same batch resent — no queued work, this assertion is void'}; after closing the tab and freeing every slot ${late} more`)
 }
 
 // ── Navigating away: tabs.onRemoved does not cover this case (Codex on #59) ──────────
@@ -949,12 +961,13 @@ check('the settings page: after deleting the custom prompt the default is chosen
   await sleep(4_500)
   await stall.release()
   await sleep(6_000)
-  const late = stall.held.length - before
+  const seen = new Set(stall.held.slice(0, before).map(h => h.body))
+  const late = stall.held.slice(before).filter(h => !seen.has(h.body)).length
   await stall.off()
   await page.close()
   check('after navigating away the background sends no new request (the session withdrawn with the navigation)',
     q.confirmed && q.requests === GOOGLE_SLOTS && late === 0,
-    `${q.pending} blocks pending, only ${q.requests} requests (${q.items} passages) ever reached the endpoint; after freeing one slot the queue filled in ${q.extra}, ${q.confirmed ? 'among them a body never seen (a queued new batch for certain, not the same batch resent)' : 'all the same batch resent — no queued work, this assertion is void'}; after navigating away and freeing every slot ${late} more`)
+    `${q.pending} blocks pending, only ${q.requests} batches (${q.items} passages) ever reached the endpoint; after freeing one slot the queue filled in ${q.extra}, ${q.confirmed ? 'among them a body never seen (a queued new batch for certain, not the same batch resent)' : 'all the same batch resent — no queued work, this assertion is void'}; after navigating away and freeing every slot ${late} more`)
 }
 
 // ── The hover highlight of a caption under side mode (issue #139): the one on screen is the clone ──────────────
@@ -1165,7 +1178,8 @@ check('the settings page: after deleting the custom prompt the default is chosen
   // **A few requests were out already at the moment** the 401 arrived. Cut by sequence number, not by time (Codex on #95):
   // any tolerance in time puts the ones “resent the moment a slot frees” before the 401, out of reach of both criteria.
   //
-  // The boundary is **the extension's own report of the failure** — the service worker's `[axt] batch failed` line —
+  // The boundary is **the extension's own report of the failure** — the service worker's `[axt] <service> passed over`
+  // line, the chain's hand-over as the transport hears it (`[axt] batch failed` before the chain, stage 4b) —
   // not the network's `response` event (issue #223). The response event is the browser's network layer receiving the
   // headers; the extension's code learns of the 401 some milliseconds later, once the body is read and the error
   // classified, and a batch-delay timer firing inside that gap sends one more wave nothing could have held back:
@@ -1187,7 +1201,7 @@ check('the settings page: after deleting the custom prompt the default is chosen
   let sent = 0
   const onEndpointRequest = request => { if (request.url().includes('openrouter.ai')) sent += 1 }
   const onWorkerConsole = message => {
-    if (sentAtAuth < 0 && sent > 0 && message.text().includes('[axt] batch failed')) sentAtAuth = sent
+    if (sentAtAuth < 0 && sent > 0 && / passed over \(/.test(message.text()) && message.text().startsWith('[axt] ')) sentAtAuth = sent
   }
   // The extension's worker as it is now — an earlier block replaced the one the suite started with — and never a
   // worker a page registered

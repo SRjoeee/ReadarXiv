@@ -8,6 +8,7 @@ export const TRANSLATE_PURPOSE =
 
 export { ACCEPT_DIGEST, accept, asOut, projectionOf, type Refusal, validSentences } from './accept.ts'
 export { chainOf, identityOf, keyOf, realClock } from './chain.ts'
+export { sha256Hex } from './sha256.ts'
 export {
   type Chain,
   type Clock,
@@ -37,6 +38,6 @@ export {
   type UnitIn,
   type Why,
 } from './contract.ts'
-export { type ChromeApi, type ChromeOptions, type ChromeSession, chrome } from './adapters/chrome.ts'
-export { type GoogleOptions, google } from './adapters/google.ts'
-export { type MicrosoftOptions, microsoft } from './adapters/microsoft.ts'
+export { type ChromeApi, type ChromeOptions, type ChromeSession, chrome, chromeTarget } from './adapters/chrome.ts'
+export { type GoogleOptions, google, tagsWire } from './adapters/google.ts'
+export { type MicrosoftOptions, microsoft, microsoftServesTarget } from './adapters/microsoft.ts'

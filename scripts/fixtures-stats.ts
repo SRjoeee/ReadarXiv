@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { Window, type Document, type Element, type Text } from 'happy-dom'
 import {
-  DOCUMENT_ROOT, FIGURE_SELECTORS, LTX_CLASS_PREFIX, PROTECT_RULES, RULES_VERSION, SKIP_RULES, TABLE_RULES, UNIT_RULES,
+  DOCUMENT_ROOT, FIGURE_SELECTORS, LTX_CLASS_PREFIX, PROTECT_RULES, SKIP_RULES, TABLE_RULES, UNIT_RULES,
   classify, type Classification,
 } from '../src/core/rules/latexml'
 
@@ -172,7 +172,7 @@ function report(all: FixtureStats[]): string {
   const out: string[] = []
   const n = all.length
   const totalText = all.reduce((a, s) => a + s.textNodes, 0)
-  out.push(`## Rule coverage audit (RULES_VERSION ${RULES_VERSION}, ${n} papers, ${totalText} text nodes)`, '')
+  out.push(`## Rule coverage audit (${n} papers, ${totalText} text nodes)`, '')
 
   out.push('### Per paper', '', table(
     ['fixture', 'parse ms', 'text nodes', 'unit', 'protected', 'skipped', 'uncovered'],

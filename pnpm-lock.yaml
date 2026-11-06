@@ -17,6 +17,9 @@ importers:
       '@readarxiv/engine':
         specifier: workspace:*
         version: link:packages/engine
+      '@readarxiv/translate':
+        specifier: workspace:*
+        version: link:packages/translate
       ai:
         specifier: ^7.0.91
         version: 7.0.91(zod@4.5.4)

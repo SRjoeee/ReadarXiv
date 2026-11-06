@@ -23,9 +23,9 @@ export interface OpenAICompatConfig {
  */
 export const noRedirects: typeof fetch = (input, init) => globalThis.fetch(input, { ...init, redirect: 'error' })
 
-export function createModel(config: OpenAICompatConfig): LanguageModel {
+export function createModel(config: OpenAICompatConfig, fetchImpl: typeof fetch = noRedirects): LanguageModel {
   // supportsStructuredOutputs: the zod schema goes to the endpoint as response_format: json_schema (DeepSeek / Gemini /
   // GPT models on OpenRouter all support it); a model that does not falls back to the output shape spelled out in the prompt
-  const provider = createOpenAICompatible({ name: 'openai-compat', baseURL: config.baseURL, apiKey: config.apiKey, supportsStructuredOutputs: true, fetch: noRedirects })
+  const provider = createOpenAICompatible({ name: 'openai-compat', baseURL: config.baseURL, apiKey: config.apiKey, supportsStructuredOutputs: true, fetch: fetchImpl })
   return provider(config.model)
 }

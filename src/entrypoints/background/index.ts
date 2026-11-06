@@ -1,4 +1,5 @@
-import { cachePortOf, translationCache } from '@/cache'
+import { chainOf, type ChromeApi } from '@readarxiv/translate'
+import { createTranslateStore } from '@/cache/translate-store'
 import { pickTargetLanguage } from '@/config/first-target'
 import { manifestOrigins } from '@/config/origins'
 import { chooseFirstTarget, getConfig, readConfig, watchConfigChange } from '@/config/storage'
@@ -47,7 +48,17 @@ export default defineBackground(() => {
       .catch(e => console.warn(`[axt] the first target language could not be saved (${e instanceof Error ? e.name : typeof e})`))
   })
 
-  const cache = cachePortOf(translationCache)
+  /**
+   * The stores of translation (cache/translate-store.ts) and **the one chain** (`@readarxiv/translate`, stage 4b): made
+   * once here, so every tab and every configuration's transport shares one owner of the pacing, the cooldowns and the
+   * breaker. A chain built anew per configuration would double the concurrency against an endpoint while two
+   * configurations' sessions run side by side (the old chain holder's acknowledged price, gone with it). A second chain
+   * with no store answers the settings page's connection test: its question is whether the endpoint answers now
+   */
+  const stores = createTranslateStore()
+  const translateChain = chainOf({ store: stores.answers })
+  const probeChain = chainOf()
+  const platform = { fetch: ((url, init) => globalThis.fetch(url, init as RequestInit)) as Parameters<typeof createLocalTransport>[1]['fetch'], chromeApi: ((globalThis as { Translator?: ChromeApi }).Translator ?? null) }
   /** Scopes ended for certain — one registry (DESIGN §8.5): the session router writes it, the chain's services and OCR read it */
   const cancelled = new CancelledScopeRegistry()
   /** The diagnostics log (issue #156): this worker's warnings, the pages' `[axt]` lines; in session storage across workers, for the settings page's export */
@@ -58,7 +69,7 @@ export default defineBackground(() => {
   })
   const diag = (line: string) => diagnostics.record('background', line)
   // the cache's expired entries, deleted at each start of the worker (./handlers.ts)
-  void sweepAtStart({ cache: translationCache, diagnostics })
+  void sweepAtStart({ cache: stores, diagnostics })
   /** The service health record's writers besides the named call (./health-guard.ts): a chain's refusal, a configuration change */
   const health = createHealthKeeper({ getConfig, mark: markRejected, clearAmong: clearRejectedAmong, warn: diag })
 
@@ -70,7 +81,7 @@ export default defineBackground(() => {
       return {
         config: resolved,
         transport: await createLocalTransport(resolved, {
-          cache, cancelled, warn: diag, note: diag, rejected,
+          chain: translateChain, probe: probeChain, rows: stores.rows, ...platform, cancelled, warn: diag, note: diag, rejected,
           // a refused key is remembered across sessions (the redesign's design, §4): a 401 to one of the reader's
           // services, marked only if the key and the address **this chain** used are still the service's — this chain
           // may have outlived a key rotation (Codex review, round 2; health-guard.ts)
@@ -135,7 +146,7 @@ export default defineBackground(() => {
     // a figure given up on ends the document's worker alone
     reset: async () => (await sendMessage({ type: 'axt:ocr-reset' }))?.reset === true,
   })
-  const ocr = createOcrService({ backend: recogniser, cache, cancelled, warn: diag })
+  const ocr = createOcrService({ backend: recogniser, cache: stores.ocr, cancelled, warn: diag })
   const router = createSessionRouter({
     current: transportOf,
     cancelled,
@@ -293,7 +304,7 @@ export default defineBackground(() => {
     offers,
     ocr,
     diagnostics,
-    cache: translationCache,
+    cache: stores,
     toggle: tabId => toggleTranslation({ send: sendToTab, saved, madeGood }, tabId),
     decide: async tabId => (await decideToggle({ send: sendToTab, saved, madeGood }, tabId))?.decision,
     getConfig,
