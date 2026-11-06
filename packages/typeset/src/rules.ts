@@ -43,7 +43,6 @@ export type RuleSpec = {
   state: RuleState
 }
 
-const open = { is: 'open' } as const
 const L1 = { is: 'elsewhere', lane: 'L1' } as const
 
 const SPECS: readonly RuleSpec[] = [

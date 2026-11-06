@@ -116,6 +116,7 @@ describe.skipIf(!today)('D.text', () => {
       expect(mine.items.length).toBeGreaterThan(1)
     })
   it('sets a name’s segment in a Latin or a CJK face’s band, as today', () => {
-    for (const t of ['Abstract', '\u6458\u8981']) expect(nameSeg(t, 10, 30, 700, 9)).toEqual(today!.nameSeg(t, 10, 30, 700, 9))
+    for (const t of ['Abstract', '\u6458\u8981'])
+      expect(nameSeg(t, 10, 30, 700, 9)).toEqual(today!.nameSeg(t, 10, 30, 700, 9))
   })
 })
