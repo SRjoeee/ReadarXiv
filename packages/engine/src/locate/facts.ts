@@ -118,13 +118,13 @@ export const TAIL_MAX = 3
 const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
 /** a mark's kind (today's markKind L2:2363) */
 export function markKind(ch: string): string {
-  if (/^[.。．｡]$/u.test(ch)) return 'stop'
-  if (/^[,、，､]$/u.test(ch)) return 'comma'
-  if (/^[;；]$/u.test(ch)) return 'semi'
-  if (/^[:：]$/u.test(ch)) return 'colon'
-  if (/^[!！]$/u.test(ch)) return 'excl'
-  if (/^[?？]$/u.test(ch)) return 'quest'
-  if (/^[)\]}）］｝〉》」』】〕〗〙〛’”]$/u.test(ch)) return 'close'
+  if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
+  if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
+  if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
+  if (/^[:\uFF1A]$/u.test(ch)) return 'colon'
+  if (/^[!\uFF01]$/u.test(ch)) return 'excl'
+  if (/^[?\uFF1F]$/u.test(ch)) return 'quest'
+  if (/^[)\]}\uFF09\uFF3D\uFF5D\u3009\u300B\u300D\u300F\u3011\u3015\u3017\u3019\u301B’”]$/u.test(ch)) return 'close'
   return ch
 }
 const TEX_TOKEN = /\\[A-Za-z@]+\*?|\\[\s\S]|---|--|''|``|[\s\S]/gu
