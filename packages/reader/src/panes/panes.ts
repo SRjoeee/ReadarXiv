@@ -128,6 +128,8 @@ export interface Panes {
     r: [number, number, number, number],
   ): { left: number; top: number; width: number; height: number } | null
   pageElement(side: Side, n: number): HTMLElement | null
+  /** a pane's scroller */
+  containerOf(side: Side): HTMLElement
   readonly follower: Follower<PaneSide>
   on<K extends keyof PaneEvents>(type: K, f: Listener<K>): () => void
   probe(): Record<string, unknown>
@@ -1267,6 +1269,7 @@ export function createPanes(o: PanesOptions): Panes {
       return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
     },
     pageElement: (side, n) => pageDiv(side === 'left' ? L : R, n),
+    containerOf: (side) => (side === 'left' ? L : R).container,
     on(type, f) {
       const set = listeners.get(type) ?? new Set()
       listeners.set(type, set)

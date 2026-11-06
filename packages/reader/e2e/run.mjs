@@ -371,66 +371,167 @@ for (const name of Object.keys(fixtures)) {
   })
 }
 
-await check('compose: a laid page\'s links, out of the paper through the host, inside it on the right (s1-columns)', async () => {
-  const { page, context, errors } = await newPage()
-  await page.evaluate(u => window.__h.open(u), indexOf['s1-columns'].original)
-  await page.evaluate(() => window.__h.layer('s1-columns'))
-  await laidShown(page, 1)
-  const links = await page.evaluate(() => window.__h.linksOf(1))
-  const ext = links.find(l => l.href?.startsWith('https:')), inner = links.find(l => l.href?.startsWith('#'))
-  assert(ext && inner, `links ${JSON.stringify(links)}`)
-  await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
-  await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
-  const hit = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return `${e?.tagName}.${e?.className} in ${e?.closest('a')?.getAttribute('href')}` }, [inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2])
-  // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
-  await waitFor(page, () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0).catch(async e => { throw new Error(`${e.message}: hit ${hit}, right page ${await page.evaluate(() => window.__h.panes.pageOf('right'))}, scroll ${await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)}, inner ${JSON.stringify(inner)}`) })
-  const external = await page.evaluate(() => window.__h.external)
-  await context.close()
-  assert(!errors.length, errors.join('; '))
-  assert(external.length === 1 && external[0] === 'https://example.invalid/reader', `opened ${JSON.stringify(external)}`)
-  return { links: links.length, external }
-})
-await check('compose: a language switch reuses the composed document, the parts and the place (s1-columns)', async () => {
-  const { page, context, errors } = await newPage()
-  await page.evaluate(u => window.__h.open(u), indexOf['s1-columns'].original)
-  await page.evaluate(() => window.__h.layer('s1-columns'))
-  await laidShown(page, 1)
-  await page.evaluate(() => window.__h.panes.goToPage('right', 2))
-  await laidShown(page, 2)
-  await page.waitForTimeout(300)
-  const asked = server.log.length
-  const r = await page.evaluate(() => window.__h.retarget('de', 's1-columns'))
-  await waitFor(page, () => window.__h.marks.filter(m => m.what === 'shown' && String(m.key).startsWith('laid:')).length >= 3)
-  await page.waitForTimeout(300)
-  const after = await page.evaluate(() => ({ place: window.__h.panes.reading(), probe: window.__h.composer.probe() }))
-  const newAsks = server.log.slice(asked).map(l => l.path).filter(p => p.startsWith('/api/v2/'))
-  await context.close()
-  assert(!errors.length, errors.join('; '))
-  assert(r.sameComposed, 'the composed document was opened again')
-  assert(newAsks.length === 0, `asked again: ${newAsks.join(', ')}`)
-  assert(r.before.place?.page === after.place?.page && Math.abs(r.before.place.at - after.place.at) < 0.02, `the place moved: ${JSON.stringify([r.before.place, after.place])}`)
-  return { place: after.place, laidPages: after.probe.laidPages, objectsAskedAgain: newAsks.length }
-})
-await check('compose: a zoom and a pinch over a laid page keep it laid, its overlay the page\'s frame (s1-columns)', async () => {
-  const { page, context, errors } = await newPage()
-  await page.evaluate(u => window.__h.open(u), indexOf['s1-columns'].original)
-  await page.evaluate(() => window.__h.layer('s1-columns'))
-  await laidShown(page, 1)
-  const frame = () => page.evaluate(() => { const s = document.querySelector('.axt-pane.right .axt-slot[data-page-number="1"] > .axt-slot-view'); const v = s.querySelector('.axt-over > svg').getBoundingClientRect(), c = s.getBoundingClientRect(); return { key: window.__h.panes.right.showing(1), dw: Math.abs(v.width - c.width), dh: Math.abs(v.height - c.height) } })
-  const out = []
-  for (const z of ['zoomBy(1.25)', 'zoomTo(2)', "zoomTo('page-width')"]) {
-    await page.evaluate(`window.__h.panes.${z}`)
+await check(
+  "compose: a laid page's links, out of the paper through the host, inside it on the right (s1-columns)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    const links = await page.evaluate(() => window.__h.linksOf(1))
+    const ext = links.find((l) => l.href?.startsWith('https:')),
+      inner = links.find((l) => l.href?.startsWith('#'))
+    assert(ext && inner, `links ${JSON.stringify(links)}`)
+    await page.mouse.click(ext.rect.x + ext.rect.width / 2, ext.rect.y + ext.rect.height / 2)
+    await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
+    const hit = await page.evaluate(
+      ([x, y]) => {
+        const e = document.elementFromPoint(x, y)
+        return `${e?.tagName}.${e?.className} in ${e?.closest('a')?.getAttribute('href')}`
+      },
+      [inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2],
+    )
+    // (a document this short ends before page 2 can stand at the top: the jump brings it into view)
+    await waitFor(
+      page,
+      () => window.__h.panes.right.inView(2) && document.querySelector('.axt-pane.right').scrollTop > 0,
+    ).catch(async (e) => {
+      throw new Error(
+        `${e.message}: hit ${hit}, right page ${await page.evaluate(() => window.__h.panes.pageOf('right'))}, scroll ${await page.evaluate(() => document.querySelector('.axt-pane.right').scrollTop)}, inner ${JSON.stringify(inner)}`,
+      )
+    })
+    const external = await page.evaluate(() => window.__h.external)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      external.length === 1 && external[0] === 'https://example.invalid/reader',
+      `opened ${JSON.stringify(external)}`,
+    )
+    return { links: links.length, external }
+  },
+)
+await check(
+  'compose: a language switch reuses the composed document, the parts and the place (s1-columns)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    await page.evaluate(() => window.__h.panes.goToPage('right', 2))
+    await laidShown(page, 2)
+    await page.waitForTimeout(300)
+    const asked = server.log.length
+    const r = await page.evaluate(() => window.__h.retarget('de', 's1-columns'))
+    await waitFor(
+      page,
+      () => window.__h.marks.filter((m) => m.what === 'shown' && String(m.key).startsWith('laid:')).length >= 3,
+    )
+    await page.waitForTimeout(300)
+    const after = await page.evaluate(() => ({ place: window.__h.panes.reading(), probe: window.__h.composer.probe() }))
+    const newAsks = server.log
+      .slice(asked)
+      .map((l) => l.path)
+      .filter((p) => p.startsWith('/api/v2/'))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(r.sameComposed, 'the composed document was opened again')
+    assert(newAsks.length === 0, `asked again: ${newAsks.join(', ')}`)
+    assert(
+      r.before.place?.page === after.place?.page && Math.abs(r.before.place.at - after.place.at) < 0.02,
+      `the place moved: ${JSON.stringify([r.before.place, after.place])}`,
+    )
+    return { place: after.place, laidPages: after.probe.laidPages, objectsAskedAgain: newAsks.length }
+  },
+)
+await check(
+  "compose: a zoom and a pinch over a laid page keep it laid, its overlay the page's frame (s1-columns)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    const frame = () =>
+      page.evaluate(() => {
+        const s = document.querySelector('.axt-pane.right .axt-slot[data-page-number="1"] > .axt-slot-view')
+        const v = s.querySelector('.axt-over > svg').getBoundingClientRect(),
+          c = s.getBoundingClientRect()
+        return {
+          key: window.__h.panes.right.showing(1),
+          dw: Math.abs(v.width - c.width),
+          dh: Math.abs(v.height - c.height),
+        }
+      })
+    const out = []
+    for (const z of ['zoomBy(1.25)', 'zoomTo(2)', "zoomTo('page-width')"]) {
+      await page.evaluate(`window.__h.panes.${z}`)
+      await page.waitForTimeout(800)
+      out.push(await frame())
+    }
+    await page.evaluate(async () => {
+      const p = window.__h.panes,
+        r = document.querySelector('.axt-pane.right').getBoundingClientRect()
+      for (let i = 0; i < 6; i++) {
+        p.pinch('right', 1.06, [r.left + 300, r.top + 200])
+        await new Promise((f) => requestAnimationFrame(f))
+      }
+    })
     await page.waitForTimeout(800)
     out.push(await frame())
-  }
-  await page.evaluate(async () => { const p = window.__h.panes, r = document.querySelector('.axt-pane.right').getBoundingClientRect(); for (let i = 0; i < 6; i++) { p.pinch('right', 1.06, [r.left + 300, r.top + 200]); await new Promise(f => requestAnimationFrame(f)) } })
-  await page.waitForTimeout(800)
-  out.push(await frame())
-  await context.close()
-  assert(!errors.length, errors.join('; '))
-  for (const f of out) assert(String(f.key).startsWith('laid:') && f.dw < 1.5 && f.dh < 1.5, `after a zoom: ${JSON.stringify(f)}`)
-  return { steps: out.length }
-})
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const f of out)
+      assert(String(f.key).startsWith('laid:') && f.dw < 1.5 && f.dh < 1.5, `after a zoom: ${JSON.stringify(f)}`)
+    return { steps: out.length }
+  },
+)
+
+await check(
+  'compose: the highlight from lit on both panes, the same unit, what is painted is what is hit (s1-columns)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    const ords = await page.evaluate(() =>
+      window.__h.composer
+        .laid(1)
+        .members.filter((m) => m.state === 'laid')
+        .map((m) => m.ord),
+    )
+    const out = []
+    for (const ord of ords.slice(0, 4)) {
+      for (const side of ['right', 'left']) {
+        const pt = await page.evaluate(([o, s]) => window.__h.pointOf(1, o, s), [ord, side])
+        if (!pt) continue
+        await page.mouse.move(pt.x, pt.y)
+        await page.waitForTimeout(80)
+        const r = await page.evaluate(() => ({ lit: window.__h.highlight.lit, bands: window.__h.highlight.bands() }))
+        out.push({
+          ord,
+          side,
+          lit: r.lit?.id ?? null,
+          bands: r.bands,
+          want: { left: pt.left + pt.own, right: pt.right + pt.own },
+        })
+      }
+    }
+    await page.mouse.move(5, 5)
+    await page.waitForTimeout(300)
+    const after = await page.evaluate(() => ({ lit: window.__h.highlight.lit, bands: window.__h.highlight.bands() }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const x of out)
+      assert(
+        x.lit === x.ord && x.bands.left === x.want.left && x.bands.right === x.want.right,
+        `hovering ${x.side} over ${x.ord}: ${JSON.stringify(x)}`,
+      )
+    assert(
+      after.lit === null && after.bands.left === 0 && after.bands.right === 0,
+      `a miss kept ${JSON.stringify(after)}`,
+    )
+    return { hovers: out.length }
+  },
+)
 
 // ---------------------------------------------------------------- I1 and the split residue (lane L1's finding 2), both ways out
 const residues = {}
@@ -438,29 +539,46 @@ for (const name of Object.keys(fixtures)) {
   await check(`I1: all groups on is arXiv's page, the split residue measured (${name})`, async () => {
     const { page, context, errors } = await newPage({ dpr: 2 })
     const lab = !!fixtures[name].face
-    await page.evaluate(u => window.__h.open(u), indexOf[name].original)
+    await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
     await page.evaluate(([n, t]) => window.__h.layer(n, { target: t, rows: 'none' }), [name, lab ? 'zh' : 'de'])
     const r = await page.evaluate(() => window.__h.residue({ scale: 1.5 }))
     await context.close()
     assert(!errors.length, errors.join('; '))
     const P = r.pages
     const sum = (f) => P.reduce((a, x) => a + f(x), 0)
-    const pix = sum(x => x.pixels)
-    const allPages = P.filter(x => x.all.px > x.self.px), laidRows = P.filter(x => x.laid)
+    const pix = sum((x) => x.pixels)
+    const allPages = P.filter((x) => x.all.px > x.self.px),
+      laidRows = P.filter((x) => x.laid)
     const summary = {
       pages: P.length,
-      self: { pagesTouched: P.filter(x => x.self.px).length, px: sum(x => x.self.px) },
-      b: { pagesTouched: allPages.length, px: sum(x => x.all.px), share: +(sum(x => x.all.px) / pix * 100).toFixed(5), maxDelta: Math.max(0, ...P.map(x => x.all.max)) },
-      a: { laidPages: laidRows.length, pagesTouched: laidRows.filter(x => x.laid.px > x.self.px).length, px: sum(x => x.laid?.px ?? 0), maxDelta: Math.max(0, ...laidRows.map(x => x.laid.max)) },
-      msA: sum(x => x.msA), msW: sum(x => x.msW),
+      self: { pagesTouched: P.filter((x) => x.self.px).length, px: sum((x) => x.self.px) },
+      b: {
+        pagesTouched: allPages.length,
+        px: sum((x) => x.all.px),
+        share: +((sum((x) => x.all.px) / pix) * 100).toFixed(5),
+        maxDelta: Math.max(0, ...P.map((x) => x.all.max)),
+      },
+      a: {
+        laidPages: laidRows.length,
+        pagesTouched: laidRows.filter((x) => x.laid.px > x.self.px).length,
+        px: sum((x) => x.laid?.px ?? 0),
+        maxDelta: Math.max(0, ...laidRows.map((x) => x.laid.max)),
+      },
+      msA: sum((x) => x.msA),
+      msW: sum((x) => x.msW),
     }
     residues[name] = { summary, pages: P }
     // (our own papers: every pixel of all groups on is arXiv's, but where the canvas differs from itself)
-    if (!lab) assert(allPages.length === 0, `all groups on differs from arXiv's page on pages ${allPages.map(x => x.n).join(', ')}`)
+    if (!lab)
+      assert(
+        allPages.length === 0,
+        `all groups on differs from arXiv's page on pages ${allPages.map((x) => x.n).join(', ')}`,
+      )
     return summary
   })
 }
-if (process.env.AXT_RESIDUE_OUT) (await import('node:fs')).writeFileSync(process.env.AXT_RESIDUE_OUT, `${JSON.stringify(residues, null, 1)}\n`)
+if (process.env.AXT_RESIDUE_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_RESIDUE_OUT, `${JSON.stringify(residues, null, 1)}\n`)
 
 await browser.close()
 await server.close()
