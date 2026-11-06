@@ -16,10 +16,12 @@ const CAUSES = new Map([
   ['other:inkreferences | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
   ['other:inknotes | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
   ['other:inkfigures | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  ['other:inknames | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
   // (an author's head: today reads the marks after the name before it as its label, by their form)
   ['role 4 | none', 'correction: no label before an author (LaTeX\'s \\author sets none; today: the marks of the name before)'],
   // (a unit's head piece the marking passed over: its ink before the start point is that piece's, the plan's)
   ['role 4 | role 2', 'choice: the ink of a head piece the marking passed over is the piece\'s (today: a label by its form)'],
+  ['role 4 | role 1', 'choice: a unit\'s lead text symbol the paper wrote is its text (today: a label where its form is one: \\textbullet)'],
   ['role 2 | role 4', 'choice: a head piece\'s run with a word space in it is a label up to the space (today: by its form)'],
   // (own.mjs's readings with thresholds of their own, not ported)
   ['role 2 | none', 'choice: footEnd not ported (a display ending a footnote, to the folio: thresholds of today\'s)'],
@@ -63,7 +65,7 @@ export function compare({ today, mine, same, chars, guarded = [] }) {
   const n = Math.max(today.glyphs.length, mine.glyphs.length)
   for (let p = 0; p < n; p++) {
     const T = today.glyphs[p], M = mine.glyphs[p]
-    if (!T || !M || !same[p]) { add('page: the two B differ', { page: p + 1 }); continue }
+    if (!T || !M || !same[p]) { add(guarded.length ? 'guard: page: the two B differ (today compiled with units its guard left unmarked)' : 'page: the two B differ', { page: p + 1 }); continue }
     samePages++
     for (let j = 0; j < T.unit.length; j++) {
       glyphsCompared++

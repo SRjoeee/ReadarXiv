@@ -166,4 +166,14 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
     expect(roles(ins).slice(0, 3)).toEqual([0, 0, 1])
   })
+  it('gives a unit the glyphs that set its unmarked lead text symbols, right before its start (own.mjs headSymbolsOf)', () => {
+    const { doc, plan } = paper('\\#\\# Role here.')
+    expect(plan.marks.some((m) => m.kind === 'open')).toBe(false)
+    const pg = page('##Role here.', [
+      ['0s', 2],
+      ['0e', 12],
+    ])
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect(roles(ins).slice(0, 3)).toEqual([1, 1, 1])
+  })
 })

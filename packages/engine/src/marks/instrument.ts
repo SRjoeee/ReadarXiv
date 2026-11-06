@@ -350,6 +350,53 @@ export function instrumentFromPlan<Doc>({
   }
   for (let id = 0; id < units.length; id++) if (!textOf.has(id) && !marksOf(id).why) marksOf(id).why = 'marks'
 
+  // ---- a unit's lead text symbols with no point of their own (own.mjs headSymbolsOf, MR 5b's symbols): TeX sets their
+  // characters right before the unit's start point, on its line; the glyphs there, in stream order, that set exactly those
+  // characters are the unit's text (the layer draws a text symbol as its character: `\#\# Role`, an affiliation's `\{kahe,
+  // …\}`, a cell's `\#`). Before the labels, which take what is left. Not ported: a cell's lead macro by the text the probe
+  // showed it sets (CELL_ABUT, a threshold), which stays no unit's
+  const symbolsInText = new Set<string>()
+  for (const [id, { s }] of textOf) {
+    if (!s) continue
+    const ps = doc.units[id]?.pieces ?? []
+    let want = ''
+    const ks: number[] = []
+    for (let k = 0; k < ps.length; k++) {
+      const p = ps[k] as (typeof ps)[number]
+      if (p.t === 'text') {
+        if (/\S/.test(p.s)) break
+        continue
+      }
+      if (!classOf(p)) continue
+      const sym = p.t === 'ph' ? symbolText(p.src) : null
+      if (sym === null || w.opening(id, k) || w.closing(id, k)) {
+        want = ''
+        break
+      }
+      want += sym.normalize('NFKC').replace(/\s/g, '')
+      ks.push(k)
+    }
+    if (!want) continue
+    const [p] = s
+    const S = pt(s)
+    const F = (pages[p] as PageRead).glyphs[S.glyph]
+    if (!F) continue
+    const run: number[] = []
+    let end = want.length
+    for (let g = S.glyph - 1; g >= 0 && end > 0; g--) {
+      const G = glyphOf(p, g)
+      const t = (G.u ?? '').normalize('NFKC').replace(/\s/g, '')
+      if ((regions[p] as Regions).glyph[g] !== at(s) || ownerAt(p, g) >= 0 || !onLine(G, F)) break
+      if (!t) continue
+      if (!want.slice(0, end).endsWith(t)) break
+      run.push(g)
+      end -= t.length
+    }
+    if (end !== 0) continue
+    for (const g of run) set(glyphs[p] as Owners, g, id, ROLE.text)
+    for (const k of ks) symbolsInText.add(`${id}.${k}`)
+  }
+
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
   /** each page's glyphs inside an included graphic or a picture, between our points around it (an \includegraphics frame's
    *  g<n>a and g<n>b, pgf's picture zs and ze): a figure's own text, never a label */
@@ -482,8 +529,6 @@ export function instrumentFromPlan<Doc>({
     endName: (u) => w.end(u),
     startName: (u) => w.start(u),
   })
-  /** the text symbols whose glyphs went to their unit's text, by `unit.piece`: the spelling reads their characters */
-  const symbolsInText = new Set<string>()
   for (const [name, e0] of owned) {
     const f = follows.get(name)
     if (!f) continue
@@ -583,51 +628,6 @@ export function instrumentFromPlan<Doc>({
     const unit = keyUnit.get(key) as number
     for (const [p, g] of take(A, close[0] as At, at(A)).gs)
       if (roleAt(p, g) !== ROLE.element) set(glyphs[p] as Owners, g, unit, ROLE.name)
-  }
-
-  // ---- a cell's lead text symbols with no point of their own (MR 5b, its symbols' part): TeX sets their characters right
-  // before the cell's start point, on its line; the glyphs there, in stream order, that set exactly those characters are the
-  // cell's text (the layer draws a text symbol as its character). Not ported: a lead macro's ink by the text the probe showed
-  // it sets (CELL_ABUT, a threshold), which stays no unit's
-  for (const [id, { s }] of textOf) {
-    if (!s || doc.units[id]?.kind !== 'cell') continue
-    const ps = doc.units[id]?.pieces ?? []
-    let want = ''
-    const ks: number[] = []
-    for (let k = 0; k < ps.length; k++) {
-      const p = ps[k] as (typeof ps)[number]
-      if (p.t === 'text') {
-        if (/\S/.test(p.s)) break
-        continue
-      }
-      if (!classOf(p)) continue
-      const sym = p.t === 'ph' ? symbolText(p.src) : null
-      if (sym === null || w.opening(id, k) || w.closing(id, k)) {
-        want = ''
-        break
-      }
-      want += sym.normalize('NFKC').replace(/\s/g, '')
-      ks.push(k)
-    }
-    if (!want) continue
-    const [p] = s
-    const S = pt(s)
-    const F = (pages[p] as PageRead).glyphs[S.glyph]
-    if (!F) continue
-    const run: number[] = []
-    let end = want.length
-    for (let g = S.glyph - 1; g >= 0 && end > 0; g--) {
-      const G = glyphOf(p, g)
-      const t = (G.u ?? '').normalize('NFKC').replace(/\s/g, '')
-      if ((regions[p] as Regions).glyph[g] !== at(s) || ownerAt(p, g) >= 0 || !onLine(G, F)) break
-      if (!t) continue
-      if (!want.slice(0, end).endsWith(t)) break
-      run.push(g)
-      end -= t.length
-    }
-    if (end !== 0) continue
-    for (const g of run) set(glyphs[p] as Owners, g, id, ROLE.text)
-    for (const k of ks) symbolsInText.add(`${id}.${k}`)
   }
 
   // ---- the lines of a unit's range its source does not spell (own.mjs spells: releaseLines, trimLead): a unit's text glyphs
