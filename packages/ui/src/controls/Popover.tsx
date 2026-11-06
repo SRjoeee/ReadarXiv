@@ -11,21 +11,24 @@
 import { type ReactNode, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 
 /** a popover's own elements matching `selector`: not those of a popover it holds (the reading options hold menus) */
-const own = (el: HTMLElement, selector: string) => [...el.querySelectorAll<HTMLElement>(selector)].filter(e => e.parentElement?.closest('[popover]') === el)
+const own = (el: HTMLElement, selector: string) =>
+  [...el.querySelectorAll<HTMLElement>(selector)].filter((e) => e.parentElement?.closest('[popover]') === el)
 /** a dialog's first control that shows: its rows for a narrow window are there, hidden in a wide one (reader.css) */
-const firstShown = (el: HTMLElement) => own(el, 'button, a[href], input').find(e => !e.closest('[hidden]') && (e.checkVisibility?.() ?? true))
+const firstShown = (el: HTMLElement) =>
+  own(el, 'button, a[href], input').find((e) => !e.closest('[hidden]') && (e.checkVisibility?.() ?? true))
 
 /** `name`: a fixed id for a popover another part of the page opens (the capsule's choose-language action); one per page */
 export function usePopover(kind: 'menu' | 'listbox' | 'dialog', name?: string) {
   const auto = useId()
   const raw = name ?? auto.replace(/[^\w-]/g, '')
-  const id = `pop-${raw}`, anchor = `--pop-${raw}`
+  const id = `pop-${raw}`,
+    anchor = `--pop-${raw}`
   const [open, setOpen] = useState(false)
   /** counts the closes: a key for contents that start afresh each time (a search, the active item) */
   const [generation, setGeneration] = useState(0)
   const onOpenChange = useCallback((now: boolean) => {
     setOpen(now)
-    if (!now) setGeneration(g => g + 1)
+    if (!now) setGeneration((g) => g + 1)
   }, [])
   return {
     open,
@@ -36,7 +39,16 @@ export function usePopover(kind: 'menu' | 'listbox' | 'dialog', name?: string) {
   }
 }
 
-export function Popover({ id, anchor, onOpenChange, role, label, onClosed, className = '', children }: {
+export function Popover({
+  id,
+  anchor,
+  onOpenChange,
+  role,
+  label,
+  onClosed,
+  className = '',
+  children,
+}: {
   id: string
   anchor: string
   onOpenChange: (open: boolean) => void
@@ -50,7 +62,8 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
   // the element to focus carries the HTML autofocus attribute, which the browser's popover honours as it shows, in the
   // same step: a key pressed at once goes to it (React's autoFocus writes no attribute). Set again as contents start afresh
   useLayoutEffect(() => {
-    if (ref.current) for (const el of own(ref.current, '[data-autofocus]:not([autofocus])')) el.setAttribute('autofocus', '')
+    if (ref.current)
+      for (const el of own(ref.current, '[data-autofocus]:not([autofocus])')) el.setAttribute('autofocus', '')
   })
   useEffect(() => {
     const el = ref.current
@@ -65,12 +78,15 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
         if (target && !el.contains(document.activeElement)) target.focus()
         return
       }
-      if (el.contains(document.activeElement) || document.activeElement === document.body) document.querySelector<HTMLElement>(`[popovertarget="${id}"]`)?.focus()
+      if (el.contains(document.activeElement) || document.activeElement === document.body)
+        document.querySelector<HTMLElement>(`[popovertarget="${id}"]`)?.focus()
       onClosed?.()
     }
     // what the pointer is pressing, if anything: the press on this popover's own button is that button's to answer
     let pressing: EventTarget | null = null
-    const onPress = (e: Event) => { pressing = e.type === 'pointerdown' ? e.target : null }
+    const onPress = (e: Event) => {
+      pressing = e.type === 'pointerdown' ? e.target : null
+    }
     // the focus gone to a control outside: a press on nothing that takes the focus, or on its own words, leaves it open
     const onFocusOut = (e: FocusEvent) => {
       const to = e.relatedTarget as Node | null
@@ -85,7 +101,8 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
     return () => {
       el.removeEventListener('toggle', onToggle)
       el.removeEventListener('focusout', onFocusOut)
-      for (const type of ['pointerdown', 'pointerup', 'pointercancel']) document.removeEventListener(type, onPress, true)
+      for (const type of ['pointerdown', 'pointerup', 'pointercancel'])
+        document.removeEventListener(type, onPress, true)
     }
   }, [id, role, onOpenChange, onClosed])
   // a dialog is the popover itself; a menu or a list is the element inside it, which carries the role and the name, so
@@ -93,7 +110,15 @@ export function Popover({ id, anchor, onOpenChange, role, label, onClosed, class
   const dialog = role === 'dialog'
   return (
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a dialog, named by its label; nothing for a menu or a list
-    <div ref={ref} id={id} popover="auto" role={dialog ? 'dialog' : undefined} aria-label={dialog ? label : undefined} className={`pop chrome ${className}`} style={{ positionAnchor: anchor } as React.CSSProperties}>
+    <div
+      ref={ref}
+      id={id}
+      popover="auto"
+      role={dialog ? 'dialog' : undefined}
+      aria-label={dialog ? label : undefined}
+      className={`pop chrome ${className}`}
+      style={{ positionAnchor: anchor } as React.CSSProperties}
+    >
       {children}
     </div>
   )

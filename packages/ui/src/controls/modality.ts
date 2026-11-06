@@ -4,12 +4,26 @@
 // click, with the menu's first option beside them. `data-axt-pointer` on <html> marks the pointer's turn, from a press
 // until a key that moves or acts (typing is left to it); the sheets take those rings off while it is there (reader.css
 // under .chrome, ui.css under .ui, controls.css in a menu's search)
-const KEYBOARD = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', 'Enter', 'Escape'])
+const KEYBOARD = new Set([
+  'Tab',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'Enter',
+  'Escape',
+])
 
 export function trackModality(doc: Document = document): () => void {
   const root = doc.documentElement
   const onPointer = () => root.setAttribute('data-axt-pointer', '')
-  const onKey = (e: KeyboardEvent) => { if (KEYBOARD.has(e.key)) root.removeAttribute('data-axt-pointer') }
+  const onKey = (e: KeyboardEvent) => {
+    if (KEYBOARD.has(e.key)) root.removeAttribute('data-axt-pointer')
+  }
   doc.addEventListener('pointerdown', onPointer, true)
   doc.addEventListener('keydown', onKey, true)
   return () => {

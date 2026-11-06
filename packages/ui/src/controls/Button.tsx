@@ -15,7 +15,18 @@ export type ButtonSize = 'lg' | 'md' | 'sm'
 /** a disabled or busy button's press: nothing, and no form submitted (aria-disabled leaves the browser's action in place) */
 const refuse = (e: MouseEvent) => e.preventDefault()
 
-export function Button({ kind = 'neutral', size = 'md', icon, shortcut, disabled = false, busy = false, className, onClick, children, ...rest }: {
+export function Button({
+  kind = 'neutral',
+  size = 'md',
+  icon,
+  shortcut,
+  disabled = false,
+  busy = false,
+  className,
+  onClick,
+  children,
+  ...rest
+}: {
   kind?: ButtonKind
   size?: ButtonSize
   /** a Lucide node, drawn 16 px before the words */
@@ -28,7 +39,14 @@ export function Button({ kind = 'neutral', size = 'md', icon, shortcut, disabled
 } & Omit<ComponentProps<'button'>, 'disabled'>) {
   const still = disabled || busy
   return (
-    <button type="button" {...rest} aria-disabled={disabled || undefined} aria-busy={busy || undefined} onClick={still ? refuse : onClick} className={`btn ${kind} ${size}${className ? ` ${className}` : ''}`}>
+    <button
+      type="button"
+      {...rest}
+      aria-disabled={disabled || undefined}
+      aria-busy={busy || undefined}
+      onClick={still ? refuse : onClick}
+      className={`btn ${kind} ${size}${className ? ` ${className}` : ''}`}
+    >
       {busy ? <Icon node={Loader} className="spin" /> : icon && <Icon node={icon} />}
       {children != null && children !== '' && <span>{children}</span>}
       {shortcut && (kind === 'brand' || kind === 'neutral') && !still && <Kbd>{shortcut}</Kbd>}

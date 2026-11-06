@@ -21,7 +21,16 @@ export interface SegmentOption<T extends string> {
 /** the chosen segment's anchor name, scoped by each `.seg.fit` to itself */
 const CHOSEN = '--seg-on'
 
-export function Segmented<T extends string>({ label, value, options, onChange, fit = false, size = 'md', iconsOnly = false, describedBy }: {
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  fit = false,
+  size = 'md',
+  iconsOnly = false,
+  describedBy,
+}: {
   label: string
   value: T
   options: readonly SegmentOption<T>[]
@@ -33,27 +42,53 @@ export function Segmented<T extends string>({ label, value, options, onChange, f
   describedBy?: string
 }) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
-  const values = options.map(o => o.value)
-  const can = (v: T) => !options.find(o => o.value === v)?.disabled
-  const choose = (v: T) => { if (v !== value && can(v)) onChange(v) }
+  const values = options.map((o) => o.value)
+  const can = (v: T) => !options.find((o) => o.value === v)?.disabled
+  const choose = (v: T) => {
+    if (v !== value && can(v)) onChange(v)
+  }
   const chosen = values.indexOf(value)
   // a value none of the options holds leaves no thumb, and the first that can be had is the tab stop, the arrows going
   // on from it: the group stays reachable
-  const stop = chosen >= 0 ? chosen : options.findIndex(o => !o.disabled)
+  const stop = chosen >= 0 ? chosen : options.findIndex((o) => !o.disabled)
   const className = ['seg', fit && 'fit', size === 'sm' && 'small', iconsOnly && 'icons'].filter(Boolean).join(' ')
   return (
-    <div role="radiogroup" aria-label={label} aria-describedby={describedBy} className={className} style={fit ? undefined : ({ '--i': chosen, '--n': options.length } as CSSProperties)}
-      onKeyDown={radioKeys(values, values[stop] as T, can, choose, i => buttons.current[i]?.focus())}>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-describedby={describedBy}
+      className={className}
+      style={fit ? undefined : ({ '--i': chosen, '--n': options.length } as CSSProperties)}
+      onKeyDown={radioKeys(values, values[stop] as T, can, choose, (i) => buttons.current[i]?.focus())}
+    >
       {chosen >= 0 && <span className="thumb" aria-hidden="true" />}
       {options.map((option, i) => (
-        <Segment key={option.value} option={option} checked={i === chosen} stop={i === stop} anchor={fit && i === chosen} iconsOnly={iconsOnly}
-          onPick={() => choose(option.value)} buttonRef={el => { buttons.current[i] = el }} />
+        <Segment
+          key={option.value}
+          option={option}
+          checked={i === chosen}
+          stop={i === stop}
+          anchor={fit && i === chosen}
+          iconsOnly={iconsOnly}
+          onPick={() => choose(option.value)}
+          buttonRef={(el) => {
+            buttons.current[i] = el
+          }}
+        />
       ))}
     </div>
   )
 }
 
-function Segment<T extends string>({ option, checked, stop, anchor, iconsOnly, onPick, buttonRef }: {
+function Segment<T extends string>({
+  option,
+  checked,
+  stop,
+  anchor,
+  iconsOnly,
+  onPick,
+  buttonRef,
+}: {
   option: SegmentOption<T>
   checked: boolean
   stop: boolean
@@ -66,15 +101,32 @@ function Segment<T extends string>({ option, checked, stop, anchor, iconsOnly, o
   const tipped = iconsOnly || option.title !== undefined
   const { props, tip } = useTip(iconsOnly ? option.label : (option.title ?? ''), iconsOnly ? option.title : undefined)
   // anchor-name takes a list: the tooltip's, and the thumb's on the chosen segment of a fit control
-  const names = [tipped ? (props.style as { anchorName: string }).anchorName : '', anchor ? CHOSEN : ''].filter(Boolean).join(', ')
+  const names = [tipped ? (props.style as { anchorName: string }).anchorName : '', anchor ? CHOSEN : '']
+    .filter(Boolean)
+    .join(', ')
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment, as the reader's are; its keys are the group's */}
-      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-disabled={option.disabled || undefined} aria-label={iconsOnly ? option.label : undefined}
-        aria-describedby={option.title ? `${id}-why` : undefined} tabIndex={stop ? 0 : -1} onClick={onPick} {...(tipped ? props : {})} style={names ? ({ anchorName: names } as CSSProperties) : undefined}>
+      <button
+        ref={buttonRef}
+        type="button"
+        role="radio"
+        aria-checked={checked}
+        aria-disabled={option.disabled || undefined}
+        aria-label={iconsOnly ? option.label : undefined}
+        aria-describedby={option.title ? `${id}-why` : undefined}
+        tabIndex={stop ? 0 : -1}
+        onClick={onPick}
+        {...(tipped ? props : {})}
+        style={names ? ({ anchorName: names } as CSSProperties) : undefined}
+      >
         {option.icon}
         {!iconsOnly && <span>{option.label}</span>}
-        {option.title && <span id={`${id}-why`} hidden>{option.title}</span>}
+        {option.title && (
+          <span id={`${id}-why`} hidden>
+            {option.title}
+          </span>
+        )}
       </button>
       {tipped && tip}
     </>

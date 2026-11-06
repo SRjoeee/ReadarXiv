@@ -7,7 +7,10 @@
 // turns it into `var(<prefix>name)` and `resolve` into the value it names.
 
 export type Mode = 'light' | 'dark'
-export interface Themed { light: string; dark: string }
+export interface Themed {
+  light: string
+  dark: string
+}
 type Value = string | Themed
 
 /** The reader's neutral ramp (the reader's design, §4.1): one cool neutral at hue 255, and the dark theme's own */
@@ -107,12 +110,27 @@ const LATIN = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui'
  * the blocks after it win where they match too (`zh-TW` is also `zh`)
  */
 export const FONT_STACKS: readonly { langs: readonly string[]; cjk: string }[] = [
-  { langs: ['zh'], cjk: '"PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC"' },
-  { langs: ['zh-TW', 'zh-Hant'], cjk: '"PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "Source Han Sans TC"' },
-  { langs: ['zh-HK', 'zh-MO', 'yue'], cjk: '"PingFang HK", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK HK", "Noto Sans HK", "Noto Sans CJK TC", "Noto Sans TC"' },
+  {
+    langs: ['zh'],
+    cjk: '"PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC"',
+  },
+  {
+    langs: ['zh-TW', 'zh-Hant'],
+    cjk: '"PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "Source Han Sans TC"',
+  },
+  {
+    langs: ['zh-HK', 'zh-MO', 'yue'],
+    cjk: '"PingFang HK", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK HK", "Noto Sans HK", "Noto Sans CJK TC", "Noto Sans TC"',
+  },
   // Yu Gothic UI, not plain Yu Gothic, whose Regular draws thin in Chrome on Windows
-  { langs: ['ja'], cjk: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP"' },
-  { langs: ['ko'], cjk: '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR"' },
+  {
+    langs: ['ja'],
+    cjk: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP"',
+  },
+  {
+    langs: ['ko'],
+    cjk: '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR"',
+  },
 ]
 
 /** The stack a language's elements draw in */
@@ -133,8 +151,9 @@ export function resolve(name: string, mode: Mode): string {
 function declarations(mode: Mode, prefix: string, indent: string): string {
   const lines = [`color-scheme: ${mode};`]
   for (const [name, value] of Object.entries(RAMP)) lines.push(`${prefix}${name}: ${value[mode]};`)
-  for (const [name, value] of Object.entries(ROLES)) lines.push(`${prefix}${name}: ${at(value, mode).replace(REF, (_, ref: string) => `var(${prefix}${ref})`)};`)
-  return lines.map(line => `${indent}${line}`).join('\n')
+  for (const [name, value] of Object.entries(ROLES))
+    lines.push(`${prefix}${name}: ${at(value, mode).replace(REF, (_, ref: string) => `var(${prefix}${ref})`)};`)
+  return lines.map((line) => `${indent}${line}`).join('\n')
 }
 
 /** Where each block goes: an extension page on its root, marked light or dark there (`data-theme`); a shadow root on
@@ -145,25 +164,40 @@ function declarations(mode: Mode, prefix: string, indent: string): string {
  *  sit in each theme's block, beside the ramp, so that the element carrying the mark (the gallery's dark half, a shadow
  *  root's marked element) resolves them anew */
 const SELECTORS = {
-  page: { light: ':root,\n[data-theme="light"]', system: ':root:not([data-theme="light"])', dark: '[data-theme="dark"]', constants: ':root' },
-  host: { light: ':host,\n[data-axt-theme="light"]', system: ':host', dark: '[data-axt-theme="dark"]', constants: ':host' },
+  page: {
+    light: ':root,\n[data-theme="light"]',
+    system: ':root:not([data-theme="light"])',
+    dark: '[data-theme="dark"]',
+    constants: ':root',
+  },
+  host: {
+    light: ':host,\n[data-axt-theme="light"]',
+    system: ':host',
+    dark: '[data-axt-theme="dark"]',
+    constants: ':host',
+  },
 } as const
 
 /** The sheet: `page` unprefixed for the extension's own documents, `host` prefixed `--axt-` for a shadow root on arXiv's pages */
 export function tokenSheet(scope: 'page' | 'host'): string {
   const s = SELECTORS[scope]
   const prefix = scope === 'page' ? '--' : '--axt-'
-  const constants = Object.entries(CONSTANTS).map(([name, value]) => `  ${prefix}${name}: ${value};`).join('\n')
+  const constants = Object.entries(CONSTANTS)
+    .map(([name, value]) => `  ${prefix}${name}: ${value};`)
+    .join('\n')
   // the font by language: on the root (or the host) the Simplified stack, then the root in one of the languages, and
   // an element of the interface in one (`.ui`, `.chrome`: the paper's layers carry `lang` too, thousands of elements, and
   // set their own faces). Inside a shadow root `:lang()` reaches the shadow tree alone, the element that carries `lang` there
-  const at = (lang: string) => (scope === 'page' ? [`:root:lang(${lang})`, `:is(.ui, .chrome) :lang(${lang})`] : [`:lang(${lang})`])
+  const at = (lang: string) =>
+    scope === 'page' ? [`:root:lang(${lang})`, `:is(.ui, .chrome) :lang(${lang})`] : [`:lang(${lang})`]
   const fonts = FONT_STACKS.map(({ langs, cjk }, i) => {
     const selector = [...(i === 0 ? [s.constants] : []), ...langs.flatMap(at)].join(', ')
     return `${selector} {\n  ${prefix}font: ${fontStack(cjk)};\n}\n`
   }).join('')
   return [
-    scope === 'page' ? '/* Generated from src/shared/tokens.ts by `pnpm tokens`: edit the source, not this file */\n' : '',
+    scope === 'page'
+      ? '/* Generated from src/shared/tokens.ts by `pnpm tokens`: edit the source, not this file */\n'
+      : '',
     `${s.light} {\n${declarations('light', prefix, '  ')}\n}\n`,
     `@media (prefers-color-scheme: dark) {\n  ${s.system} {\n${declarations('dark', prefix, '    ')}\n  }\n}\n`,
     `${s.dark} {\n${declarations('dark', prefix, '  ')}\n}\n`,

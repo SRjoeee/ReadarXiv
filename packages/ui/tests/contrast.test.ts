@@ -12,34 +12,39 @@ const colour = (name: string, mode: Mode): Rgba => {
 }
 /** layers from the top down, the last one opaque */
 const stack = (layers: string[], mode: Mode): Rgba =>
-  layers.map(l => colour(l, mode)).reduceRight((below, top) => over(top, below))
+  layers.map((l) => colour(l, mode)).reduceRight((below, top) => over(top, below))
 
 const PAIRS: { what: string; fg: string; bg: string[]; floor: number; modes?: Mode[] }[] = [
   { what: 'words on the brand', fg: 'on-brand', bg: ['brand'], floor: 4.5 },
   { what: 'a shortcut label on the brand', fg: 'on-brand', bg: ['brand-chip', 'brand'], floor: 4.5 },
   { what: 'a shortcut label on the large neutral button', fg: 'ink', bg: ['ink@9%', 'fill'], floor: 4.5 },
   { what: 'a shortcut label on the small neutral button', fg: 'ink', bg: ['ink@9%', 'button'], floor: 4.5 },
-  { what: 'a shortcut label on P0\'s search row', fg: 'ink', bg: ['ink@9%', 'group-hover'], floor: 4.5 },
-  { what: 'P0\'s paper id: on-brand-2, 85 % white in light and white in dark (§5.4)', fg: 'on-brand-2', bg: ['brand'], floor: 4.5 },
-  { what: 'a value in the popup\'s group, a replaced service struck in it too', fg: 'ink-2', bg: ['group'], floor: 4.5 },
-  { what: 'a chevron in the popup\'s group', fg: 'ink-3', bg: ['group'], floor: 3 },
-  { what: 'a hovered or open row\'s label in the popup\'s group', fg: 'ink', bg: ['group-hover'], floor: 4.5 },
-  { what: 'a hovered or open row\'s value, struck or not', fg: 'ink-2', bg: ['group-hover'], floor: 4.5 },
-  { what: 'a hovered or open row\'s chevron', fg: 'ink-3', bg: ['group-hover'], floor: 3 },
+  { what: "a shortcut label on P0's search row", fg: 'ink', bg: ['ink@9%', 'group-hover'], floor: 4.5 },
+  {
+    what: "P0's paper id: on-brand-2, 85 % white in light and white in dark (§5.4)",
+    fg: 'on-brand-2',
+    bg: ['brand'],
+    floor: 4.5,
+  },
+  { what: "a value in the popup's group, a replaced service struck in it too", fg: 'ink-2', bg: ['group'], floor: 4.5 },
+  { what: "a chevron in the popup's group", fg: 'ink-3', bg: ['group'], floor: 3 },
+  { what: "a hovered or open row's label in the popup's group", fg: 'ink', bg: ['group-hover'], floor: 4.5 },
+  { what: "a hovered or open row's value, struck or not", fg: 'ink-2', bg: ['group-hover'], floor: 4.5 },
+  { what: "a hovered or open row's chevron", fg: 'ink-3', bg: ['group-hover'], floor: 3 },
   { what: 'a placeholder on a field', fg: 'ink-2', bg: ['field'], floor: 4.5 },
-  { what: 'a destructive confirm\'s words', fg: 'danger', bg: ['button-danger'], floor: 4.5 },
-  { what: 'an alert\'s icon in a note', fg: 'danger', bg: ['group'], floor: 3 },
+  { what: "a destructive confirm's words", fg: 'danger', bg: ['button-danger'], floor: 4.5 },
+  { what: "an alert's icon in a note", fg: 'danger', bg: ['group'], floor: 3 },
   { what: 'the connected icon', fg: 'success', bg: ['chrome'], floor: 3 },
-  { what: 'a search hit\'s words, in a label or a description', fg: 'ink', bg: ['mark', 'chrome'], floor: 4.5 },
-  { what: 'the neutral primary\'s words', fg: 'ink', bg: ['fill'], floor: 4.5 },
-  { what: 'a chosen swatch\'s edge', fg: 'line-strong', bg: ['chrome'], floor: 3 },
+  { what: "a search hit's words, in a label or a description", fg: 'ink', bg: ['mark', 'chrome'], floor: 4.5 },
+  { what: "the neutral primary's words", fg: 'ink', bg: ['fill'], floor: 4.5 },
+  { what: "a chosen swatch's edge", fg: 'line-strong', bg: ['chrome'], floor: 3 },
   // a switch that is on, in the popup and on the settings page (the maintainer, 2026-09-28; round 8: 6.81 / 3.07)
-  { what: 'a switch\'s on-track against the popup\'s ground', fg: 'brand', bg: ['chrome'], floor: 3 },
-  { what: 'a switch\'s on-track against the settings card', fg: 'brand', bg: ['chrome'], floor: 3 },
-  { what: 'a switch\'s thumb, white, against its on-track', fg: 'on-brand', bg: ['brand'], floor: 3 },
+  { what: "a switch's on-track against the popup's ground", fg: 'brand', bg: ['chrome'], floor: 3 },
+  { what: "a switch's on-track against the settings card", fg: 'brand', bg: ['chrome'], floor: 3 },
+  { what: "a switch's thumb, white, against its on-track", fg: 'on-brand', bg: ['brand'], floor: 3 },
 ]
 
-describe('the redesign\'s colour pairs', () => {
+describe("the redesign's colour pairs", () => {
   for (const pair of PAIRS) {
     for (const mode of pair.modes ?? (['light', 'dark'] as const)) {
       it(`${pair.what}, ${mode}: at least ${pair.floor}:1`, () => {
@@ -50,7 +55,7 @@ describe('the redesign\'s colour pairs', () => {
     }
   }
 
-  it('reads round 8\'s numbers for the brand red the maintainer chose: white on it 6.81:1 light, 5.14:1 dark', () => {
+  it("reads round 8's numbers for the brand red the maintainer chose: white on it 6.81:1 light, 5.14:1 dark", () => {
     expect(contrast(colour('on-brand', 'light'), colour('brand', 'light'))).toBeCloseTo(6.81, 1)
     expect(contrast(colour('on-brand', 'dark'), colour('brand', 'dark'))).toBeCloseTo(5.14, 1)
   })

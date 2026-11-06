@@ -29,7 +29,7 @@ export function parseOklch(css: string): Rgba {
 
 /** `top` painted over `below`, which is opaque */
 export const over = (top: Rgba, below: Rgba): Rgba =>
-  [0, 1, 2].map(i => top[i]! * top[3] + below[i]! * (1 - top[3])).concat(1) as Rgba
+  [0, 1, 2].map((i) => top[i]! * top[3] + below[i]! * (1 - top[3])).concat(1) as Rgba
 
 const luminance = ([r, g, b]: Rgba) => {
   const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)

@@ -12,7 +12,17 @@
 // field takes the focus as its menu opens, but not under a finger, where it would raise the on-screen keyboard over the
 // list (`touchFirst`)
 import { Check, Loader } from 'lucide'
-import { type CSSProperties, Fragment, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  type CSSProperties,
+  Fragment,
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { useMenuNav } from './menu-nav.ts'
 import { Icon } from './Icon.tsx'
 
@@ -84,7 +94,17 @@ export interface MenuListItem {
   manage?: true
 }
 
-export function MenuList({ items, kind, label, layout = 'inline', search, noMatch, onPick, onAction, onClose }: {
+export function MenuList({
+  items,
+  kind,
+  label,
+  layout = 'inline',
+  search,
+  noMatch,
+  onPick,
+  onAction,
+  onClose,
+}: {
   items: MenuListItem[]
   kind: 'listbox' | 'radios' | 'items'
   label: string
@@ -102,7 +122,7 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   /** the list holds the focus as the menu opens: always without a search field, and with one under a finger */
   const listFocus = useSyncExternalStore(onPointerChange, touchFirst, () => false) || !search
   const q = query.trim().toLowerCase()
-  const shown = q ? items.filter(i => `${i.name} ${i.keywords ?? ''}`.toLowerCase().includes(q)) : items
+  const shown = q ? items.filter((i) => `${i.name} ${i.keywords ?? ''}`.toLowerCase().includes(q)) : items
   /** a row with an action is picked for its action, disabled or not, unless the action is already running; any other
    *  row is chosen, if it can be */
   const pick = (item: MenuListItem | undefined) => {
@@ -113,7 +133,15 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
     }
     if (!item.disabled) onPick(item.id)
   }
-  const nav = useMenuNav({ count: shown.length, initial: shown.findIndex(i => i.checked && !i.manage), isDisabled: i => !!shown[i]?.disabled && !shown[i]?.action, labelOf: i => shown[i]?.name ?? '', onPick: i => pick(shown[i]), onClose, typeahead: !search })
+  const nav = useMenuNav({
+    count: shown.length,
+    initial: shown.findIndex((i) => i.checked && !i.manage),
+    isDisabled: (i) => !!shown[i]?.disabled && !shown[i]?.action,
+    labelOf: (i) => shown[i]?.name ?? '',
+    onPick: (i) => pick(shown[i]),
+    onClose,
+    typeahead: !search,
+  })
   const role = kind === 'listbox' ? 'option' : kind === 'radios' ? 'menuitemradio' : 'menuitem'
   const listId = `${useId()}-list`
   const root = useRef<HTMLDivElement>(null)
@@ -137,7 +165,9 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
     const el = root.current
     const popover = el?.closest('[popover]')
     if (!el || !popover) return
-    const onToggle = (e: Event) => { if ((e as Event & { newState?: string }).newState === 'open') reveal(el.querySelector('[data-active]'), popover) }
+    const onToggle = (e: Event) => {
+      if ((e as Event & { newState?: string }).newState === 'open') reveal(el.querySelector('[data-active]'), popover)
+    }
     popover.addEventListener('toggle', onToggle)
     return () => popover.removeEventListener('toggle', onToggle)
   }, [])
@@ -150,31 +180,69 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   // the search's, so it moves into the field and goes on the end of the query, as the field would have taken it had it
   // had the focus (a query typed before the list took the focus back is kept, never replaced)
   const field = useRef<HTMLInputElement>(null)
-  const listKeys = !search ? keys : {
-    ...keys,
-    onKeyDown: (e: KeyboardEvent) => {
-      // a key an input method is composing with is the composition's (menu-nav's own guard, before the redirect)
-      if (!e.nativeEvent.isComposing && e.keyCode !== 229 && e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        e.preventDefault()
-        const typed = e.key
-        setQuery(q => q + typed)
-        nav.setActive(0)
-        field.current?.focus()
-        return
+  const listKeys = !search
+    ? keys
+    : {
+        ...keys,
+        onKeyDown: (e: KeyboardEvent) => {
+          // a key an input method is composing with is the composition's (menu-nav's own guard, before the redirect)
+          if (
+            !e.nativeEvent.isComposing &&
+            e.keyCode !== 229 &&
+            e.key.length === 1 &&
+            e.key !== ' ' &&
+            !e.metaKey &&
+            !e.ctrlKey &&
+            !e.altKey
+          ) {
+            e.preventDefault()
+            const typed = e.key
+            setQuery((q) => q + typed)
+            nav.setActive(0)
+            field.current?.focus()
+            return
+          }
+          nav.onKeyDown(e)
+        },
       }
-      nav.onKeyDown(e)
-    },
-  }
   return (
     <div ref={root} className="outline-none">
       {search && (
         // the search takes the focus when the menu opens (Popover's data-autofocus), unless the list does
-        <input ref={field} data-autofocus={listFocus ? undefined : ''} role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
+        <input
+          ref={field}
+          data-autofocus={listFocus ? undefined : ''}
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-autocomplete="list"
+          {...keys}
+          value={query}
+          placeholder={search}
+          aria-label={search}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            nav.setActive(0)
+          }}
+          onInput={(e) => {
+            setQuery((e.target as HTMLInputElement).value)
+            nav.setActive(0)
+          }}
+          className="search"
+        />
       )}
       {shown.length === 0 && noMatch && <p className="px-2.5 py-2 text-[12px] text-ink-2">{noMatch}</p>}
       {/* a listbox of options or a menu of items, named, holding its items alone: a separator is drawn, not an item */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: a listbox or a menu, named by its label */}
-      <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={listFocus ? 0 : undefined} {...(listFocus ? listKeys : {})} className="outline-none" data-autofocus={listFocus ? '' : undefined}>
+      <div
+        id={listId}
+        role={kind === 'listbox' ? 'listbox' : 'menu'}
+        aria-label={label}
+        tabIndex={listFocus ? 0 : undefined}
+        {...(listFocus ? listKeys : {})}
+        className="outline-none"
+        data-autofocus={listFocus ? '' : undefined}
+      >
         {shown.map((item, index) => {
           const checked = !!item.checked && !item.manage
           const two = layout === 'two-line' && !!item.hint && !item.preview
@@ -187,18 +255,45 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (ui/menu-nav.ts) */}
               {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: an option, a menu radio or a menu item, by the list's kind */}
               {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
-              <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? checked : undefined} aria-checked={kind === 'radios' ? checked : undefined} aria-disabled={(item.disabled && !item.action) || undefined} aria-busy={item.action?.busy || undefined}
-                data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => pick(item)} className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}${item.disabled && item.action ? ' unavailable' : ''}`}>
+              <div
+                id={nav.idOf(index)}
+                tabIndex={-1}
+                role={role}
+                aria-selected={kind === 'listbox' ? checked : undefined}
+                aria-checked={kind === 'radios' ? checked : undefined}
+                aria-disabled={(item.disabled && !item.action) || undefined}
+                aria-busy={item.action?.busy || undefined}
+                data-active={index === nav.active || undefined}
+                onMouseEnter={() => nav.setActive(index)}
+                onClick={() => pick(item)}
+                className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}${item.disabled && item.action ? ' unavailable' : ''}`}
+              >
                 {two ? (
                   <span className="t">
                     <span lang={item.lang}>{item.name}</span>
                     <span className="sub">{item.hint}</span>
                   </span>
                 ) : (
-                  <span className={item.preview ? 'nm' : 'min-w-0 flex-1 truncate'} lang={item.preview ? undefined : item.lang}>{item.name}</span>
+                  <span
+                    className={item.preview ? 'nm' : 'min-w-0 flex-1 truncate'}
+                    lang={item.preview ? undefined : item.lang}
+                  >
+                    {item.name}
+                  </span>
                 )}
-                {item.preview ? <span className="preview" aria-hidden="true" lang={item.lang} style={item.preview}>{item.hint}</span> : !two && item.hint && <span className="hint">{item.hint}</span>}
-                {item.action && (item.action.busy ? <Icon node={Loader} size={14} className="spin" /> : <span className="act">{item.action.label}</span>)}
+                {item.preview ? (
+                  <span className="preview" aria-hidden="true" lang={item.lang} style={item.preview}>
+                    {item.hint}
+                  </span>
+                ) : (
+                  !two && item.hint && <span className="hint">{item.hint}</span>
+                )}
+                {item.action &&
+                  (item.action.busy ? (
+                    <Icon node={Loader} size={14} className="spin" />
+                  ) : (
+                    <span className="act">{item.action.label}</span>
+                  ))}
                 {/* the check's slot, last: after the hint, the sample and the action, which a chosen row can hold too (the Chrome
                     row, chosen while its pack downloads, P10); drawn unseen on every other row of a choice */}
                 {kind !== 'items' && <Icon node={Check} size={14} className={checked ? 'check' : 'check invisible'} />}

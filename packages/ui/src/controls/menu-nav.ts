@@ -14,7 +14,15 @@ export interface MenuNav {
   idOf: (index: number) => string
 }
 
-export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClose, typeahead = true }: {
+export function useMenuNav({
+  count,
+  initial,
+  isDisabled,
+  labelOf,
+  onPick,
+  onClose,
+  typeahead = true,
+}: {
   count: number
   initial: number
   isDisabled: (index: number) => boolean
@@ -39,14 +47,38 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     // an input method that is composing (Japanese, Korean, pinyin) owns the keys: Enter commits the word, the arrows choose a
     // candidate, Escape drops it; none of them is the menu's (229: the key a composition reports where isComposing lags)
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onClose()
+      return
+    }
     if (!count) return
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => step(a, 1)); return }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => step(a, -1)); return }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActive((a) => step(a, 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive((a) => step(a, -1))
+      return
+    }
     // in a search field Home and End move its caret, as in any text field
-    if (e.key === 'Home' && typeahead) { e.preventDefault(); setActive(step(-1, 1)); return }
-    if (e.key === 'End' && typeahead) { e.preventDefault(); setActive(step(count, -1)); return }
-    if (e.key === 'Enter' || (e.key === ' ' && typeahead)) { e.preventDefault(); onPick(active); return }
+    if (e.key === 'Home' && typeahead) {
+      e.preventDefault()
+      setActive(step(-1, 1))
+      return
+    }
+    if (e.key === 'End' && typeahead) {
+      e.preventDefault()
+      setActive(step(count, -1))
+      return
+    }
+    if (e.key === 'Enter' || (e.key === ' ' && typeahead)) {
+      e.preventDefault()
+      onPick(active)
+      return
+    }
     if (!typeahead || e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) return
     const now = performance.now()
     const word = now - typed.current.at < 500
@@ -57,7 +89,11 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     for (let k = 0; k < count; k++) {
       const j = (from + k) % count
       // the key is the menu's: nothing else on the page acts on it
-      if (!isDisabled(j) && labelOf(j).toLowerCase().startsWith(q)) { e.preventDefault(); setActive(j); return }
+      if (!isDisabled(j) && labelOf(j).toLowerCase().startsWith(q)) {
+        e.preventDefault()
+        setActive(j)
+        return
+      }
     }
   }
   const idOf = (index: number) => `${base}-item-${index}`

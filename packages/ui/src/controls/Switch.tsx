@@ -5,11 +5,35 @@
 // `why` is the tooltip then, beside its name (the reader, S-R-21)
 import { useTip } from './tip.tsx'
 
-export function Switch({ label, checked, onChange, disabled = false, why }: { label: string; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean; why?: string }) {
+export function Switch({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  why,
+}: {
+  label: string
+  checked: boolean
+  onChange: (on: boolean) => void
+  disabled?: boolean
+  why?: string
+}) {
   const { props, tip } = useTip(label, why)
   return (
     <>
-      <button type="button" role="switch" aria-checked={checked} aria-label={label} aria-description={why} aria-disabled={disabled || undefined} className="switch" onClick={() => { if (!disabled) onChange(!checked) }} {...(why ? props : {})} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        aria-description={why}
+        aria-disabled={disabled || undefined}
+        className="switch"
+        onClick={() => {
+          if (!disabled) onChange(!checked)
+        }}
+        {...(why ? props : {})}
+      />
       {why && tip}
     </>
   )

@@ -5,7 +5,18 @@ import { createElement } from 'react'
 
 export function Icon({ node, size = 16, className }: { node: IconNode; size?: number; className?: string }) {
   return (
-    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
       {node.map(([tag, attrs], index) => createElement(tag, { key: index, ...attrs }))}
     </svg>
   )

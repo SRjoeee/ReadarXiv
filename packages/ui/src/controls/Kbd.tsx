@@ -5,5 +5,9 @@ import type { ReactNode } from 'react'
 
 export function Kbd({ children }: { children: ReactNode }) {
   // biome-ignore lint/a11y/noAriaHiddenOnFocusable: a kbd takes no focus; the label is a visible hint beside a control named by its own words
-  return <kbd aria-hidden="true" className="kbd">{children}</kbd>
+  return (
+    <kbd aria-hidden="true" className="kbd">
+      {children}
+    </kbd>
+  )
 }
