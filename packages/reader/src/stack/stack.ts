@@ -68,7 +68,7 @@ export interface StackEvents {
   /** every page's own size is known */
   sized: { pages: number }
   /** a content swapped in */
-  shown: { n: number; key: string }
+  shown: { n: number; key: string; swapMs: number; drawMs: number }
 }
 type Listener<K extends keyof StackEvents> = (e: StackEvents[K]) => void
 
@@ -130,6 +130,8 @@ interface Drawing {
   drawnAt: number
   job: Job
   detailJob: Job | null
+  /** its page view's drawing, ms */
+  drawMs: number
 }
 interface Slot {
   n: number
@@ -335,6 +337,7 @@ export function createStack(o: StackOptions): Stack {
       drawnAt: 0,
       job: null as unknown as Job,
       detailJob: null,
+      drawMs: 0,
     }
     const mine = gen
     d.job = {
@@ -345,12 +348,24 @@ export function createStack(o: StackOptions): Stack {
         if (!view.pdfPage) view.setPdfPage(await content.doc.getPage(s.n))
         if (view.renderingState !== INITIAL) return
         const at = view.scale
+        const td = performance.now()
         await view.draw()
+        d.drawMs = performance.now() - td
         if (mine !== gen || disposed) return
         d.drawnAt = at
         // (a new content's overlay made before it is swapped in: the swap is one task)
         if (s.next === d && d.content.over && !d.over) {
-          d.over = await d.content.over({ n: s.n, view, viewport: view.viewport })
+          try {
+            d.over = await d.content.over({ n: s.n, view, viewport: view.viewport })
+          } catch (e) {
+            // (an overlay that cannot be made: the drawing let go, the slot keeps what it shows; told)
+            o.warn?.(`page ${s.n}'s overlay`, e)
+            if (s.next === d) {
+              release(d)
+              s.next = null
+            }
+            return
+          }
           if (mine !== gen || disposed || s.next !== d) return
         }
         drawnNow(s, d)
@@ -392,6 +407,7 @@ export function createStack(o: StackOptions): Stack {
   /** a drawing finished: a new content swapped in, in one task, its overlay made; told */
   function drawnNow(s: Slot, d: Drawing) {
     if (s.next === d) {
+      const t0 = performance.now()
       const focus = focusIn(s)
       const was = s.shown
       if (d.over) d.holder.append(d.over)
@@ -404,7 +420,7 @@ export function createStack(o: StackOptions): Stack {
       counts.swaps++
       name(s)
       keepFocus(s, focus)
-      tell('shown', { n: s.n, key: d.key })
+      tell('shown', { n: s.n, key: d.key, swapMs: performance.now() - t0, drawMs: d.drawMs })
     }
     rounding(s)
     tell('drawn', { n: s.n, scale: d.drawnAt, key: d.key, detail: false })

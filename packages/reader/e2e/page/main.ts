@@ -12,6 +12,8 @@ import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
 import type { Page } from '../../src/compose/page.ts'
 import { fixtureLay, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
+import { createStack, type Stack } from '../../src/stack/stack.ts'
+import { eagerPages, quietRoot } from '../../src/panes/left.ts'
 import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
 import { createScheduler } from '../../src/stack/scheduler.ts'
@@ -35,6 +37,7 @@ const h = {
   kit: null as Awaited<ReturnType<typeof loadKit>> | null,
   doc: null as import('pdfjs-dist').PDFDocumentProxy | null,
   source: null as OriginalSource | null,
+  task: null as { destroy(): Promise<void> } | null,
   composed: null as import('pdfjs-dist').PDFDocumentProxy | null,
   groups: null as Groups | null,
   composer: null as Composer | null,
@@ -90,6 +93,7 @@ const h = {
     const source = rangeSource({ fetch: (u, i) => fetch(u, i), url, own, store: chunkStore() })
     h.source = source
     const task = openRanged(kit.lib as never, source, { options: kit.options('original') })
+    h.task = task
     const doc = await task.promise
     h.doc = doc
     panes.right.contentOf = () => ({ key: 'original', doc, config: null, own: true, over: null })
@@ -182,7 +186,25 @@ const h = {
     })
     h.composer = composer
     composer.on('laid', (e) => h.marks.push({ what: 'laid', at: performance.now() - h.t0, page: e.n, on: !!e.page }))
-    panes.right.on('shown', (e) => h.marks.push({ what: 'shown', at: performance.now() - h.t0, page: e.n, key: e.key }))
+    panes.right.on('shown', (e) => {
+      // (the commit's style and layout: the swap's own task, its layout forced here, in the same task)
+      const t = performance.now()
+      const slot = panes.right.page(e.n)
+      // (the slot's size is contained: its own box asks nothing of what the commit added; the SVG's text and the text layer's
+      // spans do)
+      for (const x of slot?.querySelectorAll('.axt-over svg text') ?? []) (x as SVGTextElement).getBBox()
+      slot?.querySelector('.axt-over .textLayer span:last-of-type')?.getBoundingClientRect()
+      const layoutMs = performance.now() - t
+      h.marks.push({
+        what: 'shown',
+        at: performance.now() - h.t0,
+        page: e.n,
+        key: e.key,
+        swapMs: e.swapMs,
+        layoutMs,
+        drawMs: e.drawMs,
+      })
+    })
     h.highlight?.dispose()
     h.highlight = createHighlight({ panes, composer, clock: h.clock as NonNullable<typeof h.clock>, on: true })
     composer.setDocuments({ original: h.doc, composed, groups })
@@ -570,6 +592,177 @@ const h = {
     const returnedAt = performance.now() - t0
     h.readers.push({ reader, root, asked })
     return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
+  },
+  /** way (b): the left on the composed document too (its pages drawn again from it), the original's document let go */
+  async toComposed() {
+    const panes = h.panes as Panes
+    const t = performance.now()
+    await panes.open(h.composed as import('pdfjs-dist').PDFDocumentProxy)
+    ;(h.composer as Composer).setDocuments({ original: null, composed: h.composed, groups: h.groups })
+    await h.task?.destroy()
+    h.kit?.release('original')
+    return { reopenMs: Math.round(performance.now() - t) }
+  },
+  /** every page walked on the right (the left following), each drawn on both; then the memory the page holds, workers included */
+  async walk() {
+    const panes = h.panes as Panes
+    const n = panes.right.pages
+    const t = performance.now()
+    for (let i = 1; i <= n; i++) {
+      panes.goToPage('right', i)
+      const t1 = performance.now()
+      while (performance.now() - t1 < 8000) {
+        // (drawn once on each pane: a page kept drawn is not drawn again)
+        const right = h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === i)
+        const left = h.marks.some((m) => m.what === 'drawn' && m.side === 'left' && m.page === i)
+        if (right && left) break
+        await new Promise((f) => setTimeout(f, 20))
+      }
+    }
+    const walkMs = performance.now() - t
+    return { pages: n, walkMs: Math.round(walkMs), probe: panes.probe() }
+  },
+  one: null as {
+    kind: string
+    pane: HTMLElement
+    stack?: Stack
+    viewer?: unknown
+    drawn: { n: number; at: number }[]
+    t0: number
+  } | null,
+  /**
+   * One pane over the original, full width: PDF.js's viewer as the left is today (`viewer`: eagerPages, quietRoot, its text and
+   * annotation layers) or the page stack (`stack`: PDF.js's page views in slots, their own text and annotation layers, the
+   * reader's scheduler). For deliverable 7's measurement: first paint, a scroll trace, memory, and the behaviours
+   */
+  async single(url: string, kind: 'viewer' | 'stack') {
+    const t0 = performance.now()
+    const kit = await loadKit()
+    h.kit = kit
+    root.className = 'axt-reader'
+    addSheets(root, kit.sheet)
+    const pane = document.createElement('div')
+    pane.className = 'axt-pane left'
+    pane.style.width = '100%'
+    root.append(pane)
+    const drawn: { n: number; at: number }[] = []
+    const source = rangeSource({ fetch: (u, i) => fetch(u, i), url, own: url.startsWith('/'), store: chunkStore() })
+    const task = openRanged(kit.lib as never, source, { options: kit.options('original') })
+    const doc = await task.promise
+    h.doc = doc
+    const V = kit.viewer
+    const bus = new V.EventBus()
+    const links = new V.PDFLinkService({ eventBus: bus })
+    const out: NonNullable<typeof h.one> = { kind, pane, drawn, t0 }
+    if (kind === 'viewer') {
+      quietRoot(document.documentElement.style)
+      const inner = document.createElement('div')
+      inner.className = 'pdfViewer'
+      pane.append(inner)
+      const Viewer = eagerPages(V.PDFViewer as never) as unknown as typeof V.PDFViewer
+      const viewer = new Viewer({
+        container: pane as HTMLDivElement,
+        viewer: inner as HTMLDivElement,
+        eventBus: bus,
+        linkService: links,
+        textLayerMode: 1,
+        removePageBorders: false,
+      } as never)
+      links.setViewer(viewer)
+      bus.on('pagerendered', (e: { pageNumber: number; isDetailView?: boolean }) => {
+        if (!e.isDetailView) drawn.push({ n: e.pageNumber, at: performance.now() - t0 })
+      })
+      bus.on('pagesinit', () => {
+        viewer.currentScaleValue = 'page-width'
+      })
+      viewer.setDocument(doc)
+      links.setDocument(doc)
+      out.viewer = viewer
+    } else {
+      const clock = ownedClock()
+      const stack = createStack({
+        scroller: pane,
+        kit,
+        scheduler: createScheduler(),
+        clock,
+        name: (n) => `page ${n}`,
+        links,
+      })
+      links.setViewer({ scrollPageIntoView: () => {}, pagesCount: doc.numPages, currentPageNumber: 1 } as never)
+      links.setDocument(doc)
+      stack.contentOf = () => ({ key: 'original', doc, config: null, own: true, over: null })
+      stack.on('drawn', (e) => {
+        if (!e.detail) drawn.push({ n: e.n, at: performance.now() - t0 })
+      })
+      const p1 = (await doc.getPage(1)).getViewport({ scale: 1 })
+      await stack.layout(doc, (pane.clientWidth - 40) / (p1.width * (96 / 72)))
+      out.stack = stack
+    }
+    h.one = out
+    return { pages: doc.numPages }
+  },
+  /** the pane scrolled through `ms` at `px` a frame: each frame's time (rAF to rAF), the pages drawn meanwhile */
+  async scrollTrace(ms = 4000, px = 40) {
+    const s = h.one as NonNullable<typeof h.one>
+    const frames: number[] = []
+    const t0 = performance.now(),
+      d0 = s.drawn.length
+    let last = t0
+    await new Promise<void>((done) => {
+      const step = (t: number) => {
+        frames.push(t - last)
+        last = t
+        s.pane.scrollTop += px
+        if (t - t0 < ms && s.pane.scrollTop + s.pane.clientHeight < s.pane.scrollHeight) requestAnimationFrame(step)
+        else done()
+      }
+      requestAnimationFrame(step)
+    })
+    frames.shift()
+    const sorted = [...frames].sort((a, b) => a - b)
+    const q = (k: number) =>
+      Math.round((sorted[Math.min(sorted.length - 1, Math.floor(k * sorted.length))] ?? 0) * 10) / 10
+    return {
+      frames: frames.length,
+      p50: q(0.5),
+      p95: q(0.95),
+      max: q(1),
+      over50: frames.filter((f) => f > 50).length,
+      drawn: s.drawn.length - d0,
+      scrolled: s.pane.scrollTop,
+    }
+  },
+  async memory() {
+    const m = (performance as unknown as { measureUserAgentSpecificMemory?: () => Promise<{ bytes: number }> })
+      .measureUserAgentSpecificMemory
+    return crossOriginIsolated && m ? Math.round(((await m.call(performance)).bytes / 2 ** 20) * 10) / 10 : null
+  },
+  /** the behaviours on a pane: text layers on the pages near, a selection across two pages, links, a detail view at a zoom */
+  async behaviours() {
+    const s = h.one as NonNullable<typeof h.one>
+    s.pane.scrollTop = 0
+    await new Promise((f) => setTimeout(f, 600))
+    const pages = [...s.pane.querySelectorAll<HTMLElement>('.page')].filter((p) => p.querySelector('.textLayer span'))
+    const a = pages[0]?.querySelector('.textLayer span'),
+      b = pages[1]?.querySelector('.textLayer span:last-of-type')
+    let across = ''
+    if (a && b) {
+      const r = document.createRange()
+      r.setStart(a, 0)
+      r.setEnd(b, b.childNodes.length)
+      const sel = getSelection() as Selection
+      sel.removeAllRanges()
+      sel.addRange(r)
+      across = sel.toString()
+      sel.removeAllRanges()
+    }
+    const anchors = s.pane.querySelectorAll('.annotationLayer a').length
+    return {
+      textPages: pages.length,
+      selectionAcross: across.length,
+      firstPageText: (a?.textContent ?? '').length,
+      anchors,
+    }
   },
   /** each page's box on both panes: [width, height, top in the pane's scroll] */
   boxes() {

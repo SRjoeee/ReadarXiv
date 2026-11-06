@@ -276,6 +276,27 @@ async function newPage(o = {}) {
   return { page, context, errors }
 }
 
+/** the resident memory (MiB) of the browser's renderer processes and of its GPU process, read by ps from the pids the browser's
+ *  CDP names (the page's renderer runs its dedicated workers, PDF.js's among them; a GPU-backed canvas lives in the GPU process) */
+async function processMiB() {
+  if (browserName !== 'chromium') return null
+  const cdp = await browser.newBrowserCDPSession()
+  const { processInfo } = await cdp.send('SystemInfo.getProcessInfo')
+  await cdp.detach()
+  const { execFileSync } = await import('node:child_process')
+  const rss = (type) => {
+    const pids = processInfo.filter((p) => p.type === type).map((p) => p.id)
+    if (!pids.length) return 0
+    const out = execFileSync('ps', ['-o', 'rss=', '-p', pids.join(',')], { encoding: 'utf8' })
+    return +(
+      out
+        .split('\n')
+        .filter(Boolean)
+        .reduce((a, x) => a + Number(x.trim()), 0) / 1024
+    ).toFixed(1)
+  }
+  return { renderer: rss('renderer'), gpu: rss('GPU') }
+}
 const results = []
 async function check(name, fn) {
   if (only && !only.some((o) => name.includes(o))) return
@@ -795,6 +816,150 @@ await check('reader: close lets everything go; a second reader on the same page 
     b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
   }
 })
+
+// ---------------------------------------------------------------- the commit and paint times against the baseline (engine-view-host §9)
+const timings = {}
+for (const name of Object.keys(fixtures)) {
+  for (const rate of [1, 4]) {
+    await check(`timing: a laid page's commit and paint at ${rate}x CPU (${name})`, async () => {
+      const { page, context, errors } = await newPage()
+      const cdp = browserName === 'chromium' ? await context.newCDPSession(page) : null
+      const lab = !!fixtures[name].face
+      await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
+      await waitFor(page, () => window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1))
+      if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate })
+      await page.evaluate(([n, t]) => window.__h.layer(n, { target: t }), [name, lab ? 'zh' : 'de'])
+      const laidPages = await page.evaluate(() =>
+        [...window.__h.pages.entries()].filter(([, p]) => p.members.some((m) => m.state === 'laid')).map(([n]) => n),
+      )
+      for (const n of laidPages.slice(0, 4)) {
+        await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+        await laidShown(page, n)
+      }
+      const r = await page.evaluate(() => ({
+        shown: window.__h.marks.filter((m) => m.what === 'shown' && String(m.key).startsWith('laid:')),
+        overlay: window.__h.composer.timings(),
+      }))
+      if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const rows = r.shown.map((m) => {
+        const o = r.overlay.find((x) => x.n === m.page) ?? {}
+        return {
+          n: m.page,
+          commitMs: +(m.swapMs + m.layoutMs).toFixed(1),
+          swapMs: +m.swapMs.toFixed(1),
+          layoutMs: +m.layoutMs.toFixed(1),
+          drawMs: Math.round(m.drawMs),
+          overlayMs: Math.round(o.overlayMs ?? 0),
+          svgMs: +(o.svgMs ?? 0).toFixed(1),
+          cropsMs: Math.round(o.cropsMs ?? 0),
+          textMs: Math.round(o.textMs ?? 0),
+        }
+      })
+      timings[`${name}@${rate}x`] = rows
+      return rows.slice(0, 4)
+    })
+  }
+}
+if (process.env.AXT_TIMINGS_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_TIMINGS_OUT, `${JSON.stringify(timings, null, 1)}\n`)
+
+// ---------------------------------------------------------------- the memory and paint of the two ways out of the residue
+const ways = {}
+for (const name of Object.keys(fixtures).filter((n) => fixtures[n].face)) {
+  await check(
+    `ways: memory and paint, (a) pages not laid from the original, (b) both panes the composed document (${name})`,
+    async () => {
+      const out = {}
+      for (const way of ['a', 'b']) {
+        const { page, context, errors } = await newPage()
+        await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
+        await waitFor(page, () =>
+          window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1),
+        )
+        await page.evaluate(
+          ([n, u]) => window.__h.layer(n, { target: 'zh', unlaid: u }),
+          [name, way === 'b' ? 'composed' : 'original'],
+        )
+        await page.waitForTimeout(500)
+        const re = way === 'b' ? await page.evaluate(() => window.__h.toComposed()) : null
+        const w = await page.evaluate(() => window.__h.walk())
+        await page.waitForTimeout(500)
+        const mem = await processMiB()
+        const draws = await page.evaluate(() => window.__h.marks.filter((m) => m.what === 'drawn').length)
+        await context.close()
+        assert(!errors.length, errors.join('; '))
+        out[way] = { ...mem, walkMs: w.walkMs, draws, reopenMs: re?.reopenMs ?? null, views: w.probe['right.views'] }
+      }
+      ways[name] = out
+      return out
+    },
+  )
+}
+if (process.env.AXT_WAYS_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_WAYS_OUT, `${JSON.stringify(ways, null, 1)}\n`)
+
+// ---------------------------------------------------------------- deliverable 7: the stack under the left, against PDF.js's viewer
+const leftRuns = {}
+const leftPapers = [
+  ['2600.00001v1', '/api/v2/o/arxiv/2600_00001v1.pdf'],
+  ...Object.entries(indexOf)
+    .filter(([n]) => fixtures[n].face)
+    .map(([n, x]) => [n, x.original]),
+  ...(process.env.AXT_PAPER ? [['lab', '/api/v2/o/arxiv/lab.pdf']] : []),
+]
+for (const [label, url] of leftPapers) {
+  await check(
+    `left: the stack against PDF.js's viewer, first paint, a scroll trace, memory, behaviours (${label})`,
+    async () => {
+      const runs = []
+      for (const kind of ['viewer', 'stack', 'stack', 'viewer']) {
+        const { page, context, errors } = await newPage()
+        await page.evaluate(([u, k]) => window.__h.single(u, k), [url, kind])
+        await waitFor(page, () => window.__h.one.drawn.some((d) => d.n === 1), undefined, 20_000)
+        const first = await page.evaluate(() => window.__h.one.drawn.find((d) => d.n === 1).at)
+        await page.waitForTimeout(800)
+        const behaviours = await page.evaluate(() => window.__h.behaviours())
+        const trace = await page.evaluate(() => window.__h.scrollTrace(4000, 40))
+        await page.waitForTimeout(800)
+        const mib = await processMiB()
+        await context.close()
+        assert(!errors.length, errors.join('; '))
+        runs.push({
+          kind,
+          firstPaintMs: Math.round(first),
+          ...trace,
+          renderer: mib?.renderer ?? null,
+          gpu: mib?.gpu ?? null,
+          ...behaviours,
+        })
+      }
+      leftRuns[label] = runs
+      const of = (k) => runs.filter((r) => r.kind === k)
+      const avg = (xs, f) => Math.round((xs.reduce((a, x) => a + (f(x) ?? 0), 0) / xs.length) * 10) / 10
+      const sum = Object.fromEntries(
+        ['viewer', 'stack'].map((k) => [
+          k,
+          {
+            firstPaintMs: avg(of(k), (r) => r.firstPaintMs),
+            p95: avg(of(k), (r) => r.p95),
+            over50: avg(of(k), (r) => r.over50),
+            drawn: avg(of(k), (r) => r.drawn),
+            renderer: avg(of(k), (r) => r.renderer),
+            gpu: avg(of(k), (r) => r.gpu),
+            textPages: of(k)[0].textPages,
+            selectionAcross: of(k)[0].selectionAcross > 0,
+            anchors: of(k)[0].anchors,
+          },
+        ]),
+      )
+      return sum
+    },
+  )
+}
+if (process.env.AXT_LEFT_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_LEFT_OUT, `${JSON.stringify(leftRuns, null, 1)}\n`)
 
 // ---------------------------------------------------------------- I1 and the split residue (lane L1's finding 2), both ways out
 const residues = {}

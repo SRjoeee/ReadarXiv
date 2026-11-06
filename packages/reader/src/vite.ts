@@ -2,7 +2,9 @@
 // cMaps, standard fonts and wasm, its worker, and its viewer's sheet with the images it names, served at `pdfjs/<version>/` of the build, where the reader's kit reads them
 // (kit.ts `base`). In a build they are emitted as assets; on the dev server they are answered from pdfjs-dist itself.
 // `legacy: true` adds the legacy build's worker at `pdfjs/<version>/legacy/` (the website's older browsers); the extension
-// leaves it out. Node code, run by Vite: it reads pdfjs-dist through Node's own modules, imported where it runs.
+// leaves it out. Node code, run by Vite.
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import type { Plugin } from 'vite'
 
 interface NodeFs {
@@ -33,9 +35,8 @@ export function assetFiles(fs: NodeFs, root: string, legacy: boolean): [string, 
 
 /** pdfjs-dist's directory (ending in `/`) and its version, where the build runs */
 async function pdfjsDist(): Promise<{ root: string; version: string; fs: NodeFs }> {
-  const fs = (await import('node:fs' as string)) as NodeFs
-  const url = (import.meta as unknown as { resolve(s: string): string }).resolve('pdfjs-dist/package.json')
-  const file = decodeURIComponent(new URL(url).pathname)
+  const fs: NodeFs = { readFileSync, readdirSync: (p, o) => readdirSync(p, o) as string[], statSync }
+  const file = createRequire(import.meta.url).resolve('pdfjs-dist/package.json')
   const root = file.slice(0, file.length - 'package.json'.length)
   const version = (JSON.parse(new TextDecoder().decode(fs.readFileSync(file))) as { version: string }).version
   return { root, version, fs }

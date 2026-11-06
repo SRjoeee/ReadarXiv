@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -8,7 +9,9 @@ import { readerAssets } from '../src/vite.ts'
 describe("the reader's build plugin", () => {
   it("emits PDF.js's data files and worker at pdfjs/<version>/, the legacy worker only when asked", async () => {
     const { build } = await import('vite')
-    const pdfjs = JSON.parse(readFileSync(new URL(import.meta.resolve('pdfjs-dist/package.json')), 'utf8')) as {
+    const pdfjs = JSON.parse(
+      readFileSync(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'), 'utf8'),
+    ) as {
       version: string
     }
     const dir = mkdtempSync(join(tmpdir(), 'axt-reader-assets-'))

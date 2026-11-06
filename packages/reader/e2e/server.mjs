@@ -23,7 +23,16 @@ const TYPES = {
 /** an object's answer to a request: whole, or the range its Range header names (206), with a strong ETag of its bytes */
 export function answerBytes(req, res, bytes, { type = 'application/octet-stream', etag = null, cors = false } = {}) {
   const tag = etag ?? `"${createHash('sha256').update(bytes).digest('hex').slice(0, 32)}"`
-  const headers = { 'content-type': type, etag: tag, 'accept-ranges': 'bytes', 'cache-control': 'no-store' }
+  // (cross-origin isolated, so that the page may measure its memory, workers included: measureUserAgentSpecificMemory)
+  const headers = {
+    'content-type': type,
+    etag: tag,
+    'accept-ranges': 'bytes',
+    'cache-control': 'no-store',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-embedder-policy': 'require-corp',
+    'cross-origin-resource-policy': 'same-origin',
+  }
   if (cors)
     Object.assign(headers, {
       'access-control-allow-origin': '*',

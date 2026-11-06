@@ -61,6 +61,8 @@ export interface Composer {
   member(ord: number): Placed | null
   on<K extends keyof ComposerEvents>(type: K, f: (e: ComposerEvents[K]) => void): () => void
   probe(): Record<string, number | string>
+  /** the last overlays' timings (ms) */
+  timings(): readonly { n: number; svgMs: number; cropsMs: number; textMs: number; overlayMs: number }[]
   dispose(): void
 }
 
@@ -97,6 +99,8 @@ export function createComposer(o: ComposerOptions): Composer {
   let tick = 0,
     firstTold = false
   const counts = { lays: 0, commits: 0, uncommits: 0, overlays: 0 }
+  /** each overlay's making, its parts (ms): the probe's, for the commit's timings */
+  const timings: { n: number; svgMs: number; cropsMs: number; textMs: number; overlayMs: number }[] = []
   const measure = canvasMeasure()
   const listeners = new Map<keyof ComposerEvents, Set<(e: unknown) => void>>()
   const tell = <K extends keyof ComposerEvents>(type: K, e: ComposerEvents[K]) => {
@@ -133,6 +137,7 @@ export function createComposer(o: ComposerOptions): Composer {
     at: Parameters<NonNullable<ReturnType<Stack['contentOf']>>['over'] & {}>[0],
   ) {
     counts.overlays++
+    const t0 = performance.now()
     const faceIds = new Set<string>()
     for (const m of page.members)
       for (const [, , , items] of m.lines) for (const it of items) if ('face' in it) faceIds.add(it.face)
@@ -143,16 +148,21 @@ export function createComposer(o: ComposerOptions): Composer {
     el.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${raw.pageWidth}px)`)
     el.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${raw.pageHeight}px)`)
     el.append(svgOf(page, at.viewport, faces))
+    const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
     const crops = await cropsFor(page, pdfPage, at.viewport, g.crops, out)
     if (crops) el.append(crops)
+    const tCrops = performance.now()
     const text = texts.get(n) ?? textContentOf(pdfPage)
     texts.set(n, text)
     const laid = laidText(await text, page, members, faces, measure)
     el.append(await textLayerOf(o.kit.lib as never, laid.content, at.viewport, o.lang()))
     const links = linkLayer(page, at.viewport, o.links)
     if (links) el.append(links)
+    const tEnd = performance.now()
+    timings.push({ n, svgMs: tSvg - t0, cropsMs: tCrops - tSvg, textMs: tEnd - tCrops, overlayMs: tEnd - t0 })
+    if (timings.length > 64) timings.shift()
     return el
   }
 
@@ -262,6 +272,7 @@ export function createComposer(o: ComposerOptions): Composer {
       set.add(f as (e: unknown) => void)
       return () => set.delete(f as (e: unknown) => void)
     },
+    timings: () => timings,
     probe() {
       return {
         laidPages: commits.size,
