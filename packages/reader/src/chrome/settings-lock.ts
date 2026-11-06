@@ -8,6 +8,9 @@ import type { ReaderController } from './model.ts'
 import { useReader } from './use-reader.ts'
 
 export function useSettingsLock(controller: ReaderController): { locked: boolean; why: string | undefined } {
-  const { landed, unreadable } = useReader(controller, s => ({ landed: s.prefs !== null, unreadable: s.settingsUnreadable }))
+  const { landed, unreadable } = useReader(controller, (s) => ({
+    landed: s.prefs !== null,
+    unreadable: s.settingsUnreadable,
+  }))
   return { locked: !landed || unreadable, why: unreadable ? R.status.unreadableHint : undefined }
 }

@@ -11,7 +11,12 @@ import type { Display } from './model.ts'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
 
-export function DisplaySwitch({ value, translatable, off, onChange }: {
+export function DisplaySwitch({
+  value,
+  translatable,
+  off,
+  onChange,
+}: {
   value: Display
   translatable: boolean
   /** displays this window cannot show, greyed as the untranslatable are (a phone's side by side); none by default */
@@ -24,24 +29,74 @@ export function DisplaySwitch({ value, translatable, off, onChange }: {
     if (!can(d) || d === value) return
     onChange(d)
   }
-  const onKey = radioKeys(ORDER, value, can, d => choose(d), i => buttons.current[i]?.focus())
-  const names: Record<Display, string> = { original: R.display.original, bilingual: R.display.bilingual, translation: R.display.translation }
+  const onKey = radioKeys(
+    ORDER,
+    value,
+    can,
+    (d) => choose(d),
+    (i) => buttons.current[i]?.focus(),
+  )
+  const names: Record<Display, string> = {
+    original: R.display.original,
+    bilingual: R.display.bilingual,
+    translation: R.display.translation,
+  }
   return (
-    <div role="radiogroup" aria-label={R.display.name} className="seg display" style={{ '--i': ORDER.indexOf(value) } as React.CSSProperties} onKeyDown={onKey}>
+    <div
+      role="radiogroup"
+      aria-label={R.display.name}
+      className="seg display"
+      style={{ '--i': ORDER.indexOf(value) } as React.CSSProperties}
+      onKeyDown={onKey}
+    >
       <span className="thumb" aria-hidden="true" />
       {ORDER.map((d, i) => (
-        <Segment key={d} display={d} name={names[d]} checked={d === value} disabled={!can(d)} onPick={() => choose(d)} buttonRef={el => { buttons.current[i] = el }} />
+        <Segment
+          key={d}
+          display={d}
+          name={names[d]}
+          checked={d === value}
+          disabled={!can(d)}
+          onPick={() => choose(d)}
+          buttonRef={(el) => {
+            buttons.current[i] = el
+          }}
+        />
       ))}
     </div>
   )
 }
 
-function Segment({ display, name, checked, disabled, onPick, buttonRef }: { display: Display; name: string; checked: boolean; disabled: boolean; onPick: () => void; buttonRef: (el: HTMLButtonElement | null) => void }) {
+function Segment({
+  display,
+  name,
+  checked,
+  disabled,
+  onPick,
+  buttonRef,
+}: {
+  display: Display
+  name: string
+  checked: boolean
+  disabled: boolean
+  onPick: () => void
+  buttonRef: (el: HTMLButtonElement | null) => void
+}) {
   const { props, tip } = useTip(name)
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment with an icon (the design, §6.2); its keys are the group's, above */}
-      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-disabled={disabled || undefined} aria-label={name} tabIndex={checked ? 0 : -1} onClick={onPick} {...props}>
+      <button
+        ref={buttonRef}
+        type="button"
+        role="radio"
+        aria-checked={checked}
+        aria-disabled={disabled || undefined}
+        aria-label={name}
+        tabIndex={checked ? 0 : -1}
+        onClick={onPick}
+        {...props}
+      >
         <DisplayIcon display={display} />
       </button>
       {tip}

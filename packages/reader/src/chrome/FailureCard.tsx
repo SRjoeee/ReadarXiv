@@ -12,15 +12,17 @@ import { useReader } from './use-reader.ts'
 /** `of`: where this one is drawn, the pane's or the page's; a card is drawn in one of them only */
 export function FailureCard({ controller, of = 'pane' }: { controller: ReaderController; of?: 'pane' | 'page' }) {
   const parts = useParts()
-  const card = useReader(controller, s => cardOf(s, parts.reason))
-  const sameTab = useReader(controller, s => s.prefs?.links === 'same-tab')
+  const card = useReader(controller, (s) => cardOf(s, parts.reason))
+  const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   if (!card || (card.action === 'arxiv') !== (of === 'page')) return null
   if (card.action === 'arxiv') {
     return (
       <div className="chrome card" data-card>
         <Icon node={CircleAlert} size={20} />
         <p>{card.reason}</p>
-        <a href="https://arxiv.org/" target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.goToArxiv}</a>
+        <a href="https://arxiv.org/" target={sameTab ? '_top' : '_blank'} rel="noopener">
+          {R.status.goToArxiv}
+        </a>
       </div>
     )
   }
@@ -29,7 +31,13 @@ export function FailureCard({ controller, of = 'pane' }: { controller: ReaderCon
     <div className="chrome card" data-card>
       <Icon node={CircleAlert} size={20} />
       <p>{card.reason}</p>
-      {card.action === 'settings' ? parts.slots.card?.('settings') : <button type="button" onClick={controller.retry}>{S.failed.retry}</button>}
+      {card.action === 'settings' ? (
+        parts.slots.card?.('settings')
+      ) : (
+        <button type="button" onClick={controller.retry}>
+          {S.failed.retry}
+        </button>
+      )}
     </div>
   )
 }

@@ -8,7 +8,24 @@
 import { type AnchorHTMLAttributes, type ButtonHTMLAttributes, type CSSProperties, type ReactNode, useId } from 'react'
 import { useTip } from '@readarxiv/ui'
 
-export function ToolbarButton({ label, value, valueLang, valueClassName = '', valueWidest, hint, why, keys, pressed, disabled, onClick, anchor, href, children, className = '', ...rest }: {
+export function ToolbarButton({
+  label,
+  value,
+  valueLang,
+  valueClassName = '',
+  valueWidest,
+  hint,
+  why,
+  keys,
+  pressed,
+  disabled,
+  onClick,
+  anchor,
+  href,
+  children,
+  className = '',
+  ...rest
+}: {
   label: string
   /** what the button shows before its children, and its name starts with: the zoom's scale, the language, the service */
   value?: string
@@ -45,17 +62,56 @@ export function ToolbarButton({ label, value, valueLang, valueClassName = '', va
   return (
     <>
       {href ? (
-        <a href={href} target="_blank" rel="noopener" {...named} {...reason} aria-keyshortcuts={keys} className={`tbtn ${className}`} {...props} {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)} style={style}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener"
+          {...named}
+          {...reason}
+          aria-keyshortcuts={keys}
+          className={`tbtn ${className}`}
+          {...props}
+          {...(rest as AnchorHTMLAttributes<HTMLAnchorElement>)}
+          style={style}
+        >
           {children}
         </a>
       ) : (
-        <button type="button" {...named} {...reason} aria-keyshortcuts={keys} aria-pressed={pressed} aria-disabled={disabled || undefined} onClick={disabled ? undefined : onClick} className={`tbtn ${className}`} {...props} {...rest} style={style}>
-          {value !== undefined && (valueWidest === undefined
-            ? <span id={`${id}-value`} data-value lang={valueLang} className={valueClassName}>{value}</span>
-            // the widest drawn hidden in the same cell holds the width; out of the name, which is the value's alone
-            : <span className={`fit ${valueClassName}`}><span data-widest aria-hidden="true">{valueWidest}</span><span id={`${id}-value`} data-value lang={valueLang}>{value}</span></span>)}
+        <button
+          type="button"
+          {...named}
+          {...reason}
+          aria-keyshortcuts={keys}
+          aria-pressed={pressed}
+          aria-disabled={disabled || undefined}
+          onClick={disabled ? undefined : onClick}
+          className={`tbtn ${className}`}
+          {...props}
+          {...rest}
+          style={style}
+        >
+          {value !== undefined &&
+            (valueWidest === undefined ? (
+              <span id={`${id}-value`} data-value lang={valueLang} className={valueClassName}>
+                {value}
+              </span>
+            ) : (
+              // the widest drawn hidden in the same cell holds the width; out of the name, which is the value's alone
+              <span className={`fit ${valueClassName}`}>
+                <span data-widest aria-hidden="true">
+                  {valueWidest}
+                </span>
+                <span id={`${id}-value`} data-value lang={valueLang}>
+                  {value}
+                </span>
+              </span>
+            ))}
           {children}
-          {value !== undefined && <span id={`${id}-words`} hidden>{label}</span>}
+          {value !== undefined && (
+            <span id={`${id}-words`} hidden>
+              {label}
+            </span>
+          )}
         </button>
       )}
       {tip}

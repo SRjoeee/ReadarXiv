@@ -9,13 +9,32 @@ export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
  *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
  *  the reader), or for this language (`target`) */
-export type Unavailable = 'no-source' | 'no-pdf' | 'cannot-prepare' | 'unknown-versions' | 'refused' | 'unreachable' | 'target'
+export type Unavailable =
+  | 'no-source'
+  | 'no-pdf'
+  | 'cannot-prepare'
+  | 'unknown-versions'
+  | 'refused'
+  | 'unreachable'
+  | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's */
-export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions', 'target'])
+export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([
+  'no-source',
+  'no-pdf',
+  'cannot-prepare',
+  'unknown-versions',
+  'target',
+])
 /** the sync as the chrome names it to a session: together, or off */
 export type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
-export interface OutlineEntry { id: number; title: string; original: string; level: 1 | 2 | 3; page: number | null }
+export interface OutlineEntry {
+  id: number
+  title: string
+  original: string
+  level: 1 | 2 | 3
+  page: number | null
+}
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
   | { type: 'saved' }
@@ -61,7 +80,11 @@ export type SessionEvent =
   /** no bilingual version for now, or for this paper or language */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
 /** what a session is given: the panes it draws into, and where it tells its events */
-export interface SessionHost { left: HTMLElement; right: HTMLElement; emit(event: SessionEvent): void }
+export interface SessionHost {
+  left: HTMLElement
+  right: HTMLElement
+  emit(event: SessionEvent): void
+}
 
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'
@@ -191,8 +214,19 @@ export interface Session {
 }
 
 /** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
-const ERROR_KINDS: readonly ProviderErrorKind[] = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown']
-const kindOf = (kind: string | undefined): ProviderErrorKind => (ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
+const ERROR_KINDS: readonly ProviderErrorKind[] = [
+  'no-key',
+  'network',
+  'rate-limit',
+  'auth',
+  'bad-request',
+  'invalid-response',
+  'timeout',
+  'aborted',
+  'unknown',
+]
+const kindOf = (kind: string | undefined): ProviderErrorKind =>
+  (ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 /** the layer has drawn something: a failure then leaves the pages laid readable, its card not over them */
 const drawn = (state: ReaderState) => state.layer.laid > 0
 /** a page of the layer settled where the translation shows: laid, or shown as arXiv's by the rule (the side's `original`), where
@@ -203,7 +237,11 @@ const settled = (layer: ReaderState['layer']) => layer.laid > 0 || (layer.origin
  *  until the original opens */
 const noOriginal = (state: ReaderState) => state.failures.pdf !== null
 /** the failures given, with the one shown derived from them */
-const withFailures = (state: ReaderState, failures: ReaderState['failures']): ReaderState => ({ ...state, failures, failure: failures.pdf ?? failures.service })
+const withFailures = (state: ReaderState, failures: ReaderState['failures']): ReaderState => ({
+  ...state,
+  failures,
+  failure: failures.pdf ?? failures.service,
+})
 
 /**
  * One event folded into the state; the same object when nothing changed, so that no listener hears of it. The phase moves
@@ -218,7 +256,13 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       // settings ask for (the radio of a display out of reach was left selected, and its pane hidden)
       if (state.noPaper || event.mode === state.display) return state
       // the original alone shown: nothing waits on a page of the layer
-      if (state.laying && event.mode === 'original') return { ...state, display: event.mode, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
+      if (state.laying && event.mode === 'original')
+        return {
+          ...state,
+          display: event.mode,
+          laying: false,
+          phase: state.phase === 'translating' ? 'ready' : state.phase,
+        }
       return { ...state, display: event.mode }
     case 'scale': {
       // the zoom the engine applied, where it says (the reading view: a fit, a scale, or none after a step or a pinch)
@@ -231,10 +275,14 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     }
     case 'page': {
       const now = state.sides[event.side]
-      return now.page === event.page && now.pages === event.pages ? state : { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
+      return now.page === event.page && now.pages === event.pages
+        ? state
+        : { ...state, sides: { ...state.sides, [event.side]: { page: event.page, pages: event.pages } } }
     }
     case 'notice':
-      return (event.why != null) === state.settingsUnreadable ? state : { ...state, settingsUnreadable: event.why != null }
+      return (event.why != null) === state.settingsUnreadable
+        ? state
+        : { ...state, settingsUnreadable: event.why != null }
     // the session tells of unreadable settings before the refusal that follows from them: that one is the notice's
     case 'refused':
       return state.settingsUnreadable ? state : { ...state, refusals: state.refusals + 1 }
@@ -261,11 +309,16 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       const next = withFailures(state, { ...state.failures, pdf: null })
       // a service's failure left with nothing laid keeps its card
       const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
-      return { ...next, phase: state.phase === 'loading' || (mends && !failed) ? 'ready' : state.phase, download: state.download === 'none' ? 'original' : state.download }
+      return {
+        ...next,
+        phase: state.phase === 'loading' || (mends && !failed) ? 'ready' : state.phase,
+        download: state.download === 'none' ? 'original' : state.download,
+      }
     }
     case 'fail': {
       const kind = kindOf(event.kind)
-      const failures = event.event === 'fetch failed' ? { ...state.failures, pdf: kind } : { ...state.failures, service: kind }
+      const failures =
+        event.event === 'fetch failed' ? { ...state.failures, pdf: kind } : { ...state.failures, service: kind }
       return { ...withFailures(state, failures), phase: drawn(state) ? 'ready' : 'failed' }
     }
     case 'preparing': {
@@ -275,18 +328,37 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, preparing, unavailable: null, phase }
     }
     case 'prepared':
-      return state.preparing === null && state.phase !== 'preparing' ? state : { ...state, preparing: null, phase: state.phase === 'preparing' ? 'ready' : state.phase }
+      return state.preparing === null && state.phase !== 'preparing'
+        ? state
+        : { ...state, preparing: null, phase: state.phase === 'preparing' ? 'ready' : state.phase }
     case 'coming':
-      return state.unavailable === null && state.available ? state : { ...state, unavailable: null, available: true, languageSupported: true }
+      return state.unavailable === null && state.available
+        ? state
+        : { ...state, unavailable: null, available: true, languageSupported: true }
     case 'layer': {
       const original = event.original ?? 0
-      const layer = event.laid === state.layer.laid && event.total === state.layer.total && original === (state.layer.original ?? 0) ? state.layer : { laid: event.laid, total: event.total, ...(original ? { original } : {}) }
+      const layer =
+        event.laid === state.layer.laid && event.total === state.layer.total && original === (state.layer.original ?? 0)
+          ? state.layer
+          : { laid: event.laid, total: event.total, ...(original ? { original } : {}) }
       // the layer refused for the visit: no bilingual version now, the original stays
       // (a lasting word the run told already stands: a layer that draws nothing is the paper's, and its side's own refusal at the
       // base does not make it a moment's)
-      if (event.state === 'refused') return { ...state, layer, preparing: null, laying: false, unavailable: state.unavailable && LASTING.has(state.unavailable.why) ? state.unavailable : { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
+      if (event.state === 'refused')
+        return {
+          ...state,
+          layer,
+          preparing: null,
+          laying: false,
+          unavailable:
+            state.unavailable && LASTING.has(state.unavailable.why)
+              ? state.unavailable
+              : { why: 'unreachable', retryAt: null },
+          phase: state.phase === 'failed' ? 'failed' : 'ready',
+        }
       // a page laid where the translation shows, or one shown as arXiv's by the rule: the end held is told
-      if (state.laying && settled(layer)) return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
+      if (state.laying && settled(layer))
+        return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
     case 'translating':
@@ -301,30 +373,68 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
 
 /** the run's own events: the translation and the layer's availability. `held`: the original's failure stands over them (its
  *  phase and its reason kept) */
-function reduceRun(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>, held: boolean): ReaderState {
+function reduceRun(
+  state: ReaderState,
+  event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>,
+  held: boolean,
+): ReaderState {
   const next = reduceRunFree(state, event)
   // (the PDF's slot is no run event's: it stands, and the phase with it)
   return held ? { ...withFailures(next, { ...next.failures, pdf: state.failures.pdf }), phase: 'failed' } : next
 }
-function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>): ReaderState {
+function reduceRunFree(
+  state: ReaderState,
+  event: Extract<SessionEvent, { type: 'translating' | 'translated' | 'unavailable' }>,
+): ReaderState {
   switch (event.type) {
     case 'translating': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 0
-      return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: false, progress, failedUnits: event.lost }
+      return {
+        ...withFailures(state, { ...state.failures, service: null }),
+        phase: 'translating',
+        begun: true,
+        laying: false,
+        progress,
+        failedUnits: event.lost,
+      }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
-      if (event.stopped && !drawn(state)) return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'failed', begun: true, progress, failedUnits: event.lost }
+      if (event.stopped && !drawn(state))
+        return {
+          ...withFailures(state, { ...state.failures, service: event.stopped }),
+          phase: 'failed',
+          begun: true,
+          progress,
+          failedUnits: event.lost,
+        }
       // done with nothing laid where the translation shows: the end held until a page is, or one is shown as arXiv's by the rule
       // (laying)
-      if (!event.stopped && !settled(state.layer) && state.display !== 'original') return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost }
-      return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost }
+      if (!event.stopped && !settled(state.layer) && state.display !== 'original')
+        return {
+          ...withFailures(state, { ...state.failures, service: null }),
+          phase: 'translating',
+          begun: true,
+          laying: true,
+          progress,
+          failedUnits: event.lost,
+        }
+      return {
+        ...withFailures(state, { ...state.failures, service: event.stopped }),
+        phase: 'ready',
+        begun: true,
+        laying: false,
+        progress,
+        failedUnits: event.lost,
+      }
     }
     case 'unavailable': {
       const lasting = LASTING.has(event.why)
       return {
-        ...state, preparing: null, unavailable: { why: event.why, retryAt: event.retryAt },
+        ...state,
+        preparing: null,
+        unavailable: { why: event.why, retryAt: event.retryAt },
         // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
         available: lasting && event.why !== 'target' ? false : state.available,
         languageSupported: event.why === 'target' ? false : state.languageSupported,
@@ -376,13 +486,25 @@ const NO_PAPER: Partial<ReaderState> = { noPaper: true, phase: 'ready', availabl
  * defaults (`DEFAULTS`), and so does one whose value cannot be read: both said to be unreadable (S-R-21). Without `first`
  * nothing is known until the session says
  */
-export function createController({ open, paper, first, defaults }: { open: (host: SessionHost) => Promise<Session>; paper: string; first?: { prefs: Prefs | null; unreadable: boolean }; defaults: Prefs }): ReaderController {
+export function createController({
+  open,
+  paper,
+  first,
+  defaults,
+}: {
+  open: (host: SessionHost) => Promise<Session>
+  paper: string
+  first?: { prefs: Prefs | null; unreadable: boolean }
+  defaults: Prefs
+}): ReaderController {
   const id = paper
   let state: ReaderState = {
     ...INITIAL,
     paper: { id, title: '' },
     ...(id ? {} : NO_PAPER),
-    ...(first === undefined ? {} : { prefs: first.prefs ?? defaults, settingsUnreadable: !first.prefs || first.unreadable }),
+    ...(first === undefined
+      ? {}
+      : { prefs: first.prefs ?? defaults, settingsUnreadable: !first.prefs || first.unreadable }),
   }
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
@@ -400,7 +522,7 @@ export function createController({ open, paper, first, defaults }: { open: (host
   /** a change of the state that is the controller's own (the zoom chosen), not the session's; none, when nothing in it
    *  differs (a pinch's every step sets no zoom: the final review) */
   const set = (patch: Partial<ReaderState>) => {
-    if ((Object.keys(patch) as (keyof ReaderState)[]).every(k => Object.is(state[k], patch[k]))) return
+    if ((Object.keys(patch) as (keyof ReaderState)[]).every((k) => Object.is(state[k], patch[k]))) return
     state = { ...state, ...patch }
     for (const listener of listeners) listener()
   }
@@ -420,31 +542,50 @@ export function createController({ open, paper, first, defaults }: { open: (host
       })
       return session
     },
-    setDisplay: display => later(s => s.setDisplay(display)),
+    setDisplay: (display) => later((s) => s.setDisplay(display)),
     // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
-    setSync: on => later(s => s.setSyncMode(on ? 'same' : 'off')),
-    zoomBy: factor => { set({ zoom: null }); later(s => s.zoomBy(factor)) },
-    zoomTo: value => { set({ zoom: value }); later(s => s.zoomTo(value)) },
-    goToPage: (side, page) => later(s => s.goToPage(side, page)),
-    setPrefs: patch => later(s => s.setPrefs(patch)),
-    goToHeading: id => later(s => s.goToUnit(id)),
-    lead: side => later(s => s.lead(side)),
+    setSync: (on) => later((s) => s.setSyncMode(on ? 'same' : 'off')),
+    zoomBy: (factor) => {
+      set({ zoom: null })
+      later((s) => s.zoomBy(factor))
+    },
+    zoomTo: (value) => {
+      set({ zoom: value })
+      later((s) => s.zoomTo(value))
+    },
+    goToPage: (side, page) => later((s) => s.goToPage(side, page)),
+    setPrefs: (patch) => later((s) => s.setPrefs(patch)),
+    goToHeading: (id) => later((s) => s.goToUnit(id)),
+    lead: (side) => later((s) => s.lead(side)),
     // a session that could not open is retried as the page first was: loaded again (PDF-READER §11.3)
-    retry: () => void session?.then(s => s.retry(), () => location.reload()),
-    pinch: (side, factor, origin) => { set({ zoom: null }); later(s => s.pinch(side, factor, origin)) },
+    retry: () =>
+      void session?.then(
+        (s) => s.retry(),
+        () => location.reload(),
+      ),
+    pinch: (side, factor, origin) => {
+      set({ zoom: null })
+      later((s) => s.pinch(side, factor, origin))
+    },
     setNarrow(on) {
       if (state.narrow === on) return
       set({ narrow: on })
-      later(s => s.setNarrow(on))
+      later((s) => s.setNarrow(on))
     },
     async download(which) {
       const s = await session
       // the original: arXiv's, the browser's own download, nothing of it read here
-      if (which === 'original') { s?.openOriginal(); return }
+      if (which === 'original') {
+        s?.openOriginal()
+        return
+      }
       const bytes = await s?.pdfBytes(which)
       if (!bytes) return
       const lang = state.prefs?.target ?? ''
-      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' })), download: fileName(state.paper.id, which, lang) })
+      const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' })),
+        download: fileName(state.paper.id, which, lang),
+      })
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 1000)
     },

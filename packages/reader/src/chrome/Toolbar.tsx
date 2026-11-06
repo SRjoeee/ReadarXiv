@@ -22,9 +22,25 @@ const MAC = /Mac/.test(navigator.platform)
 const MOD = MAC ? '⌘' : 'Ctrl'
 const MOD_KEY = MAC ? 'Meta' : 'Control'
 
-export function Toolbar({ controller, contents, onContents }: { controller: ReaderController; contents: boolean; onContents: () => void }) {
+export function Toolbar({
+  controller,
+  contents,
+  onContents,
+}: {
+  controller: ReaderController
+  contents: boolean
+  onContents: () => void
+}) {
   const { slots } = useParts()
-  const state = useReader(controller, s => ({ swapped: s.prefs?.swapped ?? false, display: s.display, narrow: s.narrow, paper: s.paper, available: s.available, languageSupported: s.languageSupported, sync: s.sync }))
+  const state = useReader(controller, (s) => ({
+    swapped: s.prefs?.swapped ?? false,
+    display: s.display,
+    narrow: s.narrow,
+    paper: s.paper,
+    available: s.available,
+    languageSupported: s.languageSupported,
+    sync: s.sync,
+  }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
   const lock = useSettingsLock(controller)
   return (
@@ -36,23 +52,52 @@ export function Toolbar({ controller, contents, onContents }: { controller: Read
         <PaperTitle id={state.paper.id} title={state.paper.title} />
       </div>
       <div data-zone="centre" className="flex items-center">
-        <DisplaySwitch value={state.display} translatable={state.available && state.languageSupported} onChange={controller.setDisplay} />
+        <DisplaySwitch
+          value={state.display}
+          translatable={state.available && state.languageSupported}
+          onChange={controller.setDisplay}
+        />
       </div>
       <div data-zone="trail" className="flex items-center gap-1 justify-self-end">
-        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide || lock.locked} why={sideBySide ? lock.why : undefined} data-side-by-side onClick={() => controller.setPrefs({ swapped: !state.swapped })}>
+        <ToolbarButton
+          label={R.swap}
+          pressed={state.swapped}
+          disabled={!sideBySide || lock.locked}
+          why={sideBySide ? lock.why : undefined}
+          data-side-by-side
+          onClick={() => controller.setPrefs({ swapped: !state.swapped })}
+        >
           <Icon node={ArrowLeftRight} />
         </ToolbarButton>
         {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind (Part 2's final review) */}
-        <ToolbarButton label={R.sync} pressed={state.sync} disabled={!sideBySide} data-side-by-side onClick={() => controller.setSync(!state.sync)}>
+        <ToolbarButton
+          label={R.sync}
+          pressed={state.sync}
+          disabled={!sideBySide}
+          data-side-by-side
+          onClick={() => controller.setSync(!state.sync)}
+        >
           <Icon node={Link2} />
         </ToolbarButton>
         <span className="divider" data-side-by-side />
         <div className="flex items-center" data-zoom>
-          <ToolbarButton label={R.zoom.out} hint={`${MOD} −`} keys={`${MOD_KEY}+-`} onClick={() => controller.zoomBy(1 / 1.1)} className="!w-[26px] !min-w-[26px]">
+          <ToolbarButton
+            label={R.zoom.out}
+            hint={`${MOD} −`}
+            keys={`${MOD_KEY}+-`}
+            onClick={() => controller.zoomBy(1 / 1.1)}
+            className="!w-[26px] !min-w-[26px]"
+          >
             <Icon node={Minus} />
           </ToolbarButton>
           <ZoomMenu controller={controller} />
-          <ToolbarButton label={R.zoom.in} hint={`${MOD} +`} keys={`${MOD_KEY}+=`} onClick={() => controller.zoomBy(1.1)} className="!w-[26px] !min-w-[26px]">
+          <ToolbarButton
+            label={R.zoom.in}
+            hint={`${MOD} +`}
+            keys={`${MOD_KEY}+=`}
+            onClick={() => controller.zoomBy(1.1)}
+            className="!w-[26px] !min-w-[26px]"
+          >
             <Icon node={Plus} />
           </ToolbarButton>
         </div>

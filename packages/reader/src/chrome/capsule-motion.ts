@@ -23,7 +23,15 @@
 import { type CapsuleWords, keyOf, sameShape } from './capsule-words.ts'
 
 /** the choreography's times (ms) and the share of the way at which growing words may appear */
-export const CHOREOGRAPHY = { grow: 300, shrink: 250, out: 150, in: 200, appearAt: 0.6, morph: 150, morphGap: 300 } as const
+export const CHOREOGRAPHY = {
+  grow: 300,
+  shrink: 250,
+  out: 150,
+  in: 200,
+  appearAt: 0.6,
+  morph: 150,
+  morphGap: 300,
+} as const
 /** the growing box's curve: a soft ease-in-out, whose peak speed is 2.9 times its mean (it does not rush its middle) */
 export const SOFT = [0.65, 0, 0.35, 1] as const
 /** the closing box's (improve-animations' AUDIT.md: moving on screen) and the words' (entering and leaving) */
@@ -35,7 +43,8 @@ const css = (b: Bezier) => `cubic-bezier(${b.join(', ')})`
 const bezier = (s: number, a: number, b: number) => 3 * (1 - s) ** 2 * s * a + 3 * (1 - s) * s ** 2 * b + s ** 3
 /** the s at which one coordinate of the curve reaches v (both are monotonic on [0, 1] for these curves) */
 function solve(v: number, a: number, b: number): number {
-  let lo = 0, hi = 1
+  let lo = 0,
+    hi = 1
   for (let i = 0; i < 40; i++) {
     const m = (lo + hi) / 2
     if (bezier(m, a, b) < v) lo = m
@@ -49,13 +58,14 @@ export function timeAt(p: number, [x1, y1, x2, y2]: Bezier = SOFT): number {
   return bezier(solve(p, y1, y2), x1, x2)
 }
 /** the eased progress of a curve at the fraction t of its duration */
-const progressAt = (t: number, [x1, y1, x2, y2]: Bezier): number => (t <= 0 ? 0 : t >= 1 ? 1 : bezier(solve(t, x1, x2), y1, y2))
+const progressAt = (t: number, [x1, y1, x2, y2]: Bezier): number =>
+  t <= 0 ? 0 : t >= 1 ? 1 : bezier(solve(t, x1, x2), y1, y2)
 
 /** ms after a growth starts at which its words cross-fade: the later of 60 % of the way and every incoming part fitting (`ends`: where each ends) */
 export function swapAt(from: number, to: number, ends: readonly number[]): number {
   const d = to - from
   if (!(d > 0.5)) return 0
-  const fit = Math.max(CHOREOGRAPHY.appearAt, ...ends.map(end => (end - from) / d))
+  const fit = Math.max(CHOREOGRAPHY.appearAt, ...ends.map((end) => (end - from) / d))
   return CHOREOGRAPHY.grow * timeAt(Math.min(1, fit))
 }
 
@@ -68,18 +78,34 @@ export interface Motion {
 }
 
 /** how a fading element looks: its opacity, how far below its place (px), its blur (px) */
-interface Look { o: number; y: number; b: number }
+interface Look {
+  o: number
+  y: number
+  b: number
+}
 const SHOWN: Look = { o: 1, y: 0, b: 0 }
 const BELOW: Look = { o: 0, y: 4, b: 2 }
 const ABOVE: Look = { o: 0, y: -4, b: 2 }
 /** visible: ink over 2 % opaque (the probe's measure) */
 const SEEN = 0.02
-interface Fade { anim: Animation; from: Look; to: Look; ms: number; delay: number }
+interface Fade {
+  anim: Animation
+  from: Look
+  to: Look
+  ms: number
+  delay: number
+}
 /** the count of the words drawn: shown, the one asked for, when the next may be shown, and its wait */
-interface Count { shown: number; wanted: number; next: number; timer: number }
+interface Count {
+  shown: number
+  wanted: number
+  next: number
+  timer: number
+}
 
 export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?: () => boolean } = {}): Motion {
-  const doc = box.ownerDocument, win = doc.defaultView as Window & typeof globalThis
+  const doc = box.ownerDocument,
+    win = doc.defaultView as Window & typeof globalThis
   const reduced = o.reduced ?? (() => win.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
   const style = (el: Element) => win.getComputedStyle(el)
   const px = (v: string) => Number.parseFloat(v) || 0
@@ -111,14 +137,21 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     // from the fade's own timing: a detached element has no computed style, and a pending one is at its start
     const t = (Number(f.anim.currentTime) || 0) - f.delay
     const p = progressAt(t / f.ms, OUT)
-    return { o: f.from.o + (f.to.o - f.from.o) * p, y: f.from.y + (f.to.y - f.from.y) * p, b: f.from.b + (f.to.b - f.from.b) * p }
+    return {
+      o: f.from.o + (f.to.o - f.from.o) * p,
+      y: f.from.y + (f.to.y - f.from.y) * p,
+      b: f.from.b + (f.to.b - f.from.b) * p,
+    }
   }
   /** a fade from one look to another, after `delay`, on --ease-out; under reduced motion nothing slides */
   function fade(el: HTMLElement, from: Look, to: Look, ms: number, delay: number, fill: FillMode): Animation {
     fades.get(el)?.anim.cancel()
     unwait(el)
     const still = reduced()
-    const frame = (l: Look) => (still ? { opacity: l.o, filter: `blur(${l.b}px)` } : { opacity: l.o, translate: `0 ${l.y}px`, filter: `blur(${l.b}px)` })
+    const frame = (l: Look) =>
+      still
+        ? { opacity: l.o, filter: `blur(${l.b}px)` }
+        : { opacity: l.o, translate: `0 ${l.y}px`, filter: `blur(${l.b}px)` }
     const anim = el.animate([frame(from), frame(to)], { duration: ms, delay, easing: css(OUT), fill })
     fades.set(el, { anim, from, to, ms, delay })
     return anim
@@ -131,19 +164,30 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
    */
   function enter(el: HTMLElement, delay: number) {
     const anim = fade(el, BELOW, SHOWN, CHOREOGRAPHY.in, delay, 'backwards')
-    anim.finished.then(() => { if (fades.get(el)?.anim === anim) fades.delete(el) }, () => {})
+    anim.finished.then(
+      () => {
+        if (fades.get(el)?.anim === anim) fades.delete(el)
+      },
+      () => {},
+    )
     if (!(delay > 0)) return
     el.inert = true
     waiting.set(el, -1)
-    anim.ready.then(() => {
-      if (fades.get(el)?.anim !== anim || !waiting.has(el)) return
-      // rounded up: a timer truncates its delay to whole ms, and the wait must not end before the entrance begins
-      const left = Math.max(0, Math.ceil(delay - (Number(anim.currentTime) || 0)))
-      waiting.set(el, win.setTimeout(() => {
-        waiting.delete(el)
-        el.inert = false
-      }, left))
-    }, () => {})
+    anim.ready.then(
+      () => {
+        if (fades.get(el)?.anim !== anim || !waiting.has(el)) return
+        // rounded up: a timer truncates its delay to whole ms, and the wait must not end before the entrance begins
+        const left = Math.max(0, Math.ceil(delay - (Number(anim.currentTime) || 0)))
+        waiting.set(
+          el,
+          win.setTimeout(() => {
+            waiting.delete(el)
+            el.inert = false
+          }, left),
+        )
+      },
+      () => {},
+    )
   }
   function drop(el: HTMLElement) {
     fades.get(el)?.anim.cancel()
@@ -165,7 +209,10 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       el.inert = true
       ghosts.add(el)
     }
-    fade(el, look, ABOVE, CHOREOGRAPHY.out, delay, 'both').finished.then(() => drop(el), () => {})
+    fade(el, look, ABOVE, CHOREOGRAPHY.out, delay, 'both').finished.then(
+      () => drop(el),
+      () => {},
+    )
   }
   /** what followed the words, its owner having removed it: a picture of it, leaving from the look its fade had reached */
   function adopt(el: HTMLElement): HTMLElement | null {
@@ -176,7 +223,8 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     if (look.o <= SEEN) return null
     const ghost = el.cloneNode(true) as HTMLElement
     // no action, no target, no name of its own: it is only drawn
-    for (const x of [ghost, ...ghost.querySelectorAll('*')]) for (const a of ['id', 'href', 'data-action', 'aria-labelledby', 'aria-describedby']) x.removeAttribute(a)
+    for (const x of [ghost, ...ghost.querySelectorAll('*')])
+      for (const a of ['id', 'href', 'data-action', 'aria-labelledby', 'aria-describedby']) x.removeAttribute(a)
     ghost.setAttribute('aria-hidden', 'true')
     ghost.inert = true
     ghost.dataset.state = 'out'
@@ -188,7 +236,9 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
 
   // ------------------------------------------------------------------ the words, drawn
   function digit(d: string): HTMLElement {
-    const dg = doc.createElement('span'), gh = doc.createElement('span'), v = doc.createElement('span')
+    const dg = doc.createElement('span'),
+      gh = doc.createElement('span'),
+      v = doc.createElement('span')
     dg.className = 'dg'
     gh.className = 'gh'
     gh.textContent = '0'
@@ -233,26 +283,38 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       w = px(style(el).width)
       el.style.whiteSpace = ''
     } else w = px(style(el).width)
-    for (const dg of el.querySelectorAll<HTMLElement>('.dg[data-grow]')) w += Number(dg.dataset.grow) - px(style(dg).width)
+    for (const dg of el.querySelectorAll<HTMLElement>('.dg[data-grow]'))
+      w += Number(dg.dataset.grow) - px(style(dg).width)
     for (const dg of el.querySelectorAll<HTMLElement>('.dg[data-close]')) w -= px(style(dg).width)
     return w
   }
   /** the width the box needs for its words on one line: its paddings, its icon, the words, what follows them */
   function natural(): number {
-    const s = style(box), parts: number[] = []
+    const s = style(box),
+      parts: number[] = []
     for (const el of box.children) {
       if (el instanceof HTMLElement && el.dataset.state === 'out') continue
       const es = style(el)
-      if (es.display === 'none' || ((es.position === 'absolute' || es.position === 'fixed') && !el.classList.contains('after'))) continue
+      if (
+        es.display === 'none' ||
+        ((es.position === 'absolute' || es.position === 'fixed') && !el.classList.contains('after'))
+      )
+        continue
       parts.push(el === cell ? lineWidth() : px(es.width))
     }
-    return px(s.paddingInlineStart) + px(s.paddingInlineEnd) + parts.reduce((a, b) => a + b, 0) + px(s.columnGap) * Math.max(0, parts.length - 1)
+    return (
+      px(s.paddingInlineStart) +
+      px(s.paddingInlineEnd) +
+      parts.reduce((a, b) => a + b, 0) +
+      px(s.columnGap) * Math.max(0, parts.length - 1)
+    )
   }
   /** the widest the box may be: its slot's width less its margin on each side (reader.css --capsule-margin) */
   function room(): number {
     const slot = box.parentElement
     if (!slot) return Number.POSITIVE_INFINITY
-    const ss = style(slot), inner = slot.clientWidth - px(ss.paddingInlineStart) - px(ss.paddingInlineEnd)
+    const ss = style(slot),
+      inner = slot.clientWidth - px(ss.paddingInlineStart) - px(ss.paddingInlineEnd)
     // not laid out (a test's document): no limit
     return inner > 0 ? inner - 2 * px(style(box).getPropertyValue('--capsule-margin')) : Number.POSITIVE_INFINITY
   }
@@ -277,16 +339,38 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     if (how === 'grow' || how === 'shrink') {
       // the moving end fades into the capsule's ground while it travels (reader.css)
       box.dataset.resizing = how
-      const anim = box.animate([{ width: `${from}px` }, { width: `${to}px` }], how === 'grow' ? { duration: CHOREOGRAPHY.grow, easing: css(SOFT) } : { duration: CHOREOGRAPHY.shrink, easing: css(IN_OUT) })
+      const anim = box.animate(
+        [{ width: `${from}px` }, { width: `${to}px` }],
+        how === 'grow'
+          ? { duration: CHOREOGRAPHY.grow, easing: css(SOFT) }
+          : { duration: CHOREOGRAPHY.shrink, easing: css(IN_OUT) },
+      )
       width = anim
-      anim.finished.then(() => { if (width === anim) { width = null; delete box.dataset.resizing } }, () => {})
+      anim.finished.then(
+        () => {
+          if (width === anim) {
+            width = null
+            delete box.dataset.resizing
+          }
+        },
+        () => {},
+      )
       return
     }
     delete box.dataset.resizing
     if (how !== 'late') return
-    const anim = box.animate([{ width: `${from}px` }, { width: `${from}px` }], { duration: 0, delay: CHOREOGRAPHY.out, fill: 'backwards' })
+    const anim = box.animate([{ width: `${from}px` }, { width: `${from}px` }], {
+      duration: 0,
+      delay: CHOREOGRAPHY.out,
+      fill: 'backwards',
+    })
     width = anim
-    anim.finished.then(() => { if (width === anim) width = null }, () => {})
+    anim.finished.then(
+      () => {
+        if (width === anim) width = null
+      },
+      () => {},
+    )
   }
   function setWrap(on: boolean) {
     if (on === wrapping()) return
@@ -306,7 +390,8 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
    * under it before
    */
   function settle(incoming: readonly HTMLElement[], outgoing: readonly HTMLElement[]) {
-    const from = current(), to = natural()
+    const from = current(),
+      to = natural()
     const still = reduced()
     if (to > room() + 0.5) {
       // too long for one line here: wrapped, balanced, the box's width its own; the words cross-fade at once
@@ -318,7 +403,8 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     const wrapped = wrapping()
     setWrap(false)
     const d = to - from
-    const grow = d > 0.5 && !wrapped, shrink = d < -0.5 && !wrapped
+    const grow = d > 0.5 && !wrapped,
+      shrink = d < -0.5 && !wrapped
     resize(from, to, wrapped ? 'snap' : still ? (shrink ? 'late' : 'snap') : grow ? 'grow' : shrink ? 'shrink' : 'snap')
     const need = after() ? to : to - px(style(box).paddingInlineEnd)
     const swap = grow && !still ? swapAt(from, to, incoming.length ? [need] : []) : 0
@@ -328,7 +414,8 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
   /** the width read again (the window, the fonts, what follows the words): moved where it no longer holds its words */
   function refit() {
     if (!live) return
-    const to = natural(), fits = to <= room() + 0.5
+    const to = natural(),
+      fits = to <= room() + 0.5
     if (!fits) return setWrap(true)
     if (wrapping()) {
       setWrap(false)
@@ -350,7 +437,12 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     if (old?.textContent) {
       old.setAttribute('data-out', '')
       const seen = style(old).opacity
-      old.animate([{ opacity: seen === '' ? 1 : Number(seen) }, { opacity: 0 }], { ...timing, fill: 'both' }).finished.then(() => old.remove(), () => {})
+      old
+        .animate([{ opacity: seen === '' ? 1 : Number(seen) }, { opacity: 0 }], { ...timing, fill: 'both' })
+        .finished.then(
+          () => old.remove(),
+          () => {},
+        )
     } else old?.remove()
     next.animate([{ opacity: 0 }, { opacity: 1 }], { ...timing, fill: 'backwards' })
   }
@@ -358,7 +450,9 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
   function morph(line: HTMLElement, from: number, to: number) {
     const num = line.querySelector<HTMLElement>('.num')
     if (!num) return
-    const a = String(from), b = String(to), still = reduced()
+    const a = String(from),
+      b = String(to),
+      still = reduced()
     let resized = false
     for (let i = a.length; i < b.length; i++) {
       const dg = digit('')
@@ -367,7 +461,15 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       if (still) continue
       const w = px(style(dg).width)
       dg.dataset.grow = String(w)
-      dg.animate([{ width: '0px' }, { width: `${w}px` }], { duration: CHOREOGRAPHY.grow, easing: css(SOFT) }).finished.then(() => { delete dg.dataset.grow }, () => {})
+      dg.animate([{ width: '0px' }, { width: `${w}px` }], {
+        duration: CHOREOGRAPHY.grow,
+        easing: css(SOFT),
+      }).finished.then(
+        () => {
+          delete dg.dataset.grow
+        },
+        () => {},
+      )
     }
     for (let i = b.length; i < a.length; i++) {
       const dg = num.querySelector<HTMLElement>(':scope > .dg:not([data-close])')
@@ -375,10 +477,20 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       resized = true
       dg.dataset.close = ''
       const v = dg.querySelector<HTMLElement>('.d:not([data-out])')
-      if (still || !v) { dg.remove(); continue }
+      if (still || !v) {
+        dg.remove()
+        continue
+      }
       v.setAttribute('data-out', '')
       v.animate([{ opacity: 1 }, { opacity: 0 }], { duration: CHOREOGRAPHY.morph, easing: css(OUT), fill: 'forwards' })
-      dg.animate([{ width: style(dg).width }, { width: '0px' }], { duration: CHOREOGRAPHY.shrink, easing: css(IN_OUT), fill: 'forwards' }).finished.then(() => dg.remove(), () => {})
+      dg.animate([{ width: style(dg).width }, { width: '0px' }], {
+        duration: CHOREOGRAPHY.shrink,
+        easing: css(IN_OUT),
+        fill: 'forwards',
+      }).finished.then(
+        () => dg.remove(),
+        () => {},
+      )
     }
     const cells = [...num.querySelectorAll<HTMLElement>(':scope > .dg:not([data-close])')]
     // the number changes as one: with a digit gained, every changed digit waits until its new cell is 60 % open
@@ -410,7 +522,9 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
     c.wanted = n
     if (!c.timer) flush()
   }
-  const stopCount = () => { if (live?.count?.timer) win.clearTimeout(live.count.timer) }
+  const stopCount = () => {
+    if (live?.count?.timer) win.clearTimeout(live.count.timer)
+  }
 
   // ------------------------------------------------------------------ the window and the fonts
   const slot = box.parentElement
@@ -424,7 +538,11 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       const gone = outgoing.map(adopt).filter((el): el is HTMLElement => el !== null)
       if (!live) {
         // the capsule's first words: everything shown at once, its width at once
-        live = { el: build(w), words: w, count: w.count === undefined ? null : { shown: w.count, wanted: w.count, next: 0, timer: 0 } }
+        live = {
+          el: build(w),
+          words: w,
+          count: w.count === undefined ? null : { shown: w.count, wanted: w.count, next: 0, timer: 0 },
+        }
         cell.append(live.el)
         for (const el of gone) drop(el)
         const to = natural()
@@ -448,7 +566,11 @@ export function capsuleMotion(box: HTMLElement, cell: HTMLElement, o: { reduced?
       // other words: the ones in the cell go (those not shown yet unseen), the new ones wait for the box
       stopCount()
       const lines = [...cell.children] as HTMLElement[]
-      live = { el: build(w), words: w, count: w.count === undefined ? null : { shown: w.count, wanted: w.count, next: 0, timer: 0 } }
+      live = {
+        el: build(w),
+        words: w,
+        count: w.count === undefined ? null : { shown: w.count, wanted: w.count, next: 0, timer: 0 },
+      }
       cell.append(live.el)
       settle([live.el, ...incoming], [...lines, ...gone])
     },

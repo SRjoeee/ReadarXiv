@@ -27,7 +27,10 @@ export type Capsule =
    *  is closed, or a later write lands; closable */
   | { kind: 'saveFailed'; words: CapsuleWords }
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
-export interface Card { reason: string; action: 'retry' | 'settings' | 'arxiv' }
+export interface Card {
+  reason: string
+  action: 'retry' | 'settings' | 'arxiv'
+}
 
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
 const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
@@ -36,7 +39,11 @@ const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'preparing'
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
-export interface Seen { noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
+export interface Seen {
+  noticeClosed: boolean
+  narrowShown: boolean
+  refusalsSeen: number
+}
 
 export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Languages, 'name' | 'tag'>): Capsule | null {
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
@@ -44,17 +51,26 @@ export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Langua
   // are true of an address with no paper too, whose controls they explain, and stand beside its card
   if (state.phase !== 'failed') {
     if (state.settingsUnreadable) return { kind: 'unreadable', words: plain(R.status.unreadable) }
-    if (state.refusals > Math.max(seen.refusalsSeen, state.mended)) return { kind: 'saveFailed', words: plain(O.saveFailed) }
+    if (state.refusals > Math.max(seen.refusalsSeen, state.mended))
+      return { kind: 'saveFailed', words: plain(O.saveFailed) }
   }
   // no paper: its card says that much, and nothing about a paper is true of it
   if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
-  if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
+  if (!state.available)
+    return state.htmlVersion
+      ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion }
+      : { kind: 'unavailable', words: plain(R.status.noPdf) }
   if (!state.languageSupported && state.prefs) {
     // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
     // `lang`
-    const code = state.prefs.target, name = languages.name(code)
-    return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: languages.tag(code) }), action: 'language' }
+    const code = state.prefs.target,
+      name = languages.name(code)
+    return {
+      kind: 'unsupported',
+      words: withPart(R.status.unsupported(name), { text: name, lang: languages.tag(code) }),
+      action: 'language',
+    }
   }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
   // (the layer-only plan's "Offline, drafted")
@@ -66,14 +82,26 @@ export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Langua
     return state.htmlVersion ? { kind: 'notNow', words, href: state.htmlVersion } : { kind: 'notNow', words }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
-  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
-  if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', words: plain(R.status.narrow) }
+  if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
+    return {
+      kind: 'notice',
+      words: withCount(S.failed.text(state.failedUnits), state.failedUnits),
+      action: state.failure ? 'retry' : null,
+    }
+  if (state.narrow && state.display === 'bilingual' && !seen.narrowShown)
+    return { kind: 'narrow', words: plain(R.status.narrow) }
   return null
 }
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it */
 export function spokenOf(state: ReaderState): string {
-  return state.phase === 'loading' ? R.status.loading : state.phase === 'preparing' ? R.status.preparing : state.phase === 'translating' ? R.status.translating : ''
+  return state.phase === 'loading'
+    ? R.status.loading
+    : state.phase === 'preparing'
+      ? R.status.preparing
+      : state.phase === 'translating'
+        ? R.status.translating
+        : ''
 }
 
 /**
@@ -83,12 +111,18 @@ export function spokenOf(state: ReaderState): string {
  * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest as its prepare
  * comes along, then the paragraphs translated to the end
  */
-export interface Line { on: boolean; value: number }
+export interface Line {
+  on: boolean
+  value: number
+}
 /** the line's share for the download where a translation follows it, and the prepare's of the rest */
-const DOWNLOAD = 0.15, PREPARE = 0.5
+const DOWNLOAD = 0.15,
+  PREPARE = 0.5
 export function lineOf(state: ReaderState): Line {
-  if (state.phase === 'loading') return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
-  if (state.phase === 'preparing') return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
+  if (state.phase === 'loading')
+    return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
+  if (state.phase === 'preparing')
+    return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
@@ -99,5 +133,8 @@ export function cardOf(state: ReaderState, reason: (kind: ProviderErrorKind) => 
   const kind = state.failure ?? 'unknown'
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
   // is the key's only where the service chosen carries one (the host's reason)
-  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reason(kind), action: KEYS.has(kind) ? 'settings' : 'retry' }
+  return {
+    reason: kind === 'rate-limit' ? R.status.rateLimited : reason(kind),
+    action: KEYS.has(kind) ? 'settings' : 'retry',
+  }
 }

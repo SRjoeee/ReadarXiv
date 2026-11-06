@@ -19,6 +19,10 @@ export function useReader<T>(controller: ReaderController, select: (state: Reade
 function shallowEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true
   if (typeof a !== 'object' || typeof b !== 'object' || !a || !b || Array.isArray(a) !== Array.isArray(b)) return false
-  const ka = Object.keys(a), kb = Object.keys(b)
-  return ka.length === kb.length && ka.every(k => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+  const ka = Object.keys(a),
+    kb = Object.keys(b)
+  return (
+    ka.length === kb.length &&
+    ka.every((k) => Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+  )
 }

@@ -4,7 +4,12 @@
 // here knows a language: a sentence is split where its count or its part stands in it, whatever its length or script
 // (the maintainer plans more interface languages after launch)
 
-export interface CapsuleWords { prefix: string; count?: number; part?: { text: string; lang: string }; suffix?: string }
+export interface CapsuleWords {
+  prefix: string
+  count?: number
+  part?: { text: string; lang: string }
+  suffix?: string
+}
 
 /**
  * The words in their one form: a sentence that holds neither a count nor a part is its one string, and one that holds
@@ -20,7 +25,8 @@ function canonical(w: CapsuleWords): CapsuleWords {
   }
 }
 
-const key = (w: CapsuleWords) => [w.prefix, w.count ?? '', w.part ? `${w.part.lang}\u0001${w.part.text}` : '', w.suffix ?? ''].join('\u0000')
+const key = (w: CapsuleWords) =>
+  [w.prefix, w.count ?? '', w.part ? `${w.part.lang}\u0001${w.part.text}` : '', w.suffix ?? ''].join('\u0000')
 export const keyOf = (w: CapsuleWords): string => key(canonical(w))
 
 /** how many words are kept interned: a capsule holds one set, the run's count goes up one set at a time */
@@ -29,7 +35,8 @@ const interned = new Map<string, CapsuleWords>()
 
 /** interned: equal words are one object (64 kept), so that useReader's member-by-member compare holds still */
 export function words(w: CapsuleWords): CapsuleWords {
-  const one = canonical(w), k = key(one)
+  const one = canonical(w),
+    k = key(one)
   const known = interned.get(k)
   // the latest used kept last, so that the oldest goes first
   interned.delete(k)
@@ -64,4 +71,9 @@ export const textOf = (w: CapsuleWords): string => `${w.prefix}${w.count ?? ''}$
 
 /** the same words but for the count: both hold one, and every other part is the same */
 export const sameShape = (a: CapsuleWords, b: CapsuleWords): boolean =>
-  a.count !== undefined && b.count !== undefined && a.prefix === b.prefix && (a.suffix ?? '') === (b.suffix ?? '') && a.part?.text === b.part?.text && a.part?.lang === b.part?.lang
+  a.count !== undefined &&
+  b.count !== undefined &&
+  a.prefix === b.prefix &&
+  (a.suffix ?? '') === (b.suffix ?? '') &&
+  a.part?.text === b.part?.text &&
+  a.part?.lang === b.part?.lang

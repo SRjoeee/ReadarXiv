@@ -22,14 +22,16 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
   // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
   // its place, and the narrow window's download and way back in it are reachable at once
   const { slots, defaults } = useParts()
-  const prefs = useReader(controller, s => s.prefs) ?? defaults
+  const prefs = useReader(controller, (s) => s.prefs) ?? defaults
   const lock = useSettingsLock(controller)
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
   // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
   const appearance = prefs.theme
-  const setAppearance = (a: (typeof APPEARANCES)[number]) => { if (!lock.locked) controller.setPrefs({ theme: a }) }
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => {
+    if (!lock.locked) controller.setPrefs({ theme: a })
+  }
   return (
     <>
       <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>
@@ -49,14 +51,27 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {S.rows.highlight}
-          <Switch label={S.rows.highlight} checked={prefs.highlight.on} disabled={lock.locked} why={lock.why} onChange={on => controller.setPrefs({ highlight: { on } })} />
+          <Switch
+            label={S.rows.highlight}
+            checked={prefs.highlight.on}
+            disabled={lock.locked}
+            why={lock.why}
+            onChange={(on) => controller.setPrefs({ highlight: { on } })}
+          />
         </label>
         <div className="row">
           {R.options.color}
           <span className="flex gap-2">
-            {prefs.bands.map(h => (
-              <Swatch key={h.id} name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id} color={h.colour || 'var(--axt-green)'} chosen={h.id === prefs.highlight.band} locked={lock.locked} why={lock.why}
-                onPick={() => controller.setPrefs({ highlight: { band: h.id } })} />
+            {prefs.bands.map((h) => (
+              <Swatch
+                key={h.id}
+                name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id}
+                color={h.colour || 'var(--axt-green)'}
+                chosen={h.id === prefs.highlight.band}
+                locked={lock.locked}
+                why={lock.why}
+                onPick={() => controller.setPrefs({ highlight: { band: h.id } })}
+              />
             ))}
           </span>
         </div>
@@ -65,18 +80,46 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
-          <div role="radiogroup" aria-label={R.options.appearance} className="seg small icons" style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
-            onKeyDown={radioKeys(APPEARANCES, appearance, () => true, setAppearance, i => radios.current[i]?.focus())}>
+          <div
+            role="radiogroup"
+            aria-label={R.options.appearance}
+            className="seg small icons"
+            style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
+            onKeyDown={radioKeys(
+              APPEARANCES,
+              appearance,
+              () => true,
+              setAppearance,
+              (i) => radios.current[i]?.focus(),
+            )}
+          >
             <span className="thumb" aria-hidden="true" />
             {APPEARANCES.map((a, i) => (
-              <AppearanceSegment key={a} name={names[a]} glyph={GLYPHS[a]} checked={a === appearance} locked={lock.locked} why={lock.why} onPick={() => setAppearance(a)} buttonRef={el => { radios.current[i] = el }} />
+              <AppearanceSegment
+                key={a}
+                name={names[a]}
+                glyph={GLYPHS[a]}
+                checked={a === appearance}
+                locked={lock.locked}
+                why={lock.why}
+                onPick={() => setAppearance(a)}
+                buttonRef={(el) => {
+                  radios.current[i] = el
+                }}
+              />
             ))}
           </div>
         </div>
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {R.options.dim}
-          <Switch label={R.options.dim} checked={prefs.dim} disabled={lock.locked} why={lock.why} onChange={on => controller.setPrefs({ dim: on })} />
+          <Switch
+            label={R.options.dim}
+            checked={prefs.dim}
+            disabled={lock.locked}
+            why={lock.why}
+            onChange={(on) => controller.setPrefs({ dim: on })}
+          />
         </label>
       </Popover>
     </>
@@ -91,30 +134,72 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
  * it lands, from here or the settings page). The website's group, in the same words and order: its heading a row of the panel
  * in the second ink, naming the rows under it, each a switch's row in the panel's own pattern
  */
-function ClassToggles({ controller, prefs, lock }: { controller: ReaderController; prefs: Prefs; lock: ReturnType<typeof useSettingsLock> }) {
+function ClassToggles({
+  controller,
+  prefs,
+  lock,
+}: {
+  controller: ReaderController
+  prefs: Prefs
+  lock: ReturnType<typeof useSettingsLock>
+}) {
   const head = useId()
   return (
     // biome-ignore lint/a11y/useSemanticElements: the popover's rows named by the heading row above them; a fieldset's legend lays out as no row of the panel
     <div role="group" aria-labelledby={head} data-axt-classes="">
-      <div id={head} className="row text-ink-2">{R.classes.name}</div>
-      {CLASSES.map(t => (
+      <div id={head} className="row text-ink-2">
+        {R.classes.name}
+      </div>
+      {CLASSES.map((t) => (
         // biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through
         <label key={t} className="row" data-axt-class={t}>
           {R.classes[t]}
-          <Switch label={R.classes[t]} checked={prefs.classes[t]} disabled={lock.locked} why={lock.why}
-            onChange={on => controller.setPrefs({ classes: { [t]: on } })} />
+          <Switch
+            label={R.classes[t]}
+            checked={prefs.classes[t]}
+            disabled={lock.locked}
+            why={lock.why}
+            onChange={(on) => controller.setPrefs({ classes: { [t]: on } })}
+          />
         </label>
       ))}
     </div>
   )
 }
 
-function AppearanceSegment({ name, glyph, checked, locked, why, onPick, buttonRef }: { name: string; glyph: IconNode; checked: boolean; locked: boolean; why: string | undefined; onPick: () => void; buttonRef: (el: HTMLButtonElement | null) => void }) {
+function AppearanceSegment({
+  name,
+  glyph,
+  checked,
+  locked,
+  why,
+  onPick,
+  buttonRef,
+}: {
+  name: string
+  glyph: IconNode
+  checked: boolean
+  locked: boolean
+  why: string | undefined
+  onPick: () => void
+  buttonRef: (el: HTMLButtonElement | null) => void
+}) {
   const { props, tip } = useTip(name, why)
   return (
     <>
       {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's */}
-      <button ref={buttonRef} type="button" role="radio" aria-checked={checked} aria-disabled={locked || undefined} aria-label={name} aria-description={why} tabIndex={checked ? 0 : -1} onClick={locked ? undefined : onPick} {...props}>
+      <button
+        ref={buttonRef}
+        type="button"
+        role="radio"
+        aria-checked={checked}
+        aria-disabled={locked || undefined}
+        aria-label={name}
+        aria-description={why}
+        tabIndex={checked ? 0 : -1}
+        onClick={locked ? undefined : onPick}
+        {...props}
+      >
         <Icon node={glyph} />
       </button>
       {tip}
@@ -123,11 +208,36 @@ function AppearanceSegment({ name, glyph, checked, locked, why, onPick, buttonRe
 }
 
 /** a highlight colour: greyed out of reach, with the reason in its tooltip beside its name (S-R-21) */
-function Swatch({ name, color, chosen, locked, why, onPick }: { name: string; color: string; chosen: boolean; locked: boolean; why: string | undefined; onPick: () => void }) {
+function Swatch({
+  name,
+  color,
+  chosen,
+  locked,
+  why,
+  onPick,
+}: {
+  name: string
+  color: string
+  chosen: boolean
+  locked: boolean
+  why: string | undefined
+  onPick: () => void
+}) {
   const { props, tip } = useTip(name, why)
   return (
     <>
-      <button type="button" data-swatch aria-label={name} aria-description={why} aria-pressed={chosen} aria-disabled={locked || undefined} className="swatch" style={{ background: color }} onClick={locked ? undefined : onPick} {...(why ? { ...props, style: { background: color, ...props.style } } : {})} />
+      <button
+        type="button"
+        data-swatch
+        aria-label={name}
+        aria-description={why}
+        aria-pressed={chosen}
+        aria-disabled={locked || undefined}
+        className="swatch"
+        style={{ background: color }}
+        onClick={locked ? undefined : onPick}
+        {...(why ? { ...props, style: { background: color, ...props.style } } : {})}
+      />
       {why && tip}
     </>
   )

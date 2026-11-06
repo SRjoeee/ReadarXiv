@@ -6,11 +6,26 @@
 import type { ButtonHTMLAttributes, CSSProperties } from 'react'
 import { useTip } from '@readarxiv/ui'
 
-export function TippedButton({ label, tip: words = label, side, style, ...rest }: { label: string; tip?: string; side?: 'bottom' | 'right' | 'top' } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'>) {
+export function TippedButton({
+  label,
+  tip: words = label,
+  side,
+  style,
+  ...rest
+}: { label: string; tip?: string; side?: 'bottom' | 'right' | 'top' } & Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'aria-label'
+>) {
   const { props, tip } = useTip(words, undefined, { side })
   return (
     <>
-      <button type="button" aria-label={label} {...rest} {...props} style={{ ...style, ...props.style } as CSSProperties} />
+      <button
+        type="button"
+        aria-label={label}
+        {...rest}
+        {...props}
+        style={{ ...style, ...props.style } as CSSProperties}
+      />
       {tip}
     </>
   )

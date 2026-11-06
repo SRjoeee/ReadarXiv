@@ -30,14 +30,23 @@ function Page({ controller }: { controller: ReaderController }) {
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.prefs?.theme, dimPages: s.prefs?.dim, swapped: s.prefs?.swapped ?? false, title: s.paper.title, card: cardOf(s, reason) !== null && !s.noPaper, noPaper: s.noPaper }))
+  const state = useReader(controller, (s) => ({
+    appearance: s.prefs?.theme,
+    dimPages: s.prefs?.dim,
+    swapped: s.prefs?.swapped ?? false,
+    title: s.paper.title,
+    card: cardOf(s, reason) !== null && !s.noPaper,
+    noPaper: s.noPaper,
+  }))
   const doc = useRef<HTMLElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
   useEffect(() => {
     const el = doc.current
     if (!el) return
-    const observer = new ResizeObserver(([entry]) => { if (entry) controller.setNarrow(entry.contentRect.width < 840) })
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) controller.setNarrow(entry.contentRect.width < 840)
+    })
     observer.observe(el)
     return () => observer.disconnect()
   }, [controller])
@@ -46,7 +55,7 @@ function Page({ controller }: { controller: ReaderController }) {
     // a session that cannot open is in the controller's state (a failure); nothing is left to catch here
     void controller.attach({ left: left.current, right: right.current }).then(
       // the probes' hooks (the e2e's and the lab's): the host's, beside its session's own
-      session => probe?.(controller, session),
+      (session) => probe?.(controller, session),
       () => {},
     )
   }, [controller, probe])
@@ -65,15 +74,22 @@ function Page({ controller }: { controller: ReaderController }) {
     drawn.current = contents
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const side = Number.parseFloat(getComputedStyle(root).getPropertyValue('--side')) || 0
-    doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], { duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)' })
+    doc.current?.animate([{ translate: `${contents ? -side : side}px 0` }, { translate: '0 0' }], {
+      duration: 200,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    })
   }, [contents])
   const swapped = state.swapped
-  useEffect(() => { document.documentElement.toggleAttribute('data-axt-swapped', swapped) }, [swapped])
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-axt-swapped', swapped)
+  }, [swapped])
   // the tab says what is being read; the page's own title (the product's name) stands until one is known, and a paper's, once set, is never put back to it
-  useEffect(() => { if (state.title) document.title = state.title }, [state.title])
+  useEffect(() => {
+    if (state.title) document.title = state.title
+  }, [state.title])
   return (
     <>
-      <Toolbar controller={controller} contents={contents} onContents={() => setContents(open => !open)} />
+      <Toolbar controller={controller} contents={contents} onContents={() => setContents((open) => !open)} />
       <Outline controller={controller} open={contents} />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
           accessibility audit); its layout is the class's */}
@@ -93,7 +109,10 @@ function Page({ controller }: { controller: ReaderController }) {
  *  below 500 px the focus went to the download) */
 function chooseLanguage() {
   const inBar = document.querySelector<HTMLElement>('[popovertarget="pop-language"]')
-  if (inBar?.offsetParent) { document.getElementById('pop-language')?.showPopover(); return }
+  if (inBar?.offsetParent) {
+    document.getElementById('pop-language')?.showPopover()
+    return
+  }
   document.getElementById('pop-options')?.showPopover()
   document.getElementById('pop-options-language')?.showPopover()
 }
@@ -105,11 +124,29 @@ function chooseLanguage() {
  * and a "1 / 0" pager that does nothing stood before the card's link (Codex on #329): the pane is inert, as a closed
  * contents sidebar is
  */
-function Pane({ controller, side, scroller, card = false, empty = false }: { controller: ReaderController; side: Side; scroller: RefObject<HTMLDivElement | null>; card?: boolean; empty?: boolean }) {
+function Pane({
+  controller,
+  side,
+  scroller,
+  card = false,
+  empty = false,
+}: {
+  controller: ReaderController
+  side: Side
+  scroller: RefObject<HTMLDivElement | null>
+  card?: boolean
+  empty?: boolean
+}) {
   const section = useRef<HTMLElement>(null)
   const pill = useRef<HTMLDivElement>(null)
   const indicator = useRef<HTMLDivElement>(null)
-  const targets = useMemo<[RefObject<HTMLElement | null>, number][]>(() => [[pill, 2500], [indicator, 900]], [])
+  const targets = useMemo<[RefObject<HTMLElement | null>, number][]>(
+    () => [
+      [pill, 2500],
+      [indicator, 900],
+    ],
+    [],
+  )
   useScrollShow(section, targets)
   return (
     // data-card: the failure's card covers the pane's scroller (reader.css; no relational selector there, §12)
@@ -137,7 +174,11 @@ function useAppearance(appearance: Appearance | undefined, dimPages: boolean | u
   const first = useRef(true)
   useLayoutEffect(() => {
     if (!appearance) return
-    applyAppearance(document.documentElement, { theme: themeOf(appearance), dim: dimmed(appearance, systemDark, dimPages ?? true) }, !first.current)
+    applyAppearance(
+      document.documentElement,
+      { theme: themeOf(appearance), dim: dimmed(appearance, systemDark, dimPages ?? true) },
+      !first.current,
+    )
     first.current = false
   }, [appearance, dimPages, systemDark])
 }

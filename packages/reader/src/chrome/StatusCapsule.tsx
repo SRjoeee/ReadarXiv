@@ -20,19 +20,25 @@ import { TippedButton } from './TippedButton.tsx'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status.ts'
 import { useReader } from './use-reader.ts'
 
-export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
+export function StatusCapsule({
+  controller,
+  onChooseLanguage,
+}: {
+  controller: ReaderController
+  onChooseLanguage: () => void
+}) {
   // the notice of failed passages closed (status.ts Seen)
   const [noticeClosed, setNoticeClosed] = useState(false)
   const [narrowShown, setNarrowShown] = useState(false)
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
   const parts = useParts()
-  const now = useReader(controller, s => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages))
+  const now = useReader(controller, (s) => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages))
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
-  const card = useReader(controller, s => cardOf(s, parts.reason))
+  const card = useReader(controller, (s) => cardOf(s, parts.reason))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
-  const sameTab = useReader(controller, s => s.prefs?.links === 'same-tab')
+  const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
@@ -55,25 +61,60 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
   const words = useId()
-  const timed = capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
+  const timed =
+    capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
   const link = capsule && (capsule.kind === 'unavailable' || capsule.kind === 'notNow') && capsule.href
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
       {spoken && <span className="sr-only">{spoken}</span>}
       {capsule && (
-        <Drawn key={capsule.kind} kind={capsule.kind} icon={Info} words={capsule.words} wordsId={words} alone={alone} out={now === null} {...timed} {...linger}
+        <Drawn
+          key={capsule.kind}
+          kind={capsule.kind}
+          icon={Info}
+          words={capsule.words}
+          wordsId={words}
+          alone={alone}
+          out={now === null}
+          {...timed}
+          {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
           afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : capsule.kind === 'notNow' ? 'retry' : ''}`}
           after={
             capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
               <>
-                {capsule.kind === 'unreadable' && parts.settingsHref && <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">{S.settings}</a>}
-                {((capsule.kind === 'notice' && capsule.action === 'retry') || capsule.kind === 'notNow') && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
-                {link && <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
-                {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}
+                {capsule.kind === 'unreadable' && parts.settingsHref && (
+                  <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">
+                    {S.settings}
+                  </a>
+                )}
+                {((capsule.kind === 'notice' && capsule.action === 'retry') || capsule.kind === 'notNow') && (
+                  <button type="button" data-action className="chip" onClick={controller.retry}>
+                    {S.failed.retry}
+                  </button>
+                )}
+                {link && (
+                  <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">
+                    {R.status.useHtml}
+                  </a>
+                )}
+                {capsule.kind === 'unsupported' && (
+                  <button type="button" data-action className="chip" onClick={onChooseLanguage}>
+                    {R.status.chooseLanguage}
+                  </button>
+                )}
                 {(capsule.kind === 'notice' || capsule.kind === 'saveFailed') && (
-                  <TippedButton label={R.status.close} side="top" className="close" onClick={() => (capsule.kind === 'saveFailed' ? setRefusalsSeen(controller.getState().refusals) : setNoticeClosed(true))}>
+                  <TippedButton
+                    label={R.status.close}
+                    side="top"
+                    className="close"
+                    onClick={() =>
+                      capsule.kind === 'saveFailed'
+                        ? setRefusalsSeen(controller.getState().refusals)
+                        : setNoticeClosed(true)
+                    }
+                  >
                     <Icon node={X} size={13} />
                   </TippedButton>
                 )}
@@ -101,7 +142,11 @@ export function useTimedLeave(on: boolean, ms: number, leave: () => void): HTMLA
     const s = at.current
     if (!s.on || s.timer || s.pointer || s.focus) return
     s.since = Date.now()
-    s.timer = window.setTimeout(() => { s.timer = 0; s.on = false; leave() }, s.left)
+    s.timer = window.setTimeout(() => {
+      s.timer = 0
+      s.on = false
+      leave()
+    }, s.left)
   }
   const stand = () => {
     const s = at.current
@@ -115,12 +160,24 @@ export function useTimedLeave(on: boolean, ms: number, leave: () => void): HTMLA
     if (!on) return
     Object.assign(at.current, { on: true, left: ms, pointer: false, focus: false })
     go()
-    return () => { stand(); at.current.on = false }
+    return () => {
+      stand()
+      at.current.on = false
+    }
   }, [on, ms])
   return {
-    onPointerEnter: () => { at.current.pointer = true; stand() },
-    onPointerLeave: () => { at.current.pointer = false; go() },
-    onFocus: () => { at.current.focus = true; stand() },
+    onPointerEnter: () => {
+      at.current.pointer = true
+      stand()
+    },
+    onPointerLeave: () => {
+      at.current.pointer = false
+      go()
+    },
+    onFocus: () => {
+      at.current.focus = true
+      stand()
+    },
     // a focus moved within the capsule does not count as gone
     onBlur: (e: FocusEvent<HTMLElement>) => {
       if (e.currentTarget.contains(e.relatedTarget as Node | null)) return

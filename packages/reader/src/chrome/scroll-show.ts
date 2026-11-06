@@ -14,10 +14,16 @@ export function useScrollShow(pane: RefObject<HTMLElement | null>, targets: [Ref
         if (!t) continue
         t.toggleAttribute('data-live', true)
         clearTimeout(timers.get(t))
-        timers.set(t, window.setTimeout(() => t.removeAttribute('data-live'), ms))
+        timers.set(
+          t,
+          window.setTimeout(() => t.removeAttribute('data-live'), ms),
+        )
       }
     }
     el.addEventListener('scroll', on, { capture: true, passive: true })
-    return () => { el.removeEventListener('scroll', on, { capture: true }); for (const t of timers.values()) clearTimeout(t) }
+    return () => {
+      el.removeEventListener('scroll', on, { capture: true })
+      for (const t of timers.values()) clearTimeout(t)
+    }
   }, [pane, targets])
 }

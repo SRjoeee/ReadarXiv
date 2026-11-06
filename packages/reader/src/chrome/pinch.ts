@@ -12,7 +12,10 @@ export function usePinch(controller: ReaderController, doc: RefObject<HTMLElemen
   useEffect(() => {
     const el = doc.current
     if (!el) return
-    let factor = 1, origin: [number, number] = [0, 0], side: Side = 'left', frame = 0
+    let factor = 1,
+      origin: [number, number] = [0, 0],
+      side: Side = 'left',
+      frame = 0
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return
       const pane = (e.target as Element).closest<HTMLElement>('.pane')
@@ -31,11 +34,20 @@ export function usePinch(controller: ReaderController, doc: RefObject<HTMLElemen
     }
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return
-      if (e.key === '=' || e.key === '+') { e.preventDefault(); controller.zoomBy(1.1) }
-      else if (e.key === '-') { e.preventDefault(); controller.zoomBy(1 / 1.1) }
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        controller.zoomBy(1.1)
+      } else if (e.key === '-') {
+        e.preventDefault()
+        controller.zoomBy(1 / 1.1)
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false, capture: true })
     document.addEventListener('keydown', onKey)
-    return () => { el.removeEventListener('wheel', onWheel, { capture: true }); document.removeEventListener('keydown', onKey); cancelAnimationFrame(frame) }
+    return () => {
+      el.removeEventListener('wheel', onWheel, { capture: true })
+      document.removeEventListener('keydown', onKey)
+      cancelAnimationFrame(frame)
+    }
   }, [controller, doc])
 }
