@@ -1,0 +1,270 @@
+// The bundle's objects, FORMAT 1 (interfaces/page/design-a.md §1.1, decided in interfaces/page/DECISION.md): one zod schema
+// per kind, the types inferred from them. Coordinates are arXiv's page (the original PDF's user space), PDF units, y up, pages
+// 1-based, written on a 1/100 grid by the prepare. An object's reader ignores a field it does not know (zod strips it), so a
+// new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread.
+import { z } from 'zod'
+
+export const FORMAT = 1 as const
+const format = z.literal(FORMAT)
+const num = z.number()
+const int = z.number().int()
+const page = z.number().int().min(1)
+const flag = z.literal(1)
+
+/** a unit's id: the content hash of its kind and pieces (ids.ts unitId; the baseline's FORMAT.md §2) */
+export const Id = z.string().regex(/^[0-9a-f]{64}$/)
+/** an object's digest: the lowercase hexadecimal SHA-256 of its bytes */
+export const Digest = z.string().regex(/^[0-9a-f]{64}$/)
+export const Box = z.tuple([num, num, num, num])
+/** A's ink and its baseline: page, x0, y0, x1, y1, base */
+export const Ink = z.tuple([page, num, num, num, num, num])
+
+/** why a placement stays the original's whatever the rows: not located on A, its page or its group not wrapped, its page refused */
+export const PrepWhy = z.enum(['unlocated', 'unwrapped', 'page'])
+
+// ---------------------------------------------------------------- what a translator reads
+/** a unit's kind: an open string, today's documented set (FORMAT.md §2): para heading caption footnote cell abstract theorem
+ *  figure author affiliation reference; name (babel's names); inkheads inkcontents inknotes inkorphan inknames inkreferences
+ *  (text our compile set that no source unit owns); inkfigures (text inside a figure) */
+export const Kind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
+/** an element's kind, as the source reader typed it: an open string (math display cite ref eqref footnote macro url code
+ *  number other, today's; break, symbol) */
+export const ElKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
+/** a span's style: an open string (bold italic mono sc link colour other …) */
+export const SpanKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
+
+export type Piece =
+  | { t: 'text'; s: string }
+  | { t: 'el'; id: string; kind: string; src: string; keys?: string[] | undefined }
+  | {
+      t: 'span'
+      id: string
+      style: string
+      must?: 1 | undefined
+      open?: string | undefined
+      close?: string | undefined
+      content: Piece[]
+    }
+  | { t: 'unit'; id: string; unit: string; pre: string; post: string }
+
+/**
+ * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
+ * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
+ * identity only. `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
+ * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). `unit`: a unit
+ * nested in this one (a footnote set inside a paragraph), by its id, with the source around it (`pre`, `post`)
+ */
+export const Piece: z.ZodType<Piece> = z.lazy(() =>
+  z.discriminatedUnion('t', [
+    z.object({ t: z.literal('text'), s: z.string() }),
+    z.object({
+      t: z.literal('el'),
+      id: z.string(),
+      kind: ElKind,
+      src: z.string(),
+      keys: z.array(z.string()).optional(),
+    }),
+    z.object({
+      t: z.literal('span'),
+      id: z.string(),
+      style: SpanKind,
+      must: flag.optional(),
+      open: z.string().optional(),
+      close: z.string().optional(),
+      content: z.array(Piece),
+    }),
+    z.object({ t: z.literal('unit'), id: z.string(), unit: Id, pre: z.string(), post: z.string() }),
+  ]),
+)
+
+/** a unit, each distinct one once: `depth` a heading's level, `sentences` it is cut into sentences, `kept` the paper keeps it
+ *  as it is (never translated) */
+export const Unit = z.object({
+  id: Id,
+  kind: Kind,
+  content: z.array(Piece),
+  depth: int.optional(),
+  sentences: z.literal(true).optional(),
+  kept: z.literal(true).optional(),
+})
+export const Units = z.object({ format, units: z.array(Unit) })
+
+// ---------------------------------------------------------------- what laying a page reads
+/** TeX's font state, the fill read from A: role, size, bold, slant (1 italic, 2 slanted), faked small capitals' size share,
+ *  upper case, fill 0xRRGGBB, the design where it is not the paper's */
+export const Style = z.object({
+  role: z.enum(['serif', 'sans', 'mono']),
+  size: num,
+  bold: flag.optional(),
+  slant: z.union([z.literal(1), z.literal(2)]).optional(),
+  sc: num.optional(),
+  upper: flag.optional(),
+  fill: int.optional(),
+  design: z.string().optional(),
+})
+
+/** a line on A: page, column, x0, x1 (its ink), baseline, top, bottom (its fonts' boxes), m0, m1 (TeX's measure for it),
+ *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored) */
+export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int])
+export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
+
+export const El = z.object({
+  kind: ElKind,
+  ink: z.array(Ink),
+  keep: flag.optional(),
+  text: z.string().optional(),
+  style: Style.optional(),
+  brackets: z.tuple([Ink, Ink]).optional(),
+  leads: flag.optional(),
+  after: z.string().optional(),
+  ends: z.tuple([int, num]).optional(),
+  opens: int.optional(),
+  name: z.string().optional(),
+})
+export const SpanAt = z.object({ style: Style.optional(), opens: int.optional() })
+export const Label = z.object({
+  kind: z.enum(['float', 'head', 'number', 'mark']),
+  ink: Ink,
+  style: Style,
+  name: z.tuple([z.string(), Ink]).optional(),
+  num: z.tuple([z.string(), Ink]).optional(),
+  punct: z.tuple([z.string(), Ink]).optional(),
+})
+export const Room = z.object({
+  below: num,
+  next: num.optional(),
+  side: z.tuple([num, num]).optional(),
+  band: z.tuple([num, num]).optional(),
+})
+/** a generated word (a babel name's key, Rules.words), its counter where it leads one */
+export const Word = z.object({
+  name: z.string(),
+  counter: z.tuple([z.string(), Ink]).optional(),
+  caps: flag.optional(),
+})
+
+/** one placement on A: a unit's, a babel name's, a figure text's (design-a §1.1) */
+export const Placed = z.object({
+  ord: int.min(0),
+  kind: Kind,
+  text: z.union([Id, Word]),
+  why: PrepWhy.optional(),
+  join: z.union([z.tuple([num]), z.tuple([num, flag])]).optional(),
+  bound: flag.optional(),
+  lead: num,
+  style: Style,
+  align: z.enum(['j', 'l', 'c', 'r']),
+  lines: z.array(Line),
+  els: z.array(z.tuple([z.string(), El])).optional(),
+  spans: z.array(z.tuple([z.string(), SpanAt])).optional(),
+  label: Label.optional(),
+  tail: z.array(z.tuple([z.string(), Style])).optional(),
+  room: Room,
+  cuts: z.array(z.tuple([int, int, num])).optional(),
+  fixed: int.optional(),
+  plain: z.string().optional(),
+  dir: z.tuple([num, num]).optional(),
+})
+export const Tie = z.discriminatedUnion('rule', [
+  z.object({
+    rule: z.literal('cells'),
+    cells: z.array(z.array(int)),
+    head: flag.optional(),
+    spanning: z.array(int).optional(),
+  }),
+  z.object({ rule: z.literal('size'), ords: z.array(int) }),
+])
+export const Link = z.object({
+  box: Box,
+  to: z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })]),
+  owner: z.tuple([int, z.string()]).optional(),
+})
+/** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
+ *  what the reader picks its served faces by (typeset-inputs A3, A4) */
+export const Faces = z.object({ fonts: z.array(z.tuple([z.string(), int])) })
+export const Part = z.object({
+  format,
+  page,
+  paper: z.object({
+    faces: Faces,
+    lineskip: z.tuple([num, num]).optional(),
+    names: z.array(z.tuple([z.string(), Id])).optional(),
+  }),
+  flows: z.array(z.array(Placed)),
+  ties: z.array(Tie).optional(),
+  links: z.array(Link).optional(),
+})
+
+// ---------------------------------------------------------------- what opens a paper
+/** the original (A): its length, its digest, and the digest of each CHUNK bytes of it, so that a reader checks every range
+ *  it reads (interfaces/host/DECISION.md): `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
+export const ORIGINAL_CHUNK = 65536
+export const Original = z.object({
+  bytes: int.min(0),
+  sha256: Digest,
+  chunk: z.literal(ORIGINAL_CHUNK),
+  chunks: z.string().regex(/^[A-Za-z0-9_-]*$/),
+})
+export const Head = z.object({
+  format,
+  paper: z.object({ id: z.string(), version: int.min(1), pages: int.min(1) }),
+  made: z.string(),
+  original: Original,
+  addOn: z.object({ digest: Digest, bytes: int.min(0) }).nullable(),
+  units: z.array(Digest),
+  parts: z.array(Digest.nullable()),
+  refused: z.array(z.tuple([page, PrepWhy])).optional(),
+  outline: z.array(z.tuple([int, page, Id])).optional(),
+})
+
+// ---------------------------------------------------------------- a translation (packages/translate's Result, by unit id)
+export type OutPiece =
+  | { t: 'text'; s: string }
+  | { t: 'el'; id: string }
+  | { t: 'span'; id: string; content: OutPiece[] }
+export const OutPiece: z.ZodType<OutPiece> = z.lazy(() =>
+  z.discriminatedUnion('t', [
+    z.object({ t: z.literal('text'), s: z.string() }),
+    z.object({ t: z.literal('el'), id: z.string() }),
+    z.object({ t: z.literal('span'), id: z.string(), content: z.array(OutPiece) }),
+  ]),
+)
+export const Why = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('refused') }),
+  z.object({ kind: z.literal('unavailable'), retryAfterMs: num.optional() }),
+  z.object({ kind: z.literal('unconfigured'), code: z.string() }),
+  z.object({ kind: z.literal('aborted') }),
+])
+export const Row = z.discriminatedUnion('ok', [
+  z.object({
+    id: Id,
+    ok: z.literal(true),
+    content: z.array(OutPiece),
+    by: z.string(),
+    sentences: z.object({ src: z.array(int), tr: z.array(int) }).optional(),
+  }),
+  z.object({ id: Id, ok: z.literal(false), why: Why }),
+])
+
+export type Id = z.infer<typeof Id>
+export type Box = z.infer<typeof Box>
+export type Ink = z.infer<typeof Ink>
+export type PrepWhy = z.infer<typeof PrepWhy>
+export type Unit = z.infer<typeof Unit>
+export type Units = z.infer<typeof Units>
+export type Style = z.infer<typeof Style>
+export type Line = z.infer<typeof Line>
+export type El = z.infer<typeof El>
+export type SpanAt = z.infer<typeof SpanAt>
+export type Label = z.infer<typeof Label>
+export type Room = z.infer<typeof Room>
+export type Word = z.infer<typeof Word>
+export type Placed = z.infer<typeof Placed>
+export type Tie = z.infer<typeof Tie>
+export type Link = z.infer<typeof Link>
+export type Faces = z.infer<typeof Faces>
+export type Part = z.infer<typeof Part>
+export type Original = z.infer<typeof Original>
+export type Head = z.infer<typeof Head>
+export type Why = z.infer<typeof Why>
+export type Row = z.infer<typeof Row>

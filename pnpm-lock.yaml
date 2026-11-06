@@ -106,7 +106,11 @@ importers:
         specifier: workspace:*
         version: link:../text
 
-  packages/format: {}
+  packages/format:
+    dependencies:
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
 
   packages/reader:
     dependencies:
