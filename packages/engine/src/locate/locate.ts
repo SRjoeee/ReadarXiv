@@ -2,7 +2,9 @@
 //
 // - A unit is LOCATED where every glyph it owns on B has a partner on A (or is a line-end hyphen a `hyphen` hunk holds, or lies
 //   off its page), and every rule and image it owns pairs with A's (S1d). No partial credit, no threshold; a unit that is not
-//   located stays the original's, with the cause (the hunk class that holds its first unmatched glyph, `box`, or `no ink`).
+//   located stays the original's, with the cause: `content difference: <class>` (the hunk class that holds its first
+//   unmatched glyph, B's and A's glyphs differing there; or a rule, an image, a turned glyph with no partner), `no ink` (the
+//   instrument gives it none), or the instrument's own why.
 // - Its ink on A: its glyphs' partners, each in the role and piece its B glyph has, and A's own unmatched glyphs inside its A
 //   span whose matched neighbours on both sides are its own (a word TeX broke on A and not on B: its hyphen; a content
 //   difference: A's own glyphs there), in their neighbours' role where both have one, else its text's.
@@ -258,14 +260,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         continue
       }
       if (m.hunkB[b] === HUNK.hyphen || m.offpageB[b]) continue
-      bad ??= hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)
+      bad ??= `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
     }
     const boxPartners: [ap: number, ai: number, p: number, x: number][] = []
     for (const [p, x] of boxes) {
       const kind = B.pages[p]!.kinds[x] as number
       const ap = m.boxPage[p]?.[x] ?? 0
       if (!(isPath(kind) || isImage(kind)) || ap === 0) {
-        bad ??= 'box'
+        bad ??= 'content difference: a rule or image with no partner'
         continue
       }
       boxPartners.push([ap, m.boxIndex[p]![x] as number, p, x])
@@ -275,7 +277,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     for (const [p, j] of turnedB) {
       const ap = m.turnedPage[p]?.[j] ?? 0
       if (ap === 0) {
-        bad ??= 'turned'
+        bad ??= 'content difference: a turned glyph with no partner'
         continue
       }
       const aj = m.turnedIndex[p]![j] as number
@@ -398,6 +400,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   for (const b of bornOf(inkA, m, claimedA, pageA)) {
     const mem = empty(-1, b.kind, unitId(b.kind, b.content))
     mem.located = true
+    // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as today's figure units)
+    mem.figure = b.kind === 'inkfigures'
     mem.text = b.glyphs
     for (const a of b.glyphs) claimedA[a] = mem.ord
     born.set(mem.ord, { kind: b.kind, content: b.content })

@@ -15,8 +15,9 @@ export interface AddOn {
   bytes: Uint8Array
   /** each page wrapOf was asked to wrap: ok, or why not; merged where its elements' and labels' groups folded into the text's */
   pages: Map<number, WrapPage>
-  /** every group the document holds, by name (`<ord>.<page>.<t|e|l>`) */
+  /** every group the document holds, by name (`<ord>.<page>.<t|e|l>`), and each one's object number */
   groups: Set<string>
+  ocgs: Map<string, number>
   stats: Wrap['stats']
 }
 
@@ -58,6 +59,7 @@ export async function wrap(
     bytes: made.bytes.slice(bytesA.length),
     pages: made.pages,
     groups: new Set(made.groups.keys()),
+    ocgs: made.groups,
     stats: made.stats,
   }
 }

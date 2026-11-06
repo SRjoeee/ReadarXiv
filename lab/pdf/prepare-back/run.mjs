@@ -112,6 +112,23 @@ if (ins) {
   }
 }
 const tBack = performance.now()
+// ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's, all
+// ON is A and each kind OFF changes A only inside its ink)
+let proofs = null
+if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') || process.argv.includes('--pixels'))) {
+  const { proveGlyphs, provePixels } = await import('./prove.mjs')
+  const W = new Uint8Array(arxivBytes.length + tally.addOn.bytes.length)
+  W.set(arxivBytes)
+  W.set(tally.addOn.bytes, arxivBytes.length)
+  const tp = performance.now()
+  proofs = { glyphs: await proveGlyphs({ W, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
+  proofs.glyphs.ms = Math.round(performance.now() - tp)
+  if (process.argv.includes('--pixels')) {
+    const tq = performance.now()
+    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL })
+    proofs.pixels.ms = Math.round(performance.now() - tq)
+  }
+}
 
 // ---- the prepare dump (FORMAT.md §3)
 const located = tally?.locatedAll ?? null
@@ -136,13 +153,20 @@ if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name ==
 const unitsList = ins?.units ?? U.bundleUnitsOf(paper).map(u => null)
 let ord = 0
 const states = { drawn: 0, laid: 0, unlaid: 0 }
-;(ins?.units ?? []).forEach((u, i) => {
+// (the dump's order: the instrument's, but a figure unit the bundle does not lay after every one it lays, as today's page pass
+// leaves such a unit out of its bundle and the baseline lists it after the bundle's: its ord-join pairs equal texts so)
+const laysFigure = i => { const mem = memberOf.get(i); return !!mem?.located && stateOf(mem, addOn).drawn }
+const order = (ins?.units ?? []).map((_, i) => i)
+const figs = order.filter(i => ins.units[i].kind === 'inkfigures')
+const figsSorted = [...figs].sort((a, b) => (laysFigure(a) ? 0 : 1) - (laysFigure(b) ? 0 : 1) || a - b)
+figs.forEach((at, q) => { order[at] = figsSorted[q] })
+order.map(i => [ins.units[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
-  if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
+  if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)
   const state = st.drawn ? 'drawn' : 'laid'
   states[state]++
@@ -177,12 +201,12 @@ mkdirSync(join(OUT, 'located'), { recursive: true })
 writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tIns0), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
   bytes: { arxiv: arxivBytes.length, addOn: addOn && !('refused' in addOn) ? addOn.bytes.length : 0, units: unitsBytes, parts: parts.reduce((n, p) => n + p.bytes, 0), head: head ? Buffer.byteLength(JSON.stringify(head)) : 0 },
-  parts, places: placeOf,
+  parts, places: placeOf, proofs,
   wrapPages: addOn && !('refused' in addOn) ? [...addOn.pages].map(([p, x]) => [p, x.ok, x.why ?? null, !!x.merged]) : null,
   moves: tally?.mapping.moves.length ?? 0, stretches: tally?.mapping.stretches ?? [],
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,
   peakRss: process.resourceUsage().maxRSS,
 })}\n`)
-console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, wrap: tally?.wrap ?? null, ms: Math.round(performance.now() - t0) }))
+console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, wrap: tally?.wrap ?? null, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
 process.exit(0)

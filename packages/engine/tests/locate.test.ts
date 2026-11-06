@@ -86,10 +86,10 @@ describe('locate', () => {
   it('leaves a unit not located where one of its glyphs has no partner, and says why', () => {
     const A = docOf([pages[0]!, { lines: ['a heading', 'second test'] }])
     const L = locate(ins, A, align(B, A))
-    expect(L.members[2]).toMatchObject({ located: false, cause: 'char' })
+    expect(L.members[2]).toMatchObject({ located: false, cause: 'content difference: char' })
     expect(L.members[0]!.located).toBe(true)
     expect(L.groups[1]!.glyphs.filter((g) => g?.startsWith('2.'))).toEqual([])
-    expect(L.stats.unlocated).toEqual({ char: 1 })
+    expect(L.stats.unlocated).toEqual({ 'content difference: char': 1 })
   })
   it('makes a unit of text B never printed, born on A', () => {
     const A = docOf([pages[0]!, pages[1]!, { lines: ['a supplement page', 'of its own'] }])
