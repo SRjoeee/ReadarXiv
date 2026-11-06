@@ -65,8 +65,21 @@ const CAUSE = {
   weight: () => 'the majority (today: by matched source words; the part: by its own glyphs)',
   slant: () => 'the majority (today: by matched source words; the part: by its own glyphs)',
   firstX0: (a, b, m) => { const l = own(m)[0]; return (m.els ?? []).some(([, e]) => e.ink.some(k => overlaps(k, l) && Math.abs(k[1] - l[2]) < 0.02)) ? 'its first line begins with an element (today: the first source word\'s start; the part: the line\'s first glyph)' : m.label ? 'a label on its first line' : a > b ? 'today\'s first word after other glyphs of its own' : 'other' },
-  'kept lines': (a, b, m) => (b - displayRows(m) === a ? 'a display\'s rows (the part: each a KEPT line, design-a; today: only file lines a display holds)' : displayRows(m) ? 'a display\'s rows counted otherwise (the part: its glyphs cut by the line rule, a fraction\'s or a stacked formula\'s parts rows of their own; today: the file lines it holds a third of)' : b > a ? 'more lines kept (a held line the source does not write)' : 'fewer lines kept'),
-  'short skips': (a, b, m) => (displayRows(m) ? 'a display\'s rows read otherwise (the part: a formula\'s part cut as a row of its own, its top nearer the line over it; today: the file\'s display segment)' : 'other'),
+  'kept lines': (a, b, m, P, s) => {
+    // (today's displays in order, each kept with file lines (`region:`) or in place with none (`inPlace`), against the part's
+    // displays in their order: the part's rows of the ones today keeps with file lines, and its held lines)
+    const today = (s.elements?.modes ?? []).filter(x => x[2] === 'display')
+    const ours = (m.els ?? []).filter(([, e]) => e.kind === 'display')
+    const rowsOf = e => m.lines.filter(l => l[9] & KEPT && e.ink.some(k => overlaps(k, l))).length
+    const held = b - displayRows(m)
+    if (today.length === ours.length && ours.length) {
+      const filed = ours.reduce((n, [, e], q) => n + (/inPlace/.test(today[q][5]) ? 0 : rowsOf(e)), 0)
+      if (held + filed === a) return 'a display today keeps in place with no file line (inPlace: a unit\'s first or last piece, or a frame\'s); the part: its rows, KEPT lines (design-a)'
+      return held + filed < a ? 'a display\'s rows: today the page\'s text lines it touches (a stacked part, a deep script a line of its own); the part TeX\'s rows (rows.ts: its ink\'s bands, joined where its glyphs interleave)' : 'a display\'s rows: the part more rows than today\'s text lines'
+    }
+    return ours.length ? 'displays told otherwise (today and the part do not count the same displays)' : b > a ? 'more lines kept (a held line the source does not write)' : 'fewer lines kept'
+  },
+  'short skips': (a, b, m) => (!displayRows(m) ? 'other' : a === 0 ? 'the part a short skip where today none' : b === 0 ? 'today a short skip where the part none' : 'both, counted otherwise'),
   pitch: (a, b, m) => (own(m).length < 2 ? 'one line of its own (the part: a smaller line set close under kept in the line by the line rule; its lead then 1.2 sizes)' : 'today: the pitch of its first block; the part: the median of all its lines\' gaps'),
   label: (a, b, m) => (a !== null && b === null ? (m.kind === 'footnote' ? 'a footnote\'s mark (today: read as a label, TEX:550; the instrument: its mark no label)' : `${m.kind}: today\'s LABEL reading (L2:1128) of its text`) : a === null ? 'a label the instrument states and today\'s reading did not take' : 'the label\'s extent'),
   centred: (a, b, m) => (m.kind === 'cell' ? 'a cell\'s alignment (E8: 1b, the tabular preamble)' : `${a ? 'today centred' : 'the part centred'}: TeX told nothing; today the maker\'s reading on B, the part on A`),
@@ -111,7 +124,7 @@ for (const f of ledgers) {
       const ok = eq(a, b)
       F[where][ok ? 'equal' : 'different']++
       if (ok || where !== 'same') continue
-      const cause = CAUSE[name]?.(a, b, m, P) ?? 'other'
+      const cause = CAUSE[name]?.(a, b, m, P, s) ?? 'other'
       const C = (F.causes ??= {})[cause] ??= { n: 0, examples: [] }
       C.n++
       if (C.examples.length < 3 && !C.examples.some(e => e.paper === pair.replace(/-[a-z-]+(?:\.pack)?$/, '') && e.ord === u.ord)) C.examples.push({ pair, paper: pair.replace(/-[a-z-]+(?:\.pack)?$/, ''), ord: u.ord, member: mo, kind: m.kind, today: a, ours: b })
