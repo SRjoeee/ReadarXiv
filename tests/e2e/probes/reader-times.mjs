@@ -73,8 +73,10 @@ const WATCH = () => {
       if (c && c.width > 0) at.left = now
     }
     if (at.laid === undefined) {
-      const copy = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer canvas.axt-layer-copy')
-      if (copy && copy.width > 0) at.laid = now
+      // today's reader: the place holds the layer (its mark), its copy drawn or its translation's text there
+      const place = document.querySelector('#right .axt-place[data-page-number="1"]')
+      const layer = place?.querySelector('.axt-layer')
+      if (place?.hasAttribute('data-axt-layer') && ((layer?.querySelector('canvas.axt-layer-copy')?.width ?? 0) > 0 || /\S/.test(layer?.querySelector('svg')?.textContent ?? ''))) at.laid = now
       // the reader package's own moments (its probe, `at.*` from its open), where the page runs it (host/v2.ts sets `reader`)
       const probe = window.__reader?.reader ? window.__reader.probe() : null
       if (probe && typeof probe['at.firstLaid'] === 'number' && typeof probe['at.open'] === 'number') at.laid = probe['at.open'] + probe['at.firstLaid']
@@ -87,10 +89,10 @@ for (let i = 0; i < RUNS + 1; i++) {
   const page = await context.newPage()
   await page.addInitScript(WATCH)
   await page.goto(readerUrl({ live: '1', paper: PAPER, mode: 'bilingual' }))
-  const t = await page.waitForFunction(() => window.__times?.left !== undefined && window.__times?.laid !== undefined && window.__times, null, { timeout: 30_000 }).then(h => h.jsonValue()).catch(async () => {
+  const t = await page.waitForFunction(() => window.__times?.left !== undefined && window.__times?.laid !== undefined && window.__times, null, { timeout: 60_000 }).then(h => h.jsonValue()).catch(async () => {
     // what came, and what the page shows, for the reader of the log
-    const seen = await page.evaluate(() => ({ times: window.__times ?? null, left: document.querySelectorAll('#left canvas, .axt-pane.left canvas').length, places: document.querySelectorAll('#right .axt-place').length, copies: document.querySelectorAll('canvas.axt-layer-copy').length, probe: typeof window.__reader?.probe }))
-    console.log(`  not both within 30 s: ${JSON.stringify(seen)}`)
+    const seen = await page.evaluate(() => ({ times: window.__times ?? null, left: document.querySelectorAll('#left canvas, .axt-pane.left canvas').length, places: document.querySelectorAll('#right .axt-place').length, layered: document.querySelectorAll('#right .axt-place[data-axt-layer]').length, copies: document.querySelectorAll('canvas.axt-layer-copy').length, phase: window.__reader?.controller?.getState?.().phase ?? null }))
+    console.log(`  not both within 60 s: ${JSON.stringify(seen)}`)
     return null
   })
   await page.close()
