@@ -511,7 +511,14 @@ export function chainOf(ports: Ports = {}): Chain {
   async function* translateCall(units: readonly UnitIn[], target: Lang, o: TranslateOptions): AsyncGenerator<Result> {
     checkCall(units, o.translators)
     const seq = ++calls
-    const signal = o.signal ?? NEVER
+    // the call's own signal: the caller's, and the iterator's end before every unit settled (a host that stops reading lets
+    // its work go as an abort does: no request is kept for it, no timer outlives it)
+    const given = o.signal ?? NEVER
+    const own = controller()
+    const forward = () => own.abort()
+    given.addEventListener('abort', forward, { once: true })
+    if (given.aborted) own.abort()
+    const signal = own.signal
     const results: Result[] = []
     const settled = new Set<number>()
     let wake: (() => void) | null = null
@@ -572,6 +579,8 @@ export function chainOf(ports: Ports = {}): Chain {
         wake = null
       }
     } finally {
+      given.removeEventListener('abort', forward)
+      if (settled.size < units.length) own.abort()
       signal.removeEventListener('abort', onAbort)
       if (ports.store && writes.length) flushes.push(flush(ports.store, writes.splice(0), clock))
       await Promise.all(flushes)

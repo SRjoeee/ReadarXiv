@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { ACCEPT_DIGEST } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'
 import { Fault, type Note, type Result, type Translator, type UnitIn } from '../src/contract.ts'
-import { echo, fakeTranslator, mangler } from '../src/testing/fakes.ts'
+import { microsoft } from '../src/adapters/microsoft.ts'
+import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
 import { el, span, t, unit } from './pieces.ts'
 
@@ -630,5 +631,81 @@ describe('DECISION "Policy": fixed inside; the caller bounds a call with its sig
     await clock.advance(1_000)
     ac.abort()
     expect((await p)[0]).toEqual({ id: 'p', ok: false, why: { kind: 'aborted' } })
+  })
+})
+
+describe('DECISION "Where pacing state lives": an object the host makes once (chainOf), no module state', () => {
+  it('one chain shares its cooldowns across calls; another chain shares nothing', async () => {
+    const clock = fakeClock()
+    const rate = fakeTranslator({
+      identity: 'rate:1',
+      script: ({ n }) => (n === 1 ? { fault: new Fault('cool', 'rate', '429', { retryAfterMs: 60_000 }) } : undefined),
+    })
+    const one = chainOf({ clock })
+    await all(one.translate([plain], 'ja', { translators: [rate, echo()] }))
+    await all(one.translate([withMath], 'ja', { translators: [rate, echo()] }))
+    expect(rate.calls.length).toBe(1)
+    const other = await all(chainOf({ clock }).translate([withMath], 'ja', { translators: [rate, echo()] }))
+    expect(other[0]).toMatchObject({ ok: true, by: 'rate:1' })
+  })
+})
+
+describe('DECISION "Who builds translators": the host passes Translator objects; the package builds the free engines over the fetch it is given', () => {
+  it('microsoft({ fetch }) asks through that fetch alone, through the chain', async () => {
+    const f = scriptedFetch((_url, init) => ({
+      status: 200,
+      body: JSON.stringify((JSON.parse(init.body) as string[]).map((text) => ({ translations: [{ text }] }))),
+    }))
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate([withMath, plain], 'zh-Hans', {
+        translators: [microsoft({ fetch: f.fetch })],
+      }),
+    )
+    expect(rs.every((r) => r.ok && r.by.startsWith('microsoft:'))).toBe(true)
+    expect(f.requests.length).toBe(1)
+    expect(f.requests[0]?.url.startsWith('https://edge.microsoft.com/translate/translatetext?')).toBe(true)
+  })
+})
+
+describe('DECISION "Rows": the package yields results; the host stores rows and skips units it has', () => {
+  it('results are plain data a host can write as rows, by unit id; the package keeps none', async () => {
+    const store = memoryStore()
+    const rs = await all(
+      chainOf({ store, clock: fakeClock() }).translate([withMath, plain], 'ja', { translators: [echo()] }),
+    )
+    expect(JSON.parse(JSON.stringify(rs))).toEqual(rs)
+    expect(rs.map((r) => r.id).sort()).toEqual(['m', 'p'])
+    // what the store holds is raw replies by key, never a row by unit id
+    expect(
+      [...store.entries.keys()].every((k) => k.startsWith('t1|') && !k.includes('|m|') && !k.includes('|p|')),
+    ).toBe(true)
+    // a host that has the row for one unit asks only for the other
+    const e = echo()
+    await all(chainOf({ clock: fakeClock() }).translate([plain], 'ja', { translators: [e] }))
+    expect(e.calls).toEqual([[JSON.stringify(plain.content)]])
+  })
+})
+
+describe('the contract: an iterator a host leaves early lets its work go', () => {
+  it('a request waited for by no one else is cut when the host stops reading', async () => {
+    const clock = fakeClock()
+    let cut = false
+    const hang = fakeTranslator({
+      identity: 'hang:9',
+      limits: { callMs: 600_000, units: 1 },
+      script: () => ({ hang: true }),
+    })
+    const send = hang.send.bind(hang)
+    hang.send = async function* (wires, call, signal) {
+      signal.addEventListener('abort', () => (cut = true), { once: true })
+      yield* send(wires, call, signal)
+    }
+    const it = chainOf({ clock })
+      .translate([unit('n', [t('2024')]), plain], 'ja', { translators: [hang] })
+      [Symbol.asyncIterator]()
+    expect((await it.next()).value).toMatchObject({ id: 'n', by: 'self' })
+    await it.return?.(undefined)
+    await tick()
+    expect(cut).toBe(true)
   })
 })
