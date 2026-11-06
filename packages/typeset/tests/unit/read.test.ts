@@ -47,6 +47,20 @@ const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
   })
 
 describe('the reading from the part', () => {
+  it('keeps a display the unit ends with in place: no region of it is referenced, no token blocks to it', () => {
+    // (2307.16209v1 p58 ord 197: a paragraph ending with a display, whose rows the part states as KEPT lines after its last
+    // text line; today's layout file holds no line of it, the maker's inPlace)
+    const m = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 120, 250, 680, 688, 676, 72, 300, 1, 10],
+      ],
+      els: [['1', { kind: 'display', keep: 1, ink: [[1, 120, 676, 250, 688, 680]] }]],
+    })
+    const got = read(m, [{ t: 'text', tr: true, s: 'Satz' } as V0Piece, { t: 'ph', src: '{=1}', k: 1 } as V0Piece])
+    expect(got.resolutions.get(1)).toMatchObject({ mode: 'kept', inPlace: true })
+    expect((got.tokens as unknown as { blockTo?: number }[]).some((t) => t.blockTo !== undefined)).toBe(false)
+  })
   it('draws a text macro whose glyphs are the unit’s text as its stated text, and one with none as nothing', () => {
     // (1810.04805v2's \\bert{}: "BERT" set as the unit's own text, no ink of the element's; the marking probe's text stated)
     const pieces = [{ t: 'ph', src: '\\bert', k: 0 } as V0Piece, { t: 'text', tr: true, s: ' ist' } as V0Piece]

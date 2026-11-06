@@ -270,7 +270,15 @@ function readingsOf(
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null
     if (cls !== 'zero' && cls !== 'symbol' && (ink.length || textOnly) && !(cls === 'space' && !ink.length)) {
-      const lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
+      let lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
+      // (a display the unit begins or ends with, its rows before its first text line or after its last, stays in place: today's
+      // layout file holds no line of it (the maker's inPlace, a unit's first or last piece), so no region of it is referenced)
+      if (cls === 'display' && lines.length) {
+        const at = (k: string) => L.findIndex((l) => l.key === k)
+        const text = L.map((l, j) => (l.kept ? -1 : j)).filter((j) => j >= 0)
+        const idx = lines.map(at)
+        if (text.length && (idx.every((j) => j > text.at(-1)!) || idx.every((j) => j < text[0]!))) lines = []
+      }
       const text = el?.text ?? ''
       gap = { text, lines, nu: el?.text === undefined, proof: true, box: boxOf(S), n: [...text].length }
     }
