@@ -225,7 +225,9 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
         if (l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)) short.push(j)
       })
       if (short.length === unplaced.length) {
-        unplaced.forEach((el, q) => breaks.push([el, short[q] as number]))
+        unplaced.forEach((el, q) => {
+          breaks.push([el, short[q] as number])
+        })
         mem.read.push('breaks')
       }
     }
