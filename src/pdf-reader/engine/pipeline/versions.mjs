@@ -6,7 +6,7 @@
 
 /** PIPELINE_VERSION, the extraction's: what a unit is (its cutting, kinds and texts), the cells' places, the left side's marks;
  *  raised with TRANSLATE_VERSION while a stored translation is judged by it (§18.2). In a bundle's key and the rows' identity */
-export const PIPELINE_VERSION = '74'
+export const PIPELINE_VERSION = '76'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

@@ -1446,8 +1446,9 @@ function probeBranch(s, from, to, b, ctx) {
   const words = dry.words || sb.units.some(u => u.pieces.some(p => p.t === 'text' && /\p{L}{2}/u.test(UTF8_LAX.decode(latin1Bytes(p.s)))))
   return { words, struct: dry.struct || ended || display, calls }
 }
-/** a conditional's branches' calls of the paper's macros (probeBranch), counted where the walk reads none of them itself */
-const countCalls = (branches, ctx) => { for (const r of branches) for (const [name, kind] of r.calls) ctx.called?.(name, kind) }
+/** a conditional's branches' calls of the paper's macros (probeBranch), counted where the walk reads none of them itself: each
+ *  `unsure`, as TeX may set it or not (storedBodies' expansions) */
+const countCalls = (branches, ctx) => { for (const r of branches) for (const [name, kind] of r.calls) ctx.called?.(name, kind, true) }
 /** each conditional's dry runs, by the project (its \\newif names, which every shadow of its context shares), its source, its
  *  place and what the walk's reading there depends on (probeConditional) */
 const PROBED = new WeakMap()
@@ -2823,13 +2824,20 @@ const tableWrapsOf = texts => {
  * Never a package's or a class's own definition (a .sty or a .cls file's: jcappub's \\maketitle and \\@fpheader, whose
  * bodies are its own code, set where the class sets them: 2609.20976v1's "! ! ! ! Abstract. ! ! Keywords:", read as prose
  * and translated for nothing), whose text is the class's to set and no unit's.
- * An author block's unit of a macro called once (`once`: 2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the
- * affiliation's text) is set once, where TeX expands that call, with the call's own surroundings: marked where it is defined
- * (frontMarks), it is the unit TeX sets, its marks once on the page, as the same text written in the block is
+ * A unit of a macro TeX expands once (`once`: its calls counted through the paper's macros that hold them, each the expansions
+ * of what holds it, and none TeX may skip) is set once, where TeX expands that call, with the call's own surroundings: marked
+ * where it is defined, it is the unit TeX sets, its marks once on the page, as the same text written there is. An author
+ * block's by frontMarks (2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the affiliation's text), any other
+ * kind's by markUnits (2610.17024v1's `\\textbf{Keywords:} \\CILKEYWORDS` and the bibliography its \\CILBIBLIOGRAPHY sets: the
+ * maker lays them where their text stands, PIPELINE 70, and unmarked the wrap gave their ink no group of theirs, the list left
+ * in its call's placeholder, which the maker left EMPTY: English, its translation never drawn). One expanded more than once
+ * (called twice, or once inside a macro called twice), or a number of times not known, has no mark
  */
 function storedBodies(calls, { ctx, files, units, own }) {
   ctx.ended = false
   let all = null
+  /** each macro whose body made units, with them */
+  const made = []
   for (const [name, call] of calls) {
     const macro = ctx.macros.get(name)
     if (!macro?.body || call.kinds.size !== 1) continue
@@ -2841,15 +2849,36 @@ function storedBodies(calls, { ctx, files, units, own }) {
     const text = files.get(file) ?? own.find(x => x.file === file)?.text
     if (text === undefined || units.some(u => u.file === file && u.start < end && u.end > start)) continue
     const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies, ctx.floats)
+    // (the calls the walk counts in its body are calls inside this macro: TeX expands them each time it expands this one)
+    calls.within = name
     if (AUTHOR_KINDS.has(kind)) frontBlock(text, start, end, b, ctx, kind === 'author' ? 'names' : 'places')
     else { b.kind = kind; walk(text, start, end, b, ctx); b.flush() }
+    calls.within = ''
     // the words its units hold, as they would be sent: fewer than four, and it is no prose (\contentsname's
     // "Contents", set in a heading)
     const words = units.slice(before).flatMap(u => u.pieces.filter(p => p.t === 'text').map(p => p.s)).join(' ').match(/\p{L}{2,}/gu)?.length ?? 0
     if (!AUTHOR_KINDS.has(kind) && words < 4) { units.length = before; continue }
-    for (const u of units.slice(before)) { u.stored = true; if (call.n === 1 && AUTHOR_KINDS.has(u.kind)) u.once = true }
+    for (const u of units.slice(before)) u.stored = true
+    if (units.length > before) made.push([name, units.slice(before)])
     if (units.length > before && !had) files.set(file, text)
   }
+  // (`once`: TeX expands the macro exactly once, every call's count the expansions of what holds it, once for running text, a
+  // macro's own count for a call in its body (2610.17024v1's \CILKEYWORDS, in an abstract: once; a macro called once inside
+  // one called twice: twice). A count not known — a call TeX may skip (a conditional the walk cannot settle), a macro that
+  // calls itself through others — is no count: the unit stays unmarked)
+  const times = new Map()
+  const timesOf = (name, path) => {
+    if (times.has(name)) return times.get(name)
+    const c = calls.get(name)
+    if (!c || c.unsure || path.has(name)) return null
+    path.add(name)
+    let t = 0
+    for (const [w, k] of c.from) { const o = w === '' ? 1 : timesOf(w, path); if (o === null) { t = null; break } t += k * o }
+    path.delete(name)
+    times.set(name, t)
+    return t
+  }
+  for (const [name, us] of made) if (timesOf(name, new Set()) === 1) for (const u of us) u.once = true
 }
 
 /** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
@@ -2962,7 +2991,14 @@ function readProject(fsys, main, tables, sourceText, own) {
   }
   ctx.visitFront = visitFront
   const calls = new Map()
-  ctx.called = (name, kind) => { const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set() }).get(name); c.n++; c.kinds.add(kind ?? 'para') }
+  // (each call where it stands: in running text (''), or in the body of the paper's macro storedBodies walks (`calls.within`); and
+  // whether TeX may skip it, a conditional the walk cannot settle: the expansions of a macro storedBodies counts)
+  calls.within = ''
+  ctx.called = (name, kind, unsure = false) => {
+    const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set(), from: new Map(), unsure: false }).get(name)
+    c.n++; c.kinds.add(kind ?? 'para'); c.from.set(calls.within, (c.from.get(calls.within) ?? 0) + 1)
+    if (unsure) c.unsure = true
+  }
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
   restorePercents(units)
@@ -3490,11 +3526,12 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
  *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
- *  which a destination's position does not follow), not a macro's body (storedBodies: set where it is called, perhaps
- *  more than once), not one TeX reads in math mode (inMath) */
+ *  which a destination's position does not follow), not a macro's body called more than once (storedBodies: set where it is
+ *  called, each time; one called once, `once`, is set once there and marked in its definition), not one TeX reads in math
+ *  mode (inMath) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || (u.stored && !u.once) || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker

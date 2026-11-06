@@ -39,7 +39,8 @@
 // them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
-// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding. A
+// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding, and
+// nor is what an opaque fill painted over it before the text covers (pageInk's `opaque`: a gridline under an annotation's box). A
 // stroke painted before the text that crosses the band only below its baseline (a gridline under a legend entry's descenders) is
 // under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`): whether a
 // translation meets it is told where the translation's faces and size are known, by the layer (figure-fit.mjs).
@@ -537,7 +538,9 @@ const angleOf = f => { const a = Math.round((Math.atan2(f.uy, f.ux) * 18000) / M
  * edges; a fill that holds the band, edges clear of it, is its background), else by its box, which a frame or a fill behind the
  * text holds the band within. A ground is painted before the text: a fill of known lines that holds the band's middle, an image
  * or a shading over the band painted after it (pageInk's `boxAt`), a card stacked on it, a picture laid over it, covers it, and
- * crowds it
+ * crowds it. And what an opaque fill painted after it covers is not shown either (pageInk's `opaque`: a gridline under a label's
+ * box, the box painted over it and the text on the box): where such a fill, painted before the text, holds the band whole along a
+ * stretch (coverOf), the ink painted before it there neither crowds the unit, nor tells its anchor, nor ends its free line
  */
 function roomOf(pg, f, u, own) {
   const G = pg.glyphs ?? [], B = pg.boxes ?? [], S = pg.shapes ?? null, U = pg.unseen ?? null, C = pg.cut ?? null
@@ -565,6 +568,41 @@ function roomOf(pg, f, u, own) {
   }
   const apartOf = near => (x0, y0, x1, y1) => Math.max(x0, x1) < near[0] || Math.min(x0, x1) > near[2] || Math.max(y0, y1) < near[1] || Math.min(y0, y1) > near[3]
   const apart = apartOf(nearOf(reach)), apartFar = apartOf(nearOf(far))
+  // (the opaque fills painted before the text near it, each with the stretches along its frame over which it holds the band whole
+  // as far as its box shows it, in paint order: the ink painted before one there is under it, not shown (2609.26457v1's Figure 2,
+  // a plot's gridlines under its annotations' white boxes: "diagnosis before any fix" crowded by the gridline its box hides))
+  const covers = []
+  if (S) {
+    for (let b = 0; b + 3 < B.length && b / 4 < over; b += 4) {
+      const shape = S.get(b / 4)
+      if (!shape?.opaque || U?.has(b / 4)) continue
+      const box = C?.get(b / 4) ?? [B[b], B[b + 1], B[b + 2], B[b + 3]]
+      if (apartFar(...box)) continue
+      const spans = coverOf(shape, f, band, box)
+      if (spans.length) covers.push({ at: b / 4, spans })
+    }
+  }
+  const lastCover = covers.length ? covers[covers.length - 1].at : -1
+  /** the parts of an extent along the baseline, of ink painted before box `next`, that no cover painted from `next` on hides */
+  const seen = (next, a0, a1) => {
+    let parts = [[a0, a1]]
+    for (const c of covers) {
+      if (c.at < next) continue
+      for (const [g0, g1] of c.spans) {
+        const out = []
+        for (const [p, q] of parts) {
+          if (q <= g0 || p >= g1) { out.push([p, q]); continue }
+          if (p < g0) out.push([p, g0])
+          if (q > g1) out.push([g1, q])
+        }
+        parts = out
+        if (!parts.length) return parts
+      }
+    }
+    return parts
+  }
+  /** an extent's reader (along1, free1) given the parts of it that show, for ink painted before box `next` */
+  const shownBy = (next, fn) => (fn && next <= lastCover ? (a0, a1) => { for (const [p, q] of seen(next, a0, a1)) fn(p, q) } : fn)
   /** an extent along the baseline of ink beside the box: where its free line ends */
   const free1 = (a0, a1) => {
     if (a1 <= band[0]) { if (a1 >= -far) freeBefore = Math.min(freeBefore, -a1) }
@@ -584,7 +622,12 @@ function roomOf(pg, f, u, own) {
     const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
     if (x.blank || x.unseen || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
     const e = inFrame(f, box)
-    if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) { if (!apart(...box)) crowded = true } else free1(e[0], e[2]) }
+    if (!(e[3] > band[1] && e[1] < band[3])) continue
+    // (painted before a cover that hides it, only the parts of it that show)
+    const next = A?.[g] ?? Infinity
+    for (const [a0, a1] of next <= lastCover ? seen(next, e[0], e[2]) : [[e[0], e[2]]]) {
+      if (a1 > band[0] && a0 < band[2]) { if (!apart(...box)) crowded = true } else free1(a0, a1)
+    }
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
     // (a box as far as it shows: the bounds of its transparency groups cut it, pageInk's `cut`)
@@ -596,14 +639,17 @@ function roomOf(pg, f, u, own) {
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
-    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after, under1); continue }
+    // (what of it shows: a cover painted after it hides it where it holds the band)
+    const next = b / 4 + 1, al = shownBy(next, near ? along1 : null), fr = shownBy(next, free1)
+    const un = next <= lastCover ? (top, a0, a1) => { if (seen(next, Math.max(a0, band[0]), Math.min(a1, band[2])).length) under1(top) } : under1
+    if (shape) { shapeRoom(shape, f, band, al, fr, e, after, un); continue }
     const kind = pg.paths?.[b / 4]
     const holds = !(after && (kind === -2 || kind === -3)) && e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
     // (a box behind the whole band is its ground, no ink of its box: a path's, its free line ending a band's height inside its
     // edges, as its lines are not known (a rounded corner, a frame's stroke, past the page's shapes: 2610.21924v1's "ARCHIVE"
     // node); an image's, a shading's or boxes merged, none: their pixels beside the original's box are no ground a translation
     // may take (2602.23285v2's caption over a screenshot))
-    if (!holds) { if (near) along1(e[0], e[2]); free1(e[0], e[2]) } else if (!(pg.paths?.[b / 4] >= -1)) { freeBefore = 0; freeAfter = 0 } else {
+    if (!holds) { al?.(e[0], e[2]); fr(e[0], e[2]) } else if (!(pg.paths?.[b / 4] >= -1)) { freeBefore = 0; freeAfter = 0 } else {
       const inset = (u.ascent - u.descent) * u.size
       freeBefore = Math.min(freeBefore, Math.max(0, -e[0] - inset)); freeAfter = Math.min(freeAfter, Math.max(0, e[2] - u.length - inset))
     }
@@ -649,7 +695,7 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
     if (under) {
       const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
       const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK), b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
-      if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top); continue }
+      if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top, a, b); continue }
     }
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }
@@ -673,6 +719,49 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = nul
     if (a < band[0]) { along1?.(a, band[0]); shown(a, band[0]) }
     if (b > band[2]) { along1?.(band[2], b); shown(band[2], b) }
   }
+}
+
+/** the stretches along a frame over which an opaque fill holds a unit's band whole (`band`, roomOf's: across from band[1] to
+ *  band[3]), as far as its box (`box`, its clip's and its groups' bounds) shows it: the band's stretch inside the box, cut at each
+ *  of the fill's edges across the band; each piece between two is wholly inside the fill or wholly outside it, its middle telling
+ *  which */
+function coverOf(shape, f, band, box) {
+  const t0 = band[1], t1 = band[3]
+  // (the stretch over which both of the band's edges stay inside the box)
+  let s0 = -Infinity, s1 = Infinity
+  for (const t of [t0, t1]) {
+    const px = f.ox - f.uy * t, py = f.oy + f.ux * t
+    for (const [p, d, lo, hi] of [[px, f.ux, box[0], box[2]], [py, f.uy, box[1], box[3]]]) {
+      if (Math.abs(d) < 1e-9) { if (p < lo || p > hi) return []; continue }
+      const a = (lo - p) / d, z = (hi - p) / d
+      s0 = Math.max(s0, Math.min(a, z)); s1 = Math.min(s1, Math.max(a, z))
+    }
+  }
+  if (!(s1 > s0)) return []
+  // (its edges' parts across the band, along the frame)
+  const { segs } = shape, cuts = []
+  for (let i = 0; i + 3 < segs.length; i += 4) {
+    const as = along(f, segs[i], segs[i + 1]), ts = across(f, segs[i], segs[i + 1]), ae = along(f, segs[i + 2], segs[i + 3]), te = across(f, segs[i + 2], segs[i + 3])
+    let lo = 0, hi = 1
+    if (ts === te) { if (ts < t0 || ts > t1) continue } else {
+      const a = (t0 - ts) / (te - ts), b = (t1 - ts) / (te - ts)
+      lo = Math.max(lo, Math.min(a, b)); hi = Math.min(hi, Math.max(a, b))
+      if (lo > hi) continue
+    }
+    const p = as + (ae - as) * lo, q = as + (ae - as) * hi
+    cuts.push([Math.min(p, q), Math.max(p, q)])
+  }
+  cuts.sort((a, b) => a[0] - b[0])
+  const out = [], mid = (t0 + t1) / 2
+  const piece = (a, b) => { if (b > a && holdsPoint(shape, f, (a + b) / 2, mid)) out.push([a, b]) }
+  let at = s0
+  for (const [a, b] of cuts) {
+    if (a >= s1) break
+    if (a > at) piece(at, a)
+    at = Math.max(at, b)
+  }
+  if (at < s1) piece(at, s1)
+  return out
 }
 
 /** whether a fill's closed edges hold a point of a frame (even-odd, as a ray along the frame's direction crosses them) */
