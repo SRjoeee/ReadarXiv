@@ -124,12 +124,12 @@ function sentencesOf(
   return out.src.length ? out : undefined
 }
 
-/** read a raw reply against a unit's plan: strictly, else tolerantly */
+/** read a raw reply against a unit's plan: strictly, else tolerantly, but for a unit stated `strict` */
 export function readMicrosoft(unit: UnitIn, raw: string): { content: OutPiece[]; sentences?: Sentences } | null {
   const r = readJson(raw) as { text?: unknown; src?: unknown; tr?: unknown } | null
   if (!r || typeof r.text !== 'string') return null
   const plan = planMarkers(unit)
-  for (const tolerant of [false, true]) {
+  for (const tolerant of unit.strict ? [false] : [false, true]) {
     const toks = readMarkers(r.text, plan, tolerant)
     if (!toks) continue
     const filled = refill(toks, plan.refill)

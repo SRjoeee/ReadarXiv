@@ -24,7 +24,14 @@ const WHOLE_ONLY = new Set(['bibblock', 'bibitem'])
  * of their 1,378 placeholders and the joined marker 1,372: live, 2026-11-07, lane L6 stage 4b); and what it reads as to a
  * sentence cutter, its visible text (the page's own rule, `core/sentences`: a formula that ends in a full stop ends its
  * sentence, a citation in brackets continues it), but for a numbering label, which reads as a word: a heading's `2.1.` is no
- * sentence of its own (today's cut there was the one difference that was today's fault, 32 headings of the fixtures)
+ * sentence of its own (today's cut there was the one difference that was today's fault, 32 headings of the fixtures).
+ *
+ * And of the unit, `strict`: a reply is taken only with every placeholder whole, as `validate` took it before the chain.
+ * Microsoft's marker come back without its `#` was read by the package's adapter, the PDF wire's way; on the page, of the
+ * 87 fixture blocks only that reading took (live, 2026-11-07, every reply read: lane L6 stage 4b, second round), 34 showed
+ * a reader a fault: 19 two elements jammed together with the words between them lost, 12 an element set inside a word or
+ * a phrase, 3 an element away from its `#` or beside characters Microsoft wrote between them; so the 87 go to the next
+ * translator, as they did before the chain
  */
 export function unitOfSegment(segment: Segment, format: WireFormat): WireUnit & { whole: boolean } {
   const whole = format === 'tags' && segment.block.kind === 'text' && WHOLE_ONLY.has(segment.block.unit)
@@ -37,5 +44,5 @@ export function unitOfSegment(segment: Segment, format: WireFormat): WireUnit & 
       ...(node && !isNumberingLabel(node) ? { reads: visibleTextOf(node) } : {}),
     }
   }
-  return { ...unitOfWire(segment.id, segment.text, format, { elementOf, sentences: !whole }), whole }
+  return { ...unitOfWire(segment.id, segment.text, format, { elementOf, sentences: !whole, strict: true }), whole }
 }

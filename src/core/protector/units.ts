@@ -52,7 +52,8 @@ function decodedAt(wire: string, from: number, to: number, t: Table): string {
 
 /**
  * A wire as a unit. `kindOf(n)` names placeholder n's element kind (the rule file's, from its slot node). `sentences`:
- * whether the unit lights by sentence (a reference unit does not: DESIGN §8.6's WHOLE_ONLY)
+ * whether the unit lights by sentence (a reference unit does not: DESIGN §8.6's WHOLE_ONLY). `strict`: a reply is taken
+ * only with every placeholder whole (the contract's UnitIn `strict`: the HTML page's)
  */
 /** what a host states of placeholder n's element: its kind, and what the contract lets it say besides (Piece `el`) */
 export interface ElementStatement {
@@ -61,7 +62,7 @@ export interface ElementStatement {
   reads?: string
 }
 
-export function unitOfWire(id: string, wire: string, format: WireFormat, o: { elementOf?: (n: number) => ElementStatement; sentences?: boolean; kind?: string } = {}): WireUnit {
+export function unitOfWire(id: string, wire: string, format: WireFormat, o: { elementOf?: (n: number) => ElementStatement; sentences?: boolean; kind?: string; strict?: boolean } = {}): WireUnit {
   const root: Piece[] = []
   const stack: Piece[][] = [root]
   const table: Table = { at: [], open: null }
@@ -105,7 +106,7 @@ export function unitOfWire(id: string, wire: string, format: WireFormat, o: { el
   text(decodedAt(wire, last, wire.length, table))
   wireAt.push(wire.length)
   return {
-    unit: { id, content: root, ...(o.kind ? { kind: o.kind } : {}), ...(o.sentences ? { sentences: true } : {}) },
+    unit: { id, content: root, ...(o.kind ? { kind: o.kind } : {}), ...(o.sentences ? { sentences: true } : {}), ...(o.strict ? { strict: true } : {}) },
     wireAt,
     lead: /^\s*/.exec(wire)?.[0] ?? '',
     trail: /\s*$/.exec(wire)?.[0] ?? '',

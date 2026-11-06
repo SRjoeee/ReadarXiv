@@ -8,7 +8,9 @@
 // Counted: the placeholders that come back (each source element whose marker stands once in the reply), the blocks
 // accepted, and the blocks refused (today: resent alone, then cut into runs, by the page; on the chain: to the next
 // translator). A refusal or a rate limit of the endpoint stops the run (no retry loop).
-// Each row keeps the wire sent and the reply (since 2026-11-07's checks: the first run kept counts only).
+// Each row keeps the wire sent and the reply, and on the package's side the raw item its adapter reads (since 2026-11-07's
+// checks: the first run kept counts only). A block dumped with `unitM` (html-blocks.lab.ts) goes out as that unit, the page's
+// mapping as it is now; one without, as the first run built it (the element kinds alone).
 // Run: npx tsx lab/translate/live-html.ts <blocks.jsonl> <out.json> today|package
 import { readFileSync, writeFileSync } from 'node:fs'
 import { accept, type Fetch, type UnitIn } from '../../packages/translate/src/index.ts'
@@ -22,7 +24,7 @@ const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 const [input, output, which] = process.argv.slice(2)
 if (!input || !output || (which !== 'today' && which !== 'package')) throw new Error('usage: live-html.ts <blocks.jsonl> <out.json> today|package')
-type Block = { paper: string; id: string; unit: string; markers: string; kindsM: Record<string, string> }
+type Block = { paper: string; id: string; unit: string; markers: string; kindsM: Record<string, string>; unitM?: UnitIn }
 // (AXT_ONLY: a file of `paper|id` lines, the blocks to send alone, for a run that reads some blocks' replies again)
 const only = process.env.AXT_ONLY ? new Set(readFileSync(process.env.AXT_ONLY, 'utf8').split('\n').filter(Boolean)) : null
 const blocks = readFileSync(input, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as Block).filter(b => !only || only.has(`${b.paper}|${b.id}`))
@@ -62,7 +64,7 @@ async function paced<T>(items: T[], size: (t: T) => number, send: (batch: T[]) =
 }
 
 const count = (re: RegExp, s: string) => (s.match(re) ?? []).length
-const out: { id: string; paper: string; elements: number; back: number; accepted: boolean; refused: boolean; error?: string; wire?: string; reply?: string }[] = []
+const out: { id: string; paper: string; elements: number; back: number; accepted: boolean; refused: boolean; error?: string; wire?: string; reply?: string; raw?: string }[] = []
 const t0 = Date.now()
 
 if (which === 'today') {
@@ -85,7 +87,7 @@ if (which === 'today') {
   })
 } else {
   const ms = microsoft({ fetch: post })
-  const units = blocks.map(b => ({ b, unit: unitOfWire(b.id, b.markers, 'markers', { elementOf: n => ({ kind: b.kindsM[String(n)] ?? 'other' }), sentences: true }).unit as UnitIn }))
+  const units = blocks.map(b => ({ b, unit: b.unitM ?? (unitOfWire(b.id, b.markers, 'markers', { elementOf: n => ({ kind: b.kindsM[String(n)] ?? 'other' }), sentences: true }).unit as UnitIn) }))
   await paced(units, u => ms.write(u.unit, 'zh-Hans').length, async batch => {
     const raws = new Map<number, string>()
     let error: string | undefined
@@ -109,7 +111,7 @@ if (which === 'today') {
       })
       const read = ms.read(unit, raw)
       const ok = !!read && accept(unit, read.content).ok
-      out.push({ id: b.id, paper: b.paper, elements, back: Math.min(back, elements), accepted: ok, refused: !ok, wire: ms.write(unit, 'zh-Hans'), reply: text })
+      out.push({ id: b.id, paper: b.paper, elements, back: Math.min(back, elements), accepted: ok, refused: !ok, wire: ms.write(unit, 'zh-Hans'), reply: text, raw })
     })
   })
 }

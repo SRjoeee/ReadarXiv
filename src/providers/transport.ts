@@ -228,7 +228,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   let lastDemoted: { id: string; kind: ProviderErrorKind; message: string } | undefined
 
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
+    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after */
   async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string): Promise<TranslateResponse> {

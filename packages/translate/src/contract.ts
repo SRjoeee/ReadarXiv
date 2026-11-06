@@ -41,6 +41,12 @@ export interface UnitIn {
   kind?: string | undefined
   content: readonly Piece[]
   sentences?: boolean | undefined
+  /** a reply is taken only where each element's placeholder came back whole: one a reading would have to repair by
+   *  guessing where the element stands (Microsoft's marker without its `#`) refuses it, to the next translator. The HTML
+   *  page states it: over 87 live Microsoft replies taken only so, an element stood glued inside a word, jammed against
+   *  another with the words between them lost, or away from its `#` beside stray characters (lane L6, stage 4b). A
+   *  doubled `#` is no such repair: the marker stands where it stood */
+  strict?: boolean | undefined
 }
 
 /** A translation's content: the unit's elements and spans by their ids, text in between */

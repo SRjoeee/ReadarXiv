@@ -143,6 +143,7 @@ tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
 packages/translate/tests/accept.test.ts 34  # 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
+packages/translate/tests/host-statements.test.ts 6  # 2026-11-07: Chinese replies in Microsoft's shapes the HTML page met live (a marker without its #, jammed, inside a word, away from its #), the inputs of the strict reading
 packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
 packages/translate/src/adapters/chrome.ts 2  # 2026-11-07: CJK punctuation the built-in translator sets a space after, the table it is taken off by, and its quoted example
 packages/translate/src/testing/suite.ts 1  # 2026-11-07: full-width brackets, one way the conformance suite mangles a reply

@@ -88,6 +88,25 @@ describe('a segment of the page as a unit (pipeline/units.ts)', () => {
     const unit = unitOfSegment({ ...s, text: m.text, protected: m }, 'markers').unit
     expect(microsoft({ fetch: none }).write(unit, 'zh-Hans')).toBe(m.text)
   })
+  it("a page's unit is strict on both wires: Microsoft's marker come back without its `#` refuses the reply, which the PDF call site's unit reads", () => {
+    const s = segment('<p class="ltx_p">The norm of <math class="ltx_Math"><mi>u</mi></math> is small.</p>')
+    const m = serialize(s.block.el, 'markers')
+    const page = unitOfSegment({ ...s, text: m.text, protected: m }, 'markers').unit
+    expect(page.strict).toBe(true)
+    expect(unitOfSegment(s, 'tags').unit.strict).toBe(true)
+    // the reader's call site (pdf-reader/session/translate.mjs) reads its engine's wires with the shim and states nothing
+    const pdf = unitOfWire('0', m.text, 'markers', { sentences: true }).unit
+    expect(pdf.strict).toBeUndefined()
+    const ms = microsoft({ fetch: none })
+    const wire = ms.write(page, 'zh-Hans')
+    expect(wire).toBe('The norm of @a# is small.')
+    expect(ms.write(pdf, 'zh-Hans')).toBe(wire)
+    const reply = (text: string) => JSON.stringify({ text })
+    expect(ms.read(page, reply('The norm of @a is small.'))).toBeNull()
+    expect(ms.read(pdf, reply('The norm of @a is small.'))).not.toBeNull()
+    // a doubled `#` is the marker's (#320), on the page as before
+    expect(ms.read(page, reply('The norm of @a## is small.'))?.content).toEqual([{ t: 'text', s: 'The norm of ' }, { t: 'el', id: 'x1' }, { t: 'text', s: ' is small.' }])
+  })
 })
 
 /** a reply the endpoint would give if it translated nothing: the wire back as it was sent */

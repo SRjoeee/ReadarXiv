@@ -386,20 +386,22 @@ interface ProtectedBlock {
 
 **Since stage 4b (2026-11-07) the judge is the chain's one acceptance rule**, over the unit the shim reads from the block's
 wire (`core/protector/units.ts`): every element once, every pair of the tags wire back exactly once and nested, nothing
-foreign, no text lost (`packages/translate` accept.ts); each adapter reads its own wire, Microsoft's tolerantly (a doubled
-or displaced `#`, a bare marker before CJK text: the PDF wire's reading, now the page's too) **only where the block's text
-holds no `#` of its own**: there every other `#` of a reply is the markers', taken out. Where the text holds one, a marker
-is read only with its `#`, and a `#` right after a marker refuses the reply (it is the closer doubled or the text's own
-moved, and either would show): the reason given below for declining the bare reading, made a rule of the adapter. Offline,
-Microsoft's four known slips (a `#` doubled, `@d# #`, dropped, displaced into brackets) applied to an echo of every fixture
-block with markers: 11,656 replies of the 2,914 blocks whose text holds no `#` all accepted, with no stray `#` or `@`, no
-element out of order, no text lost (`lab/translate/slips.lab.ts`). What the paragraphs below
-describe of the page's resend and its runs path is the chain's per unit now (re-ask, the next translator, the runs floor),
-and nothing is cached before it is accepted. `validate` stays the gate of `rehydrate` on the wire the shim writes back,
-which is the source's own grammar. Measured live the same day (lane L6 stage 4b, the 13 fixtures' 5,999 blocks through
-Microsoft, one run each): today's wire and reading had 5,912 blocks accepted and 87 refused; the package's adapter, in its
-run of the same blocks, all 5,999. Not examined there: whether a reply now taken shows a stray `#` (the reason given below for declining the bare
-reading on the HTML page).
+foreign, no text lost (`packages/translate` accept.ts); each adapter reads its own wire. **The page's units are `strict`**
+(the contract's UnitIn, stated by `core/pipeline/units.ts`): a reply is taken only with every placeholder whole, so
+Microsoft's marker is read only with its `#` — doubled or set twice with a space between (`@e##`, `@d# #`, below) it is
+still the marker's — and the bare marker the PDF wire reads tolerantly refuses the reply, to the next translator. Only
+where the block's text holds no `#` of its own is a `#` outside the markers taken out; where it holds one, a `#` right
+after a marker refuses the reply (it is the closer doubled or the text's own moved, and either would show). What the
+paragraphs below describe of the page's resend and its runs path is the chain's per unit now (re-ask, the next translator,
+the runs floor), and nothing is cached before it is accepted. `validate` stays the gate of `rehydrate` on the wire the shim
+writes back, which is the source's own grammar. **Measured live** (lane L6 stage 4b, 2026-11-07, the 13 fixtures' 5,999
+blocks through Microsoft): today's wire and reading had 5,912 blocks accepted and 87 refused, the package's tolerant reading
+all 5,999. The 87 replies read again whole, block by block, rendered as the page would show them: every one of them taken
+only by reading a marker without its `#`, and 34 of them showed a reader a fault — 19 two elements jammed together with the
+words between them lost, 12 an element set inside a word or a phrase (where its `#` is dropped before a Han character the
+marker is often glued into the word: 11 of 33 such bare markers between two Han characters split one, 1 of 160 whole
+ones), 3 an element away from its `#` or beside characters Microsoft wrote between them; no stray `#` or `@`, no element
+lost or doubled, no text dropped by the reading. Hence `strict` (`lab/translate/replies.lab.ts`; the 87 are refused again).
 
 A translation passes when the set of void ids equals the source's exactly, each once; paired tags are matched and legally nested; and no id absent from the source appears. The expectations are derived from the request text itself (`expectationsFromText`) — after escaping, every `<x>` / `<t>` in it is necessarily a real placeholder — so the check sits right beside the cache write in the background (§9) and needs no callback across the message boundary.
 

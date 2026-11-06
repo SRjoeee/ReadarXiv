@@ -15,7 +15,7 @@
 //   marks after that marker are taken off on reading;
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
-//   the wire holds no `#` of its own.
+//   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
 import { asOut, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, SAYS } from './text.ts'
