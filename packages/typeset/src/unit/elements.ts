@@ -124,7 +124,7 @@ export function bracketed(pieces: readonly V0Piece[], cls2: readonly (string | n
     }
     return null
   }
-  return /[（(［[]\s*$/.test(textAt(k - 1, -1) ?? '') && /^\s*[）)］\]]/.test(textAt(k + 1, 1) ?? '')
+  return /[\uFF08(\uFF3B[]\s*$/.test(textAt(k - 1, -1) ?? '') && /^\s*[\uFF09)\uFF3D\]]/.test(textAt(k + 1, 1) ?? '')
 }
 
 const bracketShaped = (t: string) => /^[([]/.test(t) && /[)\]]$/.test(t)

@@ -47,7 +47,7 @@ const run = (pieces: V0Piece[], readings: [number, ElementReading][], more = {})
 
 describe('U.brackets', () => {
   it('reads the translation’s own brackets round a piece, past spaces and TeX’s nothing', () => {
-    const p = [t('Gl. （'), ph('\\,', 1), ph('\\eqref{a}', 2), t('）')]
+    const p = [t('Gl. \uFF08'), ph('\\,', 1), ph('\\eqref{a}', 2), t('\uFF09')]
     expect(bracketed(p, [null, 'space', 'num', null], 2)).toBe(true)
     expect(bracketed([t('Eqn. '), ph('\\eqref{a}', 1), t(' holds')], [null, 'num', null], 1)).toBe(false)
   })

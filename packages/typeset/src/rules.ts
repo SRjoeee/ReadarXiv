@@ -266,9 +266,14 @@ const SPECS: readonly RuleSpec[] = [
       'no-start.mjs',
       'hyph.mjs',
     ],
+    file: 'breaker/tokens.ts',
     how: 'ported',
     reads: ['breaking.*', 'fit.autospace', 'fit.compressMax', 'words'],
-    state: open,
+    state: {
+      is: 'ported',
+      replay: "samples/B.tokens.json.gz with lanes/L3/replay/B.tokens.json.gz (B.faces' answers recorded)",
+      cases: 42,
+    },
   },
   {
     id: 'B.faces',
@@ -297,9 +302,10 @@ const SPECS: readonly RuleSpec[] = [
     step: 'L7',
     owns: ['1F:tokens:w100'],
     ports: ['L2:2899-2907 measureTokens', 'L2:2303 w100', 'L2:2319 ink100', 'L2:2347 inkRight100'],
+    file: 'breaker/measure.ts',
     how: 'ported',
     reads: [],
-    state: open,
+    state: { is: 'ported', replay: "samples/B.tokens.json.gz, the pair's metrics table", cases: 42 },
   },
   {
     id: 'B.slots',

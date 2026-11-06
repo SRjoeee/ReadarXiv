@@ -12,6 +12,8 @@
 // - `U.elements`: for the same rounds, each placeholder's reading whatever the row (readingsOf): what today's resolution sets
 //   it to in each case the row decides, by today's own renderings and drawnAs, unbracketed, displayLines, leadMark (L1: El).
 // - `U.admit`: for every sampled verdict, each row piece's class as locatedWhole reads it (phClassProven: L1's El.kind).
+// - `B.tokens`: for every sampled round, the faces today's faceOf gave (B.faces' answers), each face's own small capitals,
+//   each rendering's runs of one fill and its faked small capitals (El.style per run), whether the source writes CJK spaced.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
@@ -24,6 +26,7 @@ globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () =
 const E = `${TODAY}/src/pdf-reader/engine/layer-proto/`
 const L2 = await import(`${E}layer2.mjs`), TEX = await import(`${E}tex.mjs`)
 const SYM = await import(`${E}../rules/text-symbols.mjs`), { PH_FLAG: PH } = await import(`${E}../layout/file.mjs`)
+const FONTS = await import(`${E}fonts.mjs`), FR = await import(`${E}../rules/font-roles.mjs`), SCRIPT = await import(`${E}../rules/script.mjs`)
 const { unser } = await import(join(TAP, 'tools/samples.mjs'))
 const read = f => JSON.parse(gunzipSync(readFileSync(f)).toString('utf8'))
 const gz = (f, v) => writeFileSync(f, gzipSync(Buffer.from(JSON.stringify(v), 'utf8'), { level: 9 }))
@@ -151,7 +154,57 @@ for (const e of read(join(TAP, 'samples', 'U.admit.json.gz')).entries)
   for (const c of e.captures)
     if (c.rule === 'U.admit:in') admit.cases[`${e.pair}|${e.ord}|${c.round}`] = { clsProven: (unser(c.value).u?.pieces ?? []).map(p => (p.t === 'ph' ? L2.phClassProven(p.src).cls : null)) }
 gz(join(OUT, 'U.admit.json.gz'), admit)
+
+// B.tokens: for every sampled round, the faces today's faceOf gave the runs the unit's tokens are set in (B.faces' answers:
+// rules/font-roles.mjs over the paper's role family), whether each face draws its own small capitals, each rendering's runs of
+// one fill and its faked small capitals (fillRunsOf, smallCapsAt over its page characters: L1's El.style per run), and whether
+// the unit's source writes CJK with spaces between (a source fact). Today's tokensOf2 run on the recorded inputs is checked
+// equal to the recorded tokens, measured from the pair's metrics table (the tap's replay-check)
+const faceKey = (st, cls) => `${st.fam}|${st.design}|${!!st.bold}|${!!st.italic}|${!!st.caps}|${cls}`
+const CJK_SPACED = new RegExp(`${SCRIPT.SPACELESS.source}\\s+${SCRIPT.SPACELESS.source}`, 'u')
+const tokens = { format: 'readarxiv-L3/derived 1', rule: 'B.tokens', note: 'per sampled round (pair|ord|round): faces (faceOf\'s answers by fam|design|bold|italic|caps|cls: B.faces), ownCaps (font-roles ownSmallCaps by face id), fills and smallCaps by resolution (fillRunsOf, smallCapsAt: El.style per run), spaced (the source writes CJK with spaces between)', cases: {} }
+let tokOk = 0, tokAll = 0
+const metricsOf = new Map(), ledgerOf = new Map()
+for (const e of read(join(TAP, 'samples', 'B.tokens.json.gz')).entries) {
+  const L = ledgerOf.get(e.pair) ?? ledgerOf.set(e.pair, read(join(TAP, 'ledgers', `${e.pair}.ledger.json.gz`))).get(e.pair)
+  const widths = metricsOf.get(e.pair) ?? metricsOf.set(e.pair, new Map(read(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)).widths.map(([f, t, w]) => [`${f}|${t}`, w]))).get(e.pair)
+  const byRound = new Map()
+  for (const c of e.captures) (byRound.get(c.round) ?? byRound.set(c.round, {}).get(c.round))[c.rule] = c.value
+  for (const [round, c] of byRound) {
+    if (!c['B.tokens:in'] || !c['B.tokens:out'] || !c['U.elements:in']) continue
+    tokAll++
+    const paper = L.info.paper
+    FONTS.setRoleFaces(paper.to, paper.family, paper.cjkFaces)
+    const i = unser(c['B.tokens:in']), want = unser(c['B.tokens:out']), e0 = unser(c['U.elements:in'])
+    const parts = TEX.texParts(e0.lu, e0.kOf, { lines: e0.lines, extents: e0.extents, shown: e0.shown, lineskip: e0.lineskip })
+    i.prep.fillOf = parts.fillOf
+    i.prep.colourOf = parts.colourOf
+    const faces = new Map()
+    globalThis.__axtWatch = (f, [st, cls], v) => { if (f === 'faceOf') faces.set(faceKey(st, cls), v) }
+    const got = L2.tokensOf2(i.unit, i.prep, i.to, i.base, i.designs, i.P, i.lead, null, true)
+    globalThis.__axtWatch = null
+    let missing = 0
+    L2.measureTokens(got, (t, face) => { const w = widths.get(`${FONTS.fontString(face, 100)}|${t}`); if (w === undefined) { missing++; return NaN } return w })
+    if (missing || norm(got) !== norm(want)) continue
+    tokOk++
+    const fills = {}, smallCaps = {}
+    for (const [k, r] of i.prep) {
+      if (r?.mode !== 'orig-text') continue
+      fills[k] = L2.fillRunsOf(r.gap?.chars, r.text)
+      const at = L2.smallCapsAt(r.gap?.chars, r.text, i.prep.orig?.size)
+      smallCaps[k] = at ? Array.from({ length: r.text.length + 1 }, (_, q) => at(q)) : null
+    }
+    tokens.cases[`${e.pair}|${e.ord}|${round}`] = {
+      faces: [...faces],
+      ownCaps: Object.fromEntries([...faces.values()].filter(f => f.id).map(f => [f.id, FR.ownSmallCaps(f.id)])),
+      fills, smallCaps,
+      spaced: CJK_SPACED.test(i.unit.src ?? ''),
+    }
+  }
+}
+gz(join(OUT, 'B.tokens.json.gz'), tokens)
+console.log(`derive: B.tokens ${tokOk} of ${tokAll} sampled rounds made again equal to the recorded`)
 gz(join(OUT, 'U.breaks.json.gz'), breaks)
 gz(join(OUT, 'U.elements.json.gz'), elements)
 console.log(`derive: ${n} readings re-read, ${n - unequal} equal to the recorded (${unequal} not, left out); U.breaks ${Object.keys(breaks.cases).length} cases, U.elements ${Object.keys(elements.cases).length}`)
-process.exit(unequal ? 1 : 0)
+process.exit(unequal || tokOk !== tokAll ? 1 : 0)

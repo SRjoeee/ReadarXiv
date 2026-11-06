@@ -65,3 +65,24 @@ export {
   translated,
   type V0Row,
 } from './unit/admit.ts'
+export { fontString, measure } from './breaker/measure.ts'
+export { CJK, cjkClassRe, keptPair, kinsokuOf, noStart, SPACELESS } from './breaker/script.ts'
+export { drawnText, plainTracker, shown, transformMap } from './breaker/text.ts'
+export {
+  caseRuns,
+  cropPartsOf,
+  droppedHeld,
+  type Face,
+  glueOf,
+  markKind,
+  type Reading,
+  renameRuns,
+  type Token,
+  type TokenRules,
+  type Tokens,
+  type TokensInput,
+  type TRes,
+  type TStyle,
+  tokens,
+  upperOf,
+} from './breaker/tokens.ts'
