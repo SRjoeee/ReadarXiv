@@ -57,6 +57,8 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   if (!mem.located) return { why: 'unlocated', drawn: false, fixed: 0 }
   if (mem.fixed) return { drawn: false, fixed: 0 }
   if ('refused' in addOn) return { why: 'page', drawn: false, fixed: 0 }
+  // (an image of its own the wrap could not group: hiding its text would leave that image standing under a translation)
+  for (const g of addOn.lost ?? []) if (g.startsWith(`${mem.ord}.`)) return { why: 'unwrapped', drawn: false, fixed: 0 }
   let fixed = 0
   for (const p of mem.pages) {
     const pg = addOn.pages.get(p)
@@ -90,6 +92,8 @@ function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
+  if (mem.tail?.length) p.tail = mem.tail
+  if (mem.read.length) p.read = [...new Set(mem.read)]
   return p
 }
 

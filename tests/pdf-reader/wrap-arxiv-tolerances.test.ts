@@ -6,7 +6,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { alignOf, pageInk, planOf, wrapOf } from '@readarxiv/engine'
+import { alignOf, type Located, pageInk, planOf, type ReadPage, wrap, wrapOf } from '@readarxiv/engine'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
 /** a one-page PDF: Helvetica as /F1, the page's content `content`, and a form /Fx1 of `form` (raw stream bytes and dict) */
@@ -52,5 +52,23 @@ describe('wrapOf over arXiv’s producers', () => {
     const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (beside a form) Tj ET\nq /Fx1 Do Q\n', { bytes: new Uint8Array(0), filter: 'FlateDecode' })
     const { made } = await wrappedOf(bytes)
     expect(made.pages.get(1)).toMatchObject({ ok: true })
+  })
+  it('names the groups whose image the page’s images cannot tell apart, so that their members stay the original’s', async () => {
+    // (a unit's text and its image, where the image boxes the walk saw are not as many as PDF.js's reading of the page: planOf
+    // wraps none of them and names the group `lost`, which the add-on carries; today's wrapFinal makes such a unit unhidden)
+    const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (text and its image) Tj ET\nq 90 0 0 0.4 72 690 cm BI /W 1 /H 1 /IM true /D [1 0] ID \u0000 EI Q\n')
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() })
+    const page = await (await task.promise).getPage(1)
+    const ops = await page.getOperatorList()
+    const facts = alignOf(OPS as unknown as Record<string, number>, ops)
+    const ink = pageInk(OPS as unknown as Record<string, number>, ops, page.commonObjs, { rotate: 0, indices: true, turned: true })
+    await task.destroy()
+    const paths = ink.paths ?? []
+    const located = { groups: [{ glyphs: ink.glyphs.map(() => '0.1.t'), boxes: paths.map(k => (k === -3 ? '0.1.e' : null)), turned: [] }], figureGroups: new Set<string>() } as unknown as Located
+    const pagesA = [{ raw: ink, extra: { ...facts, images: facts.images + 1 } }] as unknown as ReadPage<typeof facts>[]
+    const addOn = await wrap(bytes, located, pagesA, { PL, deflate, inflate })
+    if ('refused' in addOn) throw new Error(addOn.why)
+    expect([...addOn.lost]).toEqual(['0.1.e'])
+    expect(addOn.groups.has('0.1.e')).toBe(false)
   })
 })

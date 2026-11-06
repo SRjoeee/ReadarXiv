@@ -1,7 +1,7 @@
 // The units born on arXiv's page: text of A that B never printed (no partner on B) and that no located unit claimed inside its
 // span (a supplement our compile did not set, a figure's text where B is a draft). The one heuristic part of locate (design
 // §4.3), kept in a file of its own so that it can be replaced (OCR lines will take this shape): A's unclaimed glyphs in stream
-// order cut into lines by the line rule (lines.ts), and consecutive lines of one page gathered into a block where the next one
+// order (those no unit holds: claimedA -1, locate's FREE) cut into lines by the line rule (lines.ts), and consecutive lines of one page gathered into a block where the next one
 // stands under the one before within 1.75 of its size and overlaps it across; a block's text is its glyphs' Unicode, a space
 // where two stand apart by 0.15 of their size and between its lines. Text inside a form XObject (an included figure) is
 // `inkfigures`, the rest `inkorphan` (the ink kinds of today's bundle, FORMAT.md §2).
@@ -28,7 +28,8 @@ export function bornOf(inkA: Doc, m: Mapping, claimedA: Int32Array, pageA: Int32
   }
   const free: number[] = []
   for (let a = 0; a < NA; a++)
-    if ((m.aToB[a] as number) < 0 && (claimedA[a] as number) < 0 && !m.offpageA[a] && /\S/.test(gA(a).u)) free.push(a)
+    if ((m.aToB[a] as number) < 0 && (claimedA[a] as number) === -1 && !m.offpageA[a] && /\S/.test(gA(a).u))
+      free.push(a)
   if (!free.length) return []
   const lines = cutLines(free, (a) => ({ page: pageA[a] as number, g: gA(a) }))
   const blocks: (typeof lines)[] = []

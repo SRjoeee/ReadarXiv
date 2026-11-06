@@ -10,6 +10,8 @@ export interface LineSpec {
   x?: number
   y?: number
   size?: number
+  /** its glyphs are shown inside a form XObject (an included figure's) */
+  form?: boolean
 }
 export interface PageSpec {
   lines: (string | LineSpec)[]
@@ -45,7 +47,7 @@ export function docOf(pages: PageSpec[]): Doc {
             ix1: x + 0.6 * size,
             n: li,
             k: glyphs.length,
-            form: false,
+            form: !!l.form,
             blank: !/\S/.test(ch),
             fill: 0,
           })

@@ -49,6 +49,8 @@ export async function* prepareBack(
     turned: true,
     extra: (OPS, ops) => alignOf(OPS, ops),
     annotations: true,
+    // (each font's own map: a glyph it gives no Unicode of is no reading of its text, A17)
+    mapped: true,
   })
   const t1 = now()
   const owners = new Int32Array(ins.ink.pages.reduce((n, p) => n + p.glyphs.length, 0)).fill(-1)

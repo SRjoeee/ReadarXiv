@@ -47,6 +47,8 @@ export interface OpList {
 export interface AlignFacts {
   codes: (number | null)[][]
   paths: number
+  /** the images the page paints (PDF.js's image operations, their repeats and groups counted one an image) */
+  images: number
 }
 /** a page's alignment facts from PDF.js's operator list (pure): the page aligns by them exactly as by the list */
 export const alignOf = remove_js.alignOf as (OPS: Record<string, number>, opList: OpList) => AlignFacts
