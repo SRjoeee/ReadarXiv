@@ -45,4 +45,12 @@ describe('markSource: the marks written into the paper’s own bytes, and the pl
     const { plan } = markSource(tree, doc)
     expect(plan.marks.map((m) => m.name)).toEqual(['h0s', 'h0e', 't1s', 't1e', 't2s', 't2e'])
   })
+  it('writes a mark before a CR LF line end, never between the CR and the LF (TeX would drop it with the CR)', () => {
+    const src = '\\documentclass{article}\r\n\\begin{document}\r\nWe see here.\r\n\r\n\\end{document}\r\n'
+    const tree = { main: 'main.tex', files: new Map([['main.tex', new TextEncoder().encode(src)]]) }
+    const doc = readSource(tree, NO_DEFINITIONS)
+    const text = new TextDecoder().decode(markSource(tree, doc).tree.files.get('main.tex'))
+    expect(text).toContain('here.\\axtend{0e}\r\n')
+    expect(text).not.toMatch(/\r\\axt/)
+  })
 })

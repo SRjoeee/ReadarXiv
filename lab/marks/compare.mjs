@@ -7,6 +7,26 @@
 //     a unit stage 1c reads otherwise, lanes/L2-source.md classes 1-10);
 //   - `guard: …`: today's owner is none and the new one's is a unit today's guard left unmarked (made.guard.unmarked);
 //   - otherwise its two owners' roles, and whether they are units apart.
+/** the differences left, by their two owners' roles, each with the cause its papers' examples show (lanes/L2-source.md, stage
+ *  1c-2 item 4, run 5): what today read with a rule this port leaves out, by name */
+const CAUSES = new Map([
+  // (today's labelKept: a label whose form is not of LABEL_FORM's word list is left the page's ink)
+  ['none | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  ['other:inkorphan | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  ['other:inkreferences | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  ['other:inknotes | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  ['other:inkfigures | role 4', 'choice: a label TeX set before its unit, whose form today\'s word list does not take (labelKept)'],
+  // (an author's head: today reads the marks after the name before it as its label, by their form)
+  ['role 4 | none', 'correction: no label before an author (LaTeX\'s \\author sets none; today: the marks of the name before)'],
+  // (a unit's head piece the marking passed over: its ink before the start point is that piece's, the plan's)
+  ['role 4 | role 2', 'choice: the ink of a head piece the marking passed over is the piece\'s (today: a label by its form)'],
+  ['role 2 | role 4', 'choice: a head piece\'s run with a word space in it is a label up to the space (today: by its form)'],
+  // (own.mjs's readings with thresholds of their own, not ported)
+  ['role 2 | none', 'choice: footEnd not ported (a display ending a footnote, to the folio: thresholds of today\'s)'],
+  ['role 1 | none', 'choice: MR 5b not ported (a cell\'s lead macro with no mark, by the text the probe showed: CELL_ABUT)'],
+  ['role 8 | none', 'choice: MR 6b not ported (the counter after a babel name on its line: COUNTER_GAP, a threshold)'],
+  ['role 2 | role 2', 'correction: a footnote call TeX gave no mark is its own piece (today: the last piece opened on its page)'],
+])
 export const SOURCE_KINDS = new Set('para heading caption footnote cell abstract theorem figure author affiliation reference name'.split(' '))
 export const keyOf = g => `${g.u}|${Math.round(g.x0 * 100)}|${Math.round(g.y * 100)}`
 
@@ -36,7 +56,8 @@ export function compare({ today, mine, same, chars, guarded = [] }) {
     if (aT.s.endsWith(':2:-1') && b.s.startsWith(aT.s.slice(0, -2))) return 'agree: element, its piece stated by the plan (today none)'
     if ((a.id && !ids.mine.has(a.id)) || (b.id && !ids.today.has(b.id))) return `stage 1c: ${roleOf(a)} | ${roleOf(b)} (a unit read otherwise)`
     if ((a.s === 'none' || a.none) && b.id && guardIds.has(b.id)) return `guard: ${roleOf(a)} | ${roleOf(b)} (a unit today's guard left unmarked)`
-    return `${roleOf(a)} | ${roleOf(b)}${a.id && b.id && a.id !== b.id ? ' (another unit)' : ''}`
+    const raw = `${roleOf(a)} | ${roleOf(b)}${a.id && b.id && a.id !== b.id ? ' (another unit)' : ''}`
+    return CAUSES.get(raw) ?? raw
   }
   let samePages = 0, glyphsCompared = 0, glyphsSame = 0, boxesCompared = 0, boxesSame = 0
   const n = Math.max(today.glyphs.length, mine.glyphs.length)

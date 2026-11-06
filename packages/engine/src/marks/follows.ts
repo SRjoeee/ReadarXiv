@@ -92,7 +92,11 @@ export function writtenOf(plan: Plan, read: ReadonlySet<string>): Written {
   for (const m of plan.marks) {
     if (m.kind === 'open') open.set(`${m.unit}.${m.piece}`, m.name)
     else if (m.kind === 'close') close.set(`${m.unit}.${m.piece}`, m.name)
-    else if (m.kind === 'start' || m.kind === 'cell-start' || m.kind === 'heading-start') start.set(m.unit, m.name)
+    else if (m.kind === 'backref') {
+      // (backref's list after an entry: one mark, \axtbrname, sets both points around the list it names)
+      open.set(`${m.unit}.${m.piece}`, `${m.name}a`)
+      close.set(`${m.unit}.${m.piece}`, `${m.name}b`)
+    } else if (m.kind === 'start' || m.kind === 'cell-start' || m.kind === 'heading-start') start.set(m.unit, m.name)
     else if (m.kind === 'end' || m.kind === 'cell-end' || m.kind === 'heading-end') end.set(m.unit, m.name)
   }
   const ifRead = (n: string | undefined) => (n !== undefined && read.has(n) ? n : null)
@@ -120,7 +124,8 @@ export function followsOf(
   for (const m of plan.marks) if (m.kind === 'close' && m.moved) moved.set(`${m.unit}.${m.piece}`, m.moved)
   const out = new Map<string, Follow>()
   for (const m of plan.marks) {
-    if (m.kind !== 'open') continue
+    if (m.kind !== 'open' && m.kind !== 'backref') continue
+    const name = m.kind === 'backref' ? `${m.name}a` : m.name
     const i = m.unit
     const k = m.piece
     const u = doc.units[i]
@@ -197,7 +202,7 @@ export function followsOf(
     // (the name the piece after it would have had: the split's reading is kept under it)
     const splitName = `${classOf(F) === 'footnote' ? 'n' : 'p'}${i}.${q}a`
     const mv = moved.get(`${i}.${k}`)
-    out.set(m.name, {
+    out.set(name, {
       unit: i,
       piece: k,
       // (a closing mark TeX did not set — LAYOUT_TEX's \axt@pm sets none on the empty list after a display, which a mark there

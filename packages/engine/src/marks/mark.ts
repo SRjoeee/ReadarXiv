@@ -817,9 +817,13 @@ export function byteOffsets(bytes: Uint8Array, encoding: SourceDoc['encoding']):
             : c >= 0xdc00 && c < 0xe000
               ? 0
               : 3
-    // (CR LF is one LF; a CR alone a LF: texText)
+    // (CR LF is one LF; a CR alone a LF: texText. The LF of a CR LF is the CR's byte: a mark written before the line's end
+    // goes before the CR, never between the two, where TeX would read the CR as a character of catcode 5 that ends the line
+    // and drops the mark after it)
     if (c === 13 && decoded.charCodeAt(i + 1) === 10) {
-      b += n
+      out.push(b)
+      b += n + 1
+      i++
       continue
     }
     out.push(b)

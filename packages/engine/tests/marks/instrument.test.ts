@@ -122,4 +122,48 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
     expect([...(ins.boxes[0]?.role ?? [])]).toEqual([1, 0])
   })
+
+  it('lets go a line of a unit’s range its source does not spell, on a line of its own below the unit’s (own.mjs releaseLines)', () => {
+    const { doc, plan } = paper('We see here.')
+    const at = (u: string, j: number, y: number) => ({ u, x0: j * 5, x1: j * 5 + 4, y, size: 10 })
+    const glyphs = [...'Wesee']
+      .map((u, j) => at(u, j, 100))
+      .concat(
+        [...'note'].map((u, j) => at(u, j, 50)),
+        [...'here.'].map((u, j) => at(u, j, 90)),
+      )
+    const pg: PageRead = {
+      glyphs,
+      boxes: [],
+      points: [
+        { name: '0s', glyph: 0, box: 0 },
+        { name: '0e', glyph: 14, box: 0 },
+      ],
+    }
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect(roles(ins)).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+  })
+  it('gives a unit’s text the thin rules on its lines alone, no box behind its words (own.mjs lineRulesOf)', () => {
+    const { doc, plan } = paper('A rule here.')
+    const base = page('A rule here.', [
+      ['0s', 0],
+      ['0e', 12],
+    ])
+    const points = base.points.map((x) => (x.name === '0e' ? { ...x, box: 2 } : x))
+    // (an underline 0.4 pt thick under "rule", and a coloured box 11 pt tall behind it)
+    const pg: PageRead = { ...base, points, boxes: [10, 98, 30, 98.4, 10, 96, 30, 107], paths: [0, 1] }
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect([...(ins.boxes[0]?.role ?? [])]).toEqual([1, 0])
+  })
+  it('takes no label glyph from an included graphic set on the start’s line (its frame’s points)', () => {
+    const { doc, plan } = paper('We see.')
+    const pg = page('XYWe see.', [
+      ['g1a', 0],
+      ['g1b', 2],
+      ['0s', 2],
+      ['0e', 9],
+    ])
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect(roles(ins).slice(0, 3)).toEqual([0, 0, 1])
+  })
 })

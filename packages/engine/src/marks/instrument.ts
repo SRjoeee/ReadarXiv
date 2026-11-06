@@ -8,7 +8,8 @@
 //   2. a unit's text: from its start point to its end point, in the start's region; across pages inside the bodies; 2a: a
 //      range outside the bodies from a page to the next at one depth (a footnote run on) is the first page's from its start
 //      to the next unit's start there, and the next page's from after the last other unit's end there to its end point;
-//      a unit's text owns glyphs and painted paths (an image, a turned glyph's box, a shading are no text's);
+//      2b: and the rules TeX painted on the text's own lines (\underline, OT1's \_, ulem's): any other box in its range — a
+//      table's rules, a coloured box behind a cell, a frame — is not the text's (an image, a turned glyph's box: none either);
 //   3. an end point alone (a title TeX sets in vertical mode): from the point before it on its page, its glyphs alone; a unit
 //      whose points TeX set more than once is its first occurrence where that is an end point alone and every later one a pair;
 //   4. a placeholder's ink: stream.ts (the plan's Follow of each opening mark); a text symbol's glyphs that set its character
@@ -16,7 +17,7 @@
 //      end point on that line; 4c: the closing punctuation TeX sets right after the end point, abutting, on its line;
 //   5. a label: the glyphs on the start's first glyph's baseline, in its region, back to the last end point before the start,
 //      the placeholders' and names' ranges passed over; the closing punctuation a head sets abutting the unit before it, that
-//      unit's text; none for a cell;
+//      unit's text; none for a cell, none for an author (LaTeX's \author sets no counter);
 //   6. a babel name: between its two points; 7. an image painted between a placeholder's points, bounded on both sides by TeX's
 //      facts (its closing point, or the text after it), is the placeholder's.
 // A glyph is one claim's: the text's first (in the units' order), a label's where none is, a placeholder's and a name's over
@@ -28,7 +29,7 @@ import { unitId } from '../source/id.ts'
 import type { SourceDoc } from '../source/read.ts'
 import type { Piece } from '../source/types.ts'
 import { classOf, symbolText } from './classes.ts'
-import { followsOf, writtenOf } from './follows.ts'
+import { followsOf, spellOf, writtenOf } from './follows.ts'
 import type { Plan } from './mark.ts'
 import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
 import { type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
@@ -345,11 +346,29 @@ export function instrumentFromPlan<Doc>({
       list = { gs: list.gs, bs: [] }
     }
     textOf.set(id, { s, e })
-    claimText(id, list.gs, list.bs)
+    claimText(id, list.gs, lineRules(pages, list.gs, list.bs))
   }
   for (let id = 0; id < units.length; id++) if (!textOf.has(id) && !marksOf(id).why) marksOf(id).why = 'marks'
 
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
+  /** each page's glyphs inside an included graphic or a picture, between our points around it (an \includegraphics frame's
+   *  g<n>a and g<n>b, pgf's picture zs and ze): a figure's own text, never a label */
+  const pictured = pages.map((pg) => {
+    let out: Uint8Array | null = null
+    const open = new Map<string, number>()
+    for (const x of pg.points) {
+      const m = /^(?:g(\d+)([ab])|z([se]))$/.exec(x.name)
+      if (!m) continue
+      const key = m[1] ?? 'z'
+      if (m[2] === 'a' || m[3] === 's') open.set(key, x.glyph)
+      else if (open.has(key)) {
+        out ??= new Uint8Array(pg.glyphs.length)
+        out.fill(1, open.get(key) as number, Math.min(x.glyph, pg.glyphs.length))
+        open.delete(key)
+      }
+    }
+    return out
+  })
   const openOf = new Map<string, string>()
   for (const m of plan.marks) if (m.kind === 'close') openOf.set(m.name, m.name.replace(/b$/, 'a'))
   /** a unit's head piece of ink with no mark of its own, before its first text (-1 none) */
@@ -369,7 +388,10 @@ export function instrumentFromPlan<Doc>({
     return -1
   }
   for (const [id, { s }] of textOf) {
-    if (!s || doc.units[id]?.kind === 'cell') continue
+    // (a cell carries no label: what stands before it on its line is another cell's; nor does an author: LaTeX's \author
+    // sets no counter before a name, and what stands between two names is the separator \and sets and the marks after the
+    // name before it)
+    if (!s || doc.units[id]?.kind === 'cell' || doc.units[id]?.kind === 'author') continue
     const [p, q] = s
     const pg = pages[p] as PageRead
     const S = pt(s)
@@ -379,8 +401,9 @@ export function instrumentFromPlan<Doc>({
     if (!F) continue
     const lead: number[] = []
     let g = S.glyph - 1
+    const inside = pictured[p]
     const glyphAt = (i: number) => {
-      if (R.glyph[i] !== r || ownerAt(p, i) >= 0) return
+      if (R.glyph[i] !== r || ownerAt(p, i) >= 0 || inside?.[i]) return
       if (onLine(glyphOf(p, i), F)) lead.push(i)
     }
     const passed: { unit: number; from: number; to: number }[] = []
@@ -459,6 +482,8 @@ export function instrumentFromPlan<Doc>({
     endName: (u) => w.end(u),
     startName: (u) => w.start(u),
   })
+  /** the text symbols whose glyphs went to their unit's text, by `unit.piece`: the spelling reads their characters */
+  const symbolsInText = new Set<string>()
   for (const [name, e0] of owned) {
     const f = follows.get(name)
     if (!f) continue
@@ -471,6 +496,7 @@ export function instrumentFromPlan<Doc>({
       const n = settingOf(pages, e.glyphs, sym)
       if (n > 0) {
         for (const [p, g] of e.glyphs.slice(0, n)) set(glyphs[p] as Owners, g, f.unit, ROLE.text)
+        symbolsInText.add(`${f.unit}.${f.piece}`)
         e = null
       }
     }
@@ -559,6 +585,184 @@ export function instrumentFromPlan<Doc>({
       if (roleAt(p, g) !== ROLE.element) set(glyphs[p] as Owners, g, unit, ROLE.name)
   }
 
+  // ---- a cell's lead text symbols with no point of their own (MR 5b, its symbols' part): TeX sets their characters right
+  // before the cell's start point, on its line; the glyphs there, in stream order, that set exactly those characters are the
+  // cell's text (the layer draws a text symbol as its character). Not ported: a lead macro's ink by the text the probe showed
+  // it sets (CELL_ABUT, a threshold), which stays no unit's
+  for (const [id, { s }] of textOf) {
+    if (!s || doc.units[id]?.kind !== 'cell') continue
+    const ps = doc.units[id]?.pieces ?? []
+    let want = ''
+    const ks: number[] = []
+    for (let k = 0; k < ps.length; k++) {
+      const p = ps[k] as (typeof ps)[number]
+      if (p.t === 'text') {
+        if (/\S/.test(p.s)) break
+        continue
+      }
+      if (!classOf(p)) continue
+      const sym = p.t === 'ph' ? symbolText(p.src) : null
+      if (sym === null || w.opening(id, k) || w.closing(id, k)) {
+        want = ''
+        break
+      }
+      want += sym.normalize('NFKC').replace(/\s/g, '')
+      ks.push(k)
+    }
+    if (!want) continue
+    const [p] = s
+    const S = pt(s)
+    const F = (pages[p] as PageRead).glyphs[S.glyph]
+    if (!F) continue
+    const run: number[] = []
+    let end = want.length
+    for (let g = S.glyph - 1; g >= 0 && end > 0; g--) {
+      const G = glyphOf(p, g)
+      const t = (G.u ?? '').normalize('NFKC').replace(/\s/g, '')
+      if ((regions[p] as Regions).glyph[g] !== at(s) || ownerAt(p, g) >= 0 || !onLine(G, F)) break
+      if (!t) continue
+      if (!want.slice(0, end).endsWith(t)) break
+      run.push(g)
+      end -= t.length
+    }
+    if (end !== 0) continue
+    for (const g of run) set(glyphs[p] as Owners, g, id, ROLE.text)
+    for (const k of ks) symbolsInText.add(`${id}.${k}`)
+  }
+
+  // ---- the lines of a unit's range its source does not spell (own.mjs spells: releaseLines, trimLead): a unit's text glyphs
+  // must spell its source (stream.mjs spellOf: letters and digits, accents and case dropped); where they do not, the lines of
+  // its range that stand on lines of their own and that its source does not go on with are let go — REVTeX's e-mail notes at a
+  // column's foot inside a paragraph, a folio after a footnote run on —, and a title's lead TeX set on lines of its own
+  // (amsart's date above its title). Not ported: own.mjs's slotted reading (a wrapper's own words, OPEN_WORDS letters at most:
+  // a threshold), which only says a unit spells; a unit that does not spell is not refused here (the instrument states its
+  // ink; whether a unit is drawn is locate's)
+  const textGlyphs = new Map<number, At[]>()
+  glyphs.forEach((O, p) => {
+    for (let g = 0; g < O.unit.length; g++)
+      if (O.role[g] === ROLE.text) {
+        const u = O.unit[g] as number
+        ;(textGlyphs.get(u) ?? (textGlyphs.set(u, []).get(u) as At[])).push([p, g])
+      }
+  })
+  const letGo = (gs: readonly At[]) => {
+    for (const [p, g] of gs) set(glyphs[p] as Owners, g, -1, ROLE.none)
+  }
+  const spelled = (a: At) => spellOf(glyphOf(a[0], a[1]).u ?? '')
+  for (const [id, { s }] of textOf) {
+    if (marksOf(id).why || doc.units[id]?.kind === 'name') continue
+    const list = textGlyphs.get(id) ?? []
+    if (!list.length) continue
+    const src = sourceOf(
+      doc.units[id]?.pieces ?? [],
+      (k) => !!(w.opening(id, k) || w.closing(id, k)),
+      (k) => symbolsInText.has(`${id}.${k}`),
+    )
+    const ink = list.map(spelled).join('')
+    if (ink === src.text || ink === src.bare) continue
+    if (!s && trimLead(id, list, src.text)) continue
+    releaseLines(id, list, src.text)
+  }
+  /** whether a unit opens (before any text but white space) with a placeholder of ink that has no point of its own */
+  function opensUnmarked(id: number): boolean {
+    const ps = doc.units[id]?.pieces ?? []
+    for (let k = 0; k < ps.length; k++) {
+      const p = ps[k] as (typeof ps)[number]
+      if (p.t === 'text') {
+        if (/\S/.test(p.s)) return false
+        continue
+      }
+      const c = classOf(p)
+      if (!c || (c === 'macro' && p.t === 'ph' && noInk.has(p.src))) continue
+      if (c !== 'footnote' && !w.opening(id, k) && !w.closing(id, k)) return true
+    }
+    return false
+  }
+  /** a title (an end point alone) whose range opens with ink TeX set on lines of its own before it: where the range's last glyphs
+   *  spell its source exactly and every glyph before them stands on no line of theirs, those are let go */
+  function trimLead(id: number, list: readonly At[], want: string): boolean {
+    if (opensUnmarked(id)) return false
+    let acc = ''
+    let k = list.length
+    while (k > 0 && acc.length < want.length) {
+      k--
+      acc = spelled(list[k] as At) + acc
+    }
+    if (acc !== want || k === 0) return false
+    const lead = list.slice(0, k)
+    const rest = list.slice(k)
+    for (const a of lead) {
+      const A = glyphOf(a[0], a[1])
+      if (!/\S/.test(A.u ?? '')) continue
+      if (rest.some((b) => b[0] === a[0] && onLine(glyphOf(b[0], b[1]), A))) return false
+    }
+    letGo(lead)
+    return true
+  }
+  /** a unit's lines its source does not spell, each on a line of its own and below every kept line it meets, let go, where the
+   *  other lines spell the source in order, whole; none from a unit with a visible placeholder of no point of its own */
+  function releaseLines(id: number, list: readonly At[], want: string): boolean {
+    const ps = doc.units[id]?.pieces ?? []
+    const unmarked = ps.some((p, k) => {
+      const c = classOf(p)
+      if (!c || (c === 'macro' && p.t === 'ph' && noInk.has(p.src)) || (p.t === 'ph' && symbolText(p.src) !== null))
+        return false
+      return !w.opening(id, k) && !w.closing(id, k)
+    })
+    if (unmarked) return false
+    const lines: At[][] = []
+    for (const a of list) {
+      const last = lines.at(-1)
+      const b = last?.at(-1)
+      if (last && b && b[0] === a[0] && onLine(glyphOf(b[0], b[1]), glyphOf(a[0], a[1]))) last.push(a)
+      else lines.push([a])
+    }
+    const box = (l: At[]) => {
+      let x0 = Number.POSITIVE_INFINITY
+      let x1 = Number.NEGATIVE_INFINITY
+      for (const a of l) {
+        const G = glyphOf(a[0], a[1])
+        x0 = Math.min(x0, G.x0)
+        x1 = Math.max(x1, G.x1)
+      }
+      const F = glyphOf((l[0] as At)[0], (l[0] as At)[1])
+      return { p: (l[0] as At)[0], y: F.y, size: F.size, x0, x1 }
+    }
+    const boxesOf = lines.map(box)
+    const alone = (k: number) => {
+      const K = boxesOf[k] as ReturnType<typeof box>
+      return boxesOf.every(
+        (o, m) =>
+          m === k ||
+          o.p !== K.p ||
+          Math.abs(o.y - K.y) >= 0.5 * Math.max(o.size, K.size) ||
+          o.x1 <= K.x0 ||
+          K.x1 <= o.x0,
+      )
+    }
+    let j = 0
+    const released: number[] = []
+    for (let k = 0; k < lines.length; k++) {
+      const t = (lines[k] as At[]).map(spelled).join('')
+      if (want.startsWith(t, j)) {
+        j += t.length
+        continue
+      }
+      if (!alone(k)) return false
+      released.push(k)
+    }
+    if (j !== want.length || !released.length) return false
+    const out = new Set(released)
+    type Line = ReturnType<typeof box>
+    const meets = (o: Line, b: Line) => o.p === b.p && o.x0 < b.x1 && b.x0 < o.x1
+    for (const k of out) {
+      const K = boxesOf[k] as Line
+      if (boxesOf.some((o, m) => !out.has(m) && meets(o, K) && o.y < K.y)) return false
+    }
+    for (const k of out) letGo(lines[k] as At[])
+    return true
+  }
+
   // ---- where each element begins and ends in B's stream (its points)
   const places: NonNullable<Instrument['places']> = []
   pages.forEach((pg, p) => {
@@ -597,4 +801,106 @@ function settingOf(pages: readonly PageRead[], gs: readonly At[], text: string):
     if (n === want.length) return j + 1
   }
   return 0
+}
+
+/** a unit's source text as the spelling reads it (own.mjs sourceOf): its texts spelled, a text symbol with no point of its own
+ *  after the unit's first text, and one whose glyphs went to the text, its character; `bare` the texts alone */
+function sourceOf(
+  pieces: SourceDoc['units'][number]['pieces'],
+  marked: (k: number) => boolean,
+  inText: (k: number) => boolean,
+): { text: string; bare: string } {
+  let text = ''
+  let bare = ''
+  let opened = false
+  pieces.forEach((p, k) => {
+    if (p.t === 'text') {
+      const t = spellOf(p.s)
+      text += t
+      bare += t
+      if (/\S/.test(p.s)) opened = true
+    } else if (p.t === 'ph' && ((!marked(k) && opened) || inText(k))) {
+      const sym = symbolText(p.src)
+      if (sym !== null) text += spellOf(sym)
+    }
+  })
+  return { text, bare }
+}
+
+/** a text rule's thickness at most, of its line's size: TeX's text rules (\underline, OT1's \_, ulem's and soul's) are rules
+ *  of the default thickness, 0.4 pt (TeXbook ch. 21, an \hrule's height; cmex10's default_rule_thickness), a twentieth of an
+ *  8 pt line and a sixtieth of a 24 pt one; a letter's stroke, an icon's part, a coloured box's height are a quarter of a size
+ *  or more (own.mjs RULE_EM) */
+const RULE_EM = 0.1
+/**
+ * The painted rules of `bs` that stand on a line of `gs` (own.mjs lineRulesOf, MR 2b): a painted path no thicker than RULE_EM
+ * of its line's size and at least twice as long, its middle within half a size of the line's baseline, across within the line's
+ * extent and half a size past it; and no part of a frame: no other thin box of the range meets it within its own thickness
+ * (amsthm's \openbox, an \fbox: their upright sides). A line: a page's glyphs on one baseline
+ */
+function lineRules(pages: readonly PageRead[], gs: readonly At[], bs: readonly At[]): At[] {
+  const pathOf = (p: number, b: number) => ((pages[p] as PageRead).paths?.[b] as number | undefined) ?? 0
+  const painted = bs.filter(([p, b]) => pathOf(p, b) >= 0)
+  if (!painted.length) return []
+  const lines: { p: number; y: number; size: number; x0: number; x1: number }[] = []
+  let last: (typeof lines)[number] | null = null
+  for (const [p, g] of gs) {
+    const G = (pages[p] as PageRead).glyphs[g] as PageGlyph
+    if (!/\S/.test(G.u ?? '') || !(G.size > 0)) continue
+    const on = (l: (typeof lines)[number]) => l.p === p && Math.abs(l.y - G.y) < 0.5 * Math.max(l.size, G.size)
+    const l: (typeof lines)[number] | null = last && on(last) ? last : (lines.find(on) ?? null)
+    if (l) {
+      l.x0 = Math.min(l.x0, G.x0)
+      l.x1 = Math.max(l.x1, G.x1)
+      l.size = Math.max(l.size, G.size)
+      last = l
+      continue
+    }
+    last = { p, y: G.y, size: G.size, x0: G.x0, x1: G.x1 }
+    lines.push(last)
+  }
+  const box = ([p, b]: At) => {
+    const B = (pages[p] as PageRead).boxes
+    return [B[4 * b] as number, B[4 * b + 1] as number, B[4 * b + 2] as number, B[4 * b + 3] as number] as const
+  }
+  const ruled = new Map<At, number>()
+  let most = 0
+  for (const x of painted) {
+    const [x0, y0, x1, y1] = box(x)
+    const mid = (y0 + y1) / 2
+    const h = y1 - y0
+    const l = lines.find(
+      (l) =>
+        l.p === x[0] &&
+        Math.abs(mid - l.y) < 0.5 * l.size &&
+        x0 >= l.x0 - 0.5 * l.size &&
+        x1 <= l.x1 + 0.5 * l.size &&
+        h <= RULE_EM * l.size &&
+        x1 - x0 >= 2 * h,
+    )
+    if (l) {
+      ruled.set(x, l.size)
+      most = Math.max(most, l.size)
+    }
+  }
+  if (!ruled.size) return []
+  const others = painted.filter((o) => {
+    if (ruled.has(o)) return false
+    const [a0, b0, a1, b1] = box(o)
+    return Math.min(a1 - a0, b1 - b0) <= RULE_EM * most
+  })
+  const out: At[] = []
+  for (const [x, size] of ruled) {
+    const [x0, y0, x1, y1] = box(x)
+    const e = y1 - y0
+    const framed = others.some((o) => {
+      if (o[0] !== x[0]) return false
+      const [a0, b0, a1, b1] = box(o)
+      return (
+        Math.min(a1 - a0, b1 - b0) <= RULE_EM * size && a0 <= x1 + e && x0 - e <= a1 && b0 <= y1 + e && y0 - e <= b1
+      )
+    })
+    if (!framed) out.push(x)
+  }
+  return out
 }

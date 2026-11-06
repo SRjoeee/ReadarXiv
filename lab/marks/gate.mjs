@@ -51,7 +51,9 @@ const arxiv = await arxivTask.promise
 let paper = live.openPaper(source)
 const { year, image } = await treeOf(paper, arxiv)
 const statsToday = { read: 0, made: 0, ms: 0 }, statsMine = { read: 0, made: 0, ms: 0 }
-const compileToday = compiler(id, image, source, arg('compiles'), statsToday)
+const compileToday0 = compiler(id, image, source, arg('compiles'), statsToday)
+// (--dump=<dir>: the marked trees both sides compiled, today's marked original's and the new one's, for a page whose B differ)
+const compileToday = arg('dump') ? async req => { if (req.rerun && req.overrides) for (const [p, b] of req.overrides) { const f = join(arg('dump'), 'today', p); mkdirSync(join(f, '..'), { recursive: true }); writeFileSync(f, b) } return compileToday0(req) } : compileToday0
 if (paperM.bibliographyKept(paper) === null) {
   const r = await paperM.madeBibliography(paper, { compile: compileToday, engines: ['pdflatex', 'xelatex', 'lualatex', 'latex'] })
   if ('paper' in r) paper = r.paper
@@ -76,6 +78,7 @@ const overrides = new Map(plan.files.map(p => [p, marked.files.get(p)]))
 // (a file the source does not hold, today's made .bbl, as the tree has it where markSource wrote nothing in it)
 for (const [p, b] of tree) if (!source.has(p) && !overrides.has(p)) overrides.set(p, b)
 const compileMine = compiler(id, image, source, arg('compiles'), statsMine)
+if (arg('dump')) for (const [p, b] of overrides) { const f = join(arg('dump'), 'mine', p); mkdirSync(join(f, '..'), { recursive: true }); writeFileSync(f, b) }
 const date = Number.isSafeInteger(day) ? { sourceDate: day } : {}
 const engine = paper.meta.compiler
 const markedC = await compileMine({ main, engine, rerun: true, bibtex: paper.meta.bbl ? false : null, overrides, files: true, ...date })
