@@ -8,7 +8,7 @@ import { measure } from '../../src/breaker/measure.ts'
 import { tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
 import { firstDifference, hasDerived, hasTap, ledgerRound, readGz, roundsOf, sample, slotOf, TAP } from './tap.ts'
-import { type In, type Reading, tokenFacts, tokensInput } from './tokens-input.ts'
+import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('U.marks: replayed on the tap', () => {
   it('drops and merges the marks today did, on every sampled round of the tokens', () => {
@@ -41,7 +41,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
           if (rule === 'U.marks') count.ofMarks++
           if (!metrics.has(e.pair))
             metrics.set(e.pair, tableMetrics(readGz(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)) as MeasureTable))
-          const got = tokens(tokensInput(a, e0, f, cls.cls2))
+          const got = tokens(tokensInput(a, e0, f, cls.cls2, rolesOf(e.pair)))
           for (const [kind] of got.marks.drops) count[kind]++
           if (got.marks.tail) count.tail++
           if (got.marks.tail?.[1]) count.merged++

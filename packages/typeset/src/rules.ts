@@ -295,7 +295,7 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['breaking.*', 'fit.autospace', 'fit.compressMax', 'words'],
     state: {
       is: 'ported',
-      replay: "samples/B.tokens.json.gz with lanes/L3/replay/B.tokens.json.gz (B.faces' answers recorded)",
+      replay: "samples/B.tokens.json.gz with lanes/L3/replay/B.tokens.json.gz, its faces B.faces' port's",
       cases: 42,
     },
   },
@@ -304,11 +304,21 @@ const SPECS: readonly RuleSpec[] = [
     home: 'breaker',
     step: 'L7',
     owns: ['G2', 'A4'],
-    ports: ['fonts.mjs:388 faceOf', 'rules/font-roles.mjs'],
+    ports: [
+      'fonts.mjs:388 faceOf, :89-100 roleFaceOf, :83 CJK_SLANT_DEG',
+      'rules/font-roles.mjs:340 rolesFor, :432 faceFor, :403 styled, :386 alphabetOf, :418 capsLetters, :423 ownSmallCaps',
+      'rules/font-letters.mjs HOLDS, SMCP (data/faces.ts)',
+    ],
     how: 'ported',
     ruling: "2026-10-06 faces are the role table's only",
     reads: ['faces'],
-    state: open,
+    file: 'breaker/faces.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "every face faceOf gave the sampled rounds of tokensOf2 (lanes/L3/replay/B.tokens.json.gz faces); B.tokens' replay now sets its tokens in B.faces' port",
+      cases: 50,
+    },
   },
   {
     id: 'B.cover',

@@ -111,7 +111,20 @@ export {
   translated,
   type V0Row,
 } from './unit/admit.ts'
+export {
+  CJK_SLANT_DEG,
+  type CjkFaces,
+  capsLetters,
+  faceFor,
+  faceOf,
+  ownSmallCaps,
+  type Roles,
+  type Run,
+  rolesFor,
+  scriptOf,
+} from './breaker/faces.ts'
 export { fontString, measure } from './breaker/measure.ts'
+export { type CatalogueFace, FACES, HOLDS, SMCP } from './data/faces.ts'
 export { CJK, cjkClassRe, keptPair, kinsokuOf, noStart, SPACELESS } from './breaker/script.ts'
 export { drawnText, plainTracker, shown, transformMap } from './breaker/text.ts'
 export {

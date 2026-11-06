@@ -1,7 +1,7 @@
 // B.tokens and B.measure replayed on the tap's sample: tokensOf2's inputs as today's run made them (B.tokens:in), the
 // elements' fills and colours by the layout unit (U.elements:in's lu and kOf, as texParts makes them), the faces today's
-// faceOf gave and each rendering's runs of one fill and faked small capitals (lanes/L3/replay/B.tokens.json.gz), the pieces'
-// classes (lanes/L3/replay/U.breaks.json.gz); measured from the pair's recorded widths (the table adapter). Against the
+// faceOf gave, now B.faces' port's (tests/replay/faces.test.ts holds the two equal), each rendering's runs of one fill and faked
+// small capitals (lanes/L3/replay/B.tokens.json.gz), the pieces' classes (lanes/L3/replay/U.breaks.json.gz); measured from the pair's recorded widths (the table adapter). Against the
 // tokens today measured (B.tokens:out), every field.
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import { measure } from '../../src/breaker/measure.ts'
 import { type TStyle, tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
 import { firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } from './tap.ts'
-import { type In, type Reading, tokenFacts, tokensInput } from './tokens-input.ts'
+import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('B.tokens: replayed on the tap', () => {
   it('makes and measures today’s tokens on every sampled round', () => {
@@ -35,7 +35,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
         rounds++
         if (!metrics.has(e.pair))
           metrics.set(e.pair, tableMetrics(readGz(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)) as MeasureTable))
-        const got = tokens(tokensInput(a, e0, f, cls.cls2))
+        const got = tokens(tokensInput(a, e0, f, cls.cls2, rolesOf(e.pair)))
         const measured = measure(got.tokens, metrics.get(e.pair)!)
         count += measured.length
         for (const t of measured)
