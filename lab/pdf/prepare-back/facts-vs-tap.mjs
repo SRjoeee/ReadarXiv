@@ -65,12 +65,14 @@ const CAUSE = {
   weight: () => 'the majority (today: by matched source words; the part: by its own glyphs)',
   slant: () => 'the majority (today: by matched source words; the part: by its own glyphs)',
   firstX0: (a, b, m) => { const l = own(m)[0]; return (m.els ?? []).some(([, e]) => e.ink.some(k => overlaps(k, l) && Math.abs(k[1] - l[2]) < 0.02)) ? 'its first line begins with an element (today: the first source word\'s start; the part: the line\'s first glyph)' : m.label ? 'a label on its first line' : a > b ? 'today\'s first word after other glyphs of its own' : 'other' },
-  'kept lines': (a, b, m) => (b - displayRows(m) === a ? 'a display\'s rows (the part: each a KEPT line, design-a; today: only file lines a display holds)' : b > a ? 'more lines kept (a held line the source does not write)' : 'fewer lines kept'),
+  'kept lines': (a, b, m) => (b - displayRows(m) === a ? 'a display\'s rows (the part: each a KEPT line, design-a; today: only file lines a display holds)' : displayRows(m) ? 'a display\'s rows counted otherwise (the part: its glyphs cut by the line rule, a fraction\'s or a stacked formula\'s parts rows of their own; today: the file lines it holds a third of)' : b > a ? 'more lines kept (a held line the source does not write)' : 'fewer lines kept'),
+  'short skips': (a, b, m) => (displayRows(m) ? 'a display\'s rows read otherwise (the part: a formula\'s part cut as a row of its own, its top nearer the line over it; today: the file\'s display segment)' : 'other'),
+  pitch: (a, b, m) => (own(m).length < 2 ? 'one line of its own (the part: a smaller line set close under kept in the line by the line rule; its lead then 1.2 sizes)' : 'today: the pitch of its first block; the part: the median of all its lines\' gaps'),
   label: (a, b, m) => (a !== null && b === null ? (m.kind === 'footnote' ? 'a footnote\'s mark (today: read as a label, TEX:550; the instrument: its mark no label)' : `${m.kind}: today\'s LABEL reading (L2:1128) of its text`) : a === null ? 'a label the instrument states and today\'s reading did not take' : 'the label\'s extent'),
   centred: (a, b, m) => (m.kind === 'cell' ? 'a cell\'s alignment (E8: 1b, the tabular preamble)' : `${a ? 'today centred' : 'the part centred'}: TeX told nothing; today the maker\'s reading on B, the part on A`),
   'head alone': (a, b, m) => (m.label && m.label.ink[0] === own(m)[0]?.[0] ? 'its label on the line (today: head false wherever a label is not drawn anew; the label is its own group)' : m.join ? 'a flow\'s member before it on the line (travels with its own text)' : a ? 'ink that stays on its baseline (the part)' : 'other ink on its baseline that travels (today counts any)'),
   'foot alone': (a, b, m, P) => (P.nextOf.get(m.ord)?.join ? 'a flow\'s member after it on the line (travels with its own text)' : a ? 'ink that stays on its baseline (the part)' : 'other ink on its baseline that travels (today counts any)'),
-  below: (a, b) => (a === null || b === null ? 'one reading finds no line under it' : 'the next line read otherwise'),
+  below: (a, b, m) => (a === null || b === null ? 'one reading finds no line under it' : own(m).some(l => l[1] !== own(m).at(-1)[1]) ? 'across: today under its last block\'s span (both columns), the part under its last line\'s column' : 'the next line read otherwise'),
   'mark after': (a, b, m) => (a > b && m.lines.at(-1)?.[9] & KEPT ? 'a display that ends the unit (today: inPlace, its origAfter the unit\'s first character; the drop rule reads it only where the display opens the unit)' : 'other'),
   band: (a, b) => (!a && b ? 'today\'s door passes no table rules (hiding.rules): no band on any cell' : 'other'),
 }
@@ -88,7 +90,12 @@ for (const f of ledgers) {
     out.units++
     const last = Math.max(0, ...u.slots.map(s => s.round))
     const s = {}
-    for (const x of u.slots) if (x.round === last) s[{ 'U.elements': 'elements', 'U.breaks': 'breaks', 'U.label': 'label', 'U.decor': 'decor', 'U.params': 'params', 'U.blocks': 'blocks' }[x.by] ?? '_'] = x.value
+    // (a step's slots of the round, merged: U.decor's second slot is a carried label's crop, beside its first)
+    for (const x of u.slots) {
+      if (x.round !== last) continue
+      const k = { 'U.elements': 'elements', 'U.breaks': 'breaks', 'U.label': 'label', 'U.decor': 'decor', 'U.params': 'params', 'U.blocks': 'blocks' }[x.by] ?? '_'
+      s[k] = s[k] && typeof s[k] === 'object' && x.value && typeof x.value === 'object' ? { ...x.value, ...s[k] } : (s[k] ?? x.value)
+    }
     const mo = P?.dumpOrds.get(u.ord)
     const m = mo === undefined ? undefined : P.placed.get(mo)
     if (!m) { const why = !P ? 'no paper' : mo === undefined ? 'no member' : 'no part holds it'; out.missing[why] = (out.missing[why] ?? 0) + 1; continue }

@@ -312,3 +312,22 @@ describe('an element’s own brackets (T12’s stated half)', () => {
     expect(el?.brackets?.map((b) => b[1])).toEqual([72 + 4 * 6, 72 + 7 * 6])
   })
 })
+
+describe('a forced break with no point on B', () => {
+  it('takes today’s reading: its own line that ends short of its column, where they are as many as such breaks', () => {
+    const B = docOf([{ lines: ['a long first line of it here', 'short', 'a long third line of it here', 'end'] }])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('a long third line of it here end'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    expect(M.elements.find(([id]) => id === '1')?.[1].ends).toEqual([1, 0])
+    expect(M.read).toContain('breaks')
+  })
+})

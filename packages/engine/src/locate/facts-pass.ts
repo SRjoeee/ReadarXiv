@@ -24,6 +24,10 @@ import {
   tailOf,
 } from './facts.ts'
 import { r2 } from './lines.ts'
+
+/** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
+ *  read only where the marked compile set no point for the break */
+const SHORT = 0.5
 import type { Member } from './locate.ts'
 
 export interface FactsInput {
@@ -152,6 +156,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     // -- its elements
     const pieces = unit ? elsOf(unit.content) : new Map()
     const breaks: [El, number][] = []
+    const unplaced: El[] = []
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
@@ -204,6 +209,24 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
         while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
         const j = b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
         if (j !== undefined) breaks.push([el, j])
+        else unplaced.push(el)
+      }
+    }
+    // (a break the marked compile set no point for, an invisible piece's: today's reading of the line it ended (forcedBreaks
+    // TEX:120), its own lines that end short of their column's right edge by SHORT of a size, not its last and none over a
+    // display, taken in order where they are as many as such breaks; the line read, not stated)
+    if (unplaced.length) {
+      const right = new Map<string, number>()
+      for (const [l] of own) right.set(`${l[0]}|${l[1]}`, Math.max(right.get(`${l[0]}|${l[1]}`) ?? -1e9, l[3]))
+      const short: number[] = []
+      own.forEach(([l, j], q) => {
+        const next = mem.lines[j + 1]
+        if (q === own.length - 1 || !next || next[9] & 1) return
+        if (l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)) short.push(j)
+      })
+      if (short.length === unplaced.length) {
+        unplaced.forEach((el, q) => breaks.push([el, short[q] as number]))
+        mem.read.push('breaks')
       }
     }
     const breakLines = new Set(breaks.map(([, j]) => j))
@@ -234,10 +257,8 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
 
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
     if (unit) {
-      const seq = [
-        ...mem.text,
-        ...[...mem.els].flatMap(([id, l]) => (pieces.get(id)?.kind === 'display' ? [] : l)),
-      ].sort((x, y) => x - y)
+      // (a display's glyphs among them: a unit that ends with a display has no tail after its text before it)
+      const seq = [...mem.text, ...[...mem.els.values()].flat()].sort((x, y) => x - y)
       const isEl = new Set([...mem.els.values()].flat())
       let last = -1
       seq.forEach((a, q) => {
