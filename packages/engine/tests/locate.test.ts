@@ -45,6 +45,7 @@ const addOnOf = (located: ReturnType<typeof locate>, pages: number, refuse: numb
   groups: new Set(
     located.groups.flatMap((g, i) => (refuse.includes(i + 1) ? [] : g.glyphs.filter((x): x is string => x !== null))),
   ),
+  ocgs: new Map(),
   stats: {} as AddOn['stats'],
 })
 
