@@ -483,7 +483,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2272-2286'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'fit/numbered.ts',
+    state: {
+      is: 'ported',
+      replay:
+        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (2 ran)',
+      cases: 2,
+    },
   },
   {
     id: 'X.lastLines',
@@ -518,7 +524,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-09 sizes per unit',
     reads: [],
-    state: open,
+    file: 'fit/runs.mjs',
+    state: {
+      is: 'ported',
+      replay:
+        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (142 ran)',
+      cases: 142,
+    },
   },
   {
     id: 'X.further',
@@ -528,7 +540,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:1796-1814 fitFurther', 'RUN:1738-1753 widenOverPaper', 'RUN:1699-1729 paperTo (its room: Room.side)'],
     how: 'ported',
     reads: ['fit.further', 'fit.floorMin'],
-    state: open,
+    file: 'fit/further.ts',
+    state: {
+      is: 'ported',
+      replay:
+        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (3 ran; its widened blocks, Room.side, from the slot)',
+      cases: 3,
+    },
   },
   // ---------------------------------------------------------------- what flows share
   {
@@ -630,7 +648,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:4363-4378 shareOf', 'L2:4331-4347 inkEndOf', 'L2:4322 onShare', 'RUN:2312-2316'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/share.mjs',
+    state: {
+      is: 'ported',
+      replay:
+        "the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (8 ran; the row the follower's F1 or the kept row)",
+      cases: 8,
+    },
   },
   {
     id: 'S.settle',

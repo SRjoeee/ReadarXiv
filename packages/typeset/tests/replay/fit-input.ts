@@ -90,6 +90,10 @@ export type WalkCase = {
   P: Raw
   want: { layout: Raw; layoutLines: unknown[]; tokens: number; cutTokens: number }
   crops: number
+  /** the round's slot of a rule (the first that holds `has`, where given) */
+  slot: (by: string, has?: string) => Raw | undefined
+  /** the target's rules (resolveRules' params) */
+  rules: Raw
 }
 
 /** the walk's case of a unit's ledger round, or why it has none */
@@ -165,6 +169,8 @@ export function walkCase(pair: string, ord: number, round: number): WalkCase | s
       cutTokens: f2.cutTokens as number,
     },
     crops,
+    slot,
+    rules: R.params,
   }
 }
 

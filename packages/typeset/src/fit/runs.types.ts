@@ -17,8 +17,8 @@ export const layoutRuns: (
   blocks: readonly FitBlock[],
   s: number,
   P: FitParams,
-  fit?: Layout | null,
-) => (Run & { layout: Layout })[] | null = m.layoutRuns
+  fit?: readonly LaidLine[] | null,
+) => { layout: Layout; runs: (Run & { layout: Layout })[] } | null = m.layoutRuns
 /** the runs' layouts as the unit's one layout (L2:4252 joinRuns) */
 export const joinRuns: (runs: readonly (Run & { layout: Layout })[]) => Layout = m.joinRuns
 /** whether a layout keeps the pages its fit set its lines on (L2:4390 keepsPages) */
