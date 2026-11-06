@@ -615,9 +615,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
     if (read === undefined && mem.lines.length) mem.read.push('size:lines')
+    // (in the text's capitals by today's walk (fakedCaps' `upper`): a faked small capital is no case change, an ink unit none)
+    const { upper: _upper, ...read0 } = styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null)
+    void _upper
     mem.style = {
-      ...styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null),
+      ...read0,
       size,
+      ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
     }
     // the lead: the pitch of its lines, where it has two on one page; else its size's

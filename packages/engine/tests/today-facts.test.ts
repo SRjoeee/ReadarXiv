@@ -132,6 +132,15 @@ describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pa
     expect(caps.ratio).toBe(0.8)
     expect(unitSize(head.filter((x) => !caps.small.has(x)))).toBe(9.96)
     expect(fakedCaps(head, null, true).ratio).toBe(0.8)
+    // (in the text's capitals only where the source's lowercase letters are set as capitals at their full size: a
+    // \MakeTextUppercase heading; faked small capitals are no case change)
+    expect(caps.upper).toBeUndefined()
+    expect(
+      fakedCaps(
+        [...'EXPERIMENTS'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),
+        'Experiments',
+      ).upper,
+    ).toBe(true)
     expect(
       fakedCaps(
         [...'Experiments'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),

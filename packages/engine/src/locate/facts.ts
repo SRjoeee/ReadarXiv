@@ -150,7 +150,7 @@ export function fakedCaps(
   gs: readonly DocGlyph[],
   source: string | null,
   ink = false,
-): { small: Set<DocGlyph>; ratio?: number } {
+): { small: Set<DocGlyph>; ratio?: number; upper?: true } {
   const none = { small: new Set<DocGlyph>() }
   const t = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math' && g.size > 0)
   if (!t.length) return none
@@ -170,6 +170,7 @@ export function fakedCaps(
   // (each glyph's letter the source's next one that spells it, case aside: the walk today makes over a word's characters)
   const changed: DocGlyph[] = []
   const same: number[] = []
+  let lower = 0
   let at = 0
   for (const g of t) {
     const key = g.u.normalize('NFKD').toLowerCase()
@@ -178,13 +179,21 @@ export function fakedCaps(
     if (k >= src.length) continue
     at = k + 1
     const s0 = src[k]!
-    if (casedChar(s0) && s0 === s0.toLowerCase() && casedChar(g.u) && g.u === g.u.toUpperCase()) changed.push(g)
+    const low = casedChar(s0) && s0 === s0.toLowerCase()
+    if (low) lower++
+    if (low && casedChar(g.u) && g.u === g.u.toUpperCase()) changed.push(g)
     else same.push(g.size)
   }
   if (!same.length) return none
   const ref = medianOf(same)
   const small = new Set(changed.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
-  return small.size ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 } : none
+  // (in the text's capitals: the capitals the source writes lowercase set at their full size, more than half its letters that
+  // can tell (today's `upper`, L2:1099); a faked small capital is none)
+  const upperN = changed.length - small.size
+  const upper = upperN > 0 && 2 * upperN > lower ? { upper: true as const } : {}
+  return small.size
+    ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100, ...upper }
+    : { ...none, ...upper }
 }
 
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
