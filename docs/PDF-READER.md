@@ -4647,9 +4647,12 @@ lines, the translation ran on from the item's short last line to the column's ed
 edge, and the frame's first row stood empty. The units had stayed English (their item's label a placeholder whose ink was not
 known) until PIPELINE 73 moved the start mark past `\topic{\code{…}}` (#596), which drew them. TeX's file and the alignment tell
 where the paragraph ends (`tex.mjs` `paragraphBreaks`). In a unit TeX set justified (UNIT_FLAG.JUSTIFIED: none of its lines ends
-short of its measure but a paragraph's last and a forced break's), a line of the file that ends short of its frame's measure
+short of its measure but a paragraph's last and a forced break's), a line of the file that ends short of its own measure
 (`forcedBreaks`' SHORT) ends a paragraph where the next line holds first the words of a group the source opens after the words
-the short line holds last. The alignment reads each source piece's first and last line (`layer2.mjs` `pieceLinesOf`, over the
+the short line holds last. Its own measure is the one TeX set at its height as the door lays it (`layer2.mjs` `measureOf` over
+its block: `measuresOf`' runs, else the block's edges), never the frame's widest edge: a full row of a narrower measure beside a
+wrapped figure is no paragraph's end, and a group on the row after it is no paragraph of its own (the review of #603). A wrapped
+paragraph too short for `measuresOf` to read its measures (under four lines) is read as one measure here, as its slots are. The alignment reads each source piece's first and last line (`layer2.mjs` `pieceLinesOf`, over the
 words it pairs). There must be no forced break of the source nor a display between the two lines, and the group must close after
 those words. The group's open piece, where the row holds it between texts of its own, breaks the translation there
 (`finishUnit`'s `openBreaks`, `tokensOf2`), and the text after it starts on the line TeX set the group's from, in a block of its
