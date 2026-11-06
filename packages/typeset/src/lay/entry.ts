@@ -7,7 +7,7 @@
 // rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own), and the members as drawn
 // (D.display). What it does not compose yet, each said where it is decided: a babel name's and a figure text's members (S.names,
 // S.figures: their members stay the original's, `name` / `kind`), the sentences' boxes (Laid.lit: empty), the page's links
-// (Page.links: empty), a CJK cell's bands from its stated band (Room.band: none read).
+// (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { fitMeasure } from '../breaker/measure.ts'
@@ -76,6 +76,18 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
+  // (a page's table rules as U.params' cellBands reads them, [x0, y0, x1, y1] each: the rule over a cell's lines and the rule
+  // under them, which its Room.band states (the clear band between them), across the cell's lines)
+  const rules0 = new Map<number, number[]>()
+  for (const m of members) {
+    const band = m.room.band
+    if (!band || !m.lines.length) continue
+    const pg = m.lines[0]![0]
+    const x0 = Math.min(...m.lines.map((l) => l[2])),
+      x1 = Math.max(...m.lines.map((l) => l[3]))
+    const list = rules0.get(pg) ?? rules0.set(pg, []).get(pg)!
+    list.push(x0, band[1], x1, band[1], x0, band[0], x1, band[0])
+  }
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   const state = new Map<number, Unlaid>()
   const faces: [string, string][] = []
@@ -131,7 +143,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         measure,
         patterns: rules.hyph as never,
         view: () => undefined,
-        rulesOf: () => undefined,
+        rulesOf: (pg) => rules0.get(pg),
         lineskip,
         reading: {
           tokens: rd.tokens as Tokens,
