@@ -1787,6 +1787,15 @@ class Walker {
       return { next: stop }
     }
     if (value === null && ctx.ifs.has(n)) value = ctx.ifs.get(n) as boolean
+    // (e-TeX's \ifdefined\X: whether X is defined, as TeX holds it at the document's start or the body has defined it)
+    if (value === null && n === 'ifdefined') {
+      const k = skipBlanks(f, end, to)
+      const x = name(f.toks[k])
+      if (x !== null && f.toks[k]?.k === 'cs') {
+        value = ctx.macros.has(x) || (ctx.defs.names.get(x)?.meaning.k ?? 'undefined') !== 'undefined'
+        thenFrom = k + 1
+      }
+    }
     if (value === null) return null
     const [from, upto] = value ? [thenFrom, thenTo] : elseFrom >= 0 ? [elseFrom, elseTo] : [thenTo, thenTo]
     endText()
@@ -1933,9 +1942,8 @@ function ownLineEnvs(defs: Definitions, own: ReadonlySet<string>, base: (env: st
         : m.k === 'other'
           ? /^\\([A-Za-z]+)$/.exec(m.text)?.[1]
           : undefined
-    // (or one that runs a package's line reader: comment.sty's \ProcessComment, fancyvrb's, listings', minted's)
-    if ((first && base(first)) || (m.k === 'macro' && /\\ProcessComment |\\FV@|\\FVB@|\\lst@|\\minted@/.test(m.body)))
-      out.add(n)
+    // (or one that runs a package's line reader: fancyvrb's, listings', minted's; comment.sty's by its exclusion, above)
+    if ((first && base(first)) || (m.k === 'macro' && /\\FV@|\\FVB@|\\lst@|\\minted@/.test(m.body))) out.add(n)
   }
   return out
 }
