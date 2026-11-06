@@ -533,7 +533,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         if ((claimedA[a] as number) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
         const g = gA(a)
         const q = box.get(pageA[a] as number)
-        if (q && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
+        // (a glyph that stands on one of its own text lines (the line rule's band, within the line's extent) is none of a held
+        // line's: ink in no group on the unit's line, never a KEPT line over it)
+        const onOwn = cut.some(
+          (l) =>
+            l.page === pageA[a] &&
+            Math.abs(g.y - l.base) < 0.5 * Math.max(l.size, g.size) &&
+            g.x1 > l.x0 &&
+            g.x0 < l.x1,
+        )
+        if (q && !onOwn && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
       }
       kept.push(...cutLines(held, atA))
     }
