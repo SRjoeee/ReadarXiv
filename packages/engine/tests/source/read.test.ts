@@ -338,3 +338,16 @@ describe('readSource: its bounds', () => {
     expect(d.units.some((u) => text(u).includes('deep'))).toBe(true)
   })
 })
+
+describe('readSource: a file read once, under the codes of its first reading (review of #608, 3: declined)', () => {
+  it('reads a file \\input after \\makeatletter as it read it first, under LaTeX’s document codes, as today’s reader does', () => {
+    const d = readSource(
+      tree({
+        'main.tex': '\\documentclass{article}\\begin{document}\n\\makeatletter\n\\input{inc}\n\\end{document}\n',
+        'inc.tex': 'Words \\my@macro{x} more.\n',
+      }),
+      NO_DEFINITIONS,
+    )
+    expect(d.units.map(text).join('')).toContain('@macro')
+  })
+})
