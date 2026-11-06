@@ -1,6 +1,6 @@
 # Equivalence with today on recorded material (lane L6)
 
-Input: 14150 records from today's tests (6379 distinct). A verdict is compared only where the adapter writes today's wire byte for byte.
+Input: 14150 records from today's tests (6379 distinct). A verdict is compared only where the adapter writes today's wire, byte for byte or but for the DOM's white space (the rows "white space apart").
 
 | source | wire | outcome | records |
 |---|---|---|---|

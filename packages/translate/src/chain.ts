@@ -219,6 +219,12 @@ export function chainOf(ports: Ports = {}): Chain {
         false,
       ).then((ok) => ok === true)
       byTarget.set(target, p)
+      // only a yes is kept: a no may be a language pack not here yet or a probe that timed out, asked again next call
+      const asked = p
+      const held = byTarget
+      void asked.then((ok) => {
+        if (!ok && held.get(target) === asked) held.delete(target)
+      })
     }
     return p
   }
@@ -379,7 +385,12 @@ export function chainOf(ports: Ports = {}): Chain {
       // fails or does not answer in time lets it through (fails open)
       let lease: string | null = null
       if (ports.gate) {
-        const g = await within(clock, ports.gate.acquire(t.identity, req.signal, last), GATE_MS, null)
+        const gate = ports.gate
+        const asked = Promise.resolve().then(() => gate.acquire(t.identity, req.signal, last))
+        const g = await within(clock, asked, GATE_MS, null)
+        // a lease granted after the chain stopped waiting is held by nobody: given back as it arrives
+        if (g === null)
+          void asked.then((late) => (late.ok ? gate.release(late.lease, 'none') : undefined)).catch(() => {})
         if (g && !g.ok) {
           gone.signal.removeEventListener('abort', cut)
           if (last && gateWaits < LAST_WAITS) {
@@ -412,18 +423,43 @@ export function chainOf(ports: Ports = {}): Chain {
         const first = todo[0] as Entry
         const call: { target: Lang; context?: PaperContext } = { target: first.target }
         if (t.context && first.context) call.context = first.context
-        for await (const [i, raw] of t.send(
-          todo.map((e) => e.wire),
-          call,
-          req.signal,
-        )) {
-          if (timedOut || gone.signal.aborted) break
-          const e = todo[i]
-          if (!e || delivered.has(i) || typeof raw !== 'string') continue
-          delivered.add(i)
-          answer(lane, e, { raw })
+        // the replies are waited for no longer than the request's signal lives: a `send` that ignores its signal
+        // (hard rule 3) is left where it hangs, and its late replies and errors go nowhere
+        const replies = t
+          .send(
+            todo.map((e) => e.wire),
+            call,
+            req.signal,
+          )
+          [Symbol.asyncIterator]()
+        let stop: () => void = () => {}
+        const stopped = new Promise<null>((resolve) => {
+          stop = () => resolve(null)
+        })
+        req.signal.addEventListener('abort', stop, { once: true })
+        try {
+          for (;;) {
+            const next = replies.next()
+            const step = await Promise.race([next, stopped])
+            if (step === null) {
+              next.catch(() => {})
+              void Promise.resolve()
+                .then(() => replies.return?.(undefined))
+                .catch(() => {})
+              break
+            }
+            if (step.done || timedOut || gone.signal.aborted) break
+            const [i, raw] = step.value
+            const e = todo[i]
+            if (!e || delivered.has(i) || typeof raw !== 'string') continue
+            delivered.add(i)
+            answer(lane, e, { raw })
+          }
+        } finally {
+          req.signal.removeEventListener('abort', stop)
         }
         if (timedOut) fault = timeout()
+        else if (gone.signal.aborted) fault = new Fault('abort', 'aborted', 'the request was aborted')
       } catch (err) {
         fault = timedOut
           ? timeout()

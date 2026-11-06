@@ -2,8 +2,8 @@
 // (capture-setup.ts), the package's adapter reads the same reply for the same unit, typed, and the acceptance rule judges
 // it; the verdict is compared with today's: readsBack for the PDF engine's units (its spans not `must` but the pairs its
 // markers wire keeps), the protector's validate for the HTML page's blocks (every pair `must`). A comparison is made only
-// where the adapter writes the unit's wire byte for byte as today does; every other record is listed with why the wires
-// differ. Run: npx tsx lab/translate/equivalence.ts <capture.jsonl> <out-dir>
+// where the adapter writes the unit's wire as today does, byte for byte or but for the DOM's white space (the two are
+// counted apart); every other record is listed with why the wires differ. Run: npx tsx lab/translate/equivalence.ts <capture.jsonl> <out-dir>
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { accept, type Fetch, google, microsoft, type Piece, type UnitIn } from '../../packages/translate/src/index.ts'
@@ -238,7 +238,7 @@ const groups = by(r => `${r.src}|${r.format}|${r.outcome}`)
 const lines = [
   '# Equivalence with today on recorded material (lane L6)',
   '',
-  `Input: ${records.length} records from today's tests (${seen.size} distinct). A verdict is compared only where the adapter writes today's wire byte for byte.`,
+  `Input: ${records.length} records from today's tests (${seen.size} distinct). A verdict is compared only where the adapter writes today's wire, byte for byte or but for the DOM's white space (the rows "white space apart").`,
   '',
   '| source | wire | outcome | records |',
   '|---|---|---|---|',
