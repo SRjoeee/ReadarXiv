@@ -227,12 +227,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   let lastAnswer: string = built.primary.id
   let lastDemoted: { id: string; kind: ProviderErrorKind; message: string } | undefined
 
-  const rowKey = (u: UnitIn, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${target}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
+  const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
+    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after */
   async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string): Promise<TranslateResponse> {
     const context = paperContextOf(call.context)
+    // the session's own target, as its status gave it (a session holds to the transport it started on, whose target it is)
+    const lang = call.target ? langOf(call.target) : target
     const ac = new AbortController()
     const mine = live.get(scope) ?? new Set()
     live.set(scope, mine)
@@ -241,7 +243,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     try {
       const out = new Map<string, UnitResult>()
       // the rows first: a unit with one is answered by it, nothing asked
-      const keys = rows ? call.units.map(u => rowKey(u, context)) : []
+      const keys = rows ? call.units.map(u => rowKey(u, lang, context)) : []
       const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
       const todo: UnitIn[] = []
       call.units.forEach((u, i) => {
@@ -265,14 +267,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       }
       const writes: [string, string][] = []
       if (todo.length) {
-        for await (const r of chain.translate(todo, target, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
+        for await (const r of chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
           if (r.ok) {
             const e = engineOf(r.by, answerers)
             if (e.engine) answered(e.engine)
             out.set(r.id, { ...r, ...e })
             if (rows && isRow(r, order, passed)) {
               const { id: _, ...row } = r
-              writes.push([rowKey(byId.get(r.id) as UnitIn, context), JSON.stringify(row)])
+              writes.push([rowKey(byId.get(r.id) as UnitIn, lang, context), JSON.stringify(row)])
             }
           } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
         }
