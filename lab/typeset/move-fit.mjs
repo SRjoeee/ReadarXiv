@@ -10,7 +10,8 @@
 // (fit/measure.ts); a language's hyphenation patterns from `P.patterns` (today's module map, hyphenData); the work counters
 // (work.mjs, a probe's) dropped; the declarations another file of the package now holds imported from it (evenGridOf and
 // measureOf, measureOn in unit/blocks.ts; originalLines in unit/decor.ts; noStart, keptPair, kinsokuOf in breaker/script.ts;
-// breakPoints in breaker/hyph.ts).
+// breakPoints in breaker/hyph.ts). The fill's reuse of a layout (today's module WeakMap fillLaid) a field of the unit; the
+// fill's decisions told to an optional `trace` where the tap's probes read them.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -46,7 +47,10 @@ const DECL = new Map([...declarations(3112, 4425), ...declarations(300, 320), ..
 SRC = SOURCES.run
 // (run.mjs's top-level functions of the fill: fillLeadsOf, closerLead, guessCloser, RUN:494-595; fillLeadsOf's comment,
 // RUN:494-505, stands over fillLaid's, which is not moved)
-const DECL_RUN = new Map(declarations(505, 596, SOURCES.run).map(d => [d.name, d]))
+// (and the page's fill, fillUnitsOf and fillPage, RUN:319-492; fillUnitsOf's own comment is RUN:319-324, pageTarget's above
+// it stays with its port, shared/fill-target.ts)
+const DECL_RUN = new Map([...declarations(505, 596, SOURCES.run), ...declarations(325, 492, SOURCES.run)].map(d => [d.name, d]))
+DECL_RUN.get('fillUnitsOf').start = 319
 SRC = SOURCES.layer2
 const COMMENTS = { run: { fillLeadsOf: [494, 505] } }
 const text = (name, from = 'layer2') => {
@@ -166,8 +170,8 @@ const FILES = {
     head: ['// S.fill.leads (design-b §1.5, E30): a unit\'s fill leadings as its lay ends: the loosest leading from its fitted one up to',
       '// its top at which its fitted state still sets it whole as the page fill lays it, else the loosest closer one. Today\'s code',
       '// (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by',
-      '// fill-leads.types.ts. The fill\'s reuse of the layout found (today\'s fillLaid, module state) is dropped: S.fill.page lays',
-      '// the unit at that state again, the same layout.'],
+      '// fill-leads.types.ts. The layout found, which the page\'s fill reuses (today\'s fillLaid, a module WeakMap), is a field of',
+      '// the unit, `fillLaid` (design-b §1.5: FillLeads.laid).'],
     imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.mjs'", "import { keepsPages } from '../fit/runs.mjs'"],
     names: ['fillLeadsOf', 'closerLead', 'guessCloser'],
     exports: ['fillLeadsOf', 'closerLead', 'guessCloser'],
@@ -175,8 +179,40 @@ const FILES = {
       ['L2.layoutAt(', 'layoutAt(', 1],
       ['L2.keepsPages(', 'keepsPages(', 1],
       ['L2.footFloorOf(', 'footFloorOf(', 1],
-      ['  fillLaid.delete(p)\n', '', 1],
-      ['    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })\n', '', 1],
+      ['  fillLaid.delete(p)\n', '  delete p.fillLaid\n', 1],
+      ['    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })\n', '    p.fillLaid = { state: st, lead: p.fillLead, l: laid }\n', 1],
+    ],
+  },
+  'shared/fill-page.mjs': {
+    rule: 'S.fill.page',
+    from: 'run',
+    head: ['// S.fill.page (design-b §1.5, T33): a page\'s fill over the units begun on it, each spread over its frame at the page\'s target',
+      '// leading, tracked where it stays short, and the page\'s one size where every body unit is short. Today\'s code (run.mjs',
+      '// RUN:319-492: fillUnitsOf, fillPage), moved by lab/typeset/move-fit.mjs; typed by fill-page.types.ts. Its target is',
+      '// S.fill.target\'s port, its settling S.settle\'s, the layout S.fill.leads found the unit\'s field `fillLaid` (today\'s module',
+      '// WeakMap), the shared row\'s ink ends measured by the unit\'s own measure (`p.P.measure`); an optional `trace` is told what the',
+      '// tap read inside it, at its probes\' places (baseline/tap/engine.diff): each unit\'s decision, the page\'s size, each unit filled.'],
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.mjs'", "import { keepsPages } from '../fit/runs.mjs'",
+      "import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'", "import { BODY_KINDS, fillTarget } from './fill-target.ts'", "import { keepsShare } from './share.mjs'",
+      "import { settleLayout } from './settle.ts'", '', '/** a unit as S.fill.target reads it */', 'const voterOf = p => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines })'],
+    names: ['fillUnitsOf', 'fillPage'],
+    exports: [],
+    changes: [
+      ['L2.layoutAt(', 'layoutAt(', 1],
+      ['L2.keepsPages(', 'keepsPages(', 1],
+      ['L2.footFloorOf(', 'footFloorOf(', 1],
+      ['L2.keepsShare(p.share, l)', 'keepsShare(p.share, l, p.P.measure)', 2],
+      ['L2.keepsShare(f.p.share, best[i])', 'keepsShare(f.p.share, best[i], f.p.P.measure)', 1],
+      ['const told = pageTarget(voters ?? units, continuing, band)', 'const told = fillTarget((voters ?? units).map(voterOf), continuing.map(voterOf), band)', 1],
+      ['BODY_KINDS.has(', 'BODY_KINDS.includes(', 1],
+      ['    const kept = fillLaid.get(p)\n    fillLaid.delete(p)\n', '    const kept = p.fillLaid\n    delete p.fillLaid\n', 1],
+      // (the trace: what the tap read inside fillPage, its probes' places and values, handed to an optional `trace`)
+      ['onFilled = () => {}, { continuing = [], voters = null } = {}) {', 'onFilled = () => {}, { continuing = [], voters = null, trace = null } = {}) {', 1],
+      ['    if (p.fillLead === null) continue\n', "    if (p.fillLead === null) { trace?.unit(p, { skip: 'no fill leading' }); continue }\n", 1],
+      ['    if (!l) continue\n', "    if (!l) { trace?.unit(p, { skip: 'not set', lead, next }); continue }\n", 1],
+      ['    filled.push({ p, st, l, full, tracked, untracked })\n', '    filled.push({ p, st, l, full, tracked, untracked })\n    trace?.unit(p, { lead, next, same: !!same, closer, short, full, tracked })\n', 1],
+      ["f.l = best[i] })\n", "f.l = best[i] })\n    trace?.size(ok, scaleOf(ok), grown.map(f => [f.p.id, f.p.run ?? null, f.st.knob === 'grow']))\n", 1],
+      ['    onFilled(p, target)\n', '    trace?.filled(p, st, l, target)\n    onFilled(p, target)\n', 1],
     ],
   },
   'shared/share.mjs': {

@@ -647,7 +647,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-11-03 the run-in head over its row',
     reads: [],
-    state: open,
+    file: 'shared/over-follower.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "chained from F2 on every laid round of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (1,291: 25 taken, their layouts whole); the follower's first line read off today's bundle (tests/replay/today.ts)",
+      cases: 1291,
+    },
   },
   {
     id: 'S.relay',
@@ -683,7 +689,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:305-307 settleLayout', 'L2:387-392 clearLines'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/settle.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "chained from F2 on every laid round of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (5,678: 435 moved), the cells' bands over the page's rules read off today's bundle (tests/replay/today.ts)",
+      cases: 5678,
+    },
   },
   {
     id: 'S.fill.leads',
@@ -728,7 +740,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-09 one page size',
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
-    state: open,
+    file: 'shared/fill-page.mjs',
+    state: {
+      is: 'ported',
+      replay:
+        "every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2)",
+      cases: 3013,
+    },
   },
   {
     id: 'S.table.settle',

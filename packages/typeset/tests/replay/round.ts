@@ -1,9 +1,10 @@
 // A unit's lay replayed from F2 to the round's last word (TAP.md §3, F1-F8 and `out`), each step's port given what the step
 // before it made, as today's layOnce chains them (RUN:2255-2316): S.onLeadRetry (F3), X.numbered (F4), S.overFollower's
 // verdict (F5), X.further or X.runs (F6), S.settle's (F7), S.share (F8); each step's answer against its slot, the round's
-// layout against `out`; then the unit's fill leadings (L9, unitFillLeads RUN:2617). A step whose input the tap does not hold ends the chain there, and says which: S.overFollower taken
-// (the follower's first line in the file), S.settle moving a line (a CJK cell's bands: the page's rules), X.further widening
-// a CJK cell (its bands over the widened lines).
+// layout against `out`; then the unit's fill leadings (L9, unitFillLeads RUN:2617). Two facts the tap does not hold are read
+// off the bundle today's reader opened (today.ts): the page's rules a CJK cell's bands read (S.settle, X.further widening a
+// cell), and the follower's first line in the file (S.overFollower). A chain that reaches L9 returns the unit as its lay left
+// it (`lay`), which the page's fill takes (pass.ts).
 import { cellBands } from '../../src/unit/params.ts'
 import { layoutCut } from '../../src/fit/cut.types.ts'
 import { fitFurther } from '../../src/fit/further.ts'
@@ -13,12 +14,18 @@ import type { FitBlock, FitParams, Layout, Tokens } from '../../src/fit/types.ts
 import { layoutUnit2 } from '../../src/fit/walk.types.ts'
 import { type FillRules, type FillUnit, fillLeadsOf } from '../../src/shared/fill-leads.types.ts'
 import { onLeadRetry } from '../../src/shared/on-lead.ts'
-import { shareOf } from '../../src/shared/share.types.ts'
+import type { FillLaid } from '../../src/shared/fill-page.types.ts'
+import { overFollower } from '../../src/shared/over-follower.ts'
+import { settleLayout } from '../../src/shared/settle.ts'
+import { type Share, shareOf } from '../../src/shared/share.types.ts'
+import type { Band } from '../../src/unit/params.ts'
 import { blockOfTap, layoutOf, linesOf, num, type WalkCase } from './fit-input.ts'
 import { firstDifference, ledger } from './tap.ts'
+import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
-export type Chain = { at: string; d: string | null; stopped?: string; steps: string[] }
+export type Chain = { at: string; d: string | null; stopped?: string; steps: string[]; lay?: FillLaid }
+type Clear = { cap: number; bands: Map<number, Band[]> } | null
 
 /** the shared row the follower is laid from, as its F1 slot holds it (the follower's last round that has one) */
 const rowOf = (pair: string, follower: number) => {
@@ -41,6 +48,15 @@ export function chain(c: WalkCase): Chain {
   steps.push('F2')
   let unitP = P
   const walked = { layout, blocks, P: unitP }
+  const L = ledger(c.pair)
+  const kind = (L.units.find((u) => u.ord === c.ord)?.kind ?? '') as string
+  // (a CJK cell's bands between the rules over and under its lines, over the page's rules (today.ts); its cap is U.params'
+  // capScale, which the walk read: held to it)
+  const today = todayBundle(paperOf(c.pair))
+  const rulesOf = (pg: number) => today?.rules(pg)
+  let clear: Clear = unitP.cjk && kind === 'cell' ? cellBands(blocks, rulesOf, c.s, unitP as never) : null
+  if (clear && clear.cap < 1 && clear.cap !== unitP.capScale)
+    return { at: 'U.params', d: `the cell's cap ${clear.cap} against capScale ${unitP.capScale}`, steps }
   // F3 S.onLeadRetry
   const f1 = c.slot('S.rowStart', 'onLeadOf')
   const onLeadOf = f1?.onLeadOf as { start: number; startY: number | null } | null | undefined
@@ -107,20 +123,61 @@ export function chain(c: WalkCase): Chain {
       layout = num4.layout
     }
   }
-  // F5 S.overFollower (its verdict; taken, the run-in head is laid over the follower's first row, which the tap does not hold)
+  // F5 S.overFollower: the follower, whether it will be laid (admitted: its L1 verdict), its row (its F1 slot's), its first
+  // line in the file (today's bundle), whether something is kept between the two (U.decor's keptAfter)
   const f5 = c.slot('S.overFollower')
-  if (f5?.taken) return { at: 'F5', d: null, stopped: 'S.overFollower taken', steps }
+  const decorKept = c.slot('U.decor', 'kept')?.kept as Raw | null | undefined
+  if (f5 && !f5.noOver) {
+    const fid = f5.follower as number
+    const fl = L.units.find((u) => u.ord === fid)
+    const fRow = rowOf(c.pair, fid) as { page: number; baseline: number } | null
+    const line = today?.lines(fid)
+    const over = overFollower(
+      {
+        kind,
+        follower: {
+          id: fid,
+          open: !!(fl?.slots.find((x) => x.by === 'U.admit' && x.round === 0)?.value as Raw | undefined)?.ok,
+          row: fRow,
+          first: line?.length ? { page: line[0]!, x1: line[2]! } : null,
+        },
+        kept: !!decorKept,
+        pages: ((
+          L.units.find((u) => u.ord === c.ord)?.slots.find((x) => x.by === 'U.admit' && x.round === 0)?.value as
+            | Raw
+            | undefined
+        )?.pages ?? []) as number[],
+        layout,
+        tokens,
+        blocks,
+        s: c.s,
+        P: unitP,
+      },
+      layoutCut,
+    )
+    d =
+      firstDifference(!!over, !!f5.taken, 'taken') ??
+      (over
+        ? (firstDifference(layoutOf(over.layout as Raw), f5.overLayout, 'overLayout') ??
+          firstDifference(linesOf(over.layout as Raw), f5.overLayoutLines, 'overLayoutLines'))
+        : null)
+    if (d) return { at: 'F5', d, steps }
+    steps.push(over ? 'F5 taken' : 'F5')
+    if (over) {
+      blocks = over.blocks
+      layout = over.layout
+      tokens = over.tokens
+    }
+  } else if (f5?.noOver) return { at: 'F5', d: null, stopped: 'S.relay (noOver)', steps }
   // F6 X.further or X.runs
   const further = c.slot('X.further'),
     runs6 = c.slot('X.runs')
-  const kind = (ledger(c.pair).units.find((u) => u.ord === c.ord)?.kind ?? '') as string
   let runs: ReturnType<typeof layoutRuns> = null
   let whole: Layout | null = null
   if (layout.clipped) {
     if (!further) return { at: 'F6', d: 'clipped, and no X.further slot', steps }
     const wb = further.widenedBlocks as Raw[] | null
     const fl = further.furtherLayout as Raw | null
-    if (wb && kind === 'cell' && unitP.cjk) return { at: 'F6', d: null, stopped: 'X.further widened a CJK cell', steps }
     const got = fitFurther(
       {
         rules: c.rules as FurtherInput['rules'],
@@ -130,7 +187,7 @@ export function chain(c: WalkCase): Chain {
         P: unitP,
         walked: layout === walked.layout && blocks === walked.blocks && unitP === walked.P,
         wide: fl?.knob === 'widen' && wb ? (wb.map(blockOfTap) as FitBlock[]) : null,
-        clearOf: (bs) => (unitP.cjk && kind === 'cell' ? cellBands(bs, () => null, c.s, unitP as never) : null),
+        clearOf: (bs) => (unitP.cjk && kind === 'cell' ? cellBands(bs, rulesOf, c.s, unitP as never) : null),
       },
       layoutUnit2,
     )
@@ -143,7 +200,10 @@ export function chain(c: WalkCase): Chain {
     if (!got) return { at: 'out', d: null, stopped: 'left the original’s (X.further found none)', steps }
     layout = got.layout
     blocks = got.blocks
-    if (got.P) unitP = got.P
+    if (got.P) {
+      unitP = got.P
+      clear = (got.clear as Clear | undefined) ?? null
+    }
   } else if (kind !== 'cell') {
     runs = layoutRuns(tokens, blocks, c.s, unitP, layout.lines)
     const want = runs6?.laidRuns as Raw | null | undefined
@@ -167,10 +227,19 @@ export function chain(c: WalkCase): Chain {
       layout = runs.layout
     }
   }
-  // F7 S.settle (a CJK cell's lines into their bands, which need the page's rules)
+  // F7 S.settle: a CJK cell's lines into their bands
   const f7 = c.slot('S.settle')
-  if (f7 && (f7.moved as number) > 0) return { at: 'F7', d: null, stopped: 'S.settle moved a line', steps }
+  if (clear || f7) {
+    const before = layout.lines.map((l) => l.baseline)
+    settleLayout({ clear, s: c.s }, layout)
+    const after = layout.lines.map((l) => l.baseline)
+    const moved = after.filter((y, i) => y !== before[i]).length
+    d = firstDifference(clear ? { moved, before, after } : null, f7 ?? null, 'settle')
+    if (d) return { at: 'F7', d, steps }
+    steps.push(moved ? 'F7 moved' : 'F7')
+  }
   // F8 S.share
+  let share: Share | null = null
   const f8 = c.slot('S.share')
   if (f8) {
     // (the follower's lead row: its F1 slot's, or, where the follower is never laid, the row kept after this unit, which is
@@ -183,7 +252,7 @@ export function chain(c: WalkCase): Chain {
       rowOf(c.pair, f8.follower as number) ??
       kept ??
       (named ? { page: named.page, baseline: named.y, size: named.band } : null)
-    const share = row ? shareOf(layout, blocks, row as never, P.measure) : null
+    share = row ? shareOf(layout, blocks, row as never, P.measure) : null
     if (share && kept && !kept.byLabel) share.kept = true
     const want = f8.share as Raw | null
     const mine = share
@@ -209,14 +278,32 @@ export function chain(c: WalkCase): Chain {
   const l9 = c.slot('S.fill.leads')
   if (!l9) return { at: 'L9', d: 'no S.fill.leads slot', steps }
   const R = c.rules as unknown as FillRules
-  const unit: FillUnit = { tokens, blocks, s: c.s, P: unitP, layout: runs ? whole! : layout }
-  const runUnits: FillUnit[] = (runs?.runs ?? []).map((r) => ({
+  const unit: FillUnit & FillLaid = {
+    id: c.ord,
+    unit: { kind },
+    refused: false,
+    tokens,
+    blocks,
+    s: c.s,
+    P: unitP,
+    layout: runs ? whole! : layout,
+    share,
+    clear,
+  }
+  const runUnits: (FillUnit & FillLaid)[] = (runs?.runs ?? []).map((r, i, all) => ({
+    id: c.ord,
+    unit: { kind },
+    refused: false,
+    run: i,
+    bi0: r.bi0,
     tokens: r.tokens,
     blocks: r.blocks,
     s: c.s,
     P: r.P!,
-    layout: r.layout,
+    layout: r.layout!,
     parent: unit,
+    share: i === all.length - 1 ? share : null,
+    clear: null,
   }))
   for (const q of runUnits) fillLeadsOf(q, R)
   fillLeadsOf(unit, R)
@@ -234,6 +321,12 @@ export function chain(c: WalkCase): Chain {
   )
   if (d) return { at: 'L9', d, steps }
   steps.push('L9')
-  return { at: 'L9', d: null, steps }
+  // (the unit as its lay left it: its runs' layout joined, its fit as one beside it)
+  unit.layout = layout
+  if (runs) {
+    unit.whole = whole
+    unit.runs = runUnits
+  }
+  return { at: 'L9', d: null, steps, lay: unit }
 }
 type FurtherInput = Parameters<typeof fitFurther>[0]

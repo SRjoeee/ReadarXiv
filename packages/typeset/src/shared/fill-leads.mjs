@@ -1,8 +1,8 @@
 // S.fill.leads (design-b §1.5, E30): a unit's fill leadings as its lay ends: the loosest leading from its fitted one up to
 // its top at which its fitted state still sets it whole as the page fill lays it, else the loosest closer one. Today's code
 // (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by
-// fill-leads.types.ts. The fill's reuse of the layout found (today's fillLaid, module state) is dropped: S.fill.page lays
-// the unit at that state again, the same layout.
+// fill-leads.types.ts. The layout found, which the page's fill reuses (today's fillLaid, a module WeakMap), is a field of
+// the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
 import { footFloorOf } from '../breaker/slots.mjs'
 import { layoutAt } from '../fit/at.mjs'
 import { keepsPages } from '../fit/runs.mjs'
@@ -42,6 +42,7 @@ function fillLeadsOf(p, P) {
   // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
   // is laid again only where that one does not set it)
   const lo = st.lead, bx = { ...st, box: true }
+  delete p.fillLaid
   let laid = at(p, bx)
   if (laid) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
@@ -54,6 +55,7 @@ function fillLeadsOf(p, P) {
     p.fillLead = ok ? L(ok) : lo
     // (the layout found there kept for the page's fill, which lays the unit at that very state wherever the band leaves it its
     // fill leading: fillPage `at`)
+    p.fillLaid = { state: st, lead: p.fillLead, l: laid }
     return
   }
   if (!at(p, st)) { p.fillLead = null; return }
