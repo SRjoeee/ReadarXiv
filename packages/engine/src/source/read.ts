@@ -191,7 +191,27 @@ interface Ctx {
   /** each of the paper's macros as TeX holds it at the document's start and as each definition the walk meets makes it: its
    *  arity where it reads nothing past its arguments, else null (macros.ts completeArity) */
   met: Map<string, (number | null)[]>
+  /** the walk's nesting now and the tokens it has visited (WALK_DEPTH, WALK_WORK) */
+  depth: number
+  work: number
 }
+
+/** how deep the walk nests (an argument, an environment's body or a file walked inside another): TeX's own limits, 255
+ *  grouping levels and 15 input files. A macro's arguments, which TeX expands with no group, can nest deeper in TeX: there
+ *  the bound is the reader's resource limit (the JavaScript stack ran out at 453 nested \href, 589 \footnote) */
+export const WALK_DEPTH = 270
+/** the tokens the walk visits in all, its arguments and bodies walked again included (a resource limit, as the instrument's
+ *  OWN_WORK) */
+export const WALK_WORK = 20_000_000
+/** the reader's bounds passed: the paper has no layer, and says why */
+export class ReadBound extends Error {
+  constructor(what: string) {
+    super(`the source reader passed its bound: ${what}`)
+    this.name = 'ReadBound'
+  }
+}
+/** the deepest nesting and the work of the last reading (the lab's census of the bounds) */
+export const READ_STATS = { depth: 0, work: 0 }
 
 const name = (t: Token | undefined): string | null => (t?.k === 'cs' ? t.name : null)
 const isLetterName = (n: string) => /^[A-Za-z@]+$/.test(n)
@@ -330,6 +350,16 @@ class Walker {
 
   // ---------------------------------------------------------------- the walk
   walk(f: SourceFile, from: number, to: number, b: Builder): void {
+    const ctx = this.ctx
+    if (++ctx.depth > WALK_DEPTH) throw new ReadBound(`a nesting deeper than ${WALK_DEPTH}`)
+    if (ctx.depth > READ_STATS.depth) READ_STATS.depth = ctx.depth
+    try {
+      this.walkIn(f, from, to, b)
+    } finally {
+      ctx.depth--
+    }
+  }
+  private walkIn(f: SourceFile, from: number, to: number, b: Builder): void {
     const toks = f.toks
     const ctx = this.ctx
     let i = from
@@ -346,6 +376,7 @@ class Walker {
     // (plain groups and spans walked in place, not by recursion: a group's close is where the walk takes its frame off)
     const frames: { close: number; after: () => void }[] = []
     while (!ctx.ended) {
+      if (++ctx.work > WALK_WORK) throw new ReadBound(`more than ${WALK_WORK} tokens visited`)
       const top = frames.at(-1)
       if (top && i === top.close) {
         endText()
@@ -2053,6 +2084,17 @@ function codeEnvs(defs: Definitions, own: ReadonlySet<string>, lines: ReadonlySe
  * before the unit it stands in; each has its id (its content's hash: equal units, one id).
  */
 export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
+  READ_STATS.depth = 0
+  try {
+    const doc = readSourceIn(tree, definitions)
+    return doc
+  } catch (e) {
+    // (the stack can be smaller than WALK_DEPTH assumes, in a worker: its end is the same reason)
+    if (e instanceof RangeError && /call stack/i.test(e.message)) throw new ReadBound('the stack ran out')
+    throw e
+  }
+}
+function readSourceIn(tree: Tree, definitions: Definitions): SourceDoc {
   const inputs = new Set(INPUTS.keys())
   // (the paper's own names, read on the tokens of every TeX file it ships; its line environments then from TeX's meanings)
   const scan = new Files(tree, lexRules(), inputs)
@@ -2134,6 +2176,8 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     ifs: facts.ifs,
     defs: definitions,
     ended: false,
+    depth: 0,
+    work: 0,
     seen: new Set(),
     order: [],
     dirs: [],
@@ -2196,6 +2240,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     return m?.k === 'macro' && /\\(?:lst@|FV@|minted|tcb|lstlisting|Verbatim|BVerbatim|LVerbatim)/.test(m.body)
   }
   const codeBodies = codeEnvNames.filter((n) => !PACKAGE_LINES.has(n) && !packaged(n))
+  READ_STATS.work = ctx.work
   return {
     encoding: files.encoding,
     codeEnvs: codeEnvNames,

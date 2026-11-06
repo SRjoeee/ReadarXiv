@@ -1,7 +1,7 @@
 import type { Piece } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { DEFINITIONS_FORMAT, NO_DEFINITIONS, readDefinitions } from '../../src/source/definitions.ts'
-import { readSource, type SourceUnit } from '../../src/source/read.ts'
+import { ReadBound, readSource, type SourceUnit, WALK_DEPTH } from '../../src/source/read.ts'
 
 const tree = (files: Record<string, string>, main = 'main.tex') => ({
   main,
@@ -308,5 +308,33 @@ describe('readSource: a display’s own stop', () => {
       ['display', undefined],
       ['display', ','],
     ])
+  })
+})
+
+describe('readSource: its bounds', () => {
+  // (a link's text, a note, an environment: the walk enters each by a call of its own; TeX stops at 255 grouping levels)
+  const nested = (n: number, open: string, close: string) => `${open.repeat(n)}deep${close.repeat(n)}`
+  it('ends in ReadBound, not a stack overflow, where the walk nests past WALK_DEPTH, executed by TeX or not', () => {
+    expect(() => doc(`Text ${nested(100_000, '\\href{u}{', '}')} here.`)).toThrow(ReadBound)
+    expect(() => doc(`Text ${nested(300, '\\footnote{', '}')} here.`)).toThrow(ReadBound)
+    expect(() => doc(`Text ${nested(100_000, '\\begin{itemize}\\item ', '\\end{itemize}')} here.`)).toThrow(ReadBound)
+  })
+  it('walks no part TeX never sets: a false branch, the text after \\end{document}', () => {
+    const skipped = doc(`Text \\iffalse ${nested(100_000, '\\href{u}{', '}')}\\fi here.`)
+      .units.map(text)
+      .join('')
+    expect(skipped).toContain('here.')
+    expect(skipped).not.toContain('deep')
+    const after = readSource(
+      tree({
+        'main.tex': `\\documentclass{article}\\begin{document}\nText here.\n\\end{document}\n${nested(100_000, '\\href{u}{', '}')}`,
+      }),
+      NO_DEFINITIONS,
+    )
+    expect(after.units.map(text).join('')).not.toContain('deep')
+  })
+  it('reads a nesting just under its bound', () => {
+    const d = doc(`Text ${nested(WALK_DEPTH - 8, '\\href{u}{', '}')} here.`)
+    expect(d.units.some((u) => text(u).includes('deep'))).toBe(true)
   })
 })
