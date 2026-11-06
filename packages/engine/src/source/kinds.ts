@@ -294,9 +294,27 @@ export function elementKind(name: string | null): string {
   return 'other'
 }
 
+/** babel's keys of the names a document's generated headings print (its ini files' [captions]: \abstractname, \refname, …;
+ *  the keys of src/pdf-reader/engine/layout/names.mjs NAME_KEYS): each `\<key>name` is asked, the word in force at the
+ *  document's start the paper's own (SourceDoc `names`) */
+export const BABEL_KEYS: readonly string[] = [
+  'abstract',
+  'ref',
+  'bib',
+  'contents',
+  'listfigure',
+  'listtable',
+  'appendix',
+  'index',
+  'proof',
+  'preface',
+  'glossary',
+  'figure',
+  'table',
+]
 /** what the reader asks TeX whatever the source uses: whether backref is loaded and sets its lists after an entry's first
- *  paragraph (its parscan, true unless the paper says \backrefparscanfalse) */
-export const ASKED: readonly string[] = ['ver@backref.sty', 'ifbackrefparscan']
+ *  paragraph (its parscan, true unless the paper says \backrefparscanfalse); babel's names in force */
+export const ASKED: readonly string[] = ['ver@backref.sty', 'ifbackrefparscan', ...BABEL_KEYS.map((k) => `${k}name`)]
 /** the packages' code environments (a paper's own environment that opens one is code too) */
 export const LISTINGS: ReadonlySet<string> = new Set([
   'verbatim',

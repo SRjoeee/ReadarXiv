@@ -260,7 +260,14 @@ export function namesUsed(tree: Tree, rules: LexRules, always: Iterable<string> 
           const env = (m[1] as string).trim()
           names.add(env)
           names.add(`end${env}`)
+          // (thmtools keeps the theorem it declared under this name: its printed name is that one's)
+          names.add(`thmt@original@${env}`)
         }
+      }
+      // (cleveref's names of a type the paper names, as TeX holds them once the preamble is read)
+      if (t.name === 'crefname' || t.name === 'Crefname') {
+        const m = /^\s*\{([A-Za-z@*]+)\}/.exec(lx.text.slice(t.e, t.e + 200))
+        if (m) for (const c of ['cref', 'Cref']) names.add(`${c}@${m[1]}@name`).add(`${c}@${m[1]}@name@plural`)
       }
       const form = INPUTS.get(t.name)
       // (an \input after \def or \let names no file TeX reads there)

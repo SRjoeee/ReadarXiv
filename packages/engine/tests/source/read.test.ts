@@ -139,3 +139,159 @@ describe('readSource: what TeX holds decides', () => {
     expect(d.units.map((u) => u.kind)).toEqual(['para'])
   })
 })
+
+// Each class of difference against today's reader (lanes/L2-source.md, the exit's classes 1 to 10), on the minimal source
+// that shows it: what TeX does there, which the new reader follows
+describe('readSource: the corrections of stage 1c, each on its minimal source', () => {
+  it('1. reads a file in the Latin encoding the paper declares to inputenc, as TeX reads its bytes', () => {
+    const t = 'Une phrase en fran\xe7ais, d\xe9j\xe0 lue.'
+    const bytes = Uint8Array.from(
+      `\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\begin{document}\n${t}\n\\end{document}\n`,
+      (c) => c.charCodeAt(0),
+    )
+    const d = readSource({ main: 'main.tex', files: new Map([['main.tex', bytes]]) }, NO_DEFINITIONS)
+    expect(d.units.map((u) => text(u).trim())).toEqual(['Une phrase en français, déjà lue.'])
+  })
+  it('2. ends a table’s row after a macro whose meaning ends with \\\\, whatever its source’s comment after it', () => {
+    const defs = records('M dirrow \\long macro:#1->\\multicolumn {2}{l}{\\itshape #1\\rule [-3pt]{0pt}{10pt}}\\\\')
+    const d = doc(
+      '\\begin{tabular}{ll}\nOne cell & Two cell \\\\\n\\dirrow{Words of the row}\n\\midrule\nThree cell & Four cell \\\\\n\\end{tabular}',
+      '\\newcommand\\dirrow[1]{\\multicolumn{2}{l}{\\itshape #1\\rule[-3pt]{0pt}{10pt}}\\\\%\n}\n',
+      defs,
+    )
+    expect(d.units.map((u) => text(u).trim())).toEqual([
+      'One cell',
+      'Two cell',
+      'Words of the row',
+      '·\nThree cell',
+      'Four cell',
+    ])
+  })
+  it('3. sets no word of a branch the body’s own \\Xtrue turns away (TeX: \\let\\ifX\\iftrue)', () => {
+    const defs = records(
+      'M ifLong \\iffalse',
+      'M Longtrue macro:->\\let \\ifLong \\iftrue ',
+      'M Longfalse macro:->\\let \\ifLong \\iffalse ',
+    )
+    const d = doc(
+      '\\Longtrue\n\\ifLong\\else\nShort version words only.\n\\fi\nCommon words for both.',
+      '\\newif\\ifLong\n',
+      defs,
+    )
+    expect(d.units.map((u) => text(u).replace(/\s+/g, ' ').trim())).toEqual(['· ·· Common words for both.'])
+  })
+  it('4. reads natbib’s \\natexlab as TeX holds it (macro:#1->): its letter no text, whatever the .bbl provides', () => {
+    const defs = records('M natexlab macro:#1->')
+    const d = doc(
+      '\\begin{thebibliography}{9}\n\\providecommand{\\natexlab}[1]{#1}\n\\bibitem{a} A.~Author, 2020{\\natexlab{a}}, A title of words.\n\\end{thebibliography}',
+      '',
+      defs,
+    )
+    const [u] = d.units.filter((x) => x.kind === 'reference')
+    expect(flat((u as SourceUnit).content)).toContainEqual(['p', '\\natexlab{a}', 'other'])
+    expect(text(u as SourceUnit)).not.toMatch(/\ba\}/)
+  })
+  it('5. reads the words of a paper’s own environment TeX sets, as any other text', () => {
+    const defs = records(
+      'M folha macro:->\\@protected@testopt \\folha \\\\folha {x}',
+      'M endfolha \\long macro:->\\relax ',
+    )
+    const d = doc(
+      '\\begin{folha}\n\\begin{flushright}\n\\parbox{2in}{{\\bfseries{"Line one of words.\\\\\nLine two of words."}}}\n\\end{flushright}\n\\end{folha}',
+      '\\newenvironment{folha}[1][x]{}{}\n',
+      defs,
+    )
+    expect(d.units.map((u) => text(u).replace(/\s+/g, ' ').trim())).toEqual([
+      '·"Line one of words.· Line two of words."',
+    ])
+  })
+  it('6. reads a note inside a group of an author block once, nested where TeX sets its mark, the row whole', () => {
+    const d = doc(
+      '\\maketitle\nBody words here.',
+      '\\author{\\textbf{Ann Author\\thanks{A note of several words.}} \\and Bob Author}\n',
+    )
+    const notes = d.units.filter((u) => u.kind === 'footnote')
+    expect(notes.map((u) => text(u))).toEqual(['A note of several words.'])
+    const ann = d.units.find((u) => u.kind === 'author' && text(u).includes('Ann')) as SourceUnit
+    expect(flat(ann.content)).toEqual([
+      ['o', '\\textbf{', 'bold'],
+      ['t', 'Ann Author'],
+      ['n', '\\thanks{', '}'],
+      ['c', '}'],
+      ['t', ' '],
+    ])
+  })
+  it('7. sets none of the lines of a comment.sty environment TeX excludes (\\def\\ProcessCutFile{})', () => {
+    const defs = records(
+      "M CCSXML macro:->\\endgroup \\message {Excluding 'CCSXML' comment.}\\begingroup \\DefaultCutFileName \\def \\ProcessCutFile {}\\def \\ThisComment ##1{}\\ProcessComment {CCSXML}",
+      'M endCCSXML undefined',
+    )
+    const d = doc(
+      '\\begin{CCSXML}\n<ccs2012>\n<concept>\n<concept_id>10010147</concept_id>\n</concept>\n</ccs2012>\n\\end{CCSXML}\nBody words here.',
+      '\\usepackage{comment}\n\\excludecomment{CCSXML}\n',
+      defs,
+    )
+    expect(d.units.map((u) => text(u).trim())).toEqual(['Body words here.'])
+  })
+  it('8. keeps a package’s float over a later \\newtheorem of the same name (LaTeX refuses the second definition)', () => {
+    const defs = records('M algorithm macro:->\\@protected@testopt \\algorithm \\\\algorithm {htbp}')
+    const d = doc(
+      '\\begin{algorithm}\nSome steps of words.\n\\end{algorithm}',
+      '\\newtheorem{algorithm}{Algorithm}\n',
+      defs,
+    )
+    expect(d.units.map((u) => u.kind)).toEqual(['para'])
+  })
+  it('9. sets the branch TeX takes of \\ifdefined, by TeX’s meaning at the document’s start', () => {
+    const defs = records('M Preprint macro:->1')
+    const d = doc(
+      '\\ifdefined\\Preprint\nThe preprint words.\n\\else\nThe other words.\n\\fi',
+      '\\newcommand\\Preprint{1}\n',
+      defs,
+    )
+    expect(d.units.map((u) => text(u).replace(/\s+/g, ' ').trim())).toEqual(['· The preprint words. ·'])
+  })
+  it('10. ends a formula at its own group’s math shift: a $ inside \\text{…} is that group’s formula', () => {
+    const [u] = doc('We have $u = v \\text{ for a.e. $t$}$, and more words $x$ here.', '\\usepackage{amsmath}\n').units
+    expect(flat((u as SourceUnit).content)).toEqual([
+      ['t', '\nWe have '],
+      ['p', '$u = v \\text{ for a.e. $t$}$', 'math'],
+      ['t', ', and more words '],
+      ['p', '$x$', 'math'],
+      ['t', ' here.\n'],
+    ])
+  })
+})
+
+describe('readSource: the paper’s own words, as TeX holds them', () => {
+  it('reads theorem names, cleveref’s and hyperref’s words and babel’s in force from the definitions, plain words alone', () => {
+    const defs = records(
+      'M thm macro:->\\@thm {thm}{Teorema}',
+      'M lem macro:->\\@thm {\\let \\thm@swap \\@gobble \\th@plain }{thm}{Lema}',
+      'M rem \\long macro:->\\thmt@parsetheoremargs {rem}',
+      'M thmt@original@rem macro:->\\@thm {\\th@remark }{rem}{Observação}',
+      'M claim macro:->\\@spthm {claim}{Claim}{\\bfseries }{\\itshape }',
+      'M fancy macro:->\\@thm {fancy}{\\textsc {Fancy}}',
+      'M cref@thm@name macro:->teorema',
+      'M cref@thm@name@plural macro:->teoremas',
+      'M sectionautorefname macro:->Sec.',
+      'M figurename macro:->Figura',
+      'M refname macro:->\\textsc {Refs}',
+    )
+    const d = doc(
+      '\\begin{thm}A b.\\end{thm}\\begin{lem}C d.\\end{lem}\\begin{rem}E f.\\end{rem}\\begin{claim}G h.\\end{claim}\\begin{fancy}I j.\\end{fancy}',
+      '\\newtheorem{thm}{Teorema}\\newtheorem{lem}[thm]{Lema}\\newtheorem{fancy}{\\textsc{Fancy}}\n',
+      defs,
+    )
+    expect(d.names).toEqual([
+      ['theorem:thm', 'Teorema'],
+      ['theorem:lem', 'Lema'],
+      ['theorem:rem', 'Observação'],
+      ['theorem:claim', 'Claim'],
+      ['autoref:section', 'Sec.'],
+      ['cref:thm', 'teorema'],
+      ['cref:thm:plural', 'teoremas'],
+      ['babel:figure', 'Figura'],
+    ])
+  })
+})

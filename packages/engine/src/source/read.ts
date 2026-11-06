@@ -6,11 +6,12 @@
 // commands that set them. What a macro of the paper's is comes from TeX (`definitions`), or from a definition the body makes
 // where the walk meets it; what its body does with its arguments is worked out on its tokens (macros.ts).
 import { type BUnit, Builder, close, hasAddress, IN_TEXT } from './build.ts'
-import { type Definitions, fileArgs, INPUTS, jobName, type Tree } from './definitions.ts'
+import { type Definitions, fileArgs, INPUTS, jobName, type Meaning, type Tree } from './definitions.ts'
 import { Files, type SourceFile } from './files.ts'
 import {
   ACCENT_MARKS,
   ACCENTS,
+  BABEL_KEYS,
   BIB_KEPT_FIELD,
   BIB_TEXT,
   CAPTIONS,
@@ -100,6 +101,11 @@ export interface SourceDoc {
   units: SourceUnit[]
   /** the files TeX reads, in the order it first reads them */
   files: string[]
+  /** the paper's own words for what TeX prints by name, as TeX holds them at the document's start (the definitions): a
+   *  theorem-like environment's printed name (`theorem:<env>`), cleveref's names of a type (`cref:<type>`, `Cref:<type>`,
+   *  each `:plural` too), hyperref's `\<type>autorefname` (`autoref:<type>`), babel's word in force for a heading's name
+   *  (`babel:<key>`); plain words alone (letters, spaces, `.'’-`, at most 40), each key once */
+  names: [string, string][]
 }
 
 const ASSIGNMENT_DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:true[ \t]*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|fill?l?|\\[A-Za-z@]+)?`
@@ -1225,6 +1231,11 @@ class Walker {
     }
     const notes: { at: number; end: number }[] = []
     for (let k = a; k < z; k++) {
+      if (isBegin(toks[k])) {
+        const c = f.close[k] ?? -1
+        if (c >= 0 && c < z) k = c
+        continue
+      }
       const n = name(toks[k])
       if (n !== 'thanks' && n !== 'footnote') continue
       if (notes.length && k < (notes.at(-1) as { end: number }).end) continue
@@ -2123,6 +2134,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
   return {
     main: tree.main,
     files: ctx.order,
+    names: paperWords(definitions, ctx.theorems),
     units: ordered.map((u) => {
       const out: SourceUnit = {
         id: u.id as string,
@@ -2142,6 +2154,77 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
       return out
     }),
   }
+}
+
+/** a word as a unit holds it: plain words, at most 40 characters (source/paper-names.mjs PLAIN) */
+const PLAIN_WORD = /^[\p{L}][\p{L}\p{M} .'’-]{0,39}$/u
+const plainWord = (s: string): string | null => {
+  const w = s.replace(/\s+/g, ' ').trim()
+  return PLAIN_WORD.test(w) ? w : null
+}
+/** a macro of no parameter whose body is a plain word: the word */
+const wordOf = (m: Meaning | undefined): string | null => (m?.k === 'macro' && !m.params ? plainWord(m.body) : null)
+/** the brace groups of a meaning's text from `at` on, an optional [..] and blanks between them passed over */
+function groupsAt(s: string, at: number): string[] {
+  const out: string[] = []
+  let i = at
+  for (;;) {
+    while (s[i] === ' ') i++
+    if (s[i] === '[') {
+      const e = s.indexOf(']', i)
+      if (e < 0) return out
+      i = e + 1
+      continue
+    }
+    if (s[i] !== '{') return out
+    let depth = 0
+    let j = i
+    for (; j < s.length; j++) {
+      if (s[j] === '\\') j++
+      else if (s[j] === '{') depth++
+      else if (s[j] === '}' && --depth === 0) break
+    }
+    if (j >= s.length) return out
+    out.push(s.slice(i + 1, j))
+    i = j + 1
+  }
+}
+/** a theorem-like environment's printed name, as its meaning holds it: the kernel's `\@thm {counter}{Name}`, amsthm's
+ *  `\@thm {style}{counter}{Name}` (the last group), llncs' `\@spthm {env}{Name}{…}{…}`; thmtools' the theorem it keeps */
+function theoremWord(defs: Definitions, env: string): string | null {
+  let m = defs.names.get(env)?.meaning
+  if (m?.k === 'macro' && m.body.startsWith('\\thmt@parsetheoremargs '))
+    m = defs.names.get(`thmt@original@${env}`)?.meaning
+  if (m?.k !== 'macro') return null
+  const thm = /^\\@thm /.exec(m.body)
+  const sp = /^\\@spthm /.exec(m.body)
+  const gs = thm || sp ? groupsAt(m.body, (thm ?? sp)?.[0].length ?? 0) : []
+  const name = thm ? gs.at(-1) : sp ? gs[1] : undefined
+  return name === undefined ? null : plainWord(name)
+}
+/** the paper's own words for what TeX prints by name (SourceDoc `names`), from TeX's definitions */
+function paperWords(defs: Definitions, theorems: ReadonlySet<string>): [string, string][] {
+  const out: [string, string][] = []
+  for (const env of theorems) {
+    // (a package's internal of one, as thmtools' kept theorem: no environment a paper begins)
+    if (env.includes('@')) continue
+    const w = theoremWord(defs, env)
+    if (w) out.push([`theorem:${env}`, w])
+  }
+  const refs: [string, string][] = []
+  for (const [n, d] of defs.names) {
+    const cref = /^(cref|Cref)@(.+)@name(@plural)?$/.exec(n)
+    const auto = /^([A-Za-z]+)autorefname$/.exec(n)
+    const key = cref ? `${cref[1]}:${cref[2]}${cref[3] ? ':plural' : ''}` : auto ? `autoref:${auto[1]}` : null
+    const w = key && wordOf(d.meaning)
+    if (key && w) refs.push([key, w])
+  }
+  out.push(...refs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)))
+  for (const k of BABEL_KEYS) {
+    const w = wordOf(defs.names.get(`${k}name`)?.meaning)
+    if (w) out.push([`babel:${k}`, w])
+  }
+  return out
 }
 
 /**
