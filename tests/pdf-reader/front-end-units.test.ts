@@ -633,6 +633,23 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
     expect(tex).toMatch(/Keywords:\\axtend\{\d+e\}\} \\axtpma\{p\d+\.\d+a\}\\KW\n/)
     expect(tex).toContain('\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}')
   })
+  it('counts a macro\'s expansions through the macros that hold its calls: one called once inside one called twice is set twice, no mark', () => {
+    const inner = '\\newcommand{\\Inner}{An inner sentence that holds enough words of prose.}'
+    const unitsOf = (p: ReturnType<typeof openPaper>) => (p.units as unknown as Unit[]).filter(u => u.stored).map(u => [textOf(u), !!u.once])
+    const marked = (p: ReturnType<typeof openPaper>) => new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (Codex on #601: \\Outer called in two paragraphs expands \\Inner twice; marked in its definition, its marks were set twice)
+    const twice = openPaper(new Map([['main.tex', enc(doc('First paragraph says \\Outer{} here.\n\nSecond paragraph says \\Outer{} again.', `${inner}\n\\newcommand{\\Outer}{An outer sentence with enough words. \\Inner{} End.}`))]]))
+    expect(unitsOf(twice)).toEqual([['An outer sentence with enough words. End.', false], ['An inner sentence that holds enough words of prose.', false]])
+    expect(marked(twice)).toContain(`${inner}\n`)
+    // (inside a macro called once it is set once: marked)
+    const once = openPaper(new Map([['main.tex', enc(doc('A paragraph says \\Outer{} here.', `${inner}\n\\newcommand{\\Outer}{An outer sentence with enough words. \\Inner{} End.}`))]]))
+    expect(unitsOf(once)).toEqual([['An outer sentence with enough words. End.', true], ['An inner sentence that holds enough words of prose.', true]])
+    expect(marked(once)).toMatch(/\\newcommand\{\\Inner\}\{\\leavevmode\\axtmark\{\d+s\}An inner sentence/)
+    // (a call TeX may skip, in a conditional the walk cannot settle: its count is not known, no mark)
+    const unsure = openPaper(new Map([['main.tex', enc(doc('A paragraph.\n\n\\ifnum\\value{page}>1 \\Inner{}\\fi\n\nMore text.', inner))]]))
+    expect(unitsOf(unsure)).toEqual([['An inner sentence that holds enough words of prose.', false]])
+    expect(marked(unsure)).toContain(`${inner}\n`)
+  })
 })
 
 describe('xy-pic\'s diagram is a drawing, as a TikZ or PSTricks picture is (SKIP_ENVS): its body is no unit', () => {
