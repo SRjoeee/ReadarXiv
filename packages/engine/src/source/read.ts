@@ -5,6 +5,7 @@
 // cut (math, a display, a citation, a reference, an address, code, a note's mark …), spans for the text arguments of the
 // commands that set them. What a macro of the paper's is comes from TeX (`definitions`), or from a definition the body makes
 // where the walk meets it; what its body does with its arguments is worked out on its tokens (macros.ts).
+import type { Piece } from '@readarxiv/format'
 import { type BUnit, Builder, close, hasAddress, IN_TEXT } from './build.ts'
 import { type Definitions, fileArgs, INPUTS, jobName, type Meaning, type Tree } from './definitions.ts'
 import { Files, type SourceFile } from './files.ts'
@@ -76,7 +77,6 @@ import {
 } from './roles.ts'
 import { TEXT_SYMBOLS } from './tables.ts'
 import { CAT, type Token } from './tokens.ts'
-import type { Piece } from './types.ts'
 
 /** a piece as the walk cut it, where it stands in its unit's file (`at`, `to`): what the marks are written at. A nested
  *  unit's piece names it by its index in SourceDoc `units` */

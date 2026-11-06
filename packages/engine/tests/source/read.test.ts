@@ -1,7 +1,7 @@
+import type { Piece } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { DEFINITIONS_FORMAT, NO_DEFINITIONS, readDefinitions } from '../../src/source/definitions.ts'
 import { readSource, type SourceUnit } from '../../src/source/read.ts'
-import type { Piece } from '../../src/source/types.ts'
 
 const tree = (files: Record<string, string>, main = 'main.tex') => ({
   main,

@@ -2,9 +2,8 @@
 // with its style, a nested unit), then each unit closed: its addresses and (in a bibliography entry) its numbers made
 // elements, an accent's letter joined with its word, a unit of fewer than two letters dropped, and its pieces typed into the
 // translation's grammar (spans paired, elements and spans numbered by their place) with its id.
-import { unitId } from './id.ts'
+import { type Piece, unitId } from '@readarxiv/format'
 import { DISPLAY_SOURCE, MATH_SPACE_SOURCE } from './tables.ts'
-import type { Piece } from './types.ts'
 
 /** a piece as the walk cuts it, with where it stands in its unit's file: `at` its first character's offset, `to` one past its
  *  last (a text's source, an element's or a span's open or close source, a nested unit's pre to its post; none for an

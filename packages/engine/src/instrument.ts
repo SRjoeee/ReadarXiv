@@ -4,6 +4,7 @@
 // later) gives exactly this; the back half reads nothing else of the source, the marks or the compile.
 import type { Piece } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
+import type { TexState } from './marks/statements.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
  *  text, or stays: a display), its label (the class's mark before it), a babel name's own word */
@@ -56,7 +57,18 @@ export interface Instrument {
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
-  tex: { lineskip?: [number, number]; paragraphEnds?: number[][] }
+  tex: {
+    lineskip?: [number, number]
+    paragraphEnds?: number[][]
+    /** TeX's state where a unit (piece null) or a placeholder (its content id) opens: its font, \baselineskip and measure
+     *  (marks/statements.ts STATE_TEX) */
+    states?: { unit: number; piece: string | null; state: TexState }[]
+    /** where TeX ended a sentence inside a unit (SENTENCE_TEX): the glyphs before the point on its page; the next sentence
+     *  begins at the next glyph */
+    sentences?: { unit: number; page: number; glyph: number }[]
+    /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
+    colours?: { unit: number; piece: string | null; colour: string }[]
+  }
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
 }

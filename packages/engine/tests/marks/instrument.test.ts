@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { instrumentFromPlan, type PageRead, ROLE, readAlign, WorkBound } from '../../src/marks/instrument.ts'
+import { ROLE } from '../../src/instrument.ts'
+import { instrumentFromPlan, type PageRead, readAlign, WorkBound } from '../../src/marks/instrument.ts'
 import { markSource } from '../../src/marks/mark.ts'
 import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
 import { readSource } from '../../src/source/read.ts'
@@ -41,7 +42,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['0e', 17],
       ['be1', 17],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     const G = ins.glyphs[0]
     expect(G && [...G.role]).toEqual([4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1])
     expect(G && [...G.unit].every((u) => u === 0)).toBe(true)
@@ -78,7 +85,7 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['be2', 7],
     ])
     const ins = instrumentFromPlan({
-      ink: null,
+      ink: { pages: [] },
       pages: [one, two],
       plan,
       doc,
@@ -95,7 +102,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['p0.1a', 8],
       ['0e', 17],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins).slice(8, 13)).toEqual([2, 2, 2, 2, 1])
   })
   it('tells the text after an opening alone up to its unit’s next mark, though it spells no letter (a URL’s dots before the stop)', () => {
@@ -108,7 +121,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['p0.1a', 4],
       ['0e', 8],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins)).toEqual([1, 1, 1, 1, 2, 2, 2, 1])
   })
   it('gives a unit’s text the painted paths in its range, never a turned glyph’s box', () => {
@@ -119,7 +138,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     ])
     const points = base.points.map((x) => (x.name === '0e' ? { ...x, box: 2 } : x))
     const pg: PageRead = { ...base, points, boxes: [0, 99, 20, 99.4, 0, 0, 5, 30], paths: [0, -4] }
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect([...(ins.boxes[0]?.role ?? [])]).toEqual([1, 0])
   })
 
@@ -140,7 +165,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
         { name: '0e', glyph: 14, box: 0 },
       ],
     }
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins)).toEqual([1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1])
   })
   it('gives a unit’s text the thin rules on its lines alone, no box behind its words (own.mjs lineRulesOf)', () => {
@@ -152,7 +183,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const points = base.points.map((x) => (x.name === '0e' ? { ...x, box: 2 } : x))
     // (an underline 0.4 pt thick under "rule", and a coloured box 11 pt tall behind it)
     const pg: PageRead = { ...base, points, boxes: [10, 98, 30, 98.4, 10, 96, 30, 107], paths: [0, 1] }
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect([...(ins.boxes[0]?.role ?? [])]).toEqual([1, 0])
   })
   it('takes no label glyph from an included graphic set on the start’s line (its frame’s points)', () => {
@@ -163,7 +200,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['0s', 2],
       ['0e', 9],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins).slice(0, 3)).toEqual([0, 0, 1])
   })
   it('gives a unit the glyphs that set its unmarked lead text symbols, right before its start (own.mjs headSymbolsOf)', () => {
@@ -173,7 +216,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['0s', 2],
       ['0e', 12],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins).slice(0, 3)).toEqual([1, 1, 1])
   })
   it('ends a pathological paper in no layer and why (WorkBound), never in a hang: ranges each running to the page’s end', () => {
@@ -187,7 +236,7 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const t0 = performance.now()
     expect(() =>
       instrumentFromPlan({
-        ink: null,
+        ink: { pages: [] },
         pages: [page(text, points)],
         plan,
         doc,
@@ -200,7 +249,7 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const fair: [string, number][] = [['bs1', 0]]
     for (let i = 0; i < 400; i++) fair.push([`${i}s`, i * 100], [`${i}e`, i * 100 + 90])
     const ins = instrumentFromPlan({
-      ink: null,
+      ink: { pages: [] },
       pages: [page(text, fair)],
       plan,
       doc,
@@ -219,7 +268,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['g1b', 12],
       ['0e', 18],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(roles(ins)).toEqual([1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
   })
   it('reads TeX’s sentence ends apart from the ownership (their points cut no reading)', () => {
@@ -230,7 +285,13 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
       ['s0.0', 7],
       ['0e', 18],
     ])
-    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
     expect(ins.tex.sentences).toEqual([{ unit: 0, page: 1, glyph: 7 }])
     expect(roles(ins).every((r) => r === 1)).toBe(true)
   })

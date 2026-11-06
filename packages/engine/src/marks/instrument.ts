@@ -22,12 +22,10 @@
 //      facts (its closing point, or the text after it), is the placeholder's.
 // A glyph is one claim's: the text's first (in the units' order), a label's where none is, a placeholder's and a name's over
 // both. What the lane file lists as not ported (the spell check's releases, the label's form, own.mjs's thresholds) is not here.
-//
-// TRANSITION: `Instrument`, `Owners`, `ROLE` are copied from lane L1's packages/engine/src/instrument.ts (branch
-// rebuild/prepare); at the merge this module imports them from there and the copies go.
-import { unitId } from '../source/id.ts'
+import { type Piece, unitId } from '@readarxiv/format'
+import type { Doc } from '../doc.ts'
+import { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE } from '../instrument.ts'
 import type { SourceDoc } from '../source/read.ts'
-import type { Piece } from '../source/types.ts'
 import { classOf, symbolText } from './classes.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
 import { type Plan, pieceIdsOf } from './mark.ts'
@@ -37,47 +35,6 @@ import { framedOf, type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
 
 export type { PageGlyph, PagePoint, PageRead } from './page.ts'
 
-// ---------------------------------------------------------------- L1's seam (copied: see the header)
-export const ROLE = Object.freeze({ none: 0, text: 1, element: 2, label: 4, name: 8 })
-export interface Owners {
-  unit: Int32Array
-  role: Uint8Array
-  piece: Int32Array
-}
-export interface InstrumentUnit {
-  id: string
-  kind: string
-  content: Piece[]
-  depth?: number
-  kept?: true
-  fixed?: true
-  echo?: number
-  cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true }
-  align?: 'j' | 'l' | 'c' | 'r'
-  name?: string
-  figure?: { set: number; dir?: [number, number] }
-  why?: string
-}
-export interface Instrument<Doc = unknown> {
-  ink: Doc
-  units: InstrumentUnit[]
-  glyphs: Owners[]
-  boxes: Owners[]
-  turned?: Owners[]
-  places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
-  tex: {
-    lineskip?: [number, number]
-    paragraphEnds?: number[][]
-    /** TeX's state where a unit (piece null) or a placeholder (its content id) opens (marks/statements.ts STATE_TEX) */
-    states?: { unit: number; piece: string | null; state: TexState }[]
-    /** where TeX ended a sentence inside a unit (SENTENCE_TEX): the glyphs before the point on its page; the next sentence
-     *  begins at the next glyph */
-    sentences?: { unit: number; page: number; glyph: number }[]
-    /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
-    colours?: { unit: number; piece: string | null; colour: string }[]
-  }
-  made: { compiler: string; tree: string; front: string }
-}
 /** the instrument's bound on its work: the glyphs, boxes and lines its readings visit in all (today's own.mjs OWN_WORK and
  *  stream.mjs WORK, 20 million each). Real ranges never overlap and cost the paper's ink a few times over; a paper past it
  *  (points that delimit nothing, ranges each running to the document's end) has no layer and says why, it never hangs */
@@ -88,11 +45,6 @@ export class WorkBound extends Error {
     this.name = 'WorkBound'
   }
 }
-export const ownersOf = (n: number): Owners => ({
-  unit: new Int32Array(n).fill(-1),
-  role: new Uint8Array(n),
-  piece: new Int32Array(n).fill(-1),
-})
 
 const BRACKET = /^([bf])([se])\d+$/
 /** each glyph's, box's and point's region: a column's body or not, a depth of floats (stream.mjs regionsOf) */
@@ -194,7 +146,7 @@ const before = (a: At, b: At) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
  * and `doc` what markSource wrote and what it wrote it from, `log` the marked compile's last pass's log, `inkless` the macros
  * TeX said set no ink and `texts` the text the probe showed each macro sets (the probe's answers markSource took)
  */
-export function instrumentFromPlan<Doc>({
+export function instrumentFromPlan({
   ink,
   pages,
   plan,
@@ -215,7 +167,7 @@ export function instrumentFromPlan<Doc>({
   doc: SourceDoc
   log?: string
   made: { compiler: string; tree: string }
-}): Instrument<Doc> {
+}): Instrument {
   // (TeX's sentence ends: points no reading of ownership takes, read on their own)
   const sentences: NonNullable<Instrument['tex']['sentences']> = []
   if (pages.some((pg) => pg.points.some((x) => SENTENCE_POINT.test(x.name)))) {

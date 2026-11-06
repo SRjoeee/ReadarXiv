@@ -21,7 +21,7 @@ import { decodeStored, encodeStored, instrumentKey } from '../../packages/engine
 import { compileMarked } from '../../packages/engine/src/compile/recover.ts'
 import { instrumentFromPlan } from '../../packages/engine/src/marks/instrument.ts'
 import { readDefinitions } from '../../packages/engine/src/source/definitions.ts'
-import { sha256Hex } from '../../packages/engine/src/source/id.ts'
+import { sha256Hex } from '../../packages/format/src/index.ts'
 import { readSource } from '../../packages/engine/src/source/read.ts'
 import { answersOf } from './answers-of.mjs'
 import { compare, draftPage } from './compare.mjs'

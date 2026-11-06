@@ -5,8 +5,8 @@
 // tree (its image), the compiler, the date the compiles run under and the compile plan's name. A new engine build that
 // does not change the marks runs only the JavaScript stages on the stored B; a try that dies after the compile resumes
 // from it. The store itself is the host's (a directory in the lab, a bucket on the box): it keeps bytes by key.
+import { sha256Hex, utf8 } from '@readarxiv/format'
 import type { Plan } from '../marks/mark.ts'
-import { sha256Hex, utf8 } from '../source/id.ts'
 import { MARKS_CODE } from './marks-code.ts'
 
 export const INSTRUMENT_FORMAT = 'readarxiv-instrument 1'
