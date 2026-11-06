@@ -12,9 +12,16 @@ import type { EventBus, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_vie
 import type { Kit } from '../pdfjs/kit.ts'
 import type { OwnedClock } from '../stack/clock.ts'
 import type { Scheduler } from '../stack/scheduler.ts'
-import { createStack, PDF_TO_CSS, roundingTable, type Stack } from '../stack/stack.ts'
+import {
+  createStack,
+  type PageContent,
+  PDF_TO_CSS,
+  roundingTable,
+  type Stack,
+  type ViewContent,
+} from '../stack/stack.ts'
 import { createFollower, type Follower, type FollowPane } from '../stack/sync.types.ts'
-import { type AheadHold, aheadHeld, eagerPages, quietRoot } from './left.ts'
+import { type AheadHold, aheadHeld, eagerPages, letAheadGo, quietRoot } from './left.ts'
 
 export type Side = 'left' | 'right'
 export type Display = 'original' | 'bilingual' | 'translation'
@@ -32,6 +39,16 @@ const READING_LINE = 0.25
 const LAID_MS = 100
 /** room left above a heading gone to (CSS px) */
 const HEADING_ROOM = 28
+/** the most the pages ahead of the view wait to be drawn (ms), from the panes' laying out: a layer's first page lets them go
+ *  sooner (places.mjs AHEAD_HOLD_MS, the web's holdAhead alike) */
+export const AHEAD_HOLD_MS = 15_000
+/** the paper's language, on the text layers of the original's words (docs/PDF-READER.md §13, text-layer.mjs SOURCE_LANG): the
+ *  reader asks every translation from English */
+export const SOURCE_LANG = 'en'
+/** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
+const RUNNING = 1,
+  PAUSED = 2,
+  FINISHED = 3
 
 export interface PaneEvents {
   page: { side: Side; page: number; pages: number }
@@ -58,6 +75,8 @@ export interface PanesOptions {
   openExternal(url: string): void
   /** no scrollend comes (a test's), else the browser's own */
   scrollEnd?: 'timer' | 'native'
+  /** the device pixels of laid pages' drawings the right keeps off the view (a host's own; 0 keeps none) */
+  keepPixels?: number
   warn?(what: string, e: unknown): void
 }
 
@@ -130,6 +149,21 @@ export interface Panes {
   pageElement(side: Side, n: number): HTMLElement | null
   /** a pane's scroller */
   containerOf(side: Side): HTMLElement
+  /** what the right shows of page n that is not laid: the left's own drawing of it while it waits for its layer and the left
+   *  shows it (the sync on, both panes shown), else its own page view of the original; the skeleton with no original. `settled`:
+   *  the page stays the original's (its own page view, with its text layer and links) */
+  originalOf(n: number, settled?: boolean): PageContent | null
+  /** the layer's word on the pages (`fn(n)`: whether page n stays the original's), the right's pages asked again */
+  settle(fn: ((n: number) => boolean) | null): void
+  /** no layer for this paper (refused, none): every page the original's own */
+  noLayer(on: boolean): void
+  /** the pages ahead of the view drawn from now on, on both panes (the layer's first page in place, a near page shown as the
+   *  original's, no layer to wait for, or AHEAD_HOLD_MS) */
+  letAheadGo(): void
+  /** whether the pages ahead still wait */
+  readonly aheadHeld: boolean
+  /** whether the left's PDF.js is drawing page n now (its page view running or paused) */
+  leftDrawing(n: number): boolean
   readonly follower: Follower<PaneSide>
   on<K extends keyof PaneEvents>(type: K, f: Listener<K>): () => void
   probe(): Record<string, unknown>
@@ -241,6 +275,12 @@ export function createPanes(o: PanesOptions): Panes {
   linkService.setViewer(viewer)
   // (the page boxes' rounding, one table for both panes: whichever draws page n at a scale first tells it)
   const rounding = roundingTable()
+  /** the scale each page of the left was last drawn at, as PDF.js told it drawn (pagerendered): its canvas is that scale's while
+   *  its page view's scale is the same; the pages being drawn, each told once drawn */
+  const leftAt = new Map<number, number>()
+  const leftWaits = new Map<number, (() => void)[]>()
+  type LeftView = { div?: HTMLElement; canvas?: HTMLCanvasElement | null; renderingState?: number; scale?: number }
+  const leftView = (n: number) => (laid ? (viewer.getPageView(n - 1) as LeftView | undefined) : undefined)
   const right = createStack({
     rounding,
     scroller: o.right,
@@ -249,6 +289,27 @@ export function createPanes(o: PanesOptions): Panes {
     clock,
     name: (n) => o.pageName('right', n),
     links: rightLinks,
+    sourceLang: SOURCE_LANG,
+    ...(typeof o.keepPixels === 'number' ? { keepPixels: o.keepPixels } : {}),
+    left: {
+      canvas(n) {
+        const lv = leftView(n)
+        return lv?.canvas && lv.renderingState === FINISHED && leftAt.get(n) === lv.scale && lv.canvas.width > 0
+          ? lv.canvas
+          : null
+      },
+      box: (n) => leftView(n)?.div ?? null,
+      drawing(n) {
+        const st = leftView(n)?.renderingState
+        if (!shown(L) || (st !== RUNNING && st !== PAUSED)) return null
+        return new Promise<void>((done) => {
+          const list = leftWaits.get(n) ?? []
+          list.push(done)
+          leftWaits.set(n, list)
+        })
+      },
+      holds: (n) => !!leftView(n)?.renderingState,
+    },
     warn,
   })
   R.stack = right.element
@@ -463,6 +524,30 @@ export function createPanes(o: PanesOptions): Panes {
   )
   for (const s of sides) refit.observe(s.container)
 
+  // ---------------------------------------------------------------- the original's pages on the right; the pages ahead
+  let settled: (n: number) => boolean = () => false,
+    layerless = false
+  function originalOf(n: number, isSettled = false): PageContent | null {
+    if (!doc || !laid) return right.pages ? { kind: 'skeleton', key: 'skeleton' } : null
+    const view: ViewContent = { key: 'original', doc, config: null, own: true, over: null }
+    if (isSettled || layerless || settled(n) || !active()) return view
+    return { kind: 'left', key: 'left', fallback: view }
+  }
+  right.contentOf = (n) => originalOf(n)
+  let aheadTimer = 0
+  function holdAhead() {
+    clock.clear(aheadTimer)
+    hold.on = true
+    right.hold(true)
+    aheadTimer = clock.later(() => goAhead(), AHEAD_HOLD_MS)
+  }
+  function goAhead() {
+    clock.clear(aheadTimer)
+    aheadTimer = 0
+    right.hold(false)
+    letAheadGo(hold)
+  }
+
   // ---------------------------------------------------------------- PDF.js's events, the stack's
   const on = (name: string, fn: (e: never) => void) => bus.on(name, fn as (e: unknown) => void, { signal } as never)
   on('pagesinit', () => {
@@ -471,6 +556,8 @@ export function createPanes(o: PanesOptions): Panes {
     else if (zoomChosen === null && scaleTold) setScale(scaleTold.scale)
     else setScale(shown(L) ? (zoomChosen === 'page-width' ? fitWidth() : (zoomChosen ?? 'page-width')) : 1)
     const mine = opening
+    // (another document: its pages ahead wait for its layer's first page, or the bound, again)
+    holdAhead()
     void right.layout(mine.doc, viewer.currentScale).then(() => {
       if (opening !== mine) return
       laid = true
@@ -508,7 +595,16 @@ export function createPanes(o: PanesOptions): Panes {
   on(
     'pagerendered',
     ({ pageNumber, error, isDetailView }: { pageNumber: number; error?: unknown; isDetailView?: boolean }) => {
-      if (!laid || isDetailView || error) return
+      if (!laid || isDetailView) return
+      // (the left's drawing, where a page of the right shows it or waits for it: taken again, or its own page view where it failed)
+      const lv = leftView(pageNumber)
+      if (lv && !error) leftAt.set(pageNumber, lv.scale ?? 0)
+      else leftAt.delete(pageNumber)
+      const waits = leftWaits.get(pageNumber)
+      leftWaits.delete(pageNumber)
+      for (const f of waits ?? []) f()
+      right.leftDrawn(pageNumber, !error)
+      if (error) return
       const div = pageDiv(L, pageNumber)
       if (div)
         rounding.set(
@@ -521,6 +617,11 @@ export function createPanes(o: PanesOptions): Panes {
     },
   )
   on('pagechanging', () => tellLeftPage())
+  // a page view's text layer holds the original's words: marked as the paper's language, the layer alone, so that the page's
+  // name, its links' names and the chrome keep the interface's (reader-view.mjs sourceText)
+  on('textlayerrendered', (e: { source?: { textLayer?: { div?: HTMLElement } } }) =>
+    e.source?.textLayer?.div?.setAttribute('lang', SOURCE_LANG),
+  )
   right.on('drawn', (e) => {
     if (!e.detail) tell('drawn', { side: 'right', page: e.n, scale: e.scale, key: e.key })
   })
@@ -577,7 +678,16 @@ export function createPanes(o: PanesOptions): Panes {
     scaleTold = { scale, zoom: zoomChosen }
     tell('scale', { scale, zoom: zoomChosen })
   }
+  /** whether the right's waiting pages show the left's drawing: told the stack where it changes */
+  let borrowing = false
+  function reborrow() {
+    const b = active()
+    if (b === borrowing) return
+    borrowing = b
+    right.refresh()
+  }
   function reportSync() {
+    reborrow()
     const a = available(),
       now = syncOn && a
     if (syncTold && syncTold.on === now && syncTold.available === a) return
@@ -613,7 +723,11 @@ export function createPanes(o: PanesOptions): Panes {
     if (laid) kept = readingPlace(readSide())
     doc = null
     laid = false
-    void right.layout(null, viewer.currentScale)
+    leftAt.clear()
+    for (const list of leftWaits.values()) for (const f of list) f()
+    leftWaits.clear()
+    // (the slots keep their sizes and show the skeleton until an original is shown again, places.mjs setDocument(null))
+    right.blank()
     viewer.setDocument(null as never)
     linkService.setDocument(null as never)
     rightLinks.setDocument(null as never)
@@ -1054,6 +1168,7 @@ export function createPanes(o: PanesOptions): Panes {
         relaying = false
         putAll(at)
         tellRightPage()
+        reborrow()
       })
     })
   }
@@ -1270,6 +1385,25 @@ export function createPanes(o: PanesOptions): Panes {
     },
     pageElement: (side, n) => pageDiv(side === 'left' ? L : R, n),
     containerOf: (side) => (side === 'left' ? L : R).container,
+    originalOf,
+    settle(fn) {
+      settled = fn ?? (() => false)
+      right.refresh()
+    },
+    noLayer(onNow) {
+      if (layerless === onNow) return
+      layerless = onNow
+      right.refresh()
+      if (onNow) goAhead()
+    },
+    letAheadGo: () => goAhead(),
+    leftDrawing(n) {
+      const st = leftView(n)?.renderingState
+      return st === RUNNING || st === PAUSED
+    },
+    get aheadHeld() {
+      return right.held
+    },
     on(type, f) {
       const set = listeners.get(type) ?? new Set()
       listeners.set(type, set)
@@ -1314,6 +1448,7 @@ export function createPanes(o: PanesOptions): Panes {
         linkService.setDocument(null as never)
       }
       unround()
+      clock.clear(aheadTimer)
       right.dispose()
       ac.abort()
       for (const x of observers) x.disconnect()

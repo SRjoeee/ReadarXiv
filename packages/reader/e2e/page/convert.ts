@@ -165,15 +165,30 @@ export function pagesOf(parts: Map<number, Part>, dump: ReaderDump, faceOf: (m: 
 
 /** the stand-in of the typesetter's layPage over converted pages: a page whose laid members' rows are not all in waits for
  *  them (every member 'waiting', lit whole from A, nothing off), unless no other row will come; then those members are the
- *  original's ('none') */
+ *  original's ('none'). A member whose row says it has no translation is the original's ('refused') at once */
 export function fixtureLay(pages: Map<number, Page>, parts: Map<number, Part>): Lay {
   const members = membersOf(parts.values())
   return (part: Part, rows: Rows): Page => {
-    const page = pages.get(part.page)
-    if (!page) return { page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] }
+    const page0 = pages.get(part.page)
+    if (!page0) return { page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] }
     const textOf = (ord: number) => members.get(ord)?.text
+    const refused = new Set(
+      page0.members
+        .filter((l) => typeof textOf(l.ord) === 'string' && rows.get(textOf(l.ord) as string)?.ok === false)
+        .map((l) => l.ord),
+    )
+    const page: Page = refused.size
+      ? {
+          ...page0,
+          members: page0.members.map((l) =>
+            refused.has(l.ord)
+              ? { ...l, state: 'refused', off: 0, lines: [], lit: { left: l.lit.left, right: l.lit.left, own: [] } }
+              : l,
+          ),
+        }
+      : page0
     const missing = page.members.filter(
-      (l) => l.state === 'laid' && typeof textOf(l.ord) === 'string' && !rows.get(textOf(l.ord) as string)?.ok,
+      (l) => l.state === 'laid' && typeof textOf(l.ord) === 'string' && !rows.get(textOf(l.ord) as string),
     )
     if (!missing.length) return page
     if (!rows.done)

@@ -107,23 +107,37 @@ export async function cropsFor(
   vp: PageViewport,
   crops: Promise<OptionalContentConfig>,
   scale: { sx: number; sy: number },
+  signal?: AbortSignal,
 ): Promise<HTMLCanvasElement | null> {
   const list = cropsOf(page)
-  if (!list.length) return null
+  if (!list.length || signal?.aborted) return null
   const w = Math.max(1, Math.floor(vp.width * scale.sx)),
     h = Math.max(1, Math.floor(vp.height * scale.sy))
   const source = document.createElement('canvas')
   source.width = w
   source.height = h
   const sctx = source.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
-  await pdfPage.render({
+  // (a crop render of a page that leaves the view is cancelled before it is drawn: its drawing let go)
+  const task = pdfPage.render({
     canvas: source,
     canvasContext: sctx,
     viewport: vp,
     transform: scale.sx !== 1 || scale.sy !== 1 ? [scale.sx, 0, 0, scale.sy, 0, 0] : undefined,
     optionalContentConfigPromise: crops,
     annotationMode: 0,
-  } as Parameters<PDFPageProxy['render']>[0]).promise
+  } as Parameters<PDFPageProxy['render']>[0])
+  const stop = () => task.cancel()
+  signal?.addEventListener('abort', stop, { once: true })
+  try {
+    await task.promise
+  } catch (e) {
+    source.width = 0
+    source.height = 0
+    if (signal?.aborted) return null
+    throw e
+  } finally {
+    signal?.removeEventListener('abort', stop)
+  }
   const out = document.createElement('canvas')
   out.className = 'axt-crops'
   out.width = w

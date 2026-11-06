@@ -263,6 +263,18 @@ async function newPage(o = {}) {
         })
       }
     }
+    // the stand-in of arXiv's abstract page (its citation_title) and its HTML version (none: 404)
+    if (url.origin === 'https://arxiv.org' && /^\/(abs|html)\//.test(url.pathname)) {
+      const id = url.pathname.split('/')[2] ?? ''
+      const known = Object.values(indexOf).some((x) => x.paper.replace(/v\d+$/, '') === id.replace(/v\d+$/, ''))
+      const headers = { 'access-control-allow-origin': '*', 'content-type': 'text/html' }
+      if (url.pathname.startsWith('/html/') || !known) return route.fulfill({ status: 404, headers, body: '' })
+      return route.fulfill({
+        status: 200,
+        headers,
+        body: `<!doctype html><meta name="citation_title" content="A paper of our own (${id})"><title>${id}</title>`,
+      })
+    }
     violations.push(`${req.method()} ${url.href}`)
     return route.abort('blockedbyclient')
   })
@@ -270,7 +282,12 @@ async function newPage(o = {}) {
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    // (arXiv's answer that a paper has no HTML version is a 404 the reader asks for: expected)
+    if (
+      m.type() === 'error' &&
+      !(/status of 404/.test(m.text()) && /^https:\/\/arxiv\.org\/html\//.test(m.location()?.url ?? ''))
+    )
+      errors.push(m.text())
   })
   await page.goto(`${server.origin}/`)
   return { page, context, errors }
@@ -485,14 +502,17 @@ for (const name of Object.keys(fixtures)) {
       per.push({
         n,
         ...ink,
-        textOk: text.laid.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, ''))),
+        // (each member's runs of text, in order, in the layer's text: the translation read in reading order)
+        textOk: text.runs.every((rs) => rs.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, '')))),
         inOrder: (() => {
           let at = 0
-          for (const t of text.laid) {
-            const i = text.text.replace(/\s+/g, '').indexOf(t.replace(/\s+/g, ''), at)
-            if (i < 0) return false
-            at = i
-          }
+          const all = text.text.replace(/\s+/g, '')
+          for (const rs of text.runs)
+            for (const t of rs) {
+              const i = all.indexOf(t.replace(/\s+/g, ''), at)
+              if (i < 0) return false
+              at = i
+            }
           return true
         })(),
         copied: text.copied.length,

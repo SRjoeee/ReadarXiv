@@ -19,6 +19,7 @@ import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
+import { ENGLISH_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
@@ -157,7 +158,8 @@ export interface Engine {
 const PAPER = /^((?:[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|(?:\d{4}\.\d{4,5}))(?:v(\d+))?$/
 /** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
 const NEAR_MS = 150
-}
+
+export { ENGLISH_WORDS, type Words }
 
 export function openReader(
   root: HTMLElement,
@@ -166,11 +168,13 @@ export function openReader(
     paper: string
     visit?: Partial<Pick<Prefs, 'display' | 'target' | 'sync'>>
     engine?: Engine
+    words?: Words
     /** the two panes' elements, where the host's chrome renders them (its scrollers): drawn into, never removed; none: the
      *  reader makes `div.axt-pane.left` and `.right` under `root` */
     panes?: { left: HTMLElement; right: HTMLElement }
   },
 ): Reader {
+  const words = (): Words => o.words ?? ENGLISH_WORDS
   const m = PAPER.exec(o.paper)
   if (!m) throw new TypeError(`not an arXiv paper: ${o.paper}`)
   const paper: PaperRef = { id: m[1] as string, version: m[2] ? Number(m[2]) : null }
@@ -217,7 +221,7 @@ export function openReader(
       kit: k,
       scheduler,
       clock,
-      pageName: (s, n) => `${s === 'left' ? 'Original' : 'Translation'}, page ${n}`,
+      pageName: (s, n) => words().pageName(s === 'left' ? 'original' : 'translation', n),
       openExternal: (url) => openExternal(url),
     })
     panes.on('drawn', (e) => {
@@ -556,15 +560,21 @@ export function openReader(
             links: {
               open: openExternal,
               follow: (d, how) => void panes?.follow(d, how),
-              unnamed: () => 'Link',
-              textUnder: () => '',
+              unnamed: (to) => words().linkName(to),
             },
+            clock,
+            root,
+            original: (n, settled) => panes?.originalOf(n, settled) ?? null,
+            settle: (fn) => panes?.settle(fn),
+            aheadGo: () => panes?.letAheadGo(),
+            leftDrawing: (n) => panes?.leftDrawing(n) ?? false,
+            classes: rt.state.prefs.value.classes,
           })
           composer.on('laid', () => mark('firstLaid'))
           composer.on('laid', () =>
             rt.input({ i: 'panes.laid', laid: composer?.probe().laidPages as number, total: head?.paper.pages ?? 0 }),
           )
-          highlight = H.createHighlight({ panes, composer, clock, on: true })
+          highlight = H.createHighlight({ panes, composer, clock, on: rt.state.prefs.value.highlight.on })
           composer.setDocuments({ original: original?.doc ?? null, composed: null, groups: null })
           mark('code')
           emit({ i: 'code.loaded', t })
@@ -744,6 +754,11 @@ export function openReader(
             })
           }
         } catch (e) {
+          // (these rows will not come: a page another target still shows goes back to the original's, layer-side.mjs dropOthers)
+          if (!signal.aborted) {
+            rowsDone = true
+            rowsIn([])
+          }
           if (!signal.aborted)
             emit({
               i: 'rows.failed',
@@ -814,6 +829,10 @@ export function openReader(
       panes?.setDisplay(displayOf(s))
       panes?.setSync(s.visit.sync ?? s.prefs.value.sync)
       composer?.setShown(displayOf(s) !== 'original')
+      // (what to translate, shown or hidden in place; the highlight's switch; no layer for the paper: every page the original's)
+      composer?.setClasses(s.prefs.value.classes)
+      highlight?.setOn(s.prefs.value.highlight.on)
+      panes?.noLayer(s.layer.s === 'refused')
     })
     tellSoon()
   }

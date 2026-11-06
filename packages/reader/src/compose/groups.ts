@@ -19,6 +19,9 @@ export interface Groups {
   readonly ready: Promise<void>
   /** whether the document holds a group by that name */
   has(name: string): boolean
+  /** whether the document holds every group `off` names of member `ord` on page `page` (a group it does not hold: the unit is
+   *  the original's, layer-side.mjs "Failures") */
+  holds(ord: number, page: number, off: number): boolean
   readonly size: number
   /** page p's groups as `page` turns them off (its members' `off`), in `laid`; the groups of that page `page` does not name on */
   set(page: Page): string[]
@@ -50,6 +53,7 @@ export function groupsOf(doc: PDFDocumentProxy): Groups {
     crops,
     ready,
     has: (name) => ids.has(name),
+    holds: (ord, page, off) => ([1, 2, 4] as const).every((bit) => !(off & bit) || ids.has(groupName(ord, page, bit))),
     get size() {
       return ids.size
     },

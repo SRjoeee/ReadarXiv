@@ -19,6 +19,7 @@ import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
 import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
+import { ENGLISH_WORDS } from '../../src/compose/words.ts'
 import { openReader, type Reader } from '../../src/reader.ts'
 
 const root = document.getElementById('root') as HTMLElement
@@ -48,12 +49,14 @@ const h = {
   head: null as Head | null,
   parts: new Map<number, Part>(),
   pages: new Map<number, Page>(),
-  rows: null as (RowsSource & { give(ids?: string[]): void; rowsCount: number }) | null,
+  rows: null as (RowsSource & { give(ids?: string[]): void; end?(): void; rowsCount: number }) | null,
   external: [] as string[],
   t0: 0,
   marks: [] as { what: string; at: number; [k: string]: unknown }[],
-  /** the panes over the original at `url` (a path of our server's, else arXiv's absolute URL) */
-  async open(url: string) {
+  /** the panes over the original at `url` (a path of our server's, else arXiv's absolute URL). `borrow`: the right's pages as
+   *  the panes give them (the left's drawing while a page waits, the skeleton with no original), else every page its own page
+   *  view; `keepPixels`, `scrollEnd` the panes' */
+  async open(url: string, o: { borrow?: boolean; keepPixels?: number; scrollEnd?: 'timer' | 'native' } = {}) {
     h.t0 = performance.now()
     const kit = await loadKit()
     h.kit = kit
@@ -77,6 +80,8 @@ const h = {
       pageName: (s, n) => `${s} page ${n}`,
       openExternal: (u) => h.marks.push({ what: 'external', at: 0, url: u }),
       warn: (w, e) => console.warn(w, e),
+      ...(o.keepPixels !== undefined ? { keepPixels: o.keepPixels } : {}),
+      ...(o.scrollEnd ? { scrollEnd: o.scrollEnd } : {}),
     })
     h.panes = panes
     panes.on('drawn', (e) =>
@@ -97,7 +102,7 @@ const h = {
     h.task = task
     const doc = await task.promise
     h.doc = doc
-    panes.right.contentOf = () => ({ key: 'original', doc, config: null, own: true, over: null })
+    if (!o.borrow) panes.right.contentOf = () => ({ key: 'original', doc, config: null, own: true, over: null })
     const r = await panes.open(doc)
     h.marks.push({ what: 'opened', at: performance.now() - h.t0, r })
     return { pages: doc.numPages, asks: source.counts.asks, bytes: source.counts.bytes }
@@ -107,7 +112,16 @@ const h = {
    * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
    * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from
    */
-  async layer(name: string, o: { unlaid?: 'original' | 'composed'; rows?: 'all' | 'none'; target?: string } = {}) {
+  async layer(
+    name: string,
+    o: {
+      unlaid?: 'original' | 'composed'
+      rows?: 'all' | 'none'
+      target?: string
+      classes?: Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean>
+      ahead?: number
+    } = {},
+  ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
     const kit = h.kit as NonNullable<typeof h.kit>
     const t0 = performance.now()
@@ -156,6 +170,11 @@ const h = {
         for (const r of all) if (!ids || ids.includes(r.id)) given.set(r.id, r)
         for (const f of [...listeners]) f()
       },
+      /** no other row will come */
+      end() {
+        rows.done = true
+        for (const f of [...listeners]) f()
+      },
       get rowsCount() {
         return given.size
       },
@@ -180,9 +199,16 @@ const h = {
       links: {
         open: (u) => h.external.push(u),
         follow: (d, how) => void panes.follow(d, how),
-        unnamed: () => 'Link',
-        textUnder: () => '',
+        unnamed: (to) => ENGLISH_WORDS.linkName(to),
       },
+      clock: h.clock as NonNullable<typeof h.clock>,
+      root,
+      original: (n, settled) => panes.originalOf(n, settled),
+      settle: (fn) => panes.settle(fn),
+      aheadGo: () => panes.letAheadGo(),
+      leftDrawing: (n) => panes.leftDrawing(n),
+      ...(o.classes ? { classes: o.classes } : {}),
+      ...(o.ahead !== undefined ? { ahead: o.ahead } : {}),
       warn: (w, e) => console.warn(w, e),
     })
     h.composer = composer
@@ -204,6 +230,9 @@ const h = {
         swapMs: e.swapMs,
         layoutMs,
         drawMs: e.drawMs,
+        // (the translating marks still on the page in the task its drawing is put in place, and the root's attributes the
+        // swap's task wrote)
+        marksLeft: slot?.querySelectorAll('.axt-translating-mark').length ?? 0,
       })
     })
     h.highlight?.dispose()
@@ -322,12 +351,16 @@ const h = {
       )
       return i < 0 ? Number.POSITIVE_INFINITY : i
     }
-    const laid = (p?.members ?? [])
+    // (a member's runs of text, in order: a crop's text is the original's under its source, moved where it is drawn, or its own)
+    const runs = (p?.members ?? [])
       .filter((m) => m.state === 'laid')
-      .map((m) => ({ at: firstOf(m.ord), t: m.lines.map(([, , , its]) => its.map((i) => i.s).join('')).join('') }))
+      .map((m) => ({
+        at: firstOf(m.ord),
+        t: m.lines.flatMap(([, , , its]) => its.filter((i) => !('src' in i)).map((i) => i.s)).filter((s) => s.trim()),
+      }))
       .sort((a, b) => a.at - b.at)
       .map((x) => x.t)
-    return { spans: spans.length, text: spans.join(''), copied, laid }
+    return { spans: spans.length, text: spans.join(''), copied, laid: runs.map((r) => r.join('')), runs }
   },
   /**
    * The split residue and I1 on pages `pages` (all where none) at `scale` and the device's ratio, each rendered as the page views
@@ -462,6 +495,72 @@ const h = {
       sameComposed: before.composed === h.composed,
     }
   },
+  /** another target whose rows are not in yet (`give` and `end` them later): the pages laid before kept until its commits */
+  async retargetLater(target: string, name: string) {
+    const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const all = ((await (await fetch(`/fixtures/${name}/${fx.rows.de ?? 'de.rows.json'}`)).json()) as { rows: Row[] })
+      .rows
+    const given = new Map<string, Row>()
+    const listeners = new Set<() => void>()
+    const rows = {
+      target,
+      done: false,
+      get: (id: string) => given.get(id),
+      on(f: () => void) {
+        listeners.add(f)
+        return () => listeners.delete(f)
+      },
+      give(ids?: string[]) {
+        for (const r of all) if (!ids || ids.includes(r.id)) given.set(r.id, r)
+        for (const f of [...listeners]) f()
+      },
+      end() {
+        rows.done = true
+        for (const f of [...listeners]) f()
+      },
+      get rowsCount() {
+        return given.size
+      },
+    }
+    h.rows = rows
+    ;(h.composer as Composer).setLayer(
+      { part: async (n) => h.parts.get(n) ?? null, pages: (h.head as Head).paper.pages },
+      rows,
+    )
+  },
+  /** the right's page n's translating marks: each one's box in shares of its slot, and the looks the sheet gives them */
+  marksOf(n: number) {
+    const slot = (h.panes as Panes).right.page(n) as HTMLElement
+    const el = slot.querySelector<HTMLElement>('.axt-translating')
+    if (!el) return null
+    const s = slot.getBoundingClientRect()
+    const ms = [...el.querySelectorAll<HTMLElement>('.axt-translating-mark')]
+    const anims = el.getAnimations({ subtree: true }) as CSSAnimation[]
+    const pass = anims.filter((a) => a.animationName === 'axt-tr-pass')
+    const cs = getComputedStyle(el),
+      m0 = ms[0] ? getComputedStyle(ms[0]) : null,
+      b0 = ms[0] ? getComputedStyle(ms[0], '::before') : null
+    const root = getComputedStyle(document.getElementById('root') as HTMLElement)
+    return {
+      count: ms.length,
+      ariaHidden: el.getAttribute('aria-hidden'),
+      pointerEvents: cs.pointerEvents,
+      shares: ms.map((m) => {
+        const r = m.getBoundingClientRect()
+        return [(r.left - s.left) / s.width, (r.top - s.top) / s.height, r.width / s.width, r.height / s.height]
+      }),
+      delay: m0?.animationDelay,
+      fade: m0?.animationDuration,
+      background: m0?.backgroundColor,
+      before: b0?.content,
+      run: b0?.animationDuration,
+      starts: [...new Set(pass.map((a) => a.startTime))],
+      passes: pass.length,
+      light: root.getPropertyValue('--axt-tr-light').trim(),
+      angle: root.getPropertyValue('--axt-tr-angle').trim(),
+      still: el.classList.contains('axt-translating-still'),
+    }
+  },
   /** the anchors of the right's laid page n: their names, hrefs and boxes */
   linksOf(n: number) {
     const slot = (h.panes as Panes).right.page(n) as HTMLElement
@@ -482,12 +581,13 @@ const h = {
     if (!b || !el) return null
     const q = (h.panes as Panes).boxOf(side, n, b) as { left: number; top: number; width: number; height: number }
     const r = el.getBoundingClientRect()
+    // (one shape a sentence, and one of its kept ink: the bands each pane shows of the member lit whole)
     return {
       x: r.left + el.clientLeft + q.left + q.width / 2,
       y: r.top + el.clientTop + q.top + q.height / 2,
-      left: m?.lit.left.flat().length ?? 0,
-      right: (committed ? m?.lit.right : m?.lit.left)?.flat().length ?? 0,
-      own: m?.lit.own.flatMap(([, x]) => x).length ?? 0,
+      left: m?.lit.left.filter((b) => b.length).length ?? 0,
+      right: ((committed ? m?.lit.right : m?.lit.left) ?? []).filter((b) => b.length).length,
+      own: m?.lit.own.some(([, x]) => x.length) ? 1 : 0,
     }
   },
   readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],

@@ -2,6 +2,11 @@
 // made from bytes read through the reader's fetch (a font is fetched as data, never imported: Chromium keeps a failed import()
 // failed for the page's life, W faces.ts:10-13), added to the document while the reader lives and taken out with it, and a class
 // a run is drawn with. A face the table names a local family for (a test's, a system's) is that family.
+//
+// Loaded in waves (layer-side.mjs warmPages, docs/PDF-READER.md §11.8): the faces asked together are read in the order asked
+// (the page in the middle of the view first), WAVE_SLOTS at a time, so that a wave does not hold the original's reads behind
+// it; each asked once. A face whose answer is a 4xx other than 408 and 429 is never asked again (W faces.ts:69-72); any other
+// failure (the network, a 5xx, a 408 or 429) is forgotten, and asked again by the next wave that wants it.
 import type { Fetch } from '../bytes/source.ts'
 import type { FaceId } from './page.ts'
 
@@ -16,14 +21,20 @@ export interface FaceEntry {
   fallback?: string
 }
 export type FaceTable = Readonly<Record<FaceId, FaceEntry>>
+/** how many faces a wave reads at a time (layer-side.mjs WAVE_SLOTS) */
+export const WAVE_SLOTS = 4
 
 export interface Faces {
   /** the class a run of `id` is drawn with */
   classOf(id: FaceId): string
   /** the CSS family a run of `id` is measured and drawn in */
   familyOf(id: FaceId): string
-  /** the faces loaded (each once); a face that cannot be read is left to its fallback, and told */
+  /** the faces loaded (each once), in the order given, WAVE_SLOTS at a time; a face that cannot be read is left to its
+   *  fallback, and told */
   ready(ids: Iterable<FaceId>): Promise<void>
+  /** the faces asked of the network, and the most read at once (the probe's) */
+  readonly asked: number
+  readonly most: number
   dispose(): void
 }
 
@@ -40,6 +51,34 @@ export function createFaces(o: {
   const classes = new Map<FaceId, string>()
   const loading = new Map<FaceId, Promise<void>>()
   const added: FontFace[] = []
+  /** the reads waiting for a slot, and the slots taken */
+  const waiting: (() => void)[] = []
+  let busy = 0,
+    asked = 0,
+    most = 0
+  const slot = () =>
+    new Promise<void>((go) => {
+      if (busy < WAVE_SLOTS) {
+        busy++
+        most = Math.max(most, busy)
+        go()
+      } else waiting.push(go)
+    })
+  const free = () => {
+    const next = waiting.shift()
+    if (next) next()
+    else busy--
+  }
+  class Answer extends Error {
+    readonly status: number
+    constructor(status: number) {
+      super(`answered ${status}`)
+      this.status = status
+    }
+  }
+  /** a 4xx other than 408 and 429: the face is not there, and will not be (asking again would only fail again) */
+  const lasting = (e: unknown) =>
+    e instanceof Answer && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429
   const familyOf = (id: FaceId) => {
     const e = o.table[id]
     return e?.local
@@ -67,22 +106,39 @@ export function createFaces(o: {
         if (!e?.src) continue
         let p = loading.get(id)
         if (!p) {
-          p = (async () => {
-            const r = await o.fetch(e.src as string)
-            if (!r.ok) throw new Error(`the face ${id} answered ${r.status}`)
-            const face = new FontFace(`axt-${rid}-${id.replace(/[^a-z0-9-]/gi, '_')}`, await r.arrayBuffer(), {
-              weight: e.weight ?? 'normal',
-              style: e.style ?? 'normal',
-            })
-            await face.load()
-            document.fonts.add(face)
-            added.push(face)
-          })().catch((err) => o.warn?.(`the face ${id}`, err))
+          const mine: Promise<void> = (async () => {
+            await slot()
+            try {
+              asked++
+              const r = await o.fetch(e.src as string)
+              if (!r.ok) throw new Answer(r.status)
+              const face = new FontFace(`axt-${rid}-${id.replace(/[^a-z0-9-]/gi, '_')}`, await r.arrayBuffer(), {
+                weight: e.weight ?? 'normal',
+                style: e.style ?? 'normal',
+              })
+              await face.load()
+              document.fonts.add(face)
+              added.push(face)
+            } finally {
+              free()
+            }
+          })().catch((err) => {
+            o.warn?.(`the face ${id}`, err)
+            // (a failure that may pass is forgotten: the next wave that wants the face asks it again)
+            if (!lasting(err) && loading.get(id) === mine) loading.delete(id)
+          })
+          p = mine
           loading.set(id, p)
         }
         waits.push(p)
       }
       return Promise.all(waits).then(() => {})
+    },
+    get asked() {
+      return asked
+    },
+    get most() {
+      return most
     },
     dispose() {
       for (const f of added) document.fonts.delete(f)
