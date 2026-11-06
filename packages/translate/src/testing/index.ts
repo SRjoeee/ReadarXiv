@@ -16,3 +16,4 @@ export {
   scriptedFetch,
 } from './fakes.ts'
 export { type CountingGate, countingGate, type FakeClock, fakeClock, type MemoryStore, memoryStore } from './ports.ts'
+export { type AdapterFixtures, goldenOf, translatorSuite } from './suite.ts'

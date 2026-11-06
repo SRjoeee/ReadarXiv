@@ -37,3 +37,6 @@ export {
   type UnitIn,
   type Why,
 } from './contract.ts'
+export { type ChromeApi, type ChromeOptions, type ChromeSession, chrome } from './adapters/chrome.ts'
+export { type GoogleOptions, google } from './adapters/google.ts'
+export { type MicrosoftOptions, microsoft } from './adapters/microsoft.ts'
