@@ -136,7 +136,7 @@ describe('S4, S5, S6, S8: what a unit owns', () => {
 describe('S7: the bytes written are the bytes proved', () => {
   it('refuses a page whose deflated stream does not inflate to the stream it proved', async () => {
     const { bytes } = await markedSample({ pages: [2] })
-    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap-final.mjs')
 
     const { inflate } = await import('./helpers/ocg-pdfs')
     const lossy = (b: Uint8Array) => new Uint8Array(deflateSync(b.subarray(0, Math.floor(b.length * 0.6))))
@@ -190,7 +190,7 @@ describe('re-review B2: arXiv\'s own layers stay listed in the composed document
 describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () => {
   it('requires units (null said for none), deflate and inflate', async () => {
     const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)')) })
-    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap-final.mjs')
 
     const { deflate, inflate } = await import('./helpers/ocg-pdfs')
     const base = { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS }
@@ -274,7 +274,7 @@ describe('coverage: a soft mask\'s content is no painted ink of the page', () =>
     const { bytes } = await markedSample({ pages: [2], edit: only(page), tweak: softMask })
     const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() } as never)
     const ops = await (await (await task.promise).getPage(2)).getOperatorList()
-    const { alignOf } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    const { alignOf } = await import('@readarxiv/engine')
     expect(ops.fnArray.filter((f: number) => f === OPS.constructPath).length).toBe(4)
     expect(alignOf(OPS, ops).paths).toBe(2)
     await task.destroy()

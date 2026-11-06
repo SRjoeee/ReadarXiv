@@ -9,7 +9,7 @@ import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { type Annot, arxivOf, baseOf, CH, endOf, FONTS, LATE_MS, lineCheckOf, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_ANY, LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
-import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { ALLOCATION_FAILED } from '@readarxiv/engine'
 
 // The layout maker over the fake world of helpers/make-world.ts
 

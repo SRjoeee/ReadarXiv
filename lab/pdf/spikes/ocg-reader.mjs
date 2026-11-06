@@ -19,6 +19,7 @@ import { extname, join, normalize, resolve } from 'node:path'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { chromium } from 'playwright'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { packageFile } from '../packages-route.mjs'
 
 const arg = (k, d = null) => process.argv.find(a => a.startsWith(`--${k}=`))?.slice(k.length + 3) ?? d
 const REPO = resolve(new URL('../../..', import.meta.url).pathname)
@@ -33,10 +34,10 @@ mkdirSync(join(OUT, NAME), { recursive: true })
 // ---- the wrap, as the maker child makes it, kept by the base's digest
 const FX = join(PACK, 'fixtures', NAME)
 const baseBytes = new Uint8Array(readFileSync(join(FX, 'base.pdf')))
-const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
+const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))).update(readFileSync(join(REPO, 'packages/engine/src/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
 const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`), glyphsPath = join(OUT, NAME, `wrapped-${digest}-ink2.json`)
 if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
-  const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))
+  const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap-final.mjs'))
   const { openPaper } = await import(join(REPO, 'src/pdf-reader/engine/pipeline/live.mjs'))
   const { unpackSource } = await import(join(REPO, 'src/pdf-reader/engine/source/tar.mjs'))
   const sourceGz = join(resolve(arg('sources') ?? ''), NAME.replace(/-[a-z]+$/, ''), 'source.gz')
@@ -52,7 +53,7 @@ if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   writeFileSync(headPath, JSON.stringify({ stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, own: r.own, ms: Math.round(performance.now() - t0) }))
   // (each page's glyphs as ownership read them, with their group, in device px at the page's k (2.5), y down: what a hidden pixel
   // outside the layout file's rectangles belongs to)
-  const { pageInk } = await import(join(REPO, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pageInk } = await import(join(REPO, 'packages/engine/src/ink.mjs'))
   const task = getDocument({ data: baseBytes.slice(), verbosity: 0, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true })
   const doc = await task.promise, glyphs = []
   for (let p = 1; p <= doc.numPages; p++) {
@@ -105,6 +106,13 @@ const server = createServer((req, res) => {
     const code = readFileSync(found, 'utf8')
     res.writeHead(200, { 'content-type': 'text/javascript' })
     res.end(found.endsWith('.ts') ? ESBUILD.transformSync(code, { loader: 'ts', format: 'esm', target: 'es2022', sourcefile: found }).code : code)
+    return
+  }
+  // (the workspace packages the engine imports (`@readarxiv/engine`, `@readarxiv/format`), TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) {
+    const f = packageFile(REPO, path)
+    res.writeHead(f ? 200 : 404, { 'content-type': f ? f.type : 'text/plain' })
+    res.end(f ? f.body : 'not found')
     return
   }
   if (path.startsWith('/hyph/')) { const j = HYPH.get(path.slice(6, -5)); res.writeHead(j ? 200 : 404, { 'content-type': 'application/json' }); res.end(j ?? 'null'); return }

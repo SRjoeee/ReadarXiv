@@ -2,8 +2,8 @@ import * as PL from '@cantoo/pdf-lib'
 import { readFileSync } from 'node:fs'
 import { deflateSync, inflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { lex } from '@/pdf-reader/engine/layout/remove.mjs'
-import { wrapFinal } from '@/pdf-reader/engine/layout/wrap.mjs'
+import { lex } from '@readarxiv/engine'
+import { wrapFinal } from '@/pdf-reader/engine/layout/wrap-final.mjs'
 
 // The synthetic marked compiles of the per-unit erasure's tests (layout/own.mjs, layout/wrap.mjs; design docs/route/
 // ocg-erasure.md §7.2): sample-1's own pages (tests/fixtures/pdf/sample-1, CC0) with points written into their content streams

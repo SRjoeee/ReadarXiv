@@ -12,7 +12,7 @@ import { POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, REFUSED_ASKS, ty
 import { readFileSync } from 'node:fs'
 import * as PL from '@cantoo/pdf-lib'
 import { deltaOf } from '@/pdf-reader/engine/layout/delta.mjs'
-import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
+import { startxrefOf } from '@readarxiv/engine'
 import { cutSample } from '../e2e/lib/layer-cut.mjs'
 import { made, type Made, N, PAPER } from './helpers/format-paper'
 

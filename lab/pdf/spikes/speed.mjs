@@ -25,6 +25,7 @@
 // quiet machine only. Prints a table a paper and a side: the medians and the spread (min to max) of the total, the first part
 // and its page, the marked read, the peak RSS, and `SLOWER` where a side's median total is past base's spread. Each run's line
 // in --out also holds the draw's counters (`draw`: its pages, bytes, and the items' fills told and the glyphs read for them).
+import { movedIn } from '../moved-in.mjs'
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -50,11 +51,11 @@ async function child() {
   const PL = await import(join(REPO, 'node_modules/@cantoo/pdf-lib/cjs/index.js')).then(m => m.default ?? m)
   const { createHash } = await import('node:crypto')
   const { constants: Z, deflateSync, inflateRawSync, inflateSync } = await import('node:zlib')
-  const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(join(E, f))
+  const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(movedIn(E, f))
   const mk = await im('layout/marks.mjs'), front = await im('source/latex-front.mjs'), live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs')
   const arx = await im('layout/arxiv.mjs'), pass = await im('pipeline/page-pass.mjs'), tail = await im('layout/tail.mjs'), versions = await im('pipeline/versions.mjs')
   // (the wrap where the engine has it)
-  const wrapMod = existsSync(join(E, 'layout/wrap.mjs')) ? await im('layout/wrap.mjs') : null
+  const wrapMod = existsSync(join(E, 'layout/wrap-final.mjs')) ? await im('layout/wrap-final.mjs') : existsSync(join(E, 'layout/wrap.mjs')) ? await im('layout/wrap.mjs') : null
   const NM = join(REPO, 'node_modules/pdfjs-dist/')
   const tasks = []
   const open = (bytes, o = LITE) => { const task = getDocument({ data: bytes.slice(), ...o, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }); tasks.push(task); return task.promise }

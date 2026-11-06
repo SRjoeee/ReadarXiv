@@ -573,7 +573,7 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
   it('a page read live tells its characters\' fills as its draw does: one colour, runs, a pattern\'s none, black (the ink off its own list)', async () => {
     const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
     const { arxivOf } = await import('./helpers/make-world')
-    const { pageInk } = await import('@/pdf-reader/engine/layout/ink.mjs')
+    const { pageInk } = await import('@readarxiv/engine')
     const { fontReaders, liveFillsOf, pageReadOf } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const runs = [
       { s: 'Section 3 heading', x: 72, y: 700, fill: '#0c5388' },

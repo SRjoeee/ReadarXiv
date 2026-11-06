@@ -40,6 +40,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
 import { wrapOf } from '../spikes/layer-gate/wrap.mjs'
+import { packageFile, ZOD_PATH } from '../packages-route.mjs'
 import { isOwnHost } from './own-host.mjs'
 import { PAGE_FILES, unservedImports } from './page-files.mjs'
 import { createRulesApi, RULES_PATH } from './rules-api.mjs'
@@ -203,7 +204,9 @@ const server = createServer((req, res) => {
     // (and the engine's view sheet, view/engine.css, which the quick view is drawn with as the readers draw it)
     return sendFile(res, /\.(m?js|json)$/.test(r) || r === 'view/engine.css' ? under(ENGINE, r) : null)
   }
-  if (path.startsWith('/zod/')) return sendFile(res, /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
+  if (path.startsWith('/zod/')) return sendFile(res, ZOD_PATH.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
+  // (the workspace packages an engine module imports, TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) { const f = packageFile(REPO, path); return f ? send(res, 200, f.body, f.type) : send(res, 404, 'not found') }
   if (path.startsWith('/pdfjs/')) {
     const r = path.slice('/pdfjs/'.length)
     return sendFile(res, /^(build|cmaps|standard_fonts|wasm|iccs)\//.test(r) ? under(PDFJS, r) : null, 'max-age=3600')

@@ -135,8 +135,9 @@ export const ENGINE = /^src\/pdf-reader\/engine\//
 export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs']
 
 /** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
- *  layout maker is handed it (`PL`) */
-export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }]
+ *  layout maker is handed it (`PL`). The engine's modules that moved into the engine package (packages/engine) are imported
+ *  from its entry, `@readarxiv/engine`, by every engine file that names one */
+export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }, { name: '@readarxiv/engine', under: 'src/pdf-reader/engine/' }]
 
 /** Files of the engine that belong to the extension alone and so import what the rule forbids, and modules outside the
  *  engine that move into it, each named so that the lint stays green until the move lands and the list is the work left.

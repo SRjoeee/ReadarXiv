@@ -25,7 +25,7 @@ import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from
 import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from '../pipeline/live.mjs'
 import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { auxUnits, contextUnits, copiesOutOfPlace, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'

@@ -11,7 +11,7 @@
 //   node lab/pdf/spikes/layer-gate/draws.mjs <engine worktree> <page.pdf> <out.json>
 // Writes { pdfjs, pages: [{ draw, why }] }, page 1 first: `draw` the draw as a left part carries it (draw.mjs, the writer's
 // wireOf), or null with drawDataOf's why.
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
@@ -28,7 +28,7 @@ float32Outlines?.(pdfjs, worker)
 globalThis.pdfjsWorker = worker
 const { getDocument, OPS } = pdfjs
 const { drawDataOf } = await import(E('pipeline/draw-data.mjs'))
-const { BOXES_PAGE, GLYPHS_PAGE, pageInk } = await import(E('layout/ink.mjs'))
+const { BOXES_PAGE, GLYPHS_PAGE, pageInk } = await import(existsSync(E('layout/ink.mjs')) ? E('layout/ink.mjs') : E('../../../packages/engine/src/ink.mjs'))
 const NM = dirname(require.resolve('pdfjs-dist/package.json'))
 const task = getDocument({ data: new Uint8Array(readFileSync(pdf)), maxImageSize: LINK_TEXT_PIXELS ?? NO_IMAGE_PIXELS, verbosity: 0, cMapUrl: `${NM}/cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}/standard_fonts/`, useSystemFonts: false, fontExtraProperties: true })
 const doc = await task.promise

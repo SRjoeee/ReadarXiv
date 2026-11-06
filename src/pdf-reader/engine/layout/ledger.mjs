@@ -19,7 +19,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, unitClass } from '../rules/content-classes.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
-import { regionMask } from './ink.mjs'
+import { regionMask } from '@readarxiv/engine'
 import { columnsAt, regionsOf } from './stream.mjs'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
