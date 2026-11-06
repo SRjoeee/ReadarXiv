@@ -10,7 +10,7 @@ export type Refusal =
   | 'spans'
   /** an id the unit lacks, a control character, U+FFFC or a default-ignorable code point */
   | 'foreign'
-  /** no letter where the unit has one */
+  /** no letter or digit where the unit has a letter */
   | 'empty'
   /** shorter than LENGTH_FLOOR of a unit of FLOOR_FROM characters or more */
   | 'short'
@@ -33,6 +33,7 @@ const holdsControl = (s: string): boolean => {
 }
 const IGNORABLE = /\p{Default_Ignorable_Code_Point}/u
 const LETTER = /\p{L}/u
+const SAYS = /[\p{L}\p{N}]/u
 const SOLID = /\S/
 
 /** The plain projection of a piece list (design-a §1.4): text joined, each element one U+FFFC, spans transparent. The
@@ -118,7 +119,8 @@ export function accept(unit: UnitIn, out: readonly OutPiece[]): { ok: true } | {
     const n = seenSpans.get(id) ?? 0
     if (n > 1 || (s.must && n !== 1) || (s.must && s.text && !spanText.get(id))) return { ok: false, why: 'spans' }
   }
-  if (LETTER.test(textOf(unit.content)) && !LETTER.test(textOf(out))) return { ok: false, why: 'empty' }
+  // (a digit is a translation of words: "two" is 2, mt.mjs SAYS, the review of #404)
+  if (LETTER.test(textOf(unit.content)) && !SAYS.test(textOf(out))) return { ok: false, why: 'empty' }
   const from = plainLength(unit.content)
   if (from >= FLOOR_FROM && plainLength(out) < LENGTH_FLOOR * from) return { ok: false, why: 'short' }
   return { ok: true }
@@ -152,4 +154,4 @@ export function asOut(content: readonly Piece[]): OutPiece[] {
 
 /** The behaviour digest of `accept`: the SHA-256 of its outputs over the golden cases of tests/accept.test.ts. A change to
  *  what the rule accepts fails that test until this moves, and with it every chain's identity (identityOf) */
-export const ACCEPT_DIGEST = '08f09f1341bf4d5d82df8eab4751279899c6af78f3135a018467b0a6e3604494'
+export const ACCEPT_DIGEST = '1f2d07f99d5bf69993053a2e4c66cdd9d6d4c091c14c394339dfa0b56a58af70'

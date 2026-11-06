@@ -84,9 +84,9 @@ const CASES: [UnitIn, OutPiece[]][] = [
   [
     u,
     out(
-      { t: 'text', s: '12' },
+      { t: 'text', s: '。' },
       { t: 'el', id: 'm1' },
-      { t: 'span', id: 'l1', content: [{ t: 'text', s: '3' }] },
+      { t: 'span', id: 'l1', content: [{ t: 'text', s: '、' }] },
       { t: 'el', id: 'c1' },
     ),
   ],
@@ -104,6 +104,8 @@ const CASES: [UnitIn, OutPiece[]][] = [
       { t: 'el', id: 'c1' },
     ),
   ],
+  // a digit for a word ("two" is 2)
+  [unit('two', [t('two')]), out({ t: 'text', s: '2' })],
 ]
 
 describe('accept: the one rule (DECISION: "one acceptance rule over typed pieces")', () => {
@@ -179,8 +181,9 @@ describe('accept: the one rule (DECISION: "one acceptance rule over typed pieces
       ),
     ).toEqual({ ok: false, why: 'foreign' })
   })
-  it('(d) no text lost: a letter where the unit has one', () => {
+  it('(d) no text lost: a letter or a digit where the unit has a letter ("two" is 2: mt.mjs SAYS)', () => {
     expect(accept(u, CASES[9]![1])).toEqual({ ok: false, why: 'empty' })
+    expect(accept(unit('two', [t('two')]), [{ t: 'text', s: '2' }])).toEqual({ ok: true })
   })
   it('(d) the length floor (DECISION: 0.2 for units of 200 characters or more, every target)', () => {
     const long = unit('long', [t('a'.repeat(150)), t(' '), t('b'.repeat(49))])
