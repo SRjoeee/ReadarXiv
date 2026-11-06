@@ -117,6 +117,17 @@ const PROBE_MS = 2_000
 /** the rows' key grammar: rises only if the key changes */
 const ROWS = 'r1'
 
+/** a stored row, or null where the value is none (a store that answers garbage is a miss) */
+function rowOf(raw: string | null | undefined): Omit<Extract<Result, { ok: true }>, 'id'> | null {
+  if (typeof raw !== 'string') return null
+  try {
+    const row = JSON.parse(raw) as Omit<Extract<Result, { ok: true }>, 'id'>
+    return row && row.ok === true && Array.isArray(row.content) && typeof row.by === 'string' ? row : null
+  } catch {
+    return null
+  }
+}
+
 /** What a failure is to a page: one of the kinds its words are keyed on (locale packs, `ui/strings.ts`) */
 export function errorOf(why: Why, status?: number): ErrorInfo {
   switch (why.kind) {
@@ -234,11 +245,11 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
       const todo: UnitIn[] = []
       call.units.forEach((u, i) => {
-        const raw = held[i]
-        const row = typeof raw === 'string' ? (JSON.parse(raw) as Omit<Extract<Result, { ok: true }>, 'id'>) : null
-        if (row?.content) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
+        const row = rowOf(held[i])
+        if (row) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
         else todo.push(u)
       })
+      const byId = new Map(todo.map(u => [u.id, u]))
       const cached = call.units.length - todo.length
       const passed = new Map<string, Map<string, Why['kind'][]>>()
       let sent = 0
@@ -261,7 +272,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
             out.set(r.id, { ...r, ...e })
             if (rows && isRow(r, order, passed)) {
               const { id: _, ...row } = r
-              writes.push([rowKey(todo.find(u => u.id === r.id) as UnitIn, context), JSON.stringify(row)])
+              writes.push([rowKey(byId.get(r.id) as UnitIn, context), JSON.stringify(row)])
             }
           } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
         }
@@ -269,7 +280,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       if (rows && writes.length) await within(rows.write(writes), 5_000, undefined)
       const results = call.units.map(u => out.get(u.id) ?? { id: u.id, ok: false as const, why: { kind: 'aborted' as const }, error: errorOf({ kind: 'aborted' }) })
       const failed = results.find(r => !r.ok)
-      deps.note?.(batchLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), segments: call.units.length, cached, calls: sent, done: results.filter(r => r.ok).length, ...(failed && !failed.ok ? { failed: failed.error.kind } : {}) }))
+      // what the call cost, for the diagnostics log (issue #237): a call the rows answered whole costs nothing and says nothing
+      if (sent > 0 || failed) deps.note?.(batchLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), segments: call.units.length, cached, calls: sent, done: results.filter(r => r.ok).length, ...(failed && !failed.ok ? { failed: failed.error.kind } : {}) }))
       return { ok: true, results, cached }
     } finally {
       inFlight--

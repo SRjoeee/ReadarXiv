@@ -121,6 +121,15 @@ describe('the rows: a page opened again (stage 4b deliverable 4)', () => {
     expect(ids(r)).toEqual(['a:microsoft'])
     expect(again.sent.microsoft).toBe(1)
   })
+  it('a row the store answers as garbage is a miss: the unit is asked as if none were kept', async () => {
+    const stores = { answers: memory(), rows: memory() }
+    await (await harness({}, {}, stores).make()).translate({ units: [unit('a')], target: 'cmn' })
+    for (const k of stores.rows.entries.keys()) stores.rows.entries.set(k, '{"not": "a row"')
+    const again = endpoints()
+    const r = await (await harness({}, { fetch: again.fetch, chain: chainOf() }, stores).make()).translate({ units: [unit('a')], target: 'cmn' })
+    expect(ids(r)).toEqual(['a:microsoft'])
+    expect(again.sent.microsoft).toBe(1)
+  })
   it('a row is the chain\'s: another chain of translators, another target, or another unit reads none', async () => {
     const stores = { answers: memory(), rows: memory() }
     await (await harness({}, {}, stores).make()).translate({ units: [unit('a')], target: 'cmn' })
