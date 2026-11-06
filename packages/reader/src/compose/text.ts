@@ -39,7 +39,17 @@ export const SOURCE_LANG = 'en'
 /** how far past a crop's ink its source reaches, PDF units (paint.ts CLIP_PAD) */
 const PAD = 0.6
 /** CJK and other scripts written with no space between words (a line break of a translation adds none) */
-const NO_SPACE = /[⺀-鿿가-힯豈-﫿＀-￯　-〿]/u
+const NO_SPACE: readonly [number, number][] = [
+  [0x2e80, 0x9fff],
+  [0xac00, 0xd7af],
+  [0xf900, 0xfaff],
+  [0xff00, 0xffef],
+  [0x3000, 0x303f],
+]
+const noSpace = (ch: string) => {
+  const c = ch.codePointAt(0) ?? 0
+  return NO_SPACE.some(([a, b]) => c >= a && c <= b)
+}
 
 /** an item read across as a line: no rotation, skew or mirror, not of a vertical face */
 const upright = (it: TextItem, c: TextContent) => {
@@ -222,7 +232,7 @@ export function laidText(
         b = (out[i + 1] as Line).items[0] as TextItem
       const ca = a.str.at(-1) ?? '',
         cb = b.str[0] ?? ''
-      if (!/\s/.test(ca) && !/\s/.test(cb) && ca !== '-' && !NO_SPACE.test(ca) && !NO_SPACE.test(cb))
+      if (!/\s/.test(ca) && !/\s/.test(cb) && ca !== '-' && !noSpace(ca) && !noSpace(cb))
         (out[i] as Line).items[(out[i] as Line).items.length - 1] = withStr(a, `${a.str} `, translatedSet, src)
     }
     return out

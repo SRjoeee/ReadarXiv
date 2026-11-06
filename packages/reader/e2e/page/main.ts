@@ -95,6 +95,8 @@ const h = {
       }),
     )
     panes.on('scale', (e) => h.marks.push({ what: 'scale', at: performance.now() - h.t0, scale: e.scale }))
+    panes.on('sync', (e) => h.marks.push({ what: 'sync', at: performance.now() - h.t0, ...e }))
+    panes.on('page', (e) => h.marks.push({ what: 'page', at: performance.now() - h.t0, ...e }))
     const own = url.startsWith('/')
     const source = rangeSource({ fetch: (u, i) => fetch(u, i), url, own, store: chunkStore() })
     h.source = source
@@ -533,7 +535,14 @@ const h = {
     const slot = (h.panes as Panes).right.page(n) as HTMLElement
     const el = slot.querySelector<HTMLElement>('.axt-translating')
     if (!el) return null
-    const s = slot.getBoundingClientRect()
+    const o0 = slot.getBoundingClientRect()
+    // (the slot's box inside PDF.js's page border: the overlay's)
+    const s = {
+      left: o0.left + slot.clientLeft,
+      top: o0.top + slot.clientTop,
+      width: slot.clientWidth,
+      height: slot.clientHeight,
+    }
     const ms = [...el.querySelectorAll<HTMLElement>('.axt-translating-mark')]
     const anims = el.getAnimations({ subtree: true }) as CSSAnimation[]
     const pass = anims.filter((a) => a.animationName === 'axt-tr-pass')
@@ -604,13 +613,17 @@ const h = {
       width?: string
       target?: string
       delayRowsMs?: number
+      /** the host's own scrollers (its chrome's), under its root */
+      panes?: { root: HTMLElement; left: HTMLElement; right: HTMLElement }
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
-    const root = document.createElement('div')
-    root.style.cssText = `position:absolute;top:0;bottom:0;left:0;width:${o.width ?? '100%'}`
-    if (o.width) root.style.left = `${100 * h.readers.length}%`.replace('100%', o.width)
-    document.body.append(root)
+    const root = o.panes?.root ?? document.createElement('div')
+    if (!o.panes) {
+      root.style.cssText = `position:absolute;top:0;bottom:0;left:0;width:${o.width ?? '100%'}`
+      if (o.width) root.style.left = `${100 * h.readers.length}%`.replace('100%', o.width)
+      document.body.append(root)
+    }
     const asked: { url: string; at: number }[] = []
     const t0 = performance.now()
     let fx: {
@@ -661,6 +674,7 @@ const h = {
     }
     const reader = openReader(root, {
       host,
+      ...(o.panes ? { panes: { left: o.panes.left, right: o.panes.right } } : {}),
       paper: index.paper,
       visit: { target },
       engine: {

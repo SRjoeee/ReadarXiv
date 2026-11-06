@@ -212,9 +212,11 @@ export function createPanes(o: PanesOptions): Panes {
 
   // ---------------------------------------------------------------- the panes
   quietRoot(document.documentElement.style)
-  const leftStack = document.createElement('div')
-  leftStack.className = 'pdfViewer'
-  o.left.append(leftStack)
+  // (a scroller the host's chrome renders holds its own `.pdfViewer`: taken, and left in place, emptied, at the end)
+  const givenLeft = o.left.querySelector<HTMLElement>(':scope > .pdfViewer')
+  const leftStack = givenLeft ?? document.createElement('div')
+  leftStack.classList.add('pdfViewer')
+  if (!givenLeft) o.left.append(leftStack)
   const L: PaneSide = {
     name: 'left',
     container: o.left,
@@ -1457,7 +1459,8 @@ export function createPanes(o: PanesOptions): Panes {
       root.removeAttribute('data-axt-pdf-mode')
       root.removeAttribute('data-axt-narrow')
       root.removeAttribute('data-axt-swapped')
-      leftStack.remove()
+      if (givenLeft) leftStack.replaceChildren()
+      else leftStack.remove()
     },
   }
   showMode()

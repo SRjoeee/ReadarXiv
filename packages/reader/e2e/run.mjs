@@ -233,7 +233,11 @@ const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
 const violations = []
 async function newPage(o = {}) {
-  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: o.dpr ?? 1 })
+  const context = await browser.newContext({
+    viewport: o.viewport ?? { width: 1400, height: 900 },
+    ...(o.screen ? { screen: o.screen } : {}),
+    deviceScaleFactor: o.dpr ?? 1,
+  })
   await context.route('**/*', async (route) => {
     const req = route.request(),
       url = new URL(req.url())
@@ -836,6 +840,1102 @@ await check('reader: close lets everything go; a second reader on the same page 
     b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
   }
 })
+
+// ---------------------------------------------------------------- stage 5a, deliverable 2 part A: today's behaviours over the stack
+// (each check names the rows of lanes/L4/list-b.md and list-a.md it holds; docs/PDF-READER.md §11.7-§11.11, §17)
+const S1 = indexOf['s1-columns'].original,
+  SAMPLE = '/api/v2/o/arxiv/2600_00001v1.pdf'
+const drawnOn = (page, side, n, key) =>
+  waitFor(
+    page,
+    ([side, n, key]) =>
+      window.__h.marks.some(
+        (m) => m.what === 'drawn' && m.side === side && m.page === n && (key === null || String(m.key).startsWith(key)),
+      ),
+    [side, n, key],
+  )
+const shownKey = (page, n) => page.evaluate((n) => window.__h.panes.right.showing(n), n)
+
+await check(
+  'port: the skeleton while no original is drawn, every slot at its size, hidden from AT (B-226)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u, { borrow: true }), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    const before = await page.evaluate(() => window.__h.panes.right.page(1).getBoundingClientRect().toJSON())
+    await page.evaluate(() => window.__h.panes.drop())
+    await page.waitForTimeout(300)
+    const r = await page.evaluate(() => {
+      const p = window.__h.panes,
+        s = p.right.page(1)
+      return {
+        slots: p.right.pages,
+        sk: !!s.querySelector('.axt-sk'),
+        lines: s.querySelectorAll('.axt-sk-lines').length,
+        hidden: s.getAttribute('aria-hidden'),
+        box: s.getBoundingClientRect().toJSON(),
+        probe: p.right.probe(),
+      }
+    })
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(r.slots === 4 && r.sk && r.lines > 0 && r.hidden === 'true', JSON.stringify(r))
+    assert(
+      Math.abs(r.box.width - before.width) < 0.5 && Math.abs(r.box.height - before.height) < 0.5,
+      'the slot resized',
+    )
+    assert(r.probe.views === 0 && r.probe.skeletons >= 1, JSON.stringify(r.probe))
+    return { skeletons: r.probe.skeletons, slots: r.slots }
+  },
+)
+
+await check(
+  "port: a waiting page is the left's own drawing, no second render, no text layer or links of its own; kept by CSS through a zoom until the left draws again; its own page view with the sync off, its text the paper's language (B-006, B-228, B-229, A-332)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u, { borrow: true }), SAMPLE)
+    await drawnOn(page, 'left', 1, null)
+    await drawnOn(page, 'right', 1, 'left')
+    const r1 = await page.evaluate(() => {
+      const p = window.__h.panes,
+        s = p.right.page(1)
+      const copy = s.querySelector('canvas.axt-slot-copy'),
+        src = p.leftViewer.getPageView(0).canvas
+      const px = (c, x, y) => [...c.getContext('2d').getImageData(x, y, 1, 1).data]
+      const at = [
+        [10, 10],
+        [Math.floor(src.width / 2), Math.floor(src.height / 3)],
+        [src.width - 5, src.height - 5],
+      ]
+      copy.dataset.tag = 'first'
+      return {
+        copy: !!copy,
+        same:
+          !!copy && copy.width === src.width && at.every(([x, y]) => px(copy, x, y).join() === px(src, x, y).join()),
+        text: !!s.querySelector('.textLayer'),
+        annotations: !!s.querySelector('.annotationLayer'),
+        made: p.right.probe().made,
+        leftLang: document.querySelector('.axt-pane.left .textLayer')?.getAttribute('lang') ?? null,
+        copies: p.right.probe().copies,
+      }
+    })
+    await page.evaluate(() => window.__h.panes.zoomBy(1.25))
+    const during = await page.evaluate(() => !!window.__h.panes.right.page(1).querySelector('canvas[data-tag="first"]'))
+    await page.waitForTimeout(1000)
+    const r2 = await page.evaluate(() => {
+      const p = window.__h.panes,
+        copy = p.right.page(1).querySelector('canvas.axt-slot-copy')
+      return { copies: p.right.probe().copies, width: copy?.width, left: p.leftViewer.getPageView(0).canvas.width }
+    })
+    await page.evaluate(() => window.__h.panes.setSync(false))
+    await drawnOn(page, 'right', 1, 'original')
+    await page.waitForTimeout(300)
+    const r3 = await page.evaluate(() => {
+      const s = window.__h.panes.right.page(1)
+      return {
+        text: !!s.querySelector('.textLayer'),
+        lang: s.querySelector('.textLayer')?.getAttribute('lang') ?? null,
+      }
+    })
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(r1.copy && r1.same, `the copy: ${JSON.stringify(r1)}`)
+    assert(!r1.text && !r1.annotations && r1.made === 0, `a second drawing: ${JSON.stringify(r1)}`)
+    assert(r1.leftLang === 'en', `the left's text layer lang ${r1.leftLang}`)
+    assert(during, 'the copy left as the zoom began')
+    assert(r2.copies > r1.copies && r2.width === r2.left, `after the zoom: ${JSON.stringify(r2)}`)
+    assert(r3.text && r3.lang === 'en', `the sync off: ${JSON.stringify(r3)}`)
+    return { copies: r2.copies }
+  },
+)
+
+await check(
+  'port: Glint on near pages waiting for their rows, every value of its look, in shares of the page, gone in the task the page is put in place (B-274-B-283)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => window.__h.layer('s1-columns', { rows: 'none' }))
+    await waitFor(page, () => (window.__h.marksOf(1)?.count ?? 0) > 0)
+    await page.waitForTimeout(150)
+    const m = await page.evaluate(() => window.__h.marksOf(1))
+    const members = await page.evaluate(
+      () =>
+        [...window.__h.parts.values()]
+          .flatMap((p) => p.flows.flat())
+          .filter((x) => x.lines.some((l) => l[0] === 1))
+          .filter((x, i, a) => a.findIndex((y) => y.ord === x.ord) === i).length,
+    )
+    await page.evaluate(() => window.__h.panes.zoomBy(1.25))
+    await page.waitForTimeout(900)
+    const z = await page.evaluate(() => window.__h.marksOf(1))
+    await page.evaluate(() => window.__h.rows.give())
+    await laidShown(page, 1)
+    const at = await page.evaluate(
+      () =>
+        window.__h.marks.find((x) => x.what === 'shown' && x.page === 1 && String(x.key).startsWith('laid:')).marksLeft,
+    )
+    const after = await page.evaluate(() => window.__h.marksOf(1))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(m.count === members, `${m.count} marks for ${members} paragraphs`)
+    assert(m.ariaHidden === 'true' && m.pointerEvents === 'none', JSON.stringify(m))
+    assert(m.delay === '0.3s' && m.fade === '0.4s' && m.run === '3.4s', `timing ${JSON.stringify(m)}`)
+    assert(m.angle === '100deg' && /78%/.test(m.light), `look ${m.angle} ${m.light}`)
+    assert(m.passes === m.count && m.starts.length === 1, `one light: ${m.passes} passes, starts ${m.starts}`)
+    const moved = m.shares
+      .flatMap((b, i) => b.map((v, k) => Math.abs(v - z.shares[i][k])))
+      .reduce((a, b) => Math.max(a, b), 0)
+    assert(moved < 0.002, `a zoom moved a mark by ${moved} of the page`)
+    assert(at === 0 && after === null, `marks at the swap ${at}, after ${JSON.stringify(after)}`)
+    // (reduced motion: the still veil, no light)
+    const r = await newPage()
+    await r.page.emulateMedia({ reducedMotion: 'reduce' })
+    await r.page.evaluate((u) => window.__h.open(u), S1)
+    await r.page.evaluate(() => window.__h.layer('s1-columns', { rows: 'none' }))
+    await waitFor(r.page, () => (window.__h.marksOf(1)?.count ?? 0) > 0)
+    await r.page.waitForTimeout(450)
+    const still = await r.page.evaluate(() => window.__h.marksOf(1))
+    await r.context.close()
+    assert(!r.errors.length, r.errors.join('; '))
+    assert(still.before === 'none' && !/rgba\(0, 0, 0, 0\)|transparent/.test(still.background), JSON.stringify(still))
+    return { marks: m.count, still: still.background }
+  },
+)
+
+await check(
+  'port: another target in place: the page laid kept until its commit, muted meanwhile, the left untouched; rows that will not come put it back to the original (B-313-B-316, B-320, B-295, A-286, A-287)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    await page.waitForTimeout(300)
+    const key1 = await shownKey(page, 1)
+    const left0 = await page.evaluate(() => ({
+      draws: window.__h.marks.filter((m) => m.what === 'drawn' && m.side === 'left').length,
+      top: document.querySelector('.axt-pane.left').scrollTop,
+    }))
+    const ord = await page.evaluate(() => window.__h.composer.laid(1).members.find((m) => m.state === 'laid').ord)
+    await page.evaluate(() => window.__h.retargetLater('xx', 's1-columns'))
+    await page.waitForTimeout(400)
+    const kept = await page.evaluate(
+      ([ord]) => {
+        const pt = window.__h.pointOf(1, ord, 'right')
+        return {
+          key: window.__h.panes.right.showing(1),
+          muted: window.__h.composer.muted(1),
+          hit: pt ? window.__h.highlight.at('right', pt.x, pt.y) : 'no point',
+        }
+      },
+      [ord],
+    )
+    await page.evaluate(() => window.__h.rows.give())
+    await waitFor(
+      page,
+      ([k]) => {
+        const s = window.__h.panes.right.showing(1)
+        return s?.startsWith('laid:') && s !== k
+      },
+      [key1],
+    )
+    const key2 = await shownKey(page, 1)
+    const muted2 = await page.evaluate(() => window.__h.composer.muted(1))
+    await page.evaluate(() => window.__h.retargetLater('yy', 's1-columns'))
+    await page.waitForTimeout(200)
+    await page.evaluate(() => window.__h.rows.end())
+    await waitFor(page, () => !String(window.__h.panes.right.showing(1)).startsWith('laid:'))
+    const back = await shownKey(page, 1)
+    const left1 = await page.evaluate(() => ({
+      draws: window.__h.marks.filter((m) => m.what === 'drawn' && m.side === 'left').length,
+      top: document.querySelector('.axt-pane.left').scrollTop,
+    }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(kept.key === key1 && kept.muted && kept.hit === null, `kept: ${JSON.stringify(kept)}`)
+    assert(key2 !== key1 && !muted2, `the new target's commit: ${key2}, muted ${muted2}`)
+    assert(back === 'original', `rows that will not come: ${back}`)
+    assert(
+      left1.draws === left0.draws && left1.top === left0.top,
+      `the left touched: ${JSON.stringify([left0, left1])}`,
+    )
+    return { kept: kept.key, next: key2, back }
+  },
+)
+
+await check(
+  "port: a laid page's crops drawn again 600 ms after a zoom; its text layers out of layout through the zoom's steps, a selection kept (B-258, B-403, B-404)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    await page.waitForTimeout(300)
+    const crop = () =>
+      page.evaluate(() => {
+        const s = window.__h.panes.right.page(1)
+        const c = s.querySelector('.axt-over > canvas.axt-crops')
+        return c ? c.width : null
+      })
+    const w0 = await crop()
+    // (a selection in the text layer, before the zoom)
+    const sel0 = await page.evaluate(() => {
+      const span = window.__h.panes.right.page(1).querySelector('.axt-over .textLayer span')
+      const r = document.createRange()
+      r.selectNodeContents(span)
+      getSelection().removeAllRanges()
+      getSelection().addRange(r)
+      return getSelection().toString()
+    })
+    await page.evaluate(() => window.__h.panes.zoomBy(1.6))
+    const during = await page.evaluate(() => {
+      const st = window.__h.panes.right.element
+      const tl = window.__h.panes.right.page(1).querySelector('.axt-over .textLayer')
+      const sel = getSelection()
+      return {
+        scaling: st.hasAttribute('data-axt-scaling'),
+        display: getComputedStyle(tl).display,
+        kept: sel.rangeCount === 1 && tl.contains(sel.getRangeAt(0).startContainer),
+      }
+    })
+    await page.waitForTimeout(500)
+    const w1 = await crop()
+    await page.waitForTimeout(1100)
+    const w2 = await crop()
+    const after = await page.evaluate(() => {
+      const st = window.__h.panes.right.element
+      const tl = window.__h.panes.right.page(1).querySelector('.axt-over .textLayer')
+      return {
+        scaling: st.hasAttribute('data-axt-scaling'),
+        display: getComputedStyle(tl).display,
+        sel: getSelection().toString(),
+        agains: window.__h.panes.right.probe().agains,
+      }
+    })
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(w0 && w1 === w0 && w2 > w0, `the crops: ${w0} → ${w1} (500 ms) → ${w2} (1.6 s)`)
+    assert(during.scaling && during.display === 'none' && during.kept, `during: ${JSON.stringify(during)}`)
+    assert(!after.scaling && after.display !== 'none' && after.sel === sel0, `after: ${JSON.stringify(after)}`)
+    return { crops: [w0, w2], agains: after.agains }
+  },
+)
+
+await check(
+  'port: a laid page far and back is its very drawing, its text layer with it; zoomed while far, drawn again at the new scale; held in place while it holds the focus; a budget of 0 keeps none (B-300, B-268, B-401, B-260, B-025, B-011, B-269)',
+  async () => {
+    const run = async (keep) => {
+      const { page, context, errors } = await newPage({
+        viewport: { width: 1400, height: 500 },
+        screen: { width: 2560, height: 1600 },
+      })
+      await page.evaluate(([u, k]) => window.__h.open(u, k === null ? {} : { keepPixels: k }), [S1, keep])
+      await page.evaluate(() => window.__h.layer('s1-columns'))
+      await laidShown(page, 1)
+      await page.evaluate(() => window.__h.panes.zoomTo(2))
+      await page.waitForTimeout(1200)
+      await page.evaluate(() => {
+        const s = window.__h.panes.right.page(1)
+        s.querySelector('.axt-slot-view canvas').dataset.tag = 'p1'
+        s.querySelector('.axt-over .textLayer').dataset.tag = 'p1'
+      })
+      const end = () =>
+        page.evaluate(() => {
+          const c = document.querySelector('.axt-pane.right')
+          c.scrollTop = c.scrollHeight
+        })
+      const top = () => page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+      await end()
+      await waitFor(page, () => !window.__h.panes.right.near(1))
+      await page.waitForTimeout(200)
+      const far = await page.evaluate(() => window.__h.panes.right.probe())
+      await top()
+      await waitFor(page, () => window.__h.panes.right.near(1))
+      await page.waitForTimeout(100)
+      const back = await page.evaluate(() => {
+        const s = window.__h.panes.right.page(1)
+        return {
+          canvas: !!s.querySelector('.axt-slot-view canvas[data-tag="p1"]'),
+          text: !!s.querySelector('.axt-over .textLayer[data-tag="p1"]'),
+          key: window.__h.panes.right.showing(1),
+        }
+      })
+      // (far, a zoom; back: the same drawing, drawn again at the new scale)
+      await end()
+      await waitFor(page, () => !window.__h.panes.right.near(1))
+      const marks0 = await page.evaluate(() => window.__h.marks.length)
+      await page.evaluate(() => window.__h.panes.zoomTo(2.4))
+      await page.waitForTimeout(800)
+      await top()
+      await waitFor(page, () => window.__h.panes.right.near(1))
+      await page.waitForTimeout(1200)
+      const again = await page.evaluate(
+        ([m0]) =>
+          window.__h.marks
+            .slice(m0)
+            .filter((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1)
+            .map((m) => ({ key: m.key, scale: m.scale })),
+        [marks0],
+      )
+      const dbg = await page.evaluate(() => {
+        const s = window.__h.panes.right.page(1)
+        const c = s.querySelector('.axt-slot-view canvas')
+        return {
+          probe: window.__h.panes.right.probe(),
+          canvas: c ? [c.width, c.style.width] : null,
+          scale: window.__h.panes.scale,
+          key: window.__h.panes.right.showing(1),
+        }
+      })
+      // (the focus on a link of page 1 as it goes far: held in place; let go a task after the focus leaves)
+      await page.evaluate(() => window.__h.panes.right.page(1).querySelector('a.axt-link')?.focus())
+      await end()
+      await waitFor(page, () => !window.__h.panes.right.near(1))
+      await page.waitForTimeout(150)
+      const held = await page.evaluate(() => ({
+        focusHeld: window.__h.panes.right.probe().focusHeld,
+        active: document.activeElement?.className ?? null,
+        drawn: !!window.__h.panes.right.page(1).querySelector('.axt-over'),
+      }))
+      await page.evaluate(() => document.activeElement?.blur())
+      await page.waitForTimeout(100)
+      const left = await page.evaluate(() => ({
+        focusHeld: window.__h.panes.right.probe().focusHeld,
+        body: document.activeElement === document.body,
+        kept: window.__h.panes.right.probe().kept,
+      }))
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      return { far, back, again, held, left, dbg }
+    }
+    const a = await run(null)
+    assert(a.far.kept === 1, `kept off the view: ${JSON.stringify(a.far)}`)
+    assert(a.back.canvas && a.back.text && String(a.back.key).startsWith('laid:'), `back: ${JSON.stringify(a.back)}`)
+    assert(
+      a.again.some((m) => String(m.key).startsWith('laid:') && Math.abs(m.scale - 2.4) < 0.01),
+      `drawn again at 2.4: ${JSON.stringify(a.again)} ${JSON.stringify(a.dbg)}`,
+    )
+    assert(a.held.focusHeld === 1 && a.held.active === 'axt-link' && a.held.drawn, `held: ${JSON.stringify(a.held)}`)
+    assert(a.left.focusHeld === 0, `let go: ${JSON.stringify(a.left)}`)
+    const b = await run(0)
+    assert(b.far.kept === 0, `a budget of 0 kept ${b.far.kept}`)
+    assert(!b.back.canvas, 'a budget of 0 kept the drawing')
+    return { kept: a.far.keptPixels, again: a.again.length, zero: b.far.kept }
+  },
+)
+
+await check(
+  "port: links named by the text under them, the PDF's border, the wash on hover, the ring on focus; a click on one levels nothing; the keyboard's jump takes the focus there (B-336-B-338, B-343, B-344, B-346-B-348, A-383)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    await page.waitForTimeout(300)
+    const links = await page.evaluate(async () => {
+      const s = window.__h.panes.right.page(1)
+      const spans = [...s.querySelectorAll('.axt-over .textLayer span')]
+      const anns = (await (await window.__h.composed.getPage(1)).getAnnotations()).filter((a) => a.subtype === 'Link')
+      return [...s.querySelectorAll('a.axt-link')].map((a) => {
+        const r = a.getBoundingClientRect()
+        const under = spans
+          .filter((x) => {
+            const q = x.getBoundingClientRect()
+            const cx = q.left + q.width / 2,
+              cy = q.top + q.height / 2
+            return q.width && cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom
+          })
+          .map((x) => x.textContent)
+          .join(' ')
+        const to = a.getAttribute('href')
+        const ann = anns.find((x) => (x.url ?? '') === to || (to.startsWith('#') && !x.url))
+        return {
+          name: a.getAttribute('aria-label'),
+          under: under.replace(/\s+/g, ' ').trim(),
+          border: a.dataset.axtBorder ?? null,
+          pdfBorder: !!(ann && ann.borderStyle?.width > 0 && ann.color),
+          href: to,
+          rect: r.toJSON(),
+        }
+      })
+    })
+    const box = links[0].rect
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.waitForTimeout(100)
+    const wash = await page.evaluate(
+      () =>
+        getComputedStyle(
+          window.__h.panes.right.page(1).querySelector('a.axt-link:hover > .axt-link-box') ?? document.body,
+        ).backgroundColor,
+    )
+    const ring = await page.evaluate(() => {
+      const a = window.__h.panes.right.page(1).querySelector('a.axt-link')
+      a.focus({ focusVisible: true })
+      const b = getComputedStyle(a.querySelector('.axt-link-box'))
+      return { width: b.outlineWidth, style: b.outlineStyle }
+    })
+    // (a click on the link inside the paper: no levelling; the right jumps, the left follows)
+    const inner = links.find((l) => l.href.startsWith('#'))
+    const line0 = await page.evaluate(() => window.__h.panes.probe().readingLine)
+    await page.mouse.click(inner.rect.x + inner.rect.width / 2, inner.rect.y + inner.rect.height / 2)
+    await page.waitForTimeout(900)
+    const after = await page.evaluate(() => ({
+      line: window.__h.panes.probe().readingLine,
+      level: window.__h.panes.probe().levelError,
+      inView2: window.__h.panes.right.inView(2),
+      top: document.querySelector('.axt-pane.right').scrollTop,
+    }))
+    // (by the keyboard: Enter on the link, the focus at the place jumped to)
+    await page.evaluate(() => {
+      document.querySelector('.axt-pane.right').scrollTop = 0
+    })
+    await page.waitForTimeout(400)
+    await page.evaluate(() => window.__h.panes.right.page(1).querySelector('a.axt-link[href^="#"]').focus())
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(900)
+    const focus = await page.evaluate(() => ({
+      page: document.activeElement?.dataset?.pageNumber ?? null,
+      cls: document.activeElement?.className ?? null,
+    }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const l of links) {
+      assert(
+        l.name && (l.under ? l.name === l.under || l.under.includes(l.name) || l.name.includes(l.under) : true),
+        `named ${JSON.stringify(l)}`,
+      )
+      assert(!!l.border === l.pdfBorder, `border ${JSON.stringify(l)}`)
+    }
+    assert(/255, 255, 0, 0\.2/.test(wash), `the wash ${wash}`)
+    assert(ring.width === '2px' && ring.style === 'solid', `the ring ${JSON.stringify(ring)}`)
+    assert(after.line === line0, `a click on a link levelled: ${line0} → ${after.line}`)
+    // (a document this short ends before page 2 can stand at the top: the jump brings it into view, the left levelled)
+    assert(after.inView2 && after.top > 0 && Math.abs(after.level ?? 0) <= 2, `the jump: ${JSON.stringify(after)}`)
+    assert(focus.page === '2', `the keyboard's jump: the focus on ${JSON.stringify(focus)}`)
+    // (the system's colours in forced colours)
+    const fc = await newPage()
+    await fc.page.emulateMedia({ forcedColors: 'active' })
+    await fc.page.evaluate((u) => window.__h.open(u), S1)
+    await fc.page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(fc.page, 1)
+    const forced = await fc.page.evaluate(() => {
+      const a = window.__h.panes.right.page(1).querySelector('a.axt-link')
+      a.focus({ focusVisible: true })
+      const b = getComputedStyle(a.querySelector('.axt-link-box'))
+      return { width: b.outlineWidth, shadow: b.boxShadow }
+    })
+    await fc.context.close()
+    assert(forced.width === '2px' && forced.shadow === 'none', `forced colours ${JSON.stringify(forced)}`)
+    return { links: links.map((l) => l.name), wash }
+  },
+)
+
+await check(
+  'port: the highlight: its switch, the right mirroring until laid and drawn again as laid under a resting pointer, a scroll under a still pointer, a click holding nothing, the wash multiplied and screened, through a pinch and the left redrawn (B-409, B-217, B-472, B-478, B-453, B-451, B-411, B-446, B-447, B-136, A-224, B-241, B-448, B-459)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => window.__h.layer('s1-columns', { rows: 'none' }))
+    await page.waitForTimeout(400)
+    const ords = await page.evaluate(() =>
+      window.__h.composer
+        .page(1)
+        .members.map((m) => m.ord)
+        .slice(0, 6),
+    )
+    const lit = () =>
+      page.evaluate(() => ({ lit: window.__h.highlight.lit?.id ?? null, bands: window.__h.highlight.bands() }))
+    // (off: nothing lit; on: the point lights)
+    await page.evaluate(() => window.__h.highlight.setOn(false))
+    const p0 = await page.evaluate(([o]) => window.__h.pointOf(1, o, 'right'), [ords[1]])
+    await page.mouse.move(p0.x, p0.y)
+    await page.waitForTimeout(120)
+    const off = await lit()
+    await page.evaluate(() => window.__h.highlight.setOn(true))
+    await page.mouse.move(p0.x + 1, p0.y)
+    await page.waitForTimeout(120)
+    const mirrored = await lit()
+    // (rows in under the resting pointer: drawn again as laid)
+    await page.evaluate(() => window.__h.rows.give())
+    await laidShown(page, 1)
+    await page.waitForTimeout(250)
+    const laid = await lit()
+    // (a scroll under the still pointer lights what comes under it: two members of one column, the pane scrolled down by their
+    // gap, the pointer on the lower one, then scrolled back up: the upper one comes under it)
+    await page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    await page.waitForTimeout(250)
+    const pick = await page.evaluate(() => {
+      const c = document.querySelector('.axt-pane.right'),
+        cr = c.getBoundingClientRect(),
+        max = c.scrollHeight - c.clientHeight
+      const pts = window.__h.composer
+        .laid(1)
+        .members.map((m) => ({ o: m.ord, p: window.__h.pointOf(1, m.ord, 'right') }))
+        .filter((x) => x.p && x.p.y > cr.top + 20 && x.p.y < cr.bottom - 20)
+      for (const A of pts)
+        for (const B of pts)
+          if (B.o !== A.o && Math.abs(B.p.x - A.p.x) < 80 && A.p.y - B.p.y > 30 && A.p.y - B.p.y <= max)
+            return { A: A.p, a: A.o, B: B.p, b: B.o }
+      return null
+    })
+    assert(pick, 'no two members to scroll between')
+    const dy = pick.A.y - pick.B.y
+    await page.evaluate(([dy]) => (document.querySelector('.axt-pane.right').scrollTop = dy), [dy])
+    await page.waitForTimeout(250)
+    await page.mouse.move(pick.A.x, pick.A.y - dy)
+    await page.waitForTimeout(150)
+    await page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    await page.waitForTimeout(250)
+    const scrolled = {
+      ...(await lit()),
+      under: await page.evaluate(
+        ([x, y]) => window.__h.highlight.at('right', x, y)?.id ?? null,
+        [pick.A.x, pick.A.y - dy],
+      ),
+      a: pick.a,
+      b: pick.b,
+    }
+    await page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    await page.waitForTimeout(250)
+    // (a click holds nothing)
+    const pc = await page.evaluate(([o]) => window.__h.pointOf(1, o, 'right'), [ords[1]])
+    await page.mouse.click(pc.x, pc.y)
+    await page.mouse.move(3, 3)
+    await page.waitForTimeout(300)
+    const released = await lit()
+    // (the wash's blend)
+    const blend = await page.evaluate(() => {
+      const l = document.querySelector('.axt-pane.right .axt-hl-layer')
+      const a = getComputedStyle(l).mixBlendMode
+      document.getElementById('root').setAttribute('data-axt-dim', '')
+      const b = getComputedStyle(l).mixBlendMode
+      document.getElementById('root').removeAttribute('data-axt-dim')
+      return [a, b]
+    })
+    await page.evaluate(() => (document.querySelector('.axt-pane.right').scrollTop = 0))
+    await page.waitForTimeout(300)
+    // (through a pinch: the band where its unit is, within 0.7 px; the point lights through the preview's transform)
+    const q = await page.evaluate(([o]) => window.__h.pointOf(1, o, 'right'), [ords[2]])
+    await page.mouse.move(q.x, q.y)
+    await page.waitForTimeout(150)
+    const share = () =>
+      page.evaluate(() => {
+        const s = window.__h.panes.right.page(1).getBoundingClientRect()
+        const b = document.querySelector('.axt-pane.right .axt-hl-layer > *').getBoundingClientRect()
+        return [(b.left - s.left) / s.width, (b.top - s.top) / s.height, b.width / s.width, s.width]
+      })
+    const s0 = await share()
+    await page.evaluate(
+      ([x, y]) => {
+        for (let i = 0; i < 4; i++) window.__h.panes.pinch('right', 1.05, [x, y])
+      },
+      [q.x, q.y],
+    )
+    await page.waitForTimeout(50)
+    const s1 = await share()
+    const during = await page.evaluate(([x, y]) => window.__h.highlight.at('right', x, y)?.id ?? null, [q.x, q.y])
+    await page.waitForTimeout(600)
+    // (the left's page redrawn after a zoom keeps its layer: lit with the pointer away from the panes, so that the zoom's scroll
+    // brings nothing else under it)
+    await page.evaluate(() => {
+      for (const c of document.querySelectorAll('.axt-pane')) c.dispatchEvent(new MouseEvent('mouseleave'))
+    })
+    await page.waitForTimeout(250)
+    await page.evaluate(([o]) => window.__h.highlight.light({ id: o, s: -1 }), [ords[2]])
+    const gaps = await page.evaluate(async () => {
+      window.__h.panes.zoomBy(1.2)
+      let missing = 0
+      for (let i = 0; i < 24; i++) {
+        await new Promise((f) => requestAnimationFrame(f))
+        if (!document.querySelector('.axt-pane.left .page[data-page-number="1"] > .axt-hl-layer > *')) missing++
+      }
+      return missing
+    })
+    // (a sweep: one look a frame, each look's script)
+    const sweep = await page.evaluate(async () => {
+      const r = window.__h.panes.right.page(1).getBoundingClientRect()
+      const c0 = window.__h.highlight.costs().looks
+      let frames = 0
+      for (let i = 0; i < 40; i++) {
+        for (let k = 0; k < 3; k++)
+          document.querySelector('.axt-pane.right').dispatchEvent(
+            new MouseEvent('mousemove', {
+              clientX: r.left + 40 + i * 10 + k,
+              clientY: r.top + 80 + i * 12,
+              bubbles: true,
+            }),
+          )
+        await new Promise((f) => requestAnimationFrame(f))
+        frames++
+      }
+      const c = window.__h.highlight.costs()
+      const ms = c.ms.slice(-40).sort((a, b) => a - b)
+      return { looks: c.looks - c0, frames, p50: ms[Math.floor(ms.length / 2)] }
+    })
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(off.lit === null && off.bands.right === 0, `off lit ${JSON.stringify(off)}`)
+    assert(
+      mirrored.lit === ords[1] && mirrored.bands.right === mirrored.bands.left,
+      `mirrored ${JSON.stringify(mirrored)}`,
+    )
+    assert(laid.lit === ords[1] && laid.bands.right > 0, `drawn again as laid ${JSON.stringify(laid)}`)
+    assert(scrolled.under === scrolled.b && scrolled.lit === scrolled.b, `the scroll lit ${JSON.stringify(scrolled)}`)
+    assert(released.lit === null, `a click held ${JSON.stringify(released)}`)
+    assert(blend[0] === 'multiply' && blend[1] === 'screen', `the wash ${blend}`)
+    assert(
+      Math.abs(s1[0] - s0[0]) * s1[3] < 0.7 &&
+        Math.abs(s1[1] - s0[1]) * s1[3] < 0.7 &&
+        Math.abs(s1[2] - s0[2]) * s1[3] < 0.7,
+      `the band in a pinch ${JSON.stringify([s0, s1])}`,
+    )
+    assert(during === ords[2], `the pointer through the preview lit ${during}`)
+    assert(gaps === 0, `the left's band missing ${gaps} frames of the redraw`)
+    assert(sweep.looks <= sweep.frames && sweep.p50 <= 0.26, `the sweep ${JSON.stringify(sweep)}`)
+    return { sweep }
+  },
+)
+
+await check('port: the smaller unit lights where two overlap (B-444, s2-splits)', async () => {
+  const { page, context, errors } = await newPage()
+  await page.evaluate((u) => window.__h.open(u), indexOf['s2-splits'].original)
+  await page.evaluate(() => window.__h.layer('s2-splits'))
+  await laidShown(page, 1)
+  await page.waitForTimeout(300)
+  const heads = await page.evaluate(() =>
+    window.__h.composer
+      .laid(1)
+      .members.filter((m) => window.__h.composer.member(m.ord)?.kind === 'heading')
+      .map((m) => m.ord),
+  )
+  const out = []
+  for (const side of ['right', 'left'])
+    for (const o of heads.slice(1, 5)) {
+      const pt = await page.evaluate(([o, s]) => window.__h.pointOf(1, o, s), [o, side])
+      if (!pt) continue
+      out.push({
+        side,
+        o,
+        hit: await page.evaluate(([s, x, y]) => window.__h.highlight.at(s, x, y)?.id ?? null, [side, pt.x, pt.y]),
+      })
+    }
+  await context.close()
+  assert(!errors.length, errors.join('; '))
+  assert(out.length && out.every((x) => x.hit === x.o), `hits ${JSON.stringify(out)}`)
+  return { heads: out.length }
+})
+
+await check(
+  "port: the panes: three displays, swapped, the single display's fit at 1060 px, the right alone fitted to its pane, the page told by pagechanging, the sync available once the pages exist (A-022, A-027, A-032, A-145, B-234, B-236)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    const panesOf = () =>
+      page.evaluate(() => {
+        const r = (s) => document.querySelector(`.axt-pane.${s}`).getBoundingClientRect()
+        const vis = (s) =>
+          getComputedStyle(document.querySelector(`.axt-pane.${s}`)).visibility !== 'hidden' &&
+          getComputedStyle(document.querySelector(`.axt-pane.${s}`)).display !== 'none' &&
+          r(s).width > 0
+        return {
+          mode: document.getElementById('root').getAttribute('data-axt-pdf-mode'),
+          left: vis('left') ? [r('left').left, r('left').width] : null,
+          right: vis('right') ? [r('right').left, r('right').width] : null,
+          leftPage: window.__h.panes.pageElement('left', 1)?.clientWidth ?? 0,
+          rightPage: window.__h.panes.pageElement('right', 1)?.clientWidth ?? 0,
+        }
+      })
+    const bi = await panesOf()
+    await page.evaluate(() => window.__h.panes.setSwapped(true))
+    const sw = await panesOf()
+    await page.evaluate(() => window.__h.panes.setSwapped(false))
+    await page.evaluate(() => window.__h.panes.setDisplay('original'))
+    await page.waitForTimeout(800)
+    const orig = await panesOf()
+    await page.evaluate(() => window.__h.panes.setDisplay('translation'))
+    await page.waitForTimeout(800)
+    const tr = await panesOf()
+    await page.evaluate(() => window.__h.panes.setDisplay('bilingual'))
+    await page.waitForTimeout(800)
+    await page.evaluate(() => window.__h.panes.goToPage('left', 3))
+    await page.waitForTimeout(500)
+    const told = await page.evaluate(() => ({
+      viewer: window.__h.panes.leftViewer.currentPageNumber,
+      told: window.__h.marks.filter((m) => m.what === 'page' && m.side === 'left').at(-1)?.page,
+      sync: window.__h.marks.filter((m) => m.what === 'sync').map((m) => m.available),
+    }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      bi.mode === 'bilingual' && bi.left && bi.right && bi.left[0] < bi.right[0],
+      `bilingual ${JSON.stringify(bi)}`,
+    )
+    assert(sw.right[0] < sw.left[0], `swapped ${JSON.stringify(sw)}`)
+    assert(orig.mode === 'original' && orig.left && !orig.right, `original ${JSON.stringify(orig)}`)
+    assert(Math.abs(orig.leftPage - Math.min(1060, orig.left[1] - 40)) < 2, `the single fit ${JSON.stringify(orig)}`)
+    assert(tr.mode === 'translation' && tr.right && !tr.left, `translation ${JSON.stringify(tr)}`)
+    assert(Math.abs(tr.rightPage - Math.min(1060, tr.right[1] - 40)) < 2, `the right alone ${JSON.stringify(tr)}`)
+    assert(told.viewer === 3 && told.told === 3, `the page told ${JSON.stringify(told)}`)
+    assert(told.sync.length && told.sync.at(-1) === true, `the sync ${JSON.stringify(told.sync)}`)
+    return { single: orig.leftPage, alone: tr.rightPage }
+  },
+)
+
+await check(
+  "port: the follower: the right by the left's steps on the compositor, levelled at rest (a timer where no scrollend comes); a click levels the same point; a zoom's steps drawn once 400 ms after the last; a zoom and a display keep the reading place (B-008, B-012, B-013, B-014, B-232, B-233, B-235, B-237, B-239, A-029, A-219)",
+  async () => {
+    const out = {}
+    for (const end of ['native', 'timer']) {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(([u, e]) => window.__h.open(u, { scrollEnd: e }), [SAMPLE, end])
+      await drawnOn(page, 'right', 1, null)
+      await page.mouse.move(350, 400)
+      await page.mouse.wheel(0, 900)
+      await page.waitForTimeout(900)
+      const rest = await page.evaluate(() => window.__h.panes.probe())
+      // (the left drew what its pages show while the right's transform led: PDF.js picks its pages by its own scroll)
+      const leftDrawn = await page.evaluate(() => {
+        const n = window.__h.panes.pageOf('left')
+        return window.__h.panes.leftViewer.getPageView(n - 1)?.renderingState
+      })
+      out[end] = { level: rest.levelError, compositing: rest.compositing, leftDrawn }
+      if (end === 'timer') {
+        await context.close()
+        assert(!errors.length, errors.join('; '))
+        continue
+      }
+      // (a click levels the same point at the click's height)
+      await page.mouse.click(300, 500)
+      await page.waitForTimeout(500)
+      const click = await page.evaluate(() => {
+        const n = window.__h.panes.pageOf('left')
+        const a = window.__h.panes.pageElement('left', n).getBoundingClientRect(),
+          b = window.__h.panes.pageElement('right', n).getBoundingClientRect()
+        return { dy: Math.abs(a.top - b.top), line: window.__h.panes.probe().readingLine }
+      })
+      // (a zoom's steps: drawn once, after the last)
+      const m0 = await page.evaluate(() => window.__h.marks.length)
+      const place0 = await page.evaluate(() => window.__h.panes.reading())
+      const tLast = await page.evaluate(async () => {
+        let at = 0
+        for (let i = 0; i < 3; i++) {
+          if (i) await new Promise((f) => setTimeout(f, 60))
+          window.__h.panes.zoomBy(1.1)
+          at = performance.now() - window.__h.t0
+        }
+        return at
+      })
+      await page.waitForTimeout(1200)
+      const draws = await page.evaluate(
+        ([m0]) =>
+          window.__h.marks
+            .slice(m0)
+            .filter((m) => m.what === 'drawn' && m.side === 'right' && m.page === window.__h.panes.pageOf('right'))
+            .map((m) => ({ at: m.at, scale: m.scale })),
+        [m0],
+      )
+      const place1 = await page.evaluate(() => ({
+        p: window.__h.panes.reading(),
+        level: window.__h.panes.probe().levelError,
+      }))
+      await page.evaluate(() => window.__h.panes.setDisplay('translation'))
+      await page.waitForTimeout(800)
+      const place2 = await page.evaluate(() => window.__h.panes.reading())
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      out.click = click
+      out.draws = draws
+      out.lastStepAt = tLast
+      out.places = [place0, place1.p, place2]
+      out.zoomLevel = place1.level
+    }
+    for (const e of ['native', 'timer'])
+      assert(Math.abs(out[e].level ?? 99) <= 2 && out[e].leftDrawn === 3, `${e}: ${JSON.stringify(out[e])}`)
+    assert(out.native.compositing === true, 'no compositor follower in Chromium')
+    assert(out.click.dy <= 1, `the click levelled ${JSON.stringify(out.click)}`)
+    const final = out.draws.at(-1)?.scale
+    const atFinal = out.draws.filter((d) => d.scale === final)
+    assert(
+      atFinal.length === 1 && atFinal[0].at >= out.lastStepAt + 380,
+      `the steps drawn ${JSON.stringify(out.draws)} after ${out.lastStepAt}`,
+    )
+    assert(Math.abs(out.zoomLevel ?? 99) <= 2, `levelled after the zoom: ${out.zoomLevel}`)
+    const [a, b, c] = out.places
+    assert(
+      a.page === b.page && Math.abs(a.at - b.at) < 0.03 && a.page === c.page && Math.abs(a.at - c.at) < 0.03,
+      `the place ${JSON.stringify(out.places)}`,
+    )
+    return out
+  },
+)
+
+await check(
+  "port: the pinch: its steps in hundredths, its remainder carried, nothing drawn meanwhile, the point kept on both panes, another input commits it first, the paper's ends kept (A-215-A-218, A-220, A-222, B-027, B-010)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    await page.evaluate(() => window.__h.panes.zoomTo(1))
+    await page.waitForTimeout(800)
+    // (the remainder carried: two pinches of 1.004 from 1 commit 1.00 then 1.01)
+    const carry = []
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => {
+        const r = document.querySelector('.axt-pane.right').getBoundingClientRect()
+        window.__h.panes.pinch('right', 1.004, [r.left + 200, r.top + 200])
+      })
+      await page.waitForTimeout(450)
+      carry.push(await page.evaluate(() => window.__h.panes.scale))
+    }
+    // (a pinch's steps: told in hundredths, nothing made, the point under the pointer kept on both panes)
+    const r = await page.evaluate(async () => {
+      const p = window.__h.panes,
+        c = document.querySelector('.axt-pane.right'),
+        cr = c.getBoundingClientRect()
+      const x = cr.left + 250,
+        y = cr.top + 300
+      const pointOf = (side) => {
+        const pane = document.querySelector(`.axt-pane.${side}`).getBoundingClientRect()
+        const n = p.pageOf(side)
+        const el = p.pageElement(side, n).getBoundingClientRect()
+        return [n, (pane.left + 250 - el.left) / el.width, (pane.top + 300 - el.top) / el.height]
+      }
+      const before = { right: pointOf('right'), left: pointOf('left') }
+      const m0 = window.__h.marks.length,
+        made0 = p.right.probe().made
+      for (let i = 0; i < 6; i++) {
+        p.pinch('right', 1.07, [x, y])
+        await new Promise((f) => requestAnimationFrame(f))
+      }
+      const made1 = p.right.probe().made
+      const scales = window.__h.marks
+        .slice(m0)
+        .filter((m) => m.what === 'scale')
+        .map((m) => m.scale)
+      await new Promise((f) => setTimeout(f, 700))
+      return {
+        before,
+        after: { right: pointOf('right'), left: pointOf('left') },
+        made: made1 - made0,
+        scales,
+        pinching: p.probe().pinching,
+      }
+    })
+    // (another input commits the pinch first)
+    const commit = await page.evaluate(() => {
+      const p = window.__h.panes,
+        cr = document.querySelector('.axt-pane.right').getBoundingClientRect()
+      p.pinch('right', 1.1, [cr.left + 100, cr.top + 100])
+      const was = p.probe().pinching
+      p.zoomBy(1)
+      return { was, now: p.probe().pinching }
+    })
+    await page.waitForTimeout(600)
+    // (at the paper's end, a pinch in: the end is the paper's, never an empty foot)
+    const foot = await page.evaluate(async () => {
+      const p = window.__h.panes,
+        c = document.querySelector('.axt-pane.right')
+      c.scrollTop = c.scrollHeight
+      await new Promise((f) => setTimeout(f, 300))
+      const cr = c.getBoundingClientRect()
+      for (let i = 0; i < 4; i++) {
+        p.pinch('right', 0.9, [cr.left + 200, cr.bottom - 50])
+        await new Promise((f) => requestAnimationFrame(f))
+      }
+      await new Promise((f) => setTimeout(f, 700))
+      const last = p.pageElement('right', p.right.pages).getBoundingClientRect()
+      return { over: c.scrollTop - (c.scrollHeight - c.clientHeight), gap: cr.bottom - last.bottom }
+    })
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(carry[0] === 1 && carry[1] === 1.01, `the remainder: ${carry}`)
+    assert(r.scales.length && r.scales.every((s) => Math.round(s * 100) / 100 === s), `the steps ${r.scales}`)
+    assert(r.made === 0 && r.pinching === null, `made during ${r.made}, pinching ${r.pinching}`)
+    for (const side of ['right', 'left']) {
+      const [n0, x0, y0] = r.before[side],
+        [n1, x1, y1] = r.after[side]
+      assert(
+        n0 === n1 && Math.abs(x0 - x1) < 0.01 && Math.abs(y0 - y1) < 0.01,
+        `${side}'s point ${JSON.stringify([r.before[side], r.after[side]])}`,
+      )
+    }
+    assert(commit.was !== null && commit.now === null, `another input ${JSON.stringify(commit)}`)
+    assert(foot.over <= 1 && foot.gap >= 0, `the foot ${JSON.stringify(foot)}`)
+    return { carry, steps: r.scales.length }
+  },
+)
+
+await check(
+  "port: the left's internals pinned, its root write quiet, the pages ahead held until the layer's first page or let go (B-149, B-019, B-047, B-050, B-231, B-017)",
+  async () => {
+    const { page, context, errors } = await newPage({ viewport: { width: 1400, height: 600 } })
+    await page.evaluate((u) => window.__h.open(u), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    const pins = await page.evaluate(() => {
+      const k = window.__h.kit,
+        v = window.__h.panes.leftViewer,
+        pv = v.getPageView(0)
+      return {
+        visible:
+          typeof Object.getPrototypeOf(v)._getVisiblePages === 'function' || typeof v._getVisiblePages === 'function',
+        renderingState: typeof pv.renderingState === 'number',
+        updateVisibleArea: typeof k.viewer.PDFPageView.prototype.updateVisibleArea === 'function',
+        detailView: 'detailView' in pv,
+        outputScale: 'outputScale' in pv,
+        rawDims: !!pv.viewport.rawDims,
+        builder: typeof k.viewer.TextLayerBuilder === 'function',
+        root: document.documentElement.style.getPropertyValue('--viewer-container-height'),
+        held: window.__h.panes.aheadHeld,
+      }
+    })
+    // (at the open: page 2 near the view, not in it, on both panes: neither drawn until the pages ahead are let go)
+    await page.waitForTimeout(1200)
+    const state = (near) =>
+      page.evaluate(
+        ([near]) => ({
+          right: near.filter((n) =>
+            window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === n),
+          ),
+          left: near.filter((n) => window.__h.panes.leftViewer.getPageView(n - 1)?.renderingState === 3),
+        }),
+        [near],
+      )
+    const near = await page.evaluate(() =>
+      [1, 2, 3, 4].filter((n) => window.__h.panes.right.near(n) && !window.__h.panes.right.inView(n)),
+    )
+    const before = await state(near)
+    const held = {
+      near,
+      drawn: before.right,
+      left: before.left,
+      held: await page.evaluate(() => window.__h.panes.aheadHeld),
+    }
+    await page.evaluate(() => window.__h.panes.letAheadGo())
+    await page.waitForTimeout(1500)
+    const after = await state(near)
+    const go = after.right
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const [k, v] of Object.entries(pins)) if (k !== 'root' && k !== 'held') assert(v === true, `pin ${k}`)
+    assert(pins.root === '' && pins.held === true, `the root ${JSON.stringify(pins)}`)
+    assert(
+      held.near.length && held.drawn.length === 0 && held.left.length === 0 && held.held,
+      `held ${JSON.stringify(held)}`,
+    )
+    assert(
+      go.length === held.near.length && after.left.length === held.near.length,
+      `let go: ${JSON.stringify(after)} of ${held.near}`,
+    )
+    return { near: held.near }
+  },
+)
+
+await check(
+  "port: a laid page's text layer paints nothing, one copy for find and assistive technology, the paper's language with the translation's spans the target's, its cost; its commit writes nothing on the root (B-386, B-398, B-400, B-407, A-333, B-023)",
+  async () => {
+    const { page, context, errors } = await newPage({ dpr: 2 })
+    await page.evaluate((u) => window.__h.open(u), S1)
+    await page.evaluate(() => {
+      window.__h.rootWrites = 0
+      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.getElementById('root'), {
+        attributes: true,
+      })
+      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.documentElement, {
+        attributes: true,
+      })
+      return 0
+    })
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    const writes = await page.evaluate(() => window.__h.rootWrites)
+    await page.waitForTimeout(400)
+    const slot = page.locator('.axt-pane.right .axt-slot[data-page-number="1"] > .axt-slot-view')
+    const a = await slot.screenshot({ animations: 'disabled' })
+    await page.evaluate(() => {
+      for (const t of document.querySelectorAll('.axt-pane.right .axt-over .textLayer')) t.style.visibility = 'hidden'
+    })
+    const b = await slot.screenshot({ animations: 'disabled' })
+    await page.evaluate(() => {
+      for (const t of document.querySelectorAll('.axt-pane.right .axt-over .textLayer')) t.style.visibility = ''
+    })
+    const r = await page.evaluate(() => {
+      const s = window.__h.panes.right.page(1)
+      const tl = s.querySelector('.axt-over .textLayer'),
+        svg = s.querySelector('.axt-over > svg')
+      const translated = [...tl.querySelectorAll('span[lang="de"]')].map((x) => x.textContent)
+      const word = (translated.find((t) => t.trim().length > 6) ?? '').trim().split(/\s+/)[0]
+      getSelection().removeAllRanges()
+      const found = window.find(word)
+      const at = getSelection().anchorNode?.parentElement?.closest('.textLayer') === tl
+      return {
+        lang: tl.getAttribute('lang'),
+        translated: translated.length,
+        svgHidden: svg.getAttribute('aria-hidden'),
+        svgSelect: getComputedStyle(svg).userSelect,
+        word,
+        found,
+        at,
+        nodes: tl.querySelectorAll('*').length,
+        textMs: window.__h.composer.timings().find((t) => t.n === 1)?.textMs ?? null,
+      }
+    })
+    const tree = await page.locator('.axt-pane.right .axt-slot[data-page-number="1"]').ariaSnapshot()
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(writes === 0, `the commit wrote ${writes} attributes on the root`)
+    assert(a.equals(b), 'the text layer changed the paint')
+    assert(r.lang === 'en' && r.translated > 0, `langs ${JSON.stringify(r)}`)
+    assert(r.svgHidden === 'true' && r.svgSelect === 'none' && r.found && r.at, `one copy ${JSON.stringify(r)}`)
+    const times = tree.split(r.word).length - 1
+    assert(times === 1, `the word "${r.word}" ${times} times in the accessibility tree`)
+    assert(r.nodes <= 2000, `nodes ${r.nodes}`)
+    return { nodes: r.nodes, textMs: Math.round(r.textMs * 10) / 10 }
+  },
+)
+
+await check(
+  "port: a host's scrollers keep their own .pdfViewer, one a pane, left in place emptied on close (the lane owner's)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    const r = await page.evaluate(async () => {
+      const root = document.createElement('div')
+      root.style.cssText = 'position:absolute;inset:0'
+      const left = document.createElement('div'),
+        right = document.createElement('div')
+      for (const [el, id] of [
+        [left, 'left'],
+        [right, 'right'],
+      ]) {
+        el.className = `viewerContainer axt-pane ${id}`
+        el.id = id
+        el.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+        root.append(el)
+      }
+      document.body.append(root)
+      window.__h.given = { root, left, right }
+      return true
+    })
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', panes: window.__h.given }))
+    await readerLaid(page)
+    const open = await page.evaluate(() => [
+      window.__h.given.left.querySelectorAll(':scope > .pdfViewer').length,
+      window.__h.given.right.querySelectorAll(':scope > .pdfViewer').length,
+      window.__h.given.right.querySelector(':scope > .pdfViewer').children.length,
+    ])
+    await page.evaluate(() => window.__h.readers[0].reader.close())
+    await page.waitForTimeout(500)
+    const closed = await page.evaluate(() => [
+      window.__h.given.left.querySelectorAll(':scope > .pdfViewer').length,
+      window.__h.given.right.querySelectorAll(':scope > .pdfViewer').length,
+      window.__h.given.right.querySelector(':scope > .pdfViewer')?.children.length ?? -1,
+    ])
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(r && open[0] === 1 && open[1] === 1 && open[2] > 0, `open ${open}`)
+    assert(closed[0] === 1 && closed[1] === 1 && closed[2] === 0, `closed ${closed}`)
+    return { open, closed }
+  },
+)
 
 // ---------------------------------------------------------------- the commit and paint times against the baseline (engine-view-host §9)
 const timings = {}

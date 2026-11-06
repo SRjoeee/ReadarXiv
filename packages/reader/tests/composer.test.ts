@@ -306,7 +306,7 @@ function world(
     lang: () => 'de',
     links: { open: () => {}, follow: () => {}, unnamed: () => 'Link' },
     clock,
-    original: (n, settled) => ({ key: settled ? 'own' : 'left', kind: 'skeleton' }) as unknown as PageContent,
+    original: (_n, settled) => ({ key: settled ? 'own' : 'left', kind: 'skeleton' }) as unknown as PageContent,
     settle: (fn) => {
       settledFn = fn ?? (() => false)
     },
@@ -525,6 +525,26 @@ describe('another target, the toggles (a generation in place)', () => {
     w.composer.setClasses({ figures: true, tables: true, heads: true, references: false, names: false })
     await settle()
     expect(w.lay.calls).toBe(lays)
+  })
+})
+
+describe('a generation let go', () => {
+  it('a commit of the generation before not in place yet is let go, nothing of it put in place', async () => {
+    const w = world()
+    w.stack.setNear([1, 2])
+    open(w, rowsOf('de', allIds(w)))
+    await settle()
+    w.stack.put(1)
+    await settle()
+    // (page 2 committed, its drawing not in place yet)
+    expect(w.composer.laid(2)).not.toBeNull()
+    const before = w.stack.contentOf(2)?.key
+    open(w, rowsOf('fr', []))
+    await settle()
+    expect(w.composer.laid(2)).toBeNull()
+    expect(w.stack.contentOf(2)?.key).not.toBe(before)
+    // (page 1, in place, kept until its new commit)
+    expect(w.composer.muted(1)).toBe(true)
   })
 })
 

@@ -268,6 +268,36 @@ describe('the laid text layer (§11.11)', () => {
     const dritte = texts.find((x) => x.str === 'dritte') as { hasEOL?: boolean }
     expect(dritte.hasEOL).toBe(true)
   })
+  it('a crop with no text under its source carries its own plain text; rotated text is left out', () => {
+    const m = placed(2, [[700, 50, 300]], [['e1', [1, 400, 400, 440, 420, 405]]])
+    const content = contentOf([
+      OC,
+      item('original', 50, 700, 200),
+      EMC,
+      { ...item('axis', 500, 300, 20), transform: [0, 10, -10, 0, 500, 300] },
+    ])
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        laid(2, [
+          [
+            700,
+            50,
+            300,
+            [
+              { s: 'eins', x: 50, face: 'sans', size: 10 },
+              { s: 'E = mc^2', x: 120, src: [1, 400, 400, 440, 420, 405], k: 1, piece: 'e1' },
+            ],
+          ],
+        ]),
+      ],
+    }
+    const r = laidText(content, page, new Map([[2, m]]), facesStub, measure)
+    const strs = (r.content.items as { str?: string }[]).filter((x) => typeof x.str === 'string').map((x) => x.str)
+    expect(strs).toEqual(['eins', 'E = mc^2'])
+  })
   it("merges the page's own abutting items on one baseline at one size, and holds at most TEXT_ITEMS_MAX", () => {
     const page: Page = { page: 1, wait: { rows: [], faces: [] }, links: [], members: [] }
     const r = laidText(

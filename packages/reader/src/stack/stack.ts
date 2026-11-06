@@ -316,9 +316,11 @@ export interface Stack {
 
 export function createStack(o: StackOptions): Stack {
   const { scroller, kit, scheduler, clock } = o
-  const element = document.createElement('div')
-  element.className = 'pdfViewer axt-stack'
-  scroller.append(element)
+  // (a scroller the host's chrome renders holds its own `.pdfViewer`: taken, and left in place, emptied, at the end)
+  const given = scroller.querySelector<HTMLElement>(':scope > .pdfViewer')
+  const element = given ?? document.createElement('div')
+  element.classList.add('pdfViewer', 'axt-stack')
+  if (!given) scroller.append(element)
   const keepPixels = typeof o.keepPixels === 'number' ? Math.max(0, o.keepPixels) : deviceKeep()
   const round = o.rounding ?? roundingTable()
   let slots: Slot[] = []
@@ -1286,7 +1288,12 @@ export function createStack(o: StackOptions): Stack {
       near.disconnect()
       inView.disconnect()
       clear()
-      element.remove()
+      if (given) {
+        element.replaceChildren()
+        element.classList.remove('axt-stack')
+        element.removeAttribute('data-axt-scaling')
+        element.style.removeProperty('--scale-factor')
+      } else element.remove()
       listeners.clear()
     },
   }

@@ -345,6 +345,9 @@ export function createComposer(o: ComposerOptions): Composer {
     if (c && c.gen === gen) return
     void partFor(n).catch(() => {})
     queue.add(n)
+    // (a page of the view asked: the pages ahead give the line, the thread and the hold up to it, begun again once the view's
+    // pages are in place)
+    if (stack.near(n)) stopAhead()
     if (pumpQueued) return
     pumpQueued = true
     queueMicrotask(() => {
