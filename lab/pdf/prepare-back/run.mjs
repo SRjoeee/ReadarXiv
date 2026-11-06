@@ -113,7 +113,8 @@ if (ins) {
   }
 }
 const tBack = performance.now()
-// ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's, all
+// ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
+// --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)
 let proofs = null
 if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') || process.argv.includes('--pixels'))) {
@@ -126,7 +127,7 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   proofs.glyphs.ms = Math.round(performance.now() - tp)
   if (process.argv.includes('--pixels')) {
     const tq = performance.now()
-    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL })
+    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
     proofs.pixels.ms = Math.round(performance.now() - tq)
   }
 }
