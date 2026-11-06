@@ -86,3 +86,4 @@ export {
   tokens,
   upperOf,
 } from './breaker/tokens.ts'
+export { BODY_KINDS, type FillTarget, fillTarget, type Voter } from './shared/fill-target.ts'

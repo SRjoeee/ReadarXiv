@@ -568,7 +568,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     reads: ['fill.band', 'fill.kinds'],
     file: 'shared/fill-target.ts',
-    state: open,
+    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz passes[].target', cases: 3014 },
   },
   {
     id: 'S.fill.page',
