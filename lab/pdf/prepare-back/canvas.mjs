@@ -16,6 +16,9 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 const [OUT, LIST] = process.argv.slice(2)
 const CANVAS = process.argv.find(a => a.startsWith('--canvas='))?.slice(9) ?? 'gpu'
 const IDS = process.argv.slice(4).filter(a => !a.startsWith('--'))
+// (--figures-off: also each page with its figure texts' groups OFF against A, the pixels changed outside their members' lines'
+// boxes counted: whether PDF.js hides a figure text written inside its form exactly)
+const FIGURES_OFF = process.argv.includes('--figures-off')
 const dirs = new Map(readFileSync(LIST, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t')))
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const OPTIONS = { cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/'), verbosity: 0, useSystemFonts: false }
@@ -27,11 +30,13 @@ const docs = new Map(), imgs = new Map()
 const hwa = new URLSearchParams(location.search).get('hwa') === '1'
 window.gate = {
   async open(id, name) { const data = new Uint8Array(await (await fetch('/pdf/' + name)).arrayBuffer()); docs.set(id, await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', enableHWA: hwa, isImageDecoderSupported: false }).promise) },
-  async render(id, n, key) {
+  async render(id, n, key, off) {
     const doc = docs.get(id), page = await doc.getPage(n), vp = page.getViewport({ scale: 2 })
     const canvas = document.createElement('canvas'); canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height)
     const ctx = canvas.getContext('2d', { willReadFrequently: !hwa })
-    await page.render({ canvasContext: ctx, canvas, viewport: vp }).promise
+    const cfg = await doc.getOptionalContentConfig({ intent: 'display' })
+    if (off) for (const [gid, g] of cfg) if (off.includes(g.name)) cfg.setVisibility(gid, false, false)
+    await page.render({ canvasContext: ctx, canvas, viewport: vp, optionalContentConfigPromise: Promise.resolve(cfg) }).promise
     imgs.set(key, { w: canvas.width, h: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data })
     page.cleanup()
   },
@@ -78,7 +83,7 @@ async function rectsOf(A, W) {
     }
     const splitRects = ink.glyphs.filter(g => split.has(g.n)).map(g => dev(Math.min(g.x0, g.ix0), g.bottom, Math.max(g.x1, g.ix1), g.top))
     for (const t of ink.turned ?? []) if (split.has(t.n) && t.box >= 0) splitRects.push(dev(...ink.boxes.slice(4 * t.box, 4 * t.box + 4)))
-    return { split: splitRects, image, splitShows: split.size }
+    return { split: splitRects, image, splitShows: split.size, vp: (x, y) => vp.convertToViewportPoint(x, y) }
   })
 }
 
@@ -94,6 +99,18 @@ try {
     W.set(A)
     W.set(add, A.length)
     const rects = await rectsOf(A, W)
+    // (each page's figure members, from the bundle's parts: their groups' names and their lines' boxes)
+    const figs = new Map()
+    if (FIGURES_OFF) {
+      const head = JSON.parse(readFileSync(join(bdir, 'head.json'), 'utf8'))
+      head.parts.forEach((d, i) => {
+        if (!d) return
+        const part = JSON.parse(readFileSync(join(bdir, `${d}.part`), 'utf8'))
+        const names = [], lines = []
+        for (const flow of part.flows) for (const m of flow) if (m.kind === 'figure' && !m.why) for (const l of m.lines) if (l[0] === i + 1) { names.push(`axt:${m.ord}.${i + 1}.t`); lines.push([l[2], l[6], l[3], l[5]]) }
+        figs.set(i + 1, { names, lines })
+      })
+    }
     const files = new Map([['a.pdf', A], ['w.pdf', W]])
     const page = await browser.newPage()
     await page.route('http://canvas.local/**', route => {
@@ -114,9 +131,18 @@ try {
       let c
       for (let t = 0; t < 4; t++) { await call('render', 'A', p, 'a'); await call('render', 'W', p, 'w'); c = await call('cmp', 'a', 'w', [...split, ...image]); if (!c.outside) break }
       const inSplit = split.length ? await call('cmp', 'a', 'w', split) : { inside: 0, region: 0, maxIn: 0 }
-      rows.push({ p, outside: c.outside, splitShows, share: inSplit.region ? inSplit.inside / inSplit.region : 0, max: inSplit.maxIn })
+      const row = { p, outside: c.outside, splitShows, share: inSplit.region ? inSplit.inside / inSplit.region : 0, max: inSplit.maxIn }
+      const fig = figs.get(p)
+      if (FIGURES_OFF && fig?.names.length) {
+        await call('render', 'W', p, 'f', fig.names)
+        const vp = rects[p - 1].vp
+        const boxes = fig.lines.map(([x0, y0, x1, y1]) => { const [a, b] = vp(x0, y0), [cc, d] = vp(x1, y1); return [Math.min(a, cc) - 1, Math.min(b, d) - 1, Math.max(a, cc) + 1, Math.max(b, d) + 1] })
+        const f = await call('cmp', 'a', 'f', boxes)
+        row.figOff = { inside: f.inside, outside: f.outside }
+      }
+      rows.push(row)
     }
     await page.close()
-    console.log(JSON.stringify({ id, canvas: CANVAS, pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length }))
+    console.log(JSON.stringify({ id, canvas: CANVAS, pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length, ...(FIGURES_OFF ? { figuresOff: { pages: rows.filter(r => r.figOff).length, outsidePages: rows.filter(r => r.figOff?.outside).map(r => [r.p, r.figOff.outside]), inside: rows.reduce((n, r) => n + (r.figOff?.inside ?? 0), 0) } } : {}) }))
   }
 } finally { await browser.close() }
