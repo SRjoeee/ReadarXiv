@@ -1,5 +1,6 @@
 // The types of ink.mjs (today's pageInk, moved as it is, JavaScript until its port): what its declarations stated, now a
 // TypeScript module of the package (the packages hold no declaration files), each value of ink.mjs re-exported with its type.
+// @ts-ignore: JavaScript moved as it is, typed by this file alone (a package holds no declaration file)
 import * as ink from './ink.mjs'
 
 /** a glyph as PDF.js's canvas places it: its character, its advance across (x0, x1) and baseline, size and the font's

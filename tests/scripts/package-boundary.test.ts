@@ -9,6 +9,7 @@ import {
   PACKAGES,
   packageFiles,
   packageViolations,
+  // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 } from '../../scripts/check-boundary.mjs'
 
 type Violation = { file: string; spec: string; why: string }

@@ -3,9 +3,7 @@
   "compilerOptions": {
     "lib": [
       "ESNext"
-    ],
-    "allowJs": true,
-    "checkJs": false
+    ]
   },
   "include": [
     "src",

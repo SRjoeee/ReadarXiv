@@ -710,6 +710,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
 })
 
 describe('the door reaches no server-only module', () => {
+  const INK_NAMES = new Set(['pageInk', 'GLYPHS_PAGE', 'BOXES_PAGE', 'OPS_CAP', 'NO_FILL', 'unreadOf', 'regionMask', 'packGlyphs', 'PICTURE_START', 'PICTURE_END', 'Glyph', 'InkPoint', 'PackedGlyphs', 'outlineBox', 'outlineKey', 'outlineTable', 'readOutlines'])
   it('walks every module reader.mjs imports and re-exports: none of the server\'s, no node: specifier, no package but zod, in rules/ alone', () => {
     const SERVER = ['pipeline/live.mjs', 'layout/remove.mjs', 'layout/addon.mjs', 'layout/make.mjs', 'layout/marks.mjs', 'layout/carry.mjs', 'layer/check.mjs'].map(f => resolve('src/pdf-reader/engine', f))
     // (static import and export … from, relative and the repository's @/ alias; a module of the alias is TypeScript)
@@ -743,9 +744,17 @@ describe('the door reaches no server-only module', () => {
     expect(awaiting).toEqual([])
     expect(seenFiles.size).toBeGreaterThan(20)
     for (const f of SERVER) expect(seenFiles.has(f), f).toBe(false)
-    // (the layout rules' validator is the one package the door's closure holds, imported by the rules' module and by none
-    // other: the rest of the engine takes the rules' answers, never the schema)
-    expect([...others.keys()]).toEqual(['zod/mini'])
+    // (the layout rules' validator is the one package of another origin the door's closure holds, imported by the rules'
+    // module and by none other: the rest of the engine takes the rules' answers, never the schema. And the engine package,
+    // which holds today's modules the rebuild moved into it (packages/engine): the door takes pageInk's alone of it, never the
+    // prepare's)
+    expect([...others.keys()].sort()).toEqual(['@readarxiv/engine', 'zod/mini'])
+    const fromPackage = new Set<string>()
+    for (const f of others.get('@readarxiv/engine')!) {
+      const text = readFileSync(f, 'utf8')
+      for (const m of text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@readarxiv\/engine'/g)) for (const n of m[1]!.split(',')) if (n.trim()) fromPackage.add(n.trim().replace(/^type\s+/, '').replace(/\s+as\s+.*$/, ''))
+    }
+    expect([...fromPackage].filter(n => !INK_NAMES.has(n))).toEqual([])
     expect(others.get('zod/mini')!.map(f => f.slice(resolve('src/pdf-reader/engine').length + 1))).toEqual(['rules/layout.mjs'])
     // (the walk reaches what it should: the run, the rows, the bundle, the translation)
     for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'translate/mt.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)

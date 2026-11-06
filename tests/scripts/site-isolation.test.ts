@@ -3,6 +3,7 @@
 // *contained the host's name*, and Codex on #315 named what that walks past: patterns that cover the website without
 // naming it. Every one of them is a case here, so the next rewrite cannot lose one.
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error — a plain node script, untyped
 import { contentScriptsRunningOn, patternCoversHost } from '../../scripts/site-isolation.mjs'
 
 const HOST = 'app-staging.readarxiv.org'
