@@ -714,7 +714,8 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2401-2409 withhold', 'RUN:2411-2425 settleGroup'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/table-settle.ts',
+    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz settles', cases: 1479 },
   },
   // ---------------------------------------------------------------- what the reader paints, hides, selects and links
   {

@@ -155,6 +155,7 @@ export type { FitBlock, FitParams, FitState, LaidItem, LaidLine, Layout, Tokens 
 export { keepsShare, type Share, shareOf } from './shared/share.types.ts'
 export { type OnLead, type OnLeadInput, onLeadRetry } from './shared/on-lead.ts'
 export { type GroupMember, keptCell, type TableRead, tableRead } from './shared/table-read.ts'
+export { type LaidCell, tableSettle } from './shared/table-settle.ts'
 export { type NumberCrop, type NumberedInput, numberCrop, numberedLayout } from './fit/numbered.ts'
 export { type Further, type FurtherInput, fitFurther } from './fit/further.ts'
 export { type CatalogueFace, FACES, HOLDS, SMCP } from './data/faces.ts'
