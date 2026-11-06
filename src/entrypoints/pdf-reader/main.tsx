@@ -5,18 +5,13 @@ import './reader.css'
 import { createController, mountChrome } from '@readarxiv/reader'
 import { trackModality } from '@readarxiv/ui'
 import { browser } from 'wxt/browser'
-import { DEFAULT_CONFIG } from '@/config/schema'
 import { readConfig } from '@/config/storage'
 import { LOOPBACK_ALLOWED, paperOf } from '@/pdf-reader/addresses'
-import { chromeLanguages } from '@/pdf-reader/host/languages'
-import { settingsUrl } from '@/pdf-reader/host/links'
-import { prefsOf } from '@/pdf-reader/host/prefs'
-import { extensionSlots } from '@/pdf-reader/host/slots'
-import { configStore, probeController, todayOpen } from '@/pdf-reader/host/today'
+import { DEFAULT_PREFS, extensionParts, firstOf } from '@/pdf-reader/host/parts'
+import { configStore, todayOpen } from '@/pdf-reader/host/today'
 import { frameOwner } from '@/shared/frame-owner'
 import { applyPageLocale } from '@/ui/apply-locale'
 import { answeredBy, firstReadTime } from '@/ui/first-read'
-import { reasonText } from '@/ui/strings'
 
 /**
  * The manifest key that lets a reader that is no frame act: only the harness's copy of a release build carries it
@@ -51,26 +46,12 @@ if (vouched !== null && (vouched.framed || topLevel)) {
   const today = READER === 'today' ? configStore(reading?.config ?? null) : null
   const v2 = READER === 'v2' ? await (await import('@/pdf-reader/host/v2')).startV2({ params, paper }) : null
   const store = today ?? v2!.store
-  const defaults = prefsOf(DEFAULT_CONFIG)
-  const controller = createController({
-    open: today ? todayOpen({ params, reading, store: today }) : v2!.open,
-    paper,
-    first: { prefs: reading ? prefsOf(reading.config) : null, unreadable: !reading || reading.fallbackReason !== null },
-    defaults,
-  })
+  const controller = createController({ open: today ? todayOpen({ params, reading, store: today }) : v2!.open, paper, first: firstOf(reading), defaults: DEFAULT_PREFS() })
   // the focus rings are the keyboard's (modality.ts)
   trackModality()
+  const probes = window as unknown as { __reader?: object }
   mountChrome(document.getElementById('root')!, {
     controller,
-    parts: {
-      slots: extensionSlots({ controller, store, embedded: params.get('embedded') === '1' }),
-      languages: chromeLanguages(),
-      // a key's reason is the key's only where the service chosen carries one (#88 E5)
-      reason: kind => reasonText(kind, store.state().config?.provider),
-      settingsHref: settingsUrl(),
-      defaults,
-      // the probes' contract (the e2e's, the lab's spikes): the controller as it was, its state with the extension's settings
-      probe: (c, session) => Object.assign((window as unknown as { __reader: object }).__reader ?? ((window as unknown as { __reader: object }).__reader = {}), { controller: probeController(c, store), session }),
-    },
+    parts: extensionParts({ controller, store, embedded: params.get('embedded') === '1', probe: hook => Object.assign((probes.__reader ??= {}), hook) }),
   })
 }
