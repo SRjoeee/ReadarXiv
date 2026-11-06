@@ -89,7 +89,7 @@ export interface Entry { label: string; disabled: boolean }
  * goes on; `settings` adds the button that opens the options page
  */
 export interface Note { text: string; tone: 'alert' | 'info'; settings: boolean }
-/** A menu as the shared menu list draws it (@/ui/controls/MenuList, Part 3): its name, whether it searches, its rows */
+/** A menu as the shared menu list draws it (@readarxiv/ui's MenuList, Part 3): its name, whether it searches, its rows */
 export interface MenuView { label: string; search: boolean; items: MenuListItem[] }
 /** One of P0's entries for a paper it names: the address it opens, or null where the checks ruled it out */
 export interface FoundEntry { label: string; href: string | null }

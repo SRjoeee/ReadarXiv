@@ -5,7 +5,7 @@
 // the style menu opens above the foot (menu-fit.ts); the rows inside are drawn from the frame after the first
 import { ChevronDown } from 'lucide'
 import { type CSSProperties, useCallback, useEffect, useRef } from 'react'
-import { Icon, MenuList, Popover, usePopover, useTip, S } from '@readarxiv/ui'
+import { Icon, MenuList, Popover, shut, usePopover, useTip, S } from '@readarxiv/ui'
 import type { PopupActions } from '../data'
 import type { MenuKind, MenuView, Row } from '../view-model'
 import { fitMenu } from './menu-fit'
@@ -16,14 +16,11 @@ type MenuActions = Pick<PopupActions, 'openMenu' | 'closeMenu'>
 /** Two anchor names on one element take one declaration: a second would replace the first (its menu's and its tooltip's) */
 export const anchors = (...names: string[]): CSSProperties => ({ anchorName: names.join(', ') }) as CSSProperties
 const tipAnchor = (tip: ReturnType<typeof useTip>) => String((tip.props.style as { anchorName?: string }).anchorName)
-/**
- * The popover shut, as a pick does (the pattern of `src/pdf-reader/ui/Menus.tsx`): `MenuList`'s Escape handler
- * prevents the browser's own dismiss and calls `onClose` itself, so `onClose` must go through the popover rather
- * than straight to `actions.closeMenu` — the native `toggle` that follows is the one path that runs `useMenu`'s
- * closing bookkeeping (`unfit`, `shown`, `actions.closeMenu`); calling `closeMenu` here too would run it twice and
- * leave the popup's min-height set until the `open` prop's own round trip clears it a second time
- */
-const shut = (id: string) => document.getElementById(id)?.hidePopover()
+// A menu's `onClose` is the kit's `shut`, the popover closed as a pick closes it (the pattern of `src/pdf-reader/ui/Menus.tsx`):
+// `MenuList`'s Escape handler prevents the browser's own dismiss and calls `onClose` itself, so `onClose` must go through
+// the popover rather than straight to `actions.closeMenu` — the native `toggle` that follows is the one path that runs
+// `useMenu`'s closing bookkeeping (`unfit`, `shown`, `actions.closeMenu`); calling `closeMenu` here too would run it twice
+// and leave the popup's min-height set until the `open` prop's own round trip clears it a second time
 
 function useMenu(kind: MenuKind, open: boolean, actions: MenuActions, up: boolean) {
   const pop = usePopover('listbox')

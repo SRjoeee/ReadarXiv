@@ -1,5 +1,5 @@
 // The controls sheet (a dev page, like the gallery: wxt.config.ts DEV_PAGES keeps it out of a release): every control of
-// src/ui/controls that the redesign's Part 3 adds, in each of its states, light and dark side by side on the pages' own
+// the kit (@readarxiv/ui, packages/ui/src/controls) that the redesign's Part 3 adds, in each of its states, light and dark side by side on the pages' own
 // sheet (ui.css), in the language `?lang=` names — to look at in a real browser before the popup and the settings page
 // use them, and for tests/e2e/probes/controls.mjs to measure
 import '@/styles/ui.css'

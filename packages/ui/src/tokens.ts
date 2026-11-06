@@ -1,7 +1,7 @@
 // The extension's design tokens (the redesign's design, §2.1): one source for every surface — the reader, the popup,
-// the settings page, and the shadow roots the content script puts on arXiv's pages. Here because the floating button
-// and the figure viewer live in src/core, which may not import src/ui (hard rule 8). A surface names a role; nothing
-// else in the tree writes a colour.
+// the settings page, and the shadow roots the content script puts on arXiv's pages. Here, with the controls that draw
+// in them; src/shared/tokens.ts hands them to src/core (the floating button, the failure widget, the figure viewer),
+// which imports no UI (hard rule 8). A surface names a role; nothing else in the tree writes a colour.
 //
 // A value is one string for both themes, or one per theme. `$name` names another token of the same sheet; the writer
 // turns it into `var(<prefix>name)` and `resolve` into the value it names.
@@ -196,7 +196,7 @@ export function tokenSheet(scope: 'page' | 'host'): string {
   }).join('')
   return [
     scope === 'page'
-      ? '/* Generated from src/shared/tokens.ts by `pnpm tokens`: edit the source, not this file */\n'
+      ? '/* Generated from packages/ui/src/tokens.ts by `pnpm tokens`: edit the source, not this file */\n'
       : '',
     `${s.light} {\n${declarations('light', prefix, '  ')}\n}\n`,
     `@media (prefers-color-scheme: dark) {\n  ${s.system} {\n${declarations('dark', prefix, '    ')}\n  }\n}\n`,

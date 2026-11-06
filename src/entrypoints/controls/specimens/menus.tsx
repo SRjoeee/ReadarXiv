@@ -7,18 +7,18 @@ import { BUILT_IN_STYLES } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
 import { languageItems } from '@/pdf-reader/ui/languages'
 import { styleSample } from '@/ui/style-sample'
-import { Button, MenuList, type MenuListItem, Popover, usePopover, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
+import { Button, MenuList, type MenuListItem, Popover, shut, usePopover, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
 import { profileName } from '@/ui/strings'
 
 function Menu({ name, label, items, layout, search, noMatch, onEvent }: { name: string; label: string; items: MenuListItem[]; layout?: 'inline' | 'two-line'; search?: string; noMatch?: string; onEvent: (event: string) => void }) {
   const pop = usePopover('listbox')
-  const shut = () => document.getElementById(pop.popover.id)?.hidePopover()
+  const close = () => shut(pop.popover.id)
   return (
     <>
       <Button data-menu={name} {...pop.trigger} style={{ anchorName: pop.anchor } as CSSProperties}>{label}</Button>
       <Popover {...pop.popover} role="listbox" label={label}>
-        <MenuList key={pop.generation} kind="listbox" label={label} layout={layout} search={search} noMatch={noMatch} items={items} onClose={shut}
-          onPick={id => { onEvent(`pick:${id}`); shut() }} onAction={id => onEvent(`action:${id}`)} />
+        <MenuList key={pop.generation} kind="listbox" label={label} layout={layout} search={search} noMatch={noMatch} items={items} onClose={close}
+          onPick={id => { onEvent(`pick:${id}`); close() }} onAction={id => onEvent(`action:${id}`)} />
       </Popover>
     </>
   )

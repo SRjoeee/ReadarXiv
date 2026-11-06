@@ -3,7 +3,7 @@
 The single basis for the interface implementation; a change to the interface starts here. The design canvas that preceded it is not in the repository.
 Numbering: `P` popup states, `O` the options page, `I` in-page components; copy ids are `S-<surface>-<number>`. Cite the ids directly in feedback.
 
-Status: **implemented** — the copy of §3, the tokens of §5 and the language of §6 are in `src/ui/strings.ts`, `src/locales/` and `src/shared/tokens.ts` (§5); the [open] marks of §1, §2, §3 and §5 dated from the drafting and were changed to [implemented] on 2026-09-13; the popup, the settings page and the controls on arXiv's pages were redrawn on 2026-09-27 (the redesign: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md`). Settled sections are marked [decided]. "The redesign's §n" names a section of that design; a bare §n is this document's.
+Status: **implemented** — the copy of §3, the tokens of §5 and the language of §6 are in `packages/ui/src/locales/`, `packages/ui/src/strings.ts`, `src/ui/strings.ts` and `packages/ui/src/tokens.ts` (§5); the [open] marks of §1, §2, §3 and §5 dated from the drafting and were changed to [implemented] on 2026-09-13; the popup, the settings page and the controls on arXiv's pages were redrawn on 2026-09-27 (the redesign: `git show exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-09-26-extension-ui-redesign-design.md`). Settled sections are marked [decided]. "The redesign's §n" names a section of that design; a bare §n is this document's.
 
 ---
 
@@ -23,13 +23,13 @@ Status: **implemented** — the copy of §3, the tokens of §5 and the language 
 **The other interface languages** [decided, 2026-11-04; the glossary of that day and its rulings]. Rules 1, 4, 5 and 8 hold in every language, and rule 6's length is Chinese's measure: what has to fit is the room, which the probes measure (`tests/e2e/probes/popup-align.mjs`, `settings-align.mjs`). Each language's platform words come first, Chrome's breaking a tie; "Read arXiv" and "arXiv" are never translated. Rules 2, 3, 7, 9 and 10 are written for Chinese; the others keep these lines:
 
 - **Traditional Chinese (zh-TW)**: rules 2–10 as written, in Taiwan's words, never a character conversion of the Simplified pack (設定, 預設, 連結, 載入, 搜尋, 支援, 快取, 匯入, 復原, 視窗, 分頁, 擴充功能; `tests/ui/locales.test.ts` holds the pack free of Simplified characters and mainland words). Quotes 「」.
-- **Japanese**: a button is a noun or 〜を + a verb (再試行, リンクをコピー), a state 〜中 (翻訳中); sentences in です・ます; full-width 、。「」, a label's colon full-width with no space. **A half-width space between Japanese and a Latin word** (arXiv で, PDF を), as Chrome's Japanese sets it, and **none between Japanese and digits** (3件, 12段落, 3ページ). A text ends in 。 where the Chinese one does. A name set into a sentence is spaced on whichever side meets it in Latin (`spacedWithinCjk`, `src/locales/spacing.ts`); a copy is 〇〇のコピー, the name first (`O.reading.copyName`). Katakana as Google and Apple write it (ブラウザ, ビューア).
+- **Japanese**: a button is a noun or 〜を + a verb (再試行, リンクをコピー), a state 〜中 (翻訳中); sentences in です・ます; full-width 、。「」, a label's colon full-width with no space. **A half-width space between Japanese and a Latin word** (arXiv で, PDF を), as Chrome's Japanese sets it, and **none between Japanese and digits** (3件, 12段落, 3ページ). A text ends in 。 where the Chinese one does. A name set into a sentence is spaced on whichever side meets it in Latin (`spacedWithinCjk`, `packages/ui/src/locales/spacing.ts`); a copy is 〇〇のコピー, the name first (`O.reading.copyName`). Katakana as Google and Apple write it (ブラウザ, ビューア).
 - **Korean**: sentences in 합니다체, a request ~하세요; a state, a label or a button ends in a noun (번역 중, 링크 복사됨, 다시 시도). Half-width punctuation with a space after it, none before a parenthesis (`영어(English)`); quotes “ ”. **A sentence ending in ~습니다 or ~하세요 takes a full stop even alone**, or it reads unfinished (unlike rule 7); a noun ending takes none. A number attaches to its counter (3개, 3페이지). **No particle follows a name set into a sentence**: 을/를, 이/가, 은/는 and (으)로 go by the name's last sound, which a template cannot know, so a name stands before a colon (`PDF 대조 미지원 언어: X`), a noun, or a particle that never varies (에, 에서, 에게, 의). Lines break between words (`word-break: keep-all`).
-- **Fonts**: every language draws in the platform's interface face, its CJK part the element's language's — PingFang SC / TC / HK, Hiragino Sans and Apple SD Gothic Neo on macOS; Microsoft YaHei UI, JhengHei UI, Yu Gothic UI and Malgun Gothic on Windows; Noto Sans CJK on Linux (`FONT_STACKS`, `src/shared/tokens.ts`). An element in another language than the one around it (a language's own name, a sample) takes its own language's stack, and everything the extension draws on arXiv's pages carries the interface's `lang`.
+- **Fonts**: every language draws in the platform's interface face, its CJK part the element's language's — PingFang SC / TC / HK, Hiragino Sans and Apple SD Gothic Neo on macOS; Microsoft YaHei UI, JhengHei UI, Yu Gothic UI and Malgun Gothic on Windows; Noto Sans CJK on Linux (`FONT_STACKS`, `packages/ui/src/tokens.ts`). An element in another language than the one around it (a language's own name, a sample) takes its own language's stack, and everything the extension draws on arXiv's pages carries the interface's `lang`.
 
 ## 2. Terminology [implemented; marked 2026-09-13]
 
-The table gives the Chinese word; Traditional Chinese, Japanese and Korean say the same concept in their own platforms' words, one word per concept in each, as their packs hold them (`src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`).
+The table gives the Chinese word; Traditional Chinese, Japanese and Korean say the same concept in their own platforms' words, one word per concept in each, as their packs hold them (`packages/ui/src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`).
 
 | Internal word (code / DESIGN.md) | What the user sees | Notes |
 |---|---|---|
@@ -129,7 +129,7 @@ Redrawn 2026-09-27 (the redesign's §5, §10.1).
 | S-P-75 | Mode bar · 上下 greyed, the reader open | PDF 对照不支持上下排列 | The segment's title (S-P-03c): a layout the reader can see it does not offer, not a technical reason |
 | S-P-80 | Hover highlight switch, in the foot | 对照高亮 | A switch with its words, its whole row its label (`reading.sentenceHighlight`); saved at once, live on the page; its colours are the settings page's (S-O-49) |
 | S-P-81 | Hover highlight `title` | 悬停时高亮对应句子；仅译文模式下停留可查看原文 | |
-| S-P-82 | Translation style · the foot's trailing button | 译文样式 | [decided, 2026-09-11, the reader's final word] The foot is 对照高亮 · 图片翻译 · 译文样式 side by side — all three are "how this reads". The entry is its words and a chevron, the chosen style in its tooltip; the **preview is inside the menu**: its rows are one line a style, its name leading and the sample sentence (`PREVIEW_TARGET`, `src/locales/preview.ts`) trailing, drawn in that style — 淡一档 and 模糊 mean nothing as names. The list is `appearance.styles`, in the settings page's order, under the same name it has there. **The menu opens upward**: the foot is the popup's last row. The page's config watcher redraws in the new style, so nothing restarts. Where there is no style to choose — the reader (S-P-03c), the settings not read yet — the same button in the same place, greyed, so that the foot is the same on every page (the maintainer, 2026-09-28) |
+| S-P-82 | Translation style · the foot's trailing button | 译文样式 | [decided, 2026-09-11, the reader's final word] The foot is 对照高亮 · 图片翻译 · 译文样式 side by side — all three are "how this reads". The entry is its words and a chevron, the chosen style in its tooltip; the **preview is inside the menu**: its rows are one line a style, its name leading and the sample sentence (`PREVIEW_TARGET`, `packages/ui/src/locales/preview.ts`) trailing, drawn in that style — 淡一档 and 模糊 mean nothing as names. The list is `appearance.styles`, in the settings page's order, under the same name it has there. **The menu opens upward**: the foot is the popup's last row. The page's config watcher redraws in the new style, so nothing restarts. Where there is no style to choose — the reader (S-P-03c), the settings not read yet — the same button in the same place, greyed, so that the foot is the same on every page (the maintainer, 2026-09-28) |
 | S-P-83 | Translation style menu · last row | 管理译文样式… | [decided, 2026-09-11, proposed by the reader] The same role as the service menu's 管理翻译服务…: the menu's last row is not a style but the way in to managing them, so it carries no preview and takes no part in selection. It opens `options.html#appearance/styles` (the settings page's 外观, S-O-06), in a tab of its own; the entries without a row (the gear at the top right, the 设置 in a note) still use `openOptionsPage`, which brings the tab already open to the front |
 | S-P-85 | Image translation switch, in the foot | 图片翻译 | A switch with its words (`image.enabled`, v11); saved at once, live on the page; figure text shows in every display since v20 |
 | S-P-90 | Action failed | {原始信息} · 设置读取失败，更改未保存，请到设置页处理 | A line under the primary (in P0, under the field's row): the alert icon in `danger`, the words `ink`; said politely (`role="status"`), not an alert (ruling 14); cleared before the next action. The second wording is for a change the store refused because the saved settings cannot be read (DESIGN §9): the popup's own write, or the mode's save on the page |
@@ -377,7 +377,7 @@ Rules:
 - A menu is the shared popover under its row; the popup takes a minimum height while it is open, so that its window
   or the panel's frame holds it, cleared as it closes; the style menu opens upward (the redesign's §5.3). The row
   toggles it, a press outside or Escape closes it.
-- A menu's rows, every menu's — the popup's, the settings page's, the PDF reader's (`src/ui/controls/MenuList.tsx`),
+- A menu's rows, every menu's — the popup's, the settings page's, the PDF reader's (`packages/ui/src/controls/MenuList.tsx`),
   and the website's, whose rows are taller (36 px) at the same insets: the words at the row's start, 10 px in, on the
   words of the search field above them; then a hint, a sample (the style menu), a button (S-P-40) or its spinner
   (S-P-41); and in a choice — a listbox, a menu of radios — the chosen row's check last, at the row's very end, 10 px
@@ -395,13 +395,13 @@ Rules:
 
 ## 5. Tokens [implemented; the redesign, 2026-09-27]
 
-One source, `src/shared/tokens.ts`, holds every token as data — the reader's neutral ramp (`n-0` … `n-10`, one cool
+One source, `packages/ui/src/tokens.ts`, holds every token as data — the reader's neutral ramp (`n-0` … `n-10`, one cool
 neutral at hue 255), the roles named for what they are for, the brand and status colours, the shadows, the font and the
 ease — in light and dark (the redesign's design, §2.1). Nothing else in the tree writes a colour: a surface names a
 role. The extension's own pages (the popup, the settings page, the PDF reader, the gallery, the controls sheet) read
-the generated `src/styles/tokens.css`, unprefixed (`pnpm tokens` writes it; `tests/shared/tokens.test.ts` fails while
+the generated `packages/ui/src/tokens.css`, unprefixed (`pnpm tokens` writes it; `packages/ui/tests/tokens.test.ts` fails while
 it and the source differ); the shadow roots on arXiv's pages take the same roles as `--axt-` variables from
-`tokenSheet('host')`, marked light or dark inside the root (DESIGN §4.0c). `tests/shared/contrast.test.ts` holds every
+`tokenSheet('host')`, marked light or dark inside the root (DESIGN §4.0c). `packages/ui/tests/contrast.test.ts` holds every
 pair a surface draws to its floor.
 
 | Role | Light | Dark | For |
@@ -496,10 +496,10 @@ a paper reader can mostly get by in English for a while. So adding a language ha
 
 | Where | Content |
 |---|---|
-| `src/locales/zh-CN.ts` | Simplified Chinese, and **the source of the type**: the other packs are written in its shape, and a missing key fails to compile |
-| `src/locales/zh-TW.ts`, `ja.ts`, `ko.ts` | Traditional Chinese (Taiwan's), Japanese and Korean (2026-11-04), each in its own register (§1) |
-| `src/locales/en.ts` | English, the fallback |
-| `src/locales/index.ts` | The language table — its order the menu's: 简体中文, 繁體中文, 日本語, 한국어, English (Chinese first, Traditional beside it, the other CJK languages, English last) — each language's own name, and `pickLocale`: the reader's choice, else each browser language in order by `localeOfTag`, else English (below) |
+| `packages/ui/src/locales/zh-CN.ts` | Simplified Chinese, and **the source of the type**: the other packs are written in its shape, and a missing key fails to compile |
+| `packages/ui/src/locales/zh-TW.ts`, `ja.ts`, `ko.ts` | Traditional Chinese (Taiwan's), Japanese and Korean (2026-11-04), each in its own register (§1) |
+| `packages/ui/src/locales/en.ts` | English, the fallback |
+| `packages/ui/src/locales/index.ts` | The language table — its order the menu's: 简体中文, 繁體中文, 日本語, 한국어, English (Chinese first, Traditional beside it, the other CJK languages, English last) — each language's own name, and `pickLocale`: the reader's choice, else each browser language in order by `localeOfTag`, else English (below) |
 | `src/ui/strings.ts` | Runtime: `S` / `O` are **live bindings**, `setLocale` swaps the pack |
 | `src/ui/apply-locale.ts` | The three pages and the paper page each call it once **before the first render**; the reader's, the popup's and the settings page's read of the stored choice is bounded to 1,500 ms from the page's start (`src/ui/first-read.ts`, S-R §3.5), the browser's language applying where it does not answer |
 | `public/_locales/` | Only the two strings Chrome itself displays: the description on the extensions page / in the store, and the shortcut description. Only the browser reads them, and only the browser picks their language |

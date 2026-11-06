@@ -6,7 +6,7 @@ import { type LangCode, toBcp47 } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { isBuiltInService } from '@/config/services'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
-import { R, S, Icon, Popover, usePopover, MenuList } from '@readarxiv/ui'
+import { R, S, Icon, Popover, shut, usePopover, MenuList } from '@readarxiv/ui'
 import { serviceName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { languageItems, ownName } from './languages'
@@ -18,8 +18,6 @@ import { useRejected } from '@/ui/use-rejected'
 const FITS = [['page-width', () => R.zoom.width], ['page-fit', () => R.zoom.page], ['page-actual', () => R.zoom.actual]] as const
 const SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const openOptions = (section: string) => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)(`/options.html#${section}`) })
-/** the popover shut, as a pick does */
-const shut = (id: string) => document.getElementById(id)?.hidePopover()
 
 export function ZoomMenu({ controller }: { controller: ReaderController }) {
   const state = useReader(controller, s => ({ zoom: s.zoom, scale: s.scale }))

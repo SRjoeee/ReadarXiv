@@ -171,7 +171,7 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
 /**
  * The declaration block's own field (fix round 1, item 5): a single-line `<input>` cannot hold what it is meant
  * to show — typing Enter adds no line break, and a stored multi-line block reads as one broken line — so this is
- * a plain three-row `<textarea>` on the same field wiring `TextInput` uses (`@/ui/controls/Field`'s `useField`),
+ * a plain three-row `<textarea>` on the same field wiring `TextInput` uses (the kit's `useField`, @readarxiv/ui),
  * carrying the same `.input` styling
  */
 function CssTextarea({ className, ...rest }: ComponentProps<'textarea'>) {

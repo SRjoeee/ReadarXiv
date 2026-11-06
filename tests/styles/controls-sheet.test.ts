@@ -1,4 +1,4 @@
-// The shared controls' sheet (src/styles/controls.css): what Part 3 adds, its values as the prototypes and the design
+// The shared controls' sheet (packages/ui/src/controls.css): what Part 3 adds, its values as the prototypes and the design
 // agreed them (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces) — a change to one is a change to the design,
 // made there first
 import { describe, expect, it } from 'vitest'

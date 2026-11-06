@@ -117,7 +117,7 @@ export default defineConfig({
     // The two strings Chrome itself shows — the extensions page, the store listing and the shortcuts
     // page — come from public/_locales, because only the browser reads them and only it can pick a
     // language for them. Everything inside our own pages follows the reader's own choice instead
-    // (src/locales, UI.md §6)
+    // (packages/ui/src/locales, UI.md §6)
     default_locale: 'en',
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to

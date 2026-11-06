@@ -39,6 +39,10 @@ export function usePopover(kind: 'menu' | 'listbox' | 'dialog', name?: string) {
   }
 }
 
+/** The popover `id` closed, as a pick closes it: through the browser's popover, whose `toggle` then runs the closing
+ *  every opener relies on (`onOpenChange`, `onClosed`, the focus back to its button) */
+export const shut = (id: string): void => document.getElementById(id)?.hidePopover()
+
 export function Popover({
   id,
   anchor,
