@@ -14,8 +14,9 @@
   },
   "dependencies": {
     "@readarxiv/format": "workspace:*",
-    "@readarxiv/typeset": "workspace:*",
     "@readarxiv/text": "workspace:*",
-    "@readarxiv/ui": "workspace:*"
+    "@readarxiv/typeset": "workspace:*",
+    "@readarxiv/ui": "workspace:*",
+    "pdfjs-dist": "6.3.289"
   }
 }

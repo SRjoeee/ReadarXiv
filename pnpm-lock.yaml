@@ -129,6 +129,9 @@ importers:
       '@readarxiv/ui':
         specifier: workspace:*
         version: link:../ui
+      pdfjs-dist:
+        specifier: 6.3.289
+        version: 6.3.289
 
   packages/text: {}
 
