@@ -1,7 +1,7 @@
 // A unit's lay replayed from F2 to the round's last word (TAP.md §3, F1-F8 and `out`), each step's port given what the step
 // before it made, as today's layOnce chains them (RUN:2255-2316): S.onLeadRetry (F3), X.numbered (F4), S.overFollower's
 // verdict (F5), X.further or X.runs (F6), S.settle's (F7), S.share (F8); each step's answer against its slot, the round's
-// layout against `out`. A step whose input the tap does not hold ends the chain there, and says which: S.overFollower taken
+// layout against `out`; then the unit's fill leadings (L9, unitFillLeads RUN:2617). A step whose input the tap does not hold ends the chain there, and says which: S.overFollower taken
 // (the follower's first line in the file), S.settle moving a line (a CJK cell's bands: the page's rules), X.further widening
 // a CJK cell (its bands over the widened lines).
 import { cellBands } from '../../src/unit/params.ts'
@@ -9,8 +9,9 @@ import { layoutCut } from '../../src/fit/cut.types.ts'
 import { fitFurther } from '../../src/fit/further.ts'
 import { numberedLayout, type NumberCrop } from '../../src/fit/numbered.ts'
 import { layoutRuns } from '../../src/fit/runs.types.ts'
-import type { FitBlock, FitParams, Tokens } from '../../src/fit/types.ts'
+import type { FitBlock, FitParams, Layout, Tokens } from '../../src/fit/types.ts'
 import { layoutUnit2 } from '../../src/fit/walk.types.ts'
+import { type FillRules, type FillUnit, fillLeadsOf } from '../../src/shared/fill-leads.types.ts'
 import { onLeadRetry } from '../../src/shared/on-lead.ts'
 import { shareOf } from '../../src/shared/share.types.ts'
 import { blockOfTap, layoutOf, linesOf, num, type WalkCase } from './fit-input.ts'
@@ -114,6 +115,7 @@ export function chain(c: WalkCase): Chain {
     runs6 = c.slot('X.runs')
   const kind = (ledger(c.pair).units.find((u) => u.ord === c.ord)?.kind ?? '') as string
   let runs: ReturnType<typeof layoutRuns> = null
+  let whole: Layout | null = null
   if (layout.clipped) {
     if (!further) return { at: 'F6', d: 'clipped, and no X.further slot', steps }
     const wb = further.widenedBlocks as Raw[] | null
@@ -160,7 +162,10 @@ export function chain(c: WalkCase): Chain {
     d = firstDifference(mine, want ?? null, 'laidRuns')
     if (d) return { at: 'F6', d, steps }
     steps.push('F6 runs')
-    if (runs) layout = runs.layout
+    if (runs) {
+      whole = layout
+      layout = runs.layout
+    }
   }
   // F7 S.settle (a CJK cell's lines into their bands, which need the page's rules)
   const f7 = c.slot('S.settle')
@@ -192,6 +197,37 @@ export function chain(c: WalkCase): Chain {
   d =
     firstDifference(layoutOf(layout as Raw), out.layout, 'out.layout') ??
     firstDifference(linesOf(layout as Raw), out.lines, 'out.lines')
-  return { at: 'out', d, steps }
+  if (d) return { at: 'out', d, steps }
+  steps.push('out')
+  // L9 S.fill.leads: each run's, then the unit's (as one: its fit before its runs, `whole`), as unitFillLeads reads them
+  const l9 = c.slot('S.fill.leads')
+  if (!l9) return { at: 'L9', d: 'no S.fill.leads slot', steps }
+  const R = c.rules as unknown as FillRules
+  const unit: FillUnit = { tokens, blocks, s: c.s, P: unitP, layout: runs ? whole! : layout }
+  const runUnits: FillUnit[] = (runs?.runs ?? []).map((r) => ({
+    tokens: r.tokens,
+    blocks: r.blocks,
+    s: c.s,
+    P: r.P!,
+    layout: r.layout,
+    parent: unit,
+  }))
+  for (const q of runUnits) fillLeadsOf(q, R)
+  fillLeadsOf(unit, R)
+  const fin = (v: unknown) => (typeof v === 'number' && !Number.isFinite(v) ? String(v) : (v ?? null))
+  d = firstDifference(
+    {
+      fillLead: fin(unit.fillLead),
+      fillTop: fin(unit.fillTop),
+      fitLines: fin(unit.fitLines),
+      state: (layoutOf(layout as Raw) as { state: unknown }).state,
+      runs: runUnits.map((q) => [fin(q.fillLead), fin(q.fillTop), fin(q.fitLines)]),
+    },
+    l9,
+    'fillLeads',
+  )
+  if (d) return { at: 'L9', d, steps }
+  steps.push('L9')
+  return { at: 'L9', d: null, steps }
 }
 type FurtherInput = Parameters<typeof fitFurther>[0]

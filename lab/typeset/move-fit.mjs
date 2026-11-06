@@ -15,34 +15,45 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
-const SRC = readFileSync(join(TODAY, 'src/pdf-reader/engine/layer-proto/layer2.mjs'), 'utf8').split('\n')
+const SOURCES = {
+  layer2: readFileSync(join(TODAY, 'src/pdf-reader/engine/layer-proto/layer2.mjs'), 'utf8').split('\n'),
+  run: readFileSync(join(TODAY, 'src/pdf-reader/engine/layer-proto/run.mjs'), 'utf8').split('\n'),
+}
+let SRC = SOURCES.layer2
 const PKG = join(import.meta.dirname, '../../packages/typeset/src')
 const check = process.argv.includes('--check')
 
 /** each top-level declaration of today's file: its name, its first line (its comment's) and its last, 1-based */
-function declarations(from, to) {
+function declarations(from, to, src = SRC) {
   const out = []
   for (let n = from; n <= to; n++) {
-    const m = /^(?:export )?(?:function\*? |const |let )([A-Za-z_$][\w$]*)/.exec(SRC[n - 1])
+    const m = /^(?:export )?(?:function\*? |const |let )([A-Za-z_$][\w$]*)/.exec(src[n - 1])
     if (!m) continue
     let start = n
-    while (start > 1 && /^(\/\*\*|\s\*|\s\*\/|\/\/)/.test(SRC[start - 2])) start--
+    while (start > 1 && /^(\/\*\*|\s\*|\s\*\/|\/\/)/.test(src[start - 2])) start--
     out.push({ name: m[1], start, decl: n })
   }
   for (let k = 0; k < out.length; k++) {
     let end = (out[k + 1]?.start ?? to + 1) - 1
-    while (end > out[k].decl && !SRC[end - 1].trim()) end--
+    while (end > out[k].decl && !src[end - 1].trim()) end--
     // (a section's heading comment between two declarations stays out of either)
-    while (end > out[k].decl && /^\/\/ ----/.test(SRC[end - 1])) { end--; while (end > out[k].decl && !SRC[end - 1].trim()) end-- }
+    while (end > out[k].decl && /^\/\/ ----/.test(src[end - 1])) { end--; while (end > out[k].decl && !src[end - 1].trim()) end-- }
     out[k].end = end
   }
   return out
 }
 const DECL = new Map([...declarations(3112, 4425), ...declarations(300, 320), ...declarations(595, 611), ...declarations(2428, 2437), ...declarations(3058, 3062)].map(d => [d.name, d]))
-const text = name => {
-  const d = DECL.get(name)
-  if (!d) throw new Error(`move-fit: no declaration ${name} in today's layer2.mjs`)
-  return SRC.slice(d.start - 1, d.end).join('\n')
+SRC = SOURCES.run
+// (run.mjs's top-level functions of the fill: fillLeadsOf, closerLead, guessCloser, RUN:494-595; fillLeadsOf's comment,
+// RUN:494-505, stands over fillLaid's, which is not moved)
+const DECL_RUN = new Map(declarations(505, 596, SOURCES.run).map(d => [d.name, d]))
+SRC = SOURCES.layer2
+const COMMENTS = { run: { fillLeadsOf: [494, 505] } }
+const text = (name, from = 'layer2') => {
+  const d = (from === 'run' ? DECL_RUN : DECL).get(name)
+  if (!d) throw new Error(`move-fit: no declaration ${name} in today's ${from}.mjs`)
+  const c = COMMENTS[from]?.[name]
+  return [...(c ? SOURCES[from].slice(c[0] - 1, c[1]) : []), ...SOURCES[from].slice(d.start - 1, d.end)].join('\n')
 }
 
 /** the changes, each [find, replace, times] */
@@ -149,6 +160,25 @@ const FILES = {
     exports: [],
     changes: [],
   },
+  'shared/fill-leads.mjs': {
+    rule: 'S.fill.leads',
+    from: 'run',
+    head: ['// S.fill.leads (design-b §1.5, E30): a unit\'s fill leadings as its lay ends: the loosest leading from its fitted one up to',
+      '// its top at which its fitted state still sets it whole as the page fill lays it, else the loosest closer one. Today\'s code',
+      '// (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by',
+      '// fill-leads.types.ts. The fill\'s reuse of the layout found (today\'s fillLaid, module state) is dropped: S.fill.page lays',
+      '// the unit at that state again, the same layout.'],
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.mjs'", "import { keepsPages } from '../fit/runs.mjs'"],
+    names: ['fillLeadsOf', 'closerLead', 'guessCloser'],
+    exports: ['fillLeadsOf', 'closerLead', 'guessCloser'],
+    changes: [
+      ['L2.layoutAt(', 'layoutAt(', 1],
+      ['L2.keepsPages(', 'keepsPages(', 1],
+      ['L2.footFloorOf(', 'footFloorOf(', 1],
+      ['  fillLaid.delete(p)\n', '', 1],
+      ['    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })\n', '', 1],
+    ],
+  },
   'shared/share.mjs': {
     rule: 'S.share',
     head: ['// S.share (design-b §1.5, E29): the shared row as a unit\'s layout leaves it (where its text and its ink end there), and',
@@ -172,7 +202,7 @@ const FILES = {
 let differ = 0
 const moved = new Set()
 for (const [file, spec] of Object.entries(FILES)) {
-  let body = spec.names.map(n => { moved.add(n); return text(n) }).join('\n')
+  let body = spec.names.map(n => { moved.add(n); return text(n, spec.from) }).join('\n')
   for (const [find, repl, times] of spec.changes) {
     const n = body.split(find).length - 1
     if (n !== times) throw new Error(`move-fit: ${file}: "${find.trim()}" occurs ${n} times, not ${times}`)

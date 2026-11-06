@@ -675,7 +675,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:512-558 fillLeadsOf', 'RUN:2617-2624 unitFillLeads'],
     how: 'ported',
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
-    state: open,
+    file: 'shared/fill-leads.mjs',
+    state: {
+      is: 'ported',
+      replay: "chained after each sampled round's out (tests/replay/round.ts): the L9 slot",
+      cases: 159,
+    },
   },
   {
     id: 'S.fill.target',

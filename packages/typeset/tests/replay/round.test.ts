@@ -1,5 +1,5 @@
-// A unit's lay replayed from F2 to its last word (round.ts: S.onLeadRetry, X.numbered, X.further, X.runs, S.share and the
-// round's `out`, each from the step before) on every laid round of every unit the tap's samples name. The whole corpus:
+// A unit's lay replayed from F2 to its last word (round.ts: S.onLeadRetry, X.numbered, X.further, X.runs, S.share, the
+// round's `out` and S.fill.leads, each from the step before) on every laid round of every unit the tap's samples name. The whole corpus:
 // lab/typeset/replay-fit.mjs.
 import { describe, expect, it } from 'vitest'
 import { walkCase } from './fit-input.ts'
@@ -47,7 +47,7 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('a unit’s lay: replayed on th
     // (S.onLeadRetry runs on no sampled unit: the corpus runner's; a chain stops where the tap holds no input of its next step)
     expect({ cases, steps: Object.fromEntries(steps), stopped: Object.fromEntries(stopped) }).toEqual({
       cases: 164,
-      steps: { F2: 164, F4: 2, 'F6 further': 3, 'F6 runs': 142, F8: 8 },
+      steps: { F2: 164, F4: 2, 'F6 further': 3, 'F6 runs': 142, F8: 8, out: 159, L9: 159 },
       stopped: {
         'S.settle moved a line': 1,
         'X.further widened a CJK cell': 3,
