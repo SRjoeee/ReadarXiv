@@ -51,6 +51,7 @@ import {
   type Macro,
   macroOf,
   ownNames,
+  type Site,
   setsWords,
 } from './macros.ts'
 import {
@@ -137,6 +138,8 @@ interface Ctx {
   rowEnds: ReadonlySet<string>
   /** backref is loaded with its parscan: an entry's list stands after its first paragraph */
   backref: boolean
+  /** the calls of the paper's macros of no argument the walk met: how many, in which kinds of unit */
+  calls: Map<string, { n: number; kinds: Set<string> }>
   /** the paper's environments whose begin opens a table their end closes */
   tableWraps: Set<string>
 }
@@ -785,6 +788,12 @@ class Walker {
       if (!macro.params) {
         const k = skipBlanks(f, e, to)
         if (isBegin(toks[k]) && f.close[k] === k + 1) e = k + 2
+        // (a call of a macro of no argument, counted: one whose every call the walk meets has its body walked where it is
+        // defined, its text the paper's own words: storedBodies)
+        const c = ctx.calls.get(n) ?? { n: 0, kinds: new Set<string>() }
+        c.n++
+        c.kinds.add(b.kind ?? 'para')
+        ctx.calls.set(n, c)
       }
       return ph(e, 'other')
     }
@@ -1678,6 +1687,7 @@ function paperFacts(
   own: ReadonlySet<string>,
   ownEnv: ReadonlySet<string>,
   isCall: (n: string) => boolean,
+  sites: ReadonlyMap<string, Site[]>,
 ) {
   const macros = new Map<string, Macro>()
   const ifs = new Map<string, boolean>()
@@ -1702,7 +1712,13 @@ function paperFacts(
       theorems.add(n)
     if (own.has(n)) {
       const mac = macroOf(n, d, isCall)
-      if (mac) macros.set(n, mac)
+      if (mac) {
+        // (its body where it stands: the last of the paper's definitions whose body is the one TeX holds)
+        const held = canonical(mac.body)
+        const site = (sites.get(n) ?? []).findLast((x) => canonical(x.file.src(x.a, x.b)) === held)
+        if (site) mac.site = site
+        macros.set(n, mac)
+      }
       const body = m.body.trim()
       const sh = /^\\(begin|end) \{([^{}]+)\}$/.exec(body)
       if (sh && m.params === '') envMacros.set(n, { side: sh[1] as 'begin' | 'end', env: (sh[2] as string).trim() })
@@ -1865,7 +1881,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     const p = own.has(n) ? null : commandParams(n, bindings)
     return !!p?.length && p !== REGISTER
   }
-  const facts = paperFacts(definitions, own, ownEnv, isCall)
+  const facts = paperFacts(definitions, own, ownEnv, isCall, names.sites)
   const stem = jobName(tree.main)
   const bbl = tree.files.has(`${stem}.bbl`) ? `${stem}.bbl` : null
   const ctx: Ctx = {
@@ -1899,6 +1915,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     dirs: [],
     bbl,
     rowEnds: facts.rowEnds,
+    calls: new Map(),
     backref:
       (definitions.names.get('ver@backref.sty')?.meaning.k ?? 'undefined') !== 'undefined' &&
       (definitions.names.get('ifbackrefparscan')?.meaning as { text?: string } | undefined)?.text !== '\\iffalse',
@@ -1924,6 +1941,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     w.walk(main, body, main.toks.length, b)
   } else w.walk(main, 0, main.toks.length, b)
   b.flush()
+  storedBodies(w, units, names.written, names.defined)
   // later units (an author block's parts after its first) after the rest, then the bibliography's entries: today's numbering,
   // which no id depends on
   const later = units.filter((u) => u.later && u.kind !== 'reference')
@@ -1952,6 +1970,39 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
       if (u.inFloat) out.inFloat = true
       return out
     }),
+  }
+}
+
+/**
+ * The paper's macros of no argument whose text is the paper's own words (\newcommand{\CILTITLE}{CLASSO: a practical …},
+ * a table kept in \newcommand{\toponelthree}{…}): one whose every call the walk met (the times its name is written, less
+ * its definitions), called in units of one kind, defined in the paper's TeX (no package's or class's), with no unit of its
+ * body's place yet, has its body walked where it stands, as units of that kind; kept where they hold four words or more
+ * (an author block's, whatever they hold)
+ */
+function storedBodies(w: Walker, units: BUnit[], written: ReadonlyMap<string, number>, defined: ReadonlyMap<string, number>): void {
+  const ctx = w.ctx
+  ctx.ended = false
+  for (const [n, call] of ctx.calls) {
+    const macro = ctx.macros.get(n)
+    const site = macro?.site
+    if (!site || call.kinds.size !== 1 || macro.params !== 0) continue
+    const kind = [...call.kinds][0] as string
+    if (/\.(?:sty|cls)$/i.test(site.file.path)) continue
+    if ((written.get(n) ?? 0) - (defined.get(n) ?? 0) !== call.n) continue
+    const from = site.file.at(site.a)
+    const upto = site.file.at(site.b)
+    if (units.some((u) => u.file === site.file.path && u.start < upto && u.end > from)) continue
+    const before = units.length
+    const b = new Builder(site.file.path, units, site.file.text)
+    if (AUTHOR_KINDS.has(kind)) w.frontBlock(site.file, site.a, site.b, b, kind === 'author' ? 'names' : 'places')
+    else w.inKind(site.file, site.a, site.b, b, kind)
+    const words = units
+      .slice(before)
+      .flatMap((u) => u.pieces.filter((p) => p.t === 'text').map((p) => (p as { s: string }).s))
+      .join(' ')
+      .match(/\p{L}{2,}/gu)?.length ?? 0
+    if (!AUTHOR_KINDS.has(kind) && words < 4) units.length = before
   }
 }
 

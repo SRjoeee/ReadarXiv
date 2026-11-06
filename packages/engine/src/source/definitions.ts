@@ -217,13 +217,17 @@ export const INPUTS: ReadonlyMap<string, 'file' | 'import' | 'subimport' | 'subf
 
 /**
  * The control sequences the source uses, in every file TeX reads from the main one on (\input and its kin followed, each
- * file once), and the environments it begins: what the ask file asks. With each environment `env`, `endenv` too. The
+ * file once) and in every TeX file the package ships, and the environments it begins: what the ask file asks. With each environment `env`, `endenv` too. The
  * tokens are read as the reader reads them (`rules`), so that \verb's text and an environment read by lines hold no names
  */
 export function namesUsed(tree: Tree, rules: LexRules, always: Iterable<string> = []): Set<string> {
   const names = new Set<string>(always)
   const seen = new Set<string>()
-  const queue: { path: string; dirs: string[] }[] = [{ path: tree.main, dirs: [] }]
+  // (every TeX file the package ships too, and the job's .bbl: a command defined or used only in one of them is asked)
+  const queue: { path: string; dirs: string[] }[] = [
+    { path: tree.main, dirs: [] },
+    ...[...tree.files.keys()].filter((p) => /\.(?:tex|sty|cls|bbl)$/i.test(p)).sort().map((path) => ({ path, dirs: [] })),
+  ]
   const codes = new Catcodes()
   while (queue.length) {
     const { path, dirs } = queue.shift() as { path: string; dirs: string[] }

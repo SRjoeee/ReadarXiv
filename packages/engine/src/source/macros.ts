@@ -8,6 +8,13 @@ import { CAPTIONS, CONTENT_BOX, INLINE_TEXT, MATH_ENVS, NO_ARGS, OPERAND_OF, SEC
 import { type Arg, commandParams, isBegin, isEnd, isOther, type Param, readArgs, skipBlanks } from './roles.ts'
 import { CAT, Catcodes, type Token } from './tokens.ts'
 
+/** a definition's body in the source: its file and its tokens [a, b) */
+export interface Site {
+  file: SourceFile
+  a: number
+  b: number
+}
+
 export interface Macro {
   params: number
   /** its first parameter is optional (LaTeX's \newcommand\x[n][default]) */
@@ -25,6 +32,8 @@ export interface Macro {
   /** a body of no parameter that reads on (\@ifnextchar, a last command that takes arguments) */
   readsOn: boolean
   words?: boolean
+  /** where its body stands in the source (a definition the walk can walk again, for a macro whose text is its body) */
+  site?: Site
 }
 
 const DEF_PRIMITIVES = new Set(['def', 'gdef', 'edef', 'xdef'])
@@ -407,10 +416,18 @@ export function ownNames(files: readonly SourceFile[]): {
   envs: Set<string>
   /** each name's definitions' bodies, in the files' order (null where its definer has none the reader finds) */
   bodies: Map<string, (string | null)[]>
+  /** each name's definitions' bodies where they stand */
+  sites: Map<string, Site[]>
+  /** how often each name is written in the files, and how often as a definition's name */
+  written: Map<string, number>
+  defined: Map<string, number>
 } {
   const out = new Set<string>()
   const envs = new Set<string>()
   const bodies = new Map<string, (string | null)[]>()
+  const sites = new Map<string, Site[]>()
+  const written = new Map<string, number>()
+  const defined = new Map<string, number>()
   for (const f of files) {
     for (let i = 0; i < f.toks.length; i++) {
       const t = f.toks[i] as Token
@@ -447,14 +464,18 @@ export function ownNames(files: readonly SourceFile[]): {
         }
       else {
         bodies.set(n.name, [...(bodies.get(n.name) ?? []), null])
+        defined.set(n.name, (defined.get(n.name) ?? 0) + 1)
         continue
       }
       j = skipBlanks(f, j, f.toks.length)
       const c = isBegin(f.toks[j]) ? (f.close[j] ?? -1) : -1
       bodies.set(n.name, [...(bodies.get(n.name) ?? []), c > 0 ? f.src(j + 1, c) : null])
+      if (c > 0) sites.set(n.name, [...(sites.get(n.name) ?? []), { file: f, a: j + 1, b: c }])
+      defined.set(n.name, (defined.get(n.name) ?? 0) + 1)
     }
   }
-  return { commands: out, envs, bodies }
+  for (const f of files) for (const t of f.toks) if (t.k === 'cs') written.set(t.name, (written.get(t.name) ?? 0) + 1)
+  return { commands: out, envs, bodies, sites, written, defined }
 }
 
 /** a body as TeX holds it, for comparing the paper's definition with TeX's meaning: a control word and a blank, one blank
@@ -499,6 +520,7 @@ export function definitionAt(
       readsOn: false,
     }
     analyse(n.name, m, isCall)
+    m.site = { file: f, a: j + 1, b: c }
     return { name: n.name, macro: m, end: c + 1, global: how === 'gdef' || how === 'xdef', provide: false }
   }
   if (!LATEX_DEFINERS.test(how) && how !== 'DeclareRobustCommand') return null
@@ -540,7 +562,7 @@ export function definitionAt(
   if (!isBegin(f.toks[k])) return null
   const c = f.close[k] ?? -1
   if (c < 0 || c >= to) return null
-  const m: Macro = { params, opt, delimited: false, body: f.src(k + 1, c), readsOn: false }
+  const m: Macro = { params, opt, delimited: false, body: f.src(k + 1, c), readsOn: false, site: { file: f, a: k + 1, b: c } }
   analyse(name, m, isCall)
   return { name, macro: m, end: c + 1, global: false, provide: how === 'providecommand' }
 }
