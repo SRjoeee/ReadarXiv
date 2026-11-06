@@ -234,7 +234,7 @@ const by = (f: (r: Row) => string) => {
   for (const r of rows) m.set(f(r), (m.get(f(r)) ?? 0) + 1)
   return [...m.entries()].sort((a, b) => b[1] - a[1])
 }
-const groups = by(r => `${r.src} ${r.format} ${r.outcome}`)
+const groups = by(r => `${r.src}|${r.format}|${r.outcome}`)
 const lines = [
   '# Equivalence with today on recorded material (lane L6)',
   '',
@@ -242,7 +242,7 @@ const lines = [
   '',
   '| source | wire | outcome | records |',
   '|---|---|---|---|',
-  ...groups.map(([k, n]) => `| ${k.split(' ').join(' | ')} | ${n} |`),
+  ...groups.map(([k, n]) => `| ${k.split('|').join(' | ')} | ${n} |`),
   '',
   '## Disagreements (the same wire, or one but for white space; different verdicts), each with its cause',
   '',
@@ -256,4 +256,4 @@ const lines = [
 ]
 writeFileSync(join(outDir, 'equivalence.md'), `${lines.join('\n')}\n`)
 writeFileSync(join(outDir, 'equivalence.json'), JSON.stringify(rows, null, 1))
-console.log(groups.map(([k, n]) => `${k}: ${n}`).join('\n'))
+console.log(groups.map(([k, n]) => `${k.split('|').join(' ')}: ${n}`).join('\n'))

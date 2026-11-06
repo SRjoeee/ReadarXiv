@@ -6,8 +6,8 @@ Input: 14150 records from today's tests (6379 distinct). A verdict is compared o
 |---|---|---|---|
 | html | markers | agree | 2124 |
 | html | tags | agree | 1631 |
-| html | markers | agree, | white | space | apart | 1198 |
-| html | tags | agree, | white | space | apart | 1162 |
+| html | markers | agree, white space apart | 1198 |
+| html | tags | agree, white space apart | 1162 |
 | html | markers | wire | 128 |
 | pdf | markers | agree | 82 |
 | pdf | tags | agree | 21 |
