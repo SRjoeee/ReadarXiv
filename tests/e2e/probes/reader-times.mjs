@@ -65,7 +65,8 @@ api.set({ layer: mode.ready() })
 /** in the page, from its first script: each moment's time since the navigation began, read every frame */
 const WATCH = () => {
   const at = {}
-  const tick = () => {
+  const tick = () => { try { look() } catch {} ; window.__times = at; if (at.left === undefined || at.laid === undefined) setTimeout(() => requestAnimationFrame(tick), 0) }
+  const look = () => {
     const now = performance.now()
     if (at.left === undefined) {
       const c = document.querySelector('#left .page[data-page-number="1"] canvas, .axt-pane.left .page[data-page-number="1"] canvas')
@@ -74,11 +75,10 @@ const WATCH = () => {
     if (at.laid === undefined) {
       const copy = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer canvas.axt-layer-copy')
       if (copy && copy.width > 0) at.laid = now
-      const probe = window.__reader?.probe?.()
+      // the reader package's own moments (its probe, `at.*` from its open), where the page runs it (host/v2.ts sets `reader`)
+      const probe = window.__reader?.reader ? window.__reader.probe() : null
       if (probe && typeof probe['at.firstLaid'] === 'number' && typeof probe['at.open'] === 'number') at.laid = probe['at.open'] + probe['at.firstLaid']
     }
-    window.__times = at
-    if (at.left === undefined || at.laid === undefined) requestAnimationFrame(tick)
   }
   requestAnimationFrame(tick)
 }
@@ -87,7 +87,12 @@ for (let i = 0; i < RUNS + 1; i++) {
   const page = await context.newPage()
   await page.addInitScript(WATCH)
   await page.goto(readerUrl({ live: '1', paper: PAPER, mode: 'bilingual' }))
-  const t = await page.waitForFunction(() => window.__times?.left !== undefined && window.__times?.laid !== undefined && window.__times, null, { timeout: 60_000 }).then(h => h.jsonValue()).catch(() => null)
+  const t = await page.waitForFunction(() => window.__times?.left !== undefined && window.__times?.laid !== undefined && window.__times, null, { timeout: 30_000 }).then(h => h.jsonValue()).catch(async () => {
+    // what came, and what the page shows, for the reader of the log
+    const seen = await page.evaluate(() => ({ times: window.__times ?? null, left: document.querySelectorAll('#left canvas, .axt-pane.left canvas').length, places: document.querySelectorAll('#right .axt-place').length, copies: document.querySelectorAll('canvas.axt-layer-copy').length, probe: typeof window.__reader?.probe }))
+    console.log(`  not both within 30 s: ${JSON.stringify(seen)}`)
+    return null
+  })
   await page.close()
   // (the first run warms the browser's caches of the build's own files: not counted)
   if (i > 0) runs.push(t ?? { left: null, laid: null })
