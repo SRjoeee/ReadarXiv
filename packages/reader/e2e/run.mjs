@@ -4,7 +4,8 @@
 //
 //   node packages/reader/e2e/run.mjs [--only=<part of a name>|…] [--browser=chromium|webkit|firefox]
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
@@ -47,6 +48,12 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
   }
 }
 const indexOf = {}
+/** the stand-in of our server's v2 routes: each paper's document; a scenario a check sets (`modes[seg]`): 'not-opened' (a 404
+ *  until the open, then preparing for `prepareMs`, then the document), else the document at once; and every ask, logged */
+const docs = {},
+  rowsObjects = new Map(),
+  modes = {},
+  v2log = []
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
   const seg = `${head.paper.id.replace('.', '_')}v${head.paper.version}`
@@ -57,6 +64,7 @@ for (const [name, f] of Object.entries(fixtures)) {
     .find((x) => x.endsWith('.head'))
     .split('.')[0]
   indexOf[name] = {
+    paper: `${head.paper.id}v${head.paper.version}`,
     seg,
     original: `/api/v2/o/arxiv/${seg}.pdf`,
     objects: `/api/v2/o/p/${seg}/fx/`,
@@ -64,6 +72,68 @@ for (const [name, f] of Object.entries(fixtures)) {
     dumps: f.dumps,
     rows: f.rows,
     face: f.face ?? null,
+  }
+  // our server's document of the paper (L5's PaperDoc): its layer the bundle, the target's rows the fixture's rows as one object
+  const files = readdirSync(f.bundle)
+  const refOf = (digest) => {
+    const file = files.find((x) => x.startsWith(`${digest}.`))
+    return { path: `p/${seg}/fx/${digest}`, sha256: digest, bytes: statSync(join(f.bundle, file)).size }
+  }
+  const targets = {}
+  const sources = Object.keys(f.dumps).length ? Object.keys(f.dumps).map((t) => [t, null]) : [['de', 'de.rows.json']]
+  for (const [t, rf] of sources) {
+    const bytes = rf
+      ? readFileSync(join(f.files, rf))
+      : Buffer.from(JSON.stringify(rowsOfDump(JSON.parse(readFileSync(join(f.files, f.dumps[t]), 'utf8')))))
+    const sha = createHash('sha256').update(bytes).digest('hex')
+    rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, bytes)
+    const n = JSON.parse(bytes.toString('utf8')).rows.length
+    targets[t] = {
+      attempt: 1,
+      state: 'done',
+      why: null,
+      retryAt: null,
+      at: 0,
+      translator: 'fx',
+      units: null,
+      rows: [{ path: `r/${seg}/${t}/fx/${sha}`, sha256: sha, bytes: bytes.length }],
+      done: n,
+      total: n,
+      view: 1,
+    }
+  }
+  docs[seg] = {
+    v: 1,
+    pv: seg,
+    epoch: 'e1',
+    rev: 1,
+    paper: head.paper.id,
+    version: head.paper.version,
+    prepare: {
+      attempt: 1,
+      state: 'done',
+      why: null,
+      retryAt: null,
+      at: 0,
+      build: 'fx',
+      stage: null,
+      units: head.units.map(refOf),
+      html: null,
+    },
+    layer: { catalog: refOf(headDigest), units: head.units.map(refOf), format: 1, build: 'fx', stale: false },
+    targets,
+  }
+}
+/** a corpus dump's rows: a row a unit, its text the dump's (what is painted is the dump) */
+function rowsOfDump(dump) {
+  return {
+    format: 1,
+    rows: dump.units.map((u) => ({
+      id: u.id,
+      ok: true,
+      content: [{ t: 'text', s: u.lines.map((l) => l.text).join(' ') }],
+      by: 'baseline',
+    })),
   }
 }
 const fixtureRoute = {
@@ -98,7 +168,66 @@ const fixtureRoute = {
     return res.end(readFileSync(at))
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute] })
+const v2Route = {
+  prefix: '/api/v2/',
+  handle(req, res, url) {
+    const json = (status, body, headers = {}) => {
+      res.writeHead(status, { 'content-type': 'application/json', ...headers })
+      res.end(JSON.stringify(body))
+    }
+    if (url.pathname.startsWith('/api/v2/papers/')) {
+      const seg = url.pathname.slice('/api/v2/papers/'.length)
+      v2log.push({ what: 'follow', seg, query: url.search, at: performance.now() })
+      const d = docs[seg] ?? Object.values(docs).find((x) => x.pv.replace(/v\d+$/, '') === seg)
+      if (!d) return json(404, { error: 'not-found' })
+      const m = modes[d.pv]
+      if (m?.kind === 'not-opened' && !m.opened) return json(404, { error: 'not-opened' })
+      if (m?.kind === 'not-opened' && performance.now() - m.opened < (m.prepareMs ?? 800))
+        return json(200, {
+          ...d,
+          rev: 1,
+          layer: null,
+          prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
+          targets: {},
+        })
+      return json(200, { ...d, rev: 2 })
+    }
+    if (url.pathname === '/api/v2/open' && req.method === 'POST') {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        const ask = JSON.parse(body || '{}')
+        v2log.push({ what: 'open', ask, at: performance.now() })
+        const d = Object.values(docs).find((x) => x.paper === ask.paper)
+        if (!d) return json(404, { error: 'not-found' })
+        const m = modes[d.pv]
+        if (m) m.opened ??= performance.now()
+        json(200, {
+          doc: {
+            ...d,
+            rev: 1,
+            layer: null,
+            prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
+            targets: {},
+          },
+          follow: null,
+        })
+      })
+      return true
+    }
+    const rows = rowsObjects.get(url.pathname)
+    if (rows) {
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        etag: `"${url.pathname.split('/').pop().slice(0, 16)}"`,
+      })
+      res.end(rows)
+      return true
+    }
+    return false
+  },
+}
+const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route] })
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -111,7 +240,11 @@ async function newPage(o = {}) {
     if (url.origin === server.origin) return route.continue()
     // the stand-in of arXiv's own server: its PDF by ranges, no entity-tag promised
     if (url.origin === 'https://arxiv.org' && url.pathname.startsWith('/pdf/')) {
-      const file = papers[url.pathname.slice(5)]
+      const file =
+        papers[url.pathname.slice(5)] ??
+        Object.entries(indexOf)
+          .map(([n, x]) => (x.paper === url.pathname.slice(5) ? fixtures[n].pdf : null))
+          .find(Boolean)
       if (file) {
         const bytes = readFileSync(file),
           m = /^bytes=(\d+)-(\d+)$/.exec(req.headers().range ?? '')
@@ -532,6 +665,136 @@ await check(
     return { hovers: out.length }
   },
 )
+
+// ---------------------------------------------------------------- deliverables 5 and 6: openReader with a fake host
+const probe = (page) => page.evaluate((i) => window.__h.readers[i ?? 0].reader.probe(), 0)
+const readerLaid = (page, i = 0) =>
+  waitFor(
+    page,
+    (i) => {
+      const p = window.__h.readers[i].reader.probe()
+      return p.laidPages > 0 && p['at.rightDrawn'] !== undefined
+    },
+    i,
+    25_000,
+  ).catch(async (e) => {
+    throw new Error(
+      `${e.message.split('\n')[0]}: ${JSON.stringify(await page.evaluate((i) => ({ probe: window.__h.readers[i].reader.probe(), state: window.__h.readers[i].reader.state(), asked: window.__h.readers[i].asked.map((a) => a.url).slice(0, 12) }), i))}`,
+    )
+  })
+await check(
+  "reader: the original at once, the layer's code after the left's page 1, the pages laid (website host)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    const r = await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web' }))
+    await readerLaid(page)
+    const p = await probe(page)
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      r.askedBeforeReturn.some((u) => u.startsWith(indexOf['s1-columns'].original)),
+      `asked before openReader returned: ${JSON.stringify(r.askedBeforeReturn)}`,
+    )
+    assert(
+      p['at.code'] >= p['at.leftDrawn'],
+      `the layer's code (${p['at.code']} ms) before the left's page 1 (${p['at.leftDrawn']} ms)`,
+    )
+    assert(
+      st.layer.s === 'ready' && st.original.s === 'open' && st.rows.s === 'complete',
+      `state ${JSON.stringify([st.original, st.layer, st.rows])}`,
+    )
+    return { moments: Object.fromEntries(Object.entries(p).filter(([k]) => k.startsWith('at.'))), rows: st.rows }
+  },
+)
+await check('reader: a paper being prepared, opened and followed to its layer (website host)', async () => {
+  const seg = indexOf['s2-splits'].seg
+  modes[seg] = { kind: 'not-opened', prepareMs: 600 }
+  const { page, context, errors } = await newPage()
+  await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+  const seen = new Set()
+  const t0 = Date.now()
+  while (Date.now() - t0 < 20_000) {
+    const s = await page.evaluate(() => window.__h.readers[0].reader.state().layer.s)
+    seen.add(s)
+    if (s === 'ready') break
+    await page.waitForTimeout(50)
+  }
+  await readerLaid(page)
+  await context.close()
+  delete modes[seg]
+  // (the follow's 404 of a paper not opened is the browser's console line, and expected)
+  assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+  const opens = v2log.filter((x) => x.what === 'open' && x.ask.paper === '2600.00003')
+  assert(opens.length === 1 && opens[0].ask.target === 'de', `opens ${JSON.stringify(opens)}`)
+  assert(seen.has('preparing') && seen.has('ready'), `layer states ${[...seen]}`)
+  return { layer: [...seen] }
+})
+await check(
+  "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
+  async () => {
+    const from = v2log.length
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'ext' }))
+    await readerLaid(page)
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const mine = v2log.slice(from)
+    assert(
+      asked.some((u) => u.startsWith('https://arxiv.org/pdf/2600.00002v1')),
+      `the original from ${asked[0]}`,
+    )
+    assert(
+      mine.every((x) => (x.what === 'follow' ? !/[?&]t=/.test(x.query) : x.ask.target === null)),
+      `a target named: ${JSON.stringify(mine)}`,
+    )
+    assert(st.rows.from === 'here' && st.rows.s === 'complete', JSON.stringify(st.rows))
+    return { follows: mine.length, rows: st.rows }
+  },
+)
+await check('reader: close lets everything go; a second reader on the same page goes on', async () => {
+  const { page, context, errors } = await newPage()
+  await page.evaluate(async () => {
+    await window.__h.reader('s1-columns', { host: 'web', width: '50%' })
+    await window.__h.reader('s2-splits', { host: 'web', width: '50%' })
+  })
+  await readerLaid(page, 0)
+  await readerLaid(page, 1)
+  await page.evaluate(() => window.__h.readers[0].reader.close())
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => ({
+    root: window.__h.readers[0].root.childElementCount,
+    attrs: window.__h.readers[0].root.getAttributeNames(),
+    a: window.__h.readers[0].reader.probe(),
+    b: window.__h.readers[1].reader.probe(),
+  }))
+  await page.evaluate(() => window.__h.readers[1].reader.do({ do: 'zoomBy', factor: 1.25 }))
+  await page.waitForTimeout(700)
+  const b2 = await page.evaluate(() => ({
+    probe: window.__h.readers[1].reader.probe(),
+    state: window.__h.readers[1].reader.state(),
+  }))
+  await context.close()
+  assert(!errors.length, errors.join('; '))
+  assert(
+    after.root === 0 && !after.attrs.some((a) => a.startsWith('data-axt')),
+    `root after close: ${after.root} children, ${after.attrs}`,
+  )
+  assert(
+    after.a.workers === 0 && after.a.clockDue === 0 && after.a.live === 0,
+    `left after close ${JSON.stringify(after.a)}`,
+  )
+  assert(
+    after.b.workers === 2 && after.b.laidPages > 0 && b2.probe.laidPages > 0 && b2.state.view.scale > 0,
+    `the other reader ${JSON.stringify(b2.probe)}`,
+  )
+  return {
+    a: { workers: after.a.workers, live: after.a.live },
+    b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
+  }
+})
 
 // ---------------------------------------------------------------- I1 and the split residue (lane L1's finding 2), both ways out
 const residues = {}

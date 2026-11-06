@@ -5,7 +5,14 @@
 export const READER_CSS = `
 .axt-reader { --axt-green: oklch(0.693 0.17 162.48); --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
 .axt-reader[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29 29); }
-.axt-reader .axt-pane { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; }
+.axt-reader { position: relative; }
+.axt-reader .axt-pane { position: absolute; top: 0; bottom: 0; overflow: auto; overflow-anchor: none; }
+.axt-reader .axt-pane.left { left: 0; width: 50%; }
+.axt-reader .axt-pane.right { left: 50%; width: 50%; }
+.axt-reader[data-axt-pdf-mode="original"] .axt-pane.left { width: 100%; }
+.axt-reader[data-axt-pdf-mode="original"] .axt-pane.right { display: none; }
+.axt-reader[data-axt-pdf-mode="translation"] .axt-pane.left { width: 0; visibility: hidden; }
+.axt-reader[data-axt-pdf-mode="translation"] .axt-pane.right { left: 0; width: 100%; }
 /* a slot is a page box of the stack (.page: PDF.js's sheet gives it the page's colour, margins and border, as the left's pages
    have them); its size is PDF.js's rule over the stack's --scale-factor; what it shows sits in its holder, which fills it */
 .axt-reader .pdfViewer .page.axt-slot { container-type: inline-size; }

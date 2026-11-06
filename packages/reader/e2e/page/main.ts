@@ -16,6 +16,7 @@ import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
 import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
+import { openReader, type Reader } from '../../src/reader.ts'
 
 const root = document.getElementById('root') as HTMLElement
 const bytesOf = async (url: string) => {
@@ -465,6 +466,110 @@ const h = {
       right: (committed ? m?.lit.right : m?.lit.left)?.flat().length ?? 0,
       own: m?.lit.own.flatMap(([, x]) => x).length ?? 0,
     }
+  },
+  readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],
+  /**
+   * A reader through openReader over fixture `name`, with a fake host: the website's (`web`: our copy of the original, our server's
+   * rows) or the extension's (`ext`: arXiv's own PDF, rows made here by a translate that yields the fixture's rows). Every fetch
+   * the host is asked is recorded with its time; the fixture's lay stands in for the typesetter's
+   */
+  async reader(
+    name: string,
+    o: {
+      host?: 'web' | 'ext'
+      unlaid?: 'original' | 'composed'
+      width?: string
+      target?: string
+      delayRowsMs?: number
+    } = {},
+  ) {
+    const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
+    const root = document.createElement('div')
+    root.style.cssText = `position:absolute;top:0;bottom:0;left:0;width:${o.width ?? '100%'}`
+    if (o.width) root.style.left = `${100 * h.readers.length}%`.replace('100%', o.width)
+    document.body.append(root)
+    const asked: { url: string; at: number }[] = []
+    const t0 = performance.now()
+    let fx: {
+      seg: string
+      dumps: Record<string, string>
+      rows: Record<string, string>
+      face: string | null
+      id: string
+    } | null = null
+    const fxReady = fetch(`/fixtures/${name}/index.json`)
+      .then((r) => r.json())
+      .then((x) => (fx = x))
+    const target = o.target ?? 'de'
+    const ext = o.host === 'ext'
+    const host = {
+      fetch: (u: string, i?: RequestInit) => {
+        asked.push({ url: u, at: performance.now() - t0 })
+        return fetch(u, i)
+      },
+      original: (ref: string) =>
+        ext ? `https://arxiv.org/pdf/${ref}` : `/api/v2/o/arxiv/${ref.replace(/[./]/g, '_')}.pdf`,
+      prefs: {
+        read: async () => ({ display: 'bilingual' as const, target, sync: true }),
+        write: async () => {},
+        watch: () => () => {},
+      },
+      ...(ext
+        ? {
+            translate: async function* (units: readonly { id: string }[], t: string, x: { signal: AbortSignal }) {
+              await fxReady
+              const all = (
+                (await (
+                  await fetch(
+                    `/fixtures/${name}/${(fx as { rows: Record<string, string> }).rows[t] ?? `${t}.rows.json`}`,
+                  )
+                ).json()) as { rows: Row[] }
+              ).rows
+              const by = new Map(all.map((r) => [r.id, r]))
+              if (o.delayRowsMs) await new Promise((f) => setTimeout(f, o.delayRowsMs))
+              for (const u of units) {
+                if (x.signal.aborted) return
+                const r = by.get(u.id)
+                yield r ?? ({ id: u.id, ok: false, why: { kind: 'refused' } } as Row)
+              }
+            },
+          }
+        : {}),
+    }
+    const reader = openReader(root, {
+      host,
+      paper: index.paper,
+      visit: { target },
+      engine: {
+        faces: faceTable(h.kit?.base ?? '/pdfjs/6.3.289/'),
+        unlaid: o.unlaid ?? 'original',
+        lay: async (partOf, pages) => {
+          await fxReady
+          const parts = new Map<number, Part>()
+          for (let n = 1; n <= pages; n++) {
+            const p = await partOf(n)
+            if (p) parts.set(n, p)
+          }
+          const dump = (await (
+            await fetch(
+              `/fixtures/${name}/${(fx as { dumps: Record<string, string> }).dumps[target] ?? `${target}.reader.json`}`,
+            )
+          ).json()) as ReaderDump
+          const face = (fx as { face: string | null }).face
+          return fixtureLay(
+            pagesOf(
+              parts,
+              dump,
+              (m) => face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+            ),
+            parts,
+          )
+        },
+      },
+    })
+    const returnedAt = performance.now() - t0
+    h.readers.push({ reader, root, asked })
+    return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
   },
   /** each page's box on both panes: [width, height, top in the pane's scroll] */
   boxes() {
