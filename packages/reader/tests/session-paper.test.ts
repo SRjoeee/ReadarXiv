@@ -8,7 +8,9 @@ import {
   abstractTitleOf,
   HTML_CHECK_MS,
   htmlVersionOf,
+  originalPdfOf,
   titleOf,
+  VIEWER_HASH,
 } from '../src/session/paper.ts'
 import { flush, manualTimers } from './helpers/ranged-server.ts'
 
@@ -80,5 +82,13 @@ describe("the paper's HTML version", () => {
     await flush()
     timers.advance(HTML_CHECK_MS)
     expect(await p).toBe('https://arxiv.org/html/x#readarxiv')
+  })
+})
+
+describe("the original's download", () => {
+  it("is arXiv's own PDF, for the browser's own viewer to open in a tab of its own", () => {
+    expect(`${originalPdfOf('hep-th/9711200v1')}${VIEWER_HASH}`).toBe(
+      'https://arxiv.org/pdf/hep-th/9711200v1#axt-viewer',
+    )
   })
 })

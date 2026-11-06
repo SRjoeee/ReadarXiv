@@ -18,7 +18,7 @@ import { CHUNK, chunkStore } from './bytes/store.ts'
 import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
-import { committed, type Lay } from './compose/page.ts'
+import type { Lay } from './compose/page.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
@@ -40,7 +40,17 @@ import {
   wanted,
 } from './session/machine.ts'
 import { abstractPage, htmlVersionOf, originalPdfOf, titleOf, VIEWER_HASH } from './session/paper.ts'
-import { anchorOf, contextOf, countsOf, keep, missingOf, type PaperContext, ranked, stopOf } from './session/rows.ts'
+import {
+  anchorOf,
+  contextOf,
+  countsOf,
+  keep,
+  missingOf,
+  type PaperContext,
+  ranked,
+  shownAsOriginal,
+  stopOf,
+} from './session/rows.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
@@ -403,9 +413,7 @@ export function openReader(
     if (!h || !panes || rt.state.layer.s !== 'ready' || !composed) return asOriginal.size
     for (let n = 1; n <= h.paper.pages; n++) {
       if (asOriginal.has(n) || !panes.right.near(n)) continue
-      const p = composer?.page(n)
-      if (h.parts[n - 1] === null || (p && committed(p) && !p.members.some((m) => m.state === 'laid')))
-        asOriginal.add(n)
+      if (shownAsOriginal(h.parts[n - 1], composer?.page(n) ?? null)) asOriginal.add(n)
     }
     return asOriginal.size
   }

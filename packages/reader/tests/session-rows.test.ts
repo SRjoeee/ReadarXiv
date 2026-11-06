@@ -11,8 +11,10 @@ import {
   keep,
   missingOf,
   ranked,
+  shownAsOriginal,
   stopOf,
 } from '../src/session/rows.ts'
+import type { Page } from '../src/compose/page.ts'
 
 const u = (n: number, kind = 'para', s = `unit ${n}`): Unit => ({
   id: String(n).padStart(64, '0'),
@@ -67,5 +69,27 @@ describe('the rows made here', () => {
     keep(held, { id: UNITS[3]?.id as string, ok: false, why: { kind: 'unconfigured', code: 'no-key' } })
     keep(held, lost(UNITS[4] as Unit))
     expect(stopOf(UNITS, held)).toEqual({ kind: 'unconfigured', code: 'no-key' })
+  })
+  it("counts a page near the view as arXiv's by the rule: no part lays a line on it, or it was laid with nothing of its own", () => {
+    const page = (states: string[], wait: string[] = []): Page =>
+      ({
+        page: 1,
+        wait: { rows: wait, faces: [] },
+        members: states.map((state, ord) => ({
+          ord,
+          page: 1,
+          state,
+          off: 0,
+          lines: [],
+          lit: { left: [], right: [], own: [] },
+        })),
+        links: [],
+      }) as unknown as Page
+    expect(shownAsOriginal(null, null)).toBe(true)
+    expect(shownAsOriginal('d'.repeat(64), page(['none', 'unfit']))).toBe(true)
+    expect(shownAsOriginal('d'.repeat(64), page(['laid', 'none']))).toBe(false)
+    // (a page still waiting for its rows, or not laid yet, is not settled)
+    expect(shownAsOriginal('d'.repeat(64), page(['waiting'], ['x']))).toBe(false)
+    expect(shownAsOriginal('d'.repeat(64), null)).toBe(false)
   })
 })

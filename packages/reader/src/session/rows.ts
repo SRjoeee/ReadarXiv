@@ -3,6 +3,7 @@
 // place counted twice as far; the paper's title and abstract as an LLM's context; a retry asking for the units with no row alone
 // (those translated are held). Pure: the reader gives it the units, the rows held and the reading place.
 import type { Row, Unit } from '@readarxiv/format'
+import { committed, type Page } from '../compose/page.ts'
 import { plainOf } from './contents.ts'
 import type { RowsStop } from './machine.ts'
 
@@ -76,6 +77,12 @@ export function stopOf(units: readonly { id: string }[], held: ReadonlyMap<strin
     if (!best || RANK[r.why.kind] > RANK[best.kind]) best = r.why
   }
   return best
+}
+/** whether a page asked near the view is shown as arXiv's by the rule, settled and never laid (PDF-READER §11.8, the `layer`
+ *  events' `original`): no part lays a line on it (the head names none), or it was laid with nothing of its own */
+export function shownAsOriginal(part: string | null | undefined, page: Page | null): boolean {
+  if (part === null) return true
+  return !!page && committed(page) && !page.members.some((m) => m.state === 'laid')
 }
 /** the counts the state tells of the rows held for `units`: those with a row, and those whose row is not a translation */
 export function countsOf(
