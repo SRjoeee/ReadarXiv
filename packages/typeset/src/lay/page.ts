@@ -20,6 +20,8 @@ export type PageMember = {
   lines: DisplayLine[]
   /** the unit as its lay and its fill left it (the gate's dump reads it) */
   lay?: PassUnit
+  /** why its flow's lay threw, where it did (state 'error') */
+  error?: string
   slots: LedgerSlot[]
 }
 export type PreparedPage = {
@@ -44,9 +46,23 @@ export function layPagePrepared(
   trace = false,
 ): PreparedPage {
   // L8, L9
-  const lays = new Map<number, { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[] }>()
-  for (const flow of flows)
-    for (const [i, got] of layFlowPrepared(flow, R, trace).entries()) {
+  const lays = new Map<
+    number,
+    { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
+  >()
+  for (const flow of flows) {
+    // (a flow whose lay throws leaves its members the original's, 'error' with the reason, and touches no other flow (design-a
+    // §1.4; today any throw refuses its unit, RUN:2521-2526); a memory error is the caller's)
+    let laidFlow: ReturnType<typeof layFlowPrepared>
+    try {
+      laidFlow = layFlowPrepared(flow, R, trace)
+    } catch (e) {
+      if (e instanceof RangeError) throw e
+      const why = `${(e as Error)?.name ?? 'Error'}: ${String((e as Error)?.message ?? e).slice(0, 160)}`
+      for (const m of flow) lays.set(m.ord, { m, state: 'error', slots: [], error: why })
+      continue
+    }
+    for (const [i, got] of laidFlow.entries()) {
       const m = flow[i]!
       const unit =
         got.lay.state === 'laid'
@@ -54,6 +70,7 @@ export function layPagePrepared(
           : undefined
       lays.set(m.ord, { m, unit, state: got.lay.state, slots: got.slots })
     }
+  }
   const all = [...lays.values()].sort((a, b) => a.m.ord - b.m.ord)
   // L10: the pass pages, ascending, each over the members laid with a line on it
   const passPages = [
@@ -115,6 +132,7 @@ export function layPagePrepared(
           : {}),
         lines: L ? displayLines(L, page) : [],
         ...(x.unit ? { lay: x.unit } : {}),
+        ...(x.error ? { error: x.error } : {}),
         slots,
       }
     })

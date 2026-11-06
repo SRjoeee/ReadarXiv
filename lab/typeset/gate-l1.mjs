@@ -31,7 +31,7 @@ const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
-const verdicts = new Map(), examples = new Map()
+const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
 /** the first difference beyond the baseline comparator's tolerance (diff.mjs: numbers within 0.01 pt are one) */
 const nearDifference = (a, b, path) => {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) <= 0.01 + 1e-9 ? null : `${path}: ${a} against ${b}`
@@ -67,11 +67,23 @@ for (const pair of pairs) {
   const base = readerDump(pair)
   const laid = new Set(g.units.map(u => u.ord))
   const mine = new Map(g.units.map(u => [u.ord, u]))
+  // (each unit's difference first, then its class: a unit whose own setting equals today's but that a page of its holds
+  // another unit laid otherwise is the page's fill's, which sets one size and lead for a page's units, T33)
+  const diffOf = new Map()
   for (const u of base.units) {
     const m = mine.get(u.ord)
-    const cls = (g.setting.get(u.ord) ?? 'not adapted').replace(/ \[.*$| [-\d.,]+$/, '')
     const pick = x => ({ size: x.size, leading: x.leading, lines: x.lines, elements: x.elements ?? [] })
-    const d = m ? nearDifference(pick(m), pick(u), '') : 'not laid'
+    diffOf.set(u.ord, m ? nearDifference(pick(m), pick(u), '') : 'not laid')
+  }
+  const pagesOf = u => [...new Set(u.lines.map(l => l.page))]
+  const differs = new Set()
+  for (const u of base.units) if (diffOf.get(u.ord)) for (const pg of pagesOf(u)) differs.add(pg)
+  const othersDiffer = u => pagesOf(u).some(pg => base.units.some(v => v.ord !== u.ord && diffOf.get(v.ord) && pagesOf(v).includes(pg)))
+  for (const u of base.units) {
+    const m = mine.get(u.ord)
+    let cls = (g.setting.get(u.ord) ?? 'not adapted').replace(/ \[.*$| [-\d.,]+$/, '')
+    const d = diffOf.get(u.ord)
+    if (d && m && cls === 'equal') cls = othersDiffer(u) ? 'equal: its page’s fill (another unit of its page laid otherwise)' : 'equal: its own lay'
     // (how far a changed unit moved: its lines' count, else the largest difference of a line's ends, baseline or the size)
     const far = () => {
       if (m.lines.length !== u.lines.length) return 'lines: another count'
@@ -79,10 +91,16 @@ for (const pair of pairs) {
       const x = Math.max(...ds)
       return x <= 0.1 ? 'at most 0.1 pt' : x <= 1 ? 'at most 1 pt' : 'more than 1 pt'
     }
-    const why = !m ? (g.thrown.has(u.ord) ? 'its flow threw: MissingMeasure' : g.tieHeld.has(u.ord) ? 'its table group holds a cell not set' : g.setting.has(u.ord) ? 'left by the fit or its group' : 'not set') : null
+    const why = !m ? (g.thrown.has(u.ord) ? `its flow threw: ${g.thrown.get(u.ord)}` : g.tieHeld.has(u.ord) ? 'its table group holds a cell not set' : g.setting.has(u.ord) ? 'left by the fit or its group' : 'not set') : null
     const v = d ? (m ? `changed (${far()}) | ${cls}` : `not laid (${why}) | ${cls}`) : `alike | ${cls}`
     add(verdicts, v)
-    if (d && m && (examples.get(v)?.length ?? 0) < 3) (examples.get(v) ?? examples.set(v, []).get(v)).push(`${pair} ord ${u.ord} ${u.kind}: ${d.slice(0, 140)}`)
+    if (d) add(classes, m ? cls : `not laid: ${why} | ${cls}`)
+    // (an example: its paper, page, unit and box, the baseline's first line)
+    const l0 = u.lines[0]
+    const ex = `${pair} p${l0?.page ?? '?'} ord ${u.ord} ${u.kind} [${l0 ? [l0.x0, l0.baseline, l0.x1].join(', ') : ''}]: ${String(d).slice(0, 120)}`
+    if (d && (examples.get(v)?.length ?? 0) < 3) (examples.get(v) ?? examples.set(v, []).get(v)).push(ex)
+    const ck = m ? cls : `not laid: ${why} | ${cls}`
+    if (d && (classEx.get(ck)?.length ?? 0) < 3) (classEx.get(ck) ?? classEx.set(ck, []).get(ck)).push(ex)
   }
   const left = (base.left ?? []).filter(l => !laid.has(l.ord))
   for (const u of base.units) if (!laid.has(u.ord)) left.push({ id: u.id, ord: u.ord, kind: u.kind, code: 'unadapted', why: 'not laid from L1’s part', pages: [] })
@@ -96,6 +114,11 @@ console.log('the baseline\'s laid units, by verdict and the first differing fiel
 for (const [v, n] of [...verdicts].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${n} ${v}`)
   for (const x of examples.get(v) ?? []) console.log(`      ${x}`)
+}
+console.log('every unit not laid alike, by class (its setting\'s first differing field, or why it is not laid), with examples:')
+for (const [k, n] of [...classes].sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${n} ${k}`)
+  for (const x of classEx.get(k) ?? []) console.log(`      ${x}`)
 }
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)

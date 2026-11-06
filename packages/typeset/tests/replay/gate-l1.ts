@@ -270,29 +270,17 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     const ties = ((part.ties ?? []) as { rule: string; cells?: number[][] }[])
       .filter((t) => t.rule === 'cells')
       .map((t) => ({ rule: 'cells' as const, cells: (t.cells ?? []).flat().map((o) => unitOf.get(o)?.ord ?? o) }))
-    // (a flow whose lay throws is left the original's alone, design-a §1.4: found by laying each flow of the page by itself,
-    // then the page again without it; a width the table lacks is a measure the stated facts asked that today's run never made)
+    // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
+    // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null
     try {
       got = layPagePrepared(pg, flows, ties, R)
-    } catch {
-      const ok = flows.filter((f) => {
-        try {
-          layPagePrepared(pg, [f], [], R)
-          return true
-        } catch (e) {
-          const why =
-            (e as Error)?.name === 'MissingMeasure' ? 'MissingMeasure' : String((e as Error)?.message ?? e).slice(0, 80)
-          for (const m of f) if (m.pages[0] === pg || !m.pages.includes(pg)) out.thrown.set(m.ord, why)
-          return false
-        }
-      })
-      try {
-        got = layPagePrepared(pg, ok, ties, R)
-      } catch (e) {
-        out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
-      }
+    } catch (e) {
+      out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
+    for (const pm of got?.members ?? [])
+      if (pm.error && !out.thrown.has(pm.ord))
+        out.thrown.set(pm.ord, pm.error.replace(/^MissingMeasure:.*/, 'MissingMeasure'))
     if (!got) continue
     for (const pm of got.members) {
       if (pm.state !== 'laid' || !pm.lay) continue
