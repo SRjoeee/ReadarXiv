@@ -6,6 +6,7 @@
 // each compile (its kind, in-container ms, wall ms) and each JavaScript stage's ms. Not shipped.
 //   node --max-old-space-size=6144 --import tsx lab/marks/time-today.mjs --dir=<paper dir> --id=<id> --out=<dir> [--root=<dir>]
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -109,7 +110,7 @@ const finalPdf = made.base?.pdf instanceof Uint8Array ? made.base.pdf : null
 const arxiv = refusal ? null : await open(arxivBytes, LITE_DRAW)
 const text = refusal ? null : await arx.readArxivText(arxiv, { draw: true })
 const mdoc = refusal ? null : await open(made.pdf)
-const orig = { bytes: arxivBytes.length, sha256: null, xref: tail.startxrefOf(arxivBytes) }
+const orig = { bytes: arxivBytes.length, sha256: createHash('sha256').update(arxivBytes).digest('hex'), xref: tail.startxrefOf(arxivBytes) }
 lap('read')
 if (!refusal && finalPdf) {
   const deflate = b => new Uint8Array(deflateSync(b))
