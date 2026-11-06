@@ -64,7 +64,18 @@ export interface MarkOptions {
   /** babel's names wrapped (NAMES_TEX); off: NAMES_OFF, and no style's literal wrapped */
   names?: boolean
   classes?: readonly string[]
+  /** each colour piece's mark (AXT-COLOUR); on */
+  colours?: boolean
+  /** units the recovery leaves without any mark of theirs (their own and their placeholders'): unit indices */
+  unmarked?: ReadonlySet<number>
 }
+/** the recovery's last step (design §4.1): the units' own marks alone — no placeholder's, colour's, name's or line probe */
+export const UNITS_ONLY: Readonly<MarkOptions> = Object.freeze({
+  classes: [],
+  colours: false,
+  names: false,
+  lines: false,
+})
 export interface PlanMark {
   /** the mark's name, as its point and destination carry it (`axt-<name>`) */
   name: string
@@ -357,6 +368,7 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
   const front = frontMarked(units)
   const own = (i: number): UnitMark | null => {
     const u = units[i] as SourceUnit
+    if (o.unmarked?.has(i)) return null
     if (u.kind === 'cell')
       return {
         start: `\\leavevmode\\axtmark{t${i}s}`,
@@ -377,6 +389,7 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
   }
   const pieces = units.map((u, i) => {
     const ps: readonly MarkPiece[] = u.pieces
+    if (o.unmarked?.has(i)) return [...ps]
     const passed = own(i) ? passedOver(ps) : null
     const lead = front.has(u) ? '\\protect' : ''
     let last: MarkPiece | null = null
@@ -403,7 +416,7 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
       if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || X.VERBATIM_ARG.test(p.src ?? ''))
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [p]
-      if (colourPiece(p)) return [p, mark(`\\axtcolour{c${i}.${k}}`, `c${i}.${k}`, 'colour', k)]
+      if (o.colours !== false && colourPiece(p)) return [p, mark(`\\axtcolour{c${i}.${k}}`, `c${i}.${k}`, 'colour', k)]
       const pairSaid = lead ? null : aheadSaid(ps, k)
       const ahead =
         !!pairSaid &&
@@ -876,6 +889,7 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
     const list = inserts.get(u.file) ?? (inserts.set(u.file, []).get(u.file) as Insert[])
     const m = marking.own(i)
     if (m) (unplaced[i] as Plan['units'][number]).marked = true
+    else if (opts.unmarked?.has(i)) (unplaced[i] as Plan['units'][number]).why = 'the recovery: unmarked'
     place(marking.pieces[i] as MarkPiece[], m, f.text, (x) => {
       list.push({ ...x, seq: seq++, name: x.name, piece: x.piece })
       plan.push({ unit: i, x })

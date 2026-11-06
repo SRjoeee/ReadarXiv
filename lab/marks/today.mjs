@@ -74,7 +74,8 @@ export function compiler(id, image, source, mine, stats = { read: 0, made: 0, ms
     if (!existsSync(join(dir, 'out.log'))) return { ok: false, error: 'no log', key }
     const pdf = existsSync(join(dir, 'out.pdf')) ? new Uint8Array(readFileSync(join(dir, 'out.pdf'))) : null
     const files = req.files && existsSync(join(dir, 'files')) ? new Map(filesUnder(join(dir, 'files')).map(p => [p.split(sep).join('/'), new Uint8Array(readFileSync(join(dir, 'files', p)))])) : undefined
-    return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), key, ...(files ? { files } : {}) }
+    const took = existsSync(join(dir, 'ms')) ? JSON.parse(readFileSync(join(dir, 'ms'), 'utf8')).ms : null
+    return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), key, ms: took, ...(files ? { files } : {}) }
   }
 }
 

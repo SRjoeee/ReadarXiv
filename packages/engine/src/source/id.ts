@@ -15,7 +15,7 @@ const K = new Uint32Array([
 ])
 
 /** The SHA-256 digest of `data` (32 bytes) */
-function sha256(data: Uint8Array): Uint8Array {
+export function sha256(data: Uint8Array): Uint8Array {
   const h = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
   ])
@@ -110,10 +110,10 @@ function toHex(b: Uint8Array): string {
   return s
 }
 /** the lowercase hexadecimal SHA-256 of `data`: an object's digest, a unit's id */
-const sha256Hex = (data: Uint8Array): string => toHex(sha256(data))
+export const sha256Hex = (data: Uint8Array): string => toHex(sha256(data))
 
 /** bytes as base64url, unpadded */
-function utf8(s: string): Uint8Array {
+export function utf8(s: string): Uint8Array {
   const out: number[] = []
   for (let i = 0; i < s.length; i++) {
     let c = s.charCodeAt(i)
