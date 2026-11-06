@@ -1895,8 +1895,8 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
   const base = lexRules()
   const lines = ownLineEnvs(definitions, ownEnv, (e) => base.lineEnv(e))
   const rules = lexRules(lines)
-  const files = new Files(tree, rules, inputs)
   // (the encoding the main file declares to inputenc: what a file that is not UTF-8 is read in)
+  let encoding: 'latin1' | 'cp1252' = 'latin1'
   const mainScan = scan.file(tree.main, null)
   if (mainScan)
     for (let k = 0; k < mainScan.toks.length; k++) {
@@ -1910,8 +1910,12 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
         mainScan.src(pkg.a + 1, pkg.b - 1).trim() === 'inputenc' &&
         /\b(?:cp1252|ansinew)\b/.test(mainScan.src(opts.a, opts.b))
       )
-        files.encoding = scan.encoding = 'cp1252'
+        encoding = 'cp1252'
     }
+  // (the files read once more only where they read otherwise: the paper has line environments of its own, or a file is in
+  // cp1252)
+  const files = lines.size || encoding !== 'latin1' ? new Files(tree, rules, inputs) : scan
+  files.encoding = encoding
   const bindings = bindingsOf(shipped)
   const isCall = (n: string) => {
     const p = own.has(n) ? null : commandParams(n, bindings)

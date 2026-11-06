@@ -65,8 +65,14 @@ export function bindingsOf(files: readonly SourceFile[]): Set<number> {
       }
       const c = f.close[k] ?? -1
       if (c < 0) continue
-      for (const raw of f.src(k + 1, c).split(',')) {
-        const name = raw.replace(/%[^\n]*\n?/g, '').trim()
+      // (the group's text without its comments: its tokens but the comment ones)
+      const text = f.toks
+        .slice(k + 1, c)
+        .filter((x) => x.k !== 'comment')
+        .map((x) => f.text.slice(x.s, x.e))
+        .join('')
+      for (const raw of text.split(',')) {
+        const name = raw.trim()
         if (!name) continue
         const own = BINDING_INDEX.get(`${name}.${cls ? 'cls' : 'sty'}`)
         if (own !== undefined || !cls) {
