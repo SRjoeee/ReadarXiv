@@ -70,6 +70,17 @@ describe("today's bounds, per table", () => {
     await store.answers.write([['d', '4']])
     expect(await store.answers.read(['a', 'b', 'c', 'd'])).toEqual(['1', null, '3', '4'])
   })
+  it('writes that start together on a store not yet counted share one count: the cap holds', async () => {
+    let now = 0
+    const db = createTranslateDb(name(), options)
+    const store = createTranslateStore({ db, now: () => ++now, limits: { maxEntries: 3 } })
+    // a page's batches end together: each write found the totals not counted and counted its own
+    await Promise.all(['a', 'b', 'c', 'd'].map(k => store.answers.write([[k, '1']])))
+    await store.answers.write([['e', '1']])
+    // the table itself, not the store's own count of it
+    expect(await db.answers.count()).toBeLessThanOrEqual(3)
+    expect((await store.stats()).entries).toBe(await db.answers.count())
+  })
   it('a value over its cap is not kept; an OCR reading may be larger than an answer', async () => {
     const store = createTranslateStore({ db: createTranslateDb(name(), options) })
     const big = 'x'.repeat(100 * 1024)

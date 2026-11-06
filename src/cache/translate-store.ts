@@ -112,11 +112,21 @@ class Bounded implements KeyValues {
     }
   }
 
-  private async counted(): Promise<{ count: number; bytes: number }> {
-    if (this.totals) return this.totals
-    const sizes = (await this.table.orderBy('bytes').keys()) as number[]
-    this.totals = { count: sizes.length, bytes: sizes.reduce((n, b) => n + (b || 0), 0) }
-    return this.totals
+  /** the count under way: writes that start together wait for the same one and then keep the same totals */
+  private counting: Promise<{ count: number; bytes: number }> | null = null
+
+  private counted(): Promise<{ count: number; bytes: number }> {
+    if (this.totals) return Promise.resolve(this.totals)
+    this.counting ??= (async () => {
+      try {
+        const sizes = (await this.table.orderBy('bytes').keys()) as number[]
+        this.totals = { count: sizes.length, bytes: sizes.reduce((n, b) => n + (b || 0), 0) }
+        return this.totals
+      } finally {
+        this.counting = null
+      }
+    })()
+    return this.counting
   }
 
   private async evict(totals: { count: number; bytes: number }): Promise<void> {
