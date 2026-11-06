@@ -32,8 +32,13 @@ export const LLM_LIMITS: Limits = { chars: 1_000, units: 4, inFlight: 8, callMs:
 const LOOPBACK_IN_FLIGHT = 4
 
 /**
- * The endpoint's identity: origin + path, the trailing slash away; the query and the hash choose no back end. The path
- * cannot be dropped (two gateway routes on one host are two back ends). Never the key (hard rule 5)
+ * The endpoint's identity: origin + path, the trailing slash away. The path cannot be dropped (two gateway routes on one
+ * host are two back ends; Azure's deployment is in it). **The query stays out, though it may choose a back end**: it may
+ * carry a credential under any name (`key`, `api-key`, `token`, Azure Functions' `code`, a SAS `sig`, a gateway's own), so
+ * the app can know of no parameter that it is not one, and an identity is persisted in every stored reply's and row's key,
+ * which never holds a key, not even digested (hard rule 5). Two services that differ in the query alone (and not in the
+ * model) share replies, as they did under the per-text cache (its `openai-compat:<origin + path>`). The hash is the
+ * client's own. Never the key
  */
 export function endpointIdentity(baseURL: string): string {
   try {

@@ -56,6 +56,8 @@ describe('the LLM translator', () => {
     expect(llmTranslator(SVC, { codeOf, prompts: custom }).identity).not.toBe(a.identity)
     expect(a.identity).not.toContain(SVC.apiKey)
     expect(endpointIdentity('https://h/v1/?q=1#x')).toBe('https://h/v1')
+    // the query stays out: it may carry a credential under any name (#607's review, declined at endpointIdentity)
+    expect(llmTranslator({ ...SVC, baseURL: `${SVC.baseURL}?code=made-up-0123` }, { codeOf }).identity).toBe(a.identity)
   })
   it("today's request size and its re-ask; a local endpoint fewer in flight", () => {
     expect(llmTranslator(SVC, { codeOf }).limits).toEqual(LLM_LIMITS)
