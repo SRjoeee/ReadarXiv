@@ -364,6 +364,17 @@ export function instrumentFromPlan<Doc>({
           }
         }
       }
+      // (a text symbol sets its character and nothing else: where its reading begins with it, those glyphs are its unit's text and
+      // nothing past them is its ink: own.mjs settingOf)
+      const piece = doc.units[m.unit]?.pieces[m.piece]
+      const sym = piece?.t === 'ph' ? symbolText(piece.src) : null
+      if (sym !== null) {
+        const want = charOf(sym)
+        let spelled = ''
+        for (let g = a.point.glyph; g < to && spelled.length < want.length; g++)
+          spelled += charOf((pg.glyphs[g] as PageGlyph).u ?? '')
+        if (want && spelled.startsWith(want)) continue
+      }
       range(a.page, a.point.glyph, to, region, (j) => set(glyphs[a.page] as Owners, j, m.unit, ROLE.element, m.piece))
       boxRange(a.page, a.point.box, bTo ?? a.point.box, region, (j) =>
         set(boxes[a.page] as Owners, j, m.unit, ROLE.element, m.piece),
