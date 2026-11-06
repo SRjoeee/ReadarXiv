@@ -14,9 +14,10 @@ import {
   step,
   type Ticket,
 } from '../src/session/machine.ts'
+import { DEFAULTS } from '../src/prefs.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
 
-const PREFS: Prefs = { display: 'bilingual', target: 'zh-Hans', sync: true }
+const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: 'zh-Hans', sync: true }
 const ref = (c: string): Ref => ({ path: `p/2600_00001v1/x/${c.repeat(64)}`, sha256: c.repeat(64), bytes: 10 })
 const CATALOG = ref('a'),
   UNITS = [ref('b')]
@@ -299,7 +300,7 @@ describe('the session: preferences', () => {
     go({ i: 'time', t: s.prefs.timer as Ticket, now: 1500 })
     expect(s.prefs.s).toBe('unreadable')
     go({ i: 'cmd.set', prefs: { sync: false } })
-    go({ i: 'prefs.landed', value: { display: 'original', target: 'ja', sync: true } })
+    go({ i: 'prefs.landed', value: { ...PREFS, display: 'original', target: 'ja', sync: true } })
     expect(s.prefs).toMatchObject({ s: 'landed', value: { display: 'original', target: 'ja', sync: false } })
     expect(s.visit.display).toBe('translation')
     expect(effects).toEqual([{ e: 'prefs.write', patch: { sync: false } }])

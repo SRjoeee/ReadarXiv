@@ -14,4 +14,5 @@ export {
   type ReaderState,
   type Result,
 } from './reader.ts'
-export type { Display, Side, Zoom } from './panes/panes.ts'
+export type { Side, Zoom } from './panes/panes.ts'
+export { CLASSES, type ClassName, type Display, type Prefs, type UiLanguage, type WritablePrefs } from './prefs.ts'

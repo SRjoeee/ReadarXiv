@@ -39,7 +39,10 @@ import {
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
+import { DEFAULTS } from './prefs.ts'
 import { addSheets } from './styles.ts'
+
+export { DEFAULTS }
 
 /** a translation result as the host's translate yields it (packages/translate's Result: format's Row) */
 export type Result = Row
@@ -55,7 +58,6 @@ export interface Host {
   prefs: PrefStore
   translate?(units: readonly Unit[], target: string, o: { signal: AbortSignal }): AsyncIterable<Result>
 }
-export const DEFAULTS: Prefs = { display: 'bilingual', target: 'zh-Hans', sync: true, highlight: { on: true } }
 
 export type Command =
   | { do: 'set'; prefs: Partial<Prefs> }

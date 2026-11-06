@@ -88,12 +88,9 @@ export interface Doc {
   progress?: number | null
 }
 
-export interface Prefs {
-  display: Display
-  target: string
-  sync: boolean
-  [k: string]: unknown
-}
+import type { Prefs } from '../prefs.ts'
+
+export type { Prefs }
 
 export type OriginalRegion =
   | { s: 'opening'; t: Ticket; pin: boolean; loaded: number }
@@ -351,9 +348,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       const v = x.value
       if (!v) break
       // (a field chosen here, or named by the address, is not undone by a landing)
-      const value = { ...v }
-      for (const k of s.prefs.chosen) value[k] = s.prefs.value[k]
-      s.prefs = { ...s.prefs, s: 'landed', value: value as Prefs, timer: null }
+      const value: Record<string, unknown> = { ...v }
+      for (const k of s.prefs.chosen) value[k] = (s.prefs.value as unknown as Record<string, unknown>)[k]
+      s.prefs = { ...s.prefs, s: 'landed', value: value as unknown as Prefs, timer: null }
       if (s.rows.s === 'none') s.rows = { s: 'none', target: targetOf(s) }
       break
     }
