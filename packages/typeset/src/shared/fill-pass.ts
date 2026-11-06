@@ -2,7 +2,7 @@
 // runs a run at a time, then joined as one again and settled), those running on to f from a page before voting only. Ported
 // from engine 065c1d973 run.mjs fillPass RUN:2365-2394, without its records (the gate's) and its paint (the reader's): it
 // returns what each unit filled took. The fill (fillPage) is today's code moved (fill-page.mjs).
-import { joinRuns } from '../fit/runs.types.ts'
+import { joinRuns } from '../fit/runs.ts'
 import type { FitBlock, Layout } from '../fit/types.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FillTarget } from './fill-target.ts'

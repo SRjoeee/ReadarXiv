@@ -126,16 +126,6 @@ const FILES = {
     exports: ['statesOf'],
     changes: [['    work.fit++\n', '', 1]],
   },
-  'fit/runs.mjs': {
-    rule: 'X.runs',
-    head: ['// X.runs (design-b §1.5, T6, T32, E28; the ruling of 2026-10-09: sizes per unit): a unit\'s runs between its displays,',
-      '// each laid as its own text block, joined as one layout; and whether a layout keeps the pages its fit set its lines on.',
-      '// Today\'s code (layer2.mjs L2:4163-4257, L2:4379-4400), moved by lab/typeset/move-fit.mjs; typed by runs.types.ts.'],
-    imports: ["import { textless } from '../breaker/cuts.mjs'", "import { layoutUnit2 } from './walk.mjs'"],
-    names: ['runsOf', 'runParams', 'layoutRuns', 'joinRuns', 'keepsPages'],
-    exports: [],
-    changes: [],
-  },
   'shared/fill-leads.mjs': {
     rule: 'S.fill.leads',
     from: 'run',
@@ -144,7 +134,7 @@ const FILES = {
       '// (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by',
       '// fill-leads.types.ts. The layout found, which the page\'s fill reuses (today\'s fillLaid, a module WeakMap), is a field of',
       '// the unit, `fillLaid` (design-b §1.5: FillLeads.laid).'],
-    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.mjs'"],
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.ts'"],
     names: ['fillLeadsOf', 'closerLead', 'guessCloser'],
     exports: ['fillLeadsOf', 'closerLead', 'guessCloser'],
     changes: [
@@ -164,7 +154,7 @@ const FILES = {
       '// S.fill.target\'s port, its settling S.settle\'s, the layout S.fill.leads found the unit\'s field `fillLaid` (today\'s module',
       '// WeakMap), the shared row\'s ink ends measured by the unit\'s own measure (`p.P.measure`); an optional `trace` is told what the',
       '// tap read inside it, at its probes\' places (baseline/tap/engine.diff): each unit\'s decision, the page\'s size, each unit filled.'],
-    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.mjs'",
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.ts'",
       "import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'", "import { BODY_KINDS, fillTarget } from './fill-target.ts'", "import { keepsShare } from './share.ts'",
       "import { settleLayout } from './settle.ts'", '', '/** a unit as S.fill.target reads it */', 'const voterOf = p => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines })'],
     names: ['fillUnitsOf', 'fillPage'],
@@ -193,6 +183,7 @@ const FILES = {
 const PORTED = {
   'fit/at.ts': ['layoutAt'], 'fit/cut.ts': ['layoutCut'], 'fit/last-lines.ts': ['toLastLines'],
   'shared/share.ts': ['onShare', 'inkEndOf', 'shareOf', 'keepsShare'],
+  'fit/runs.ts': ['runsOf', 'runParams', 'layoutRuns', 'joinRuns', 'keepsPages'],
 }
 let differ = 0
 const moved = new Set()

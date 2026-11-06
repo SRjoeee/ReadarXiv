@@ -5,7 +5,7 @@
 // the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
 import { footFloorOf } from '../breaker/slots.mjs'
 import { layoutAt } from '../fit/at.ts'
-import { keepsPages } from '../fit/runs.mjs'
+import { keepsPages } from '../fit/runs.ts'
 
 /**
  * A unit's fill leading (fillPage's) and its top, read from its fit alone: `fillTop`, the loosest leading P.fillLead allows

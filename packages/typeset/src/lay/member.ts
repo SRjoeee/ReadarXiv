@@ -8,7 +8,7 @@
 import { layoutCut } from '../fit/cut.ts'
 import { fitFurther } from '../fit/further.ts'
 import { type NumberCrop, numberedLayout } from '../fit/numbered.ts'
-import { layoutRuns } from '../fit/runs.types.ts'
+import { layoutRuns } from '../fit/runs.ts'
 import type { FitBlock, FitParams, Layout, Tokens } from '../fit/types.ts'
 import { layoutUnit2 } from '../fit/walk.types.ts'
 import { fillLeadsOf } from '../shared/fill-leads.types.ts'

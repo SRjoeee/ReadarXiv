@@ -537,7 +537,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-09 sizes per unit',
     reads: [],
-    file: 'fit/runs.mjs',
+    file: 'fit/runs.ts',
     state: {
       is: 'ported',
       replay:

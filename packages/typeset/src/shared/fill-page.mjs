@@ -6,7 +6,7 @@
 // tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
 import { footFloorOf } from '../breaker/slots.mjs'
 import { layoutAt } from '../fit/at.ts'
-import { keepsPages } from '../fit/runs.mjs'
+import { keepsPages } from '../fit/runs.ts'
 import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'
 import { BODY_KINDS, fillTarget } from './fill-target.ts'
 import { keepsShare } from './share.ts'
