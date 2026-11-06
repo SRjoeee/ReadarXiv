@@ -183,8 +183,9 @@ export function sourceEndMarks(content: readonly Piece[]): string[] | null {
   }
   return out
 }
-/** a glyph a text font sets as punctuation (not a formula's: a math font's glyph is the formula's) */
-const isMark = (g: DocGlyph) => /^\p{P}$/u.test(g.u) && classifyFont(g.base).fam !== 'math'
+/** a glyph a text font sets as punctuation (not a formula's: a math font's glyph is the formula's; not one whose Unicode is no
+ *  reading of it, `nu`: today's L2:1666) */
+const isMark = (g: DocGlyph) => /^\p{P}$/u.test(g.u) && !g.nu && classifyFont(g.base).fam !== 'math'
 /**
  * The class's own marks after a unit's text (C20, today's tailOf L2:1638): its own glyphs on its last line after its last
  * letter, digit or element glyph (`after`, in stream order), less the marks its source writes there itself (`ends`, as many,

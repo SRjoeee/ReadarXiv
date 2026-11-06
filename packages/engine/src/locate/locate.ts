@@ -620,7 +620,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
-      if (TEXT_KINDS.has(p.kind) && gl.length) el.text = gl.map((a) => gA(a).u).join('')
+      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420)
+      if (TEXT_KINDS.has(p.kind) && gl.length && !gl.some((a) => gA(a).nu)) el.text = gl.map((a) => gA(a).u).join('')
       mem.elements.push([id, el])
     }
     // its label: the class's mark before it

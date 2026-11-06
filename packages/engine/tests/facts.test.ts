@@ -19,6 +19,7 @@ import {
   tailOf,
 } from '../src/locate/facts.ts'
 import { locate } from '../src/locate/locate.ts'
+import { mappedOf, unmapped } from '../src/read.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
 const g = (u: string, x = 72, y = 700, o: Partial<DocGlyph> = {}): DocGlyph => {
@@ -385,5 +386,27 @@ describe('forced breaks with no point on B, set one after the other', () => {
     expect(ends('1')?.[0]).toBe(1)
     expect(ends('2')?.[0]).toBe(1)
     expect(ends('1')?.[1]).toBeCloseTo(1, 1)
+  })
+})
+
+describe('a glyph whose Unicode is no reading of it (A17, today’s nu)', () => {
+  it('reads a font’s own map and tells a glyph it gives no character of, or one no Unicode stands for', () => {
+    const map = mappedOf({ toUnicode: { _map: [undefined, 'a', 'ﬁ', '∑'] } })
+    expect(map && [...map].sort()).toEqual(['a', 'f', 'i', 'ﬁ', '∑'].sort())
+    expect(unmapped('a', map)).toBe(false)
+    expect(unmapped('Í', map)).toBe(true)
+    expect(unmapped('', null)).toBe(true)
+    expect(unmapped(' ', map)).toBe(false)
+    expect(mappedOf({ toUnicode: { firstChar: 0, lastChar: 255 } })).toBeNull()
+  })
+  it('states no text of an element one of whose glyphs is nu: the typesetter crops it (TEX:420)', () => {
+    const B = docOf([{ lines: ['see 12 here'] }])
+    B.pages[0]!.glyphs[5]!.nu = true
+    const content: Piece[] = [text('see '), { t: 'el', id: '1', kind: 'ref', src: '\\ref{a}' }, text(' here')]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j <= 5 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = locate(ins, B, align(B, B)).members[0]!.elements.find(([id]) => id === '1')?.[1]
+    expect(el?.ink).toHaveLength(1)
+    expect(el?.text).toBeUndefined()
   })
 })
