@@ -114,6 +114,8 @@ for (let p = 0; p < Math.max(todayPages.length, minePages.length); p++) {
     const a = ownerOf(today, T, j, kindOfToday), b = ownerOf(mine, M, j, kindOfToday)
     const aT = a.startsWith('other:') ? 'none' : a
     if (aT === b) { glyphsSame++; continue }
+    // (an element today's reading could not tell the piece of, and the plan states)
+    if (aT.endsWith(':2:-1') && b.startsWith(aT.slice(0, -2))) { glyphsSame++; add('glyph: element, its piece stated by the plan (today none)', { page: p + 1, glyph: j, today: a, mine: b }); continue }
     const role = s => (s === 'none' ? 'none' : s.startsWith('other:') ? s : `role ${s.split(':')[1]}`)
     add(`glyph: ${role(a)} | ${role(b)}${a !== 'none' && b !== 'none' && !a.startsWith('other') && a.split(':')[0] !== b.split(':')[0] ? ' (another unit)' : ''}`, { page: p + 1, glyph: j, u: tRaw[j].u, today: a, mine: b })
   }

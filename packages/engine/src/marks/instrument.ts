@@ -355,8 +355,15 @@ export function instrumentFromPlan<Doc>({
           for (let j = a.point.glyph; j < to; j++) {
             if (R[j] !== region) continue
             let s = ''
-            for (let g = j; g < to && s.length < want.length; g++)
-              if (R[g] === region) s += charOf((pg.glyphs[g] as PageGlyph).u ?? '')
+            for (let g = j; g < to && s.length < want.length; g++) {
+              if (R[g] !== region) continue
+              const G = pg.glyphs[g] as PageGlyph
+              // (a hyphen TeX set at a line's end is no letter of the text: the next glyph stands on another line)
+              const N = pg.glyphs[g + 1]
+              if (g > j && /^[-‐]$/.test(G.u ?? '') && N && Math.abs(N.y - G.y) > 0.5 * Math.max(N.size, G.size))
+                continue
+              s += charOf(G.u ?? '')
+            }
             if (s.startsWith(want)) {
               to = j
               break
@@ -381,6 +388,20 @@ export function instrumentFromPlan<Doc>({
       )
     }
   }
+  /** the piece of ink at a unit's head that the marking passed over (no mark of its own), before its first text: -1 none */
+  const headPiece = (unit: number): number => {
+    const ps = doc.units[unit]?.pieces ?? []
+    for (let k = 0; k < ps.length; k++) {
+      const p = ps[k] as (typeof ps)[number]
+      if (p.t === 'text') {
+        if (/\S/.test(p.s)) return -1
+        continue
+      }
+      if (p.t !== 'ph' || !classOf(p)) continue
+      return byName.has(`p${unit}.${k}a`) ? -1 : k
+    }
+    return -1
+  }
   // ---- the labels: on the start's line, between the last end point before it and the start (none for a cell)
   for (const { unit, s } of spans) {
     if (!s || doc.units[unit]?.kind === 'cell') continue
@@ -396,12 +417,27 @@ export function instrumentFromPlan<Doc>({
       }
     }
     const O = glyphs[s.page] as Owners
+    const run: number[] = []
     for (let j = s.point.glyph - 1; j >= from; j--) {
       const g = pg.glyphs[j] as PageGlyph
       if (Math.abs(g.y - first.y) > 0.5 * Math.max(g.size, first.size)) break
       if ((O.unit[j] as number) >= 0) continue
-      set(O, j, unit, ROLE.label)
+      run.unshift(j)
     }
+    // (a unit whose head is a piece of ink the marking passed over, before its first text (a heading's `\sys{} Framework`):
+    // that piece's ink stands between the label and the start, after the label's first word space; it is the piece's)
+    const head = headPiece(unit)
+    let cut = run.length
+    if (head >= 0)
+      for (let r = 1; r < run.length; r++) {
+        const a = pg.glyphs[run[r - 1] as number] as PageGlyph
+        const b = pg.glyphs[run[r] as number] as PageGlyph
+        if (b.x0 - a.x1 > 0.2 * Math.max(a.size, b.size)) {
+          cut = r
+          break
+        }
+      }
+    run.forEach((j, r) => (r < cut ? set(O, j, unit, ROLE.label) : set(O, j, unit, ROLE.element, head)))
   }
   // ---- babel's names: one unit a key, its occurrences its own
   const keyUnit = new Map<string, number>()
