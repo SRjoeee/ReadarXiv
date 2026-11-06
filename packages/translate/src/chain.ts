@@ -362,7 +362,11 @@ export function chainOf(ports: Ports = {}): Chain {
       lane.inFlight++
       void run(lane, request).finally(() => {
         lane.inFlight--
-        pump(lane)
+        // a request cut because no one waits for it any more ends inside a host's withdrawal of its calls, which may run
+        // microtasks before its next call is withdrawn (a router awaiting between scopes; Chromium runs them inside the
+        // abort of a fetch): the slot goes on after the current task, so that it starts nothing of a call being withdrawn
+        if (request[0]?.request?.signal.aborted) platform.setTimeout(() => pump(lane), 0)
+        else pump(lane)
       })
     }
   }

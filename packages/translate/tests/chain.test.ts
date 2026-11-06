@@ -779,3 +779,50 @@ describe('the contract: an iterator a host leaves early lets its work go', () =>
     expect(cut).toBe(true)
   })
 })
+
+describe('the contract: a host withdrawing its calls one after another starts nothing of theirs meanwhile', () => {
+  // A host withdraws a page's calls one by one, and between two of them microtasks may run: the background's router awaits
+  // between scopes and chains, and Chromium runs the queued microtasks inside the abort of a fetch. The slot a cut request
+  // frees must not start the next call's units before that call is withdrawn too (pnpm e2e's tab close, lane L6 stage
+  // 4b: one request more reached the endpoint after the tab closed); it goes on after the current task
+  const hanging = (identity: string, hangs: (n: number) => boolean) =>
+    fakeTranslator({
+      identity,
+      limits: { callMs: 600_000, inFlight: 1, units: 1 },
+      script: ({ n }) => (hangs(n) ? { hang: true } : undefined),
+    })
+  it('the slot of a cut request starts nothing of a call withdrawn a few microtasks later', async () => {
+    const clock = fakeClock({ auto: false })
+    const hang = hanging('hang:w', () => true)
+    const a = controller()
+    const b = controller()
+    const chain = chainOf({ clock })
+    const pa = all(chain.translate([plain], 'ja', { translators: [hang], signal: a.signal }))
+    while (hang.calls.length < 1) await tick()
+    const pb = all(chain.translate([withMath], 'ja', { translators: [hang], signal: b.signal }))
+    for (let i = 0; i < 5; i++) await tick()
+    expect(hang.calls).toEqual([[JSON.stringify(plain.content)]])
+    a.abort()
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    b.abort()
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(hang.calls.length).toBe(1)
+    expect((await pa)[0]).toMatchObject({ ok: false, why: { kind: 'aborted' } })
+    expect((await pb)[0]).toMatchObject({ ok: false, why: { kind: 'aborted' } })
+  })
+  it('a call left waiting behind a cut request is still sent, a task later', async () => {
+    const clock = fakeClock({ auto: false })
+    const t1 = hanging('hang:x', (n) => n === 1)
+    const a = controller()
+    const chain = chainOf({ clock })
+    const pa = all(chain.translate([plain], 'ja', { translators: [t1], signal: a.signal }))
+    while (t1.calls.length < 1) await tick()
+    const pb = all(chain.translate([withMath], 'ja', { translators: [t1] }))
+    for (let i = 0; i < 5; i++) await tick()
+    expect(t1.calls.length).toBe(1)
+    a.abort()
+    expect((await pb)[0]).toMatchObject({ id: 'm', ok: true, by: 'hang:x' })
+    expect((await pa)[0]).toMatchObject({ ok: false, why: { kind: 'aborted' } })
+    expect(t1.calls.length).toBe(2)
+  })
+})
