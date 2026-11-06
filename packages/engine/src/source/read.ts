@@ -78,15 +78,31 @@ import { TEXT_SYMBOLS } from './tables.ts'
 import { CAT, type Token } from './tokens.ts'
 import type { Piece } from './types.ts'
 
+/** a piece as the walk cut it, where it stands in its unit's file (`at`, `to`): what the marks are written at. A nested
+ *  unit's piece names it by its index in SourceDoc `units` */
+export type SourcePiece = (
+  | { t: 'text'; s: string; src?: string }
+  | { t: 'ph'; src: string; kind: string; display?: boolean }
+  | { t: 'open'; src: string; style: string; must?: true }
+  | { t: 'close'; src: string }
+  | { t: 'nested'; pre: string; unit: number; post: string }
+) & { at: number; to: number }
 /** a unit of the source: its content (the translation's grammar), and where it stands */
 export interface SourceUnit {
   id: string
   kind: string
   content: Piece[]
+  /** its pieces as cut, in content's order (a span's open and close apart), with their places */
+  pieces: SourcePiece[]
   file: string
   /** source offsets in its file's text (lines ended at LF) */
   start: number
   end: number
+  /** made from a macro's body where it is defined, called once (`once`) */
+  stored?: true
+  once?: true
+  /** an author block's unit: its command's whole argument, where it begins in the unit's file */
+  block?: { at: number; text: string }
   depth?: number
   title?: true
   front?: true
@@ -106,6 +122,12 @@ export interface SourceDoc {
    *  each `:plural` too), hyperref's `\<type>autorefname` (`autoref:<type>`), babel's word in force for a heading's name
    *  (`babel:<key>`); plain words alone (letters, spaces, `.'’-`, at most 40), each key once */
   names: [string, string][]
+  /** how a file that is not UTF-8 was read: the encoding the paper declares (Files `encoding`) */
+  encoding: 'utf8' | 'latin1' | 'cp1252'
+  /** the code environments the paper begins (a listing package's or its own), by name, and those whose body is its own
+   *  (no listing package sets its lines): what the marked compile's code regions hook (marks' REGIONS) */
+  codeEnvs: string[]
+  codeBodies: string[]
 }
 
 const ASSIGNMENT_DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:true[ \t]*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|fill?l?|\\[A-Za-z@]+)?`
@@ -122,6 +144,8 @@ const ROW_END_TAIL = new RegExp(
 const RULE_SPEC = new RegExp(String.raw`^(?:[ \t]*(?:height|depth|width)[ \t]*${ASSIGNMENT_DIMEN})+(?![A-Za-z])`)
 const THEOREM_PARAMS = paramsOf('[t')
 const PDF_STRING = 'texorpdfstring'
+/** the code environments whose lines a listing package sets by its own hooks (latex-front.mjs PACKAGE_LINES) */
+const PACKAGE_LINES = new Set(['Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'tcblisting'])
 const ROLE_OF = (name: string) => (FRONT_NAMES.has(name) ? 'names' : 'places')
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 
@@ -1141,10 +1165,12 @@ class Walker {
           pre: f.text.slice(at, inner.start),
           unit: inner,
           post: f.text.slice(inner.end, eTok.e),
+          at,
+          to: eTok.e,
         })
         parent.end = eTok.e
       } else if (parent && made === 0) {
-        parent.pieces.push({ t: 'ph', src: f.text.slice(at, eTok.e), kind: 'note-mark' })
+        parent.pieces.push({ t: 'ph', src: f.text.slice(at, eTok.e), kind: 'note-mark', at, to: eTok.e })
         parent.end = eTok.e
       } else if (parent) b.flush()
       return { next: e }
@@ -1223,6 +1249,13 @@ class Walker {
   }
   /** an author block: its notes, and the text between them units of names or places by the rows TeX sets it in */
   frontBlock(f: SourceFile, a: number, z: number, b: Builder, role: 'names' | 'places'): void {
+    // (each unit cut from the block keeps the block's whole text: what a class compares, the front units' marks)
+    const before = b.units.length
+    this.frontBlockUnits(f, a, z, b, role)
+    const block = { at: f.at(a), text: f.src(a, z) }
+    for (const u of b.units.slice(before)) if (AUTHOR_KINDS.has(u.kind)) u.block = block
+  }
+  frontBlockUnits(f: SourceFile, a: number, z: number, b: Builder, role: 'names' | 'places'): void {
     const toks = f.toks
     if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(f.src(a, z))) {
       if (role === 'places') this.frontValues(f, a, z, b)
@@ -1687,7 +1720,7 @@ class Walker {
           return f.toks.slice(from, upto).some((t) => t.k === 'par' || (t.k === 'cs' && t.name === 'par'))
         }
         const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
-        first?.pieces.push({ t: 'ph', src: '\\axtbackref', kind: 'backref' })
+        first?.pieces.push({ t: 'ph', src: '\\axtbackref', kind: 'backref', at: first.end, to: first.end })
       }
     })
     b.kind = saved
@@ -2131,7 +2164,30 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
   const rest = units.filter((u) => !u.later && u.kind !== 'reference')
   const ordered = [...rest, ...later, ...entries]
   for (const u of ordered) close(u)
+  const indexOf = new Map(ordered.map((u, i) => [u, i]))
+  // (the environments begun in the files TeX reads; a code environment's body its own where no listing package sets its lines:
+  // its TeX meaning reaches no listings', fancyvrb's, minted's or tcolorbox's)
+  const begun = new Set<string>()
+  for (const path of ctx.order) {
+    const f = files.file(path, null)
+    if (!f) continue
+    for (let k = 0; k < f.toks.length; k++) {
+      const t = f.toks[k] as Token
+      if (t.k !== 'cs' || t.name !== 'begin') continue
+      const e = envName(f, k + 1, f.toks.length)
+      if (e) begun.add(e.name)
+    }
+  }
+  const codeEnvNames = [...new Set([...LISTINGS, ...ctx.skipEnvs])].filter((n) => begun.has(n)).sort()
+  const packaged = (n: string) => {
+    const m = definitions.names.get(n)?.meaning
+    return m?.k === 'macro' && /\\(?:lst@|FV@|minted|tcb|lstlisting|Verbatim|BVerbatim|LVerbatim)/.test(m.body)
+  }
+  const codeBodies = codeEnvNames.filter((n) => !PACKAGE_LINES.has(n) && !packaged(n))
   return {
+    encoding: files.encoding,
+    codeEnvs: codeEnvNames,
+    codeBodies,
     main: tree.main,
     files: ctx.order,
     names: paperWords(definitions, ctx.theorems),
@@ -2140,6 +2196,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
         id: u.id as string,
         kind: u.kind,
         content: u.content as Piece[],
+        pieces: u.pieces.map((p): SourcePiece => (p.t === 'nested' ? { ...p, unit: indexOf.get(p.unit) ?? -1 } : p)),
         file: u.file,
         start: u.start,
         end: u.end,
@@ -2148,6 +2205,9 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
       if (u.title) out.title = true
       if (u.front) out.front = true
       if (u.held) out.held = true
+      if (u.stored) out.stored = true
+      if (u.once) out.once = true
+      if (u.block !== undefined) out.block = u.block
       if (u.nested) out.nested = true
       if (u.bracketed) out.bracketed = true
       if (u.inFloat) out.inFloat = true
@@ -2263,6 +2323,10 @@ function storedBodies(
         .join(' ')
         .match(/\p{L}{2,}/gu)?.length ?? 0
     if (!AUTHOR_KINDS.has(kind) && words < 4) units.length = before
+    for (const u of units.slice(before)) {
+      u.stored = true
+      if (call.n === 1) u.once = true
+    }
   }
 }
 

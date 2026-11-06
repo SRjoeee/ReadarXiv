@@ -6,12 +6,16 @@ import { unitId } from './id.ts'
 import { DISPLAY_SOURCE, MATH_SPACE_SOURCE } from './tables.ts'
 import type { Piece } from './types.ts'
 
-export type Raw =
+/** a piece as the walk cuts it, with where it stands in its unit's file: `at` its first character's offset, `to` one past its
+ *  last (a text's source, an element's or a span's open or close source, a nested unit's pre to its post; none for an
+ *  element the reader adds, backref's list: at the entry's end) */
+export type Raw = (
   | { t: 'text'; s: string; src?: string }
   | { t: 'ph'; src: string; kind: string; display?: boolean }
   | { t: 'open'; src: string; style: string; must?: true }
   | { t: 'close'; src: string }
   | { t: 'nested'; pre: string; unit: BUnit; post: string }
+) & { at: number; to: number }
 
 /** a unit being built, and once closed */
 export interface BUnit {
@@ -30,6 +34,11 @@ export interface BUnit {
   nested?: true
   /** numbered after the rest (an author block's later parts) */
   later?: true
+  /** made from a macro's body where it is defined (storedBodies), called once (`once`) */
+  stored?: true
+  once?: true
+  /** an author block's unit: its command's whole argument, what a class compares (the marks' front units) */
+  block?: { at: number; text: string }
   bracketed?: true
   inFloat?: true
   /** set once closed */
@@ -69,7 +78,8 @@ function escapedLocals(pieces: Raw[]): Raw[] {
       if (rest && tail?.t === 'text') {
         out.pop()
         const head = (/[\w.+-]+$/.exec(last.s) as RegExpExecArray)[0]
-        if (last.s.length > head.length) out.push({ t: 'text', s: last.s.slice(0, -head.length) })
+        const cut = last.at + last.s.length - head.length
+        if (last.s.length > head.length) out.push({ t: 'text', s: last.s.slice(0, -head.length), at: last.at, to: cut })
         out.push({
           t: 'ph',
           kind: 'url',
@@ -80,8 +90,11 @@ function escapedLocals(pieces: Raw[]): Raw[] {
               .map(srcOf)
               .join('') +
             rest,
+          at: cut,
+          to: tail.at + rest.length,
         })
-        if (tail.s.length > rest.length) out.push({ t: 'text', s: tail.s.slice(rest.length) })
+        if (tail.s.length > rest.length)
+          out.push({ t: 'text', s: tail.s.slice(rest.length), at: tail.at + rest.length, to: tail.to })
         k = j + 1
         continue
       }
@@ -110,8 +123,15 @@ function keepAddresses(pieces: Raw[]): Raw[] {
       domain &&
       after?.t === 'text'
     ) {
-      lists.push({ t: 'ph', kind: 'url', src: p.src + names.s + shut.src + domain })
-      if (after.s.length > domain.length) lists.push({ t: 'text', s: after.s.slice(domain.length) })
+      lists.push({
+        t: 'ph',
+        kind: 'url',
+        src: p.src + names.s + shut.src + domain,
+        at: p.at,
+        to: after.at + domain.length,
+      })
+      if (after.s.length > domain.length)
+        lists.push({ t: 'text', s: after.s.slice(domain.length), at: after.at + domain.length, to: after.to })
       k += 3
     } else lists.push(p)
   }
@@ -121,7 +141,11 @@ function keepAddresses(pieces: Raw[]): Raw[] {
     let at = 0
     for (const m of p.s.matchAll(EMAIL)) {
       if (m.index > at) out.push(cut(p, at, m.index))
-      out.push({ t: 'ph', kind: 'url', src: m[0] })
+      out.push(
+        p.src === undefined
+          ? { t: 'ph', kind: 'url', src: m[0], at: p.at + m.index, to: p.at + m.index + m[0].length }
+          : { t: 'ph', kind: 'url', src: m[0], at: p.at, to: p.to },
+      )
       at = m.index + m[0].length
     }
     if (at < p.s.length) out.push(cut(p, at, p.s.length))
@@ -130,7 +154,9 @@ function keepAddresses(pieces: Raw[]): Raw[] {
 }
 /** a text piece's part [x, y) (one whose source differs from its text keeps it whole: an address is never cut out of one) */
 const cut = (p: Raw & { t: 'text' }, x: number, y: number): Raw =>
-  p.src === undefined ? { t: 'text', s: p.s.slice(x, y) } : { t: 'text', s: p.s.slice(x, y), src: p.src }
+  p.src === undefined
+    ? { t: 'text', s: p.s.slice(x, y), at: p.at + x, to: p.at + y }
+    : { t: 'text', s: p.s.slice(x, y), src: p.src, at: p.at, to: p.to }
 
 // (today's rule read the text's UTF-8 bytes as Latin-1, where a character past ASCII begins with a letter: it is kept so, a
 // character past ASCII no part of a number, so that the units' ids stay today's)
@@ -169,7 +195,8 @@ function keepNumbers(pieces: Raw[]): Raw[] {
     const part = (x: number, y: number): Raw => {
       const t = p.s.slice(x, y)
       const from = src.slice(at(x), at(y))
-      return from === t ? { t: 'text', s: t } : { t: 'text', s: t, src: from }
+      const where = { at: p.at + at(x), to: p.at + at(y) }
+      return from === t ? { t: 'text', s: t, ...where } : { t: 'text', s: t, src: from, ...where }
     }
     const out: Raw[] = []
     let last = 0
@@ -182,7 +209,7 @@ function keepNumbers(pieces: Raw[]): Raw[] {
       const right = end < n ? /\s/.test(p.s[end] as string) : APART(pieces[k + 1])
       if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
       if (m.index > last) out.push(part(last, m.index))
-      out.push({ t: 'ph', kind: 'number', src: m.text })
+      out.push({ t: 'ph', kind: 'number', src: m.text, at: p.at + at(m.index), to: p.at + at(end) })
       last = end
     }
     if (!out.length) return [p]
@@ -196,7 +223,13 @@ function joinLetters(pieces: Raw[]): Raw[] {
   for (const p of pieces) {
     const last = out.at(-1)
     if (p.t === 'text' && last?.t === 'text' && (p.src !== undefined || last.src !== undefined))
-      out[out.length - 1] = { t: 'text', s: last.s + p.s, src: (last.src ?? last.s) + (p.src ?? p.s) }
+      out[out.length - 1] = {
+        t: 'text',
+        s: last.s + p.s,
+        src: (last.src ?? last.s) + (p.src ?? p.s),
+        at: last.at,
+        to: p.to,
+      }
     else out.push(p)
   }
   return out
@@ -317,27 +350,30 @@ export class Builder implements BuildState {
   text_(s: string, start: number, end: number): void {
     if (!this.cur && !s.trim()) return
     const u = this.start(start)
-    u.pieces.push({ t: 'text', s })
+    u.pieces.push({ t: 'text', s, at: start, to: end })
     u.end = end
   }
   ph(src: string, kind: string, start: number, end: number, display = false): void {
     const u = this.start(start)
-    u.pieces.push(display ? { t: 'ph', src, kind, display } : { t: 'ph', src, kind })
+    u.pieces.push(
+      display ? { t: 'ph', src, kind, display, at: start, to: end } : { t: 'ph', src, kind, at: start, to: end },
+    )
     u.end = end
   }
   open(src: string, style: string, start: number, must = false): void {
     const u = this.start(start)
-    u.pieces.push(must ? { t: 'open', src, style, must } : { t: 'open', src, style })
+    const where = { at: start, to: start + src.length }
+    u.pieces.push(must ? { t: 'open', src, style, must, ...where } : { t: 'open', src, style, ...where })
     u.end = Math.max(u.end, start + src.length)
   }
   close(src: string, end: number): void {
     if (!this.cur) return
-    this.cur.pieces.push({ t: 'close', src })
+    this.cur.pieces.push({ t: 'close', src, at: end - src.length, to: end })
     this.cur.end = end
   }
   letter(letter: string, src: string, start: number, end: number): void {
     const u = this.start(start)
-    u.pieces.push({ t: 'text', s: letter, src })
+    u.pieces.push({ t: 'text', s: letter, src, at: start, to: end })
     u.end = end
   }
   flush(): void {
