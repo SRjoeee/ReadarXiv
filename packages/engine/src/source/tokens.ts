@@ -246,7 +246,8 @@ export class Lexer {
         this.raw = false
         const r = this.rawGroup()
         if (r) return r
-      } else if (c !== CAT.space) this.raw = false
+        // (blanks, and one line end, may stand before the argument: never a blank line)
+      } else if (c !== CAT.space && !(c === CAT.eol && this.blankLines(s) === s)) this.raw = false
     }
     const [code, len] = this.charAt(s)
     // (a line end the text writes in ^^ notation, ^^J or ^^M, is no line of the file: a character of the text; LaTeX's own

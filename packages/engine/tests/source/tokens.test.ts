@@ -167,6 +167,12 @@ describe('the tokenizer: text read otherwise than as tokens', () => {
     expect(text.slice(raw.s, raw.e)).toBe('{http://a.b/%20{c}}')
     expect(lx.next()?.k).toBe('comment')
   })
+  it("reads \\href's address raw on the next line too, as TeX reads an argument there", () => {
+    const rules: LexRules = { ...RULES, raw: (n) => n === 'href' }
+    const text = '\\href\n  {https://doi.org/x?a=%3Fb}{t}'
+    const raw = tokenize(text, rules).find((t) => t.k === 'raw') as Token
+    expect(text.slice(raw.s, raw.e)).toBe('{https://doi.org/x?a=%3Fb}')
+  })
   it('reads an argument group as TeX does: a % in it a comment', () => {
     const lx = new Lexer('{a%}\n}b', new Catcodes(), RULES)
     const g = lx.group()
