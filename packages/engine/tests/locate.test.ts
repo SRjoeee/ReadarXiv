@@ -92,6 +92,7 @@ describe('locate', () => {
     expect(L.members[0]!.located).toBe(true)
     expect(L.groups[1]!.glyphs.filter((g) => g?.startsWith('2.'))).toEqual([])
     expect(L.stats.unlocated).toEqual({ 'content difference: char': 1 })
+    expect(L.born.size).toBe(0)
   })
   it('makes a unit of text B never printed, born on A', () => {
     const A = docOf([pages[0]!, pages[1]!, { lines: ['a supplement page', 'of its own'] }])
@@ -144,6 +145,8 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     const L = locate(ins, A, align(B, A))
     expect(L.members[0]).toMatchObject({ located: false, cause: 'content difference: aonly' })
     expect(L.groups[0]!.glyphs.every((g) => g === null || !g.startsWith('0.'))).toBe(true)
+    // (its A-only glyphs stay A's ink inside it: no unit is born of them)
+    expect(L.born.size).toBe(0)
   })
 })
 

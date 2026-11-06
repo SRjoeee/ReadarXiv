@@ -99,6 +99,11 @@ export interface Located {
   }
 }
 
+/** an A glyph's owner in `claimedA` where no member owns it: free (born.ts may make a unit of it), or held as A's ink inside a
+ *  unit that stays the original's */
+export const FREE = -1
+export const HELD = -2
+
 /** an element kind whose glyphs are a reading of it: its text is stated */
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
@@ -207,7 +212,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       else turnedOf.set(u, [[p, j]])
     }
   })
-  const claimedA = new Int32Array(NA).fill(-1)
+  const claimedA = new Int32Array(NA).fill(FREE)
   const members: Member[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
@@ -319,13 +324,15 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // a word arXiv's page broke at a line end where our compile did not) whose B side holds the unit's glyphs alone, or none.
     // A glyph drawn inside a form XObject between glyphs that are not is an included figure's own text, no glyph of the unit's
     // text: it stays unclaimed (born.ts gives it to a figure text). Any other is text A sets inside the unit that our compile
-    // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue))
+    // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue).
+    // A unit that stays the original's holds those glyphs as A's ink (HELD): they are no unit born on A)
+    const claims: [number, [number, number]][] = []
     if (aIdx.length) {
       const sorted = [...aIdx].sort((x, y) => x - y)
       const lo = sorted[0] as number
       const hi = sorted.at(-1) as number
-      for (let a = lo; a <= hi && !bad; a++) {
-        if ((m.aToB[a] as number) >= 0 || m.offpageA[a] || (claimedA[a] as number) >= 0) continue
+      for (let a = lo; a <= hi; a++) {
+        if ((m.aToB[a] as number) >= 0 || m.offpageA[a] || (claimedA[a] as number) !== FREE) continue
         let pv = a - 1
         while (pv >= lo && (m.aToB[pv] as number) < 0) pv--
         let nx = a + 1
@@ -340,18 +347,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         if (own) {
           const rp = roleOfB(bp)
           const rn = roleOfB(bn)
-          roleAt.set(a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1])
+          claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
           continue
         }
         if (gA(a).form && !gA(pv).form && !gA(nx).form) continue
+        claims.push([a, [ROLE.none, -1]])
         const h = hunkName(m.hunkA[a] as number)
-        bad = `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
+        bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
       }
     }
     if (bad || (!aIdx.length && !turnedA.length)) {
+      for (const [a] of claims) claimedA[a] = HELD
       mem.cause = bad ?? 'no ink'
       return mem
     }
+    for (const [a, r] of claims) roleAt.set(a, r)
     mem.located = true
     mem.turned = turnedA
     if (!aIdx.length) {
