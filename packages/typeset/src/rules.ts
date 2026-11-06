@@ -558,7 +558,8 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-24 a table with one English cell beats an English table',
     reads: [],
-    state: open,
+    file: 'shared/table-read.ts',
+    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz tables', cases: 2059 },
   },
   {
     id: 'S.names',
