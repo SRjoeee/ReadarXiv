@@ -48,8 +48,9 @@ export interface PageContent {
   config: Promise<OptionalContentConfig> | null
   /** PDF.js's own text layer and links over it (a page that is arXiv's); a laid page brings its own in `over` */
   own: boolean
-  /** what is laid over the page view once it has drawn (the composed page's overlay, text layer, links): made then */
-  over: ((at: SlotAt) => HTMLElement | null) | null
+  /** what is laid over the page view once it has drawn (the composed page's overlay, text layer, links): made then, in the
+   *  drawing's own turn of the scheduler, before the swap */
+  over: ((at: SlotAt) => Promise<HTMLElement | null> | HTMLElement | null) | null
 }
 /** a slot as `over` is given it: its page, the page view drawn, its viewport */
 export interface SlotAt {
@@ -347,6 +348,11 @@ export function createStack(o: StackOptions): Stack {
         await view.draw()
         if (mine !== gen || disposed) return
         d.drawnAt = at
+        // (a new content's overlay made before it is swapped in: the swap is one task)
+        if (s.next === d && d.content.over && !d.over) {
+          d.over = await d.content.over({ n: s.n, view, viewport: view.viewport })
+          if (mine !== gen || disposed || s.next !== d) return
+        }
         drawnNow(s, d)
       },
     }
@@ -388,7 +394,6 @@ export function createStack(o: StackOptions): Stack {
     if (s.next === d) {
       const focus = focusIn(s)
       const was = s.shown
-      d.over = d.content.over?.({ n: s.n, view: d.view, viewport: d.view.viewport }) ?? null
       if (d.over) d.holder.append(d.over)
       s.next = null
       s.shown = d

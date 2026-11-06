@@ -201,9 +201,15 @@ export function createPanes(o: PanesOptions): Panes {
   const other = (s: PaneSide) => (s === L ? R : L)
   const bus: EventBus = new V.EventBus()
   const linkService: PDFLinkService = new V.PDFLinkService({ eventBus: bus, externalLinkTarget: V.LinkTarget.BLANK })
-  // a link out of the paper, on the left's own annotations, goes out through the host alone
-  {
-    const ls = linkService as unknown as {
+  // the right's own pages (arXiv's, not laid) carry PDF.js's links: a link service whose viewer is the right's pages, as today's
+  // places had it (a destination, a page, the named actions, the optional content the document's)
+  const rightLinks: PDFLinkService = new V.PDFLinkService({
+    eventBus: new V.EventBus(),
+    externalLinkTarget: V.LinkTarget.BLANK,
+  })
+  // a link out of the paper, on either pane's own annotations, goes out through the host alone
+  for (const one of [linkService, rightLinks]) {
+    const ls = one as unknown as {
       addLinkAttributes(link: HTMLAnchorElement, url: string, newWindow?: boolean): void
     }
     const bind = ls.addLinkAttributes.bind(ls)
@@ -240,10 +246,44 @@ export function createPanes(o: PanesOptions): Panes {
     scheduler: o.scheduler,
     clock,
     name: (n) => o.pageName('right', n),
-    links: null,
+    links: rightLinks,
     warn,
   })
   R.stack = right.element
+  rightLinks.setViewer({
+    scrollPageIntoView: (x: { pageNumber: number; destArray?: unknown[] | null }) => jump(R, x),
+    get currentPageNumber() {
+      return rightPage
+    },
+    set currentPageNumber(n: number) {
+      goToPage('right', Math.min(right.pages, Math.max(1, n)))
+    },
+    get pagesCount() {
+      return right.pages
+    },
+    nextPage() {
+      if (rightPage >= right.pages) return false
+      goToPage('right', rightPage + 1)
+      return true
+    },
+    previousPage() {
+      if (rightPage <= 1) return false
+      goToPage('right', rightPage - 1)
+      return true
+    },
+    get pagesRotation() {
+      return 0
+    },
+    set pagesRotation(_: number) {},
+    get optionalContentConfigPromise(): unknown {
+      return viewer.optionalContentConfigPromise
+    },
+    set optionalContentConfigPromise(p: unknown) {
+      viewer.optionalContentConfigPromise = p as never
+    },
+    isInPresentationMode: false,
+    pageLabelToPageNumber: () => null,
+  } as never)
 
   // ---------------------------------------------------------------- geometry
   const pageCount = (s: PaneSide) => (s === L ? (laid ? viewer.pagesCount : 0) : right.pages)
@@ -560,6 +600,7 @@ export function createPanes(o: PanesOptions): Panes {
       doc = next
       viewer.setDocument(next)
       linkService.setDocument(next)
+      rightLinks.setDocument(next)
     }).then((r) => {
       if (r === 'opened') tell('opened', { pages: next.numPages })
       return r as 'opened' | 'superseded'
@@ -573,6 +614,7 @@ export function createPanes(o: PanesOptions): Panes {
     void right.layout(null, viewer.currentScale)
     viewer.setDocument(null as never)
     linkService.setDocument(null as never)
+    rightLinks.setDocument(null as never)
     leftTold = ''
     follower.invalidate()
     reportSync()

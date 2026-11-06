@@ -4,7 +4,7 @@
 //
 //   node packages/reader/e2e/run.mjs [--only=<part of a name>|…] [--browser=chromium|webkit|firefox]
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
@@ -23,7 +23,82 @@ const sample = join(REPO, 'tests/fixtures/pdf/sample-1/sample-1.pdf')
 const papers = { '2600.00001v1': sample }
 if (process.env.AXT_PAPER) papers.lab = join(process.env.AXT_PAPER, 'arxiv.pdf')
 const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxiv/${id.replace('.', '_')}.pdf`, f]))
-const server = await startServer({ out: join(HERE, '.out'), objects })
+// the fixtures (packages/reader/e2e/fixtures: ours; AXT_LAB_FIXTURES=<id>,… : lane L1's bundles of corpus papers and the
+// baseline's dumps, read in place from lab-data): each one's A, its bundle's objects under our server's paths, its dumps and rows
+const FIX = join(HERE, 'fixtures')
+const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
+const fixtures = {}
+for (const name of readdirSync(FIX)) {
+  const d = join(FIX, name)
+  if (!existsSync(join(d, 'arxiv.pdf'))) continue
+  fixtures[name] = { pdf: join(d, 'arxiv.pdf'), bundle: join(d, 'bundle'), files: d, dumps: {}, rows: {} }
+}
+for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)) {
+  const papersJson = JSON.parse(readFileSync(join(LAB, 'baseline/corpora/papers.json'), 'utf8'))
+  const p = papersJson.papers.find((x) => x.id === id)
+  if (!p) throw new Error(`no corpus paper ${id}`)
+  fixtures[id] = {
+    pdf: join(p.dir, 'arxiv.pdf'),
+    bundle: join(LAB, 'lanes/L1-out4/bundles', id),
+    files: join(LAB, 'baseline/reader'),
+    dumps: { zh: `${id}-zh.reader.json` },
+    rows: { zh: null },
+    face: 'cjk',
+  }
+}
+const indexOf = {}
+for (const [name, f] of Object.entries(fixtures)) {
+  const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
+  const seg = `${head.paper.id.replace('.', '_')}v${head.paper.version}`
+  objects.set(`/api/v2/o/arxiv/${seg}.pdf`, f.pdf)
+  for (const file of readdirSync(f.bundle))
+    if (/^[0-9a-f]{64}\./.test(file)) objects.set(`/api/v2/o/p/${seg}/fx/${file.split('.')[0]}`, join(f.bundle, file))
+  const headDigest = readdirSync(f.bundle)
+    .find((x) => x.endsWith('.head'))
+    .split('.')[0]
+  indexOf[name] = {
+    seg,
+    original: `/api/v2/o/arxiv/${seg}.pdf`,
+    objects: `/api/v2/o/p/${seg}/fx/`,
+    head: headDigest,
+    dumps: f.dumps,
+    rows: f.rows,
+    face: f.face ?? null,
+  }
+}
+const fixtureRoute = {
+  prefix: '/fixtures/',
+  handle(_req, res, url) {
+    const [, , name, file] = url.pathname.split('/')
+    const f = fixtures[name]
+    if (!f) return false
+    if (file === 'index.json') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(JSON.stringify(indexOf[name]))
+    }
+    // (a corpus paper's rows: those of its dump's units, a row each, whatever their text: the dump is what is painted)
+    if (/\.rows\.json$/.test(file) && f.rows[file.split('.')[0]] === null) {
+      const dump = JSON.parse(readFileSync(join(f.files, f.dumps[file.split('.')[0]]), 'utf8'))
+      res.writeHead(200, { 'content-type': 'application/json' })
+      return res.end(
+        JSON.stringify({
+          format: 1,
+          rows: dump.units.map((u) => ({
+            id: u.id,
+            ok: true,
+            content: [{ t: 'text', s: u.lines.map((l) => l.text).join(' ') }],
+            by: 'baseline',
+          })),
+        }),
+      )
+    }
+    const at = join(f.files, file)
+    if (!existsSync(at)) return false
+    res.writeHead(200, { 'content-type': 'application/json' })
+    return res.end(readFileSync(at))
+  },
+}
+const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute] })
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -213,6 +288,86 @@ for (const [id, label] of [['2600.00001v1', 'sample-1'], ...(process.env.AXT_PAP
     for (const w of walk)
       assert(w.pixels * 4 <= budget + w.near * 8e6, `views ${w.views}, near ${w.near}, pixels ${w.pixels}`)
     return { pages: r.pages, walk, focus: focus.page }
+  })
+}
+
+// ---------------------------------------------------------------- deliverable 4: composing the right pane
+const laidShown = (page, n) =>
+  waitFor(
+    page,
+    (n) => window.__h.marks.some((m) => m.what === 'shown' && m.page === n && String(m.key).startsWith('laid:')),
+    n,
+    20_000,
+  )
+for (const name of Object.keys(fixtures)) {
+  const lab = !!fixtures[name].face
+  const target = lab ? 'zh' : 'de'
+  await check(`compose: the original at once, then each laid page equal to its Page (${name})`, async () => {
+    const { page, context, errors } = await newPage({ dpr: 2 })
+    await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
+    await waitFor(page, () => window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1))
+    const firstOriginal = await page.evaluate(() =>
+      window.__h.marks.find((m) => m.what === 'drawn' && m.side === 'right' && m.page === 1),
+    )
+    const layer = await page.evaluate(([n, t]) => window.__h.layer(n, { target: t }), [name, target])
+    const laidPages = await page.evaluate(() =>
+      [...window.__h.pages.entries()].filter(([, p]) => p.members.some((m) => m.state === 'laid')).map(([n]) => n),
+    )
+    const per = []
+    for (const n of laidPages.slice(0, lab ? 4 : 8)) {
+      await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+      await laidShown(page, n)
+      await page.waitForTimeout(150)
+      const shot = await page
+        .locator(`.axt-pane.right .axt-slot[data-page-number="${n}"] > .axt-slot-view`)
+        .screenshot({
+          animations: 'disabled',
+          ...(process.env.AXT_SHOTS ? { path: join(HERE, '.shots', `${name}-p${n}.png`) } : {}),
+        })
+      const ink = await page.evaluate(([n, png]) => window.__h.overlayInk(n, png), [n, shot.toString('base64')])
+      const text = await page.evaluate((n) => window.__h.textOf(n), n)
+      if (process.env.AXT_DEBUG)
+        console.log(JSON.stringify({ n, text: text.text.slice(0, 600), laid: text.laid.map((t) => t.slice(0, 40)) }))
+      per.push({
+        n,
+        ...ink,
+        textOk: text.laid.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, ''))),
+        inOrder: (() => {
+          let at = 0
+          for (const t of text.laid) {
+            const i = text.text.replace(/\s+/g, '').indexOf(t.replace(/\s+/g, ''), at)
+            if (i < 0) return false
+            at = i
+          }
+          return true
+        })(),
+        copied: text.copied.length,
+      })
+    }
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(layer.proved, 'the original is not the one the layer was made over')
+    for (const x of per) {
+      assert(!x.error, x.error)
+      // I3: the translations' ink in their regions, on no other ink (lab papers' dumps are painted in another face: reported)
+      if (!lab)
+        assert(
+          x.outside === 0 && x.onInk <= Math.max(4, 0.002 * x.ink),
+          `page ${x.n}: ${x.outside} px of ${x.ink} outside its regions, ${x.onInk} on other ink, at ${JSON.stringify(x.where)}`,
+        )
+      // I4: every element of a laid member an item (none kept in these fixtures but displays)
+      if (!lab) assert(x.crops === x.elements, `page ${x.n}: ${x.crops} crops for ${x.elements} elements`)
+      // I8: the text layer reads each laid member's translation, in order; a selection of it copies it
+      assert(
+        x.textOk && x.inOrder && x.copied > 0,
+        `page ${x.n}: the text layer reads ${x.textOk ? 'out of order' : 'not every translation'}`,
+      )
+    }
+    return {
+      originalPage1Ms: Math.round(firstOriginal.at),
+      layer,
+      pages: per.map((x) => ({ n: x.n, ink: x.ink, outside: x.outside, onInk: x.onInk, crops: x.crops })),
+    }
   })
 }
 

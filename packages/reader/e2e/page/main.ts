@@ -1,8 +1,15 @@
 // The harness page: the reader's parts, driven by the checks (run.mjs) through `window.__h`. Nothing here reaches the network
 // but the page's own origin and the stand-in of arXiv's server, which the route table answers.
-import { rangeSource } from '../../src/bytes/source.ts'
+import { type Head, type Part, read, type Row } from '@readarxiv/format'
+import { composedSource } from '../../src/bytes/composed.ts'
 import { openRanged } from '../../src/bytes/ranged.ts'
+import { type OriginalSource, rangeSource } from '../../src/bytes/source.ts'
 import { chunkStore } from '../../src/bytes/store.ts'
+import { type Composer, createComposer, type RowsSource } from '../../src/compose/composer.ts'
+import { createFaces, type Faces } from '../../src/compose/faces.ts'
+import { groupsOf, type Groups } from '../../src/compose/groups.ts'
+import type { Page } from '../../src/compose/page.ts'
+import { fixtureLay, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
@@ -10,14 +17,38 @@ import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
 
 const root = document.getElementById('root') as HTMLElement
+const bytesOf = async (url: string) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`${url}: ${r.status}`)
+  return new Uint8Array(await r.arrayBuffer())
+}
+/** the fixtures' faces: PDF.js's own Liberation Sans (metric for metric the standard Helvetica the fixtures are set in), a CJK
+ *  face of the system's for the corpus papers' dumps (local runs) */
+const faceTable = (base: string) => ({
+  sans: { src: `${base}standard_fonts/LiberationSans-Regular.ttf`, fallback: 'sans-serif' },
+  cjk: { local: 'Songti SC', fallback: '"STSong", "Noto Serif CJK SC", serif' },
+})
 const h = {
   panes: null as Panes | null,
+  kit: null as Awaited<ReturnType<typeof loadKit>> | null,
+  doc: null as import('pdfjs-dist').PDFDocumentProxy | null,
+  source: null as OriginalSource | null,
+  composed: null as import('pdfjs-dist').PDFDocumentProxy | null,
+  groups: null as Groups | null,
+  composer: null as Composer | null,
+  faces: null as Faces | null,
+  head: null as Head | null,
+  parts: new Map<number, Part>(),
+  pages: new Map<number, Page>(),
+  rows: null as (RowsSource & { give(ids?: string[]): void; rowsCount: number }) | null,
+  external: [] as string[],
   t0: 0,
   marks: [] as { what: string; at: number; [k: string]: unknown }[],
   /** the panes over the original at `url` (a path of our server's, else arXiv's absolute URL) */
   async open(url: string) {
     h.t0 = performance.now()
     const kit = await loadKit()
+    h.kit = kit
     root.className = 'axt-reader'
     addSheets(root, kit.sheet)
     const left = document.createElement('div'),
@@ -52,12 +83,221 @@ const h = {
     panes.on('scale', (e) => h.marks.push({ what: 'scale', at: performance.now() - h.t0, scale: e.scale }))
     const own = url.startsWith('/')
     const source = rangeSource({ fetch: (u, i) => fetch(u, i), url, own, store: chunkStore() })
+    h.source = source
     const task = openRanged(kit.lib as never, source, { options: kit.options('original') })
     const doc = await task.promise
+    h.doc = doc
     panes.right.contentOf = () => ({ key: 'original', doc, config: null, own: true, over: null })
     const r = await panes.open(doc)
     h.marks.push({ what: 'opened', at: performance.now() - h.t0, r })
     return { pages: doc.numPages, asks: source.counts.asks, bytes: source.counts.bytes }
+  },
+  /**
+   * The layer of fixture `name` over the original open: its head and parts read from our server's objects, the original's chunks
+   * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
+   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from
+   */
+  async layer(name: string, o: { unlaid?: 'original' | 'composed'; rows?: 'all' | 'none'; target?: string } = {}) {
+    const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const kit = h.kit as NonNullable<typeof h.kit>
+    const t0 = performance.now()
+    const head = read('head', await bytesOf(`${fx.objects}${fx.head}`), fx.head) as Head
+    h.head = head
+    const proved = await (h.source as OriginalSource).prove(head.original.chunks)
+    const addOn = rangeSource({ fetch: (u, i) => fetch(u, i), url: `${fx.objects}${head.addOn?.digest}`, own: true })
+    const src = composedSource(h.source as OriginalSource, head.original.bytes, addOn, head.addOn?.bytes ?? 0)
+    const composed = await openRanged(kit.lib as never, src, { options: kit.options('composed') }).promise
+    h.composed = composed
+    const groups = groupsOf(composed)
+    await groups.ready
+    h.groups = groups
+    const tOpen = performance.now() - t0
+    const parts = new Map<number, Part>()
+    await Promise.all(
+      head.parts.map(async (d, i) => {
+        if (d) parts.set(i + 1, read('part', await bytesOf(`${fx.objects}${d}`), d) as Part)
+      }),
+    )
+    h.parts = parts
+    const target = o.target ?? 'de'
+    const dump = (await (
+      await fetch(`/fixtures/${name}/${fx.dumps[target] ?? `${target}.reader.json`}`)
+    ).json()) as ReaderDump
+    const all = (
+      (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
+    ).rows
+    const pages = pagesOf(
+      parts,
+      dump,
+      (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+    )
+    h.pages = pages
+    const given = new Map<string, Row>()
+    const listeners = new Set<() => void>()
+    const rows = {
+      target,
+      done: false,
+      get: (id: string) => given.get(id),
+      on(f: () => void) {
+        listeners.add(f)
+        return () => listeners.delete(f)
+      },
+      give(ids?: string[]) {
+        for (const r of all) if (!ids || ids.includes(r.id)) given.set(r.id, r)
+        for (const f of [...listeners]) f()
+      },
+      get rowsCount() {
+        return given.size
+      },
+    }
+    if ((o.rows ?? 'all') === 'all') rows.give()
+    h.rows = rows
+    h.faces ??= createFaces({
+      table: faceTable(kit.base),
+      fetch: (u, i) => fetch(u, i),
+      root,
+      warn: (w, e) => console.warn(w, e),
+    })
+    const panes = h.panes as Panes
+    h.composer?.dispose()
+    const composer = createComposer({
+      stack: panes.right,
+      kit,
+      faces: h.faces,
+      lay: fixtureLay(pages, parts),
+      unlaid: o.unlaid ?? 'original',
+      lang: () => target,
+      links: {
+        open: (u) => h.external.push(u),
+        follow: (d, how) => void panes.follow(d, how),
+        unnamed: () => 'Link',
+        textUnder: () => '',
+      },
+      warn: (w, e) => console.warn(w, e),
+    })
+    h.composer = composer
+    composer.on('laid', (e) => h.marks.push({ what: 'laid', at: performance.now() - h.t0, page: e.n, on: !!e.page }))
+    panes.right.on('shown', (e) => h.marks.push({ what: 'shown', at: performance.now() - h.t0, page: e.n, key: e.key }))
+    composer.setDocuments({ original: h.doc, composed, groups })
+    composer.setLayer({ part: async (n) => parts.get(n) ?? null, pages: head.paper.pages }, rows)
+    return {
+      proved,
+      groups: groups.size,
+      tOpen: Math.round(tOpen),
+      parts: parts.size,
+      laidPages: pages.size,
+      digested: (h.source as OriginalSource).digested,
+    }
+  },
+  /**
+   * I3 and I4 on the right's page n as it shows, from a screenshot of its slot (`png`, base64, at the page's device scale): the
+   * overlay's ink is where the slot is darker than its page view's own canvas (the composed page with the groups off); every
+   * such pixel must lie in a laid member's region (its column across its measure, from its first line's top to its room's
+   * bottom) and on no other ink (a pixel the page view itself inks). And every element of a laid member is an item or kept
+   */
+  async overlayInk(n: number, png: string) {
+    const p = h.composer?.laid(n)
+    const slot = (h.panes as Panes).right.page(n) as HTMLElement
+    const canvas = slot.querySelector('.axt-slot-view .canvasWrapper canvas') as HTMLCanvasElement | null
+    if (!p || !canvas) return { error: `page ${n} is not laid (${!!p}) or has no canvas` }
+    const shot = await createImageBitmap(await (await fetch(`data:image/png;base64,${png}`)).blob())
+    const W = canvas.width,
+      H = canvas.height
+    const a = new OffscreenCanvas(W, H).getContext('2d') as OffscreenCanvasRenderingContext2D
+    a.drawImage(shot, 0, 0, W, H)
+    const S = a.getImageData(0, 0, W, H).data
+    const b = new OffscreenCanvas(W, H).getContext('2d') as OffscreenCanvasRenderingContext2D
+    b.drawImage(canvas, 0, 0)
+    const C = b.getImageData(0, 0, W, H).data
+    const vp = (h.panes as Panes).right.viewport(n) as import('pdfjs-dist').PageViewport
+    const k = W / vp.width
+    const dev = (x0: number, y0: number, x1: number, y1: number) => {
+      const [ax, ay] = vp.convertToViewportPoint(x0, y1) as [number, number],
+        [bx, by] = vp.convertToViewportPoint(x1, y0) as [number, number]
+      return [
+        Math.floor(Math.min(ax, bx) * k) - 1,
+        Math.floor(Math.min(ay, by) * k) - 1,
+        Math.ceil(Math.max(ax, bx) * k) + 1,
+        Math.ceil(Math.max(ay, by) * k) + 1,
+      ]
+    }
+    const regions: number[][] = []
+    let elements = 0,
+      items = 0
+    for (const m of p.members) {
+      if (m.state !== 'laid') continue
+      const pl = h.composer?.member(m.ord)
+      if (!pl) continue
+      const ls = pl.lines.filter((l) => l[0] === n)
+      if (!ls.length) continue
+      const top = Math.max(...ls.map((l) => l[5]), ...(pl.label?.ink[0] === n ? [pl.label.ink[4]] : []))
+      const bottom = Math.min(...ls.map((l) => l[6])) - (pl.room.below ?? 0)
+      const x0 = Math.min(...ls.map((l) => l[7]), ...ls.map((l) => l[2])),
+        x1 = Math.max(...ls.map((l) => l[8]), ...ls.map((l) => l[3]))
+      regions.push(dev(x0, bottom, x1, top))
+      for (const [, el] of pl.els ?? []) if (el.ink.some((i) => i[0] === n) && !el.keep) elements++
+      for (const [, , , its] of m.lines) items += its.filter((i) => 'src' in i).length
+    }
+    const lum = (D: Uint8ClampedArray, i: number) =>
+      0.299 * (D[i] as number) + 0.587 * (D[i + 1] as number) + 0.114 * (D[i + 2] as number)
+    let ink = 0,
+      outside = 0,
+      onInk = 0
+    const where: number[][] = []
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const i = 4 * (y * W + x)
+        if (lum(C, i) - lum(S, i) < 48) continue
+        ink++
+        if (lum(C, i) < 128) onInk++
+        if (
+          !regions.some(
+            (r) => x >= (r[0] as number) && y >= (r[1] as number) && x <= (r[2] as number) && y <= (r[3] as number),
+          )
+        ) {
+          outside++
+          if (where.length < 5) where.push(vp.convertToPdfPoint(x / k, y / k).map((v) => Math.round(v * 10) / 10))
+        }
+      }
+    return { size: [W, H], ink, outside, onInk, where, regions: regions.length, elements, crops: items }
+  },
+  /** the right's page n's text layer as a reader reads it (its spans in order), a selection of it whole, and the laid members'
+   *  translations in the order their original text comes in the original document's own text content (its first item on the
+   *  member's first line) */
+  async textOf(n: number) {
+    const slot = (h.panes as Panes).right.page(n) as HTMLElement
+    const layer = slot.querySelector('.axt-over .textLayer') ?? slot.querySelector('.textLayer')
+    if (!layer) return null
+    const spans = [...layer.querySelectorAll('span')].map((x) => x.textContent ?? '').filter(Boolean)
+    const r = document.createRange()
+    r.selectNodeContents(layer)
+    const sel = getSelection() as Selection
+    sel.removeAllRanges()
+    sel.addRange(r)
+    const copied = sel.toString()
+    sel.removeAllRanges()
+    const p = h.composer?.laid(n)
+    const items = (await (await (h.doc as import('pdfjs-dist').PDFDocumentProxy).getPage(n)).getTextContent())
+      .items as { str: string; transform: number[]; width: number }[]
+    const firstOf = (ord: number) => {
+      const m = h.composer?.member(ord)
+      const l = m?.lines.find((x) => x[0] === n)
+      if (!l) return Number.POSITIVE_INFINITY
+      const i = items.findIndex(
+        (it) =>
+          it.str.trim() &&
+          Math.abs((it.transform[5] as number) - l[4]) < 1 &&
+          (it.transform[4] as number) + it.width / 2 >= l[2] - 1 &&
+          (it.transform[4] as number) + it.width / 2 <= l[3] + 1,
+      )
+      return i < 0 ? Number.POSITIVE_INFINITY : i
+    }
+    const laid = (p?.members ?? [])
+      .filter((m) => m.state === 'laid')
+      .map((m) => ({ at: firstOf(m.ord), t: m.lines.map(([, , , its]) => its.map((i) => i.s).join('')).join('') }))
+      .sort((a, b) => a.at - b.at)
+      .map((x) => x.t)
+    return { spans: spans.length, text: spans.join(''), copied, laid }
   },
   /** each page's box on both panes: [width, height, top in the pane's scroll] */
   boxes() {
