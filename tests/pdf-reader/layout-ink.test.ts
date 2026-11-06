@@ -1,6 +1,7 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { figureUnitsOf } from '@/pdf-reader/engine/layout/figure-text.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -593,6 +594,36 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       [OPS.setFillRGBColor, ['#ffffff']], stroke(50, 50, 60, 50),
     ))
     expect([...Array(11).keys()].map(i => r.shapes!.get(i)!.opaque ?? false)).toEqual([true, true, false, false, false, false, true, false, false, false, false])
+  })
+  it('a fill covers what lies under it only where every clip in force is a rectangle on the page\'s axes: the clip is kept as its box (#602\'s review)', () => {
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const clipTo = (pts: number[], box: number[]): Op[] => [[OPS.clip, []], [OPS.constructPath, [OPS.endPath, [Float32Array.from([0, pts[0]!, pts[1]!, ...pts.slice(2).flatMap((v, i) => (i % 2 ? [v] : [1, v])), 4])], Float32Array.from(box)]]]
+    const opaque = (...ops: Op[]) => figureInk(ops).shapes!.get(figureInk(ops).boxes.length / 4 - 1)!.opaque ?? false
+    const at = (m: number[], ...inner: Op[]): Op[] => [[OPS.paintFormXObjectBegin, [Float32Array.from(m), Float32Array.from([0, 0, 100, 100])]], ...inner, [OPS.paintFormXObjectEnd, []]]
+    // (a rectangle's clip, upright or under a quarter turn: its box is where the fill shows)
+    expect(opaque(...at([1, 0, 0, 1, 0, 0], [OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(true)
+    expect(opaque(...at([0, 1, -1, 0, 100, 0], rect(10, 10, 60, 50)))).toBe(true)
+    // (a triangle's clip, a form turned 30 degrees, text shown in a clipping mode: what shows is less than the box)
+    expect(opaque(...at([1, 0, 0, 1, 0, 0], [OPS.save, []], ...clipTo([10, 10, 60, 10, 10, 50], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(false)
+    const c = Math.cos(Math.PI / 6), sn = Math.sin(Math.PI / 6)
+    expect(opaque(...at([c, sn, -sn, c, 50, 0], rect(10, 10, 60, 50)))).toBe(false)
+    expect(opaque(...at([1, 0, 0, 1, 0, 0], ...text('f1', 10, [1, 0, 0, 1, 20, 20], [OPS.setTextRenderingMode, [7]], show(g('A', 600))), rect(10, 10, 60, 50)))).toBe(false)
+    // (the clip given back at its restore: a fill after it covers again)
+    expect(opaque(...at([1, 0, 0, 1, 0, 0], [OPS.save, []], ...clipTo([10, 10, 60, 10, 10, 50], [10, 10, 60, 50]), [OPS.restore, []], rect(10, 10, 60, 50)))).toBe(true)
+  })
+  it('a label over a gridline that a white fill clipped to a triangle leaves in view is crowded; the same fill clipped to its rectangle covers it (#602\'s review)', () => {
+    // (the gridline at x 30 through the word's band; the white fill [10, 30, 60, 55] painted after it, clipped to a triangle whose
+    // edge from (60, 30) to (10, 55) passes x 30 at y 45, inside the band: above it the gridline shows; then the word "label")
+    const labelOver = (clip: number[]) => figureUnitsOf([pageInk(OPS, list([
+      [OPS.paintFormXObjectBegin, [Float32Array.from([1, 0, 0, 1, 0, 0]), Float32Array.from([0, 0, 100, 100])]],
+      [OPS.constructPath, [OPS.stroke, [Float32Array.from([0, 30, 0, 1, 30, 100])], Float32Array.from([30, 0, 30, 100])]],
+      [OPS.save, []], [OPS.clip, []], [OPS.constructPath, [OPS.endPath, [Float32Array.from([0, clip[0]!, clip[1]!, ...clip.slice(2).flatMap((v, i) => (i % 2 ? [v] : [1, v])), 4])], Float32Array.from([10, 30, 60, 55])]],
+      [OPS.setFillRGBColor, ['#ffffff']], [OPS.constructPath, [OPS.fill, [Float32Array.from([0, 10, 30, 1, 60, 30, 1, 60, 55, 1, 10, 55, 4])], Float32Array.from([10, 30, 60, 55])]], [OPS.restore, []],
+      [OPS.setFillRGBColor, ['#000000']], ...text('f1', 10, [1, 0, 0, 1, 20, 40], show(g('l'), g('a'), g('b'), g('e'), g('l'))),
+      [OPS.paintFormXObjectEnd, []],
+    ]), commonObjs, { rotate: 0, turned: true, indices: true })] as never, null).units.find(u => u.text === 'label')!
+    expect(labelOver([10, 30, 60, 30, 10, 55]).why).toBe('crowded')
+    expect(labelOver([10, 30, 60, 30, 60, 55, 10, 55]).why).toBeNull()
   })
   it('a path filled and stroked keeps what shows of each: an invisible fill under a seen stroke is a stroke, and the reverse (#555)', () => {
     const both = (ca: number, CA: number) => {

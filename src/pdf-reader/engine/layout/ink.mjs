@@ -109,12 +109,37 @@ const finite = (...xs) => xs.every(Number.isFinite)
  *  stroke's) and `ga` the alpha the groups open now are painted with, multiplied, and `gclip` the box the groups open now bound
  *  what they paint to, as PDF.js bounds a group (the figures' reading: `unseen`, `cut`); `bm`, `sm` whether a blend mode other
  *  than Normal, or a soft mask, is in force, and `gblend` whether a group open now is painted under either, so that what is
- *  painted now does not simply cover what lies under it (the figures' reading: a shape's `opaque`) */
+ *  painted now does not simply cover what lies under it; `rclip` whether every clip in force, and every group's bounds, is a
+ *  rectangle on the page's axes, so that `clip` (their box) is where what is painted now shows (the figures' reading: a shape's
+ *  `opaque`) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
   tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1, gclip: null, tile: false,
-  bm: false, sm: false, gblend: false,
+  bm: false, sm: false, gblend: false, rclip: true,
 })
+/** whether a matrix keeps a rectangle on the page's axes (a scale, a translation, a quarter turn, a mirror) */
+const squareOf = m => (Math.abs(m[1]) < 1e-9 && Math.abs(m[2]) < 1e-9) || (Math.abs(m[0]) < 1e-9 && Math.abs(m[3]) < 1e-9)
+/** whether a path PDF.js gives (constructPath's data: 0 moveTo, 1 lineTo, 2 and 3 curves, 4 closePath) is one rectangle on the
+ *  page's axes under matrix `m`: one subpath of four corners, its edges level and upright in turn (0.01 of a unit across) */
+function rectPathOf(m, data) {
+  if (!data || typeof data.length !== 'number') return false
+  const pts = []
+  for (let i = 0, moves = 0; i < data.length;) {
+    const o = data[i++]
+    if (o === 4) continue
+    if (o !== 0 && o !== 1) return false
+    if (o === 0 && ++moves > 1) return false
+    const x = data[i], y = data[i + 1]
+    i += 2
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false
+    const X = m[0] * x + m[2] * y + m[4], Y = m[1] * x + m[3] * y + m[5], p = pts.at(-1)
+    if (!p || Math.abs(p[0] - X) > 0.01 || Math.abs(p[1] - Y) > 0.01) pts.push([X, Y])
+  }
+  if (pts.length === 5 && Math.abs(pts[0][0] - pts[4][0]) <= 0.01 && Math.abs(pts[0][1] - pts[4][1]) <= 0.01) pts.pop()
+  if (pts.length !== 4) return false
+  const level = i => Math.abs(pts[i][1] - pts[(i + 1) % 4][1]) <= 0.01, upright = i => Math.abs(pts[i][0] - pts[(i + 1) % 4][0]) <= 0.01
+  return (level(0) && upright(1) && level(2) && upright(3)) || (upright(0) && level(1) && upright(2) && level(3))
+}
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = v => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
@@ -660,7 +685,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
    *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, whether its fill
    *  covers what was painted under it (`opaque`: a colour, no pattern nor PDF.js's transparent, at an alpha of 1 under no blend
-   *  mode but Normal and no soft mask, its groups' alike), and its half line width on the page, by its box's index; at most
+   *  mode but Normal and no soft mask, its groups' alike, and every clip in force a rectangle on the page's axes, so that its box
+   *  is where it shows), and its half line width on the page, by its box's index; at most
    *  SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map()
   /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), by index: nothing of them shows; and the
@@ -717,12 +743,14 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
     // (`pattern`: a fill of a tiling pattern, whose cells (a hatching) paint what is not read)
-    const opaque = fill && s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend
+    const opaque = fill && s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
     shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, ...(fill && s.tile ? { pattern: true } : {}), ...(opaque ? { opaque: true } : {}), hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
   }
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
     if (indices) { if (!inAnnotation && !inMask) showAt++; curShow = inAnnotation || inMask ? -1 : showAt; glyphAt = -1 }
+    // (text shown in a clipping mode (4 to 7) is added to the clip, its glyphs' shapes: no clip of known rectangles then)
+    if (s.tr & 4) s.rclip = false
     // (in a state not known, its font, size and mode are not either: nothing shown is placed, and the page is capped)
     if (!known()) return
     const f = s.font
@@ -835,7 +863,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         s.formId = ++formSeq
         if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
         const bb = a[1]
-        if (bb && bb.length >= 4) clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]))
+        if (bb && bb.length >= 4) { clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3])); if (!squareOf(s.ctm)) s.rclip = false }
         break
       }
       case FORM_END: pop(); break
@@ -851,8 +879,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
         const bb = a?.[0]?.bbox
         if (turned && bb && bb.length >= 4) {
-          const b = boxOf(a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
+          const gm = a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm
+          const b = boxOf(gm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
           s.gclip = b
+          if (!squareOf(gm)) s.rclip = false
         }
         break
       }
@@ -883,7 +913,12 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
           if (turned && boxes.length > had && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
-        if (s.pendingClip) { if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]; s.pendingClip = false }
+        if (s.pendingClip) {
+          if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]
+          // (the clip is kept as its box: a triangle's, a circle's or a turned rectangle's box is more than it shows)
+          if (ok && !rectPathOf(s.ctm, a[1]?.[0])) s.rclip = false
+          s.pendingClip = false
+        }
         break
       }
       case SHADING:
