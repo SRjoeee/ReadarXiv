@@ -205,7 +205,7 @@ export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'lat
 /** a laid line: its slot, and its items at their places */
 /** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
  *  (breakLines: where the page's word table writes a region's kept lines) */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number; ls?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it); ls: the letter spacing a CJK word takes to justify its line, inside w
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
