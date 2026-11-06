@@ -4,26 +4,27 @@
 // ARIA toolbar: each control is a stop of its own, which a toolbar's arrow keys would not be (the interface review).
 // What leaves it in a narrow window is marked (`data-wide`, `data-side-by-side`; reader.css). Everything here goes
 // through the controller; nothing reads the viewers
-import { ArrowLeftRight, Link2, LogOut, Minus, PanelLeft, Plus, Settings } from 'lucide'
-import { R, S, Icon } from '@readarxiv/ui'
-import type { ReaderController } from '../controller'
-import { DisplaySwitch } from './DisplaySwitch'
-import { leaveReader, settingsUrl } from './links'
-import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from './Menus'
-import { PaperTitle } from './PaperTitle'
-import { ProgressLine } from './ProgressLine'
-import { ReadingOptions } from './ReadingOptions'
-import { useSettingsLock } from './settings-lock'
-import { ToolbarButton } from './ToolbarButton'
-import { useReader } from './use-reader'
+import { ArrowLeftRight, Link2, Minus, PanelLeft, Plus } from 'lucide'
+import { Icon, R } from '@readarxiv/ui'
+import type { ReaderController } from './model.ts'
+import { DisplaySwitch } from './DisplaySwitch.tsx'
+import { LanguageMenu, ZoomMenu } from './Menus.tsx'
+import { PaperTitle } from './PaperTitle.tsx'
+import { useParts } from './parts.tsx'
+import { ProgressLine } from './ProgressLine.tsx'
+import { ReadingOptions } from './ReadingOptions.tsx'
+import { useSettingsLock } from './settings-lock.ts'
+import { ToolbarButton } from './ToolbarButton.tsx'
+import { useReader } from './use-reader.ts'
 
 /** ⌘ on a Mac, Ctrl elsewhere, as the zoom's shortcuts show them, and as assistive technology names the key */
 const MAC = /Mac/.test(navigator.platform)
 const MOD = MAC ? '⌘' : 'Ctrl'
 const MOD_KEY = MAC ? 'Meta' : 'Control'
 
-export function Toolbar({ controller, embedded, contents, onContents }: { controller: ReaderController; embedded: boolean; contents: boolean; onContents: () => void }) {
-  const state = useReader(controller, s => ({ swapped: s.settings?.pdfReader.swapped ?? false, display: s.display, narrow: s.narrow, paper: s.paper, available: s.available, languageSupported: s.languageSupported, sync: s.sync }))
+export function Toolbar({ controller, contents, onContents }: { controller: ReaderController; contents: boolean; onContents: () => void }) {
+  const { slots } = useParts()
+  const state = useReader(controller, s => ({ swapped: s.prefs?.swapped ?? false, display: s.display, narrow: s.narrow, paper: s.paper, available: s.available, languageSupported: s.languageSupported, sync: s.sync }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
   const lock = useSettingsLock(controller)
   return (
@@ -38,7 +39,7 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
         <DisplaySwitch value={state.display} translatable={state.available && state.languageSupported} onChange={controller.setDisplay} />
       </div>
       <div data-zone="trail" className="flex items-center gap-1 justify-self-end">
-        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide || lock.locked} why={sideBySide ? lock.why : undefined} data-side-by-side onClick={() => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, swapped: !c.pdfReader.swapped } }))}>
+        <ToolbarButton label={R.swap} pressed={state.swapped} disabled={!sideBySide || lock.locked} why={sideBySide ? lock.why : undefined} data-side-by-side onClick={() => controller.setPrefs({ swapped: !state.swapped })}>
           <Icon node={ArrowLeftRight} />
         </ToolbarButton>
         {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind (Part 2's final review) */}
@@ -57,19 +58,11 @@ export function Toolbar({ controller, embedded, contents, onContents }: { contro
         </div>
         <span className="divider" />
         <LanguageMenu controller={controller} name="language" />
-        <ServiceMenu controller={controller} />
-        <ReadingOptions controller={controller} embedded={embedded} />
-        {/* below 500 px these are the reading options' first rows (§5) */}
-        <span className="divider" data-wide />
-        <DownloadMenu controller={controller} wide />
-        <ToolbarButton label={S.settings} href={settingsUrl()} data-wide>
-          <Icon node={Settings} />
-        </ToolbarButton>
-        {embedded && (
-          <ToolbarButton label={R.leave} data-leave data-wide onClick={leaveReader}>
-            <Icon node={LogOut} />
-          </ToolbarButton>
-        )}
+        {/* the host's own before the reading options (the extension's service), and after them (its download, settings and
+            way back, which below 500 px are the reading options' first rows, §5) */}
+        {slots.beforeOptions?.('bar')}
+        <ReadingOptions controller={controller} />
+        {slots.afterOptions?.('bar')}
       </div>
       <ProgressLine controller={controller} />
     </header>

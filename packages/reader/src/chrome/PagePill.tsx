@@ -4,9 +4,9 @@
 import { ChevronLeft, ChevronRight } from 'lucide'
 import { forwardRef, useState } from 'react'
 import { R, Icon } from '@readarxiv/ui'
-import type { ReaderController, Side } from '../controller'
-import { TippedButton } from './TippedButton'
-import { useReader } from './use-reader'
+import type { ReaderController, Side } from './model.ts'
+import { TippedButton } from './TippedButton.tsx'
+import { useReader } from './use-reader.ts'
 
 export const PagePill = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function PagePill({ controller, side }, ref) {
   const { page, pages } = useReader(controller, s => s.sides[side])

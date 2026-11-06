@@ -2,13 +2,10 @@
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
 // failure's card. A capsule's sentence is its words in parts (capsule-words.ts): a count drawn in cells of its own, a
 // language's own name drawn in that language
-import { toBcp47 } from '@/config/languages'
-import type { ProviderErrorKind } from '@/providers/types'
-import { O, R, S } from '@readarxiv/ui'
-import { reasonText } from '@/ui/strings'
-import type { ReaderState } from '../controller'
-import { type CapsuleWords, plain, withCount, withPart } from './capsule-words'
-import { ownName } from './languages'
+import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
+import type { ReaderState } from './model.ts'
+import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
+import type { Languages } from './parts.tsx'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
@@ -41,7 +38,7 @@ const running = (state: ReaderState) => state.phase === 'translating' || state.p
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
 export interface Seen { noticeClosed: boolean; narrowShown: boolean; refusalsSeen: number }
 
-export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
+export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Languages, 'name' | 'tag'>): Capsule | null {
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
   // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused. They
   // are true of an address with no paper too, whose controls they explain, and stand beside its card
@@ -53,11 +50,11 @@ export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
   if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) return state.htmlVersion ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion } : { kind: 'unavailable', words: plain(R.status.noPdf) }
-  if (!state.languageSupported && state.settings) {
+  if (!state.languageSupported && state.prefs) {
     // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
     // `lang`
-    const code = state.settings.targetLanguage, name = ownName(code)
-    return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: toBcp47(code) }), action: 'language' }
+    const code = state.prefs.target, name = languages.name(code)
+    return { kind: 'unsupported', words: withPart(R.status.unsupported(name), { text: name, lang: languages.tag(code) }), action: 'language' }
   }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
   // (the layer-only plan's "Offline, drafted")
@@ -95,11 +92,12 @@ export function lineOf(state: ReaderState): Line {
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
-export function cardOf(state: ReaderState): Card | null {
+/** `reason`: a failure's sentence, the host's (it knows whether the translator in use has a key) */
+export function cardOf(state: ReaderState, reason: (kind: ProviderErrorKind) => string): Card | null {
   if (state.noPaper) return { reason: R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
   const kind = state.failure ?? 'unknown'
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
-  // is the key's only where the service chosen carries one (reasonText)
-  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reasonText(kind, state.settings?.provider), action: KEYS.has(kind) ? 'settings' : 'retry' }
+  // is the key's only where the service chosen carries one (the host's reason)
+  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reason(kind), action: KEYS.has(kind) ? 'settings' : 'retry' }
 }

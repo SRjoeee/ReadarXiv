@@ -4,7 +4,7 @@
 // rest, and through a zoom until the reader next scrolls; the thumb drags, a press on the track turns a screen towards it,
 // and a press makes its pane the leading side
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import type { ReaderController, Side } from '../controller'
+import type { ReaderController, Side } from './model.ts'
 
 /** the pane's scroller the engine shows now (it replaces the right one as translations come) */
 const scrollerOf = (track: HTMLElement | null) => track?.parentElement?.querySelector<HTMLElement>('.viewerContainer:not(.axt-incoming)') ?? null

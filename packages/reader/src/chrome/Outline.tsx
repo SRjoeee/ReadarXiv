@@ -4,15 +4,15 @@
 // the reader leaves it
 import { ChevronRight } from 'lucide'
 import { useEffect, useMemo, useState } from 'react'
-import { toBcp47 } from '@/config/languages'
 import { R, Icon, useTip } from '@readarxiv/ui'
-import type { ReaderController } from '../controller'
-import type { OutlineEntry } from '../engine/view/outline'
-import { TippedButton } from './TippedButton'
-import { useReader } from './use-reader'
+import type { OutlineEntry, ReaderController } from './model.ts'
+import { useParts } from './parts.tsx'
+import { TippedButton } from './TippedButton.tsx'
+import { useReader } from './use-reader.ts'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {
-  const { outline: entries, currentHeading, lang } = useReader(controller, s => ({ outline: s.outline, currentHeading: s.currentHeading, lang: s.settings ? toBcp47(s.settings.targetLanguage) : undefined }))
+  const { languages } = useParts()
+  const { outline: entries, currentHeading, lang } = useReader(controller, s => ({ outline: s.outline, currentHeading: s.currentHeading, lang: s.prefs ? languages.tag(s.prefs.target) : undefined }))
   const parents = useMemo(() => entries.map((e, k) => { for (let p = k - 1; p >= 0; p--) if (entries[p]!.level < e.level) return p; return -1 }), [entries])
   const hasKids = (k: number) => parents.includes(k)
   // the section being read is the session's to say, by the reading line: a heading at a page's foot, gone to, is read

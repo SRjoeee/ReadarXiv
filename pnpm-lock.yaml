@@ -17,6 +17,12 @@ importers:
       '@readarxiv/engine':
         specifier: workspace:*
         version: link:packages/engine
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:packages/format
+      '@readarxiv/reader':
+        specifier: workspace:*
+        version: link:packages/reader
       '@readarxiv/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -132,9 +138,18 @@ importers:
       '@readarxiv/ui':
         specifier: workspace:*
         version: link:../ui
+      lucide:
+        specifier: 1.47.0
+        version: 1.47.0
       pdfjs-dist:
         specifier: 6.3.289
         version: 6.3.289
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
 
   packages/text: {}
 

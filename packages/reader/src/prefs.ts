@@ -23,6 +23,12 @@ export interface WritablePrefs {
   ui: UiLanguage
 }
 
+/** a write: a patch, never a whole object; the classes and the highlight by the fields it names */
+export type PrefsPatch = Partial<Omit<WritablePrefs, 'classes' | 'highlight'>> & {
+  classes?: Partial<WritablePrefs['classes']>
+  highlight?: Partial<WritablePrefs['highlight']>
+}
+
 export interface Prefs extends WritablePrefs {
   /** the highlight's bands the visitor may pick: `name` null for a built-in band, which the reader names */
   readonly bands: readonly { id: string; colour: string; name: string | null }[]

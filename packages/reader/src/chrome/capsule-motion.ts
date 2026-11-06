@@ -20,7 +20,7 @@
 // for one line at the window's width wraps, balanced (`data-wrap`): the box's width is then its own, and only the words
 // cross-fade. The engine measures layout widths, never drawn ones, so that the capsule's entrance (a 0.96 scale) does not
 // count; it reads them once a change, and as the window or the fonts change
-import { type CapsuleWords, keyOf, sameShape } from './capsule-words'
+import { type CapsuleWords, keyOf, sameShape } from './capsule-words.ts'
 
 /** the choreography's times (ms) and the share of the way at which growing words may appear */
 export const CHOREOGRAPHY = { grow: 300, shrink: 250, out: 150, in: 200, appearAt: 0.6, morph: 150, morphGap: 300 } as const

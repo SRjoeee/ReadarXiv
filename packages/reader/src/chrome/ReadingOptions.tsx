@@ -2,88 +2,66 @@
 // dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
 // window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
 // download, the settings and the way back
-import { type IconNode, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun } from 'lucide'
+import { type IconNode, Monitor, Moon, SlidersHorizontal, Sun } from 'lucide'
 import { useId, useRef } from 'react'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { R, S, Icon, Popover, usePopover, radioKeys, Switch, useTip } from '@readarxiv/ui'
-import { profileName } from '@/ui/strings'
-import type { ReaderController } from '../controller'
-import { CLASS_ROWS } from '../settings'
-import { leaveReader, settingsUrl } from './links'
-import { DownloadMenu, LanguageMenu, ServiceMenu } from './Menus'
-import { useSettingsLock } from './settings-lock'
-import { ToolbarButton } from './ToolbarButton'
-import { useReader } from './use-reader'
+import { Icon, O, Popover, R, radioKeys, S, Switch, usePopover, useTip } from '@readarxiv/ui'
+import { CLASSES, type Prefs } from '../prefs.ts'
+import { LanguageMenu } from './Menus.tsx'
+import type { ReaderController } from './model.ts'
+import { useParts } from './parts.tsx'
+import { useSettingsLock } from './settings-lock.ts'
+import { ToolbarButton } from './ToolbarButton.tsx'
+import { useReader } from './use-reader.ts'
 
 /** the system's first (the maintainer, 2026-09-26); as icons, equal whatever the interface's language, as the display
  *  switch's are, their words in tooltips and to screen readers: a word per third ran off its thumb in English */
 const APPEARANCES = ['system', 'light', 'dark'] as const
 const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
 
-export function ReadingOptions({ controller, embedded = false }: { controller: ReaderController; embedded?: boolean }) {
+export function ReadingOptions({ controller }: { controller: ReaderController }) {
   // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
   // its place, and the narrow window's download and way back in it are reachable at once
-  const config = useReader(controller, s => s.settings) ?? DEFAULT_CONFIG
+  const { slots, defaults } = useParts()
+  const prefs = useReader(controller, s => s.prefs) ?? defaults
   const lock = useSettingsLock(controller)
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
   // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
-  const appearance = config.theme
-  const setAppearance = (a: (typeof APPEARANCES)[number]) => { if (!lock.locked) controller.patchSettings(c => ({ ...c, theme: a })) }
+  const appearance = prefs.theme
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => { if (!lock.locked) controller.setPrefs({ theme: a }) }
   return (
     <>
       <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>
         <Icon node={SlidersHorizontal} />
       </ToolbarButton>
       <Popover {...pop.popover} role="dialog" label={R.options.name}>
-        {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26) */}
-        <div className="row narrowest-only">
-          {R.download.name}
-          <DownloadMenu controller={controller} />
-        </div>
-        <div className="row narrowest-only">
-          {S.settings}
-          <ToolbarButton label={S.settings} href={settingsUrl()}>
-            <Icon node={Settings} />
-          </ToolbarButton>
-        </div>
-        {embedded && (
-          <div className="row narrowest-only">
-            {R.leave}
-            <ToolbarButton label={R.leave} onClick={leaveReader}>
-              <Icon node={LogOut} />
-            </ToolbarButton>
-          </div>
-        )}
-        <div className="sep narrowest-only" />
+        {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26): the host's */}
+        {slots.afterOptions?.('options')}
         {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
         <div className="row narrow-only">
           {S.rows.language}
           <LanguageMenu controller={controller} name="options-language" />
         </div>
-        <div className="row narrow-only">
-          {S.rows.service}
-          <ServiceMenu controller={controller} />
-        </div>
+        {slots.beforeOptions?.('options')}
         <div className="sep narrow-only" />
         {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {S.rows.highlight}
-          <Switch label={S.rows.highlight} checked={config.reading.sentenceHighlight} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, reading: { ...c.reading, sentenceHighlight: on } }))} />
+          <Switch label={S.rows.highlight} checked={prefs.highlight.on} disabled={lock.locked} why={lock.why} onChange={on => controller.setPrefs({ highlight: { on } })} />
         </label>
         <div className="row">
           {R.options.color}
           <span className="flex gap-2">
-            {config.appearance.highlights.map(h => (
-              <Swatch key={h.id} name={profileName(h, 'highlights')} color={h.color || 'var(--axt-green)'} chosen={h.id === config.appearance.activeHighlight} locked={lock.locked} why={lock.why}
-                onPick={() => controller.patchSettings(c => ({ ...c, appearance: { ...c.appearance, activeHighlight: h.id } }))} />
+            {prefs.bands.map(h => (
+              <Swatch key={h.id} name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id} color={h.colour || 'var(--axt-green)'} chosen={h.id === prefs.highlight.band} locked={lock.locked} why={lock.why}
+                onPick={() => controller.setPrefs({ highlight: { band: h.id } })} />
             ))}
           </span>
         </div>
         <div className="sep" />
-        <ClassToggles controller={controller} config={config} lock={lock} />
+        <ClassToggles controller={controller} prefs={prefs} lock={lock} />
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
@@ -98,7 +76,7 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
         <label className="row">
           {R.options.dim}
-          <Switch label={R.options.dim} checked={config.pdfReader.dimPages} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, dimPages: on } }))} />
+          <Switch label={R.options.dim} checked={prefs.dim} disabled={lock.locked} why={lock.why} onChange={on => controller.setPrefs({ dim: on })} />
         </label>
       </Popover>
     </>
@@ -113,18 +91,18 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
  * it lands, from here or the settings page). The website's group, in the same words and order: its heading a row of the panel
  * in the second ink, naming the rows under it, each a switch's row in the panel's own pattern
  */
-function ClassToggles({ controller, config, lock }: { controller: ReaderController; config: Config; lock: ReturnType<typeof useSettingsLock> }) {
+function ClassToggles({ controller, prefs, lock }: { controller: ReaderController; prefs: Prefs; lock: ReturnType<typeof useSettingsLock> }) {
   const head = useId()
   return (
     // biome-ignore lint/a11y/useSemanticElements: the popover's rows named by the heading row above them; a fieldset's legend lays out as no row of the panel
     <div role="group" aria-labelledby={head} data-axt-classes="">
       <div id={head} className="row text-ink-2">{R.classes.name}</div>
-      {CLASS_ROWS.map(t => (
+      {CLASSES.map(t => (
         // biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through
         <label key={t} className="row" data-axt-class={t}>
           {R.classes[t]}
-          <Switch label={R.classes[t]} checked={config.pdfReader.classes[t]} disabled={lock.locked} why={lock.why}
-            onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, classes: { ...c.pdfReader.classes, [t]: on } } }))} />
+          <Switch label={R.classes[t]} checked={prefs.classes[t]} disabled={lock.locked} why={lock.why}
+            onChange={on => controller.setPrefs({ classes: { [t]: on } })} />
         </label>
       ))}
     </div>

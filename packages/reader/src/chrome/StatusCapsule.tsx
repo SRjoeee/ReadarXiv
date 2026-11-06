@@ -13,12 +13,12 @@
 import { Info, X } from 'lucide'
 import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
 import { R, S, Icon } from '@readarxiv/ui'
-import type { ReaderController } from '../controller'
-import { Capsule as Drawn } from './Capsule'
-import { settingsUrl } from './links'
-import { TippedButton } from './TippedButton'
-import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
-import { useReader } from './use-reader'
+import type { ReaderController } from './model.ts'
+import { Capsule as Drawn } from './Capsule.tsx'
+import { useParts } from './parts.tsx'
+import { TippedButton } from './TippedButton.tsx'
+import { type Capsule, capsuleOf, cardOf, spokenOf } from './status.ts'
+import { useReader } from './use-reader.ts'
 
 export function StatusCapsule({ controller, onChooseLanguage }: { controller: ReaderController; onChooseLanguage: () => void }) {
   // the notice of failed passages closed (status.ts Seen)
@@ -26,12 +26,13 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
   const [narrowShown, setNarrowShown] = useState(false)
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
-  const now = useReader(controller, s => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }))
+  const parts = useParts()
+  const now = useReader(controller, s => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages))
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
-  const card = useReader(controller, cardOf)
+  const card = useReader(controller, s => cardOf(s, parts.reason))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
-  const sameTab = useReader(controller, s => s.settings?.reading.openIn === 'same-tab')
+  const sameTab = useReader(controller, s => s.prefs?.links === 'same-tab')
   // a capsule that goes is kept 160 ms, leaving (reader.css .capsule[data-out]); one that comes replaces it at once
   const [leaving, setLeaving] = useState<Capsule | null>(null)
   const last = useRef<Capsule | null>(null)
@@ -67,7 +68,7 @@ export function StatusCapsule({ controller, onChooseLanguage }: { controller: Re
           after={
             capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
               <>
-                {capsule.kind === 'unreadable' && <a data-action className="chip" href={settingsUrl()} target="_blank" rel="noopener">{S.settings}</a>}
+                {capsule.kind === 'unreadable' && parts.settingsHref && <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">{S.settings}</a>}
                 {((capsule.kind === 'notice' && capsule.action === 'retry') || capsule.kind === 'notNow') && <button type="button" data-action className="chip" onClick={controller.retry}>{S.failed.retry}</button>}
                 {link && <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">{R.status.useHtml}</a>}
                 {capsule.kind === 'unsupported' && <button type="button" data-action className="chip" onClick={onChooseLanguage}>{R.status.chooseLanguage}</button>}

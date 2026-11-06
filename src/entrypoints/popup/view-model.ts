@@ -8,7 +8,7 @@
 // stopped and the information for something that goes on; every menu the view offers is drawn whether open or not (a
 // popover's contents exist before it opens), they open at any time, a change while the page is on restarts it in place
 // (data.ts), and only a choice that cannot run leaves the page behind the settings.
-import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+import { languageItems, READER_LANGUAGES } from '@/pdf-reader/host/languages'
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'

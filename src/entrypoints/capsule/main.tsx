@@ -9,8 +9,7 @@ import '../pdf-reader/reader.css'
 import { Info } from 'lucide'
 import { StrictMode, useEffect, useState, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Capsule } from '@/pdf-reader/ui/Capsule'
-import { plain, withCount } from '@/pdf-reader/ui/capsule-words'
+import { Capsule, plain, withCount } from '@readarxiv/reader'
 
 type Stage = 'queued' | 'preparing' | 'translating' | 'typesetting'
 /** a moment of the run: its stage, the passages translated of all, the preview's pages; or a sentence of its own */

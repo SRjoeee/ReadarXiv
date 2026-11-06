@@ -1,17 +1,67 @@
-// The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
-// folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
-// per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back. The session is the
-// reading view the engine holds for both readers (§11.7) and the extension's run of a paper on its layer (session/host.ts,
-// session/run.ts), whose events fromView and the run turn into the ones below
-import { toBcp47 } from '@/config/languages'
-import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import type { ConfigReading } from '@/config/storage'
-import type { PackState } from '@/shared/pack'
-import { paperOf } from './addresses'
-import type { OutlineEntry } from './engine/view/outline'
-import type { ViewEvent } from './engine/view.mjs'
-import { PROVIDER_ERROR_KINDS, type ProviderErrorKind } from '@/providers/types'
-import { type EngineDisplay, LASTING, type SessionEvent, type SessionHost, type SyncMode, type Unavailable } from './session/events'
+// The one boundary between the reader and its chrome (the reader's design, §11.3): the session's events folded into a state
+// the chrome subscribes to, and the chrome's commands passed on to the session. pdfslick's per-viewer store, adopted: the
+// session's events drive the store, and nothing reads the viewers back. Either session feeds it: the extension's run of a
+// paper on its layer (its own events) or the reader's (openReader's state, told as these events); the chrome is the same.
+import type { ProviderErrorKind } from '@readarxiv/ui'
+import type { Prefs, PrefsPatch } from '../prefs.ts'
+
+export type EngineDisplay = 'original' | 'translation' | 'bilingual'
+/** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
+ *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
+ *  the reader), or for this language (`target`) */
+export type Unavailable = 'no-source' | 'no-pdf' | 'cannot-prepare' | 'unknown-versions' | 'refused' | 'unreachable' | 'target'
+/** the unavailable states that are the paper's or the language's, not a moment's */
+export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(['no-source', 'no-pdf', 'cannot-prepare', 'unknown-versions', 'target'])
+/** the sync as the chrome names it to a session: together, or off */
+export type SyncMode = 'same' | 'off'
+/** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
+export interface OutlineEntry { id: number; title: string; original: string; level: 1 | 2 | 3; page: number | null }
+export type SessionEvent =
+  /** a write of the settings by this page that went through: a refusal before it is mended */
+  | { type: 'saved' }
+  /** why the settings could not be read, or null when they could */
+  | { type: 'notice'; why: unknown }
+  /** a write of the settings that storage refused or could not make, after the notice of settings that cannot be read when that is why */
+  | { type: 'refused' }
+  /** the contents: the paper's headings */
+  | { type: 'outline'; entries: OutlineEntry[] }
+  /** the heading being read: the last one above the reading line on the pane read */
+  | { type: 'heading'; id: number | null }
+  /** the paper's id and its title for the toolbar, '' until known or when there is none */
+  | { type: 'paper'; id: string; title: string }
+  /** the panes scroll together, as the reader applies it */
+  | { type: 'sync'; on: boolean }
+  /** the visitor's preferences, each time they land (the one model, prefs.ts) */
+  | { type: 'prefs'; prefs: Prefs }
+  | { type: 'display'; mode: EngineDisplay }
+  /** `zoom`: the fit or the scale applied, null after a step or a pinch */
+  | { type: 'scale'; scale: number; zoom?: number | 'page-width' | 'page-fit' | 'page-actual' | null }
+  /** the paper's PDF coming in, in bytes: the progress line while the reader loads */
+  | { type: 'loading'; loaded: number; total: number }
+  | { type: 'page'; side: 'left' | 'right'; page: number; pages: number }
+  /** the original on screen: its pages laid out, in every display */
+  | { type: 'opened' }
+  /** the paper's HTML version with its translating hash, once the bilingual version cannot be had; null where arXiv has none */
+  | { type: 'html'; url: string | null }
+  /** the reader cannot go on: the original could not be fetched, the service cannot translate, or a crash; the chain's error
+   *  kind where it is the service's */
+  | { type: 'fail'; event: 'fetch failed' | 'service' | 'crashed'; text: string; kind?: ProviderErrorKind }
+  /** the paper's layer being prepared: told at each of our server's answers while it lasts */
+  | { type: 'preparing'; position: number | null; progress: number | null }
+  /** the layer is coming: a catalog, or a prepare's first objects */
+  | { type: 'coming' }
+  /** the layer's catalog: the paper's prepare, where there was one, is over */
+  | { type: 'prepared' }
+  /** the layer's side: opening, open, or refused (no layer for the visit), its pages laid, and (none where absent) the pages
+   *  asked near the view it shows as arXiv's by the rule, never laid */
+  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number; original?: number }
+  /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */
+  | { type: 'translating'; got: number; total: number; lost: number }
+  | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }
+  /** no bilingual version for now, or for this paper or language */
+  | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
+/** what a session is given: the panes it draws into, and where it tells its events */
+export interface SessionHost { left: HTMLElement; right: HTMLElement; emit(event: SessionEvent): void }
 
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'
@@ -68,8 +118,8 @@ export interface ReaderState {
   /** the refusals there were when a write of this page last went through: it proves storage takes a write, so a refusal
    *  before it is told no more (a retry that succeeds leaves no stale "couldn't save") */
   mended: number
-  /** the extension's settings as they last landed; null before the first read */
-  settings: Config | null
+  /** the visitor's preferences as they last landed; null before the first read */
+  prefs: Prefs | null
   /** the paper: its id from the address, its title once known ('' until then, or when there is none) */
   paper: { id: string; title: string }
   /** the address names no paper (a hand-typed one): known from the address, before any session: nothing to load, and
@@ -81,8 +131,6 @@ export interface ReaderState {
   outline: OutlineEntry[]
   /** the heading being read: the last one above the reading line on the side read; null before the first */
   currentHeading: number | null
-  /** the offline service's language pack, as the settings' surface knows it */
-  pack: PackState | null
   /** the zoom last chosen from the menu; null after a step or a pinch */
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
@@ -111,14 +159,13 @@ export const INITIAL: ReaderState = {
   settingsUnreadable: false,
   refusals: 0,
   mended: 0,
-  settings: null,
+  prefs: null,
   paper: { id: '', title: '' },
   noPaper: false,
   narrow: false,
   sync: true,
   outline: [],
   currentHeading: null,
-  pack: null,
   zoom: 'page-width',
 }
 
@@ -129,7 +176,8 @@ export interface Session {
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
-  patchSettings(change: (latest: Config) => Config): void
+  /** a patch of the preferences, on top of what the store holds when its turn comes */
+  setPrefs(patch: PrefsPatch): void
   /** the translation's bytes, to save (Task 20 fills it); null while there are none */
   pdfBytes(which: 'translation'): Promise<Uint8Array | null>
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
@@ -143,7 +191,8 @@ export interface Session {
 }
 
 /** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
-const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
+const ERROR_KINDS: readonly ProviderErrorKind[] = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown']
+const kindOf = (kind: string | undefined): ProviderErrorKind => (ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 /** the layer has drawn something: a failure then leaves the pages laid readable, its card not over them */
 const drawn = (state: ReaderState) => state.layer.laid > 0
 /** a page of the layer settled where the translation shows: laid, or shown as arXiv's by the rule (the side's `original`), where
@@ -199,8 +248,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return event.on === state.sync ? state : { ...state, sync: event.on }
     case 'html':
       return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
-    case 'settings':
-      return event.config === state.settings && event.pack === state.pack ? state : { ...state, settings: event.config, pack: event.pack }
+    case 'prefs':
+      return event.prefs === state.prefs ? state : { ...state, prefs: event.prefs }
     // a write of this page that went through: storage takes a write, so a refusal before it is told no more. Only that
     // proves it: the settings shown again (a language pack that came, a read, another tab's change) prove nothing
     case 'saved':
@@ -285,26 +334,6 @@ function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 
   }
 }
 
-/** the reading view's event as the session's (the reader's design, §11.7): what the interface's state is folded from. The
- *  original opened is `opened` (ready in every display), a PDF that could not be opened its fetch failure; the paper's id is
- *  the address's. None for what the interface does not hold (the original dropped) */
-export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
-  switch (event.type) {
-    case 'loading': return event
-    case 'opened': return { type: 'opened' }
-    case 'failed': return { type: 'fail', event: 'fetch failed', text: `Could not fetch ${paper}'s PDF (${event.error})`, kind: 'network' }
-    case 'paper': return { type: 'paper', id: paper, title: event.title }
-    case 'page': return { type: 'page', side: event.side, page: event.page, pages: event.pages }
-    case 'scale': return { type: 'scale', scale: event.scale, zoom: event.zoom }
-    case 'display': return { type: 'display', mode: event.display }
-    case 'sync': return { type: 'sync', on: event.on }
-    case 'outline': return event
-    case 'heading': return event
-    case 'layer': return { type: 'layer', state: event.state, laid: event.laid, total: event.total, ...(event.original ? { original: event.original } : {}) }
-    default: return null
-  }
-}
-
 /** a download's file name (the reader's design, §6.1): the paper's id, the translation's with its language; the slash of
  *  an old-style id (hep-th/9711200) made safe */
 export function fileName(id: string, which: 'translation' | 'original', lang: string): string {
@@ -321,8 +350,8 @@ export interface ReaderController {
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
-  /** a change of the extension's settings, on top of what storage holds when its turn comes */
-  patchSettings(change: (latest: Config) => Config): void
+  /** a patch of the preferences, on top of what the store holds when its turn comes */
+  setPrefs(patch: PrefsPatch): void
   /** a pinch over a side: both sides zoom together about the pointer, one call a frame (ui/pinch.ts) */
   pinch(side: Side, factor: number, origin: [number, number]): void
   /** translate again what is missing (Part 3: the page starts again; Part 4 in place) */
@@ -341,20 +370,19 @@ export interface ReaderController {
 const NO_PAPER: Partial<ReaderState> = { noPaper: true, phase: 'ready', available: false }
 
 /**
- * `reading`: the page's own first read of the settings (main.tsx, ui/first-read.ts), made before the first paint and not
- * waiting for the session, which is a heavy module that reads them again: the chrome is drawn with what storage holds
- * from its first frame. A read that did not answer in the time the page gave it (`null`) paints the defaults, and so does
- * one whose value cannot be read (its `fallbackReason`): both said to be unreadable (S-R-21). The session is handed it
- * (`SessionHost.reading`): one that did not answer is not waited on again, the PDF opens on the defaults, and the
- * session shows the settings as they come. Without `reading` nothing is known until the session says
+ * `paper`: the address's paper, '' when it names none (S-R-20: nothing to load, the card says so). `first`: the page's own
+ * first read of the preferences, made before the first paint and not waiting for the session: the chrome is drawn with what
+ * the store holds from its first frame. A read that did not answer in the time the page gave it (`prefs` null) paints the
+ * defaults (`DEFAULTS`), and so does one whose value cannot be read: both said to be unreadable (S-R-21). Without `first`
+ * nothing is known until the session says
  */
-export function createController({ open, params, reading }: { open: (host: SessionHost) => Promise<Session>; params: URLSearchParams; reading?: ConfigReading | null }): ReaderController {
-  const id = paperOf(params)
+export function createController({ open, paper, first, defaults }: { open: (host: SessionHost) => Promise<Session>; paper: string; first?: { prefs: Prefs | null; unreadable: boolean }; defaults: Prefs }): ReaderController {
+  const id = paper
   let state: ReaderState = {
     ...INITIAL,
     paper: { id, title: '' },
     ...(id ? {} : NO_PAPER),
-    ...(reading === undefined ? {} : { settings: reading?.config ?? DEFAULT_CONFIG, settingsUnreadable: !reading || reading.fallbackReason !== null }),
+    ...(first === undefined ? {} : { prefs: first.prefs ?? defaults, settingsUnreadable: !first.prefs || first.unreadable }),
   }
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
@@ -386,7 +414,7 @@ export function createController({ open, params, reading }: { open: (host: Sessi
     },
     attach(panes) {
       // a session that cannot be opened (its module not loaded) is a failure the interface shows, as a crash is
-      session ??= open({ ...panes, params, emit, ...(reading === undefined ? {} : { reading }) }).catch((e: unknown) => {
+      session ??= open({ ...panes, emit }).catch((e: unknown) => {
         emit({ type: 'fail', event: 'crashed', text: String((e as Error)?.message ?? e) })
         throw e
       })
@@ -398,7 +426,7 @@ export function createController({ open, params, reading }: { open: (host: Sessi
     zoomBy: factor => { set({ zoom: null }); later(s => s.zoomBy(factor)) },
     zoomTo: value => { set({ zoom: value }); later(s => s.zoomTo(value)) },
     goToPage: (side, page) => later(s => s.goToPage(side, page)),
-    patchSettings: change => later(s => s.patchSettings(change)),
+    setPrefs: patch => later(s => s.setPrefs(patch)),
     goToHeading: id => later(s => s.goToUnit(id)),
     lead: side => later(s => s.lead(side)),
     // a session that could not open is retried as the page first was: loaded again (PDF-READER §11.3)
@@ -415,7 +443,7 @@ export function createController({ open, params, reading }: { open: (host: Sessi
       if (which === 'original') { s?.openOriginal(); return }
       const bytes = await s?.pdfBytes(which)
       if (!bytes) return
-      const lang = state.settings ? toBcp47(state.settings.targetLanguage) : ''
+      const lang = state.prefs?.target ?? ''
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' })), download: fileName(state.paper.id, which, lang) })
       a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 1000)

@@ -66,6 +66,8 @@
     "@ai-sdk/openai-compatible": "^3.0.43",
     "@cantoo/pdf-lib": "2.11.1",
     "@readarxiv/engine": "workspace:*",
+    "@readarxiv/format": "workspace:*",
+    "@readarxiv/reader": "workspace:*",
     "@readarxiv/ui": "workspace:*",
     "ai": "^7.0.91",
     "dexie": "^4.4.5",

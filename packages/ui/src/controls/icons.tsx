@@ -1,7 +1,8 @@
 // The display switch's own three icons on a 24 × 18 pane, the maintainer's round 11 (2026-09-25): its frame 1 px too,
 // as Lucide's beside it (@/ui/controls/Icon), its edges on the pixel grid, the split drawn crisp; the letters filled (§6.2)
-import type { Display } from '../controller'
-import { GLYPH_A, GLYPH_WEN } from './display-glyphs'
+/** the reader's three displays, as its icons draw them */
+type Display = 'original' | 'bilingual' | 'translation'
+import { GLYPH_A, GLYPH_WEN } from './display-glyphs.ts'
 
 /** U+6587 is narrowed to 0.76 of its width: a stroke this wide round its outline gives back the weight its verticals lost */
 export const WEN_GAIN = 0.18

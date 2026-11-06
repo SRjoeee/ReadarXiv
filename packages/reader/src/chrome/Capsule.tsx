@@ -8,8 +8,8 @@
 import { type IconNode, Loader } from 'lucide'
 import { type HTMLAttributes, type ReactNode, useLayoutEffect, useRef } from 'react'
 import { Icon } from '@readarxiv/ui'
-import { capsuleMotion, type Motion } from './capsule-motion'
-import { type CapsuleWords, textOf } from './capsule-words'
+import { capsuleMotion, type Motion } from './capsule-motion.ts'
+import { type CapsuleWords, textOf } from './capsule-words.ts'
 
 export interface CapsuleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   kind: string

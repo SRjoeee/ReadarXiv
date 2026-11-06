@@ -1,23 +1,9 @@
 /* The PDF reader's page (the reader's design, §4, §5, §11.5): the extension's tokens and shared controls (tokens.css,
-   controls.css) and not the pages' ui.css, with Tailwind's theme and utilities and **without Preflight**, whose resets
+   controls.css) and not the pages' ui.css, with Tailwind's theme and utilities (a host's page sheet imports them before this
+   one, with the sources it scans: src/entrypoints/pdf-reader/reader.css) and **without Preflight**, whose resets
    would reach inside PDF.js's viewers: their layout assumes the browser's defaults (a box-sizing of ours once shifted
    the highlight, 2026-09-22). The chrome — every control the page draws — takes its own small base under the class
    `chrome`; the viewers keep theirs */
-@layer theme, base, components, utilities;
-@import "tailwindcss/theme.css" layer(theme);
-/* the utilities of the reader's own sources: Tailwind's scan of the whole tree brought the settings page's in, a :has()
-   among them (Part 3's final review; tests/styles/no-has.test.ts) */
-@import "tailwindcss/utilities.css" layer(utilities) source(none);
-@source "./";
-@source "../../pdf-reader/";
-/* not the engine's modules: they draw no utility, and Tailwind reads comments, which had put `.table { display: table }`
-   into this sheet from one of theirs (the redesign's Part 3) */
-@source not "../../pdf-reader/engine/";
-/* the menu rows moved there (src/ui/controls/MenuList.tsx) draw the utilities they drew here (the redesign's Part 3).
-   That one file, not the directory: Tailwind reads comments as well as class lists, and the directory brought in `.grow`
-   from two comments; a word such as hidden or table in another control's comment would restyle PDF.js's own classes */
-@source "../../../packages/ui/src/controls/MenuList.tsx";
-
 /* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
    src/shared/tokens.ts; the reader's own layout values stay below */
 @import "@readarxiv/ui/tokens.css";

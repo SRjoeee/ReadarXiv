@@ -2,7 +2,7 @@
 // part it shows, and renders again only when that part changes: a page turned in a pane renders its pill, not the page
 // (the final review: every event rendered the whole interface, a pinch twice a frame)
 import { useRef, useSyncExternalStore } from 'react'
-import type { ReaderController, ReaderState } from '../controller'
+import type { ReaderController, ReaderState } from './model.ts'
 
 export function useReader<T>(controller: ReaderController, select: (state: ReaderState) => T): T {
   const last = useRef<{ value: T } | null>(null)

@@ -4,10 +4,10 @@
 // the focus and the tooltip), so that the bar does not reflow when the settings arrive (P3-M16); the tooltip tells the
 // reason once it is known, not for the short time before the first answer
 import { R } from '@readarxiv/ui'
-import type { ReaderController } from '../controller'
-import { useReader } from './use-reader'
+import type { ReaderController } from './model.ts'
+import { useReader } from './use-reader.ts'
 
 export function useSettingsLock(controller: ReaderController): { locked: boolean; why: string | undefined } {
-  const { landed, unreadable } = useReader(controller, s => ({ landed: s.settings !== null, unreadable: s.settingsUnreadable }))
+  const { landed, unreadable } = useReader(controller, s => ({ landed: s.prefs !== null, unreadable: s.settingsUnreadable }))
   return { locked: !landed || unreadable, why: unreadable ? R.status.unreadableHint : undefined }
 }

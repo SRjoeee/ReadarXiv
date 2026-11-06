@@ -3,8 +3,10 @@
 
 // the control kit (the redesign's Part 3)
 export * from './controls/Button.tsx'
+export * from './controls/display-glyphs.ts'
 export * from './controls/Field.tsx'
 export * from './controls/Icon.tsx'
+export * from './controls/icons.tsx'
 export * from './controls/Kbd.tsx'
 export * from './controls/MenuList.tsx'
 export * from './controls/menu-nav.ts'

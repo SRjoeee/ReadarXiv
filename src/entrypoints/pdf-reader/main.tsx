@@ -2,18 +2,21 @@ import 'pdfjs-dist/web/pdf_viewer.css'
 import '@/styles/image.css'
 import '@/pdf-reader/engine/view/engine.css'
 import './reader.css'
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { createController } from '@/pdf-reader/controller'
-import type { SessionHost } from '@/pdf-reader/session/events'
+import { createController, mountChrome } from '@readarxiv/reader'
 import { trackModality } from '@readarxiv/ui'
+import { browser } from 'wxt/browser'
+import { DEFAULT_CONFIG } from '@/config/schema'
 import { readConfig } from '@/config/storage'
+import { LOOPBACK_ALLOWED, paperOf } from '@/pdf-reader/addresses'
+import { chromeLanguages } from '@/pdf-reader/host/languages'
+import { settingsUrl } from '@/pdf-reader/host/links'
+import { prefsOf } from '@/pdf-reader/host/prefs'
+import { extensionSlots } from '@/pdf-reader/host/slots'
+import { configStore, todayOpen } from '@/pdf-reader/host/today'
+import { frameOwner } from '@/shared/frame-owner'
 import { applyPageLocale } from '@/ui/apply-locale'
 import { answeredBy, firstReadTime } from '@/ui/first-read'
-import { browser } from 'wxt/browser'
-import { LOOPBACK_ALLOWED } from '@/pdf-reader/addresses'
-import { frameOwner } from '@/shared/frame-owner'
-import { App } from './App'
+import { reasonText } from '@/ui/strings'
 
 /**
  * The manifest key that lets a reader that is no frame act: only the harness's copy of a release build carries it
@@ -36,15 +39,27 @@ const vouched = await owner
 if (vouched !== null && (vouched.framed || topLevel)) {
   applyPageLocale(reading?.config.uiLanguage)
   const params = new URLSearchParams(location.search)
-  // the session opens once the panes are there (App.tsx attach): the reading view over arXiv's PDF and the paper's layer
-  const open = async (host: SessionHost) => (await import('@/pdf-reader/session/host')).openReader(host)
-  const controller = createController({ open, params, reading })
+  // the chrome over today's session (host/today.ts): the reading view over arXiv's PDF and the paper's layer, opened once
+  // the panes are there (the chrome's App attach), the extension's configuration as the one preference model
+  const store = configStore(reading?.config ?? null)
+  const defaults = prefsOf(DEFAULT_CONFIG)
+  const controller = createController({
+    open: todayOpen({ params, reading, store }),
+    paper: paperOf(params),
+    first: { prefs: reading ? prefsOf(reading.config) : null, unreadable: !reading || reading.fallbackReason !== null },
+    defaults,
+  })
   // the focus rings are the keyboard's (modality.ts)
   trackModality()
-
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App controller={controller} embedded={params.get('embedded') === '1'} />
-    </StrictMode>,
-  )
+  mountChrome(document.getElementById('root')!, {
+    controller,
+    parts: {
+      slots: extensionSlots({ controller, store, embedded: params.get('embedded') === '1' }),
+      languages: chromeLanguages(),
+      // a key's reason is the key's only where the service chosen carries one (#88 E5)
+      reason: kind => reasonText(kind, store.state().config?.provider),
+      settingsHref: settingsUrl(),
+      defaults,
+    },
+  })
 }

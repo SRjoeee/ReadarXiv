@@ -1,26 +1,36 @@
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ReaderController, Side } from '@/pdf-reader/controller'
-import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from '@/pdf-reader/ui/appearance'
-import { FailureCard } from '@/pdf-reader/ui/FailureCard'
-import { Outline } from '@/pdf-reader/ui/Outline'
-import { PagePill } from '@/pdf-reader/ui/PagePill'
-import { ScrollIndicator } from '@/pdf-reader/ui/ScrollIndicator'
-import { useScrollShow } from '@/pdf-reader/ui/scroll-show'
-import { usePinch } from '@/pdf-reader/ui/pinch'
-import { cardOf } from '@/pdf-reader/ui/status'
-import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
-import { Toolbar } from '@/pdf-reader/ui/Toolbar'
-import { useReader } from '@/pdf-reader/ui/use-reader'
+import type { ReaderController, Side } from './model.ts'
+import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from './appearance.ts'
+import { FailureCard } from './FailureCard.tsx'
+import { Outline } from './Outline.tsx'
+import { PagePill } from './PagePill.tsx'
+import { ScrollIndicator } from './ScrollIndicator.tsx'
+import { useScrollShow } from './scroll-show.ts'
+import { usePinch } from './pinch.ts'
+import { cardOf } from './status.ts'
+import { StatusCapsule } from './StatusCapsule.tsx'
+import { Toolbar } from './Toolbar.tsx'
+import { type Parts, PartsProvider, useParts } from './parts.tsx'
+import { useReader } from './use-reader.ts'
 
 /**
  * The reader's page (the reader's design, §5): the toolbar, the contents, the document area with its two panes (the
  * engine draws into their scrollers, and owns them), and what floats over them. The panes' ids are the probes' too
  */
-export function App({ controller, embedded }: { controller: ReaderController; embedded: boolean }) {
+export function App({ controller, parts }: { controller: ReaderController; parts: Parts }) {
+  return (
+    <PartsProvider value={parts}>
+      <Page controller={controller} />
+    </PartsProvider>
+  )
+}
+
+function Page({ controller }: { controller: ReaderController }) {
+  const { reason } = useParts()
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
-  const state = useReader(controller, s => ({ appearance: s.settings?.theme, dimPages: s.settings?.pdfReader.dimPages, swapped: s.settings?.pdfReader.swapped ?? false, title: s.paper.title, card: cardOf(s) !== null && !s.noPaper, noPaper: s.noPaper }))
+  const state = useReader(controller, s => ({ appearance: s.prefs?.theme, dimPages: s.prefs?.dim, swapped: s.prefs?.swapped ?? false, title: s.paper.title, card: cardOf(s, reason) !== null && !s.noPaper, noPaper: s.noPaper }))
   const doc = useRef<HTMLElement>(null)
   usePinch(controller, doc)
   // a document area under 840 px shows the translation alone in side by side (the design, §5); the session applies it
@@ -65,7 +75,7 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   useEffect(() => { if (state.title) document.title = state.title }, [state.title])
   return (
     <>
-      <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />
+      <Toolbar controller={controller} contents={contents} onContents={() => setContents(open => !open)} />
       <Outline controller={controller} open={contents} />
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
           accessibility audit); its layout is the class's */}

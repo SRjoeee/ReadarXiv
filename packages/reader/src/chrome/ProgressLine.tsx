@@ -3,9 +3,9 @@
 // one line that never starts again (the maintainer, 2026-10-02). It grows by a transform, on the compositor; it fades
 // out at the length it reached. Decorative: the capsule says in words what is under way, in the status region
 import { useRef } from 'react'
-import type { ReaderController } from '../controller'
-import { lineOf } from './status'
-import { useReader } from './use-reader'
+import type { ReaderController } from './model.ts'
+import { lineOf } from './status.ts'
+import { useReader } from './use-reader.ts'
 
 /** a stage just begun still shows, as a sliver */
 const START = 0.02

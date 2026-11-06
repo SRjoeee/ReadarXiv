@@ -5,7 +5,7 @@
 import { type CSSProperties, useState } from 'react'
 import { BUILT_IN_STYLES } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
-import { languageItems } from '@/pdf-reader/ui/languages'
+import { languageItems } from '@/pdf-reader/host/languages'
 import { styleSample } from '@/ui/style-sample'
 import { Button, MenuList, type MenuListItem, Popover, shut, usePopover, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
 import { profileName } from '@/ui/strings'

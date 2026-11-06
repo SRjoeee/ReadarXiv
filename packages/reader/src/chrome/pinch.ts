@@ -4,7 +4,7 @@
 // frame's steps however small: the view carries what PDF.js's rounding to a hundredth leaves of each (reader-view.mjs
 // pinch). ⌘ and Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages
 import { type RefObject, useEffect } from 'react'
-import type { ReaderController, Side } from '../controller'
+import type { ReaderController, Side } from './model.ts'
 
 export const wheelStep = (deltaY: number) => (Math.abs(deltaY) >= 40 ? Math.sign(deltaY) * 0.1 : deltaY * 0.01)
 
