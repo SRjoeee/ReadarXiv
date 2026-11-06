@@ -43,6 +43,7 @@ import {
 } from './kinds.ts'
 import {
   adjacent,
+  analyse,
   bodyFile,
   canonical,
   definitionAt,
@@ -325,14 +326,20 @@ class Walker {
           // (today's reading of empty lines, kept so that the units' ids are today's: it takes a line end and the empty line
           // after it as one \par, two by two, and a comment's own empty line after it only where a unit is open; a line end
           // left over begins the next text, as a blank. TeX reads all of them as one \par: only blanks differ)
-          const prevComment = toks[i - 1]?.k === 'comment'
+          // (a comment's empty line may begin with blanks TeX skips: the comment is the token before them)
+          let j = i - 1
+          while ((toks[j] as Token | undefined)?.k === 'space' && (toks[j] as { skipped?: true }).skipped) j--
+          const prevComment = toks[j]?.k === 'comment'
+          const open = !!b.cur
           endText()
           let n = 0
           for (let k = t.s; k < t.e; k++) if (f.text.charCodeAt(k) === 10) n++
-          if (prevComment && b.cur) n--
+          if (prevComment && open) n--
           b.flush()
           if (n % 2 === 1) {
-            textStart = t.e - 1
+            // (the line end left over, and, after a comment where no unit was open, the blanks before it: today's reading
+            // goes on from the comment's line end as text)
+            textStart = prevComment && !open && j + 1 < i ? (toks[j + 1] as Token).s : t.e - 1
             textEnd = t.e
           }
           i++
@@ -1757,7 +1764,17 @@ function paperFacts(
         // (its body where it stands: the last of the paper's definitions whose body is the one TeX holds)
         const held = canonical(mac.body)
         const site = (sites.get(n) ?? []).findLast((x) => canonical(x.file.src(x.a, x.b)) === held)
-        if (site) mac.site = site
+        if (site) {
+          // (what its body does with its arguments read on the paper's own text of it, which TeX's \meaning respaces: a
+          // blank after a control word there is TeX's writing, not the paper's)
+          mac.site = site
+          mac.body = site.file.src(site.a, site.b)
+          delete mac.prose
+          delete mac.stores
+          delete mac.tail
+          delete mac.words
+          analyse(n, mac, isCall)
+        }
         macros.set(n, mac)
       }
       const body = m.body.trim()
