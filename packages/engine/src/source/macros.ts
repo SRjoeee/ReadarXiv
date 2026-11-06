@@ -429,12 +429,17 @@ const UNITS = new Set([
  *  tokens (no comment or verbatim text counts) */
 const DEFINERS =
   /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator)$/
+/** the definers of a theorem-like environment (the kernel's \newtheorem, llncs', elsarticle's, mdframed's, thmtools') */
+const THEOREM_DEFINERS =
+  /^(?:newtheorem|spnewtheorem|newmdtheoremenv|newproof|newdefinition|newexample|newremark|declaretheorem)$/
 /** the definers of an environment, its name a group after them (the kernel's, xparse's, the packages' that make one) */
 const ENV_DEFINERS =
   /^(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|(?:Custom|Recustom|Define)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing|newminted)$/
 export function ownNames(files: readonly SourceFile[]): {
   commands: Set<string>
   envs: Set<string>
+  /** the environments it defines by a theorem's definer */
+  theorems: Set<string>
   /** each name's definitions' bodies, in the files' order (null where its definer has none the reader finds) */
   bodies: Map<string, (string | null)[]>
   /** each name's definitions' bodies where they stand */
@@ -445,6 +450,7 @@ export function ownNames(files: readonly SourceFile[]): {
 } {
   const out = new Set<string>()
   const envs = new Set<string>()
+  const theorems = new Set<string>()
   const bodies = new Map<string, (string | null)[]>()
   const sites = new Map<string, Site[]>()
   const written = new Map<string, number>()
@@ -452,6 +458,17 @@ export function ownNames(files: readonly SourceFile[]): {
   for (const f of files) {
     for (let i = 0; i < f.toks.length; i++) {
       const t = f.toks[i] as Token
+      if (t.k === 'cs' && THEOREM_DEFINERS.test(t.name)) {
+        // a theorem's name: the group after the definer's star and options (each name of a list)
+        let k = skipBlanks(f, i + 1, f.toks.length)
+        if (isOther(f.toks[k], '*')) k = skipBlanks(f, k + 1, f.toks.length)
+        if (isOther(f.toks[k], '[')) {
+          while (k < f.toks.length && !isOther(f.toks[k], ']')) k++
+          k = skipBlanks(f, k + 1, f.toks.length)
+        }
+        const c = isBegin(f.toks[k]) ? (f.close[k] ?? -1) : -1
+        if (c > 0) for (const n of f.src(k + 1, c).split(',')) if (n.trim() && !/[\\{}]/.test(n)) theorems.add(n.trim())
+      }
       if (t.k === 'cs' && ENV_DEFINERS.test(t.name)) {
         // an environment's name, in a group: each name of a list (comment.sty's \excludecomment{a,b})
         let k = skipBlanks(f, i + 1, f.toks.length)
@@ -496,7 +513,7 @@ export function ownNames(files: readonly SourceFile[]): {
     }
   }
   for (const f of files) for (const t of f.toks) if (t.k === 'cs') written.set(t.name, (written.get(t.name) ?? 0) + 1)
-  return { commands: out, envs, bodies, sites, written, defined }
+  return { commands: out, envs, theorems, bodies, sites, written, defined }
 }
 
 /** a body as TeX holds it, for comparing the paper's definition with TeX's meaning: a control word and a blank, one blank

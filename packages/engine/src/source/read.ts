@@ -1706,6 +1706,12 @@ class Walker {
   }
 }
 
+/** the theorem-like environments the common classes define themselves */
+const THEOREM_NAMES = ['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example']
+/** a float's begin as LaTeX makes one (\newfloat, algorithm2e, float.sty): its optional placement, by default `htbp` */
+const isFloat = (m: { k: string; body?: string } | undefined): boolean =>
+  m?.k === 'macro' && /^\\@protected@testopt \\[A-Za-z@*]+ \\\\[A-Za-z@*]+ \{[htbpH!]*\}$/.test((m.body ?? '').trim())
+
 /** whether TeX holds a command of that name at the document's start (neither undefined nor \relax, as \csname leaves one) */
 const definitions = (defs: Definitions, n: string): boolean => {
   const m = defs.names.get(n)?.meaning
@@ -1929,18 +1935,13 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     bindings,
     own,
     macros: facts.macros,
+    // the theorem-like environments: those the paper defines by a theorem's definer (\newtheorem and its kin), the common
+    // ones the classes define themselves, and those TeX's meanings show set a run-in head; not one TeX holds as a float (a
+    // \newtheorem{algorithm} where algorithm2e's float stands: LaTeX keeps the first definition)
     theorems: new Set(
-      [
-        ...facts.theorems,
-        'proof',
-        'theorem',
-        'lemma',
-        'corollary',
-        'proposition',
-        'definition',
-        'remark',
-        'example',
-      ].filter((x) => facts.theorems.has(x) || !definitions.names.has(x)),
+      [...names.theorems, ...THEOREM_NAMES, ...facts.theorems].filter(
+        (x) => !isFloat(definitions.names.get(x)?.meaning),
+      ),
     ),
     displayEnvs: facts.displayEnvs,
     skipEnvs: codeEnvs(definitions, ownEnv, lines),
