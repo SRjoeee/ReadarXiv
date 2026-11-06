@@ -94,6 +94,12 @@ describe('unitId', () => {
     expect(unitId('para', a)).not.toBe(unitId('para', [{ t: 'el', id: '1', kind: 'cite', src: '\\cite{b}' }]))
     expect(unitId('para', a)).not.toBe(unitId('caption', a))
   })
+  it('a display’s own stop is read by the schema and is not in the id (it is part of its source)', () => {
+    const d: Piece[] = [{ t: 'el', id: '0', kind: 'display', src: '\\[ x = y. \\]', stop: '.' }]
+    const units: Units = { format: 1, units: [{ id: unitId('para', d), kind: 'para', content: d }] }
+    expect(read('units', write('units', units).bytes).units[0]?.content[0]).toEqual(d[0])
+    expect(unitId('para', d)).toBe(unitId('para', [{ t: 'el', id: '0', kind: 'display', src: '\\[ x = y. \\]' }]))
+  })
 })
 
 describe('sha256', () => {
