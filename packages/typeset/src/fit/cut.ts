@@ -4,7 +4,7 @@
 import { pageCutsOf, withPageBreaks } from '../breaker/cuts.types.ts'
 import { layoutAt } from './at.ts'
 import type { FitBlock, FitParams, Layout, Tokens } from './types.ts'
-import { layoutUnit2 } from './walk.types.ts'
+import { layoutUnit2 } from './walk.ts'
 
 /**
  * A unit laid over its frame breaks (a page's, a column's): as without them, the fit's states searched once; where that

@@ -448,7 +448,7 @@ const SPECS: readonly RuleSpec[] = [
       'fit.floor',
       'fit.step',
     ],
-    file: 'fit/walk.mjs',
+    file: 'fit/walk.ts',
     state: {
       is: 'ported',
       replay:
@@ -802,7 +802,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-30 frames fill as TeX does; a block lights whole',
     reads: [],
-    state: open,
+    file: 'emit/groups.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "hand-made members held to today's unitHiding (tests/unit/groups.test.ts): off bits, shown ink; a group in Placed.fixed never off",
+      cases: 9,
+    },
   },
   {
     id: 'D.display',
@@ -832,7 +838,13 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     reads: ['tex.copySpace'],
-    state: open,
+    file: 'emit/text.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "segsOfUnit against today's on every laid unit's every page of the corpus (lab/typeset/replay-emit.mjs): 308,051 segments; textLayer against textLayerOf on hand-made pages, groups for hide operations",
+      cases: 308051,
+    },
   },
   {
     id: 'D.links',
@@ -842,7 +854,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['links.mjs:344-369 matchUnit (owners stated)', 'links.mjs:485 placeUnit', 'RUN:1044-1128 linkUnit'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'emit/links.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "placeUnit against today's on every laid unit of the corpus (lab/typeset/replay-emit.mjs): 70,174 records over 14,359 units; matchUnit's tiers and pairs on hand-made cases (the baseline records no links)",
+      cases: 70174,
+    },
   },
   {
     id: 'D.sentences',
@@ -852,7 +870,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['words.mjs:212-267 addUnitWords', 'words.mjs:159-169 tokenBand', 'L2:4718 keptLines'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'emit/sentences.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "addUnitWords against today's on every laid unit's every page of the corpus (lab/typeset/replay-emit.mjs): 1,914,671 tokens; keptLines and the kept ink on hand-made cases",
+      cases: 1914671,
+    },
   },
   // ---------------------------------------------------------------- facts the prepare states (lane L1, packages/engine)
   {

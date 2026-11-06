@@ -5,7 +5,7 @@
 import { textless } from '../breaker/cuts.types.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from './types.ts'
-import { layoutUnit2 } from './walk.types.ts'
+import { layoutUnit2 } from './walk.ts'
 
 /** a run of a unit between its kept regions: its first block, its blocks and its tokens (and each token's place in the
  *  unit's, `idx`); once laid, its parameters and layout */

@@ -151,7 +151,7 @@ export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoo
 export { type Broken, breakLines, lineExtent } from './breaker/break.types.ts'
 export { type Cut, pageCutsOf, textless, withPageBreaks } from './breaker/cuts.types.ts'
 export { laidOut } from './breaker/place.types.ts'
-export { layoutUnit2, statesOf } from './fit/walk.types.ts'
+export { layoutUnit2, statesOf } from './fit/walk.ts'
 export { layoutCut } from './fit/cut.ts'
 export { layoutAt } from './fit/at.ts'
 export { toLastLines } from './fit/last-lines.ts'
@@ -219,6 +219,42 @@ export {
   type TextItem,
   type TextRun,
 } from './emit/display.ts'
+export { displayIdsOf, type GroupEl, type GroupsInput, groupsOff, type Shown } from './emit/groups.ts'
+export {
+  type Compact,
+  type Drawn,
+  nameSeg,
+  segsOfUnit,
+  TEXT_ITEMS_MAX,
+  type TextItem as LayerItem,
+  textLayer,
+  type TextSeg,
+} from './emit/text.ts'
+export {
+  addUnitWords,
+  type KeptInput,
+  type KeptLine,
+  keptLines,
+  newWords,
+  tokenBand,
+  type Words,
+} from './emit/sentences.ts'
+export {
+  type Annot,
+  type Cand,
+  DRIFT_BOUND,
+  kindOfAnnot,
+  type LinkKind,
+  type LinkRecord,
+  linkKindOf,
+  matchUnit,
+  placeUnit,
+  type RunLine,
+  singleTarget,
+  type Target,
+  urlOf,
+  WORK_MAX,
+} from './emit/links.ts'
 export { layMember, type MemberLay, type Prepared } from './lay/member.ts'
 export { type FlowLay, type FlowMember, layFlowPrepared } from './lay/flow.ts'
 export { layPagePrepared, type PageMember, type PreparedPage } from './lay/page.ts'

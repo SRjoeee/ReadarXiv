@@ -116,16 +116,6 @@ const FILES = {
       ['lineExtent(b, f, st.scale)', 'lineExtent(b, f, st.scale, P.measure)', 1],
     ],
   },
-  'fit/walk.mjs': {
-    rule: 'X.walk',
-    head: ['// X.walk (design-b §1.5, T31): the fit\'s states, from the most natural, each knob taken to its bound before the next, and',
-      '// a unit laid at the first state at which every token is placed. Today\'s code (layer2.mjs L2:4040-4134), moved by',
-      '// lab/typeset/move-fit.mjs; typed by walk.types.ts.'],
-    imports: ["import { breakLines } from '../breaker/break.mjs'", "import { laidOut } from '../breaker/place.mjs'", "import { slotsAt } from '../breaker/slots.mjs'"],
-    names: ['statesOf', 'sameState', 'sharedStates', 'layoutUnit2'],
-    exports: ['statesOf'],
-    changes: [['    work.fit++\n', '', 1]],
-  },
   'shared/fill-leads.mjs': {
     rule: 'S.fill.leads',
     from: 'run',
@@ -184,6 +174,7 @@ const PORTED = {
   'fit/at.ts': ['layoutAt'], 'fit/cut.ts': ['layoutCut'], 'fit/last-lines.ts': ['toLastLines'],
   'shared/share.ts': ['onShare', 'inkEndOf', 'shareOf', 'keepsShare'],
   'fit/runs.ts': ['runsOf', 'runParams', 'layoutRuns', 'joinRuns', 'keepsPages'],
+  'fit/walk.ts': ['statesOf', 'sameState', 'sharedStates', 'layoutUnit2'],
 }
 let differ = 0
 const moved = new Set()

@@ -1,7 +1,7 @@
 // I6 on table metrics (design-a §1.4, design-b §1.8): the composition is deterministic. A pair laid page by page twice from the
 // same prepared members (gate.ts gatePair) gives deep-equal dumps, and each member on two pages is laid alike from each page's
-// part. Not yet whole: the walk writes `free` on the blocks it is handed (today's), which the TypeScript port of walk.mjs
-// copies first (the lane file's Next).
+// part. The walk writes `free` only on a block whose borrow room is not stated (`freeOf`, today's lazy measure; the parts
+// state it as Room.below).
 import { describe, expect, it } from 'vitest'
 import { gatePair } from './gate.ts'
 import { hasDerived, hasTap } from './tap.ts'
