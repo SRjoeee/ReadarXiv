@@ -148,6 +148,34 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.units[1]).toMatchObject({ id: unitId('inkcontents', heading.content), content: heading.content, echo: 0 })
   })
+
+  it('makes a unit of A’s text where A sets text our compile does not, its glyphs among it', () => {
+    // (2610.21084v1's e-mail block: arXiv's page sets the initials our compile does not; the unit made on A is A's text)
+    const B = docOf([
+      {
+        lines: ['Running Title', 'Body text here'],
+        points: [
+          ['bs1', 13],
+          ['be1', 27],
+        ],
+      },
+    ])
+    const A = docOf([{ lines: ['Running XY Title', 'Body text here'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const head = L.members.find((m) => m.kind === 'inkheads')!
+    expect(L.units[head.unit]!.id).toBe(unitId('inkheads', [text('Running XY Title')]))
+    expect(head).toMatchObject({ located: true })
+    expect(L.born.size).toBe(0)
+  })
+
+  it('reads a glyph as an included figure’s where its partner on B is one, A’s form flattened', () => {
+    const B = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640, form: true }] }])
+    const A = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640 }] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph')], [[0, -1]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.units[1]).toMatchObject({ kind: 'inkfigures', content: [text('Loss')] })
+  })
 })
 
 describe('carry: B’s marks onto A’s stream', () => {

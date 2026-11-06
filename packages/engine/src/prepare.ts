@@ -50,6 +50,8 @@ export async function* prepareBack(
   const read = await readPdf(deps.pdfjs, original, {
     options: deps.pdfOptions ?? {},
     turned: true,
+    // (every path's lines: the figure texts locate makes on A read a figure's lines where B's pictures and forms say it is one)
+    shapesAll: true,
     extra: (OPS, ops) => alignOf(OPS, ops),
     annotations: true,
     // (each font's own map: a glyph it gives no Unicode of is no reading of its text, A17)

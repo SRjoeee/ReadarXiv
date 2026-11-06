@@ -67,13 +67,37 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
   const carried = carry(ins.ink, inkA, m, o.pageA)
   // ---- each A page as today's makers read one, its glyphs' and boxes' owners
   const turnedOwned = inkA.pages.map((pg) => new Array<string | null>(pg.turned?.length ?? 0).fill(null))
+  // (a turned glyph's partner on B: whether TeX showed it in an included figure)
+  const turnedForm = inkA.pages.map((pg) => new Array<boolean | null>(pg.turned?.length ?? 0).fill(null))
+  ins.ink.pages.forEach((pg, p) => {
+    ;(pg.turned ?? []).forEach((t, j) => {
+      const ap = m.turnedPage[p]?.[j] ?? 0
+      if (ap > 0) turnedForm[ap - 1]![m.turnedIndex[p]![j] as number] = t.form
+    })
+  })
   ;(ins.turned ?? []).forEach((ow, p) => {
     for (let j = 0; j < ow.unit.length; j++) {
       const ap = m.turnedPage[p]?.[j] ?? 0
       if ((ow.unit[j] as number) >= 0 && ap > 0) turnedOwned[ap - 1]![m.turnedIndex[p]![j] as number] = 'u'
     }
   })
-  const pages: TodayPage[] = inkA.pages.map((pg, i) => pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!))
+  // (whether a glyph is shown in an included figure, and which: its partner's on B, where it has one, as TeX included it; arXiv's
+  // producer may have flattened the figure's form)
+  const B = ins.ink
+  const pageB = new Int32Array(m.offB[B.pages.length] as number)
+  B.pages.forEach((pg, p) => {
+    pageB.fill(p + 1, m.offB[p] as number, (m.offB[p] as number) + pg.glyphs.length)
+  })
+  const formOf = (i: number, j: number): { form: boolean; fid: number | undefined } | null => {
+    const b = m.aToB[(m.offA[i] as number) + j] as number
+    if (b < 0) return null
+    const p = (pageB[b] as number) - 1
+    const g = B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
+    return { form: g.form, fid: g.fid }
+  }
+  const pages: TodayPage[] = inkA.pages.map((pg, i) =>
+    pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
+  )
   const own: { glyphs: (string | null)[][]; boxes: (string | null)[][] } = {
     glyphs: inkA.pages.map((pg, i) =>
       Array.from({ length: pg.glyphs.length }, (_, j): string | null =>
@@ -267,13 +291,20 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
       }
       return null
     }
-    const boxOf = (P: number, g: number) => {
+    // (its box count likewise: before the partner of the first box from it on that has one on its A page, else after the last
+    // one before it that has one there, else the boxes before its glyph)
+    const nb = pg.kinds.length
+    const bp = m.boxPage[p]
+    const bi = m.boxIndex[p]
+    const boxOf = (P: number, g: number, count: number) => {
+      for (let x = count; x < nb; x++) if (bp?.[x] === P) return bi![x] as number
+      for (let x = Math.min(count, nb) - 1; x >= 0; x--) if (bp?.[x] === P) return (bi![x] as number) + 1
       const A = inkA.pages[P - 1]!
       return A.boxAt[g] ?? A.kinds.length
     }
     const put = (x: DocPoint): [number, DocPoint] | null => {
       const w = at(x.glyph)
-      return w ? [w[0], { name: x.name, glyph: w[1], box: boxOf(w[0], w[1]) }] : null
+      return w ? [w[0], { name: x.name, glyph: w[1], box: boxOf(w[0], w[1], x.box) }] : null
     }
     // (each A page's points and paragraph points before this B page's: a paragraph end counts its own page's)
     const ptsBefore = out.map((c) => c.points.length)
@@ -323,7 +354,14 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
 /** an A page as today's makers read one: pageInk's result for it, B's marks carried onto it, its glyphs' pictures (`pid`, a
  *  turned glyph's `pt` and `pid`) read again from those marks as pageInk reads them from its own (ink.mjs: a picture's id, its
  *  page's count of pictures opened, the innermost open) */
-function pageOf(view: number[], raw: PageInk | null, c: Carried, turnedOwners: (string | null)[]): TodayPage {
+function pageOf(
+  view: number[],
+  raw: PageInk | null,
+  c: Carried,
+  turnedOwners: (string | null)[],
+  formOf: (j: number) => { form: boolean; fid: number | undefined } | null,
+  turnedForm: (boolean | null)[],
+): TodayPage {
   const page = {
     view: [...view],
     points: c.points,
@@ -346,8 +384,16 @@ function pageOf(view: number[], raw: PageInk | null, c: Carried, turnedOwners: (
       unseen: new Set(),
       cut: new Map(),
     }
-  let glyphs: unknown[] = raw.glyphs
-  let turned: unknown[] = raw.turned ?? []
+  let glyphs: unknown[] = raw.glyphs.map((g, j) => {
+    const f = formOf(j)
+    if (!f || (!!g.form === f.form && (g as { fid?: number }).fid === f.fid)) return g
+    const { fid: _, ...rest } = g as typeof g & { fid?: number }
+    return { ...rest, form: f.form, ...(f.fid !== undefined ? { fid: f.fid } : {}) }
+  })
+  let turned: unknown[] = (raw.turned ?? []).map((t, j) => {
+    const f = turnedForm[j]
+    return f === null || f === undefined || !!t.form === f ? t : { ...t, form: f }
+  })
   if (c.pictures.length) {
     const P = [...c.pictures].sort((a, b) => a.glyph - b.glyph)
     let seq = 0
@@ -357,17 +403,18 @@ function pageOf(view: number[], raw: PageInk | null, c: Carried, turnedOwners: (
       else if (x.name === 'ze') stack.pop()
     }
     let q = 0
-    glyphs = raw.glyphs.map((g, i) => {
+    glyphs = (glyphs as typeof raw.glyphs).map((g, i) => {
       while (q < P.length && (P[q] as DocPoint).glyph <= i) apply(P[q++] as DocPoint)
       const { pid: _, ...rest } = g as typeof g & { pid?: number }
       return stack.length ? { ...rest, pid: stack.at(-1) } : rest
     })
-    turned = (raw.turned ?? []).map((t) => {
+    turned = (turned as NonNullable<typeof raw.turned>).map((t) => {
       seq = 0
       stack.length = 0
       let pt = 0
+      // (a point before it: before the level glyphs it follows, or at their count and before its own box)
       for (const x of P)
-        if (x.glyph <= t.at) {
+        if (x.glyph < t.at || (x.glyph === t.at && (t.box < 0 || x.box <= t.box))) {
           apply(x)
           pt++
         }

@@ -121,6 +121,8 @@ export const pageInk = ink.pageInk as (
     msMax?: number
     glyphsOnly?: boolean
     turned?: boolean
+    /** with `turned`: every painted path's lines (`shapes`), not a figure's alone */
+    shapesAll?: boolean
   },
 ) => PageInk
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
