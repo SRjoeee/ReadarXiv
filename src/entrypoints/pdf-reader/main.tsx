@@ -24,6 +24,11 @@ import { reasonText } from '@/ui/strings'
  */
 export const TOP_LEVEL_READER_KEY = 'axt_top_level_reader'
 
+declare const __AXT_READER__: 'today' | 'v2' | undefined
+/** which reader the page runs: today's session under the package's chrome (the default), or the reader package whole
+ *  (wxt.config.ts AXT_READER) */
+const READER = typeof __AXT_READER__ === 'string' ? __AXT_READER__ : 'today'
+
 // The settings once, before the first paint, for the language and for the chrome (ui/first-read.ts): the page gives the
 // read 1,500 ms and paints the defaults, said to be unreadable, if it has not answered (S-R-21). The session, a heavy
 // module (the reading view, the engine's layer, PDF.js), starts on that reading and follows the settings from there.
@@ -39,13 +44,17 @@ const vouched = await owner
 if (vouched !== null && (vouched.framed || topLevel)) {
   applyPageLocale(reading?.config.uiLanguage)
   const params = new URLSearchParams(location.search)
-  // the chrome over today's session (host/today.ts): the reading view over arXiv's PDF and the paper's layer, opened once
-  // the panes are there (the chrome's App attach), the extension's configuration as the one preference model
-  const store = configStore(reading?.config ?? null)
+  // the chrome over today's session (host/today.ts: the reading view over arXiv's PDF and the paper's layer), or over the
+  // reader package (host/v2.ts), opened once the panes are there (the chrome's App attach); the extension's configuration as
+  // the one preference model
+  const paper = paperOf(params)
+  const today = READER === 'today' ? configStore(reading?.config ?? null) : null
+  const v2 = READER === 'v2' ? await (await import('@/pdf-reader/host/v2')).startV2({ params, paper }) : null
+  const store = today ?? v2!.store
   const defaults = prefsOf(DEFAULT_CONFIG)
   const controller = createController({
-    open: todayOpen({ params, reading, store }),
-    paper: paperOf(params),
+    open: today ? todayOpen({ params, reading, store: today }) : v2!.open,
+    paper,
     first: { prefs: reading ? prefsOf(reading.config) : null, unreadable: !reading || reading.fallbackReason !== null },
     defaults,
   })
