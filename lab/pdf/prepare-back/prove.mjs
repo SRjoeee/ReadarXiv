@@ -165,14 +165,17 @@ function ppm(file) {
 export async function provePixels({ W, original, pagesA, located, addOn, scratch, PL, dpi = 100, chunk = 12 }) {
   const planned = plannedOf(located, addOn)
   const s = dpi / 72
-  const kinds = ['t', 'e', 'l']
+  // (the kinds turned OFF: `t` the text groups of the units, `f` those of the figure texts (written inside their forms), `e` the
+  // elements', `l` the labels')
+  const kinds = ['t', 'f', 'e', 'l']
+  const isKind = (g, k) => g !== null && (k === 'f' ? located.figureGroups.has(g) : g.endsWith(`.${k}`) && !(k === 't' && located.figureGroups.has(g)))
   mkdirSync(scratch, { recursive: true })
   const files = { a: join(scratch, 'A.pdf'), w: join(scratch, 'W.pdf') }
   writeFileSync(files.a, original)
   writeFileSync(files.w, W)
   const offs = {}
   for (const k of kinds) {
-    const d = await offDocument(W, addOn, g => g.endsWith(`.${k}`), PL)
+    const d = await offDocument(W, addOn, g => isKind(g, k), PL)
     if (!d) return { refused: 'the catalog written is not of the fresh /OCProperties form' }
     files[k] = join(scratch, `off-${k}.pdf`)
     writeFileSync(files[k], d.bytes)
@@ -214,7 +217,7 @@ export async function provePixels({ W, original, pagesA, located, addOn, scratch
           for (let y = Y0; y < Y1; y++) mask.fill(1, y * a.w + X0, y * a.w + X1)
           for (let y = Math.max(0, Y0 - 2); y < Math.min(a.h, Y1 + 2); y++) wide.fill(1, y * a.w + Math.max(0, X0 - 2), y * a.w + Math.min(a.w, X1 + 2))
         }
-        const P = planned[p - 1], kind = g => g !== null && g.endsWith(`.${k}`)
+        const P = planned[p - 1], kind = g => isKind(g, k)
         raw.glyphs.forEach((g, j) => { if (kind(P.glyphs[j]) && g.top > g.bottom) box(Math.min(g.x0, g.ix0), g.bottom, Math.max(g.x1, g.ix1), g.top) })
         // (and apart, a hidden glyph pageInk calls inkless (its outline of nothing drawn: top = bottom) that paints all the same,
         // a Type 3 glyph whose procedure the outline reading does not see: its em box over its advance, counted on its own)
