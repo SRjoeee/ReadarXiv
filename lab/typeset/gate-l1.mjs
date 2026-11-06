@@ -29,6 +29,9 @@ const METRICS = args.find(a => a.startsWith('--metrics='))?.slice(10) ?? 'layere
 const served = METRICS === 'table' ? null : servedMetrics()
 // (--reading=part: the reading and the tokens from the part (lay/read.ts), today's the oracle; default today's, the tap's)
 const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
+// (--subst=free,measure,next,side,all: a named correction's effect, today's value of those inputs in each member (gate-l1.ts
+// substitute); then lab/typeset/effect.mjs compares the dumps with those of a run without it)
+const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
@@ -60,7 +63,7 @@ const add = (m, k, n = 1) => m.set(k, (m.get(k) ?? 0) + n)
 for (const pair of pairs) {
   count.pairs++
   let g
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages

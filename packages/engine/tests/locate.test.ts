@@ -107,6 +107,33 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
+    // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
+    // head's paragraph on its row)
+    const lines = [
+      { text: 'Head.', x: 72, y: 700 },
+      { text: 'Table 1: a caption', x: 72, y: 500 },
+      { text: 'a note', x: 72, y: 80 },
+      { text: 'Body runs on', x: 110, y: 700 },
+      { text: 'and on', x: 72, y: 688 },
+    ]
+    const B2 = docOf([{ lines }])
+    const units2 = [
+      unitOf('heading', 'Head.'),
+      unitOf('caption', 'Table 1: a caption'),
+      unitOf('footnote', 'a note'),
+      unitOf('para', 'Body runs on and on'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 1, 2, 3, 3]])
+    // (the caption's and the footnote's own paragraph ends, after their last glyphs)
+    ins2.tex = { paragraphEnds: [[5 + 18, 5 + 18 + 6]] }
+    const L = locate(ins2, B2, align(B2, B2))
+    expect(L.flows).toEqual([[0, 3], [1], [2]])
+    expect(L.members[3]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
+    // (a paragraph end of the head's own, before the float: the head ends its paragraph, and the two are not one)
+    ins2.tex = { paragraphEnds: [[5, 5 + 18, 5 + 18 + 6]] }
+    expect(locate(ins2, B2, align(B2, B2)).flows).toEqual([[0], [1], [2], [3]])
+  })
 })
 
 describe('locate: the glyphs of A with no partner on B inside a unit', () => {

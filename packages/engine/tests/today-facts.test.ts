@@ -76,6 +76,22 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
     )
     expect(line!.base).toBe(700)
   })
+  it('reads its next glyph against its body’s baseline, not its first glyph’s: a line that opens with a script', () => {
+    // (2610.21765v1 p9: a line opening with 1/√2π's numerator, 3.8 pt over the baseline; its last formula's fraction, the
+    // numerator 3.8 pt over and the denominator 3.5 pt under, back left: one line, never two)
+    const gs = [
+      g('1', 61, 696.48, 7),
+      g('2', 62, 688.08, 7),
+      ...[...'D(x,y)='].map((u, i) => g(u, 75 + 5 * i, 692.64, 10)),
+      ...[...'1-x'].map((u, i) => g(u, 120 + 4 * i, 696.48, 7)),
+      ...[...'1-y'].map((u, i) => g(u, 120 + 4 * i, 689.16, 7)),
+    ]
+    const lines = cutLines(
+      gs.map((_, i) => i),
+      (i) => ({ page: 1, g: gs[i]! }),
+    )
+    expect(lines.map((l) => [l.base, l.x0])).toEqual([[692.64, 61]])
+  })
 })
 
 describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pageChars2)', () => {
@@ -86,6 +102,8 @@ describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pa
     const math = [...'xyzw'].map((u, i) => g(u, 120 + 5 * i, 688, 7, { base: 'CMMI7' }))
     expect(unitSize([...wide, ...plain, ...math])).toBe(10.13)
     expect(unitSize(math)).toBeUndefined()
+    // (as the page states it: pdfTeX's 10 pt is 9.9626 bp, which every width the lay sets is scaled by; no 1/100 grid)
+    expect(unitSize([...'ten'].map((u, i) => g(u, 72 + 5 * i, 700, 9.9626)))).toBe(9.9626)
   })
 })
 
@@ -124,5 +142,33 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
     // first line holds the paragraph's text before it, within its block's span (its second line starts at the column): pinned)
     const m2 = at.members[2]!
     expect(m2.lines.map((l) => l[9] & 2)).toEqual([2, 0])
+  })
+  it('reads a labelled line’s column from its label’s start, as today’s block begins at the label drawn anew', () => {
+    // (two columns of three paragraph lines, 72-192 and 320-440; a caption across them, its label at 150 and its words from
+    // 250: the words' middle stands in the right column, the block's in neither, so its column is the page's text area)
+    const left = 'l'.repeat(20),
+      right = 'r'.repeat(20)
+    const B2 = docOf([
+      {
+        lines: [
+          ...[700, 688, 676].flatMap((y) => [
+            { text: left, x: 72, y },
+            { text: right, x: 320, y },
+          ]),
+          { text: 'T9.', x: 150, y: 600 },
+          { text: 'c'.repeat(37), x: 250, y: 600 },
+        ],
+      },
+    ])
+    const cap: InstrumentUnit = {
+      id: unitId('caption', [text('T9. c')]),
+      kind: 'caption',
+      content: [text('T9. c')],
+    }
+    // (glyph j: each column's lines a paragraph of its own, then the caption's label and words)
+    const own = (_: number, j: number): [number, number, number] =>
+      j < 120 ? [Math.floor(j / 20) % 2, ROLE.text, -1] : j < 123 ? [2, ROLE.label, -1] : [2, ROLE.text, -1]
+    const L = locate(instrument(B2, [para(left), para(right), cap], own), B2, align(B2, B2))
+    expect(L.members[2]!.lines[0]!.slice(7, 9)).toEqual([72, 472])
   })
 })

@@ -735,11 +735,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return a < ends.length && (ends[a] as number) <= hi
   }
   const ownBox = (x: Member) => x.kind === 'cell' || x.figure || x.kind === 'inkfigures'
+  // (TeX keeps a paragraph open across the inserts set inside it: a float's caption and cells, a figure's text, a footnote's
+  // text, each in a box of its own; so the member of the body before a member of the body is the last one before it that is
+  // no insert's, and the paragraph ends inside those inserts (their own paragraphs: a caption's, a footnote's) are none of
+  // its. 2608.06701v1 p6: a run-in head, a table and a footnote in the stream, then the head's paragraph on its row)
+  const insert = (x: Member) => ownBox(x) || x.kind === 'caption' || x.kind === 'footnote'
+  const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
-  let cur: number[] = []
+  let body: number | null = null
   for (let q = 0; q < members.length; q++) {
     const mem = members[q]!
-    const prev = q > 0 ? members[q - 1]! : null
+    let k = q - 1
+    if (!insert(mem) && k >= 0 && insert(members[k]!) && body !== null) k = body
+    const prev = k >= 0 ? members[k]! : null
+    // (the paragraph ends between the two that are not inside the inserts between them)
+    const insideInsert = (e: number) => {
+      for (let j = k + 1; j < q; j++) {
+        const x = members[j]!
+        if (x.bFirst >= 0 && e > x.bFirst && e <= x.bLast + 1) return true
+      }
+      return false
+    }
+    const endsBetween = (lo: number, hi: number) =>
+      k === q - 1 ? endBetween(lo, hi) : ends.some((e) => e > lo && e <= hi && !insideInsert(e))
     const a = prev?.lines.at(-1)
     const b = mem.lines[0]
     const shares =
@@ -755,16 +773,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       b[2] >= a[3] - 0.5 &&
       !ownBox(prev) &&
       !ownBox(mem) &&
-      (prev.bLast < 0 || mem.bFirst < 0 || !endBetween(prev.bLast, mem.bFirst))
-    if (shares && cur.length) {
-      mem.join = mem.labelAt && mem.labelAt.ink[0] === b[0] ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
-      cur.push(mem.ord)
+      (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
+    const into = shares ? flowOf.get(prev.ord) : undefined
+    if (into) {
+      mem.join = mem.labelAt && mem.labelAt.ink[0] === b![0] ? [r2(b![2] - a![3]), 1] : [r2(b![2] - a![3])]
+      into.push(mem.ord)
+      flowOf.set(mem.ord, into)
     } else {
-      if (cur.length) flows.push(cur)
-      cur = [mem.ord]
+      const flow = [mem.ord]
+      flows.push(flow)
+      flowOf.set(mem.ord, flow)
     }
+    if (!insert(mem)) body = q
   }
-  if (cur.length) flows.push(cur)
 
   // ---- ties: a table's cells, laid together; a figure's set, at one size
   const ties: Located['ties'] = []
@@ -966,8 +987,8 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
       if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(t)
     })
   }
-  const columnOf = (l: Line): [number, number] => {
-    const mid = (l[2] + l[3]) / 2
+  const columnOf = (l: Line, x0 = l[2]): [number, number] => {
+    const mid = (x0 + l[3]) / 2
     const over = (q: number) => (paras.get(q) ?? []).filter((c) => c[2] <= mid && c[3] >= mid)
     let own = over(l[0])
     for (let q = l[0] - 1; own.length < 3 && q >= 1; q--) {
@@ -985,7 +1006,15 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
     return [Math.min(...own.map((c) => c[2])), right]
   }
   const measures = new Map<Line, [number, number]>()
-  for (const mem of members) for (const l of mem.lines) measures.set(l, columnOf(l))
+  // (a line's middle as today's widened block has it: from its label's start where its label stands on it, the label drawn
+  // anew beginning the block (U.decor's first rectangle, RUN:2039); 1512.03385v1 p11's "Table 9." caption across both columns,
+  // whose words' middle stands in the right column and whose block's in neither: the page's text area)
+  for (const mem of members)
+    for (const l of mem.lines) {
+      const lb = mem.labelAt?.ink
+      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < 0.4 * (l[10] ?? mem.style.size) && lb[1] < l[2]
+      measures.set(l, columnOf(l, on ? lb[1] : l[2]))
+    }
   for (const [l, [m0, m1]] of measures) {
     l[7] = r2(m0)
     l[8] = r2(m1)

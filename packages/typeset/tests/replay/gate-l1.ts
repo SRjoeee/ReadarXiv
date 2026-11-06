@@ -143,24 +143,25 @@ const DETAIL = !!process.env.AXT_GATE_DETAIL
 /** AXT_GATE_DEEP=<pair>:<ord>: every field of that member's preparation that differs from today's, printed */
 const DEEP = process.env.AXT_GATE_DEEP
 /** every difference between two values beyond 0.005, by path (functions and the tokens aside), at most 40 */
-export function differences(a: unknown, b: unknown, path = '', out: string[] = []): string[] {
+export function differences(a: unknown, b: unknown, path = '', out: string[] = [], tol = 0.005): string[] {
   if (out.length >= 40 || path.endsWith('.tokens') || path.endsWith('.measure') || path.endsWith('.patterns'))
     return out
   if (typeof a === 'function' || typeof b === 'function') return out
   if (typeof a === 'number' && typeof b === 'number') {
-    if (!(Math.abs(a - b) <= 0.005 || a === b)) out.push(`${path}: ${a} against ${b}`)
+    if (!(Math.abs(a - b) <= tol || a === b)) out.push(`${path}: ${a} against ${b}`)
     return out
   }
-  if (a instanceof Map && b instanceof Map) return differences(Object.fromEntries(a), Object.fromEntries(b), path, out)
-  if (a instanceof Set && b instanceof Set) return differences([...a], [...b], path, out)
+  if (a instanceof Map && b instanceof Map)
+    return differences(Object.fromEntries(a), Object.fromEntries(b), path, out, tol)
+  if (a instanceof Set && b instanceof Set) return differences([...a], [...b], path, out, tol)
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) out.push(`${path}.length: ${a.length} against ${b.length}`)
-    for (let i = 0; i < Math.min(a.length, b.length); i++) differences(a[i], b[i], `${path}[${i}]`, out)
+    for (let i = 0; i < Math.min(a.length, b.length); i++) differences(a[i], b[i], `${path}[${i}]`, out, tol)
     return out
   }
   if (a && b && typeof a === 'object' && typeof b === 'object') {
     for (const k of new Set([...Object.keys(a), ...Object.keys(b)]))
-      differences((a as Raw)[k], (b as Raw)[k], `${path}.${k}`, out)
+      differences((a as Raw)[k], (b as Raw)[k], `${path}.${k}`, out, tol)
     return out
   }
   if (a !== b && !(a == null && b == null))
@@ -187,7 +188,10 @@ export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true):
     if (Math.abs((a.pitch0 ?? 0) - (b.pitch0 ?? 0)) > 0.01) return 'U.blocks: pitch'
   }
   if (Math.abs(mine.s - today.s) > 0.01) return 'U.params: size'
+  // (the size and the leading base as the lay reads them, every digit: the part states the size as the page does)
+  if (Math.abs(mine.s - today.s) > 1e-6) return 'U.params: size, under a hundredth apart'
   if (r2(mine.P.leadBase) !== r2(today.P.leadBase)) return 'U.params: leadBase'
+  if (Math.abs(mine.P.leadBase - today.P.leadBase) > 1e-6) return 'U.params: leadBase, under a hundredth apart'
   const ha = mine.P.halfLead,
     hb = today.P.halfLead
   if (!!ha !== !!hb || (ha && hb && (ha.head !== hb.head || ha.foot !== hb.foot))) return 'U.params: edges (head, foot)'
@@ -291,11 +295,56 @@ export function tokensDiff(mine: readonly Tok[], today: readonly Tok[]): string 
 }
 let heads: Record<string, { heads: Record<string, string> }> | null = null
 
+/** the inputs a named correction's effect substitutes, today's value for the part's: `free` the borrow room under each block
+ *  (Room.below's freeFor), `measure` each block's measure x0..x1 (the column's), `next` the room under the last line
+ *  (Room.next: U.params' halfLead.below), `side` the widened blocks (X.further's), `all` the whole prepared member (the
+ *  tokens too); a block's only where the two cut as many blocks */
+export type Substitute = 'free' | 'measure' | 'next' | 'side' | 'all' | `.${string}`
+export function substitute(mem: FlowMember, td: FlowMember, what: readonly Substitute[]) {
+  const same = mem.blocks.length === td.blocks.length
+  for (const w of what) {
+    if (w === 'all') {
+      const { ord, follower, rowStart } = mem
+      Object.assign(mem, td, { ord, follower, rowStart })
+      continue
+    }
+    // (a field of the member by its path, `.P.x` or `.blocks.x` (each block's), to find which one an equal-input difference reads)
+    if (w.startsWith('.')) {
+      const [f, g] = w.slice(1).split('.') as [string, string | undefined]
+      const a = mem as unknown as Raw,
+        b = td as unknown as Raw
+      if (!g) a[f] = b[f]
+      else if (f === 'blocks') {
+        if (same)
+          mem.blocks.forEach((x, k) => {
+            ;(x as unknown as Raw)[g] = (td.blocks[k] as unknown as Raw)[g]
+          })
+      } else a[f] = { ...(a[f] as Raw), [g]: (b[f] as Raw)[g] }
+      continue
+    }
+    if (w === 'next' && mem.P.halfLead && td.P.halfLead)
+      mem.P = { ...mem.P, halfLead: { ...mem.P.halfLead, below: td.P.halfLead.below } }
+    if (w === 'side') mem.wide = td.wide
+    if (!same) continue
+    mem.blocks.forEach((b, k) => {
+      const t = td.blocks[k]!
+      if (w === 'free') {
+        b.free = t.free
+        b.freeOf = t.freeOf
+      }
+      if (w === 'measure') {
+        b.x0 = t.x0
+        b.x1 = t.x1
+      }
+    })
+  }
+}
+
 /** a pair laid page by page from L1's parts, the reading and tokens today's; `metricsOf` the Metrics its lays measure with
  *  (default: the tap's table of today's measures, which throws MissingMeasure for a measure today never made) */
 export function gateL1Pair(
   pair: string,
-  o: { metricsOf?: (pair: string) => Metrics; reading?: 'today' | 'part' } = {},
+  o: { metricsOf?: (pair: string) => Metrics; reading?: 'today' | 'part'; substitute?: readonly Substitute[] } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
   const metrics = o.metricsOf?.(pair) ?? null
@@ -335,6 +384,9 @@ export function gateL1Pair(
   // (the reading from the part: the door's rows, the paper's designs and roles from its part's fonts, the label's names)
   const part0 = bundle.parts.values().next().value
   const doors = o.reading === 'part' ? doorRows(pair) : null
+  const doorById = new Map<string, NonNullable<ReturnType<typeof doorRows>> extends Map<number, infer R> ? R : never>()
+  if (doors)
+    for (const u of L.units) if (u.id && doors.has(u.ord) && !doorById.has(u.id)) doorById.set(u.id, doors.get(u.ord)!)
   let paperR: PaperReading | null = null
   if (o.reading === 'part' && part0) {
     paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
@@ -417,10 +469,14 @@ export function gateL1Pair(
     }
     let tokensVerdict: string | null = null
     if (o.reading === 'part') {
-      const row = doors?.get(u.ord)
+      // (a row by the unit's id: rows are keyed by content (design-a §1.5), and a unit the paper repeats (a running head on
+      // every page) has one row, which today's door holds under its first ord)
+      const row = doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)
       const src = bundle.units.get(x.m.text)
       if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial') || !metrics || !paperR) {
         stop(`the reading: ${!row ? 'no door row' : !src ? 'no unit of the part' : `a row ${row[2]}`}`)
+        if (!row && process.env.AXT_GATE_NOROW)
+          console.log(`NOROW ${pair} ord ${u.ord} ${u.kind} ${x.m.kind} ${String(x.m.text).slice(0, 12)}`)
         continue
       }
       if (x.m.els?.some(([, e]) => e.ends || e.opens !== undefined)) {
@@ -525,8 +581,13 @@ export function gateL1Pair(
     // (every other field of the prepared member the lay reads, beyond the named ones: the first that differs, by its path; a
     // block's h and pitch the walk sets on today's, and noOver unset against false, are no input)
     if (setting === 'equal') {
+      // (nor the fields of a shared row no rule reads: the follower's row is read by its page and baseline, S.share's by its
+      // page, baseline and size; today's rows carry the lead's id and extent beside them)
       const rest = differences(mem, td).filter(
-        (d) => !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$/.test(d),
+        (d) =>
+          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against/.test(
+            d,
+          ),
       )
       if (rest.length) setting = `prepared: ${rest[0]!.replace(/\[\d+\]/g, '[]').replace(/: .*$/, '')}`
       if (process.env.AXT_GATE_FREE && rest[0]?.includes('.free'))
@@ -536,7 +597,15 @@ export function gateL1Pair(
     }
     out.setting.set(u.ord, setting)
     if (o.reading === 'part') out.inputs.set(u.ord, setting !== 'equal' ? setting : (tokensVerdict ?? 'equal'))
-    if (DEEP === `${pair}:${u.ord}`) console.log(JSON.stringify(differences(mem, td), null, 1))
+    if (DEEP === `${pair}:${u.ord}`)
+      console.log(
+        JSON.stringify(differences(mem, td), null, 1),
+        // (and every number apart at all: the comparison's tolerance hides a difference the lay may read)
+        JSON.stringify({ s: [mem.s, td.s], P: differences(mem.P, td.P, '.P', [], 0) }),
+      )
+    // (a named correction's effect: today's value of the inputs named substituted into the member, the rest the part's; its
+    // classes above are the member's own)
+    if (o.substitute?.length) substitute(mem, td, o.substitute)
   }
   pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
   const dumped = new Map<
@@ -593,6 +662,19 @@ export function gateL1Pair(
         out.thrown.set(pm.ord, pm.error.replace(/^MissingMeasure:.*/, 'MissingMeasure'))
     if (!got) continue
     for (const pm of got.members) {
+      // (AXT_GATE_LAID=<pair>:<ord>: that member's blocks and laid lines, as its lay left them)
+      if (process.env.AXT_GATE_LAID === `${pair}:${pm.ord}` && pm.lay) {
+        const L = pm.lay.layout as unknown as Raw & { lines: Raw[] }
+        console.log(
+          `LAID p${pg} ord ${pm.ord} f ${L.f} scale ${L.scale} knob ${L.knob} clipped ${L.clipped}`,
+          JSON.stringify(
+            (pm.lay.blocks as unknown as Raw[]).map((b) => [b.page, b.x0, b.x1, b.B, b.free, b.widened, b.start]),
+          ),
+          JSON.stringify(
+            L.lines.map((l) => [l.page, l.block, l.baseline, l.x0, l.x1, l.used, (l.items as unknown[]).length]),
+          ),
+        )
+      }
       if (pm.state !== 'laid' || !pm.lay) continue
       const d = dumpUnit(pm.lay, (p) => views.get(p))
       const lines = d.lines.filter((l) => l.page === pg),

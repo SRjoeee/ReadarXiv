@@ -123,7 +123,9 @@ export function unitSize(gs: readonly DocGlyph[]): number | undefined {
     .filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
     .map((g) => g.along ?? g.size)
     .sort((a, b) => a - b)
-  return sizes.length ? r2(sizes[sizes.length >> 1] as number) : undefined
+  // (as the page states it, not on the coordinates' 1/100 grid: a size is a font's scale, which the lay multiplies every width
+  // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 set a 240 pt line 0.06 pt short of today's)
+  return sizes.length ? (sizes[sizes.length >> 1] as number) : undefined
 }
 
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
@@ -314,11 +316,13 @@ export function labelParts(
   page: number,
 ): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink] } {
   const t = gs.filter(real)
+  // (across their advances, as the label's own ink and today's characters, which U.decor and U.label read the parts as: a
+  // label drawn anew starts its line at its first glyph's advance, 2608.04322v1 p5's "IV." at 397.89, its outline at 398.07)
   const inkOf = (xs: DocGlyph[]): Ink => [
     page,
-    r2(Math.min(...xs.map((g) => g.ix0))),
+    r2(Math.min(...xs.map((g) => g.x0))),
     r2(Math.min(...xs.map((g) => g.bottom))),
-    r2(Math.max(...xs.map((g) => g.ix1))),
+    r2(Math.max(...xs.map((g) => g.x1))),
     r2(Math.max(...xs.map((g) => g.top))),
     r2(mostOf(xs.map((g) => r2(g.y))) ?? (xs[0] as DocGlyph).y),
   ]

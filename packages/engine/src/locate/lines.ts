@@ -51,9 +51,23 @@ export function lineSize(gs: readonly DocGlyph[]): number {
 
 /** the lines of `list` (each an index `at` resolves to its page and glyph), blank glyphs aside */
 export function cutLines(list: readonly number[], at: (i: number) => { page: number; g: DocGlyph }): CutLine[] {
-  const out: { page: number; y0: number; size: number; gs: number[] }[] = []
-  let L: (typeof out)[number] | null = null
+  type Open = { page: number; y0: number; size: number; gs: number[]; votes: Map<number, number>; best: number }
+  const out: Open[] = []
+  let L: Open | null = null
   let prev: DocGlyph | null = null
+  // (the band a line's next glyph is read against: the baseline its body glyphs so far share (those within BODY of its largest
+  // size, by characters), not its first glyph's, which may be a script or a fraction's part: 2610.21765v1 p9, a line opening
+  // with 1/√2π's numerator, whose band then cut the formula's last fraction off as a line of its own)
+  const vote = (l: Open, g: DocGlyph) => {
+    if (Math.abs(g.size - l.size) > BODY * l.size) return
+    const y = r2(g.y)
+    const n = (l.votes.get(y) ?? 0) + Math.max(1, g.u.length)
+    l.votes.set(y, n)
+    if (n > l.best) {
+      l.best = n
+      l.y0 = y
+    }
+  }
   for (const i of list) {
     const { page, g } = at(i)
     if (!/\S/.test(g.u)) continue
@@ -65,11 +79,20 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
         g.x0 > prev.x1 + 2 * Math.max(prev.size, g.size) ||
         Math.abs(g.y - L.y0) > 1.5 * Math.max(L.size, g.size))
     if (L === null || page !== L.page || (off && jump)) {
-      L = { page, y0: g.y, size: g.size, gs: [] }
+      L = { page, y0: g.y, size: g.size, gs: [], votes: new Map(), best: 0 }
       out.push(L)
     }
     L.gs.push(i)
-    if (g.size > L.size) L.size = g.size
+    if (g.size > L.size * (1 + BODY)) {
+      // (a larger body than the glyphs before: the band is its, the votes counted again over the line's glyphs of that size)
+      L.size = g.size
+      L.votes = new Map()
+      L.best = 0
+      for (const j of L.gs) vote(L, at(j).g)
+    } else {
+      if (g.size > L.size) L.size = g.size
+      vote(L, g)
+    }
     prev = g
   }
   return out.map((l) => {
