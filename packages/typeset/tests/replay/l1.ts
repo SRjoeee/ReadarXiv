@@ -1,4 +1,5 @@
-// Lane L1's bundles of the corpus (readarxiv-lab-data refactor-2026-11/lanes/L1-out7/bundles/<paper>/, lanes/L1-prepare.md):
+// Lane L1's bundles of the corpus, as the converge lane's last run made them with the code of this tree (readarxiv-lab-data
+// refactor-2026-11/lanes/L7/prepare/bundles/<paper>/, lanes/L7-converge.md; lane L1's own runs: lanes/L1-out9):
 // a paper's head (`head.json`), its parts by page (`<digest>.part`: design-a's Part, flows of Placed members) and its Units
 // objects (`<digest>.units`). Read as JSON, every field as the bundle holds it (packages/format's schema on L1's branch:
 // `read` names the facts carried as read on A). Lab-data only: the bundles hold licensed papers' text.
@@ -7,7 +8,8 @@ import { join } from 'node:path'
 import type { Part, Placed, Unit } from '@readarxiv/format'
 import { LAB } from './tap.ts'
 
-export const L1_BUNDLES = process.env.AXT_L1_BUNDLES ?? join(LAB, 'refactor-2026-11', 'lanes', 'L1-out7', 'bundles')
+export const L1_BUNDLES =
+  process.env.AXT_L1_BUNDLES ?? join(LAB, 'refactor-2026-11', 'lanes', 'L7', 'prepare', 'bundles')
 export const hasL1 = existsSync(L1_BUNDLES)
 
 /** a member as L1's part holds it: Placed and the fields L1's later schema adds */

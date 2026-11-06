@@ -45,6 +45,62 @@ export function layPagePrepared(
   R: RuleParams,
   trace = false,
 ): PreparedPage {
+  try {
+    return layPageOnce(page, flows, ties, R, trace)
+  } catch (e) {
+    if (e instanceof RangeError) throw e
+    // (a throw past the flows' own lays: the page's fill (L10), one decision a page, which fills the units in place. The page
+    // is laid anew without the flows whose own lay of the page throws; their members are 'error', with the reason)
+    const why = (x: unknown) => `${(x as Error)?.name ?? 'Error'}: ${String((x as Error)?.message ?? x).slice(0, 160)}`
+    const bad: { flow: readonly FlowMember[]; why: string }[] = []
+    const good = flows.filter((f) => {
+      try {
+        layPageOnce(page, [f], [], R, false)
+        return true
+      } catch (x) {
+        if (x instanceof RangeError) throw x
+        bad.push({ flow: f, why: why(x) })
+        return false
+      }
+    })
+    const errorOf = (m: FlowMember, w: string): PageMember => ({
+      ord: m.ord,
+      state: 'error',
+      lines: [],
+      error: w,
+      slots: [],
+    })
+    let out: PreparedPage
+    try {
+      out = layPageOnce(page, good, ties, R, trace)
+    } catch (x) {
+      if (x instanceof RangeError) throw x
+      // (the flows throw together and none alone: the page's every member stays the original's)
+      return {
+        page,
+        members: flows
+          .flat()
+          .filter((m) => m.pages.includes(page))
+          .map((m) => errorOf(m, why(x))),
+        passes: [],
+        tables: [],
+      }
+    }
+    const errors = bad.flatMap(({ flow, why: w }) =>
+      flow.filter((m) => m.pages.includes(page)).map((m) => errorOf(m, w)),
+    )
+    return { ...out, members: [...out.members, ...errors].sort((a, b) => a.ord - b.ord) }
+  }
+}
+
+/** the page laid once: a throw of a flow's own lay is that flow's (its members 'error'); any other throw is the caller's */
+function layPageOnce(
+  page: number,
+  flows: readonly (readonly FlowMember[])[],
+  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  R: RuleParams,
+  trace: boolean,
+): PreparedPage {
   // L8, L9
   const lays = new Map<
     number,
