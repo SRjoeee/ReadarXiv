@@ -154,12 +154,32 @@ export function walkCase(pair: string, ord: number, round: number): WalkCase | s
     measure: fitMeasure(metrics(pair)),
     patterns,
   }
+  // (the tap's blockOf, mapped over the blocks, took a block's index for its `deep`: the first block's flowX lost its lead
+  // block. S.rowStart's: the unit before's block that holds the row, from its last round, the F1 slot naming it)
+  const blocks = (f2.walkedBlocks as Raw[]).map(blockOfTap)
+  const fx = blocks[0]?.flowX as { y: number; lead: Raw | null } | undefined
+  if (fx && !fx.lead) {
+    const f1 = slot('S.rowStart', 'flowX')
+    const row = f1?.row as { id: number; page: number; baseline: number } | undefined
+    const named = (f1?.flowX as { lead?: number[] } | undefined)?.lead
+    const lu = row ? L.units.find((x) => x.ord === row.id) : undefined
+    if (lu && row && named) {
+      const r = row
+      const last = Math.max(...lu.slots.map((x) => x.round))
+      const at = (by: string) => lu.slots.find((x) => x.round === last && x.by === by)?.value as Raw | undefined
+      const raw = (at('X.further')?.widenedBlocks ?? at('X.cut')?.walkedBlocks) as Raw[] | undefined
+      const lead = raw
+        ?.map(blockOfTap)
+        .find((q) => q.page === r.page && (q.B as number[]).some((y) => Math.abs(y - r.baseline) < 0.05))
+      if (lead && lead.page === named[0] && lead.x0 === named[1] && lead.x1 === named[2]) fx.lead = lead
+    }
+  }
   return {
     pair,
     ord,
     round,
     tokens,
-    blocks: (f2.walkedBlocks as Raw[]).map(blockOfTap),
+    blocks,
     s: up.s as number,
     P,
     want: {

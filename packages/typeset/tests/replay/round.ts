@@ -176,7 +176,13 @@ export function chain(c: WalkCase): Chain {
     // (the follower's lead row: its F1 slot's, or, where the follower is never laid, the row kept after this unit, which is
     // that row itself, keptAfter: shareOf reads its page, baseline and size alone)
     const kept = decor?.kept as { page: number; baseline: number; size: number; byLabel?: boolean } | null | undefined
-    const row = rowOf(c.pair, f8.follower as number) ?? kept ?? null
+    // (else, the follower neither laid nor kept after, the row as the slot's share names it: its page, baseline and band, the
+    // row's size; F.chains' fact, which lane L1 states as Placed.join)
+    const named = f8.share as { page: number; y: number; band: number } | null
+    const row =
+      rowOf(c.pair, f8.follower as number) ??
+      kept ??
+      (named ? { page: named.page, baseline: named.y, size: named.band } : null)
     const share = row ? shareOf(layout, blocks, row as never, P.measure) : null
     if (share && kept && !kept.byLabel) share.kept = true
     const want = f8.share as Raw | null
