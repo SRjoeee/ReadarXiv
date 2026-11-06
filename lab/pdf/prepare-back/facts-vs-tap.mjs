@@ -71,6 +71,7 @@ const CAUSE = {
   'head alone': (a, b, m) => (m.label && m.label.ink[0] === own(m)[0]?.[0] ? 'its label on the line (today: head false wherever a label is not drawn anew; the label is its own group)' : m.join ? 'a flow\'s member before it on the line (travels with its own text)' : a ? 'ink that stays on its baseline (the part)' : 'other ink on its baseline that travels (today counts any)'),
   'foot alone': (a, b, m, P) => (P.nextOf.get(m.ord)?.join ? 'a flow\'s member after it on the line (travels with its own text)' : a ? 'ink that stays on its baseline (the part)' : 'other ink on its baseline that travels (today counts any)'),
   below: (a, b) => (a === null || b === null ? 'one reading finds no line under it' : 'the next line read otherwise'),
+  'mark after': (a, b, m) => (a > b && m.lines.at(-1)?.[9] & KEPT ? 'a display that ends the unit (today: inPlace, its origAfter the unit\'s first character; the drop rule reads it only where the display opens the unit)' : 'other'),
   band: (a, b) => (!a && b ? 'today\'s door passes no table rules (hiding.rules): no band on any cell' : 'other'),
 }
 

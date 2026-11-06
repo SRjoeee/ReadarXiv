@@ -522,7 +522,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         mem.lines.push([ap, 0, r2(x0), r2(x1), r2(first.oy), r2(y1), r2(y0), r2(x0), r2(x1), 0])
       }
     }
-    mem.pages = [...new Set(mem.lines.map((l) => l[0]))]
+    // (the pages it has ink of its own on, which a group of its holds: a KEPT line's page alone is none of them)
+    mem.pages = [...new Set(mem.lines.filter((l) => !(l[9] & 1)).map((l) => l[0]))]
     // style: TeX's font state is not stated by today's instrument: read off its own glyphs on A as today's reader reads it
     // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage 1b states it)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
@@ -824,10 +825,10 @@ function roomOf(mem: Member, inkA: Doc, claimedA: Int32Array, offA: number): Roo
     if (by1 < foot && bx1 > x0 && bx0 < x1 && by1 > next && !(bx1 - bx0 >= 0.9 * W && by1 - by0 >= 0.75 * H)) next = by1
   }
   const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
-  // (the next line of its column under its last: the page's glyphs not its own, across its lines' extent on that page, under
+  // (the next line of its column under its last: the page's glyphs not its own, across its lines' extent in that column, under
   // its baseline by more than three quarters of its pitch; of the highest, those within half a size, their median baseline;
   // the distance from baseline to baseline (today's edgesOf `below` RUN:1655))
-  const on = mem.lines.filter((l) => l[0] === p && !(l[9] & 1))
+  const on = mem.lines.filter((l) => l[0] === p && l[1] === last[1] && !(l[9] & 1))
   const cx0 = Math.min(...on.map((l) => l[2]), x0)
   const cx1 = Math.max(...on.map((l) => l[3]), x1)
   const T = base - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)

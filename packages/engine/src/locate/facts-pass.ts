@@ -215,7 +215,9 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     // glyph of the unit's is an element's; its line on A)
     if (mem.bFirst >= 0)
       for (const e of ends) {
-        if (e <= mem.bFirst || e > mem.bLast) continue
+        // (the paragraph that ended is its own: its glyph before the end is the unit's, not a float's or a footnote's that TeX's
+        // output routine put between two of its lines)
+        if (e <= mem.bFirst || e > mem.bLast || (unitB[e - 1] as number) !== mem.unit) continue
         let b = e
         while (b <= mem.bLast && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b++
         if (b > mem.bLast || roleB[b] !== ROLE.element) continue
