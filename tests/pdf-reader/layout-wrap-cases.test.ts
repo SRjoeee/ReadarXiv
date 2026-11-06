@@ -5,7 +5,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
 import { pageInk } from '@readarxiv/engine'
-import { alignOf, wrapOf } from '@/pdf-reader/engine/layout/wrap.mjs'
+import { alignOf, wrapOf } from '@readarxiv/engine'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { deflate, DOCUMENT_OPTIONS, inflate, markedSample, pixelsApart, renderPage, SAMPLE_1, wrapped } from './helpers/ocg-pdfs'
 

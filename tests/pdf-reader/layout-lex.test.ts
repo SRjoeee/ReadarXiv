@@ -2,7 +2,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { lex } from '@/pdf-reader/engine/layout/remove.mjs'
+import { lex } from '@readarxiv/engine'
 import { lexDifference, outcomeOf, streamsOf } from './helpers/lex-compare'
 import { lexReference } from './helpers/lex-reference.mjs'
 

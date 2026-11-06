@@ -27,7 +27,7 @@ import { FeatureTest, getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { deltaOf, proveDelta } from '../../../src/pdf-reader/engine/layout/delta.mjs'
 import { pageInk } from '@readarxiv/engine'
 import { float32Outlines, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
-import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
+import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap-final.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 

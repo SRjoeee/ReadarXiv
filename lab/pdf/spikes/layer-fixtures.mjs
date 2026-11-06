@@ -61,6 +61,7 @@
 // Microsoft's endpoint, each with the project's User-Agent and nothing else. Every file written inside the work tree is
 // added to .git/info/exclude as it is written (the 2026-09-21 rule): no paper, nor anything made of one, is committed.
 // Stops below 10 GiB free on the data's disk. Exits 1 where an output could not be made.
+import { movedIn } from '../moved-in.mjs'
 import { execFile, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { setDefaultResultOrder } from 'node:dns'
@@ -86,7 +87,7 @@ const OFFLINE = process.argv.includes('--offline')
 const LAYOUTS_ONLY = process.argv.includes('--layouts-only')
 /** the engine the outputs are made with: this repository's, or another worktree's (--engine) */
 const ENGINE = resolve(argOf('engine') ?? REPO)
-const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
+const engine = path => import(pathToFileURL(movedIn(join(ENGINE, 'src/pdf-reader/engine'), path)).href)
 const { sourceHash, seedFrom, unitsOf } = await engine('pipeline/cache.mjs')
 const { kOfSource, trPiecesOf } = await engine('layer/pieces.mjs')
 const { encodeLayout, LAYOUT } = await engine('layout/file.mjs')

@@ -185,6 +185,7 @@
 // names); the fixtures carry groups and captions as spikes/table-groups.mjs --write gives them (--fixtures).
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
 // being one of its measures), on a regression under --check, or where a fixture could not be run.
+import { movedIn } from '../moved-in.mjs'
 import { execFile, execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -938,7 +939,7 @@ function drawCutOf(name) {
     DRAW_CUTS.set(name, (async () => {
       const made = await doorBundleOf(name)
       const D = await drawsOf(name)
-      const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+      const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
       const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
       const ours = made.composed.page
       const read3 = readBundle(new Uint8Array(made.bytes))
@@ -1100,7 +1101,7 @@ function doorBaseOf(page, xref, pages, wrap = null) {
 async function doorPartsFixture(page, name, errors) {
   const { paper, target } = nameOf(name)
   const made = await doorBundleOf(name)
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
   const ours = made.composed.page
   const cutTo = targetOf(DOOR_PARTS)
@@ -1180,7 +1181,7 @@ async function sourcesOf(name) {
   const { paper } = nameOf(name)
   const source = sourceOf(paper), recordFile = trFile(name, 'record.json')
   if (!source || !existsSync(recordFile)) return null
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   const [{ bundleUnitsOf }, { sourceUnitsOf }, { openPaper }, { unpackSource }, { sourceHash }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'pipeline/cache.mjs'].map(f => import(E(f))))
   if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)))
   const src = sourceUnitsOf({ units: PAPER_UNITS.get(paper) }), record = readJson(recordFile)
@@ -1196,7 +1197,7 @@ async function sourcesOf(name) {
  */
 async function doorBundleOf(name) {
   const { paper, target } = nameOf(name)
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   // (--ink: the wrap's ink units in the bundle after the source units', their rows in the layout, as the page pass carries them:
   // pipeline/ink-pass.mjs; an echo is drawn with its source unit's row, the others stay the original's, the gate holding no
   // translation of theirs; on the left their kinds and no anchor, the gate's geometry holding no tokens)

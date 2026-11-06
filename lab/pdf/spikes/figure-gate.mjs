@@ -43,7 +43,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { CJK_FOOT, fitFigureSet, sameAsSource } from '../../../src/pdf-reader/engine/layer-proto/figure-fit.mjs'
 import { pageInk } from '@readarxiv/engine'
-import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
+import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap-final.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 

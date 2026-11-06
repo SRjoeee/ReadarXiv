@@ -30,6 +30,7 @@
 // printed. Runs with tsx from the repository root:
 //   pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--made] [--compile]
 //       [--dump=<dir>] [--against=<dir>] [--which] [--pack=<gate pack>] [--out=<dir>] <id>=<dir with source.gz and arxiv.pdf>[@<year>] …
+import { movedIn } from '../moved-in.mjs'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -51,8 +52,8 @@ if (!BASE) { console.error('usage: classes-gate.mjs --base=<dir holding src/> [-
 // (the engine measured: this repository's, or another tree's (`--engine`): the base engine's own run, dumped, is what --against
 // compares a run with, unit by unit)
 const ENGINE = join(resolve(argOf('engine') ?? join(LAB, '../..')), 'src/pdf-reader/engine')
-const E = f => import(pathToFileURL(join(ENGINE, f)).href)
-const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper, madeBibliography }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs'].map(E))
+const E = f => import(pathToFileURL(movedIn(ENGINE, f)).href)
+const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper, madeBibliography }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap-final.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs'].map(E))
 const base = await import(pathToFileURL(join(BASE, 'src/pdf-reader/engine/pipeline/live.mjs')).href)
 const IMAGES = JSON.parse(readFileSync(join(LAB, 'compile-images.json'), 'utf8'))
 const NM = join(LAB, '../../node_modules/pdfjs-dist/')

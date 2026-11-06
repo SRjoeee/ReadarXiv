@@ -68,7 +68,7 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
   }
   mkdirSync(dir, { recursive: true })
   const E = f => import(existsSync(join(engine, 'src/pdf-reader/engine', f)) ? join(engine, 'src/pdf-reader/engine', f) : join(engine, 'packages/engine/src', f.split('/').pop()))
-  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }, { bundleUnitsOf }] = await Promise.all(['layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs', 'layer-proto/bundle.mjs'].map(E))
+  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }, { bundleUnitsOf }] = await Promise.all([existsSync(join(engine, 'src/pdf-reader/engine/layout/wrap-final.mjs')) ? 'layout/wrap-final.mjs' : 'layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs', 'layer-proto/bundle.mjs'].map(E))
   // (the cell rules by the engine's own module; an engine from before REMOVAL 8 has none and reads its rules from its add-on, which
   // this instrument no longer makes: the gate's own module then, whose rules such an engine does not read)
   const { pageRules, checkBoxes } = await E('layout/cell-rules.mjs').catch(() => import('../../../../src/pdf-reader/engine/layout/cell-rules.mjs'))

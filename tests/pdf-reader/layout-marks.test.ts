@@ -14,7 +14,7 @@ import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeli
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { settleWithClock } from './helpers/clock'
-import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { ALLOCATION_FAILED } from '@readarxiv/engine'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —

@@ -14,7 +14,7 @@ import { ENGINE_ALLOW, ENGINE_PACKAGES } from '../../scripts/check-boundary.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const ENGINE = 'src/pdf-reader/engine/'
-const SERVER = [/^packages\/engine\/src\/(?!ink\.)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap)\.mjs$/]
+const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
 
 /** the files a browser build of `entries` reads, repository-relative: of the engine package (packages/engine, today's
  *  modules the rebuild moved into it, read through its one entry), those whose code the build keeps (its bytes in the output),
@@ -27,7 +27,7 @@ async function inputsOf(entries: string[]): Promise<string[]> {
 /** the package a file of node_modules belongs to (pnpm's layout: …/node_modules/<name>/…, the last one) */
 const packageOf = (f: string) => /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\/(?!.*\/node_modules\/)/.exec(f)?.[1] ?? null
 const PACKAGES = (ENGINE_PACKAGES as { name: string }[]).map(p => p.name)
-const allowed = (f: string) => f.startsWith(ENGINE) || /^packages\/engine\/src\/ink\.(?:mjs|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
+const allowed = (f: string) => f.startsWith(ENGINE) || /^packages\/engine\/src\/(?:ink|memory|delta-wire|tail)\.(?:mjs|types\.ts)$/.test(f) || (ENGINE_ALLOW as string[]).some(c => f === `${c}.ts` || f === `${c}/index.ts`) || PACKAGES.includes(packageOf(f) ?? '')
 
 describe('the reading view, bundled for the browser', () => {
   it('reads nothing outside the engine and the allowlist, no package, and nothing of the server\'s', async () => {
@@ -45,7 +45,8 @@ describe('the reading view, bundled for the browser', () => {
     expect(inputs.filter(f => SERVER.some(r => r.test(f))).length).toBeGreaterThan(0)
     expect(SERVER.some(r => r.test(`${ENGINE}pipeline/anchors.mjs`))).toBe(false)
     expect(SERVER.some(r => r.test(`${ENGINE}layout/cell-rules.mjs`))).toBe(false)
-    expect(SERVER.some(r => r.test(`${ENGINE}layout/wrap.mjs`))).toBe(true)
+    expect(SERVER.some(r => r.test(`${ENGINE}layout/wrap-final.mjs`))).toBe(true)
+    expect(SERVER.some(r => r.test('packages/engine/src/wrap.mjs'))).toBe(true)
     expect(allowed('node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist/build/pdf.mjs')).toBe(false)
     expect(allowed('src/pdf-reader/session/session.mjs')).toBe(false)
   }, 60_000)

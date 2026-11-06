@@ -484,7 +484,7 @@ describe('BUNDLE 8 held as a delta: the stand-in PDF the original, our page a de
   const { cutSample, sampleFiles } = await import('./layer-cut.mjs')
   const F = await import('@/pdf-reader/engine/layer-proto/format.mjs')
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const { startxrefOf } = await import('@/pdf-reader/engine/layout/tail.mjs')
+  const { startxrefOf } = await import('@readarxiv/engine')
   const cut = await cutSample(sampleFiles(), { base: 'delta' })
   const PATH = `/api/v1/layer/${sample.segment}/${F.CTAG5}`
   const sha = createHash('sha256').update(sample.pdf).digest('hex')

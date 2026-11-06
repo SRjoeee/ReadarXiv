@@ -2,7 +2,7 @@
 // below its constants: each token made a string, a number read by a pattern and Number), kept here alone as the reference the
 // lexer is held to: the same operators, operands, offsets, `bytes` and LexLimit refusals, value for value
 // (tests/pdf-reader/layout-lex.test.ts). Imported by no module of the engine.
-import { COST, LexLimit } from '../../../src/pdf-reader/engine/layout/remove.mjs'
+import { COST, LexLimit } from '@readarxiv/engine'
 
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1

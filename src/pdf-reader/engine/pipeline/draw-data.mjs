@@ -11,7 +11,7 @@
 // (draw.mjs drawRounded, F8), once its fills are read of them as they are. Imports the engine's pure modules alone.
 import { drawRounded, unmappedRuns, wireText } from '../layer-proto/draw.mjs'
 import { itemFills } from '../layout/fills.mjs'
-import { isMemoryError } from './memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 
 /**
  * The characters a font's own map gives its glyphs (the file's ToUnicode, or what its encoding names), each value as written and as PDF.js's

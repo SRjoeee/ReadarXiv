@@ -25,7 +25,7 @@ import { figureUnits } from '../../../src/pdf-reader/engine/pipeline/page-pass.m
 import { checkDelta, deltaKey, indexOf, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 import { deltaOf, proveDelta } from '../../../src/pdf-reader/engine/layout/delta.mjs'
 import { layerRows, sourceUnitsOf, toTranslate } from '../../../src/pdf-reader/engine/layer-proto/rows.mjs'
-import { startxrefOf } from '../../../src/pdf-reader/engine/layout/tail.mjs'
+import { startxrefOf } from '@readarxiv/engine'
 import { createHash } from 'node:crypto'
 import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { figureAnchors } from '../../../src/pdf-reader/engine/pipeline/ink-pass.mjs'

@@ -36,7 +36,7 @@ import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPar
 import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from '@readarxiv/engine'
 import { listOf, orNull } from './oplist.mjs'
 import { checkBoxes, pageRules } from './cell-rules.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, headsOf, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
