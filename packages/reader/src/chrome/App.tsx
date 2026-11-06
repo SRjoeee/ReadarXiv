@@ -26,7 +26,7 @@ export function App({ controller, parts }: { controller: ReaderController; parts
 }
 
 function Page({ controller }: { controller: ReaderController }) {
-  const { reason } = useParts()
+  const { reason, probe } = useParts()
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
@@ -45,13 +45,11 @@ function Page({ controller }: { controller: ReaderController }) {
     if (!left.current || !right.current) return
     // a session that cannot open is in the controller's state (a failure); nothing is left to catch here
     void controller.attach({ left: left.current, right: right.current }).then(
-      session => {
-        // the probes' hooks (lab/pdf/spikes): beside the session's own on window.__reader
-        Object.assign((window as unknown as { __reader: object }).__reader, { controller, session })
-      },
+      // the probes' hooks (the e2e's and the lab's): the host's, beside its session's own
+      session => probe?.(controller, session),
       () => {},
     )
-  }, [controller])
+  }, [controller, probe])
   useAppearance(state.appearance, state.dimPages)
   // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)

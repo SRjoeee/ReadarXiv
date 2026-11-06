@@ -2,7 +2,7 @@
 // passes its gate and the reader package lays the pages, stage 5's deletion list): its session (session/host.ts on the
 // engine's view, its run on our server's v1 layer) opened in the chrome's panes, its events told to the chrome's controller
 // with the extension's configuration as the one preference model, and the chrome's patches written as configuration changes.
-import type { SessionEvent as ChromeEvent, Session as ChromeSession, SessionHost as ChromeHost } from '@readarxiv/reader'
+import type { SessionEvent as ChromeEvent, Session as ChromeSession, SessionHost as ChromeHost, ReaderController } from '@readarxiv/reader'
 import type { Config } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { PackState } from '@/shared/pack'
@@ -62,4 +62,13 @@ export function todayOpen(o: { params: URLSearchParams; reading: ConfigReading |
     o.store.open(session)
     return { ...session, setPrefs: patch => session.patchSettings(c => withPrefs(c, patch)) }
   }
+}
+
+/** the controller as the probes read it (`window.__reader.controller`: tests/e2e, lab/pdf/spikes): the chrome's, its state with
+ *  the extension's settings and pack beside the preferences, and `patchSettings` writing a configuration change */
+export function probeController(controller: ReaderController, store: ConfigStore) {
+  return Object.assign(Object.create(controller) as ReaderController, {
+    getState: () => ({ ...controller.getState(), settings: store.state().config, pack: store.state().pack }),
+    patchSettings: (change: (latest: Config) => Config) => store.patch(change),
+  })
 }

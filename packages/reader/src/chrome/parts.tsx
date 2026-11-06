@@ -6,6 +6,7 @@
 import { createContext, type ReactNode, useContext } from 'react'
 import { LOCALES, localeInUse, type ProviderErrorKind } from '@readarxiv/ui'
 import { DEFAULTS, type Prefs } from '../prefs.ts'
+import type { ReaderController, Session } from './model.ts'
 
 export interface LanguageItem {
   id: string
@@ -38,6 +39,8 @@ export interface Parts {
   settingsHref: string | null
   /** the preferences shown, greyed, until the host's land */
   defaults: Prefs
+  /** the host's probe hooks, given the controller and the session once it is open (the extension's `window.__reader`) */
+  probe?: (controller: ReaderController, session: Session) => void
 }
 
 const own = (t: string) => t

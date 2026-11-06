@@ -12,7 +12,7 @@ import { chromeLanguages } from '@/pdf-reader/host/languages'
 import { settingsUrl } from '@/pdf-reader/host/links'
 import { prefsOf } from '@/pdf-reader/host/prefs'
 import { extensionSlots } from '@/pdf-reader/host/slots'
-import { configStore, todayOpen } from '@/pdf-reader/host/today'
+import { configStore, probeController, todayOpen } from '@/pdf-reader/host/today'
 import { frameOwner } from '@/shared/frame-owner'
 import { applyPageLocale } from '@/ui/apply-locale'
 import { answeredBy, firstReadTime } from '@/ui/first-read'
@@ -69,6 +69,8 @@ if (vouched !== null && (vouched.framed || topLevel)) {
       reason: kind => reasonText(kind, store.state().config?.provider),
       settingsHref: settingsUrl(),
       defaults,
+      // the probes' contract (the e2e's, the lab's spikes): the controller as it was, its state with the extension's settings
+      probe: (c, session) => Object.assign((window as unknown as { __reader: object }).__reader ?? ((window as unknown as { __reader: object }).__reader = {}), { controller: probeController(c, store), session }),
     },
   })
 }
