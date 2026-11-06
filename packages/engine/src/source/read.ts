@@ -525,7 +525,10 @@ class Walker {
     if (/^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]?def)$/.test(n)) {
       const d = definitionAt(f, i, to, this.isCall)
       if (d) {
-        if (!(d.provide && ctx.macros.has(d.name))) ctx.macros.set(d.name, d.macro)
+        // (\providecommand and \newcommand define nothing defined already: TeX's meaning at the document's start, or a
+        // definition the walk met; \renewcommand and \def always define)
+        const held = definitions(ctx.defs, d.name)
+        if (!((d.provide || n === 'newcommand') && (ctx.macros.has(d.name) || held))) ctx.macros.set(d.name, d.macro)
         return ph(d.end, 'other')
       }
     }
@@ -1678,6 +1681,12 @@ class Walker {
   }
 }
 
+/** whether TeX holds a command of that name at the document's start (neither undefined nor \relax, as \csname leaves one) */
+const definitions = (defs: Definitions, n: string): boolean => {
+  const m = defs.names.get(n)?.meaning
+  return !!m && m.k !== 'undefined' && !(m.k === 'other' && m.text === '\\relax')
+}
+
 const isChar = (t: Token | undefined, cat: number): boolean => !!t && t.k === 'char' && t.cat === cat
 
 /** what TeX's definitions say of the paper, read once: its own macros, newif values, theorems, display and code
@@ -1916,8 +1925,9 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     bbl,
     rowEnds: facts.rowEnds,
     calls: new Map(),
+    // (LaTeX records a package loaded as the macro \ver@<name>.sty; \@ifpackageloaded leaves \relax where it is not)
     backref:
-      (definitions.names.get('ver@backref.sty')?.meaning.k ?? 'undefined') !== 'undefined' &&
+      definitions.names.get('ver@backref.sty')?.meaning.k === 'macro' &&
       (definitions.names.get('ifbackrefparscan')?.meaning as { text?: string } | undefined)?.text !== '\\iffalse',
   }
   const w = new Walker(ctx)
@@ -1980,7 +1990,12 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
  * body's place yet, has its body walked where it stands, as units of that kind; kept where they hold four words or more
  * (an author block's, whatever they hold)
  */
-function storedBodies(w: Walker, units: BUnit[], written: ReadonlyMap<string, number>, defined: ReadonlyMap<string, number>): void {
+function storedBodies(
+  w: Walker,
+  units: BUnit[],
+  written: ReadonlyMap<string, number>,
+  defined: ReadonlyMap<string, number>,
+): void {
   const ctx = w.ctx
   ctx.ended = false
   for (const [n, call] of ctx.calls) {
@@ -1997,11 +2012,12 @@ function storedBodies(w: Walker, units: BUnit[], written: ReadonlyMap<string, nu
     const b = new Builder(site.file.path, units, site.file.text)
     if (AUTHOR_KINDS.has(kind)) w.frontBlock(site.file, site.a, site.b, b, kind === 'author' ? 'names' : 'places')
     else w.inKind(site.file, site.a, site.b, b, kind)
-    const words = units
-      .slice(before)
-      .flatMap((u) => u.pieces.filter((p) => p.t === 'text').map((p) => (p as { s: string }).s))
-      .join(' ')
-      .match(/\p{L}{2,}/gu)?.length ?? 0
+    const words =
+      units
+        .slice(before)
+        .flatMap((u) => u.pieces.filter((p) => p.t === 'text').map((p) => (p as { s: string }).s))
+        .join(' ')
+        .match(/\p{L}{2,}/gu)?.length ?? 0
     if (!AUTHOR_KINDS.has(kind) && words < 4) units.length = before
   }
 }

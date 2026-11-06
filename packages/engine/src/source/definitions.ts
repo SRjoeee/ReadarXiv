@@ -226,7 +226,10 @@ export function namesUsed(tree: Tree, rules: LexRules, always: Iterable<string> 
   // (every TeX file the package ships too, and the job's .bbl: a command defined or used only in one of them is asked)
   const queue: { path: string; dirs: string[] }[] = [
     { path: tree.main, dirs: [] },
-    ...[...tree.files.keys()].filter((p) => /\.(?:tex|sty|cls|bbl)$/i.test(p)).sort().map((path) => ({ path, dirs: [] })),
+    ...[...tree.files.keys()]
+      .filter((p) => /\.(?:tex|sty|cls|bbl)$/i.test(p))
+      .sort()
+      .map((path) => ({ path, dirs: [] })),
   ]
   const codes = new Catcodes()
   while (queue.length) {

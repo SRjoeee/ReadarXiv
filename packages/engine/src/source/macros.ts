@@ -374,35 +374,56 @@ export function setsWords(m: Macro): boolean {
     const f = bodyFile(m.body)
     let words = false
     let depth = 0
+    let brackets = 0
     let math = false
-    let run = 0
+    // (a run of letters, and whether it follows a number: TeX's unit of a dimension, `8pt`, is no word)
+    let run = ''
+    let afterNumber = false
+    const end = () => {
+      if (run.length >= 2 && !(afterNumber && UNITS.has(run))) words = true
+      run = ''
+    }
     for (let i = 0; i < f.toks.length && !words; i++) {
       const t = f.toks[i] as Token
-      if (t.k === 'char' && t.cat === CAT.math) {
-        math = !math
-        run = 0
+      const ch = f.text.slice(t.s, t.e)
+      if (t.k === 'letter' && depth === 0 && brackets === 0 && !math && /\p{L}/u.test(ch)) {
+        if (!run) afterNumber = /[\d.]\s*$/.test(f.text.slice(Math.max(0, t.s - 3), t.s))
+        run += ch
         continue
       }
-      if (isBegin(t)) {
-        depth++
-        run = 0
-        continue
-      }
-      if (t.k === 'char' && t.cat === CAT.end) {
-        depth--
-        run = 0
-        continue
-      }
-      if (t.k === 'letter' && depth === 0 && !math && /\p{L}/u.test(f.text.slice(t.s, t.e))) {
-        if (++run >= 2) words = true
-        continue
-      }
-      run = 0
+      end()
+      if (t.k === 'char' && t.cat === CAT.math) math = !math
+      else if (isBegin(t)) depth++
+      else if (t.k === 'char' && t.cat === CAT.end) depth--
+      else if (depth === 0 && isOther(t, '[')) brackets++
+      else if (depth === 0 && isOther(t, ']')) brackets = Math.max(0, brackets - 1)
     }
+    end()
     m.words = words
   }
   return m.words
 }
+/** TeX's units of a dimension */
+const UNITS = new Set([
+  'pt',
+  'em',
+  'ex',
+  'cm',
+  'mm',
+  'in',
+  'bp',
+  'sp',
+  'pc',
+  'dd',
+  'cc',
+  'mu',
+  'true',
+  'fil',
+  'fill',
+  'filll',
+  'plus',
+  'minus',
+])
 
 /** the paper's own names: those its files define by a definer of TeX or LaTeX (\newcommand, \def, \let, …), read on the
  *  tokens (no comment or verbatim text counts) */
@@ -562,7 +583,14 @@ export function definitionAt(
   if (!isBegin(f.toks[k])) return null
   const c = f.close[k] ?? -1
   if (c < 0 || c >= to) return null
-  const m: Macro = { params, opt, delimited: false, body: f.src(k + 1, c), readsOn: false, site: { file: f, a: k + 1, b: c } }
+  const m: Macro = {
+    params,
+    opt,
+    delimited: false,
+    body: f.src(k + 1, c),
+    readsOn: false,
+    site: { file: f, a: k + 1, b: c },
+  }
   analyse(name, m, isCall)
   return { name, macro: m, end: c + 1, global: false, provide: how === 'providecommand' }
 }

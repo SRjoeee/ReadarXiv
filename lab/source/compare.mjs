@@ -74,15 +74,21 @@ function byteOffsets(text) {
   return out
 }
 
-/** a multiset join by id: [pairs, leftA, leftB] */
+/** a multiset join by id: [leftA, leftB]. Among equal ids, a unit at the same place (file and byte offset, where both sides
+ *  have one) first, then the k-th with the k-th */
 function join2(a, b) {
   const byId = new Map()
   for (const x of b) (byId.get(x.id) ?? byId.set(x.id, []).get(x.id)).push(x)
-  const left = []
   const used = new Set()
+  const rest = []
   for (const x of a) {
-    const list = byId.get(x.id)
-    const y = list?.shift()
+    const y = x.file !== undefined ? byId.get(x.id)?.find(z => !used.has(z) && z.file === x.file && z.b0 === x.start) : undefined
+    if (y) used.add(y)
+    else rest.push(x)
+  }
+  const left = []
+  for (const x of rest) {
+    const y = byId.get(x.id)?.find(z => !used.has(z))
     if (y) used.add(y)
     else left.push(x)
   }
@@ -131,12 +137,14 @@ for (const p of papers) {
     const project = loadProject(inMemory(files), main, { tables: true })
     const todayMs = performance.now() - t1
     const today = todayUnits(project)
-    const mine = doc.units.map(u => ({ id: u.id, kind: u.kind, file: u.file, start: u.start, end: u.end, tagged: flat(u.content) }))
+    const texts = new Map()
+    const offsets = f => texts.get(f) ?? texts.set(f, byteOffsets(UTF8.decode(files.get(f)).replace(/\r\n?/g, '\n'))).get(f)
+    const mine = doc.units.map(u => ({ id: u.id, kind: u.kind, file: u.file, start: u.start, end: u.end, b0: offsets(u.file)[u.start], b1: offsets(u.file)[u.end], tagged: flat(u.content) }))
     // the baseline's source units
     const dump = JSON.parse(readFileSync(join(BASE, `${p.id}.prepare.json`), 'utf8'))
     const base = dump.units.filter(u => SOURCE_KINDS.has(u.kind))
     totals.names += dump.units.filter(u => u.kind === 'name').length
-    const [baseLeft] = join2(base, mine)
+    const [baseLeft] = join2(base.map(u => ({ id: u.id })), mine)
     totals.baseline += base.length
     totals.sameBaseline += base.length - baseLeft.length
     // today (run here) against new, paired by place
@@ -145,9 +153,7 @@ for (const p of papers) {
     totals.today += today.length
     totals.mine += mine.length
     totals.same += today.length - tLeft.length
-    const texts = new Map()
-    const offsets = f => texts.get(f) ?? texts.set(f, byteOffsets(UTF8.decode(files.get(f)).replace(/\r\n?/g, '\n'))).get(f)
-    const placed = mLeft.map(u => ({ ...u, b0: offsets(u.file)[u.start], b1: offsets(u.file)[u.end] }))
+    const placed = mLeft
     const taken = new Set()
     for (const u of tLeft) {
       const v = placed.find(x => !taken.has(x) && x.file === u.file && x.b0 < u.end && u.start < x.b1 && x.kind === u.kind) ?? placed.find(x => !taken.has(x) && x.file === u.file && x.b0 < u.end && u.start < x.b1)

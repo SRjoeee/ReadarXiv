@@ -8,7 +8,10 @@ const tree = (files: Record<string, string>, main = 'main.tex') => ({
   files: new Map(Object.entries(files).map(([k, v]) => [k, new TextEncoder().encode(v)])),
 })
 const doc = (body: string, preamble = '', defs = NO_DEFINITIONS) =>
-  readSource(tree({ 'main.tex': `\\documentclass{article}\n${preamble}\\begin{document}\n${body}\n\\end{document}\n` }), defs)
+  readSource(
+    tree({ 'main.tex': `\\documentclass{article}\n${preamble}\\begin{document}\n${body}\n\\end{document}\n` }),
+    defs,
+  )
 /** a unit's pieces as the id reads them: t text, p element, o/c a span's open and close, n a nested unit (an explicit
  *  stack: spans nest deep) */
 const flat = (content: readonly Piece[]): string[][] => {
@@ -31,10 +34,15 @@ const flat = (content: readonly Piece[]): string[][] => {
   }
   return out
 }
-const text = (u: SourceUnit) => flat(u.content).map((p) => (p[0] === 't' ? p[1] : p[0] === 'p' ? '·' : '')).join('')
+const text = (u: SourceUnit) =>
+  flat(u.content)
+    .map((p) => (p[0] === 't' ? p[1] : p[0] === 'p' ? '·' : ''))
+    .join('')
 /** TeX's records as the definitions pass writes them */
 const records = (...lines: string[]) =>
-  readDefinitions([`H ${DEFINITIONS_FORMAT}`, ...lines, `END ${lines.filter((l) => l.startsWith('M ')).length}`].join('\n'))
+  readDefinitions(
+    [`H ${DEFINITIONS_FORMAT}`, ...lines, `END ${lines.filter((l) => l.startsWith('M ')).length}`].join('\n'),
+  )
 
 describe('readSource: the cut', () => {
   it('cuts paragraphs at TeX’s paragraph ends, a comment’s empty line one of them', () => {
@@ -123,7 +131,10 @@ describe('readSource: what TeX holds decides', () => {
     expect(d.units.map((u) => text(u))).toEqual(['· Final words only.·\n'])
   })
   it('takes no theorem for an environment whose meaning sets no run-in head', () => {
-    const defs = records('M algorithm macro:->\\@protected@testopt \\algorithm \\\\algorithm {htbp}', 'M endalgorithm macro:->\\end {algocf@algorithm}')
+    const defs = records(
+      'M algorithm macro:->\\@protected@testopt \\algorithm \\\\algorithm {htbp}',
+      'M endalgorithm macro:->\\end {algocf@algorithm}',
+    )
     const d = doc('\\begin{algorithm}\nSome steps of words.\n\\end{algorithm}', '', defs)
     expect(d.units.map((u) => u.kind)).toEqual(['para'])
   })
