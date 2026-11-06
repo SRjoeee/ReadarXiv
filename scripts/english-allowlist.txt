@@ -159,3 +159,5 @@ CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the dou
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
+packages/translate/tests/accept.test.ts 32  # 2026-11-07: Chinese readings of a unit, the inputs and expectations of the acceptance rule (packages/translate)
+packages/translate/tests/sha256.test.ts 1  # 2026-11-07: a multilingual text, the input of a digest checked against Node's
