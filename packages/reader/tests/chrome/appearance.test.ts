@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the appearance (the reader\'s design, §4.3)', () => {
+describe("the appearance (the reader's design, §4.3)", () => {
   it('is the one chosen, or none to follow the system', () => {
     expect(themeOf('light')).toBe('light')
     expect(themeOf('dark')).toBe('dark')
@@ -25,11 +25,17 @@ describe('the appearance (the reader\'s design, §4.3)', () => {
   it('takes a crossfade cut short (the window resized as it ran) as no fault (Task 21)', async () => {
     const unhandled = vi.fn()
     process.on('unhandledRejection', unhandled)
-    const aborted = () => Promise.reject(new DOMException('Transition was aborted because of invalid state', 'InvalidStateError'))
+    const aborted = () =>
+      Promise.reject(new DOMException('Transition was aborted because of invalid state', 'InvalidStateError'))
     vi.stubGlobal('matchMedia', () => ({ matches: false }))
-    Object.assign(document, { startViewTransition: (run: () => void) => { run(); return { ready: aborted(), finished: aborted(), updateCallbackDone: Promise.resolve() } } })
+    Object.assign(document, {
+      startViewTransition: (run: () => void) => {
+        run()
+        return { ready: aborted(), finished: aborted(), updateCallbackDone: Promise.resolve() }
+      },
+    })
     applyAppearance(document.documentElement, { theme: 'dark', dim: false }, true)
-    await new Promise(r => setTimeout(r, 0))
+    await new Promise((r) => setTimeout(r, 0))
     process.off('unhandledRejection', unhandled)
     expect(unhandled).not.toHaveBeenCalled()
     expect(document.documentElement.dataset.theme).toBe('dark')
@@ -51,10 +57,13 @@ describe('the appearance (the reader\'s design, §4.3)', () => {
   it('holds every transition but a motion for the flip, and lets go two frames later: a pressed button flashed as it faded, and the thumb must still slide (better-ui)', async () => {
     vi.stubGlobal('matchMedia', () => ({ matches: false }))
     Object.assign(document, { startViewTransition: undefined })
-    const off = () => [...document.head.querySelectorAll('style')].some(s => /transition-property:\s*translate\s*!important/.test(s.textContent ?? ''))
+    const off = () =>
+      [...document.head.querySelectorAll('style')].some((s) =>
+        /transition-property:\s*translate\s*!important/.test(s.textContent ?? ''),
+      )
     applyAppearance(document.documentElement, { theme: 'dark', dim: false }, true)
     expect([document.documentElement.dataset.theme, off()]).toEqual(['dark', true])
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))
     expect(off()).toBe(false)
   })
 })

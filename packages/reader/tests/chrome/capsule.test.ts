@@ -2,6 +2,7 @@
 // capsule both the extension and the website draw (Capsule.tsx). How the words move with the box is measured in a real
 // browser, frame by frame (tests/e2e/probes/capsule.mjs)
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Info } from 'lucide'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,13 +16,25 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
-describe('the capsule\'s words in parts', () => {
+describe("the capsule's words in parts", () => {
   it('a sentence split around its count, or around a name in a language of its own; whole where it holds neither', () => {
-    expect(withCount('Translating · 12 of 86 passages', 12)).toEqual({ prefix: 'Translating · ', count: 12, suffix: ' of 86 passages' })
+    expect(withCount('Translating · 12 of 86 passages', 12)).toEqual({
+      prefix: 'Translating · ',
+      count: 12,
+      suffix: ' of 86 passages',
+    })
     expect(withCount('3 处翻译失败', 3)).toEqual({ prefix: '', count: 3, suffix: ' 处翻译失败' })
-    expect(withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })).toEqual({ prefix: 'PDF 对照暂不支持', part: { text: '日本語', lang: 'ja' }, suffix: '' })
+    expect(withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })).toEqual({
+      prefix: 'PDF 对照暂不支持',
+      part: { text: '日本語', lang: 'ja' },
+      suffix: '',
+    })
     // the count where it stands as a number of its own, not inside another
-    expect(withCount('Translating · 6 of 86 passages', 6)).toEqual({ prefix: 'Translating · ', count: 6, suffix: ' of 86 passages' })
+    expect(withCount('Translating · 6 of 86 passages', 6)).toEqual({
+      prefix: 'Translating · ',
+      count: 6,
+      suffix: ' of 86 passages',
+    })
     for (const text of ['Preparing', '正在生成页面']) {
       expect(withCount(text, 4)).toBe(plain(text))
       expect(withPart(text, { text: '日本語', lang: 'ja' })).toBe(plain(text))
@@ -47,8 +60,12 @@ describe('the capsule\'s words in parts', () => {
 
   it('equal words are one object', () => {
     expect(plain('Preparing')).toBe(plain('Preparing'))
-    expect(withCount('Translating · 12 of 86 passages', 12)).toBe(words({ prefix: 'Translating · ', count: 12, suffix: ' of 86 passages' }))
-    expect(withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })).toBe(words({ prefix: 'PDF 对照暂不支持', part: { text: '日本語', lang: 'ja' }, suffix: '' }))
+    expect(withCount('Translating · 12 of 86 passages', 12)).toBe(
+      words({ prefix: 'Translating · ', count: 12, suffix: ' of 86 passages' }),
+    )
+    expect(withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })).toBe(
+      words({ prefix: 'PDF 对照暂不支持', part: { text: '日本語', lang: 'ja' }, suffix: '' }),
+    )
     // words that draw the same are the same: a plain sentence is its one string, however it was split
     expect(words({ prefix: 'Prep', suffix: 'aring' })).toBe(plain('Preparing'))
     expect(keyOf(plain('9'))).not.toBe(keyOf(words({ prefix: '', count: 9, suffix: '' })))
@@ -59,8 +76,8 @@ describe('the capsule\'s words in parts', () => {
   })
 })
 
-describe('the motion\'s arithmetic', () => {
-  it('the growing box\'s curve reaches 60 % of its way at 161 ms of its 300', () => {
+describe("the motion's arithmetic", () => {
+  it("the growing box's curve reaches 60 % of its way at 161 ms of its 300", () => {
     expect(Math.round(300 * timeAt(0.6))).toBe(161)
     expect(Math.round(CHOREOGRAPHY.grow * timeAt(CHOREOGRAPHY.appearAt, SOFT))).toBe(161)
   })
@@ -74,9 +91,13 @@ describe('the motion\'s arithmetic', () => {
     expect(swapAt(100, 100.2, [101])).toBe(0)
   })
 
-  it('the sheet\'s curves are the engine\'s: what reader.css moves and what the engine starts move alike', () => {
-    const sheet = readFileSync('src/entrypoints/pdf-reader/reader.css', 'utf8')
-    const token = (name: string) => sheet.match(new RegExp(`${name}:\\s*cubic-bezier\\(([^)]*)\\)`))?.[1]?.split(',').map(Number)
+  it("the sheet's curves are the engine's: what reader.css moves and what the engine starts move alike", () => {
+    const sheet = readFileSync(join(import.meta.dirname, '../../src/chrome/reader.css'), 'utf8')
+    const token = (name: string) =>
+      sheet
+        .match(new RegExp(`${name}:\\s*cubic-bezier\\(([^)]*)\\)`))?.[1]
+        ?.split(',')
+        .map(Number)
     expect(token('--ease-soft')).toEqual([...SOFT])
     expect(token('--ease-out')).toEqual([0.23, 1, 0.32, 1])
     expect(token('--ease-in-out')).toEqual([0.77, 0, 0.175, 1])
@@ -88,54 +109,105 @@ describe('the capsule', () => {
 
   it('its words in a cell of their own, hidden from assistive technology, which is told them whole once in a line of its own', async () => {
     const said = withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })
-    const { container } = await mountElement(createElement(Capsule, { kind: 'unsupported', icon: Info, words: said, wordsId: 'said' }))
+    const { container } = await mountElement(
+      createElement(Capsule, { kind: 'unsupported', icon: Info, words: said, wordsId: 'said' }),
+    )
     const cell = drawn(container)
-    expect([cell.getAttribute('aria-hidden'), cell.textContent, document.getElementById('said')?.textContent]).toEqual(['true', 'PDF 对照暂不支持日本語', 'PDF 对照暂不支持日本語'])
+    expect([cell.getAttribute('aria-hidden'), cell.textContent, document.getElementById('said')?.textContent]).toEqual([
+      'true',
+      'PDF 对照暂不支持日本語',
+      'PDF 对照暂不支持日本語',
+    ])
     // #313 (Devin): the language's own name drawn in its own language
     expect(cell.querySelector('.part[lang="ja"]')?.textContent).toBe('日本語')
     expect(container.querySelectorAll('.sr-only')).toHaveLength(1)
   })
 
-  it('the line a screen reader is told keeps the part\'s language: the own name in its lang there too (Codex and Devin on #317)', async () => {
+  it("the line a screen reader is told keeps the part's language: the own name in its lang there too (Codex and Devin on #317)", async () => {
     const said = withPart('PDF 对照暂不支持日本語', { text: '日本語', lang: 'ja' })
-    const { container } = await mountElement(createElement(Capsule, { kind: 'unsupported', icon: Info, words: said, wordsId: 'told' }))
+    const { container } = await mountElement(
+      createElement(Capsule, { kind: 'unsupported', icon: Info, words: said, wordsId: 'told' }),
+    )
     const told = document.getElementById('told')!
-    expect([told.textContent, told.querySelector('[lang="ja"]')?.textContent, told.closest('[aria-hidden="true"]')]).toEqual(['PDF 对照暂不支持日本語', '日本語', null])
+    expect([
+      told.textContent,
+      told.querySelector('[lang="ja"]')?.textContent,
+      told.closest('[aria-hidden="true"]'),
+    ]).toEqual(['PDF 对照暂不支持日本語', '日本語', null])
     // the words drawn are as they were: the motion's cell, its part in its lang
     expect(container.querySelector('.words .part[lang="ja"]')?.textContent).toBe('日本語')
   })
 
   it('a count in cells of its own, one a digit, each over a hidden 0 that holds its width', async () => {
-    const { container } = await mountElement(createElement(Capsule, { kind: 'progress', icon: 'spinner', words: withCount('Translating · 12 of 86 passages', 12) }))
-    const cells = [...drawn(container).querySelectorAll('.num > .dg')].map(dg => [dg.querySelector('.gh')?.textContent, dg.querySelector('.d')?.textContent])
-    expect(cells).toEqual([['0', '1'], ['0', '2']])
+    const { container } = await mountElement(
+      createElement(Capsule, {
+        kind: 'progress',
+        icon: 'spinner',
+        words: withCount('Translating · 12 of 86 passages', 12),
+      }),
+    )
+    const cells = [...drawn(container).querySelectorAll('.num > .dg')].map((dg) => [
+      dg.querySelector('.gh')?.textContent,
+      dg.querySelector('.d')?.textContent,
+    ])
+    expect(cells).toEqual([
+      ['0', '1'],
+      ['0', '2'],
+    ])
   })
 
   it('the spinner, for a run under way', async () => {
-    const { container } = await mountElement(createElement(Capsule, { kind: 'progress', icon: 'spinner', words: plain('Preparing') }))
+    const { container } = await mountElement(
+      createElement(Capsule, { kind: 'progress', icon: 'spinner', words: plain('Preparing') }),
+    )
     expect(container.querySelector('.capsule > svg.spin')).not.toBeNull()
-    const { container: still } = await mountElement(createElement(Capsule, { kind: 'notice', icon: Info, words: plain('Preparing') }))
-    expect([still.querySelector('.capsule > svg'), still.querySelector('.capsule > svg.spin')].map(e => e !== null)).toEqual([true, false])
+    const { container: still } = await mountElement(
+      createElement(Capsule, { kind: 'notice', icon: Info, words: plain('Preparing') }),
+    )
+    expect(
+      [still.querySelector('.capsule > svg'), still.querySelector('.capsule > svg.spin')].map((e) => e !== null),
+    ).toEqual([true, false])
   })
 
   it('what a screen reader is told may be other words than those drawn', async () => {
-    const { container } = await mountElement(createElement(Capsule, { kind: 'progress', icon: 'spinner', words: withCount('正在翻译 · 12 / 86 段', 12), spoken: '正在翻译，0 / 86 段' }))
-    expect([container.querySelector('.sr-only')?.textContent, drawn(container).textContent?.includes('段')]).toEqual(['正在翻译，0 / 86 段', true])
+    const { container } = await mountElement(
+      createElement(Capsule, {
+        kind: 'progress',
+        icon: 'spinner',
+        words: withCount('正在翻译 · 12 / 86 段', 12),
+        spoken: '正在翻译，0 / 86 段',
+      }),
+    )
+    expect([container.querySelector('.sr-only')?.textContent, drawn(container).textContent?.includes('段')]).toEqual([
+      '正在翻译，0 / 86 段',
+      true,
+    ])
   })
 
   it('other words: the new ones in the cell, read once in the line a screen reader is told', async () => {
     const at = (w: ReturnType<typeof plain>) => createElement(Capsule, { kind: 'progress', icon: 'spinner', words: w })
     const mounted = await mountElement(at(plain('Waiting in line')))
     await mounted.rerender(at(plain('Preparing')))
-    const live = [...drawn(mounted.container).querySelectorAll('.line')].filter(l => l.getAttribute('data-state') !== 'out')
-    expect([live.map(l => l.textContent), mounted.container.querySelector('.sr-only')?.textContent]).toEqual([['Preparing'], 'Preparing'])
+    const live = [...drawn(mounted.container).querySelectorAll('.line')].filter(
+      (l) => l.getAttribute('data-state') !== 'out',
+    )
+    expect([live.map((l) => l.textContent), mounted.container.querySelector('.sr-only')?.textContent]).toEqual([
+      ['Preparing'],
+      'Preparing',
+    ])
   })
 
   it('what follows the words comes and goes with them: the new one held for the motion, the old one a picture that leaves, no action of its own', async () => {
-    const at = (chip: boolean) => createElement(Capsule, {
-      kind: 'progress', icon: 'spinner', words: plain('Translating'), afterKey: chip ? 'show' : '', alone: !chip,
-      after: chip && createElement('button', { type: 'button', className: 'chip', 'data-action': '' }, 'Show translation'),
-    })
+    const at = (chip: boolean) =>
+      createElement(Capsule, {
+        kind: 'progress',
+        icon: 'spinner',
+        words: plain('Translating'),
+        afterKey: chip ? 'show' : '',
+        alone: !chip,
+        after:
+          chip && createElement('button', { type: 'button', className: 'chip', 'data-action': '' }, 'Show translation'),
+      })
     const mounted = await mountElement(at(false))
     expect(mounted.container.querySelector('.after')).toBeNull()
     await mounted.rerender(at(true))
@@ -144,23 +216,33 @@ describe('the capsule', () => {
     await mounted.rerender(at(false))
     // the chip React removed is drawn leaving: inert, hidden, and no longer an action anything can find or press
     const ghost = mounted.container.querySelector<HTMLElement>('.after')
-    expect(ghost === null || (ghost.dataset.state === 'out' && ghost.inert && ghost.querySelector('[data-action]') === null)).toBe(true)
+    expect(
+      ghost === null || (ghost.dataset.state === 'out' && ghost.inert && ghost.querySelector('[data-action]') === null),
+    ).toBe(true)
   })
 })
 
 describe('the count', () => {
   /** a box and its cell, laid out nowhere (happy-dom): the count's timing alone */
   function capsule() {
-    const box = document.createElement('div'), cell = document.createElement('span')
+    const box = document.createElement('div'),
+      cell = document.createElement('span')
     box.className = 'capsule'
     cell.className = 'words'
     box.append(cell)
     document.body.append(box)
     const added: string[] = []
-    const shown = () => [...cell.querySelectorAll('.line:not([data-state]) .d:not([data-out])')].map(d => d.textContent).join('')
+    const shown = () =>
+      [...cell.querySelectorAll('.line:not([data-state]) .d:not([data-out])')].map((d) => d.textContent).join('')
     const motion = capsuleMotion(box, cell, { reduced: () => false })
     // every digit ever put in the cell, as it is put there
-    const record = () => { for (const d of cell.querySelectorAll('.d')) if (!d.hasAttribute('data-seen')) { d.setAttribute('data-seen', ''); added.push(d.textContent ?? '') } }
+    const record = () => {
+      for (const d of cell.querySelectorAll('.d'))
+        if (!d.hasAttribute('data-seen')) {
+          d.setAttribute('data-seen', '')
+          added.push(d.textContent ?? '')
+        }
+    }
     return { motion, shown, added, record }
   }
   const at = (n: number) => withCount(`正在翻译 · ${n} / 86 段`, n)
@@ -210,34 +292,45 @@ describe('an action that comes while the box opens for it (Codex on #317)', () =
    */
   function opening(reduced: boolean) {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    const slot = document.createElement('div'), box = document.createElement('div'), cell = document.createElement('span')
+    const slot = document.createElement('div'),
+      box = document.createElement('div'),
+      cell = document.createElement('span')
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     box.className = 'capsule'
     cell.className = 'words'
     box.append(icon, cell)
     slot.append(box)
     document.body.append(slot)
-    const after = document.createElement('span'), chip = document.createElement('button')
+    const after = document.createElement('span'),
+      chip = document.createElement('button')
     after.className = 'after'
     chip.textContent = 'Show translation'
     after.append(chip)
     const real = window.getComputedStyle.bind(window)
     const width = (el: Element) => (el === icon ? 15 : el.classList.contains('line') ? 100 : el === after ? 80 : 0)
-    const box3 = { paddingInlineStart: '12px', paddingInlineEnd: '6px', columnGap: '8px' } as Record<string | symbol, string>
-    vi.spyOn(window, 'getComputedStyle').mockImplementation(el => new Proxy(real(el), {
-      get(s, p) {
-        if (el === box && p in box3) return box3[p]
-        if (p === 'width' && el !== box) return `${width(el)}px`
-        const v = Reflect.get(s, p)
-        return typeof v === 'function' ? v.bind(s) : v
-      },
-    }))
+    const box3 = { paddingInlineStart: '12px', paddingInlineEnd: '6px', columnGap: '8px' } as Record<
+      string | symbol,
+      string
+    >
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (el) =>
+        new Proxy(real(el), {
+          get(s, p) {
+            if (el === box && p in box3) return box3[p]
+            if (p === 'width' && el !== box) return `${width(el)}px`
+            const v = Reflect.get(s, p)
+            return typeof v === 'function' ? v.bind(s) : v
+          },
+        }),
+    )
     const motion = capsuleMotion(box, cell, { reduced: () => reduced })
     motion.change(plain('Translating'))
     box.append(after)
     return { motion, after, chip }
   }
-  afterEach(() => { vi.restoreAllMocks() })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
   it('unseen while the box opens, it is inert: nothing can focus it or tell it; once its entrance begins, it can be focused', async () => {
     const { motion, after, chip } = opening(false)

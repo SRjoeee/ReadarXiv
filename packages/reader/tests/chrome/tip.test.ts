@@ -8,16 +8,25 @@ import { isOpen, stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the timers are faked after mounting only: mountElement settles React on a real timer
-beforeEach(() => { restore = stubPopovers() })
-afterEach(() => { restore(); vi.useRealTimers(); document.body.innerHTML = '' })
+beforeEach(() => {
+  restore = stubPopovers()
+})
+afterEach(() => {
+  restore()
+  vi.useRealTimers()
+  document.body.innerHTML = ''
+})
 
 /** a pointer event as a browser sends it: bubbling, so that React (which listens at its root) hears it; React makes its
  *  enter and leave out of over and out */
-const pointer = (target: Element, type: 'pointerover' | 'pointerout' | 'pointerdown') => target.dispatchEvent(new MouseEvent(type, { bubbles: true, relatedTarget: type === 'pointerout' ? document.body : null }))
+const pointer = (target: Element, type: 'pointerover' | 'pointerout' | 'pointerdown') =>
+  target.dispatchEvent(
+    new MouseEvent(type, { bubbles: true, relatedTarget: type === 'pointerout' ? document.body : null }),
+  )
 const mount = (props: Partial<Parameters<typeof ToolbarButton>[0]> = {}) =>
   mountElement(createElement(ToolbarButton, { label: '放大', hint: '⌘ +', onClick: () => {}, ...props }, 'x'))
 
-describe('a toolbar button and its tooltip (the reader\'s design, §6.1, §13)', () => {
+describe("a toolbar button and its tooltip (the reader's design, §6.1, §13)", () => {
   it('is named by its words, and its tooltip shows them with the shortcut', async () => {
     const { container } = await mount()
     const button = container.querySelector('button')!
@@ -27,45 +36,81 @@ describe('a toolbar button and its tooltip (the reader\'s design, §6.1, §13)',
 
   it('shows its tooltip after 500 ms of hover, and hides it on leaving', async () => {
     const { container } = await mount()
-    const button = container.querySelector('button')!, tip = container.querySelector('[popover]')
+    const button = container.querySelector('button')!,
+      tip = container.querySelector('[popover]')
     vi.useFakeTimers()
-    await act(async () => { pointer(button, 'pointerover') })
-    await act(async () => { vi.advanceTimersByTime(499) })
+    await act(async () => {
+      pointer(button, 'pointerover')
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(499)
+    })
     expect(isOpen(tip)).toBe(false)
-    await act(async () => { vi.advanceTimersByTime(1) })
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
     expect(isOpen(tip)).toBe(true)
-    await act(async () => { pointer(button, 'pointerout') })
+    await act(async () => {
+      pointer(button, 'pointerout')
+    })
     expect(isOpen(tip)).toBe(false)
   })
 
   it('shows it at once on keyboard focus, not on a press', async () => {
     const { container } = await mount()
-    const button = container.querySelector('button')!, tip = container.querySelector('[popover]')
-    await act(async () => { button.focus() })
+    const button = container.querySelector('button')!,
+      tip = container.querySelector('[popover]')
+    await act(async () => {
+      button.focus()
+    })
     expect(isOpen(tip)).toBe(true)
-    await act(async () => { button.blur() })
-    await act(async () => { pointer(button, 'pointerdown'); button.focus() })
+    await act(async () => {
+      button.blur()
+    })
+    await act(async () => {
+      pointer(button, 'pointerdown')
+      button.focus()
+    })
     expect(isOpen(tip)).toBe(false)
   })
 
-  it('shows inside an open popover, and not over one it is outside of (the appearance\'s icons in the reading options)', async () => {
+  it("shows inside an open popover, and not over one it is outside of (the appearance's icons in the reading options)", async () => {
     // an open popover (the stub's data-open) holding a button, and a button outside it
-    const inside = await mountElement(createElement('div', { className: 'pop', 'data-open': '' }, createElement(ToolbarButton, { label: '浅色', onClick: () => {} }, 'x')))
+    const inside = await mountElement(
+      createElement(
+        'div',
+        { className: 'pop', 'data-open': '' },
+        createElement(ToolbarButton, { label: '浅色', onClick: () => {} }, 'x'),
+      ),
+    )
     const outside = await mount()
     // each read as it is focused: the other one's blur hides a tip
     const shown = []
     for (const { container } of [inside, outside]) {
-      await act(async () => { container.querySelector('button')!.focus() })
+      await act(async () => {
+        container.querySelector('button')!.focus()
+      })
       shown.push(isOpen(container.querySelector('.tip')))
     }
     expect(shown).toEqual([true, false])
   })
 
   it('a small icon button of the reader is named in a tooltip beside it, below by default and above or aside where it stands at the foot of the page or in the sidebar', async () => {
-    for (const [side, expected] of [[undefined, 'bottom'], ['top', 'top'], ['right', 'right']] as const) {
-      const { container } = await mountElement(createElement(TippedButton, { label: R.status.close, side, onClick: () => {} }, 'x'))
+    for (const [side, expected] of [
+      [undefined, 'bottom'],
+      ['top', 'top'],
+      ['right', 'right'],
+    ] as const) {
+      const { container } = await mountElement(
+        createElement(TippedButton, { label: R.status.close, side, onClick: () => {} }, 'x'),
+      )
       const button = container.querySelector('button')!
-      expect([button.getAttribute('aria-label'), button.nextElementSibling?.matches('.tip[popover]'), button.nextElementSibling?.textContent, button.nextElementSibling?.getAttribute('data-side')]).toEqual([R.status.close, true, R.status.close, expected])
+      expect([
+        button.getAttribute('aria-label'),
+        button.nextElementSibling?.matches('.tip[popover]'),
+        button.nextElementSibling?.textContent,
+        button.nextElementSibling?.getAttribute('data-side'),
+      ]).toEqual([R.status.close, true, R.status.close, expected])
     }
   })
 

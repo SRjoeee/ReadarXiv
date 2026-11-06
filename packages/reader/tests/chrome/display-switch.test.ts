@@ -8,22 +8,41 @@ import { stubPopovers } from '../popover-stub.ts'
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them
 beforeAll(() => setLocale('zh-CN'))
-beforeEach(() => { restore = stubPopovers() })
-afterEach(() => { restore(); document.body.innerHTML = '' })
+beforeEach(() => {
+  restore = stubPopovers()
+})
+afterEach(() => {
+  restore()
+  document.body.innerHTML = ''
+})
 
-const mount = (value: 'original' | 'bilingual' | 'translation', translatable = true, off?: readonly ('original' | 'bilingual' | 'translation')[]) => {
+const mount = (
+  value: 'original' | 'bilingual' | 'translation',
+  translatable = true,
+  off?: readonly ('original' | 'bilingual' | 'translation')[],
+) => {
   const onChange = vi.fn()
-  return mountElement(createElement(DisplaySwitch, { value, translatable, off, onChange })).then(m => ({ ...m, onChange }))
+  return mountElement(createElement(DisplaySwitch, { value, translatable, off, onChange })).then((m) => ({
+    ...m,
+    onChange,
+  }))
 }
-const key = (target: EventTarget, k: string) => act(async () => { target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })) })
+const key = (target: EventTarget, k: string) =>
+  act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }))
+  })
 
-describe('the display switch (the reader\'s design, §6.2)', () => {
+describe("the display switch (the reader's design, §6.2)", () => {
   it('is a radio group named 显示, its three choices named by their words, the chosen one checked', async () => {
     const { container } = await mount('bilingual')
     expect(container.querySelector('[role="radiogroup"]')!.getAttribute('aria-label')).toBe('显示')
     const radios = [...container.querySelectorAll('[role="radio"]')]
-    expect(radios.map(r => [r.getAttribute('aria-label'), r.getAttribute('aria-checked')])).toEqual([['原文', 'false'], ['对照', 'true'], ['译文', 'false']])
-    expect(radios.map(r => r.getAttribute('tabindex'))).toEqual(['-1', '0', '-1'])
+    expect(radios.map((r) => [r.getAttribute('aria-label'), r.getAttribute('aria-checked')])).toEqual([
+      ['原文', 'false'],
+      ['对照', 'true'],
+      ['译文', 'false'],
+    ])
+    expect(radios.map((r) => r.getAttribute('tabindex'))).toEqual(['-1', '0', '-1'])
   })
 
   it('moves the choice with the arrows, wrapping', async () => {
@@ -44,17 +63,21 @@ describe('the display switch (the reader\'s design, §6.2)', () => {
   it('greys the translated displays when there is no translation to be had, and skips them', async () => {
     const { container, onChange } = await mount('original', false)
     const radios = [...container.querySelectorAll('[role="radio"]')]
-    expect(radios.map(r => r.getAttribute('aria-disabled'))).toEqual([null, 'true', 'true'])
+    expect(radios.map((r) => r.getAttribute('aria-disabled'))).toEqual([null, 'true', 'true'])
     ;(radios[1] as HTMLElement).click()
     await key(container.querySelector('[role="radiogroup"]')!, 'ArrowRight')
     await key(document.body, '2')
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('greys a display the host says this window cannot show (`off`, a phone\'s side by side): still a focusable radio, passed by the arrows, a press doing nothing', async () => {
+  it("greys a display the host says this window cannot show (`off`, a phone's side by side): still a focusable radio, passed by the arrows, a press doing nothing", async () => {
     const { container, onChange } = await mount('translation', true, ['bilingual'])
     const radios = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
-    expect(radios.map(r => [r.getAttribute('aria-disabled'), r.disabled])).toEqual([[null, false], ['true', false], [null, false]])
+    expect(radios.map((r) => [r.getAttribute('aria-disabled'), r.disabled])).toEqual([
+      [null, false],
+      ['true', false],
+      [null, false],
+    ])
     radios[1]!.focus()
     expect(document.activeElement).toBe(radios[1])
     radios[1]!.click()
@@ -72,10 +95,18 @@ describe('the display switch (the reader\'s design, §6.2)', () => {
   it('greys nothing more when `off` is empty or absent, and adds to what no translation greys', async () => {
     for (const off of [undefined, []]) {
       const { container } = await mount('bilingual', true, off)
-      expect([...container.querySelectorAll('[role="radio"]')].map(r => r.getAttribute('aria-disabled'))).toEqual([null, null, null])
+      expect([...container.querySelectorAll('[role="radio"]')].map((r) => r.getAttribute('aria-disabled'))).toEqual([
+        null,
+        null,
+        null,
+      ])
       document.body.innerHTML = ''
     }
     const { container } = await mount('original', false, ['original'])
-    expect([...container.querySelectorAll('[role="radio"]')].map(r => r.getAttribute('aria-disabled'))).toEqual(['true', 'true', 'true'])
+    expect([...container.querySelectorAll('[role="radio"]')].map((r) => r.getAttribute('aria-disabled'))).toEqual([
+      'true',
+      'true',
+      'true',
+    ])
   })
 })

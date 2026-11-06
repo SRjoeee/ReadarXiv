@@ -5,15 +5,17 @@ import type { ReaderController } from '../../src/chrome/model.ts'
 import { mountElement } from '../render-hook.ts'
 import { fakeController } from './fake-controller.ts'
 
-afterEach(() => { document.body.innerHTML = '' })
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 describe('useReader: a component renders again for the part of the state it shows (the final review)', () => {
-  it('renders a pane\'s page again when it changes, not when the heading being read does', async () => {
+  it("renders a pane's page again when it changes, not when the heading being read does", async () => {
     const fake = fakeController()
     let renders = 0
     function Page({ controller }: { controller: ReaderController }) {
       renders++
-      const side = useReader(controller, s => s.sides.left)
+      const side = useReader(controller, (s) => s.sides.left)
       return createElement('output', null, String(side.page))
     }
     const { container } = await mountElement(createElement(Page, { controller: fake.controller }))

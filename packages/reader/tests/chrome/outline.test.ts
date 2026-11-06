@@ -1,16 +1,21 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG } from '@/config/schema'
 import { Outline } from '../../src/chrome/Outline.tsx'
 import { R, setLocale } from '@readarxiv/ui'
 import { mountElement } from '../render-hook.ts'
-import { fakeController } from './fake-controller.ts'
+import { fakeController, PREFS } from './fake-controller.ts'
+import { LANGUAGES, withParts } from './parts.ts'
 import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 beforeAll(() => setLocale('zh-CN'))
-beforeEach(() => { restore = stubPopovers() })
-afterEach(() => { restore(); document.body.innerHTML = '' })
+beforeEach(() => {
+  restore = stubPopovers()
+})
+afterEach(() => {
+  restore()
+  document.body.innerHTML = ''
+})
 
 const outline = [
   { id: 2, title: '引言', original: 'Introduction', level: 1 as const, page: 1 },
@@ -19,13 +24,20 @@ const outline = [
   { id: 9, title: '细节', original: 'Details', level: 3 as const, page: 4 },
   { id: 12, title: '结果', original: 'Results', level: 1 as const, page: 6 },
 ]
-const rows = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[data-entry]')].filter(r => !r.closest('[hidden]'))
+const rows = (c: HTMLElement) =>
+  [...c.querySelectorAll<HTMLElement>('[data-entry]')].filter((r) => !r.closest('[hidden]'))
 
-describe('the contents (the reader\'s design, §6.3)', () => {
+describe("the contents (the reader's design, §6.3)", () => {
   it('folds: the first level shown, the section being read marked and its branch open, as the session places the reading', async () => {
     const fake = fakeController({ outline, currentHeading: 9 })
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
-    expect(rows(container).map(r => r.querySelector('.t')?.textContent)).toEqual(['引言', '方法', '设置', '细节', '结果'])
+    expect(rows(container).map((r) => r.querySelector('.t')?.textContent)).toEqual([
+      '引言',
+      '方法',
+      '设置',
+      '细节',
+      '结果',
+    ])
     expect(container.querySelector('[aria-current="true"]')!.textContent).toContain('细节')
     await act(async () => fake.set({ currentHeading: 2 }))
     expect(container.querySelector('[aria-current="true"]')!.textContent).toContain('引言')
@@ -43,9 +55,9 @@ describe('the contents (the reader\'s design, §6.3)', () => {
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
     const fold = container.querySelector<HTMLElement>('[data-entry="5"] [aria-expanded]')!
     await act(async () => fold.click())
-    expect(rows(container).map(r => r.dataset.entry)).toEqual(['2', '5', '6', '12'])
+    expect(rows(container).map((r) => r.dataset.entry)).toEqual(['2', '5', '6', '12'])
     await act(async () => fold.click())
-    expect(rows(container).map(r => r.dataset.entry)).toEqual(['2', '5', '12'])
+    expect(rows(container).map((r) => r.dataset.entry)).toEqual(['2', '5', '12'])
     container.querySelector<HTMLElement>('[data-entry="12"] a')!.click()
     expect(fake.controller.goToHeading).toHaveBeenCalledWith(12)
   })
@@ -55,18 +67,30 @@ describe('the contents (the reader\'s design, §6.3)', () => {
     const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
     const fold = container.querySelector<HTMLElement>('[data-entry="5"] [aria-expanded]')!
     const tip = () => fold.nextElementSibling!
-    expect([fold.getAttribute('aria-label'), tip().matches('.tip[popover]'), tip().textContent, tip().getAttribute('data-side')]).toEqual([outline[1]!.title, true, R.fold.expand, 'right'])
+    expect([
+      fold.getAttribute('aria-label'),
+      tip().matches('.tip[popover]'),
+      tip().textContent,
+      tip().getAttribute('data-side'),
+    ]).toEqual([outline[1]!.title, true, R.fold.expand, 'right'])
     await act(async () => fold.click())
     expect(tip().textContent).toBe(R.fold.collapse)
   })
 
-  it('draws each title in the language it is in: the translation in the target\'s, a heading not yet translated in the paper\'s (WCAG 3.1.2)', async () => {
+  it("draws each title in the language it is in: the translation in the target's, by the host's tag, a heading not yet translated in the paper's (WCAG 3.1.2)", async () => {
     const mixed = [{ ...outline[0]!, title: 'Introduction' }, outline[1]!]
-    const fake = fakeController({ outline: mixed, settings: { ...DEFAULT_CONFIG, targetLanguage: 'jpn' } })
-    const { container } = await mountElement(createElement(Outline, { controller: fake.controller, open: true }))
-    expect([...container.querySelectorAll('.t')].map(t => [t.textContent, t.getAttribute('lang')])).toEqual([['Introduction', 'en'], [outline[1]!.title, 'ja']])
-    // no settings yet: what is translated has no language to claim
-    await act(async () => fake.set({ settings: null }))
-    expect([...container.querySelectorAll('.t')].map(t => t.getAttribute('lang'))).toEqual(['en', null])
+    const fake = fakeController({ outline: mixed, prefs: { ...PREFS, target: 'ja' } })
+    const { container } = await mountElement(
+      withParts(createElement(Outline, { controller: fake.controller, open: true }), {
+        languages: { ...LANGUAGES, tag: (t) => (t === 'ja' ? 'ja-JP' : t) },
+      }),
+    )
+    expect([...container.querySelectorAll('.t')].map((t) => [t.textContent, t.getAttribute('lang')])).toEqual([
+      ['Introduction', 'en'],
+      [outline[1]!.title, 'ja-JP'],
+    ])
+    // no preferences yet: what is translated has no language to claim
+    await act(async () => fake.set({ prefs: null }))
+    expect([...container.querySelectorAll('.t')].map((t) => t.getAttribute('lang'))).toEqual(['en', null])
   })
 })

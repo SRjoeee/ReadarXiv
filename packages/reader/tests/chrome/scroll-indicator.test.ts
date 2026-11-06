@@ -6,7 +6,9 @@ import { fakeController } from './fake-controller.ts'
 
 // A pane's scroll indicator (the reader's design, §6.5): a drag of its thumb ends however the pointer goes
 
-afterEach(() => { document.body.innerHTML = '' })
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 async function mount() {
   const fake = fakeController()
@@ -22,14 +24,17 @@ async function mount() {
   track.setPointerCapture = () => undefined
   return { track, scroller }
 }
-const pointer = (type: string, init: PointerEventInit = {}) => new PointerEvent(type, { bubbles: true, pointerId: 1, clientY: 100, ...init })
+const pointer = (type: string, init: PointerEventInit = {}) =>
+  new PointerEvent(type, { bubbles: true, pointerId: 1, clientY: 100, ...init })
 
-describe('ScrollIndicator: the thumb\'s drag', () => {
+describe("ScrollIndicator: the thumb's drag", () => {
   for (const end of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     it(`ends on ${end}: the grabbing state goes, and the thumb no longer follows the pointer (Codex on #301)`, async () => {
       const { track, scroller } = await mount()
       const thumb = track.querySelector('i')!
-      await act(async () => { thumb.dispatchEvent(pointer('pointerdown')) })
+      await act(async () => {
+        thumb.dispatchEvent(pointer('pointerdown'))
+      })
       expect(track.hasAttribute('data-drag')).toBe(true)
       // while it drags, the pane follows the thumb
       track.dispatchEvent(pointer('pointermove', { clientY: 120 }))

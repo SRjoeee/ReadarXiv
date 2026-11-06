@@ -5,14 +5,20 @@ import { lineOf } from '../../src/chrome/status.ts'
 import { mountElement } from '../render-hook.ts'
 import { fakeController } from './fake-controller.ts'
 
-afterEach(() => { document.body.innerHTML = '' })
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
-describe('the progress line under the toolbar (the reader\'s design, §6.6)', () => {
+describe("the progress line under the toolbar (the reader's design, §6.6)", () => {
   it('shows the process done as its length, and leaves at its last length once reading', async () => {
     const fake = fakeController({ phase: 'translating', progress: 0.4 })
     const { container } = await mountElement(createElement(ProgressLine, { controller: fake.controller }))
     const line = container.querySelector<HTMLElement>('.progress-line')!
-    expect([line.hasAttribute('data-on'), Number(line.style.getPropertyValue('--p')), line.getAttribute('aria-hidden')]).toEqual([true, lineOf({ ...fake.controller.getState() }).value, 'true'])
+    expect([
+      line.hasAttribute('data-on'),
+      Number(line.style.getPropertyValue('--p')),
+      line.getAttribute('aria-hidden'),
+    ]).toEqual([true, lineOf({ ...fake.controller.getState() }).value, 'true'])
     await act(async () => fake.set({ progress: 1 }))
     await act(async () => fake.set({ phase: 'ready' }))
     const after = container.querySelector<HTMLElement>('.progress-line')!
