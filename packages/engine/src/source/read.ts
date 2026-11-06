@@ -330,16 +330,20 @@ class Walker {
           let j = i - 1
           while ((toks[j] as Token | undefined)?.k === 'space' && (toks[j] as { skipped?: true }).skipped) j--
           const prevComment = toks[j]?.k === 'comment'
+          const lineStart = j + 1 < i ? (toks[j + 1] as Token).s : t.s
+          // (the blanks of a comment's empty line are no text: today's reading passes over them with the line)
+          if (prevComment && textStart === lineStart) textStart = -1
           const open = !!b.cur
           endText()
-          let n = 0
-          for (let k = t.s; k < t.e; k++) if (f.text.charCodeAt(k) === 10) n++
-          if (prevComment && open) n--
+          // the line ends today pairs off: a line's end with the empty line after it, from the first on (a comment's empty
+          // line taken alone where a unit is open); one left over begins the next text, from the start of its line
+          const ends: number[] = []
+          for (let k = t.s; k < t.e; k++) if (f.text.charCodeAt(k) === 10) ends.push(k)
+          if (prevComment && open) ends.shift()
           b.flush()
-          if (n % 2 === 1) {
-            // (the line end left over, and, after a comment where no unit was open, the blanks before it: today's reading
-            // goes on from the comment's line end as text)
-            textStart = prevComment && !open && j + 1 < i ? (toks[j + 1] as Token).s : t.e - 1
+          if (ends.length % 2 === 1) {
+            const first = prevComment && !open ? lineStart : (ends[0] as number)
+            textStart = ends.length === 1 ? first : (ends[ends.length - 2] as number) + 1
             textEnd = t.e
           }
           i++
@@ -559,6 +563,19 @@ class Walker {
     if (/^newtheorem$|^spnewtheorem$|^declaretheorem$/.test(n)) {
       const a = adjacent(f, end, to).find((x) => x.shape === '{')
       if (a) for (const x of f.src(a.a + 1, a.b - 1).split(',')) if (x.trim()) ctx.theorems.add(x.trim())
+    }
+    // a conditional's value set where the body sets it: a \newif's setter (TeX: \Xtrue is \let\ifX\iftrue), and a
+    // \newif the body makes
+    const setter = /^\\let \\(if[A-Za-z@]+) \\if(true|false) ?$/.exec(
+      ((ctx.defs.names.get(n)?.meaning as { body?: string } | undefined)?.body ?? '').trim(),
+    )
+    if (setter) ctx.ifs.set(setter[1] as string, setter[2] === 'true')
+    else if (/^(?:[A-Za-z@]+)(true|false)$/.test(n) && ctx.ifs.has(`if${n.replace(/(?:true|false)$/, '')}`))
+      ctx.ifs.set(`if${n.replace(/(?:true|false)$/, '')}`, n.endsWith('true'))
+    if (n === 'newif') {
+      const k = skipBlanks(f, end, to)
+      const x = name(toks[k])
+      if (x?.startsWith('if')) ctx.ifs.set(x, false)
     }
     // conditionals
     if (n === 'iffalse' || (n === 'if' && this.ifWords(f, end))) {
@@ -1485,8 +1502,17 @@ class Walker {
     b.inFloat = outside
     return { next: e.after }
   }
-  envArgs(f: SourceFile, at: number, to: number, env: string): { end: number; title: Arg | null } {
+  envArgs(f: SourceFile, at: number, to: number, env0: string): { end: number; title: Arg | null } {
     const ctx = this.ctx
+    // (an environment whose begin is another's \begin, and nothing more, takes that one's arguments: ieeecolor.cls'
+    // IEEEbiography is \begin{biography}, which reads [photo]{name})
+    let env = env0
+    for (let k = 0; k < 4; k++) {
+      const m = ctx.defs.names.get(env)?.meaning
+      const inner = m?.k === 'macro' && m.params === '' ? /^\\begin \{([^{}]+)\}$/.exec(m.body.trim())?.[1] : undefined
+      if (!inner || inner === env) break
+      env = inner
+    }
     const params =
       ctx.envParams.get(env) ?? (ctx.theorems.has(env) ? THEOREM_PARAMS : null) ?? environmentParams(env, ctx.bindings)
     const r = params ? readArgs(f, at, params, to, this.isCall) : null
@@ -1651,6 +1677,27 @@ class Walker {
     }
     return -1
   }
+  /** whether tokens [a, z) set a word or anything but inline material, as the walk reads them (a dry walk: a paragraph's or a
+   *  block's end, a display, a file read, an environment that is no formula count as more than inline) */
+  setsText(f: SourceFile, a: number, z: number, b: Builder): boolean {
+    for (let k = a; k < z; k++) {
+      const t = f.toks[k] as Token
+      if (t.k === 'par' || t.k === 'verbatim') return true
+      if (t.k === 'cs' && (t.name === 'par' || t.name === '[' || INPUTS.has(t.name))) return true
+      if (t.k === 'cs' && t.name === 'begin' && !MATH_ENVS.test(envName(f, k + 1, z)?.name ?? '')) return true
+      if (t.k === 'char' && t.cat === CAT.math && isChar(f.toks[k + 1], CAT.math)) return true
+    }
+    const units: BUnit[] = []
+    const dry = new Builder(f.path, units, f.text)
+    dry.kind = b.kind
+    dry.cellMode = b.cellMode
+    const calls = new Map(this.ctx.calls)
+    this.walk(f, a, z, dry)
+    this.ctx.calls = calls
+    const pieces = [...units.flatMap((u) => u.pieces), ...(dry.cur?.pieces ?? [])]
+    return pieces.some((p) => p.t === 'nested' || (p.t === 'text' && /\p{L}{2}/u.test(p.s)))
+  }
+
   /** a conditional TeX can decide from what it holds at the document's start (a \newif's value, as the body sets it), or
    *  whose own text decides it (\iftrue, \if of two characters): the live branch walked, the rest kept as it is */
   conditional(
@@ -1694,7 +1741,17 @@ class Walker {
         value = f.text.slice(x.s, x.e) === (y.k === 'space' ? ' ' : f.text.slice(y.s, y.e))
         thenFrom = k + 2
       }
-    } else if (ctx.ifs.has(n)) value = ctx.ifs.get(n) as boolean
+    }
+    // (a conditional whose own text decides nothing, none of whose branches sets a word or anything but inline material:
+    // one element, whatever TeX takes — no text either way. Today's reading, kept: \ifdefined\Preprint\url{…}\else
+    // \url{…}\fi)
+    if (value === null && !this.setsText(f, end, thenTo, b) && (elseFrom < 0 || !this.setsText(f, elseFrom, elseTo, b))) {
+      endText()
+      const toks = f.toks
+      b.ph(f.src(i, stop), 'other', (toks[i] as Token).s, (toks[stop - 1] as Token).e)
+      return { next: stop }
+    }
+    if (value === null && ctx.ifs.has(n)) value = ctx.ifs.get(n) as boolean
     if (value === null) return null
     const [from, upto] = value ? [thenFrom, thenTo] : elseFrom >= 0 ? [elseFrom, elseTo] : [thenTo, thenTo]
     endText()
@@ -1735,6 +1792,7 @@ function paperFacts(
   ownEnv: ReadonlySet<string>,
   isCall: (n: string) => boolean,
   sites: ReadonlyMap<string, Site[]>,
+  envDefined: ReadonlySet<string>,
 ) {
   const macros = new Map<string, Macro>()
   const ifs = new Map<string, boolean>()
@@ -1806,7 +1864,8 @@ function paperFacts(
     const endD = defs.names.get(`end${n}`)
     if (!ownEnv.has(n) || d.meaning.k !== 'macro' || !endD) continue
     const mac = macroOf(n, d, isCall)
-    if (mac && !mac.delimited)
+    // (its parameters where an environment's definer made it: a command's definer, \let\proof…, states none)
+    if (mac && !mac.delimited && envDefined.has(n))
       envParams.set(n, paramsOf(`${mac.opt ? '[a' : ''}${'{a'.repeat(mac.params - (mac.opt ? 1 : 0))}`))
     const begins = opened(mac?.body ?? d.meaning.body).filter((x) => TABLE_ENVS.test(x))
     if (
@@ -1944,7 +2003,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     const p = own.has(n) ? null : commandParams(n, bindings)
     return !!p?.length && p !== REGISTER
   }
-  const facts = paperFacts(definitions, own, ownEnv, isCall, names.sites)
+  const facts = paperFacts(definitions, own, ownEnv, isCall, names.sites, names.envs)
   const stem = jobName(tree.main)
   const bbl = tree.files.has(`${stem}.bbl`) ? `${stem}.bbl` : null
   const ctx: Ctx = {
