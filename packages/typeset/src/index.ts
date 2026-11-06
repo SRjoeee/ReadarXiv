@@ -55,3 +55,13 @@ export {
   spacedText,
   type UnitLabel,
 } from './unit/label.ts'
+export {
+  type Admission,
+  type AdmitInput,
+  admit,
+  kOfPieces,
+  locatedWhole,
+  refusalOf,
+  translated,
+  type V0Row,
+} from './unit/admit.ts'

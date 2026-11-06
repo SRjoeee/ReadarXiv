@@ -66,7 +66,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     reads: ['N (the last page shown)'],
     file: 'unit/admit.ts',
-    state: open,
+    state: { is: 'ported', replay: 'samples/U.admit.json.gz and lanes/L3/replay/U.admit.json.gz', cases: 27 },
   },
   {
     id: 'U.elements',

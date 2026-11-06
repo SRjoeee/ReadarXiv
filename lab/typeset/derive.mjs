@@ -11,6 +11,7 @@
 //   recorded one, and the `pieceLines` it hands its parts' `breaks` taken.
 // - `U.elements`: for the same rounds, each placeholder's reading whatever the row (readingsOf): what today's resolution sets
 //   it to in each case the row decides, by today's own renderings and drawnAs, unbracketed, displayLines, leadMark (L1: El).
+// - `U.admit`: for every sampled verdict, each row piece's class as locatedWhole reads it (phClassProven: L1's El.kind).
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
@@ -144,6 +145,12 @@ for (const x of readings()) {
   }
   elements.cases[key] = { from: x.rule, ...readingsOf(r) }
 }
+// U.admit: each row piece's class as locatedWhole reads it (phClassProven: L1's El.kind), for every sampled verdict
+const admit = { format: 'readarxiv-L3/derived 1', rule: 'U.admit', note: 'per sampled verdict (pair|ord|round): clsProven, each row piece\'s phClassProven class, null where it is no placeholder (L1: El.kind)', cases: {} }
+for (const e of read(join(TAP, 'samples', 'U.admit.json.gz')).entries)
+  for (const c of e.captures)
+    if (c.rule === 'U.admit:in') admit.cases[`${e.pair}|${e.ord}|${c.round}`] = { clsProven: (unser(c.value).u?.pieces ?? []).map(p => (p.t === 'ph' ? L2.phClassProven(p.src).cls : null)) }
+gz(join(OUT, 'U.admit.json.gz'), admit)
 gz(join(OUT, 'U.breaks.json.gz'), breaks)
 gz(join(OUT, 'U.elements.json.gz'), elements)
 console.log(`derive: ${n} readings re-read, ${n - unequal} equal to the recorded (${unequal} not, left out); U.breaks ${Object.keys(breaks.cases).length} cases, U.elements ${Object.keys(elements.cases).length}`)
