@@ -96,7 +96,7 @@ describe('the live bindings S, O and R', () => {
   it('are read nowhere as a module loads', () => {
     expect(ROOTS).toContain(join(ROOT, 'packages/reader/src'))
     const files = ROOTS.flatMap(sources).filter(file => file !== `${STRINGS}.ts`)
-    let guarded = 0
+    const guarded: string[] = []
     const reads: string[] = []
     for (const file of files) {
       const source = readFileSync(file, 'utf8')
@@ -106,12 +106,16 @@ describe('the live bindings S, O and R', () => {
       if (!source.includes('strings') && !source.includes('@readarxiv/ui')) continue
       const lines = moduleLoadReads(source, file)
       if (lines === null) continue
-      guarded++
+      guarded.push(relative(ROOT, file))
       reads.push(...lines.map(line => `${relative(ROOT, file)}:${line}`))
     }
     // Finds its subjects, or it guards nothing: counted by what the detector recognised as importing S, O or R — the
     // popup, the settings page, the reader and the shared components all do
-    expect(guarded).toBeGreaterThan(10)
+    expect(guarded.length).toBeGreaterThan(10)
+    // the reader's chrome among them, in its place in the reader's package: its toolbar, its menus, its capsule's states
+    const chrome = guarded.filter(f => f.startsWith('packages/reader/src/chrome/'))
+    expect(chrome).toEqual(expect.arrayContaining(['packages/reader/src/chrome/Toolbar.tsx', 'packages/reader/src/chrome/Menus.tsx', 'packages/reader/src/chrome/status.ts']))
+    expect(chrome.length).toBeGreaterThan(10)
     expect(reads, 'a value built from S, O or R at module load freezes the pack current at import (packages/ui/src/strings.ts)').toEqual([])
   })
 

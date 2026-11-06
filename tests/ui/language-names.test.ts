@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_JA_NAME, LANG_CODE_TO_KO_NAME, LANG_CODE_TO_ZH_TW_NAME } from '@/config/language-names'
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, englishName, label } from '@/config/languages'
-import { languageItems } from '@/pdf-reader/ui/languages'
+import { languageItems } from '@/pdf-reader/host/languages'
 import { languageKeywords } from '@/ui/language-keywords'
 import { type LocaleCode, setLocale } from '@readarxiv/ui'
 import { languageLabel, languageName } from '@/ui/strings'

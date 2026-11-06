@@ -6,12 +6,12 @@ import { FACES, rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 import { BUILTIN_RULES, type FrozenRuleSet, parseRules, RULES_CAP, RULES_FIELDS, RULES_SCHEMA, RULES_VALUES, RulesRefusal, readRules, resolveRules, SCRIPTS, TARGETS, writeRules } from '@/pdf-reader/engine/rules/layout.mjs'
 import { toBcp47 } from '@/config/languages'
-import { READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+import { READER_LANGUAGES } from '@/pdf-reader/host/languages'
 /** the tags the final's babel tried for a target's locale, in order (the TeX path's scripts.mjs babelTags, which went with the
  *  compiled translation on 2026-11-04): the language's own tag, then its language and script, then its language alone */
 const babelTags = (lang: string) => { const l = new Intl.Locale(lang); return [...new Set([lang, `${l.language}-${l.maximize().script}`, l.language])] }
 
-/** the languages the extension's reader offers, as tags (its menu, ui/languages.ts) */
+/** the languages the extension's reader offers, as tags (its menu, host/languages.ts) */
 const VERIFIED = READER_LANGUAGES.map(toBcp47)
 
 // The layout rule set (rules/layout.mjs, the rules-as-data plan §2): its built-in copy, its resolution to the fields v0 reads,

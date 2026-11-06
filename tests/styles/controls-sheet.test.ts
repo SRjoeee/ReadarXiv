@@ -18,7 +18,7 @@ describe('controls.css: the motions both pages share', () => {
   })
 
   it('leaves the reader\'s sheet without a copy of its own; its capsule\'s words move with its box instead, by no keyframes (capsule-motion.ts)', () => {
-    const reader = sheet('../../src/entrypoints/pdf-reader/reader.css')
+    const reader = sheet('../../packages/reader/src/chrome/reader.css', '../../src/entrypoints/pdf-reader/reader.css')
     expect(reader).not.toContain('@keyframes words-in')
     expect(reader).toMatch(/\.capsule \.words \{[^}]*\}/)
     expect(reader).not.toMatch(/\.capsule \.words \{[^}]*animation:/)

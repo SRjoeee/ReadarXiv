@@ -50,6 +50,25 @@ describe('the reader preferences over the extension configuration', () => {
       for (const k of Object.keys(before) as (keyof typeof before)[]) if (!(k in patch)) expect(back[k]).toEqual(before[k])
     }
   })
+  it('writes the chrome\'s own patches as the configuration changes its controls wrote before (packages/reader tests/chrome): a field by the field it names', () => {
+    const c = config({ targetLanguage: 'cmn' })
+    // the highlight's switch, and its band: the other half as it was
+    expect(withPrefs(c, { highlight: { on: false } })).toMatchObject({ reading: { ...c.reading, sentenceHighlight: false }, appearance: c.appearance })
+    const sky = withPrefs(c, { highlight: { band: 'sky' } })
+    expect([sky.appearance.activeHighlight, sky.appearance.highlights, sky.reading]).toEqual(['sky', c.appearance.highlights, c.reading])
+    // one toggle of what to translate: the others, and the HTML page's figure text, as they were
+    const names = withPrefs(c, { classes: { names: true } })
+    expect(names.pdfReader.classes).toEqual({ ...c.pdfReader.classes, names: true })
+    expect([names.image, names.pdfReader.sync, names.pdfReader.swapped, names.pdfReader.dimPages]).toEqual([c.image, c.pdfReader.sync, c.pdfReader.swapped, c.pdfReader.dimPages])
+    // the appearance, the dark pages, the swap, the target and the display
+    expect(withPrefs(c, { theme: 'dark' }).theme).toBe('dark')
+    expect(withPrefs(c, { dim: false }).pdfReader).toEqual({ ...c.pdfReader, dimPages: false })
+    expect(withPrefs(c, { swapped: !c.pdfReader.swapped }).pdfReader).toEqual({ ...c.pdfReader, swapped: !c.pdfReader.swapped })
+    expect(withPrefs(c, { target: 'de' }).targetLanguage).toBe('deu')
+    expect(withPrefs(c, { display: 'translation' }).mode).toBe('only')
+    // an empty patch writes nothing
+    expect(withPrefs(c, {})).toBe(c)
+  })
   it('round-trips every display through mode and the original flag as withDisplay and displayOf do', () => {
     for (const mode of ['side', 'stack', 'only'] as const) for (const d of ['original', 'bilingual', 'translation'] as const) expect(displayOf(withPrefs(config({ mode }), { display: d }))).toBe(d)
   })
