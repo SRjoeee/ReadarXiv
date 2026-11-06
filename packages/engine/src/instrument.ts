@@ -50,8 +50,9 @@ export interface Instrument {
   boxes: Owners[]
   /** the owners of each page's turned glyphs (DocPage.turned), where any is owned */
   turned?: Owners[]
-  /** TeX's statements of the paper: \lineskip and \lineskiplimit */
-  tex: { lineskip?: [number, number] }
+  /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
+   *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
+  tex: { lineskip?: [number, number]; paragraphEnds?: number[][] }
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
 }

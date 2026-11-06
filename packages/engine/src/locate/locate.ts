@@ -62,6 +62,9 @@ export interface Member {
   pages: number[]
   join?: [number] | [number, 1]
   dir?: [number, number]
+  /** its first and last glyph on B (global), -1 for none */
+  bFirst: number
+  bLast: number
 }
 
 export interface Located {
@@ -230,6 +233,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     lead: 12,
     room: { below: 0 },
     pages: [],
+    bFirst: -1,
+    bLast: -1,
   })
 
   /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
@@ -246,6 +251,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.fixed = !!unit.fixed
     mem.figure = !!unit.figure
     if (unit.figure?.dir) mem.dir = unit.figure.dir
+    if (list.length) {
+      mem.bFirst = list[0] as number
+      mem.bLast = list.at(-1) as number
+    }
     mem.align = unit.align ?? 'j'
     if (!list.length && !turnedB.length) {
       mem.cause = unit.why ?? 'no ink'
@@ -528,7 +537,25 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   columnsAndMeasures(members, inkA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, members)
 
-  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end
+  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end, in one paragraph of
+  // TeX's (no paragraph end of B's between the one's last glyph and the other's first, where the instrument states them); a
+  // table's cell and a figure's text are set in boxes of their own, never in a paragraph with another
+  const ends: number[] = []
+  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+    for (const g of l) ends.push((m.offB[p] as number) + g)
+  })
+  ends.sort((x, y) => x - y)
+  const endBetween = (lo: number, hi: number) => {
+    let a = 0
+    let b = ends.length
+    while (a < b) {
+      const mid = (a + b) >> 1
+      if ((ends[mid] as number) <= lo) a = mid + 1
+      else b = mid
+    }
+    return a < ends.length && (ends[a] as number) <= hi
+  }
+  const ownBox = (x: Member) => x.kind === 'cell' || x.figure || x.kind === 'inkfigures'
   const flows: number[][] = []
   let cur: number[] = []
   for (let q = 0; q < members.length; q++) {
@@ -546,7 +573,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       a[0] === b[0] &&
       a[1] === b[1] &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
-      b[2] >= a[3] - 0.5
+      b[2] >= a[3] - 0.5 &&
+      !ownBox(prev) &&
+      !ownBox(mem) &&
+      (prev.bLast < 0 || mem.bFirst < 0 || !endBetween(prev.bLast, mem.bFirst))
     if (shares && cur.length) {
       mem.join = mem.labelAt && mem.labelAt.ink[0] === b[0] ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
       cur.push(mem.ord)
