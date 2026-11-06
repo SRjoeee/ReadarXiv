@@ -50,8 +50,9 @@ if (vouched !== null && (vouched.framed || topLevel)) {
   // the focus rings are the keyboard's (modality.ts)
   trackModality()
   const probes = window as unknown as { __reader?: object }
+  probes.__reader ??= {}
   mountChrome(document.getElementById('root')!, {
     controller,
-    parts: extensionParts({ controller, store, embedded: params.get('embedded') === '1', probe: hook => Object.assign((probes.__reader ??= {}), hook) }),
+    parts: extensionParts({ controller, store, embedded: params.get('embedded') === '1', probe: hook => Object.assign(probes.__reader ?? {}, hook) }),
   })
 }
