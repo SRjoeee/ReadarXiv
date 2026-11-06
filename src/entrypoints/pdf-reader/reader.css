@@ -1,0 +1,20 @@
+/* The reader's page sheet: Tailwind's theme and utilities over the sources this page draws (the reader's chrome, the
+   extension's slots and session), then the reader's own sheet (@readarxiv/reader/reader.css: the tokens, the controls, the
+   chrome's layout). No Preflight: its resets would reach inside PDF.js's viewers (the package's sheet says why) */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+/* the utilities of the reader's own sources: Tailwind's scan of the whole tree brought the settings page's in, a :has()
+   among them (Part 3's final review; tests/styles/no-has.test.ts) */
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
+@source "../../pdf-reader/";
+/* not the engine's modules: they draw no utility, and Tailwind reads comments, which had put `.table { display: table }`
+   into this sheet from one of theirs (the redesign's Part 3) */
+@source not "../../pdf-reader/engine/";
+/* the chrome, moved into the reader package */
+@source "../../../packages/reader/src/chrome/";
+/* the menu rows moved there (packages/ui/src/controls/MenuList.tsx) draw the utilities they drew here (the redesign's Part 3).
+   That one file, not the directory: Tailwind reads comments as well as class lists, and the directory brought in `.grow`
+   from two comments; a word such as hidden or table in another control's comment would restyle PDF.js's own classes */
+@source "../../../packages/ui/src/controls/MenuList.tsx";
+@import "@readarxiv/reader/reader.css";
