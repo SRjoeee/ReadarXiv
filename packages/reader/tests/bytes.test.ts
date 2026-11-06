@@ -74,7 +74,8 @@ describe('the byte store and the ranged source', () => {
     await g.read(0, CHUNK)
     expect(await g.read(CHUNK, 40 * CHUNK)).toEqual(big.slice(CHUNK))
     expect(most).toBeLessThanOrEqual(CHUNKS_IN_FLIGHT)
-  })
+    // (40 chunks digested and a task's turn an ask: about a second alone, past vitest's 5 s in a whole run on a loaded machine)
+  }, 30_000)
   it('lets the least recently read chunks go past its bound', async () => {
     const store = chunkStore(2 * CHUNK)
     const s = rangedServer(objects())
