@@ -44,11 +44,16 @@ export function endpointIdentity(baseURL: string): string {
   }
 }
 
-/** The endpoint's words with the key taken out: the service's own key wherever it stands, then every shape the log's
- *  redaction knows (an endpoint may echo the key it was sent; #88 E4). A key under 8 characters is left to the shapes */
+/** The endpoint's words with the key taken out (an endpoint may echo the key it was sent; #88 E4): the service's own key
+ *  at any length, as it was sent (bare or after `Bearer`) and URL-encoded (a query, a form), wherever it stands, then
+ *  every shape the log's redaction knows. A short key takes the words that hold it with it: no key enters a message at any
+ *  length (hard rule 5; the contract's Fault holds no key), and a message's words are worth less than that */
 export function withoutKey(message: string, apiKey: string): string {
   const key = apiKey.trim()
-  return redact(key.length >= 8 ? message.split(key).join('…') : message)
+  if (!key) return redact(message)
+  // the longest first: a form may hold a shorter one (`%2` is in `%252`)
+  const forms = [...new Set([key, encodeURIComponent(key), new URLSearchParams([['', key]]).toString().slice(1)])].sort((a, b) => b.length - a.length)
+  return redact(forms.reduce((m, form) => m.split(form).join('…'), message))
 }
 
 export interface LlmOptions {

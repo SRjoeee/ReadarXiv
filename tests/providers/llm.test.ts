@@ -3,9 +3,12 @@
 // as its remedy; the key goes to the service alone (#88 E3, E4)
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
-import { chainOf, Fault, type Result, type Translator, type UnitIn } from '@readarxiv/translate'
+import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Translator, type UnitIn } from '@readarxiv/translate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { endpointIdentity, LLM_LIMITS, llmTranslator, withoutKey } from '@/providers/llm'
+import { CancelledScopeRegistry } from '@/providers/request/cancellation'
+import { createLocalTransport } from '@/providers/transport'
 import type { Service } from '@/config/services'
 
 const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k-0123456789', model: 'test/model', thinking: 'disabled' }
@@ -127,9 +130,40 @@ describe('the LLM translator: the key goes to the service alone (#88 E3, E4)', (
       expect(f?.message).not.toContain(apiKey)
     }
   })
-  it('withoutKey takes the key out wherever it stands, and leaves a key too short to tell from a word to the shapes', () => {
+  it('withoutKey takes the key out at any length, as sent and URL-encoded, wherever it stands (hard rule 5)', () => {
     expect(withoutKey('a key-of-the-reader then key-of-the-reader again', 'key-of-the-reader')).toBe('a … then … again')
     expect(withoutKey('Bearer abc.def', '')).toBe('Bearer …')
-    expect(withoutKey('the word ok stays', 'ok')).toBe('the word ok stays')
+    // a short key goes too, with the words that hold it: a message's words are worth less than the key
+    expect(withoutKey('the word ok goes, and so does token', 'ok')).toBe('the word … goes, and so does t…en')
+    expect(withoutKey('auth=a%2Bb%2Fc%20d, form a%2Bb%2Fc+d, bare a+b/c d', 'a+b/c d')).toBe('auth=…, form …, bare …')
+  })
+  it('an endpoint that echoes a key of any length, bare, as a bearer or URL-encoded: neither the fault nor a line the transport logs holds it', async () => {
+    for (const apiKey of ['Q+7', 'gw/Long+Key=0123456789abcdef']) {
+      const forms = [apiKey, encodeURIComponent(apiKey)]
+      const echo = `Incorrect API key provided: ${apiKey}; sent Authorization: Bearer ${apiKey} from https://h/v1?auth=${encodeURIComponent(apiKey)}`
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: { message: echo } }), { status: 401, headers: { 'content-type': 'application/json' } })))
+      const service = { ...SVC, apiKey }
+      // the fault, through the AI SDK's own reading of the endpoint's refusal
+      const f = await faultOf(llmTranslator(service, { codeOf }))
+      expect(f).toMatchObject({ remedy: 'off', code: 'key-refused', message: expect.stringContaining('Incorrect API key provided') })
+      for (const form of forms) expect(f?.message).not.toContain(form)
+      // the background's path: every line its transport gives the diagnostics log (`warn`, `note`) or the console
+      const lines: string[] = []
+      const spies = (['log', 'info', 'debug', 'warn', 'error'] as const).map(m => vi.spyOn(console, m).mockImplementation((...a: unknown[]) => { lines.push(a.map(String).join(' ')) }))
+      const google = async (_url: string, init: FetchInit): Promise<FetchReply> => {
+        const texts = (JSON.parse(init.body) as [[string[]]])[0][0]
+        return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify([texts]) }
+      }
+      const t = await createLocalTransport({ ...DEFAULT_CONFIG, provider: service.id, services: [service] } as Config, {
+        chain: chainOf(), probe: chainOf(), fetch: google, chromeApi: null, cancelled: new CancelledScopeRegistry(),
+        warn: l => lines.push(l), note: l => lines.push(l), onFailure: info => lines.push(info.message),
+      })
+      const r = await t.translate({ units: [unit('u', ' be a graph.')], target: 'cmn' })
+      const tested = await t.translate({ units: [unit('s', ' be a graph.')], target: 'cmn', providerId: service.id, candidate: service })
+      for (const s of spies) s.mockRestore()
+      lines.push(JSON.stringify(r), JSON.stringify(tested))
+      expect(lines.some(l => l.includes('passed over'))).toBe(true)
+      for (const form of forms) expect(lines.filter(l => l.includes(form))).toEqual([])
+    }
   })
 })
