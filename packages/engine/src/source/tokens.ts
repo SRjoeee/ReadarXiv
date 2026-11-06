@@ -396,8 +396,10 @@ export class Lexer {
         return null
       // (\begingroup and \endgroup bound TeX's changes too, but they stand unpaired in definitions' bodies, which a reader
       // does not run: only braces, which a body's own pair, bound the changes the tokenizer makes)
+      // (at the file's top level only: in a group it may stand in a definition's body, which TeX does not run where it reads
+      // it, and REVTeX's .bbl defines \@sanitize@url{\catcode`\\12 … \catcode`\%12}: run, its own `}` became a comment)
       case 'catcode':
-        this.catcodeAssignment()
+        if (this.depth === 0) this.catcodeAssignment()
         return null
       case 'begin':
         return this.lineEnvironment(tok)

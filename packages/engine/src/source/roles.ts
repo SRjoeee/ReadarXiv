@@ -151,8 +151,11 @@ export function bracketEnd(f: SourceFile, k: number, to: number): number {
   }
   return -1
 }
+/** a group read raw (url.sty's argument from the file) is one token, and a whole argument */
+export const isRaw = (t: Token | undefined): boolean => t?.k === 'raw'
 /** past the group whose `{` is token k, or -1 */
 export function groupEnd(f: SourceFile, k: number, to: number): number {
+  if (isRaw(f.toks[k])) return k + 1 <= to ? k + 1 : -1
   if (!isBegin(f.toks[k])) return -1
   const c = f.close[k] ?? -1
   return c < 0 || c >= to ? -1 : c + 1
@@ -161,7 +164,7 @@ export function groupEnd(f: SourceFile, k: number, to: number): number {
 export function oneArg(f: SourceFile, k: number, to: number): number {
   const t = f.toks[k]
   if (!t) return -1
-  if (isBegin(t)) return groupEnd(f, k, to)
+  if (isBegin(t) || isRaw(t)) return groupEnd(f, k, to)
   if (
     t.k === 'char' &&
     t.cat === CAT.param &&

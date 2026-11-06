@@ -76,11 +76,11 @@ describe('the tokenizer: category codes', () => {
     ])
   })
   it('makes the change a written-out \\catcode assignment states, and ends it with the group it is made in', () => {
-    const t = '{\\catcode`\\@=11 \\x@y}\\x@y\\catcode`\\|=13 |'
+    const t = '\\catcode`\\@=11 \\x@y\\catcode`\\@=12 \\x@y\\catcode`\\|=13 |'
     const cs = tokenize(t)
       .filter((x) => x.k === 'cs')
       .map((x) => (x as Token & { k: 'cs' }).name)
-    expect(cs).toEqual(['catcode', 'x@y', 'x', 'catcode'])
+    expect(cs).toEqual(['catcode', 'x@y', 'catcode', 'x', 'catcode'])
     const last = tokenize(t).at(-1) as Token & { k: 'char' }
     expect(last.cat).toBe(CAT.active)
   })
@@ -92,6 +92,19 @@ describe('the tokenizer: category codes', () => {
         form,
       ).toEqual(['catcode', 'a@b'])
     }
+  })
+  it('runs no assignment in a group, which may be a definition’s body (REVTeX’s \\@sanitize@url)', () => {
+    const cs = tokenize('\\def\\s{\\catcode`\\\\12\\catcode`\\%12\\relax}%\n\\a').filter((x) => x.k === 'cs')
+    expect(cs.map((x) => (x as Token & { k: 'cs' }).name)).toEqual([
+      'def',
+      's',
+      'catcode',
+      '\\',
+      'catcode',
+      '%',
+      'relax',
+      'a',
+    ])
   })
   it('leaves the codes as they are where an assignment is not written out', () => {
     const cs = tokenize('\\def\\x#1{\\catcode`#1=11}\\a@b').filter((x) => x.k === 'cs')

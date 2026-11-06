@@ -297,3 +297,18 @@ export function elementKind(name: string | null): string {
   if (name === '\\' || name === 'newline' || name === 'linebreak') return 'break'
   return 'other'
 }
+
+/** what the reader asks TeX whatever the source uses: whether backref is loaded and sets its lists after an entry's first
+ *  paragraph (its parscan, true unless the paper says \backrefparscanfalse) */
+export const ASKED: readonly string[] = ['ver@backref.sty', 'ifbackrefparscan']
+/** the packages' code environments (a paper's own environment that opens one is code too) */
+export const LISTINGS: ReadonlySet<string> = new Set([
+  'verbatim',
+  'Verbatim',
+  'BVerbatim',
+  'LVerbatim',
+  'lstlisting',
+  'minted',
+  'alltt',
+  'tcblisting',
+])

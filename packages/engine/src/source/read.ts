@@ -28,6 +28,7 @@ import {
   HEADINGS,
   INLINE_TEXT,
   LETTER_COMMANDS,
+  LISTINGS,
   lexRules,
   MATH_ENVS,
   NO_ARGS,
@@ -40,7 +41,18 @@ import {
   TEX_IFS,
   UNIT_FORMS,
 } from './kinds.ts'
-import { adjacent, definitionAt, envEnd, envName, type Macro, macroOf, ownNames, setsWords } from './macros.ts'
+import {
+  adjacent,
+  bodyFile,
+  canonical,
+  definitionAt,
+  envEnd,
+  envName,
+  type Macro,
+  macroOf,
+  ownNames,
+  setsWords,
+} from './macros.ts'
 import {
   type Arg,
   bindingsOf,
@@ -104,15 +116,15 @@ interface Ctx {
   own: ReadonlySet<string>
   /** the macros in force: TeX's at the document's start, and the body's own definitions as the walk meets them */
   macros: Map<string, Macro>
-  theorems: ReadonlySet<string>
+  theorems: Set<string>
   /** the paper's environments whose begin opens a display (eqsplit: \equation\aligned) */
-  displayEnvs: ReadonlySet<string>
+  displayEnvs: Set<string>
   /** the paper's environments whose body is code */
-  skipEnvs: ReadonlySet<string>
+  skipEnvs: Set<string>
   /** the paper's shorthands of an environment's begin or end (\be: \begin{equation}) */
   envMacros: ReadonlyMap<string, { side: 'begin' | 'end'; env: string }>
   /** the paper's own environments' parameters (by TeX's begin code: \newenvironment's count) */
-  envParams: ReadonlyMap<string, readonly Param[]>
+  envParams: Map<string, readonly Param[]>
   /** the newif values TeX holds at the document's start, by name, as the body changes them */
   ifs: Map<string, boolean>
   defs: Definitions
@@ -123,6 +135,10 @@ interface Ctx {
   bbl: string | null
   /** a cell's row ends of the paper's own (a macro whose body is `\\`) */
   rowEnds: ReadonlySet<string>
+  /** backref is loaded with its parscan: an entry's list stands after its first paragraph */
+  backref: boolean
+  /** the paper's environments whose begin opens a table their end closes */
+  tableWraps: Set<string>
 }
 
 const name = (t: Token | undefined): string | null => (t?.k === 'cs' ? t.name : null)
@@ -509,6 +525,13 @@ class Walker {
         if (!(d.provide && ctx.macros.has(d.name))) ctx.macros.set(d.name, d.macro)
         return ph(d.end, 'other')
       }
+    }
+    // an environment the body defines (\newenvironment{x}[n][d]{begin}{end}), or a theorem (\newtheorem{x}…): what it is
+    // from here on, as TeX defines it here; the definition itself read as any command is
+    if (/^(?:re)?newenvironment$|^provideenvironment$/.test(n)) this.environmentAt(f, end, to)
+    if (/^newtheorem$|^spnewtheorem$|^declaretheorem$/.test(n)) {
+      const a = adjacent(f, end, to).find((x) => x.shape === '{')
+      if (a) for (const x of f.src(a.a + 1, a.b - 1).split(',')) if (x.trim()) ctx.theorems.add(x.trim())
     }
     // conditionals
     if (n === 'iffalse' || (n === 'if' && this.ifWords(f, end))) {
@@ -1285,6 +1308,59 @@ class Walker {
     )
   }
 
+  /** an environment the body defines: its parameters, and whether its begin opens code, a display or a table */
+  environmentAt(f: SourceFile, i: number, to: number): void {
+    const ctx = this.ctx
+    let k = skipBlanks(f, i, to)
+    if (isOther(f.toks[k], '*')) k = skipBlanks(f, k + 1, to)
+    const nameEnd = groupEnd(f, k, to)
+    if (nameEnd < 0) return
+    const env = f.src(k + 1, nameEnd - 1).trim()
+    let params = 0
+    let opt = false
+    k = skipBlanks(f, nameEnd, to)
+    if (isOther(f.toks[k], '[')) {
+      const e = bracketEnd(f, k, to)
+      if (e < 0) return
+      params = Number(f.src(k + 1, e - 1).trim()) || 0
+      k = skipBlanks(f, e, to)
+      if (isOther(f.toks[k], '[')) {
+        const e2 = bracketEnd(f, k, to)
+        if (e2 < 0) return
+        opt = true
+        k = skipBlanks(f, e2, to)
+      }
+    }
+    const beginEnd = groupEnd(f, k, to)
+    if (beginEnd < 0) return
+    const k2 = skipBlanks(f, beginEnd, to)
+    const endEnd = groupEnd(f, k2, to)
+    if (endEnd < 0) return
+    const begin = f.src(k + 1, beginEnd - 1)
+    const endCode = f.src(k2 + 1, endEnd - 1)
+    ctx.envParams.set(env, paramsOf(`${opt ? '[a' : ''}${'{a'.repeat(params - (opt ? 1 : 0))}`))
+    const cmds = opened(begin)
+    if (
+      ((cmds.includes('ttfamily') || cmds.includes('tt')) && cmds.includes('obeylines')) ||
+      cmds.some((c) => LISTINGS.has(c) || ctx.skipEnvs.has(c))
+    )
+      ctx.skipEnvs.add(env)
+    if (
+      /^\\(?:begin\s*\{)?(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath)\*?/.test(
+        begin.trim(),
+      ) &&
+      /\\(?:end\s*\{)?(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath)/.test(endCode)
+    )
+      ctx.displayEnvs.add(env)
+    if (
+      cmds.some((c) => TABLE_ENVS.test(c)) &&
+      /\\end\s*\{(?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?\}|\\end(?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\b/.test(
+        endCode,
+      )
+    )
+      ctx.tableWraps.add(env)
+  }
+
   // ---------------------------------------------------------------- environments
   begin(f: SourceFile, i: number, end: number, to: number, b: Builder, endText: () => void): { next: number } {
     const toks = f.toks
@@ -1310,6 +1386,18 @@ class Walker {
       return { next: e.after }
     }
     if (SKIP_ENVS.test(env.name) || ctx.skipEnvs.has(env.name)) return { next: e.after }
+    if (ctx.tableWraps.has(env.name)) {
+      const { end: argsEnd } = this.envArgs(f, env.after, e.body, env.name)
+      const saved = b.kind
+      const savedCell = b.cellMode
+      b.kind = AUTHOR_KINDS.has(b.kind ?? '') ? b.kind : 'cell'
+      b.cellMode = true
+      this.walk(f, argsEnd, e.body, b)
+      b.flush()
+      b.kind = saved
+      b.cellMode = savedCell
+      return { next: e.after }
+    }
     if (TABLE_ENVS.test(env.name)) {
       const tp = ctx.envParams.has(env.name) ? null : environmentParams(env.name, ctx.bindings)
       const tr = tp ? readArgs(f, env.after, tp, e.body, this.isCall) : null
@@ -1472,8 +1560,23 @@ class Walker {
         }
       }
       b.kind = 'reference'
+      const before = b.units.length
       this.walk(f, x, y, b)
       b.flush()
+      // backref (with its parscan) sets an entry's list of pages after the entry's first paragraph: an element there
+      if (this.ctx.backref) {
+        const made = b.units
+          .slice(before)
+          .filter((u) => u.kind === 'reference' && u.file === b.file)
+          .sort((p, q) => p.start - q.start)
+        const ends = (u: BUnit, next: BUnit | undefined) => {
+          const from = tokenAt(f, u.end, x, y)
+          const upto = next ? tokenAt(f, next.start, x, y) : y
+          return f.toks.slice(from, upto).some((t) => t.k === 'par' || (t.k === 'cs' && t.name === 'par'))
+        }
+        const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
+        first?.pieces.push({ t: 'ph', src: '\\axtbackref', kind: 'backref' })
+      }
     })
     b.kind = saved
   }
@@ -1570,7 +1673,12 @@ const isChar = (t: Token | undefined, cat: number): boolean => !!t && t.k === 'c
 
 /** what TeX's definitions say of the paper, read once: its own macros, newif values, theorems, display and code
  *  environments, shorthands, row ends */
-function paperFacts(defs: Definitions, own: ReadonlySet<string>, isCall: (n: string) => boolean) {
+function paperFacts(
+  defs: Definitions,
+  own: ReadonlySet<string>,
+  ownEnv: ReadonlySet<string>,
+  isCall: (n: string) => boolean,
+) {
   const macros = new Map<string, Macro>()
   const ifs = new Map<string, boolean>()
   const theorems = new Set<string>()
@@ -1583,8 +1691,15 @@ function paperFacts(defs: Definitions, own: ReadonlySet<string>, isCall: (n: str
     if (m.k === 'other' && (m.text === '\\iftrue' || m.text === '\\iffalse') && n.startsWith('if'))
       ifs.set(n, m.text === '\\iftrue')
     if (m.k !== 'macro') continue
-    // a theorem-like environment: the kernel's \newtheorem (\@thm), amsthm's, thmtools', llncs' \spnewtheorem
-    if (/^\\@thm |^\\@spthm|^\\thmt@parsetheoremargs |^\\@begintheorem/.test(m.body)) theorems.add(n)
+    // a theorem-like environment: one that sets a run-in head, as the kernel's \newtheorem (\@thm), amsthm's, thmtools',
+    // llncs' \spnewtheorem make one, and amsthm's proof (\trivlist \item [\hskip \labelsep \itshape #1…], its optional
+    // argument's internal)
+    const code = d.opt?.k === 'macro' ? d.opt.body : m.body
+    if (
+      /^\\@thm |^\\@spthm|^\\thmt@parsetheoremargs |^\\@begintheorem/.test(m.body) ||
+      /\\trivlist \\item \[/.test(code)
+    )
+      theorems.add(n)
     if (own.has(n)) {
       const mac = macroOf(n, d, isCall)
       if (mac) macros.set(n, mac)
@@ -1597,7 +1712,7 @@ function paperFacts(defs: Definitions, own: ReadonlySet<string>, isCall: (n: str
   // the paper's own environments that set a display: their begin opens a math environment their end closes
   for (const [n, d] of defs.names) {
     const endD = defs.names.get(`end${n}`)
-    if (d.meaning.k !== 'macro' || endD?.meaning.k !== 'macro' || !own.has(n)) continue
+    if (d.meaning.k !== 'macro' || endD?.meaning.k !== 'macro' || !ownEnv.has(n)) continue
     const open = /^\\(?:begin \{)?(equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath)\*?/.exec(
       d.meaning.body.trim(),
     )
@@ -1609,7 +1724,26 @@ function paperFacts(defs: Definitions, own: ReadonlySet<string>, isCall: (n: str
     )
       displayEnvs.add(n)
   }
-  return { macros, ifs, theorems, displayEnvs, envMacros, rowEnds, envParams }
+  // the paper's own environments' parameters, by what TeX holds of their begin (\newenvironment{x}[n][d]: an optional
+  // argument first), and those whose begin opens a table their end closes (their body the table's rows)
+  const tableWraps = new Set<string>()
+  for (const [n, d] of defs.names) {
+    const endD = defs.names.get(`end${n}`)
+    if (!ownEnv.has(n) || d.meaning.k !== 'macro' || !endD) continue
+    const mac = macroOf(n, d, isCall)
+    if (mac && !mac.delimited)
+      envParams.set(n, paramsOf(`${mac.opt ? '[a' : ''}${'{a'.repeat(mac.params - (mac.opt ? 1 : 0))}`))
+    const begins = opened(mac?.body ?? d.meaning.body).filter((x) => TABLE_ENVS.test(x))
+    if (
+      begins.length &&
+      endD.meaning.k === 'macro' &&
+      /\\end \{(?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?\}|\\end(?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\b/.test(
+        endD.meaning.body,
+      )
+    )
+      tableWraps.add(n)
+  }
+  return { macros, ifs, theorems, displayEnvs, envMacros, rowEnds, envParams, tableWraps }
 }
 
 /** the paper's own environments read by lines: those whose begin code begins one of the packages' (\newenvironment{code}
@@ -1625,9 +1759,56 @@ function ownLineEnvs(defs: Definitions, own: ReadonlySet<string>, base: (env: st
         : m.k === 'other'
           ? /^\\([A-Za-z]+)$/.exec(m.text)?.[1]
           : undefined
-    if (first && base(first)) out.add(n)
+    // (or one that runs a package's line reader: comment.sty's \ProcessComment, fancyvrb's, listings', minted's)
+    if ((first && base(first)) || (m.k === 'macro' && /\\ProcessComment |\\FV@|\\FVB@|\\lst@|\\minted@/.test(m.body)))
+      out.add(n)
   }
   return out
+}
+
+/** the commands a begin code runs where it stands (not those inside a definition it makes), and the environments it begins */
+function opened(body: string): string[] {
+  const f = bodyFile(body)
+  const out: string[] = []
+  for (let k = 0; k < f.toks.length; k++) {
+    const t = f.toks[k] as Token
+    if (t.k !== 'cs') continue
+    if (/^(?:[gex]?def|(?:re)?newcommand|providecommand)$/.test(t.name)) {
+      let j = k + 1
+      while (j < f.toks.length && !isBegin(f.toks[j])) j++
+      const c = f.close[j] ?? -1
+      if (c > 0) k = c
+      continue
+    }
+    if (t.name === 'begin') {
+      const e = envName(f, k + 1, f.toks.length)
+      if (e) out.push(e.name, e.name.replace(/\*$/, ''))
+      continue
+    }
+    out.push(t.name)
+  }
+  return out
+}
+/** the paper's own code environments: one read by lines, one whose begin code opens a package's code environment or
+ *  another of these, or sets its body as alltt does (typewriter type, its lines obeyed) */
+function codeEnvs(defs: Definitions, own: ReadonlySet<string>, lines: ReadonlySet<string>): Set<string> {
+  const code = new Set<string>(lines)
+  const runs = new Map<string, string[]>()
+  for (const [n, d] of defs.names) {
+    if (!own.has(n) || d.meaning.k !== 'macro' || !defs.names.has(`end${n}`)) continue
+    const cmds = opened(d.meaning.body)
+    if ((cmds.includes('ttfamily') || cmds.includes('tt')) && cmds.includes('obeylines')) code.add(n)
+    runs.set(n, cmds)
+  }
+  for (let found = true; found; ) {
+    found = false
+    for (const [n, cmds] of runs)
+      if (!code.has(n) && cmds.some((c) => LISTINGS.has(c) || code.has(c))) {
+        code.add(n)
+        found = true
+      }
+  }
+  return code
 }
 
 /**
@@ -1642,17 +1823,49 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     .filter((p) => /\.(?:tex|sty|cls)$/i.test(p))
     .map((p) => scan.file(p, null))
     .filter((x): x is SourceFile => !!x)
-  const own = ownNames(shipped)
+  const names = ownNames(shipped)
+  // (a command is the paper's where TeX holds one of the paper's definitions of it, or none at the document's start (a
+  // definition the body makes, or a local one); where TeX's meaning is none of them, a package's overrides the paper's
+  // fallback, \providecommand\href{…} under hyperref: its arguments are the role table's)
+  const own = new Set(
+    [...names.commands].filter((n) => {
+      const d = definitions.names.get(n)
+      const list = names.bodies.get(n) ?? []
+      if (!d || d.meaning.k === 'undefined' || list.some((x) => x === null)) return true
+      const held = [d.meaning, d.opt, d.robust, d.code]
+        .filter((m) => m?.k === 'macro')
+        .map((m) => canonical((m as { body: string }).body))
+      return list.some((x) => held.includes(canonical(x as string)))
+    }),
+  )
+  // (an environment is the paper's where it defines it by an environment's definer, or by a command's: \let\code\verbatim)
+  const ownEnv = new Set([...names.envs, ...own])
   const base = lexRules()
-  const lines = ownLineEnvs(definitions, own, (e) => base.lineEnv(e))
+  const lines = ownLineEnvs(definitions, ownEnv, (e) => base.lineEnv(e))
   const rules = lexRules(lines)
   const files = new Files(tree, rules, inputs)
+  // (the encoding the main file declares to inputenc: what a file that is not UTF-8 is read in)
+  const mainScan = scan.file(tree.main, null)
+  if (mainScan)
+    for (let k = 0; k < mainScan.toks.length; k++) {
+      if (name(mainScan.toks[k]) !== 'usepackage') continue
+      const a = adjacent(mainScan, k + 1, mainScan.toks.length)
+      const pkg = a.find((x) => x.shape === '{')
+      const opts = a.find((x) => x.shape === '[')
+      if (
+        pkg &&
+        opts &&
+        mainScan.src(pkg.a + 1, pkg.b - 1).trim() === 'inputenc' &&
+        /\b(?:cp1252|ansinew)\b/.test(mainScan.src(opts.a, opts.b))
+      )
+        files.encoding = scan.encoding = 'cp1252'
+    }
   const bindings = bindingsOf(shipped)
   const isCall = (n: string) => {
     const p = own.has(n) ? null : commandParams(n, bindings)
     return !!p?.length && p !== REGISTER
   }
-  const facts = paperFacts(definitions, own, isCall)
+  const facts = paperFacts(definitions, own, ownEnv, isCall)
   const stem = jobName(tree.main)
   const bbl = tree.files.has(`${stem}.bbl`) ? `${stem}.bbl` : null
   const ctx: Ctx = {
@@ -1674,9 +1887,10 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
       ].filter((x) => facts.theorems.has(x) || !definitions.names.has(x)),
     ),
     displayEnvs: facts.displayEnvs,
-    skipEnvs: lines,
+    skipEnvs: codeEnvs(definitions, ownEnv, lines),
     envMacros: facts.envMacros,
     envParams: facts.envParams,
+    tableWraps: facts.tableWraps,
     ifs: facts.ifs,
     defs: definitions,
     ended: false,
@@ -1685,6 +1899,9 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     dirs: [],
     bbl,
     rowEnds: facts.rowEnds,
+    backref:
+      (definitions.names.get('ver@backref.sty')?.meaning.k ?? 'undefined') !== 'undefined' &&
+      (definitions.names.get('ifbackrefparscan')?.meaning as { text?: string } | undefined)?.text !== '\\iffalse',
   }
   const w = new Walker(ctx)
   const units: BUnit[] = []

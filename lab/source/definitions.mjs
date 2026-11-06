@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { askFile, jobName, namesUsed } from '../../packages/engine/src/source/definitions.ts'
-import { LEX_RULES } from '../../packages/engine/src/source/kinds.ts'
+import { ASKED, LEX_RULES } from '../../packages/engine/src/source/kinds.ts'
 import { analyze } from '../../src/pdf-reader/engine/source/paper-meta.mjs'
 import { inMemory } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 import { unpackSource } from '../../src/pdf-reader/engine/source/tar.mjs'
@@ -38,7 +38,7 @@ for (const p of papers) {
   const compiler = base?.compiler ?? meta.compiler ?? 'pdflatex'
   const image = base?.image ?? PINS.images[PINS.default].texlive
   const main = meta.main
-  const names = namesUsed({ main, files }, LEX_RULES)
+  const names = namesUsed({ main, files }, LEX_RULES, ASKED)
   const build = join(OUT, `build-${p.id}`)
   rmSync(build, { recursive: true, force: true })
   for (const [path, bytes] of files) {

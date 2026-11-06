@@ -5,7 +5,7 @@
 import type { Definition, Meaning } from './definitions.ts'
 import { SourceFile } from './files.ts'
 import { CAPTIONS, CONTENT_BOX, INLINE_TEXT, MATH_ENVS, NO_ARGS, OPERAND_OF, SECOND_OPERAND_OF } from './kinds.ts'
-import { type Arg, commandParams, isBegin, isOther, type Param, readArgs, skipBlanks } from './roles.ts'
+import { type Arg, commandParams, isBegin, isEnd, isOther, type Param, readArgs, skipBlanks } from './roles.ts'
 import { CAT, Catcodes, type Token } from './tokens.ts'
 
 export interface Macro {
@@ -49,7 +49,24 @@ export function macroOf(name: string, d: Definition, isCall: (name: string) => b
     opt = true
   }
   if (m.k !== 'macro') return null
-  if (d.spec !== undefined) return null
+  if (d.spec !== undefined) {
+    // an ltcmd command: its arguments by its specification (mandatory `m`, `+m`; an optional `o` or `O{…}` first), its code
+    // its body. Any other argument type (a star, a delimiter, an embellishment) is one no reader here takes
+    const spec = d.spec
+      .replace(/O\{(?:[^{}]|\{[^{}]*\})*\}/g, 'O')
+      .replace(/\+/g, '')
+      .replace(/\s+/g, '')
+    if (!/^[oO]?m*$/.test(spec) || d.code?.k !== 'macro') return null
+    const out: Macro = {
+      params: spec.length,
+      opt: /^[oO]/.test(spec),
+      delimited: false,
+      body: d.code.body,
+      readsOn: false,
+    }
+    analyse(name, out, isCall)
+    return out
+  }
   const params = (m.params.match(/#\d/g) ?? []).length
   const delimited =
     m.params.replace(/#\d/g, '').replace(/^\[\]$/, '') !== '' && !(opt && m.params === `[#1]${m.params.slice(4)}`)
@@ -235,6 +252,11 @@ export function adjacent(f: SourceFile, i: number, to: number): Arg[] {
       at = e
       continue
     }
+    if (f.toks[k]?.k === 'raw') {
+      out.push({ shape: '{', role: 'a', param: n, a: k, b: k + 1 })
+      at = k + 1
+      continue
+    }
     if (isBegin(f.toks[k])) {
       const c = f.close[k] ?? -1
       if (c < 0 || c >= to) break
@@ -377,20 +399,77 @@ export function setsWords(m: Macro): boolean {
  *  tokens (no comment or verbatim text counts) */
 const DEFINERS =
   /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator)$/
-export function ownNames(files: readonly SourceFile[]): Set<string> {
+/** the definers of an environment, its name a group after them (the kernel's, xparse's, the packages' that make one) */
+const ENV_DEFINERS =
+  /^(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|(?:Custom|Recustom|Define)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing|newminted)$/
+export function ownNames(files: readonly SourceFile[]): {
+  commands: Set<string>
+  envs: Set<string>
+  /** each name's definitions' bodies, in the files' order (null where its definer has none the reader finds) */
+  bodies: Map<string, (string | null)[]>
+} {
   const out = new Set<string>()
+  const envs = new Set<string>()
+  const bodies = new Map<string, (string | null)[]>()
   for (const f of files) {
     for (let i = 0; i < f.toks.length; i++) {
       const t = f.toks[i] as Token
+      if (t.k === 'cs' && ENV_DEFINERS.test(t.name)) {
+        // an environment's name, in a group: each name of a list (comment.sty's \excludecomment{a,b})
+        let k = skipBlanks(f, i + 1, f.toks.length)
+        if (isOther(f.toks[k], '*')) k = skipBlanks(f, k + 1, f.toks.length)
+        if (isOther(f.toks[k], '[')) {
+          while (k < f.toks.length && !isOther(f.toks[k], ']')) k++
+          k = skipBlanks(f, k + 1, f.toks.length)
+        }
+        const c = isBegin(f.toks[k]) ? (f.close[k] ?? -1) : -1
+        if (c > 0) for (const n of f.src(k + 1, c).split(',')) if (n.trim() && !/[\\{}]/.test(n)) envs.add(n.trim())
+        continue
+      }
       if (t.k !== 'cs' || !DEFINERS.test(t.name)) continue
       let k = skipBlanks(f, i + 1, f.toks.length)
       if (isOther(f.toks[k], '*')) k = skipBlanks(f, k + 1, f.toks.length)
       if (isBegin(f.toks[k])) k = skipBlanks(f, k + 1, f.toks.length)
       const n = f.toks[k]
-      if (n?.k === 'cs' && /^[A-Za-z@]+$/.test(n.name)) out.add(n.name)
+      if (n?.k !== 'cs' || !/^[A-Za-z@]+$/.test(n.name)) continue
+      out.add(n.name)
+      // the definition's body, where its definer has one the reader can find: a LaTeX definer's after its [n][default], a
+      // TeX one's after its parameter text
+      let j = k + 1
+      if (isEnd(f.toks[j])) j++
+      if (/^[gex]?def$/.test(t.name)) while (j < f.toks.length && !isBegin(f.toks[j])) j++
+      else if (/newcommand|providecommand|DeclareRobustCommand/.test(t.name))
+        for (let m = 0; m < 2; m++) {
+          j = skipBlanks(f, j, f.toks.length)
+          if (!isOther(f.toks[j], '[')) break
+          while (j < f.toks.length && !isOther(f.toks[j], ']')) j++
+          j++
+        }
+      else {
+        bodies.set(n.name, [...(bodies.get(n.name) ?? []), null])
+        continue
+      }
+      j = skipBlanks(f, j, f.toks.length)
+      const c = isBegin(f.toks[j]) ? (f.close[j] ?? -1) : -1
+      bodies.set(n.name, [...(bodies.get(n.name) ?? []), c > 0 ? f.src(j + 1, c) : null])
     }
   }
-  return out
+  return { commands: out, envs, bodies }
+}
+
+/** a body as TeX holds it, for comparing the paper's definition with TeX's meaning: a control word and a blank, one blank
+ *  for any run of them, no comment, no blank TeX skips */
+export function canonical(body: string): string {
+  const f = bodyFile(body)
+  let out = ''
+  for (const t of f.toks) {
+    if (t.k === 'cs') out += /^[A-Za-z@]+$/.test(t.name) ? `\\${t.name} ` : `\\${t.name}`
+    else if (t.k === 'space') {
+      if (!t.skipped && !out.endsWith(' ')) out += ' '
+    } else if (t.k === 'par') out += '\\par '
+    else if (t.k !== 'comment') out += f.text.slice(t.s, t.e)
+  }
+  return out.trim()
 }
 
 /** a definition the body makes at token i (a definer's name): the macro it makes, and where the definition ends; null where

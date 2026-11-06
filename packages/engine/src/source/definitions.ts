@@ -12,6 +12,7 @@
 //                                             makes \x \@protected@testopt\x\\x{d}; this is \\x's), where defined
 //   R <name> <meaning>                        a robust command's internal (\DeclareRobustCommand\x: `\x␣`), where defined
 //   S <name> <spec>                           an xparse (ltcmd) command's argument specification
+//   C <name> <meaning>                        its code (`\<name>␣code`), one parameter an argument
 //   END <count>                               the number of M records: a file without it was cut short
 import { Catcodes, isCs, Lexer, type LexRules, type Token, texText } from './tokens.ts'
 
@@ -33,6 +34,8 @@ export interface Definition {
   robust?: Meaning
   /** ltcmd's argument specification */
   spec?: string
+  /** an ltcmd command's code (`\x␣code`), its parameters one a specified argument */
+  code?: Meaning
 }
 
 export interface Definitions {
@@ -99,12 +102,14 @@ export function readDefinitions(text: string): Definitions {
     if (kind === 'O') d.opt = meaningOf(value)
     else if (kind === 'R') d.robust = meaningOf(value)
     else if (kind === 'S') d.spec = value
+    else if (kind === 'C') d.code = meaningOf(value)
   }
   return { names, complete }
 }
 
-/** a name the ask file can carry in a brace group as it stands: letters, `@` and `*` (an environment's star) */
-const ASKABLE = /^[A-Za-z@*]+$/
+/** a name the ask file can carry in a brace group as it stands: letters, `@` and `*` (an environment's star), and a
+ *  file's name in LaTeX's record of a package loaded (`ver@backref.sty`) */
+const ASKABLE = /^[A-Za-z@*][A-Za-z0-9@*.-]*$/
 
 /**
  * The ask file: TeX that writes `<job>.axtdefs` when it is read at `begindocument/end`. Every name once; names that cannot
@@ -138,6 +143,7 @@ export function askFile(names: Iterable<string>): string {
     '    \\ifin@\\ifdefined\\GetDocumentCommandArgSpec',
     '      \\expandafter\\GetDocumentCommandArgSpec\\csname #1\\endcsname',
     '      \\immediate\\write15{S #1 \\detokenize\\expandafter{\\ArgumentSpecification}}%',
+    '      \\immediate\\write15{C #1 \\expandafter\\meaning\\csname #1 code\\endcsname}%',
     '    \\fi\\fi',
     '  \\else',
     '    \\immediate\\write15{M #1 undefined}%',
@@ -160,9 +166,20 @@ export interface Tree {
   files: ReadonlyMap<string, Uint8Array>
 }
 
-const UTF8 = new TextDecoder('utf-8')
-/** a file's text as the reader reads it: UTF-8 (an invalid byte U+FFFD), lines ended at LF */
-export const fileText = (bytes: Uint8Array): string => texText(UTF8.decode(bytes))
+const UTF8 = new TextDecoder('utf-8', { fatal: true })
+const CP1252 = new TextDecoder('windows-1252')
+/** a file's text as the reader reads it, lines ended at LF: UTF-8, or, a file that is not, the encoding the paper declares
+ *  to inputenc (`cp1252`, `ansinew`), else Latin-1 (each byte its code point) */
+export function fileText(bytes: Uint8Array, fallback: 'latin1' | 'cp1252' = 'latin1'): string {
+  try {
+    return texText(UTF8.decode(bytes))
+  } catch {
+    if (fallback === 'cp1252') return texText(CP1252.decode(bytes))
+    let s = ''
+    for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192))
+    return texText(s)
+  }
+}
 
 /** a path written as the tree holds it: no `./`, no empty or `.` part, `..` taken back */
 export function normalizePath(p: string): string {
@@ -203,8 +220,8 @@ export const INPUTS: ReadonlyMap<string, 'file' | 'import' | 'subimport' | 'subf
  * file once), and the environments it begins: what the ask file asks. With each environment `env`, `endenv` too. The
  * tokens are read as the reader reads them (`rules`), so that \verb's text and an environment read by lines hold no names
  */
-export function namesUsed(tree: Tree, rules: LexRules): Set<string> {
-  const names = new Set<string>()
+export function namesUsed(tree: Tree, rules: LexRules, always: Iterable<string> = []): Set<string> {
+  const names = new Set<string>(always)
   const seen = new Set<string>()
   const queue: { path: string; dirs: string[] }[] = [{ path: tree.main, dirs: [] }]
   const codes = new Catcodes()

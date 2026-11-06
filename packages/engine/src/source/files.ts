@@ -62,6 +62,8 @@ export class Files {
   readonly tree: Tree
   readonly rules: LexRules
   readonly inputs: ReadonlySet<string>
+  /** how a file that is not UTF-8 is read: the encoding the paper declares */
+  encoding: 'latin1' | 'cp1252' = 'latin1'
   private readonly read = new Map<string, SourceFile>()
   constructor(tree: Tree, rules: LexRules, inputs: ReadonlySet<string>) {
     this.tree = tree
@@ -78,7 +80,7 @@ export class Files {
     if (codes) c.restore(codes)
     // (a package's or a class's own file is read with @ a letter, as \usepackage reads it)
     if (/\.(?:sty|cls)$/i.test(path)) c.set(64, CAT.letter)
-    const f = new SourceFile(path, fileText(bytes), c, this.rules, this.inputs)
+    const f = new SourceFile(path, fileText(bytes, this.encoding), c, this.rules, this.inputs)
     this.read.set(path, f)
     return f
   }
