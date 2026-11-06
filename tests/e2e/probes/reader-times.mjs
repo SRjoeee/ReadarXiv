@@ -55,7 +55,7 @@ await routeTable(context, [
   ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
 ])
 for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config)).catch(() => false)); tries++) await sleep(200)
-await seedService(worker, { id: 'svc-times0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
+await seedService(worker, { id: 'svc-timings0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
 await worker.evaluate(async () => {
   const { config } = await chrome.storage.local.get('config')
   await chrome.storage.local.set({ config: { ...config, targetLanguage: 'deu', theme: 'light' } })
