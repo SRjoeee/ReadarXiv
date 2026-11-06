@@ -594,10 +594,21 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L4',
     owns: ['T10', 'G16', 'A26'],
-    ports: ['RUN:1441-1496 paintFigures', 'figure-fit.mjs:42 fitFigureSet', 'L2:4824-4839 figureRuns'],
+    ports: [
+      'RUN:1441-1496 paintFigures',
+      'figure-fit.mjs:42 fitFigureSet',
+      'figure-fit.mjs:1-76 lineOf, CJK_FOOT, sameAsSource',
+      'L2:4824-4839 figureRuns',
+    ],
     how: 'ported',
     reads: ['fit.floorMin'],
-    state: open,
+    file: 'shared/figures.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs): drawn, why and line (x0, baseline, rot, text), the figure rows, views and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
+      cases: 14351,
+    },
   },
   {
     id: 'S.rowStart',
@@ -790,7 +801,13 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:4633-4694 lineRuns', 'L2:4695 runEdge', 'L2:1875 cropPartsOf'],
     how: 'ported',
     reads: ['tex.copySpace'],
-    state: open,
+    file: 'emit/display.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "every laid unit of the 123 reader dumps (tests/replay/display.ts, lab/typeset/replay-display.mjs): from the chain's and the fill's final layout, size, leading, each line's page, x0, x1, baseline and text, each crop's piece and box (32,023 of 32,035; the other 12 are the one F2 difference and its page's pass)",
+      cases: 32023,
+    },
   },
   {
     id: 'D.text',

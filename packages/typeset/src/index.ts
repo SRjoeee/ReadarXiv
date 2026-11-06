@@ -172,6 +172,35 @@ export {
   type PageRules,
 } from './shared/fill-page.types.ts'
 export { type Filled, fillPass, type PassUnit } from './shared/fill-pass.ts'
+export {
+  type Figure,
+  type FigureRow,
+  type FigureRun,
+  type FigureUnit,
+  type FiguresInput,
+  figureRuns,
+  figureRunsDepth,
+  figureRunsWidth,
+  figures,
+  fontClassOf,
+} from './shared/figures.ts'
+export { CJK_FOOT, type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
+export {
+  COPY_SPACE_EM,
+  type CropItem,
+  type DisplayItem,
+  type DisplayLine,
+  displayLines,
+  type LineRun,
+  lineRuns,
+  runEdge,
+  type TextItem,
+  type TextRun,
+} from './emit/display.ts'
+export { layMember, type MemberLay, type Prepared } from './lay/member.ts'
+export { type FlowLay, type FlowMember, layFlowPrepared } from './lay/flow.ts'
+export { layPagePrepared, type PageMember, type PreparedPage } from './lay/page.ts'
+export { fin, layoutOf, linesOf, stateOf, Trace as LedgerTrace } from './lay/trace.ts'
 export { type OnLead, type OnLeadInput, onLeadRetry } from './shared/on-lead.ts'
 export { type GroupMember, keptCell, type TableRead, tableRead } from './shared/table-read.ts'
 export { type LaidCell, tableSettle } from './shared/table-settle.ts'
