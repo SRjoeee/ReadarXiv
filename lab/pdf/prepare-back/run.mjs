@@ -16,6 +16,7 @@ import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:z
 import * as PL from '@cantoo/pdf-lib'
 import { prepareBack, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
@@ -27,7 +28,7 @@ const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfj
 // (layer2.mjs makes a measuring canvas at its load: a stub, nothing here measures)
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => ({ width: 0 }), font: '' } } }
 const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs'), U = await im('layer-proto/units.mjs')
-const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs'), { instrumentOf } = await im('pipeline/instrument.mjs')
+const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs')
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
 const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
 const tasks = []

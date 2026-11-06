@@ -17,12 +17,13 @@ const ENGINE = 'src/pdf-reader/engine/'
 const SERVER = [/^packages\/engine\/src\/(?!(?:ink|memory|delta-wire|tail)\.)/, /^src\/pdf-reader\/engine\/pipeline\/(?!(?:anchors|versions|memory)\.mjs$)/, /^src\/pdf-reader\/engine\/source\//, /^src\/pdf-reader\/engine\/layout\/(?:make|remove|own|wrap|wrap-final)\.mjs$/]
 
 /** the files a browser build of `entries` reads, repository-relative: of the engine package (packages/engine, today's
- *  modules the rebuild moved into it, read through its one entry), those whose code the build keeps (its bytes in the output),
- *  since its entry names the prepare's modules too and the build shakes off what the reader does not take */
+ *  modules the rebuild moved into it, read through its one entry) and of the packages it names (format), those whose code the
+ *  build keeps (its bytes in the output), since its entry names the prepare's modules too and the build shakes off what the
+ *  reader does not take */
 async function inputsOf(entries: string[]): Promise<string[]> {
   const r = await build({ entryPoints: entries.map(e => resolve(ROOT, e)), bundle: true, write: false, metafile: true, platform: 'browser', format: 'esm', target: 'es2022', outdir: resolve(ROOT, '.reader-view-bundle'), logLevel: 'silent' })
   const kept = new Set(Object.values(r.metafile.outputs).flatMap(o => Object.entries(o.inputs).filter(([, v]) => v.bytesInOutput > 0).map(([f]) => f)))
-  return Object.keys(r.metafile.inputs).filter(f => !/(?:^|\/)packages\/engine\//.test(f) || kept.has(f)).map(f => relative(ROOT, resolve(ROOT, f)).split('\\').join('/')).sort()
+  return Object.keys(r.metafile.inputs).filter(f => !/(?:^|\/)packages\//.test(f) || kept.has(f)).map(f => relative(ROOT, resolve(ROOT, f)).split('\\').join('/')).sort()
 }
 /** the package a file of node_modules belongs to (pnpm's layout: …/node_modules/<name>/…, the last one) */
 const packageOf = (f: string) => /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\/(?!.*\/node_modules\/)/.exec(f)?.[1] ?? null
