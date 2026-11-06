@@ -589,6 +589,20 @@ export function createStack(o: StackOptions): Stack {
         near.observe(sl.div)
         inView.observe(sl.div)
       }
+      // the slots in the first view drawn now, not a frame later at the observers' first word (their geometry read once, here):
+      // page 1 waited for the IntersectionObserver's first callback, 17 to 33 ms of first paint against PDF.js's viewer
+      if (scroller.clientHeight) {
+        const top = scroller.scrollTop,
+          bottom = top + scroller.clientHeight
+        for (const sl of slots) {
+          const y = sl.div.offsetTop
+          if (y >= bottom) break
+          if (y + sl.div.offsetHeight <= top) continue
+          sl.near = true
+          sl.inView = true
+          want(sl)
+        }
+      }
       // (a stack out of the display draws nothing, and its sizes are read at once)
       if (!scroller.clientWidth) {
         sized = -1
