@@ -1717,7 +1717,7 @@ class Walker {
 const THEOREM_NAMES = ['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example']
 /** a float's begin as LaTeX makes one (\newfloat, algorithm2e, float.sty): its optional placement, by default `htbp` */
 const isFloat = (m: { k: string; body?: string } | undefined): boolean =>
-  m?.k === 'macro' && /^\\@protected@testopt \\[A-Za-z@*]+ \\\\[A-Za-z@*]+ \{[htbpH!]*\}$/.test((m.body ?? '').trim())
+  m?.k === 'macro' && /^\\@protected@testopt \\[A-Za-z@*]+ \\\\[A-Za-z@*]+ \{[htbpH!]+\}$/.test((m.body ?? '').trim())
 
 /** whether TeX holds a command of that name at the document's start (neither undefined nor \relax, as \csname leaves one) */
 const definitions = (defs: Definitions, n: string): boolean => {
