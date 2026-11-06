@@ -11,9 +11,11 @@ type In = { labels: unknown; to: string; names: Record<string, string> | null; o
 type Prep = Map<number, { mode: string; sup?: boolean; src?: string; text?: string }>
 
 describe.skipIf(!hasTap || !hasToday)('U.rename: replayed on the tap', () => {
-  const NAMES = JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as TexNamesData
+  // read when a test runs, never while the file is collected: a skipped suite's body still runs, and CI holds no copy
+  let names: TexNamesData | undefined
+  const NAMES = () => (names ??= JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as TexNamesData)
   const run = (prep: Prep, a: In) =>
-    [...rename(prep, refNamesOf(NAMES, a.to), a.labels ? a.names : null, a.ownNames)].map(
+    [...rename(prep, refNamesOf(NAMES(), a.to), a.labels ? a.names : null, a.ownNames)].map(
       ([k, x]) => [k, x] as [number, Rename[]],
     )
 
