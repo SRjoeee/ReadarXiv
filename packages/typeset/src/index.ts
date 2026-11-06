@@ -56,6 +56,18 @@ export {
   type UnitLabel,
 } from './unit/label.ts'
 export {
+  jointOf,
+  type Lead,
+  type LeadChar,
+  type LeadInput,
+  type Led,
+  lead,
+  type NameLead,
+  type NameRecord,
+  styleOfChars,
+  unlead,
+} from './unit/lead.ts'
+export {
   GENERATED_REF,
   type NameRow,
   nameOfRow,
