@@ -191,7 +191,11 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     reads: ['k.SHORT 0.5 em (a guard: TeX states the line a break ends, A.El.ends)'],
     file: 'unit/breaks.ts',
-    state: open,
+    state: {
+      is: 'ported',
+      replay: 'samples/U.breaks.json.gz (+ every sampled reading) and lanes/L3/replay/U.breaks.json.gz',
+      cases: 101,
+    },
   },
   {
     id: 'U.blocks',

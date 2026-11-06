@@ -108,6 +108,32 @@ export function measuresOf(
   return out
 }
 
+/** a block's measure at slot `k` of its lines or at baseline `y`: its line's (measuresOf); between two lines of two
+ *  measures the narrower of both (L2:579 measureAt) */
+function measureAt(b: Measured, y: number | null, k: number | null): [number, number] {
+  const at = (i: number) => b.measures!.get(rectKey(b.rects[i]!)) ?? [b.x0, b.x1]
+  return k !== null && k >= 0 && k < b.rects.length ? at(k) : measureOn(b.G ?? b.B!, at, y!)
+}
+/** what a measure is read from: a block, or blocksOf2's block before its baselines (read by its lines alone) */
+type Measured = Pick<Block, 'measures' | 'centred' | 'rects' | 'x0' | 'x1' | 'G'> & { B?: number[] }
+/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges
+ *  (L2:585 measureOf) */
+export const measureOf = (b: Measured, y: number | null, k: number | null): [number, number] =>
+  b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1]
+/** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)` (L2:588 measureOn) */
+function measureOn(Y: readonly number[], at: (i: number) => [number, number], y: number): [number, number] {
+  if (y >= Y[0]! - 0.05) return at(0)
+  for (let i = 0; i + 1 < Y.length; i++) {
+    if (Math.abs(y - Y[i + 1]!) <= 0.05) return at(i + 1)
+    if (y < Y[i]! && y > Y[i + 1]!) {
+      const a = at(i),
+        c = at(i + 1)
+      return [Math.max(a[0], c[0]), Math.min(a[1], c[1])]
+    }
+  }
+  return at(Y.length - 1)
+}
+
 type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | 'flow'> & { after?: number }
 
 /** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
