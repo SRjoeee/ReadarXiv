@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   canonical,
@@ -99,6 +100,41 @@ describe('unitId', () => {
     const units: Units = { format: 1, units: [{ id: unitId('para', d), kind: 'para', content: d }] }
     expect(read('units', write('units', units).bytes).units[0]?.content[0]).toEqual(d[0])
     expect(unitId('para', d)).toBe(unitId('para', [{ t: 'el', id: '0', kind: 'display', src: '\\[ x = y. \\]' }]))
+  })
+  // (lane L2's tests of the walk, rebuild/source c26d4bf7a packages/engine/tests/source/id.test.ts: the flat list the id hashes,
+  // hashed by FORMAT.md's rule through Node's own SHA-256)
+  const reference = (kind: string, flat: unknown[]) =>
+    createHash('sha256')
+      .update(JSON.stringify([kind, flat]), 'utf8')
+      .digest('hex')
+  it('tags text, elements, spans (with and without their open or close) and nested units in the source order', () => {
+    const content: Piece[] = [
+      { t: 'text', s: 'A ' },
+      { t: 'el', id: 'e0', kind: 'math', src: '$x$' },
+      { t: 'span', id: 's1', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'b' }] },
+      { t: 'span', id: 's2', style: 'group', close: '}', content: [{ t: 'text', s: 'cut' }] },
+      { t: 'unit', id: 'u3', unit: 'abc', pre: '\\footnote{', post: '}' },
+    ]
+    expect(unitId('para', content)).toBe(
+      reference('para', [
+        ['t', 'A '],
+        ['p', '$x$'],
+        ['o', '\\textbf{'],
+        ['t', 'b'],
+        ['c', '}'],
+        ['t', 'cut'],
+        ['c', '}'],
+        ['n', '\\footnote{', 'abc', '}'],
+      ]),
+    )
+  })
+  it('names a unit of spans nested 20,000 deep, as the flat list it stands for (the walk is iterative)', () => {
+    const n = 20_000
+    let inner: Piece[] = [{ t: 'text', s: 'deep' }]
+    for (let k = 0; k < n; k++)
+      inner = [{ t: 'span', id: `s${k}`, style: 'group', open: '{', close: '}', content: inner }]
+    const flat = [...Array(n).fill(['o', '{']), ['t', 'deep'], ...Array(n).fill(['c', '}'])]
+    expect(unitId('para', inner)).toBe(reference('para', flat))
   })
 })
 
