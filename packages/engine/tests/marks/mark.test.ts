@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { markSource } from '../../src/marks/mark.ts'
-import { FRAMES_TEX, STATE_TEX } from '../../src/marks/statements.ts'
+import { FRAMES_TEX, SENTENCE_TEX, STATE_TEX } from '../../src/marks/statements.ts'
 import { LAYOUT_TEX } from '../../src/marks/tex.ts'
 import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
 import { readSource } from '../../src/source/read.ts'
@@ -54,5 +54,14 @@ describe('markSource: the marks written into the paper’s own bytes, and the pl
     const text = new TextDecoder().decode(markSource(tree, doc).tree.files.get('main.tex'))
     expect(text).toContain('here.\\axtend{0e}\r\n')
     expect(text).not.toMatch(/\r\\axt/)
+  })
+  it('writes a sentence end’s mark after a stop that more text follows, where the file holds the text (sentences on)', () => {
+    const { tree, doc } = paper('First one. Second (two).  Third? Yes.')
+    const { tree: marked, plan } = markSource(tree, doc, { sentences: true })
+    const text = dec.decode(marked.files.get('main.tex'))
+    expect(text).toContain('First one.\\axtsf{s0.0} Second (two).\\axtsf{s0.1}  Third?\\axtsf{s0.2} Yes.\\axtend{0e}')
+    expect(plan.marks.filter((m) => m.kind === 'sentence').map((m) => m.name)).toEqual(['s0.0', 's0.1', 's0.2'])
+    expect(text).toContain(SENTENCE_TEX)
+    expect(dec.decode(markSource(tree, doc).tree.files.get('main.tex'))).not.toContain('axtsf')
   })
 })

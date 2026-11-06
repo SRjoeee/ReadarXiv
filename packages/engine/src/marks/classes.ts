@@ -37,6 +37,7 @@ export interface Mark {
   to?: undefined
 }
 export type MarkKind =
+  | 'sentence'
   | 'start'
   | 'end'
   | 'lines'

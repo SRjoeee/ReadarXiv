@@ -26,7 +26,7 @@ import {
   prefixWord,
   READS_NOTHING,
 } from './classes.ts'
-import { FRAMES_TEX, STATE_TEX } from './statements.ts'
+import { FRAMES_TEX, PARA_ENDS_TEX, SENTENCE_TEX, STATE_TEX } from './statements.ts'
 import * as X from './tex.ts'
 
 export const PLAN_FORMAT = 'readarxiv-plan 1'
@@ -69,6 +69,15 @@ export interface MarkOptions {
   colours?: boolean
   /** units the recovery leaves without any mark of theirs (their own and their placeholders'): unit indices */
   unmarked?: ReadonlySet<number>
+  /** the text TeX sets inside a figure (a TikZ node's, an axis label's, a legend entry's) marked as a unit (stage 1b's count:
+   *  today's writer never marks it; off) */
+  figures?: boolean
+  /** a point where TeX ends a sentence: after each ".", "?" or "!" a unit's text follows with more text, \axtsf, which sets its
+   *  point only where TeX's space factor there is a sentence's (2000 or more: not after a capital, not under \frenchspacing,
+   *  not after "\@"); off */
+  sentences?: boolean
+  /** a paragraph's end point also after a whatsit (PARA_ENDS_TEX); off */
+  paragraphEnds?: boolean
 }
 /** the recovery's last step (design §4.1): the units' own marks alone — no placeholder's, colour's, name's or line probe */
 export const UNITS_ONLY: Readonly<MarkOptions> = Object.freeze({
@@ -112,6 +121,8 @@ export interface Plan {
 
 // ---------------------------------------------------------------- the units' own marks
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
+/** a sentence's end in a text: its stop and the closing marks after it, before white space and more text */
+const SENTENCE_END = /[.?!][)\]'\u2019\u201d"]*(?=[ \t\r\n]+[^ \t\r\n])/g
 const inAuthorBlock = (u: SourceUnit) => AUTHOR_KINDS.has(u.kind)
 interface UnitMark {
   start: string
@@ -385,6 +396,7 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
         names: [`h${i}s`, `h${i}e`],
       }
     if (front.has(u)) return unitMark(i)
+    if (o.figures && u.kind === 'figure' && !u.front && !(u.stored && !u.once) && !inMath(u.pieces)) return unitMark(i)
     if (!markedUnit(u)) return null
     return o.lines ? { ...unitMark(i), before: `\\axtlines{${i}}` } : unitMark(i)
   }
@@ -895,6 +907,30 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
       list.push({ ...x, seq: seq++, name: x.name, piece: x.piece })
       plan.push({ unit: i, x })
     })
+    if (m && opts.sentences) {
+      // (TeX's sentence ends inside the unit's text, where the file holds the text piece's source as it is)
+      let n = 0
+      const verbatim: boolean[] = []
+      u.pieces.forEach((p, k) => {
+        if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || X.VERBATIM_ARG.test(p.src ?? ''))
+        else if (p.t === 'close') verbatim.pop()
+        if (p.t !== 'text' || verbatim.at(-1) === true) return
+        const src = p.src ?? p.s
+        if (f.text.slice(p.at, p.to) !== src) return
+        for (const e of src.matchAll(SENTENCE_END)) {
+          const name = `s${i}.${n++}`
+          const x = {
+            at: p.at + (e.index as number) + e[0].length,
+            tex: `\\axtsf{${name}}`,
+            name,
+            kind: 'sentence' as const,
+            piece: k,
+          }
+          list.push({ ...x, seq: seq++ })
+          plan.push({ unit: i, x })
+        }
+      })
+    }
     for (const p of u.pieces) if (p.t === 'nested' && p.unit >= 0) write(p.unit)
   }
   const plan: { unit: number; x: Omit<Insert, 'seq'> }[] = []
@@ -983,7 +1019,9 @@ export function markSource(tree: Tree, doc: SourceDoc, o: MarkOptions = {}): { t
     regions +
     X.END_TEX +
     (opts.lines ? X.LINES_TEX : '') +
-    STATE_TEX
+    STATE_TEX +
+    (opts.sentences ? SENTENCE_TEX : '') +
+    (opts.paragraphEnds ? PARA_ENDS_TEX : '')
   const mainBytes = out.get(doc.main) as Uint8Array
   out.set(doc.main, concat([latin1Bytes(head), mainBytes]))
   if (!written.includes(doc.main)) written.push(doc.main)

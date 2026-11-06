@@ -36,6 +36,22 @@ export const STATE_TEX =
   '\\the\\axt@ps/\\ifdefined\\parshapeindent\\ifnum\\axt@ps>0 \\the\\parshapeindent1/\\the\\parshapelength1\\else/\\fi' +
   '\\else/\\fi/\\axt@fn\\axt@ft;^^J}}\\makeatother\n'
 
+/** TeX's sentence ends: \axtsf sets its point where the space factor is a sentence's (\sfcode of a stop 3000 but under
+ *  \frenchspacing; a capital's 999 before it keeps it under 2000: "A. Turing"), in horizontal mode, while the marks are on;
+ *  never in a moving argument (\protect not \@typeset@protect) nor in a PDF string */
+export const SENTENCE_TEX =
+  '\\makeatletter\\protected\\def\\axtsf#1{\\ifx\\protect\\@typeset@protect\\ifhmode\\ifaxt@off\\else' +
+  '\\ifnum\\spacefactor>1999 \\axt@point{#1}\\fi\\fi\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands' +
+  '\\pdfstringdefDisableCommands{\\let\\axtsf\\@gobble}\\fi}\\makeatother\n'
+/** a paragraph's end point (LAYOUT_TEX's qe<n>) also where the list ends in a whatsit: today's \\axt@peat withholds it there,
+ *  and a unit's own end mark is one, so the paragraphs our units end read as no end (spike S7 §0.2: 92 of 279 on
+ *  1512.03385v1); the table of \\lastnodetype is today's but for the whatsit (9) */
+export const PARA_ENDS_TEX =
+  '\\makeatletter\\def\\axt@peat{\\ifcase\\numexpr\\lastnodetype+1\\relax 0\\or1\\or0\\or0\\or1\\or1\\or1\\or0\\or1\\or0' +
+  '\\or1\\or1\\else0\\fi}\\makeatother\n'
+/** a sentence end's point (SENTENCE_TEX) */
+export const SENTENCE_POINT = /^s\d+\.\d+$/
+
 /** a dimension TeX printed (\the of a dimen or a skip: its natural size), in TeX points */
 const pt = (s: string | undefined): number | null => {
   const m = /^(-?[\d.]+)pt\b/.exec(s?.trim() ?? '')

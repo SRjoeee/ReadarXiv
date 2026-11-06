@@ -13,7 +13,7 @@
 //   3. an end point alone (a title TeX sets in vertical mode): from the point before it on its page, its glyphs alone; a unit
 //      whose points TeX set more than once is its first occurrence where that is an end point alone and every later one a pair;
 //   4. a placeholder's ink: stream.ts (the plan's Follow of each opening mark); a text symbol's glyphs that set its character
-//      are its unit's text; 4b: a footnote's call TeX gave no mark after the unit's last word, the raised glyphs right after its
+//      are its unit's text; (4b, the raised glyphs of a footnote call with no mark after a unit's end: the call's points instead);
 //      end point on that line; 4c: the closing punctuation TeX sets right after the end point, abutting, on its line;
 //   5. a label: the glyphs on the start's first glyph's baseline, in its region, back to the last end point before the start,
 //      the placeholders' and names' ranges passed over; the closing punctuation a head sets abutting the unit before it, that
@@ -30,9 +30,9 @@ import type { SourceDoc } from '../source/read.ts'
 import type { Piece } from '../source/types.ts'
 import { classOf, symbolText } from './classes.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
-import type { Plan } from './mark.ts'
+import { type Plan, pieceIdsOf } from './mark.ts'
 import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
-import { readStates, type TexState } from './statements.ts'
+import { readStates, SENTENCE_POINT, type TexState } from './statements.ts'
 import { framedOf, type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
 
 export type { PageGlyph, PagePoint, PageRead } from './page.ts'
@@ -70,6 +70,11 @@ export interface Instrument<Doc = unknown> {
     paragraphEnds?: number[][]
     /** TeX's state where a unit (piece null) or a placeholder (its content id) opens (marks/statements.ts STATE_TEX) */
     states?: { unit: number; piece: string | null; state: TexState }[]
+    /** where TeX ended a sentence inside a unit (SENTENCE_TEX): the glyphs before the point on its page; the next sentence
+     *  begins at the next glyph */
+    sentences?: { unit: number; page: number; glyph: number }[]
+    /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
+    colours?: { unit: number; piece: string | null; colour: string }[]
   }
   made: { compiler: string; tree: string; front: string }
 }
@@ -211,6 +216,16 @@ export function instrumentFromPlan<Doc>({
   log?: string
   made: { compiler: string; tree: string }
 }): Instrument<Doc> {
+  // (TeX's sentence ends: points no reading of ownership takes, read on their own)
+  const sentences: NonNullable<Instrument['tex']['sentences']> = []
+  if (pages.some((pg) => pg.points.some((x) => SENTENCE_POINT.test(x.name)))) {
+    pages = pages.map((pg, p) => {
+      for (const x of pg.points)
+        if (SENTENCE_POINT.test(x.name))
+          sentences.push({ unit: Number(x.name.slice(1, x.name.indexOf('.'))), page: p + 1, glyph: x.glyph })
+      return { ...pg, points: pg.points.filter((x) => !SENTENCE_POINT.test(x.name)) }
+    })
+  }
   const noInk = new Set(inkless)
   let spent = 0
   const spend = (n: number) => {
@@ -577,41 +592,9 @@ export function instrumentFromPlan<Doc>({
     else if (e0.how >= OWNED && textOf.has(f.unit) && !marksOf(f.unit).why) marksOf(f.unit).why = 'marks'
   }
 
-  // ---- a footnote's call after the unit's last word that TeX gave no mark (MR 4b): the raised glyphs right after its end
-  // point, on that line, in its region, in no claim (a raised mark stands a fifth of its line's size or more above it: make.mjs
-  // SHIFT; within six tenths of an em of the glyph before: CELL_ABUT)
-  for (const [id, { e }] of textOf) {
-    const ps = doc.units[id]?.pieces ?? []
-    const last = ps.findLastIndex((x) => x.t === 'text' && /\S/.test(x.s))
-    const tails = ps.map((x, k) => [x, k] as const).filter(([x, k]) => k > last && classOf(x) !== null)
-    if (
-      last < 0 ||
-      !tails.length ||
-      !tails.every(([x, k]) => classOf(x) === 'footnote' && !w.opening(id, k) && !w.closing(id, k))
-    )
-      continue
-    const [p] = e
-    const pg = pages[p] as PageRead
-    const E = pt(e)
-    const r = at(e)
-    const L = pg.glyphs[E.glyph - 1]
-    if (!L) continue
-    let edge = L.x1
-    for (let g = E.glyph; g < pg.glyphs.length; g++) {
-      const G = glyphOf(p, g)
-      if (
-        (regions[p] as Regions).glyph[g] !== r ||
-        ownerAt(p, g) >= 0 ||
-        !(G.y - L.y >= 0.2 * L.size) ||
-        G.y - L.y > L.size ||
-        G.x0 - edge > 0.6 * L.size
-      )
-        break
-      set(glyphs[p] as Owners, g, id, ROLE.element, (tails[0] as readonly [unknown, number])[1])
-      edge = G.x1
-    }
-  }
-
+  // (MR 4b, a footnote's call after the unit's last word that TeX gave no mark, read by the raised glyphs after the end point
+  // within today's SHIFT 0.2 and CELL_ABUT 0.6 of a size, is not here: the call's own points answer it — stage 1b's count,
+  // lanes/L2-source.md: 39 of 40 such calls carry their points with the probe's vetoes, 40 of 40 without them)
   // ---- the closing punctuation TeX sets after a unit's end point (MR 4c): right of the glyph before it, abutting, on its
   // line, in its region, in no claim, the first after the unit's own
   for (const [id, { e }] of textOf) {
@@ -812,6 +795,13 @@ export function instrumentFromPlan<Doc>({
       places.push({ unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: m.kind === 'close' })
     }
   })
+  // ---- the colour TeX was in after each colour piece (AXT-COLOUR c<u>.<k> <\current@color>, its 79-column wrap joined)
+  const colours: NonNullable<Instrument['tex']['colours']> = []
+  for (const m of log.replace(/^(AXT-COLOUR .{68})\n/gm, '$1').matchAll(/^AXT-COLOUR c(\d+)\.(\d+) (.*)$/gm)) {
+    const unit = Number(m[1])
+    const ids = doc.units[unit] ? pieceIdsOf(doc.units[unit].pieces) : []
+    colours.push({ unit, piece: ids[Number(m[2])] ?? null, colour: (m[3] as string).trim() })
+  }
   // ---- TeX's state where each unit, cell, heading and placeholder opens (STATE_TEX: its font, \baselineskip and measure)
   const told = readStates(log)
   const states: NonNullable<Instrument['tex']['states']> = []
@@ -831,6 +821,8 @@ export function instrumentFromPlan<Doc>({
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),
       states,
+      ...(sentences.length ? { sentences } : {}),
+      ...(colours.length ? { colours } : {}),
     },
     made: { compiler: made.compiler, tree: made.tree, front: 'marks' },
   }

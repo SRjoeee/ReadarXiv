@@ -43,6 +43,8 @@ const id = arg('id'), DIR = arg('dir'), OUT = arg('out'), STORE = arg('store')
 const STEPS = 'drafts: latexmk over the marked tree, graphicx draft; no final pass; the bounded recovery'
 /** --probe=off: the placement without the probe's answers (stage 1b's count) */
 const PROBE = arg('probe') !== 'off'
+/** --with=figures,sentences,paragraphEnds: TeX's statements of stage 1b's deliverable 2 (markSource's options) */
+const WITH = Object.fromEntries((arg('with') ?? '').split(',').filter(Boolean).map(k => [k, true]))
 let attempts = null
 mkdirSync(OUT, { recursive: true })
 mkdirSync(STORE, { recursive: true })
@@ -75,7 +77,7 @@ const stem = main.split('/').pop().replace(/\.[^.]+$/, '')
 let t = lap('source', t0)
 
 // ---- the key, and the store
-const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: STEPS, answers: PROBE ? (A ?? null) : null })
+const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: `${STEPS}${Object.keys(WITH).length ? `; with ${Object.keys(WITH).sort().join(', ')}` : ''}`, answers: PROBE ? (A ?? null) : null })
 const file = join(STORE, `${key}.axti`)
 t = lap('key', t)
 const made = { compiler: compilerName, tree: year }
@@ -108,7 +110,7 @@ else {
   const unmarkedLog = existsSync(join(arg('defs'), `${id}.log`)) ? readFileSync(join(arg('defs'), `${id}.log`), 'latin1') : ''
   const rec = await compileMarked({
     tree, doc, unmarkedLog,
-    options: { compiler: compilerName, ...(PROBE ? { answers: answersOf(A) } : {}) },
+    options: { compiler: compilerName, ...WITH, ...(PROBE ? { answers: answersOf(A) } : {}) },
     compile: async (marked, plan) => {
       const overrides = new Map(plan.files.map(p => [p, marked.files.get(p)]))
       for (const [p, b] of tree.files) if (!source.has(p) && !overrides.has(p)) overrides.set(p, b)

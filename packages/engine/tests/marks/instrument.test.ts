@@ -222,4 +222,16 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
     expect(roles(ins)).toEqual([1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
   })
+  it('reads TeX’s sentence ends apart from the ownership (their points cut no reading)', () => {
+    const { doc, plan } = paper('We see. Then more.')
+    const pg = page('We see. Then more.', [
+      ['bs1', 0],
+      ['0s', 0],
+      ['s0.0', 7],
+      ['0e', 18],
+    ])
+    const ins = instrumentFromPlan({ ink: null, pages: [pg], plan, doc, made: { compiler: 'pdflatex', tree: '2025' } })
+    expect(ins.tex.sentences).toEqual([{ unit: 0, page: 1, glyph: 7 }])
+    expect(roles(ins).every((r) => r === 1)).toBe(true)
+  })
 })
