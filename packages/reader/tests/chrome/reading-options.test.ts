@@ -1,11 +1,11 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { ReadingOptions } from '@/pdf-reader/ui/ReadingOptions'
+import { ReadingOptions } from '../../src/chrome/ReadingOptions.tsx'
 import { R, S, setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them

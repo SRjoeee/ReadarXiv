@@ -1,9 +1,9 @@
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { useReader } from '@/pdf-reader/ui/use-reader'
-import type { ReaderController } from '@/pdf-reader/controller'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
+import { useReader } from '../../src/chrome/use-reader.ts'
+import type { ReaderController } from '../../src/chrome/model.ts'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
 
 afterEach(() => { document.body.innerHTML = '' })
 

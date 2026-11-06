@@ -2,11 +2,11 @@ import { act, createElement } from 'react'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { Toolbar } from '@/pdf-reader/ui/Toolbar'
+import { Toolbar } from '../../src/chrome/Toolbar.tsx'
 import { R, S, setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them

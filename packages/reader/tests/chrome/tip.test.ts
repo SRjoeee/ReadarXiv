@@ -1,10 +1,10 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TippedButton } from '@/pdf-reader/ui/TippedButton'
-import { ToolbarButton } from '@/pdf-reader/ui/ToolbarButton'
+import { TippedButton } from '../../src/chrome/TippedButton.tsx'
+import { ToolbarButton } from '../../src/chrome/ToolbarButton.tsx'
 import { R } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { isOpen, stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { isOpen, stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the timers are faked after mounting only: mountElement settles React on a real timer

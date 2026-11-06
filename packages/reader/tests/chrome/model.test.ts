@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { createController, fromView, INITIAL, reduce, type Session } from '@/pdf-reader/controller'
-import type { SessionEvent, SessionHost } from '@/pdf-reader/session/events'
-import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
+import { createController, fromView, INITIAL, reduce, type Session } from '../../src/chrome/model.ts'
+import type { SessionEvent, SessionHost } from '../../src/chrome/model.ts'
+import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 
 const fold = (events: SessionEvent[], from = INITIAL) => events.reduce(reduce, from)
 const opened: SessionEvent = { type: 'opened' }

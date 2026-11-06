@@ -1,11 +1,11 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { Outline } from '@/pdf-reader/ui/Outline'
+import { Outline } from '../../src/chrome/Outline.tsx'
 import { R, setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 beforeAll(() => setLocale('zh-CN'))

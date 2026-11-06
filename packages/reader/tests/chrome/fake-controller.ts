@@ -1,7 +1,7 @@
 // A controller for the interface's tests: a state the test sets, every command a spy
 import { type Mock, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { INITIAL, type ReaderController, type ReaderState } from '@/pdf-reader/controller'
+import { INITIAL, type ReaderController, type ReaderState } from '../../src/chrome/model.ts'
 
 /** the controller with every command a spy the test can read */
 type Spied<T> = { [K in keyof T]: T[K] extends (...args: infer A) => infer R ? Mock<(...args: A) => R> : T[K] }

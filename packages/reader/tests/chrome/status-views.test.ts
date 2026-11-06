@@ -1,12 +1,12 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { FailureCard } from '@/pdf-reader/ui/FailureCard'
-import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
+import { FailureCard } from '../../src/chrome/FailureCard.tsx'
+import { StatusCapsule } from '../../src/chrome/StatusCapsule.tsx'
 import { O, R, S, setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them

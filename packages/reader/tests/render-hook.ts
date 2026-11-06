@@ -1,0 +1,94 @@
+// A copy of the extension's tests/ui/render-hook.ts, for the chrome's tests: a hook or a component mounted in a real React
+// root over happy-dom. The extension's tests keep theirs: a package's tests import nothing of the extension
+import { act, createElement, type ReactElement } from 'react'
+import { createRoot } from 'react-dom/client'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+export const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+export interface MountedHook<T> {
+  /** The hook's latest return value */
+  current(): T
+  /** Let pending promises settle and React commit */
+  flush(): Promise<void>
+  /** Run an action inside `act` and settle after it */
+  run(action: () => void | Promise<void>): Promise<void>
+  unmount(): Promise<void>
+}
+
+export async function mountHook<T>(use: () => T): Promise<MountedHook<T>> {
+  let latest: T | undefined
+  function Probe() {
+    latest = use()
+    return null
+  }
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const flush = async () => {
+    await act(async () => {
+      await tick()
+    })
+  }
+  await act(async () => {
+    root.render(createElement(Probe))
+  })
+  await flush()
+  return {
+    current: () => latest as T,
+    flush,
+    run: async (action) => {
+      await act(async () => {
+        await action()
+      })
+      await flush()
+    },
+    unmount: async () => {
+      await act(async () => {
+        root.unmount()
+      })
+      container.remove()
+    },
+  }
+}
+
+export interface MountedElement {
+  container: HTMLElement
+  /** Render another element into the same root and settle */
+  rerender(element: ReactElement): Promise<void>
+  flush(): Promise<void>
+  unmount(): Promise<void>
+}
+
+/** A component mounted in a real React root over happy-dom, for what a part of the chrome shows */
+export async function mountElement(element: ReactElement): Promise<MountedElement> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const flush = async () => {
+    await act(async () => {
+      await tick()
+    })
+  }
+  await act(async () => {
+    root.render(element)
+  })
+  await flush()
+  return {
+    container,
+    rerender: async (next) => {
+      await act(async () => {
+        root.render(next)
+      })
+      await flush()
+    },
+    flush,
+    unmount: async () => {
+      await act(async () => {
+        root.unmount()
+      })
+      container.remove()
+    },
+  }
+}

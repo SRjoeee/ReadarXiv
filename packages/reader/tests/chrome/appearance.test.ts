@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyAppearance, dimmed, themeOf } from '@/pdf-reader/ui/appearance'
+import { applyAppearance, dimmed, themeOf } from '../../src/chrome/appearance.ts'
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-theme')

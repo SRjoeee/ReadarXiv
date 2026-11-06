@@ -1,9 +1,9 @@
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ProgressLine } from '@/pdf-reader/ui/ProgressLine'
-import { lineOf } from '@/pdf-reader/ui/status'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
+import { ProgressLine } from '../../src/chrome/ProgressLine.tsx'
+import { lineOf } from '../../src/chrome/status.ts'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
 
 afterEach(() => { document.body.innerHTML = '' })
 

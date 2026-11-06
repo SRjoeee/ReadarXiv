@@ -1,9 +1,9 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DisplaySwitch } from '@/pdf-reader/ui/DisplaySwitch'
+import { DisplaySwitch } from '../../src/chrome/DisplaySwitch.tsx'
 import { setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them

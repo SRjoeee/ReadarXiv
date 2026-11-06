@@ -5,10 +5,10 @@ import { readFileSync } from 'node:fs'
 import { Info } from 'lucide'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Capsule } from '@/pdf-reader/ui/Capsule'
-import { CHOREOGRAPHY, capsuleMotion, SOFT, swapAt, timeAt } from '@/pdf-reader/ui/capsule-motion'
-import { keyOf, plain, sameShape, textOf, withCount, withPart, words } from '@/pdf-reader/ui/capsule-words'
-import { mountElement } from '../../ui/render-hook'
+import { Capsule } from '../../src/chrome/Capsule.tsx'
+import { CHOREOGRAPHY, capsuleMotion, SOFT, swapAt, timeAt } from '../../src/chrome/capsule-motion.ts'
+import { keyOf, plain, sameShape, textOf, withCount, withPart, words } from '../../src/chrome/capsule-words.ts'
+import { mountElement } from '../render-hook.ts'
 
 afterEach(() => {
   vi.useRealTimers()

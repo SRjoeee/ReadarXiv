@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ReaderController } from '@/pdf-reader/controller'
-import { usePinch, wheelStep } from '@/pdf-reader/ui/pinch'
-import { mountHook } from '../../ui/render-hook'
+import type { ReaderController } from '../../src/chrome/model.ts'
+import { usePinch, wheelStep } from '../../src/chrome/pinch.ts'
+import { mountHook } from '../render-hook.ts'
 
 describe('a pinch (the reader\'s design, §6.8)', () => {
   it('zooms continuously on a trackpad\'s small deltas, a tenth for a mouse notch', () => {

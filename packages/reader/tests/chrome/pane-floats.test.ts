@@ -1,11 +1,11 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PagePill } from '@/pdf-reader/ui/PagePill'
-import { ScrollIndicator, thumbSize } from '@/pdf-reader/ui/ScrollIndicator'
+import { PagePill } from '../../src/chrome/PagePill.tsx'
+import { ScrollIndicator, thumbSize } from '../../src/chrome/ScrollIndicator.tsx'
 import { R, setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { isOpen, stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { isOpen, stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 // the interface's words as the maintainer reads them: the controls are found by them

@@ -4,11 +4,11 @@
 import { StrictMode, act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { App } from '@/entrypoints/pdf-reader/App'
+import { App } from '../../src/chrome/App.tsx'
 import { setLocale } from '@readarxiv/ui'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
-import { stubPopovers } from './popover-stub'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
+import { stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 const animate = vi.fn()

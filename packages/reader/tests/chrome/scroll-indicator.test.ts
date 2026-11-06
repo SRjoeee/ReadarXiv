@@ -1,8 +1,8 @@
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ScrollIndicator } from '@/pdf-reader/ui/ScrollIndicator'
-import { mountElement } from '../../ui/render-hook'
-import { fakeController } from './fake-controller'
+import { ScrollIndicator } from '../../src/chrome/ScrollIndicator.tsx'
+import { mountElement } from '../render-hook.ts'
+import { fakeController } from './fake-controller.ts'
 
 // A pane's scroll indicator (the reader's design, §6.5): a drag of its thumb ends however the pointer goes
 
