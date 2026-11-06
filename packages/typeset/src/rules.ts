@@ -366,8 +366,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/slots.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+      cases: 32588,
     },
   },
   {
@@ -385,8 +386,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/break.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+      cases: 32588,
     },
   },
   {
@@ -400,8 +402,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/place.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+      cases: 32588,
     },
   },
   {
@@ -416,8 +419,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'breaker/cuts.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (3 cut)",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record) (3 cut)",
+      cases: 32588,
     },
   },
   // ---------------------------------------------------------------- the fit
@@ -441,8 +445,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'fit/walk.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+      cases: 32588,
     },
   },
   {
@@ -456,8 +461,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'fit/cut.mjs',
     state: {
       is: 'ported',
-      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (3 cut)",
-      cases: 164,
+      replay:
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record) (3 cut)",
+      cases: 32588,
     },
   },
   {
@@ -471,8 +477,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'fit/at.mjs',
     state: {
       is: 'ported',
-      replay: "inside layoutCut where a unit is cut at its frames (the walk's replay at F2)",
-      cases: 3,
+      replay:
+        'inside layoutCut where a unit is cut at its frames, and in every search of S.fill.leads (31,612 corpus rounds reaching their out)',
+      cases: 31612,
     },
   },
   {
@@ -487,8 +494,8 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (2 ran)',
-      cases: 2,
+        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (64 ran on the corpus)',
+      cases: 64,
     },
   },
   {
@@ -504,8 +511,8 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (11 with lastLines)",
-      cases: 164,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record) (11 sampled with lastLines)",
+      cases: 32588,
     },
   },
   {
@@ -528,8 +535,8 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (142 ran)',
-      cases: 142,
+        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (25,617 ran)',
+      cases: 25617,
     },
   },
   {
@@ -544,8 +551,8 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        'the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (3 ran; its widened blocks, Room.side, from the slot)',
-      cases: 3,
+        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (584 ran; the widened blocks, Room.side, from the slot)',
+      cases: 584,
     },
   },
   // ---------------------------------------------------------------- what flows share
@@ -624,7 +631,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2256-2269'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/on-lead.ts',
+    state: {
+      is: 'ported',
+      replay: 'chained after F2 on every laid round of the corpus (lab/typeset/replay-fit.mjs): its F3 slot',
+      cases: 3,
+    },
   },
   {
     id: 'S.overFollower',
@@ -659,8 +671,8 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        "the round chained from F2 on every laid round of every sampled unit (tests/replay/round.ts): its slot (8 ran; the row the follower's F1 or the kept row)",
-      cases: 8,
+        "chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (1,266 ran; the row the follower's F1, the kept row, or the share's own)",
+      cases: 1266,
     },
   },
   {
@@ -684,8 +696,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/fill-leads.mjs',
     state: {
       is: 'ported',
-      replay: "chained after each sampled round's out (tests/replay/round.ts): the L9 slot",
-      cases: 159,
+      replay:
+        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out)',
+      cases: 31612,
     },
   },
   {
