@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULTS, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { eventsOf, hostFetch, hostPrefs } from '@/pdf-reader/host/v2'
+import { eventsOf, hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
 
 const API = 'https://readarxiv.com'
 
@@ -50,6 +50,15 @@ describe('the extension host prefs over the configuration surface', () => {
     expect(s.start).toHaveBeenCalled()
     s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
     await expect(p).resolves.toMatchObject({ theme: 'dark', translator: 'r1' })
+  })
+  it('the slots\' store: the same snapshot until the surface changes (useSyncExternalStore loops on a new one each read)', () => {
+    const s = surface(DEFAULT_CONFIG)
+    const store = surfaceStore(s as never)
+    expect(store.state()).toBe(store.state())
+    const first = store.state()
+    s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
+    expect(store.state()).not.toBe(first)
+    expect(store.state().config?.theme).toBe('dark')
   })
   it('a write is a patch on the latest stored, every other field untouched; a landing from elsewhere is told', async () => {
     const s = surface(DEFAULT_CONFIG)

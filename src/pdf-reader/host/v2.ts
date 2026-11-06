@@ -164,6 +164,21 @@ export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof 
   }
 }
 
+/** the configuration the slots read over the surface: the same object until the surface changes (the slots read it through
+ *  useSyncExternalStore, whose snapshot must be stable: a new one each read looped React), a pick its patch */
+export function surfaceStore(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | 'patch'>) {
+  let last: { config: ReturnType<SurfaceConfig['state']>['config']; pack: ReturnType<SurfaceConfig['state']>['pack'] | null } = { config: null, pack: null }
+  return {
+    state: () => {
+      const { config, pack } = surface.state()
+      if (config !== last.config || (pack ?? null) !== last.pack) last = { config, pack: pack ?? null }
+      return last
+    },
+    subscribe: (l: () => void) => surface.subscribe(l),
+    patch: (change: Parameters<SurfaceConfig['patch']>[0]) => void surface.patch(change),
+  }
+}
+
 /** the v2 reader's pieces for the extension's page: the configuration surface (one store for the preferences and the slots),
  *  the Host, the chrome's `open` */
 export async function startV2(o: { params: URLSearchParams; paper: string }) {
@@ -178,10 +193,6 @@ export async function startV2(o: { params: URLSearchParams; paper: string }) {
   const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs: hostPrefs(surface), transport: createMessageTransport(), paper: o.paper })
   const mode = o.params.get('mode')
   const visit = mode === 'original' || mode === 'bilingual' || mode === 'translation' ? { display: mode as Prefs['display'] } : undefined
-  const store = {
-    state: () => ({ config: surface.state().config, pack: surface.state().pack ?? null }),
-    subscribe: (l: () => void) => surface.subscribe(l),
-    patch: (change: Parameters<SurfaceConfig['patch']>[0]) => void surface.patch(change),
-  }
+  const store = surfaceStore(surface)
   return { store, open: v2Open({ host, paper: o.paper, visit, original: pdf(o.paper) }) }
 }
