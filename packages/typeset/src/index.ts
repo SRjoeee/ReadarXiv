@@ -141,6 +141,8 @@ export {
   scriptOf,
 } from './breaker/faces.ts'
 export { type FitMeasure, fitMeasure, fontString, measure } from './breaker/measure.ts'
+export { type Cover, cover, runsOfTokens } from './breaker/cover.ts'
+export { type RelayFollower, type RelayLead, relay } from './shared/relay.ts'
 export { breakPoints, hyphenationOf, type Mins, type Patterns } from './breaker/hyph.ts'
 export { footFloorOf, inFlow, PREDISPLAY, SHORT_SKIP, type Slot, slotsAt, texRoomOf } from './breaker/slots.types.ts'
 export { type Broken, breakLines, lineExtent } from './breaker/break.types.ts'

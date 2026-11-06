@@ -333,10 +333,16 @@ const SPECS: readonly RuleSpec[] = [
     home: 'breaker',
     step: 'L7',
     owns: ['T3', 'A8'],
-    ports: ['RUN:2203-2207 FS.check(runsOfTokens(tokens))'],
+    ports: ['RUN:2203-2207 FS.check(runsOfTokens(tokens))', 'fonts.mjs:314-325 runsOfTokens'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'breaker/cover.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "samples/B.tokens.json.gz: every sampled round's runs over its pair's table ({ ok: true }, its slot); `served` (3 units of the corpus) needs the served slices' coverage, which the tap does not record: synthetic",
+      cases: 42,
+    },
   },
   {
     id: 'B.measure',
@@ -663,7 +669,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2540-2559 settleLeadOf', 'RUN:2565-2602 relay'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/relay.ts',
+    state: {
+      is: 'ported',
+      replay: 'never taken on the corpus (the tap: no relay round, F9 0): synthetic tests (tests/unit/cover.test.ts)',
+      cases: 0,
+    },
   },
   {
     id: 'S.share',

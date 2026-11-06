@@ -5,6 +5,7 @@
 // tokens today measured (B.tokens:out), every field.
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { cover } from '../../src/breaker/cover.ts'
 import { measure } from '../../src/breaker/measure.ts'
 import { type TStyle, tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
@@ -17,7 +18,8 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
     const metrics = new Map<string, ReturnType<typeof tableMetrics>>()
     const differ: string[] = []
     let rounds = 0,
-      count = 0
+      count = 0,
+      covers = 0
     const kinds = new Set<string>()
     for (const e of sample('B.tokens').entries)
       for (const [round, c] of roundsOf(e)) {
@@ -36,6 +38,12 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
         if (!metrics.has(e.pair))
           metrics.set(e.pair, tableMetrics(readGz(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)) as MeasureTable))
         const got = tokens(tokensInput(a, e0, f, cls.cls2, rolesOf(e.pair)))
+        // (B.cover: every face of the round's runs measured in its pair's table, as its slot says: { ok: true })
+        const covered = cover(got.tokens, metrics.get(e.pair)!)
+        const slot = e.slots.find((s) => s.by === 'B.cover')?.value
+        if (firstDifference(covered, slot ?? { ok: true }))
+          differ.push(`${key}: B.cover ${JSON.stringify(covered).slice(0, 80)}`)
+        else covers++
         const measured = measure(got.tokens, metrics.get(e.pair)!)
         count += measured.length
         for (const t of measured)
@@ -62,6 +70,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
       }
     expect(differ).toEqual([])
     expect(rounds).toBe(42)
+    expect(covers).toBe(42)
     expect(count).toBeGreaterThan(1000)
     // (every kind of token the sample was drawn for is among them)
     expect([...kinds].sort()).toEqual([
