@@ -267,6 +267,12 @@ export const Row = z.discriminatedUnion('ok', [
   z.object({ id: Id, ok: z.literal(false), why: Why }),
 ])
 
+/** a paper's rows for one target, as the server stores and serves them (the Worker's rows file, the extension's store): each a
+ *  translate package's Result, by unit id, in the units' reading order (the head's Units, first occurrence), each id once */
+export const Rows = z
+  .object({ format, rows: z.array(Row) })
+  .refine((x) => new Set(x.rows.map((r) => r.id)).size === x.rows.length, { message: 'a unit id twice' })
+
 export type Id = z.infer<typeof Id>
 export type Box = z.infer<typeof Box>
 export type Ink = z.infer<typeof Ink>
@@ -289,3 +295,4 @@ export type Original = z.infer<typeof Original>
 export type Head = z.infer<typeof Head>
 export type Why = z.infer<typeof Why>
 export type Row = z.infer<typeof Row>
+export type Rows = z.infer<typeof Rows>

@@ -190,6 +190,16 @@ describe('read and write', () => {
       ['head', head],
       ['part', part()],
       ['row', { id: ID, ok: true, content: [text('Einleitung')], by: 'test' }],
+      [
+        'rows',
+        {
+          format: 1,
+          rows: [
+            { id: ID, ok: true, content: [text('Einleitung')], by: 'test' },
+            { id: '3'.repeat(64), ok: false, why: { kind: 'refused' } },
+          ],
+        },
+      ],
     ] as const) {
       const { bytes, digest } = write(kind, value as never)
       expect(read(kind, bytes, digest)).toEqual(value)
@@ -250,5 +260,14 @@ describe('names', () => {
     expect(chunkMatches(c, 1, b.subarray(65536, 131072))).toBe(true)
     expect(chunkMatches(c, 2, b.subarray(131072))).toBe(true)
     expect(chunkMatches(c, 2, b.subarray(131071))).toBe(false)
+  })
+})
+
+describe('the rows object', () => {
+  it('holds each unit’s row once: a unit id twice is refused', () => {
+    const row = { id: ID, ok: true as const, content: [{ t: 'text' as const, s: 'x' }], by: 'test' }
+    const { bytes } = write('rows', { format: 1, rows: [row] })
+    expect(read('rows', bytes).rows).toHaveLength(1)
+    expect(() => read('rows', utf8(JSON.stringify({ format: 1, rows: [row, row] })))).toThrow(/a unit id twice/)
   })
 })

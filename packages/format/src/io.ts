@@ -4,9 +4,9 @@
 // Where trust changes (the box's service reading its child's objects, the browser reading the server's) this is the one check.
 import type { z } from 'zod'
 import { fromUtf8, sha256Hex, utf8 } from './bytes.ts'
-import { Head, Part, Row, Units } from './schema.ts'
+import { Head, Part, Row, Rows, Units } from './schema.ts'
 
-export const SCHEMAS = { head: Head, units: Units, part: Part, row: Row } as const
+export const SCHEMAS = { head: Head, units: Units, part: Part, row: Row, rows: Rows } as const
 export type ObjKind = keyof typeof SCHEMAS
 export type Obj<K extends ObjKind> = z.infer<(typeof SCHEMAS)[K]>
 
@@ -16,6 +16,8 @@ export const BOUNDS: Readonly<Record<ObjKind, { bytes: number; values: number; d
   units: { bytes: 1024 * 1024, values: 256 * 1024, depth: 48 },
   part: { bytes: 4 * 1024 * 1024, values: 1024 * 1024, depth: 16 },
   row: { bytes: 256 * 1024, values: 32 * 1024, depth: 48 },
+  // (a paper's rows for a target: its every unit's row, the largest paper's some 2 MB of text)
+  rows: { bytes: 16 * 1024 * 1024, values: 4 * 1024 * 1024, depth: 48 },
 })
 
 /** why an object was refused: its kind, and what failed (digest, bounds, json, schema) */

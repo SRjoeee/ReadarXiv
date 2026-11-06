@@ -436,23 +436,31 @@ export function gateL1Pair(
         continue
       }
       const tr = performance.now()
-      const rd = readMember({
-        m: x.m,
-        unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
-        rects: x.m.lines.map((l) => rectOf(l, x.m)),
-        to: L.target,
-        P: R as never,
-        paper: paperR,
-        labels: {
-          words: (rules!.targets[L.target] as { labels?: Record<string, string> }).labels ?? null,
-          captions: { figure: 'target', table: 'target' },
-          heads: heads?.[L.target]?.heads ?? null,
-          names: null,
-        },
-        relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
-        metrics,
-        shown: Number.POSITIVE_INFINITY,
-      })
+      let rd: ReturnType<typeof readMember>
+      try {
+        rd = readMember({
+          m: x.m,
+          unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+          rects: x.m.lines.map((l) => rectOf(l, x.m)),
+          to: L.target,
+          P: R as never,
+          paper: paperR,
+          labels: {
+            words: (rules!.targets[L.target] as { labels?: Record<string, string> }).labels ?? null,
+            captions: { figure: 'target', table: 'target' },
+            heads: heads?.[L.target]?.heads ?? null,
+            names: null,
+          },
+          relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
+          metrics,
+          shown: Number.POSITIVE_INFINITY,
+        })
+      } catch (e) {
+        // (a width the Metrics given lacks: the tap's table holds today's measures alone)
+        if ((e as Error)?.name !== 'MissingMeasure') throw e
+        stop('the reading: a measure the table lacks')
+        continue
+      }
       out.readMs += performance.now() - tr
       // (today's own tokens: those the tap recorded, before the label crops the run set ahead of them)
       let todays = c.tokens as unknown as Tok[]
