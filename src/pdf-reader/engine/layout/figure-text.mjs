@@ -60,7 +60,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { BAND_MAX } from '../layer-proto/figure-rows.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
-import { PICTURE_END, PICTURE_START, regionMask } from './ink.mjs'
+import { PICTURE_END, PICTURE_START, regionMask } from '@readarxiv/engine'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05

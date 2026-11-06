@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
+import { startxrefOf } from '@readarxiv/engine'
 
 // A PDF's `startxref` read from its bytes (layout/tail.mjs): the CC0 sample's, and the forms a section may end in
 

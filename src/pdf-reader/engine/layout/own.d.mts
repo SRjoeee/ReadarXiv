@@ -1,6 +1,6 @@
 // own.mjs's types: each unit's own ink in our final pass, by its marks
-export { UNHIDDEN } from './delta-wire.mjs'
-import type { Unhidden } from './delta-wire.mjs'
+export { UNHIDDEN } from '@readarxiv/engine'
+import type { Unhidden } from '@readarxiv/engine'
 export declare const SPELL_LIST_MAX: number
 /** a head macro's closing punctuation after the unit before a start (MR 5), and how near it abuts the glyph before it, in ems */
 export declare const HEAD_PUNCT: RegExp

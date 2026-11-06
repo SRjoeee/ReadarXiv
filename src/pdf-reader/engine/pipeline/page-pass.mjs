@@ -21,7 +21,7 @@ import { bundleUnitsOf, NAME_KIND, UNIT_FLAG_BITS } from '../layer-proto/units.m
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
-import { countOf, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '../layout/delta-wire.mjs'
+import { countOf, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '@readarxiv/engine'
 import { texLiveOf } from '../layout/guard.mjs'
 import { LayoutRefusal } from '../layout/json.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
@@ -34,7 +34,7 @@ import { rangedAnchors } from './left-part.mjs'
 import { leftSideOf, leftSideStream } from './left-side.mjs'
 import { movedLinesOf } from './moved-lines.mjs'
 import { bundleWithInk, figureAnchors, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, streamWithInk } from './ink-pass.mjs'
-import { isMemoryError } from './memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { frontierStream, leftBoundsOf, partClosable } from './frontier.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */

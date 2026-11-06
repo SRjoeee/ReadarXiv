@@ -54,7 +54,7 @@ describe('the five entries', () => {
     for (const name of ENTRIES) {
       const statements = withoutComments(readFileSync(entryFile(name), 'utf8')).split('\n').map((l: string) => l.trim()).filter(Boolean)
       expect(statements.length, name).toBeGreaterThan(0)
-      for (const line of statements) expect(/^export (?:\*|\{[^}]+\}) from '\.\/[\w./-]+\.(?:mjs|ts)'$/.test(line), `${name}: ${line}`).toBe(true)
+      for (const line of statements) expect(/^export (?:\*|\{[^}]+\}) from '(?:\.\/[\w./-]+\.(?:mjs|ts)|@readarxiv\/engine)'$/.test(line), `${name}: ${line}`).toBe(true)
     }
   })
 

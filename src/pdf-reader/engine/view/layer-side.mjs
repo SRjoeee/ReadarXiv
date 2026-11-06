@@ -30,7 +30,7 @@
 // web/src/layer/side.ts (drawOver: the copy's source and resolution, the stall, the copies let go) and, for the document's
 // open and the open again, from its visit.ts.
 import { layerDraws } from '../layer-proto/format.mjs'
-import { pagesOf } from '../layout/delta-wire.mjs'
+import { pagesOf } from '@readarxiv/engine'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { visibilityOf } from '../layer-proto/visibility.mjs'
 import { faceWarmer, familyOfParts, firstPageUnits, pagesOfParts } from '../layer-proto/warm.mjs'

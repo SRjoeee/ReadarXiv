@@ -16,7 +16,7 @@ import { nameAnswered } from '@/pdf-reader/engine/rules/tex-names.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
-import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import {
   BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, RULES_2, sha256Of, STREAM, textOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
 } from './helpers/format-paper'

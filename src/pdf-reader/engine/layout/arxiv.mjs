@@ -10,7 +10,7 @@
 import { inkEdges, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { hasMarkText, markTextOf, pageTextOf } from './base.mjs'
 import { drawTextOf } from '../pipeline/draw-data.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 
 /**
  * arXiv's text, every page read once: { pages, views, ok, tokens, edges: { l, r }, spans: { x0, x1 } }.

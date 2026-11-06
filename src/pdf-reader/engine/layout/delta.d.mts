@@ -4,8 +4,8 @@
  *  of the document the proof opened and gives it, its result unread (the proof makes each page's record of the text content the page
  *  gave); the document the host's from its opening (the result's `documents`) */
 export interface DeltaReader { options?: Record<string, unknown>; own?: boolean; read(doc: { numPages: number; getPage(n: number): Promise<unknown> }): Promise<unknown> }
-import type { DeltaWhy, PageRanges } from './delta-wire.mjs'
-import type { PdfLib } from './remove.mjs'
+import type { DeltaWhy, PageRanges } from '@readarxiv/engine'
+import type { PdfLib } from '@readarxiv/engine'
 
 /** the canonical forms' text held at most, and the object and cross-reference streams' decoded bytes at most, per document */
 export declare const DELTA_HELD_MAX: number
@@ -38,4 +38,4 @@ export declare function proveDelta(origBytes: Uint8Array, deltaBytes: Uint8Array
   readers?: { orig?: DeltaReader; ours?: DeltaReader } | null
   objectsMax?: number; decodedMax?: number; heldMax?: number
 }): Promise<({ ok: true; pages: [ours: number, arxiv: number]; replaced: number } | { ok: false; code: 'delta-proof' | 'delta-xref'; why: string }) & { documents?: { orig: unknown | null; ours: unknown | null } }>
-export declare function wrappedPagesOf(PL: import('./remove.mjs').PdfLib, doc: unknown): number[]
+export declare function wrappedPagesOf(PL: import('@readarxiv/engine').PdfLib, doc: unknown): number[]

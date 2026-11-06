@@ -1,5 +1,5 @@
 import { inflateSync } from 'node:zlib'
-import { lex, type PdfLib } from '@/pdf-reader/engine/layout/remove.mjs'
+import { lex, type PdfLib } from '@readarxiv/engine'
 import { lexReference } from './lex-reference.mjs'
 
 // The lexer held to the reference (lex-reference.mjs, the lexer of 42bf0cf7): where the two first part on a stream, and every

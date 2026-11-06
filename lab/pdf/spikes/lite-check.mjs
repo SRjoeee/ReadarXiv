@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { pageRules } from '../../../src/pdf-reader/engine/layout/cell-rules.mjs'
 import { indexLayout, parseLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
-import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
+import { pageInk, unreadOf } from '@readarxiv/engine'
 import { LITE_ALWAYS } from './lite-pdfjs.mjs'
 
 const root = new URL('..', import.meta.url).pathname

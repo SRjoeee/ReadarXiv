@@ -14,6 +14,9 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 2.11.1
         version: 2.11.1(html-entities@2.6.0)
+      '@readarxiv/engine':
+        specifier: workspace:*
+        version: link:packages/engine
       '@readarxiv/translate':
         specifier: workspace:*
         version: link:packages/translate
@@ -109,7 +112,11 @@ importers:
         specifier: workspace:*
         version: link:../text
 
-  packages/format: {}
+  packages/format:
+    dependencies:
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
 
   packages/reader:
     dependencies:

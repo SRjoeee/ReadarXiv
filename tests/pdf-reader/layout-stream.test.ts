@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Glyph, packGlyphs } from '@readarxiv/engine'
 import { type Follow, type Head, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
 import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 

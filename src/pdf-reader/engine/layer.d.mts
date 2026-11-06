@@ -7,6 +7,6 @@ export { BUILD_END_WHYS, BUNDLE5, CATALOG_CAP, CATALOG_VALUES, CHUNKS_MAX, CONTE
 // E-C: a left part's draw geometry (BUNDLE 5): the reader's check, the layer's own inputs decoded of it, and the fonts' key
 export { DrawRefusal, checkDraw, drawFontKey, drawInputsOf } from './layer-proto/draw.mjs'
 export type { Draw, DrawDest, DrawFont, DrawItem, DrawLink } from './layer-proto/draw.mjs'
-export { isMemoryError } from './pipeline/memory.mjs'
-export type { BaseKind, DeltaWhy, PageRanges } from './layout/delta-wire.mjs'
+export { isMemoryError } from '@readarxiv/engine'
+export type { BaseKind, DeltaWhy, PageRanges } from '@readarxiv/engine'
 export type { BaseCheck, BaseSource, DeltaBase, Caps, CatalogBase, EndWhy, HeadBase, HeadVersions, LayerIndex, PartChain, ReadCatalog, ReadHead, ReadLeftPart, ReadPart, ReadUnits, ReadUnitsChunk, ReadUnitsChunkLight, ReadUnitsLight, LightLayerIndex, Ref, UnitRecords, TokenWire, Written } from './layer-proto/format.mjs'
