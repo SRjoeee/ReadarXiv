@@ -133,10 +133,21 @@ const SPECS: readonly RuleSpec[] = [
     home: 'unit',
     step: 'L5',
     owns: ['T15', 'D12', 'A6'],
-    ports: ['L2:1289-1306 renameRefs', 'L2:1266 nameOfRow', 'RUN:2026'],
+    ports: [
+      'L2:1289-1306 renameRefs',
+      'L2:1266 nameOfRow',
+      'RUN:2026',
+      'rules/tex-names.mjs:74-140 refName, conjunctionOf, refInTarget',
+    ],
     how: 'ported',
-    reads: ['words'],
-    state: open,
+    reads: ['words', "the packages' names (rules/tex-names.json, a data file of Rules)"],
+    file: 'unit/rename.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "samples/U.rename.json.gz (6) and the ledger's U.rename slot on every other sampled reading of its pairs (38)",
+      cases: 44,
+    },
   },
   {
     id: 'U.label',

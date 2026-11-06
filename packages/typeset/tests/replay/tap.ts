@@ -25,6 +25,8 @@ export type Entry = {
   ord: number
   id: string | null
   kind: string | null
+  /** the ledger's rounds of the unit (a round given up on NeedPixels left out) */
+  rounds?: { round: number; kind: string }[]
   branches: string[]
   captures: Capture[]
   slots: { step: string; by: string; round: number; value: unknown }[]
@@ -33,6 +35,56 @@ export type Sample = { rule: string; branches: Record<string, { count: number; s
 
 export const sample = (rule: string): Sample => readGz(join(TAP, 'samples', `${rule}.json.gz`)) as Sample
 export const derived = <T>(name: string): T => readGz(join(DERIVED, `${name}.json.gz`)) as T
+
+/** a pair's ledger (TAP.md §5): every unit's slots of every round, the fill passes, the table groups */
+export type Ledger = {
+  pair: string
+  target: string
+  info: Record<string, unknown>
+  units: { ord: number; id: string | null; kind: string | null; slots: Entry['slots'] }[]
+  passes: unknown[]
+}
+const ledgers = new Map<string, Ledger>()
+export const ledger = (pair: string): Ledger => {
+  const l = ledgers.get(pair) ?? (readGz(join(TAP, 'ledgers', `${pair}.ledger.json.gz`)) as Ledger)
+  ledgers.set(pair, l)
+  return l
+}
+/**
+ * The ledger's round of a capture's round. A sample entry's captures are numbered by pass 2's own lays, a round given up on
+ * NeedPixels among them; the ledger leaves those out and numbers the rest again (TAP.md §2, its NOTES.md: the entry's
+ * `rounds`). Where the two counts agree a round is its own; where the ledger holds one round it is the last lay's, and an
+ * earlier capture's round was given up (null); otherwise the round cannot be told (undefined)
+ */
+export function ledgerRound(e: Entry, round: number): number | null | undefined {
+  const raw = [...new Set(e.captures.map((c) => c.round))].sort((a, b) => a - b)
+  const n = e.rounds?.length ?? raw.length
+  if (raw.length === n) return round
+  if (n === 1) return round === raw.at(-1) ? 1 : null
+  return undefined
+}
+/** a unit's slot of one rule in one round, from its pair's ledger; undefined where it has none */
+export const slotOf = (pair: string, ord: number, round: number, by: string): unknown =>
+  ledger(pair)
+    .units.find((u) => u.ord === ord)
+    ?.slots.find((s) => s.by === by && s.round === round)?.value
+
+/** the rules whose sample files capture a unit's reading (U.elements:in and :out) */
+export const READING_RULES = ['U.breaks', 'U.elements', 'U.label', 'U.marks', 'U.rename', 'B.tokens'] as const
+/** every sampled round that holds a reading, once (by pair|ord|round), from every rule's sample file that captures one */
+export function readings(): { key: string; e: Entry; round: number; rule: string; c: Record<string, unknown> }[] {
+  const seen = new Set<string>()
+  const out: ReturnType<typeof readings> = []
+  for (const rule of READING_RULES)
+    for (const e of sample(rule).entries)
+      for (const [round, c] of roundsOf(e)) {
+        const key = `${e.pair}|${e.ord}|${round}`
+        if (!c['U.elements:in'] || !c['U.elements:out'] || seen.has(key)) continue
+        seen.add(key)
+        out.push({ key, e, round, rule, c })
+      }
+  return out
+}
 
 /** an entry's captures by round, each rule's value decoded (unser) */
 export function roundsOf(e: Entry): Map<number, Record<string, unknown>> {

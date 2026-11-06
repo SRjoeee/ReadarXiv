@@ -56,6 +56,19 @@ export {
   type UnitLabel,
 } from './unit/label.ts'
 export {
+  GENERATED_REF,
+  type NameRow,
+  nameOfRow,
+  type RefNames,
+  type Rename,
+  type Renamable,
+  refInTarget,
+  refName,
+  refNamesOf,
+  rename,
+  type TexNamesData,
+} from './unit/rename.ts'
+export {
   type Admission,
   type AdmitInput,
   admit,
