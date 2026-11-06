@@ -4850,9 +4850,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   none crowded that was drawn (2610.40394v1 15, 2608.06007v1 13, 2608.04322v1 12, 1810.04805v2 10, 2610.30769v1 8,
   2609.26457v1 7: its Figure 2's six annotation lines; stacked cards' and boxed nodes' labels over the lines and frames behind
   them); 173 rooms on 10 papers longer and none shorter (2610.19159v1 115), 7 anchors on 5 papers (a gridline under a label's box
-  no longer telling it). Each gained band as poppler renders the base page is one colour (in 16 levels) outside the label's own
-  glyphs (the 14 bands too small to hold a free pixel are under the figure gate, 1810.04805v2's "[CLS]" and 2610.22065v1's "QK"
-  and "SV", or were looked at, 2610.21313v1's "SAMA" and 2610.31506v1's "(Lower-Sodium Requirement)").
+  no longer telling it). The figure gate: G1, G3f, D, O and R 0 on both engines, on the pack (drawn 938 to 968: 2608.04322v1
+  12, 1810.04805v2 10, 2609.26457v1 7, 1512.03385v1 1), on 24 of the 25-paper set's bases (1,167 to 1,185) and on our final
+  passes of nine more of the 87 that move (each paper's drawn units up by its count above; 2610.19159v1's longer rooms R 0;
+  2610.20808v1 p14's "activations" fails O and R on both engines alike): 100 of the 106 under it. Of the other six, 2610.40576v1's
+  five bands are one colour outside the label's own glyphs as poppler renders the base page, and 2610.31506v1's "(Lower-Sodium
+  Requirement)", too small for that, was looked at in a crop.
 - **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). A Type 3 glyph's ink is what its
   char procedure paints (LAYOUT 28, #122-1: `ink.mjs` `type3Box`, PDF.js's `charProcOperatorList`, each painted path's box, a
