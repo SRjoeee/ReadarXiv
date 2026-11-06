@@ -167,6 +167,9 @@ export const Placed = z.object({
   fixed: int.optional(),
   plain: z.string().optional(),
   dir: z.tuple([num, num]).optional(),
+  // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
+  // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags)
+  read: z.array(z.string()).optional(),
 })
 export const Tie = z.discriminatedUnion('rule', [
   z.object({

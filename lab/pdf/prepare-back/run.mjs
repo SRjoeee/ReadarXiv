@@ -154,6 +154,7 @@ const memberOf = new Map()
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) memberOf.set(mem.unit, mem)
 const unitsList = ins?.units ?? U.bundleUnitsOf(paper).map(u => null)
 let ord = 0
+const dumpOrds = [] // [the dump's ord, the member's ord]: what the comparison with the tap joins by
 const states = { drawn: 0, laid: 0, unlaid: 0 }
 // (the dump's order: the instrument's, but a figure unit the bundle does not lay after every one it lays, as today's page pass
 // leaves such a unit out of its bundle and the baseline lists it after the bundle's: its ord-join pairs equal texts so)
@@ -166,6 +167,7 @@ order.map(i => [ins.units[i], i]).forEach(([u, i]) => {
   if (u.name !== undefined) return
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
+  if (mem) dumpOrds.push([ord, mem.ord])
   const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
@@ -182,6 +184,7 @@ if (located) for (const [o, b] of located.born) {
   const st = stateOf(mem, addOn)
   const pieces = flat(b.content)
   states[st.drawn ? 'drawn' : 'laid']++
+  dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
 }
 const N = paperOut.pages
@@ -203,7 +206,7 @@ mkdirSync(join(OUT, 'located'), { recursive: true })
 writeFileSync(join(OUT, 'located', `${id}.json`), `${JSON.stringify({
   id, refused: refusal, stats: tally?.located ?? null, wrap: tally?.wrap ?? null, ms: { front: Math.round(tFront - t0), instrument: Math.round(tIns - tIns0), back: Math.round(tBack - tIns), ...(tally ? Object.fromEntries(Object.entries(tally.ms).map(([k, v]) => [k, Math.round(v)])) : {}) },
   bytes: { arxiv: arxivBytes.length, addOn: addOn && !('refused' in addOn) ? addOn.bytes.length : 0, units: unitsBytes, parts: parts.reduce((n, p) => n + p.bytes, 0), head: head ? Buffer.byteLength(JSON.stringify(head)) : 0 },
-  parts, places: placeOf, proofs,
+  parts, places: placeOf, dumpOrds, proofs,
   wrapPages: addOn && !('refused' in addOn) ? [...addOn.pages].map(([p, x]) => [p, x.ok, x.why ?? null, !!x.merged]) : null,
   moves: tally?.mapping.moves.length ?? 0, stretches: tally?.mapping.stretches ?? [],
   identical: tally?.mapping.identical.filter(Boolean).length ?? 0,

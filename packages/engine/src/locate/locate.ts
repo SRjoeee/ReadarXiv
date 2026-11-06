@@ -22,7 +22,9 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, ROLE } from '../instrument.ts'
+import { styleOf } from './facts.ts'
 import { bornOf } from './born.ts'
+import { factsOf } from './facts-pass.ts'
 import { cutLines, r2 } from './lines.ts'
 
 /** where a located unit stands on A against B */
@@ -65,6 +67,12 @@ export interface Member {
   /** its first and last glyph on B (global), -1 for none */
   bFirst: number
   bLast: number
+  /** the class's marks after its text (C20) */
+  tail?: [string, Style][]
+  /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
+  read: string[]
+  /** each line's glyphs on A (global), by line, for the facts read after the lines */
+  lineGlyphs: number[][]
 }
 
 export interface Located {
@@ -235,6 +243,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     pages: [],
     bFirst: -1,
     bLast: -1,
+    read: [],
+    lineGlyphs: [],
   })
 
   /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
@@ -425,13 +435,63 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? ins.units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
+    // (an element whose ink stands on none of the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
+    // and no line of the unit's)
+    const textCut = cutLines(
+      [...mem.text].sort((x, y) => x - y),
+      atA,
+    )
+    const outside = new Set<string>()
+    if (textCut.length)
+      for (const [id, l] of mem.els)
+        if (
+          kindOf(id) !== 'display' &&
+          l.length &&
+          l.every((a) => !textCut.some((t) => t.page === pageA[a] && gA(a).y <= t.top && gA(a).y >= t.bottom))
+        )
+          outside.add(id)
     const inline: number[] = [...mem.text]
-    for (const [id, l] of mem.els) if (kindOf(id) !== 'display') inline.push(...l)
+    for (const [id, l] of mem.els) if (kindOf(id) !== 'display' && !outside.has(id)) inline.push(...l)
     inline.sort((x, y) => x - y)
     const cut = cutLines(inline, atA)
-    mem.lines = cut.map(
-      (l) => [l.page, 0, r2(l.x0), r2(l.x1), l.base, r2(l.top), r2(l.bottom), r2(l.x0), r2(l.x1), 0] as Line,
+    // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
+    // span on A that B printed and no unit owns: the lines its source does not write (B17; today's heldOf MAKE:1855 read them
+    // by the source's words, under a 0.2 share: ownership says it))
+    const kept: number[][] = []
+    for (const [id, l] of mem.els) if (kindOf(id) === 'display') for (const c of cutLines(l, atA)) kept.push(c.gs)
+    if (inline.length && unit) {
+      const own = [...inline, ...mem.label].sort((x, y) => x - y)
+      // (within its own lines' extent on each page: a page's furniture, a float the stream passes between two of its lines
+      // on another part of the page, are none of its)
+      const box = new Map<number, [number, number, number, number]>()
+      for (const l of cut) {
+        const q = box.get(l.page)
+        box.set(
+          l.page,
+          q
+            ? [Math.min(q[0], l.x0), Math.min(q[1], l.bottom), Math.max(q[2], l.x1), Math.max(q[3], l.top)]
+            : [l.x0, l.bottom, l.x1, l.top],
+        )
+      }
+      const held: number[] = []
+      for (let a = own[0] as number; a <= (own.at(-1) as number); a++) {
+        const b = m.aToB[a] as number
+        if ((claimedA[a] as number) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
+        const g = gA(a)
+        const q = box.get(pageA[a] as number)
+        if (q && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
+      }
+      for (const c of cutLines(held, atA)) kept.push(c.gs)
+    }
+    const all = [
+      ...cut.map((l) => ({ l, kept: false })),
+      ...kept.flatMap((gs) => cutLines(gs, atA).map((l) => ({ l, kept: true }))),
+    ].sort((x, y) => (x.l.gs[0] as number) - (y.l.gs[0] as number))
+    mem.lines = all.map(
+      ({ l, kept: k }) =>
+        [l.page, 0, r2(l.x0), r2(l.x1), l.base, r2(l.top), r2(l.bottom), r2(l.x0), r2(l.x1), k ? 1 : 0] as Line,
     )
+    mem.lineGlyphs = all.map(({ l }) => l.gs)
     // (a run set turned: its band's box on the page, from its first glyph's origin to its last one's end, its descent to its
     // ascent across; its baseline the first glyph's origin's height)
     if (mem.turned.length) {
@@ -463,19 +523,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
     mem.pages = [...new Set(mem.lines.map((l) => l[0]))]
-    // style: TeX's font state is not stated by today's instrument: the size and fill of its own glyphs on A, its design
+    // style: TeX's font state is not stated by today's instrument: read off its own glyphs on A as today's reader reads it
+    // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage 1b states it)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
     const size =
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
-    const fill = mostOf(txt.map((g) => g.fill))
-    const design = mostOf(txt.map((g) => g.base))
-    mem.style = {
-      role: 'serif',
-      size,
-      ...(fill !== undefined && fill > 0 ? { fill } : {}),
-      ...(design ? { design } : {}),
-    }
+    mem.style = { ...styleOf(mem.text.map(gA), size), size }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
@@ -483,6 +537,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const d = cut[q - 1]!.base - cut[q]!.base
         if (d > 0 && d < 3 * size) pitches.push(r2(d))
       }
+    if (mem.lines.length) mem.read.push('style', 'lead')
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
     // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
@@ -510,7 +565,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       }
       const el: El = { kind: p.kind, ink }
-      if (p.kind === 'display') el.keep = 1
+      if (p.kind === 'display' || outside.has(id)) el.keep = 1
       if (TEXT_KINDS.has(p.kind) && gl.length) el.text = gl.map((a) => gA(a).u).join('')
       mem.elements.push([id, el])
     }
@@ -521,21 +576,18 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (L) {
         mem.labelAt = {
           kind: LABEL_KIND[mem.kind] ?? 'number',
-          ink: [
-            L.page,
-            r2(Math.min(...lg.map((g) => g.ix0))),
-            r2(L.bottom),
-            r2(Math.max(...lg.map((g) => g.ix1))),
-            r2(L.top),
-            L.base,
-          ],
+          // (its glyphs' advances, as an element's ink and a line's extent)
+          ink: [L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base],
           style: { role: 'serif', size: L.most },
         }
       }
     }
   }
   columnsAndMeasures(members, inkA)
-  for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, members)
+  for (const mem of members)
+    if (mem.lines.length) mem.room = roomOf(mem, inkA, claimedA, m.offA[mem.lines.at(-1)![0] - 1] as number)
+  // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
+  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB })
 
   // ---- flows: a member whose first line is the one before's last line, on its baseline after its end, in one paragraph of
   // TeX's (no paragraph end of B's between the one's last glyph and the other's first, where the instrument states them); a
@@ -686,6 +738,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const name = (a: number, c: string) => `${mem.ord}.${pageA[a]}.${c}`
+    // (an element whose ink stays, a display's, one outside the unit or on a held line: in no group)
+    const keptEl = new Set(mem.elements.filter(([, el]) => el.keep).map(([id]) => id))
     for (const a of mem.text) {
       set(a, name(a, 't'))
       if (mem.figure) figureGroups.add(name(a, 't'))
@@ -696,12 +750,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
     }
     for (const [id, l] of mem.els) {
-      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display') continue
+      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
       for (const a of l) set(a, name(a, 'e'))
     }
     for (const [ap, ai] of mem.textBoxes) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.t`
     for (const [id, l] of mem.elBoxes) {
-      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display') continue
+      if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
       for (const [ap, ai] of l) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.e`
     }
   }
@@ -732,8 +786,9 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
   }
   const measure = new Map<string, [number, number]>()
   for (const mem of members) {
-    if (mem.align !== 'j' || mem.lines.length < 2) continue
+    if (mem.align !== 'j' || mem.lines.filter((l) => !(l[9] & 1)).length < 2) continue
     for (const l of mem.lines) {
+      if (l[9] & 1) continue
       const k = `${l[0]}|${l[1]}`
       const m = measure.get(k)
       if (!m) measure.set(k, [l[2], l[3]])
@@ -751,16 +806,14 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
 }
 
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
- *  bottom edge where there is none; and the gap to the next text line of its column */
-function roomOf(mem: Member, inkA: Doc, members: Member[]): Room {
+ *  bottom edge where there is none; and the distance to the next text line of its column, baseline to baseline */
+function roomOf(mem: Member, inkA: Doc, claimedA: Int32Array, offA: number): Room {
   const last = mem.lines.at(-1)!
-  const [p, col, x0, x1, , , bottom] = last
+  const [p, , x0, x1, base, , bottom] = last
   const pg = inkA.pages[p - 1]!
   const foot = bottom - 0.5
   let next = Number.NEGATIVE_INFINITY
-  const mine = new Set(mem.text)
   for (const g of pg.glyphs) if (g.top < foot && g.x1 > x0 && g.x0 < x1 && g.top > next && /\S/.test(g.u)) next = g.top
-  void mine
   const W = pg.view[2] - pg.view[0]
   const H = pg.view[3] - pg.view[1]
   for (let b = 0; b < pg.kinds.length; b++) {
@@ -771,11 +824,26 @@ function roomOf(mem: Member, inkA: Doc, members: Member[]): Room {
     if (by1 < foot && bx1 > x0 && bx0 < x1 && by1 > next && !(bx1 - bx0 >= 0.9 * W && by1 - by0 >= 0.75 * H)) next = by1
   }
   const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
-  let nextLine = Number.NEGATIVE_INFINITY
-  for (const o of members) {
-    if (o === mem) continue
-    for (const l of o.lines)
-      if (l[0] === p && l[1] === col && l[5] < foot && l[5] > nextLine && l[3] > x0 && l[2] < x1) nextLine = l[5]
+  // (the next line of its column under its last: the page's glyphs not its own, across its lines' extent on that page, under
+  // its baseline by more than three quarters of its pitch; of the highest, those within half a size, their median baseline;
+  // the distance from baseline to baseline (today's edgesOf `below` RUN:1655))
+  const on = mem.lines.filter((l) => l[0] === p && !(l[9] & 1))
+  const cx0 = Math.min(...on.map((l) => l[2]), x0)
+  const cx1 = Math.max(...on.map((l) => l[3]), x1)
+  const T = base - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
+  const under: DocGlyph[] = []
+  pg.glyphs.forEach((g, j) => {
+    if (/\S/.test(g.u) && g.y < T && g.x1 > cx0 && g.x0 < cx1 && (claimedA[offA + j] as number) !== mem.ord)
+      under.push(g)
+  })
+  let nextBase: number | null = null
+  if (under.length) {
+    const top = Math.max(...under.map((g) => g.y))
+    const ys = under
+      .filter((g) => g.y > top - 0.5 * g.size)
+      .map((g) => g.y)
+      .sort((a, b) => a - b)
+    nextBase = ys[(ys.length - 1) >> 1] as number
   }
-  return { below, ...(Number.isFinite(nextLine) ? { next: r2(bottom - nextLine) } : {}) }
+  return { below, ...(nextBase !== null ? { next: r2(base - nextBase) } : {}) }
 }

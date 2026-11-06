@@ -90,6 +90,8 @@ function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
+  if (mem.tail?.length) p.tail = mem.tail
+  if (mem.read.length) p.read = [...new Set(mem.read)]
   return p
 }
 
