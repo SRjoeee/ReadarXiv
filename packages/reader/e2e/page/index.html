@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>reader harness</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  #root { position: absolute; inset: 0; }
+  .axt-reader .axt-pane { top: 0; bottom: 0; width: 50%; background: #e8e8e8; }
+  .axt-reader .axt-pane.left { left: 0; }
+  .axt-reader .axt-pane.right { left: 50%; }
+  .axt-reader[data-axt-pdf-mode="original"] .axt-pane.right { display: none; }
+  .axt-reader[data-axt-pdf-mode="original"] .axt-pane.left { width: 100%; }
+  .axt-reader[data-axt-pdf-mode="translation"] .axt-pane.left { width: 0; visibility: hidden; }
+  .axt-reader[data-axt-pdf-mode="translation"] .axt-pane.right { left: 0; width: 100%; }
+  .axt-reader .pdfViewer .page { --page-margin: 8px auto; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 // A PDF.js document over a ByteSource (from the website's `openRanged`, W ranges.ts:826): the first chunk read here and given
 // as the transport's initial data, the document's last chunks asked as soon as its length is known (PDF.js reads a file's
 // startxref and cross-reference right after its first chunk), and every range PDF.js asks for read chunk by chunk through the
-// source and given to it a chunk at a time, so that a page waits only for its own chunks. The source is not the document's:
+// source (the store shares and joins them) and given whole once its chunks are in. The source is not the document's:
 // the original's is the reader's, shared by both documents; letting the document go stops its reads, not the source.
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import type { ByteSource } from './source.ts'
@@ -80,19 +80,32 @@ export function openRanged(lib: RangedLib, source: ByteSource, o: RangedOptions)
     const transport = new lib.PDFDataRangeTransport(total, first.byteLength >= Math.min(CHUNK, total) ? first : null)
     let cancelled = false
     transport.requestDataRange = (begin: number, end: number) => {
-      for (let i = Math.floor(begin / CHUNK); i < Math.ceil(end / CHUNK); i++) {
-        chunkOf(i, total).then(
-          (chunk) => {
-            if (destroyed || cancelled) return
-            try {
-              transport.onDataRange(i * CHUNK, chunk)
-            } catch {
-              // (its reader let go meanwhile, PDF.js's own cancel: the bytes are no one's)
+      // (each chunk read through the source, so that the store shares and joins them; the range given whole, at its own begin:
+      // PDF.js's transport stream finds the reader of a range by its begin and takes one answer for it)
+      const parts: Promise<Uint8Array>[] = []
+      for (let i = Math.floor(begin / CHUNK); i < Math.ceil(end / CHUNK); i++) parts.push(chunkOf(i, total))
+      Promise.all(parts).then(
+        (chunks) => {
+          if (destroyed || cancelled) return
+          const out =
+            chunks.length === 1
+              ? (chunks[0] as Uint8Array)
+              : new Uint8Array(chunks.reduce((a, c) => a + c.byteLength, 0))
+          if (chunks.length > 1) {
+            let at = 0
+            for (const c of chunks) {
+              out.set(c, at)
+              at += c.byteLength
             }
-          },
-          () => {},
-        )
-      }
+          }
+          try {
+            transport.onDataRange(begin, out)
+          } catch {
+            // (its reader let go meanwhile, PDF.js's own cancel: the bytes are no one's)
+          }
+        },
+        () => {},
+      )
     }
     transport.abort = () => {
       cancelled = true

@@ -22,15 +22,15 @@
 			"javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded", "trailingCommas": "all" } }
 		},
 		{
-			"includes": ["packages/engine/src/**/*.mjs"],
+			"includes": ["packages/engine/src/**/*.mjs", "packages/reader/src/**/*.mjs"],
 			"formatter": { "enabled": false }
 		},
 		{
-			"includes": ["packages/engine/src/**/*.types.ts"],
+			"includes": ["packages/engine/src/**/*.types.ts", "packages/reader/src/**/*.types.ts"],
 			"linter": { "rules": { "suspicious": { "noTsIgnore": "off" } } }
 		},
 		{
-			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs", "packages/engine/src/**/*.mjs"],
+			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs", "packages/engine/src/**/*.mjs", "packages/reader/src/**/*.mjs"],
 			"linter": {
 				"rules": {
 					"complexity": { "noCommaOperator": "off" },

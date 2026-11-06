@@ -28,6 +28,8 @@ describe("the reader's build plugin", () => {
         expect(existsSync(join(at, 'cmaps', '78-H.bcmap'))).toBe(true)
         expect(existsSync(join(at, 'standard_fonts', 'LiberationSans-Regular.ttf'))).toBe(true)
         expect(existsSync(join(at, 'wasm', 'openjpeg.wasm'))).toBe(true)
+        expect(existsSync(join(at, 'pdf_viewer.css'))).toBe(true)
+        expect(existsSync(join(at, 'images', 'loading-icon.gif'))).toBe(true)
         expect(existsSync(join(at, 'legacy', 'pdf.worker.min.mjs'))).toBe(legacy)
       }
     } finally {

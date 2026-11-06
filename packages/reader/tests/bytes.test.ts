@@ -197,7 +197,7 @@ describe("the composed document's source", () => {
 })
 
 describe('a ranged open', () => {
-  it('gives PDF.js the first chunk, asks the end beside it, and every range a chunk at a time', async () => {
+  it('gives PDF.js the first chunk, asks the end beside it, and every range whole at its begin, its chunks read one by one', async () => {
     const s = rangedServer(objects())
     const src = own(s.fetch)
     const given: [number, number][] = []
@@ -228,7 +228,7 @@ describe('a ranged open', () => {
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 4, 5])
     ;(transport as unknown as { requestDataRange(b: number, e: number): void }).requestDataRange(2 * CHUNK, 6 * CHUNK)
     for (let i = 0; i < 6; i++) await flush()
-    expect(given.map(([b]) => b / CHUNK).sort()).toEqual([2, 3, 4, 5])
+    expect(given).toEqual([[2 * CHUNK, A.length - 2 * CHUNK]])
     // the end's chunks taken from the early asks, not asked again
     expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 4, 5, 2, 3])
     await t.destroy()

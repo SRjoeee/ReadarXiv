@@ -37,6 +37,8 @@ export interface Kit {
   readonly viewer: typeof Viewer
   readonly version: string
   readonly base: string
+  /** PDF.js's viewer sheet, which the reader links into its root */
+  readonly sheet: string
   /** getDocument's options for a document of `role`: the measured ones and this reader's worker for it */
   options(role: Role): Record<string, unknown>
   /** the worker of `role` let go, once the documents on it are destroyed (a worker destroyed before its handshake reports
@@ -137,6 +139,7 @@ export async function loadKit(o: KitOptions = {}): Promise<Kit> {
     viewer,
     version,
     base,
+    sheet: `${base}pdf_viewer.css`,
     options: (role) => ({ ...assets, worker: workerOf(role) }),
     release,
     destroy() {
