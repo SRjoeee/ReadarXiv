@@ -82,6 +82,14 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
+  if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
+  if (c.cmd !== undefined) out.cmd = c.cmd
+  if (c.bare) out.bare = 1
+  if (c.brk) out.brk = 1
+  if (c.note !== undefined) out.note = c.note
+  if (c.same !== undefined) out.same = c.same
+  if (c.colour !== undefined) out.colour = c.colour
+  if (c.nested) out.nested = 1
   return out
 }
 
@@ -107,6 +115,8 @@ function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
     const cls = new Map(unit?.classes ?? [])
     p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
   }
+  // (each group's command and fill, as the instrument reads its source)
+  if (unit?.spans?.length) p.spans = unit.spans.map(([id, x]) => [id, { ...x }])
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir

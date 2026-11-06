@@ -44,6 +44,14 @@ export interface InstrumentUnit {
    *  drawing and a footnote's mark (format's El: `kind`, `unknown`, `copy`, `sym`, `mark`), so that no rule of the typesetter
    *  reads a source */
   classes?: [piece: string, PieceClass][]
+  /** what its source says of each group (by its open piece's id), which the part states as the span's facts (format's
+   *  SpanAt: `cmd`, `colour`) */
+  spans?: [piece: string, SpanClass][]
+}
+/** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in */
+export interface SpanClass {
+  cmd?: string
+  colour?: number
 }
 /** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
 export interface PieceClass {
@@ -54,6 +62,23 @@ export interface PieceClass {
   mark?: true
   /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
   literal?: true
+  // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
+  // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
+  /** its glue as TeX sets it (today's glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
+  glue?: [length: number, unit: 'em' | 'bp', brk?: 1]
+  /** the command its source begins with (its name and star); `bare`: its source is that command alone (a declaration) */
+  cmd?: string
+  bare?: true
+  /** a forced break (today's FORCED_BREAK) */
+  brk?: true
+  /** a citation's note: its last optional argument as today's renameRefs reads it */
+  note?: string
+  /** an earlier piece of the unit whose source is the same: its id (the source's identity, by which a macro is learnt) */
+  same?: string
+  /** the fill TeX set its run in (a colour piece's: the marked compile's log, today's readColours) */
+  colour?: number
+  /** a nested unit's mark (a footnote set inside the unit), not a placeholder */
+  nested?: true
 }
 
 export interface Instrument {

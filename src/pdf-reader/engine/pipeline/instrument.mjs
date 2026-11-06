@@ -16,7 +16,7 @@ import { ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
 import { figureUnitsOf } from '../layout/figure-text.mjs'
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../layout/ink-units.mjs'
 import { ledgerOf } from '../layout/ledger.mjs'
-import { classOf, followsOf, readAlign, readSkipProbe } from '../layout/marks.mjs'
+import { classOf, followsOf, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -150,13 +150,83 @@ function phClassProven(src) {
   return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
 }
 
-/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
- *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id */
-export function classesOf(pieces) {
+// ---- what the typesetter's rules read of a piece's source besides its class (the rest of today's reads of `src`: tokensOf2's
+// glue, style commands and links L2:2406-2620, U.breaks' forced breaks TEX:84, U.rename's citation notes L2:1279, U.elements'
+// macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf,
+// FORCED_BREAK and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts
+const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
+const BP = { pt: 72 / 72.27, bp: 1, mm: 72 / 25.4, cm: 72 / 2.54, in: 72, pc: (12 * 72) / 72.27, dd: ((1238 / 1157) * 72) / 72.27, cc: ((12 * 1238) / 1157 * 72) / 72.27, sp: 72 / 72.27 / 65536 }
+const KERNS = { '\\enspace': 0.5, '\\thinspace': 1 / 6, '\\,': 1 / 6, '\\:': 2 / 9, '\\;': 5 / 18 }
+const SKIPS = { '\\quad': 1, '\\qquad': 2 }
+/** explicit glue, as TeX sets it (layer2.mjs glueOf L2:2406): { em } or { bp }, and whether a line may break at it */
+export function glueOf(src) {
+  if (Object.hasOwn(KERNS, src)) return { em: KERNS[src], brk: false }
+  if (Object.hasOwn(SKIPS, src)) return { em: SKIPS[src], brk: true }
+  const m = /^\\(hspace\*?|hskip|kern)\s*(?:\{\s*([^{}]*?)\s*\}|([^{}\\]*?))\s*$/.exec(src)
+  if (!m) return null
+  const len = (m[2] ?? m[3] ?? '').replace(/\s+(?:plus|minus)\s.*$/, '').trim()
+  const d = DIMEN.exec(len)
+  if (!d || !(Number(d[1]) > 0)) return null
+  const brk = m[1] !== 'kern'
+  return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]], brk }
+}
+/** a forced break's source (tex.mjs:84 FORCED_BREAK) */
+export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a citation's note: its last optional argument, its ties and control spaces a space, where it holds a letter (layer2.mjs
+ *  renameRefs' CITE_NOTE L2:1279-1305) */
+const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
+export function noteOf(src) {
+  const m = CITE_NOTE.exec(src)
+  if (!m) return null
+  const last = [...m[1].matchAll(/\[([^\]]*)\]/g)].at(-1)
+  const note = last?.[1]?.replace(/~|\\[ ,]/g, ' ').replace(/\s+/g, ' ').trim()
+  return note && /\p{L}/u.test(note) ? note : null
+}
+/** the command a source begins with (its name and its star), and whether the source is that command alone (a declaration:
+ *  tokensOf2's switch, /^\\[A-Za-z]+$/) */
+export function commandOf(src) {
+  const m = /^\\([A-Za-z]+\*?)/.exec(src)
+  return m ? { cmd: m[1], ...(/^\\[A-Za-z]+$/.test(src) ? { bare: true } : {}) } : null
+}
+/** what a piece's source tells the rules besides its class: its glue, its command, a forced break, a citation's note, an
+ *  earlier piece of the unit with the same source (`same`: the source's identity, which U.elements' macros are learnt by),
+ *  and the fill TeX set its run in (a colour piece's, readColours: `colours` by piece index) */
+function sourceFactsOf(src, k, first, colours) {
+  const x = {}
+  const g = glueOf(src)
+  if (g) x.glue = g.em !== undefined ? [g.em, 'em', ...(g.brk ? [1] : [])] : [g.bp, 'bp', ...(g.brk ? [1] : [])]
+  const c = commandOf(src)
+  if (c) Object.assign(x, c)
+  if (FORCED_BREAK.test(src)) x.brk = true
+  const note = noteOf(src)
+  if (note !== null) x.note = note
+  const f = first.get(src)
+  if (f === undefined) first.set(src, String(k))
+  else x.same = f
+  if (colours?.has(k)) x.colour = colours.get(k)
+  return x
+}
+/** each group's facts by its open piece's id: the command its open begins with, and the fill TeX set its run in */
+export function spansOf(pieces, colours = null) {
   const out = []
   pieces.forEach((p, k) => {
+    if (p.t !== 'open') return
+    const c = commandOf(unicodeOf(p.src))
+    const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}) }
+    if (Object.keys(x).length) out.push([String(k), x])
+  })
+  return out
+}
+
+/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
+ *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id;
+ *  and what the rest of the rules read of its source (sourceFactsOf), `colours` the unit's colour pieces' fills by index */
+export function classesOf(pieces, colours = null) {
+  const out = []
+  const first = new Map()
+  pieces.forEach((p, k) => {
     // (a nested unit: its mark a footnote mark's, placeholdersOf L2:1066)
-    if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true }]); return }
+    if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true, nested: true }]); return }
     if (p.t !== 'ph') return
     const src = unicodeOf(p.src)
     // (the placeholder's class, placeholdersOf L2:1065: phClassProven, a symbol that is no text symbol a formula; its
@@ -171,6 +241,7 @@ export function classesOf(pieces) {
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
     if (textPieceOf(src)) x.literal = true
+    Object.assign(x, sourceFactsOf(src, k, first, colours))
     out.push([String(k), x])
   })
   return out
@@ -234,6 +305,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
 
   // ---- the units
   const align = new Map(readAlign(log))
+  // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
+  const colours = new Map()
+  for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
   const ids = []
   const out = []
   const kindOf = p => classOf(p) ?? 'other'
@@ -242,8 +316,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    const classes = classesOf(u.pieces, colours.get(i) ?? null), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
@@ -251,8 +325,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   }
   for (const u of [...ink, ...kept]) {
     const content = contentOf(u.pieces ?? [], { kindOf })
-    const classes = classesOf(u.pieces ?? [])
-    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
+    const classes = classesOf(u.pieces ?? []), spans = spansOf(u.pieces ?? [])
+    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
   }
   const figBase = out.length
   // (the figure units in today's bundle's order: those it draws first, in their order, then those whose ink stays, crowded or

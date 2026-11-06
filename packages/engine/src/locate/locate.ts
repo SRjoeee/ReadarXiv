@@ -628,8 +628,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
       // (a nested unit, a footnote set inside the unit: its mark, the glyphs TeX set for it in the unit's text, an element of
-      // the unit's as today's placeholdersOf reads it (L2:1066, a footnote mark), where B gives it any)
-      if (p0.t === 'unit' && !gl.length) continue
+      // the unit's as today's placeholdersOf reads it (L2:1066, a footnote mark); one B gives none an element of no ink, so that
+      // the part says which of the unit's pieces are its nested units: the instrument's class `nested`)
       const p = p0.t === 'unit' ? { kind: 'note-mark' } : p0
       const bx = mem.elBoxes.get(id) ?? []
       // (each line's box of its own ink: across its glyphs' advances and their outlines (an italic glyph's overhang past its

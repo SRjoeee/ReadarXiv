@@ -5,6 +5,7 @@
 // baseline's reader-dump format, the members the adapter did not set by what stops them, and, per adapted member, the first
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
+import type { OutPiece } from '@readarxiv/format'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { readFileSync } from 'node:fs'
 import { adapt, rectOf } from '../../src/lay/adapt.ts'
@@ -13,6 +14,7 @@ import {
   type PaperReading,
   readMember,
   type RowUnit,
+  rowPieces,
   sourcePieces,
 } from '../../src/lay/read.ts'
 import { fontString } from '../../src/breaker/measure.ts'
@@ -102,6 +104,11 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
               : spaces
                 ? 'past the slot with spaces to shrink'
                 : 'squeezed past the slot'
+        // (AXT_GATE_OVER=<pt>: each line past its slot by more, with its member)
+        if (process.env.AXT_GATE_OVER && over > Number(process.env.AXT_GATE_OVER))
+          console.log(
+            `OVER p${page} ord ${pm.ord} ${over.toFixed(2)} pt (${cls}) line [${l.x0}, ${l.baseline}, ${l.x1}]`,
+          )
         const b = inv.I5by.get(cls) ?? inv.I5by.set(cls, { n: 0, max: 0 }).get(cls)!
         b.n++
         b.max = Math.max(b.max, over)
@@ -170,6 +177,31 @@ export function differences(a: unknown, b: unknown, path = '', out: string[] = [
 }
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 const r2 = (v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
+
+/** a door row's pieces (a translated text, or a source piece by its index) as the translation package's Result holds a row:
+ *  its texts (a source's text piece by its text), the source's elements (and nested units) by id, its groups as spans of
+ *  their content; null where a piece is no source piece or a group does not close */
+export function outOfDoor(row: readonly (string | number)[], source: readonly V0Piece[]): OutPiece[] | null {
+  const top: OutPiece[] = []
+  const stack: { id: string; content: OutPiece[] }[] = []
+  const at = () => stack.at(-1)?.content ?? top
+  for (const q of row) {
+    if (typeof q === 'string') {
+      at().push({ t: 'text', s: q })
+      continue
+    }
+    const p = source[q]
+    if (!p) return null
+    if (p.t === 'text') at().push({ t: 'text', s: p.s })
+    else if (p.t === 'ph' || p.t === 'nested') at().push({ t: 'el', id: String(q) })
+    else if (p.t === 'open') {
+      const sp = { t: 'span' as const, id: String(q), content: [] as OutPiece[] }
+      at().push(sp)
+      stack.push(sp)
+    } else if (!stack.pop()) return null
+  }
+  return stack.length ? null : top
+}
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
 export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true): string {
@@ -484,13 +516,19 @@ export function gateL1Pair(
         continue
       }
       const source = sourcePieces(src.content)
-      const pieces = row[1].map((q) =>
-        typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
-      ) as V0Piece[]
-      if (pieces.some((q) => !q)) {
+      // (the door's row as the translation package's Result would hold it (its text, the source's elements and groups by id):
+      // the reading takes the pieces from it and the member's facts alone, rowPieces; AXT_GATE_SOURCE=1 the unit's own pieces
+      // as before, to hold the two equal)
+      const content = outOfDoor(row[1], source)
+      if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
       }
+      const pieces = process.env.AXT_GATE_SOURCE
+        ? (row[1].map((q) =>
+            typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
+          ) as V0Piece[])
+        : rowPieces(x.m, content)
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {

@@ -62,6 +62,7 @@ const nearDifference = (a, b, path) => {
 const add = (m, k, n = 1) => m.set(k, (m.get(k) ?? 0) + n)
 for (const pair of pairs) {
   count.pairs++
+  if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length

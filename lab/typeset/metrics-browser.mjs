@@ -89,7 +89,7 @@ function parse(font) {
 }
 
 /** a character of the CJK scripts, set unkerned in a run of its own (served-metrics.mjs CJK and inRanges, copied) */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 const inRanges = (r, cp) => {
   for (let i = 0; i < r.length; i += 2) if (cp >= r[i] && cp <= r[i + 1]) return true
   return false
@@ -129,8 +129,8 @@ function runsOf(families, font, text) {
 
 /** the CJK punctuation Chrome's text-spacing-trim narrows when two stand together (fullwidth and ideographic marks); a CJK
  *  run is cut between two of them, so that each is measured at its full advance, as the measurer's unkerned run sums it */
-const PUNCT = /[、-〃〈-】〔-〟・！-／：-＠［-｀｛-･]/u
-const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u
+const PUNCT = /[\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u
+const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}\u30fc]/u
 
 /** the parts the rules mode measures: [the font string without small capitals, text, unkerned, the slice's key] */
 function partsOf(string, runs) {

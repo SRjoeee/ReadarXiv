@@ -16,7 +16,7 @@
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
 // What the part does not state yet is passed as today does without it, each named where it is read: a name leading the unit
 // (U.lead), U.rename's names, a rendering's runs of one fill and its faked small capitals, a colour piece's run.
-import type { El, Placed, Piece } from '@readarxiv/format'
+import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
 import { measure } from '../breaker/measure.ts'
@@ -55,6 +55,47 @@ export function sourcePieces(content: readonly Piece[]): V0Piece[] {
         if (p.open !== undefined) out.push({ t: 'open', src: p.open, id, k: out.length })
         walk(p.content)
         if (p.close !== undefined) out.push({ t: 'close', src: p.close, id, k: out.length })
+      }
+    }
+  }
+  walk(content)
+  return out
+}
+
+/** the source a rule reads of an element, made of what the part states of it (El: its glue, its command and whether its
+ *  source is that command alone, a forced break, a citation's note, its identity): every test today's rules make of a source
+ *  (glueOf, FORCED_BREAK, the style commands' and GENERATED_REF's names, CITE_NOTE, a declaration's /^\\[A-Za-z]+$/, the
+ *  macros learnt by their source) answers on it as on the source itself */
+export function srcOfEl(id: string, el: El | undefined): string {
+  if (!el) return `{=${id}}`
+  if (el.brk) return '\\\\'
+  if (el.glue) return `\\${el.glue[2] ? 'hskip' : 'kern'} ${el.glue[0]}${el.glue[1]}`
+  if (el.cmd !== undefined && el.bare) return `\\${el.cmd}`
+  const key = `{=${el.same ?? id}}`
+  return el.cmd !== undefined ? `\\${el.cmd}${el.note !== undefined ? `[${el.note}]` : ''}${key}` : key
+}
+/** a group's open as the rules read it: the command it begins with (SpanAt.cmd) */
+export const srcOfSpan = (sp: SpanAt | undefined): string => (sp?.cmd !== undefined ? `\\${sp.cmd}{` : '{')
+
+/** a row's content (the translation package's Result: its text, the source's elements and groups by id) as the flat pieces
+ *  today's rules read (rows.mjs unitOf: a translated text, `ph` an element, `open` / `close` a group, `nested` a unit), each
+ *  source piece with its id as its index `k` and its source as the part states it (srcOfEl, srcOfSpan): the reading needs
+ *  nothing of the unit's own pieces but what its member states */
+export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
+  const els = new Map(m.els ?? [])
+  const spans = new Map(m.spans ?? [])
+  const out: V0Piece[] = []
+  const walk = (ps: readonly OutPiece[]) => {
+    for (const p of ps) {
+      if (p.t === 'text') out.push({ t: 'text', tr: true, s: p.s } as V0Piece)
+      else if (p.t === 'el') {
+        const e = els.get(p.id)
+        out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
+      } else {
+        const id = Number(p.id)
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id })
+        walk(p.content)
+        out.push({ t: 'close', src: '}', id })
       }
     }
   }
@@ -184,7 +225,7 @@ function readingsOf(
     return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
   })
   pieces.forEach((p, k) => {
-    if (p.t === 'nested' && !els.has(String(p.k))) {
+    if (p.t === 'nested' && !els.get(String(p.k))?.ink.length) {
       const source: Res = { mode: 'source', text: '*', math: false, sup: true }
       readings.set(k, {
         src: '\\footnotemark',
@@ -357,6 +398,7 @@ export function readMember(i: ReadInput): ReadOut {
   const { m, unit, paper } = i
   const pieces = unit.pieces
   const els = new Map(m.els ?? [])
+  const spans = new Map(m.spans ?? [])
   const L = linesOf(m, i.rects)
   const { readings, cls2 } = readingsOf(pieces, els, L)
   // (the lines its source does not write, held: KEPT lines no display's rows are; a display's rows, touched)
@@ -432,7 +474,17 @@ export function readMember(i: ReadInput): ReadOut {
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
-    colourOf: () => null,
+    // (a colour piece's run in the fill TeX set it in, El.colour or SpanAt.colour: today's tex.mjs colourOf over the log's)
+    colourOf: (k) => {
+      const p = pieces[k]
+      const c =
+        p?.t === 'ph' || p?.t === 'nested'
+          ? els.get(String(p.k))?.colour
+          : p?.t === 'open'
+            ? spans.get(String(p.k))?.colour
+            : undefined
+      return c ?? null
+    },
     fillOf: (k) => {
       const p = pieces[k]
       const f = p?.t === 'ph' ? els.get(String(p.k))?.style?.fill : undefined
