@@ -10,7 +10,7 @@ one() {
   local id=$1 dir=$2 rc free
   free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
   if [ "$free" -lt 12 ]; then printf '%s\trefused\t%s GiB free\n' "$id" "$free" >> "$OUT/log.tsv"; return; fi
-  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/run.mjs" --dir="$dir" --id="$id" --out="$OUT" --caches="$CACHES" "${FLAGS[@]}") > "$OUT/logs/$id.log" 2>&1
+  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/run.mjs" --dir="$dir" --id="$id" --out="$OUT" --caches="$CACHES" ${FLAGS[@]+"${FLAGS[@]}"}) > "$OUT/logs/$id.log" 2>&1
   rc=$?
   printf '%s\t%s\t%s\n' "$id" "$rc" "$(grep -v '^\s*at ' "$OUT/logs/$id.log" | grep -v '^$' | grep -v '^Node.js' | tail -1 | tr '\t' ' ' | cut -c1-400)" >> "$OUT/log.tsv"
 }
