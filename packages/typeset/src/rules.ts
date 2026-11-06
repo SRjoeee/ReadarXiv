@@ -598,7 +598,13 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'shared/row-start.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "every F1 slot of the corpus (ledgers/*.ledger.json.gz): keptBetween, a page fact, taken from the slot's verdict where it decides",
+      cases: 1349,
+    },
   },
   {
     id: 'S.nameLed',
