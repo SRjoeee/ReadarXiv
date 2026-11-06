@@ -68,6 +68,8 @@ export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: st
 function kindOf(why: { kind: string; code?: string }): ProviderErrorKind {
   if (why.kind === 'unconfigured') return why.code === 'auth' ? 'auth' : 'no-key'
   if (why.kind === 'unavailable') return 'network'
+  // refused for good by the service: what the chain calls a request it will not take
+  if (why.kind === 'refused') return 'bad-request'
   return 'unknown'
 }
 const LAYER_WHY: Record<string, 'no-source' | 'cannot-prepare' | 'unknown-versions' | 'refused' | 'unreachable'> = {
@@ -93,7 +95,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   if (!p || p.settings.s !== next.settings.s) out.push({ type: 'notice', why: next.settings.s === 'unreadable' ? 'unreadable' : null })
   for (let n = p?.settings.refused ?? 0; n < next.settings.refused; n++) out.push({ type: 'refused' })
   const o = next.original
-  if (o.s === 'opening' && (!p || p.original.s !== 'opening' || p.original.loaded !== o.loaded)) out.push({ type: 'loading', loaded: o.loaded, total: 1 })
+  if (o.s === 'opening' && (!p || p.original.s !== 'opening' || p.original.loaded !== o.loaded)) out.push({ type: 'loading', loaded: o.loaded, total: o.total })
   if (o.s === 'open' && p?.original.s !== 'open') out.push({ type: 'opened' })
   if (o.s === 'failed' && p?.original.s !== 'failed') out.push({ type: 'fail', event: 'fetch failed', text: `the original could not be read (${o.why})`, kind: 'network' })
   const v = next.view
@@ -115,7 +117,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why)) out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
   const r = next.rows, pr = p?.rows
   if (r.s === 'arriving' && (pr?.s !== 'arriving' || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost)) out.push({ type: 'translating', got: r.got, total: r.total, lost: r.lost })
-  if (r.s === 'complete' && pr?.s !== 'complete') out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: null })
+  if (r.s === 'complete' && pr?.s !== 'complete') out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped ? kindOf(r.stopped) : null })
   if (r.s === 'failed' && pr?.s !== 'failed') {
     if (r.why.kind === 'target') out.push({ type: 'unavailable', why: 'target', retryAt: null })
     else out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: kindOf(r.why) })
@@ -152,8 +154,8 @@ export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof 
       setPrefs: set,
       pdfBytes: async () => null,
       // arXiv's own PDF, opened by the browser in a tab of its own: never read through the reader
-      openOriginal: () => void open(o.original, '_blank', 'noopener,noreferrer'),
-      goToUnit: id => reader.do({ do: 'unit', id }),
+      openOriginal: () => reader.do({ do: 'original' } as never),
+      goToUnit: id => reader.do({ do: 'heading', id }),
       lead: side => reader.do({ do: 'lead', side }),
       retry: () => reader.do({ do: 'retry' }),
       setNarrow: on => reader.do({ do: 'narrow', on }),

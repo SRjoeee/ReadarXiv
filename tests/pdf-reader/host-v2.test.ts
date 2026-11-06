@@ -56,7 +56,7 @@ describe('the extension host prefs over the configuration surface', () => {
     const store = hostPrefs(s as never)
     const told = vi.fn()
     store.watch(told)
-    await store.write({ classes: { references: true } })
+    await store.write({ classes: { ...DEFAULTS.classes, references: true } })
     expect(s.patches[0]).toEqual({ ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, classes: { ...DEFAULT_CONFIG.pdfReader.classes, references: true } } })
     expect(told).toHaveBeenLastCalledWith(expect.objectContaining({ classes: expect.objectContaining({ references: true }) }))
   })
@@ -67,7 +67,7 @@ describe('the reader state told to the chrome', () => {
     paper: { id: '2600.00001', version: 1, title: '', html: null, pdf: '' },
     prefs: DEFAULTS,
     settings: { s: 'landed', refused: 0 },
-    original: { s: 'opening', loaded: 0 },
+    original: { s: 'opening', loaded: 0, total: 0 },
     layer: { s: 'none' },
     rows: { target: 'de', from: 'here', s: 'none' },
     view: { display: 'bilingual', sync: { on: true, available: false }, scale: 1, zoom: 'page-width', narrow: false, sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } }, outline: [], heading: null },
@@ -86,7 +86,7 @@ describe('the reader state told to the chrome', () => {
     expect(fold([a, b, c])).toMatchObject({ phase: 'preparing', preparing: { position: 2, progress: 0.4 } })
     const d = { ...c, layer: { s: 'ready', laid: 0, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'arriving', got: 3, total: 10, lost: 0 } } as ReaderState
     expect(fold([a, b, c, d])).toMatchObject({ phase: 'translating', progress: 0.3 })
-    const e = { ...d, layer: { s: 'ready', laid: 2, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'complete', got: 10, total: 10, lost: 0 } } as ReaderState
+    const e = { ...d, layer: { s: 'ready', laid: 2, total: 4, asOriginal: 0 }, rows: { target: 'de', from: 'here', s: 'complete', got: 10, total: 10, lost: 0, stopped: null } } as ReaderState
     expect(fold([a, b, c, d, e])).toMatchObject({ phase: 'ready', layer: { laid: 2, total: 4 } })
   })
   it('a key missing: the card with the settings; a language the reader does not set: the language\'s notice', () => {
