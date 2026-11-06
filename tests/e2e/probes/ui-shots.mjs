@@ -39,7 +39,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // the packs' words, to find the controls by their names in each language (a probe runs on node, the packs are TypeScript);
 // from wherever this tree keeps the catalogue, so one probe reads two trees alike
-const CATALOGUE = ['src/locales/index.ts', 'packages/ui/src/index.ts'].find(f => existsSync(join(ROOT, f)) && readFileSync(join(ROOT, f), 'utf8').includes('LOCALES'))
+const CATALOGUE = ['src/locales/index.ts', 'packages/ui/src/locales/index.ts', 'packages/ui/src/index.ts'].find(f => existsSync(join(ROOT, f)) && readFileSync(join(ROOT, f), 'utf8').includes('LOCALES'))
 const LOCALES = JSON.parse(execFileSync('pnpm', ['-s', 'tsx', '-e', `import { LOCALES } from './${CATALOGUE}'; console.log(JSON.stringify(LOCALES))`], { cwd: ROOT, encoding: 'utf8' }))
 
 const errors = []
