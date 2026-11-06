@@ -31,7 +31,7 @@ mkdirSync(OUT, { recursive: true })
 
 for (const p of papers) {
   if (only && !only.includes(p.id)) continue
-  if (existsSync(join(OUT, `${p.id}.json`)) && !arg('again')) continue
+  if (existsSync(join(OUT, `${p.id}.json`)) && !process.argv.includes('--again')) continue
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(p.dir, 'source.gz'))))
   const meta = analyze(inMemory(files))
   const base = PREP ? JSON.parse(readFileSync(join(PREP, `${p.id}.prepare.json`), 'utf8')).paper.tex : null
@@ -50,14 +50,18 @@ for (const p of papers) {
   const stem = jobName(main)
   const first = `\\AddToHook{begindocument/end}{\\input{axt-ask.tex}}\\input{${main}}`
   const engine = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex'] }[compiler] ?? ['pdflatex', '-draftmode']
-  const cmd = [...engine, '-interaction=nonstopmode', `-jobname=${stem}`, first]
+  // (and, where the package ships no .bbl of the job, the bibliography the pass asks for: BibTeX's, or biber's where the pass
+  // wrote biblatex's control file, as the prepare's first pass makes it; kept as <id>.bbl)
+  const bib = files.has(`${stem}.bbl`) ? '' : `; if [ -f ${stem}.bcf ]; then biber ${stem}; elif grep -q bibdata ${stem}.aux 2>/dev/null; then bibtex ${stem}; fi`
+  const cmd = ['sh', '-c', `"$@" >/dev/null 2>&1${bib} >/dev/null 2>&1; true`, 'sh', ...engine, '-interaction=nonstopmode', `-jobname=${stem}`, first]
   const t0 = performance.now()
   const said = await run(SLOT, ['docker', '--', 'nice', '-n', '10', 'docker', 'run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', image, 'sh', '-c', 's=$(date +%s%N); timeout 300 "$@" >/dev/null 2>&1; e=$?; echo "axt-l2: exit $e ms $(( ($(date +%s%N) - s) / 1000000 ))"', 'sh', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
   const m = /axt-l2: exit (\d+) ms (\d+)/.exec(said)
-  const defs = join(build, `${stem}.axtdefs`), log = join(build, `${stem}.log`)
+  const defs = join(build, `${stem}.axtdefs`), log = join(build, `${stem}.log`), bbl = join(build, `${stem}.bbl`)
   if (existsSync(defs)) writeFileSync(join(OUT, `${p.id}.axtdefs`), readFileSync(defs))
+  if (bib && existsSync(bbl)) writeFileSync(join(OUT, `${p.id}.bbl`), readFileSync(bbl))
   if (existsSync(log)) writeFileSync(join(OUT, `${p.id}.log`), readFileSync(log))
-  const info = { id: p.id, main, compiler, image, names: names.size, exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
+  const info = { id: p.id, main, compiler, image, names: names.size, bbl: bib ? existsSync(bbl) : 'shipped', exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
   writeFileSync(join(OUT, `${p.id}.json`), `${JSON.stringify(info)}\n`)
   rmSync(build, { recursive: true, force: true })
   console.log(JSON.stringify(info))

@@ -33,8 +33,9 @@ export const CAT = {
 export type Token =
   /** a control word or a control symbol: `name` without its backslash (a control space's name is ' ') */
   | { k: 'cs'; s: number; e: number; name: string }
-  /** a run of letters (category 11), or one character of another category that TeX passes on as a character token */
-  | { k: 'letters'; s: number; e: number }
+  /** a letter (category 11), or one character of another category that TeX passes on as a character token: one
+   *  character each, as TeX's tokens are, so that an undelimited argument of one character (`\cmd x`) ends between two */
+  | { k: 'letter'; s: number; e: number }
   | { k: 'char'; s: number; e: number; cat: number; ch: string }
   /** blanks with at most one line end between them; `skipped`: TeX makes no token of them (after a control word, at a
    *  line's start, after a space) */
@@ -166,6 +167,9 @@ export interface LexRules {
    *  then a delimiter or a brace group) */
   inline(name: string): 'verb' | 'listing' | 'minted' | null
   lineEnv(name: string): boolean
+  /** commands that read their argument with `%` a character where TeX reads it from the file (url.sty's \url); the
+   *  tokenizer reads it so at the file's top level, in no group, where no command can have read it as an argument first */
+  raw?(name: string): boolean
 }
 
 const NO_RULES: LexRules = { inline: () => null, lineEnv: () => false }
@@ -184,6 +188,9 @@ export class Lexer {
   private state: State = 'N'
   /** whether \endinput was read: the file ends at the end of the line it stands on */
   private stopAt = -1
+  /** the brace depth from the file's start, and whether a command that reads its argument raw was just read there */
+  private depth = 0
+  private raw = false
   readonly text: string
   readonly codes: Catcodes
   readonly rules: LexRules
@@ -233,6 +240,14 @@ export class Lexer {
     const end = this.end
     if (this.pos >= end) return null
     const s = this.pos
+    if (this.raw) {
+      const c = this.cat(s)
+      if (c === CAT.begin) {
+        this.raw = false
+        const r = this.rawGroup()
+        if (r) return r
+      } else if (c !== CAT.space) this.raw = false
+    }
     const [code, len] = this.charAt(s)
     // (a line end the text writes in ^^ notation, ^^J or ^^M, is no line of the file: a character of the text; LaTeX's own
     // uses of them are \typeout's and \newlinechar's)
@@ -290,21 +305,20 @@ export class Lexer {
       case CAT.escape:
         return this.controlSequence(s, len)
       case CAT.letter: {
-        let k = s + len
-        while (k < end) {
-          const [c2, l2] = this.charAt(k)
-          if (this.codes.cat(c2) !== CAT.letter) break
-          k += l2
-        }
-        this.pos = k
+        this.pos = s + len
         this.state = 'M'
-        return { k: 'letters', s, e: k }
+        return { k: 'letter', s, e: s + len }
       }
       default: {
         this.pos = s + len
         this.state = 'M'
-        if (cat === CAT.begin) this.codes.push()
-        else if (cat === CAT.end) this.codes.pop()
+        if (cat === CAT.begin) {
+          this.codes.push()
+          this.depth++
+        } else if (cat === CAT.end) {
+          this.codes.pop()
+          this.depth = Math.max(0, this.depth - 1)
+        }
         return { k: 'char', s, e: s + len, cat: cat === CAT.invalid ? CAT.other : cat, ch: String.fromCodePoint(code) }
       }
     }
@@ -389,6 +403,7 @@ export class Lexer {
         return this.lineEnvironment(tok)
     }
     const inline = this.rules.inline(name)
+    if (!inline && this.depth === 0 && this.rules.raw?.(name)) this.raw = true
     return inline ? this.inlineCode(tok, inline) : null
   }
 

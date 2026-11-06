@@ -15,8 +15,16 @@ const RULES: LexRules = {
   lineEnv: (n) => n === 'verbatim' || n === 'lstlisting' || n === 'comment',
 }
 /** each token as `kind:source` */
-const show = (text: string, rules = RULES) =>
-  tokenize(text, rules).map((t) => `${t.k}${t.k === 'space' && t.skipped ? '~' : ''}:${text.slice(t.s, t.e)}`)
+const show = (text: string, rules = RULES) => {
+  // (letters are one token each; a run of them is shown as one)
+  const out: string[] = []
+  for (const t of tokenize(text, rules)) {
+    const one = `${t.k}${t.k === 'space' && t.skipped ? '~' : ''}:${text.slice(t.s, t.e)}`
+    if (t.k === 'letter' && out.at(-1)?.startsWith('letter:')) out[out.length - 1] += text.slice(t.s, t.e)
+    else out.push(one)
+  }
+  return out
+}
 const kinds = (text: string) => tokenize(text, RULES).map((t) => t.k)
 
 describe('the tokenizer: lines, blanks and comments', () => {
@@ -25,28 +33,28 @@ describe('the tokenizer: lines, blanks and comments', () => {
   })
   it('reads a blank line as \\par, and a single line end as a space with the next line indent', () => {
     expect(show('ab\n  cd\n\n  ef')).toEqual([
-      'letters:ab',
+      'letter:ab',
       'space:\n  ',
-      'letters:cd',
+      'letter:cd',
       'par:\n\n',
       'space~:  ',
-      'letters:ef',
+      'letter:ef',
     ])
   })
   it('makes blanks after a control word and at a line start no token (skipped)', () => {
-    expect(show('\\foo  x')).toEqual(['cs:\\foo', 'space~:  ', 'letters:x'])
-    expect(show('\\foo\n  x')).toEqual(['cs:\\foo', 'space~:\n  ', 'letters:x'])
+    expect(show('\\foo  x')).toEqual(['cs:\\foo', 'space~:  ', 'letter:x'])
+    expect(show('\\foo\n  x')).toEqual(['cs:\\foo', 'space~:\n  ', 'letter:x'])
   })
   it('takes the line end with a comment; a blank line after it is still \\par, an indent after it is skipped', () => {
-    expect(show('a % note\n\nb')).toEqual(['letters:a', 'space: ', 'comment:% note\n', 'par:\n', 'letters:b'])
-    expect(show('a% note\n   b')).toEqual(['letters:a', 'comment:% note\n', 'space~:   ', 'letters:b'])
+    expect(show('a % note\n\nb')).toEqual(['letter:a', 'space: ', 'comment:% note\n', 'par:\n', 'letter:b'])
+    expect(show('a% note\n   b')).toEqual(['letter:a', 'comment:% note\n', 'space~:   ', 'letter:b'])
   })
   it('reads \\\\% as a backslash pair and then a comment, \\% as a control symbol', () => {
-    expect(show('x\\\\% gone\ny')).toEqual(['letters:x', 'cs:\\\\', 'comment:% gone\n', 'letters:y'])
-    expect(show('50\\% of')).toEqual(['char:5', 'char:0', 'cs:\\%', 'space: ', 'letters:of'])
+    expect(show('x\\\\% gone\ny')).toEqual(['letter:x', 'cs:\\\\', 'comment:% gone\n', 'letter:y'])
+    expect(show('50\\% of')).toEqual(['char:5', 'char:0', 'cs:\\%', 'space: ', 'letter:of'])
   })
   it('reads a backslash at a line end as a control symbol that ends the line', () => {
-    expect(show('a\\\n  b')).toEqual(['letters:a', 'cs:\\\n', 'space~:  ', 'letters:b'])
+    expect(show('a\\\n  b')).toEqual(['letter:a', 'cs:\\\n', 'space~:  ', 'letter:b'])
   })
   it('reads ^^ notation as the character it stands for', () => {
     const toks = tokenize('\\a^^J\\b^^41')
@@ -116,10 +124,10 @@ describe('the tokenizer: text read otherwise than as tokens', () => {
     expect(at('\\verb|a%{b|c')).toMatchObject({ ended: 'delimiter', s: 0, e: 11 })
     expect(at('\\verb+a\nb+')).toMatchObject({ ended: 'line', e: 7 })
     expect(at('\\verb*!a b')).toMatchObject({ ended: 'file', e: 10 })
-    expect(show('\\verb{x{ y')).toEqual(['verb:\\verb{x{', 'space: ', 'letters:y'])
+    expect(show('\\verb{x{ y')).toEqual(['verb:\\verb{x{', 'space: ', 'letter:y'])
   })
   it('does not take a longer name for \\verb', () => {
-    expect(kinds('\\verba{x}')).toEqual(['cs', 'char', 'letters', 'char'])
+    expect(kinds('\\verba{x}')).toEqual(['cs', 'char', 'letter', 'char'])
   })
   it("reads listings' and minted's inline code with its options, a brace group or a delimiter", () => {
     expect(show('\\lstinline[language=C]{a{b}c} x')[0]).toBe('verb:\\lstinline[language=C]{a{b}c}')
@@ -129,14 +137,14 @@ describe('the tokenizer: text read otherwise than as tokens', () => {
   it('reads an environment read by lines up to its first \\end, whatever stands in it', () => {
     const t = 'a\\begin{verbatim}\n% \\end{x} } {\n\\end{verbatim}b'
     expect(show(t)).toEqual([
-      'letters:a',
+      'letter:a',
       'verb' + 'atim:\\begin{verbatim}\n% \\end{x} } {\n\\end{verbatim}',
-      'letters:b',
+      'letter:b',
     ])
     expect(kinds('\\begin{comment}never closed')).toEqual(['verbatim'])
   })
   it('reads any other environment as tokens', () => {
-    expect(kinds('\\begin{center}x')).toEqual(['cs', 'char', 'letters', 'char', 'letters'])
+    expect(kinds('\\begin{center}x')).toEqual(['cs', 'char', ...Array(6).fill('letter'), 'char', 'letter'])
   })
   it("reads \\url's argument with % a character where the reader asks for it", () => {
     const text = '\\url{http://a.b/%20{c}}%x\nd'
@@ -150,7 +158,7 @@ describe('the tokenizer: text read otherwise than as tokens', () => {
     const lx = new Lexer('{a%}\n}b', new Catcodes(), RULES)
     const g = lx.group()
     expect(g?.e).toBe(6)
-    expect(g?.tokens.map((t) => t.k)).toEqual(['letters', 'comment'])
+    expect(g?.tokens.map((t) => t.k)).toEqual(['letter', 'comment'])
   })
   it('reads groups nested past any recursion limit', () => {
     const n = 200_000
