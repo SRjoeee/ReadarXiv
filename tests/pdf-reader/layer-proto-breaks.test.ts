@@ -143,3 +143,36 @@ describe('a group TeX set as a paragraph of its own: its text starts on the line
     expect(lines.every(l => l[8] === 0)).toBe(true)
   })
 })
+
+// The review of #603: a justified paragraph beside a wrapped figure, its rows there full at a narrower measure. A row of it ends
+// well before the frame's widest right edge, and a group the source opens on the row after it (`\textbf{…}`) was taken for a
+// paragraph TeX set of its own: the translation broke there, the bold text a block of its own. A line is short of its own
+// measure, the one TeX set at its height as the door lays it (layer2.mjs measureOf, measuresOf's runs), never of the frame's
+describe('a group on the row after a full row of a narrower measure beside a wrapped figure: no paragraph of its own', () => {
+  const ROWS = ['Alpha beta gamma delta', 'epsilon zeta eta theta', 'iota kappa lambda mu', 'nu xi omicron pi rho', 'sigma tau upsilon', 'Phi chi psi omega and', 'more words follow here', 'to the end.']
+  const BOLD = 'Phi chi psi'
+  const OPEN = { t: 'open', id: 1, src: '\\textbf{', k: 1 }, CLOSE = { t: 'close', id: 1, src: '}', k: 3 }
+  // (five rows beside the figure end at 150, those under it at 280, the last at 200; the bold group opens the sixth)
+  const wrapped: Paper = {
+    name: 'a wrapped paragraph', pages: 1,
+    specs: [{ id: 0, kind: 'para', chars: 0, at: 0, lines: ROWS.map((t, i) => line(1, 250 - 12 * i, t, 20, i < 5 ? 150 : i === 7 ? 200 : 280)) }],
+  }
+  it('lays the translation on as one paragraph, the group no break', async () => {
+    const P = build(wrapped)
+    const row = P.rows.get(0) as unknown as { src: string; pieces: unknown[] }
+    const before = ROWS.slice(0, 5).join(' '), after = ROWS.slice(5).join(' ').slice(BOLD.length)
+    const source = [{ t: 'text', s: `${before} ` }, OPEN, { t: 'text', s: BOLD }, CLOSE, { t: 'text', s: after }]
+    Object.defineProperty(row, 'source', { value: source, enumerable: false })
+    row.src = `${before} ${BOLD}${after}`
+    row.pieces = [{ t: 'text', tr: true, s: CJK(20, 0x4e00) }, OPEN, { t: 'text', tr: true, s: CJK(4, 0x5100) }, CLOSE, { t: 'text', tr: true, s: CJK(16, 0x5300) }]
+    const layout = P.layout as unknown as { units: number[][]; frames: [number, number[]][] }
+    layout.units = layout.units.map(u => [...u.slice(0, 3), 32, source.length])
+    layout.frames = layout.frames.map(([id]) => [id, [1, 0, 0, ROWS.length, -1, 0]])
+    P.index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(P.layout))))
+    const run = await openRun(P)
+    await askPage(run, 1)
+    const lines = (run.stats.find(x => x.id === 0)?.lines ?? []) as number[][]
+    expect(lines.length, JSON.stringify(run.skipped)).toBeGreaterThan(1)
+    expect(lines.every(l => l[8] === 0), `the lines' blocks ${lines.map(l => `${l[1]}:${l[8]}`)}`).toBe(true)
+  })
+})

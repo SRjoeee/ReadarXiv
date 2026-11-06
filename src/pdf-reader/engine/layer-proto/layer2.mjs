@@ -580,8 +580,9 @@ function measureAt(b, y, k) {
   const at = i => b.measures.get(rectKey(b.rects[i])) ?? [b.x0, b.x1]
   return k >= 0 && k < b.rects.length ? at(k) : measureOn(b.G ?? b.B, at, y)
 }
-/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges */
-const measureOf = (b, y, k) => (b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1])
+/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges (slotsAt; tex.mjs
+ *  paragraphBreaks reads a line's so) */
+export const measureOf = (b, y, k) => (b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1])
 /** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)`: a line's own on its baseline (and over
  *  the first, under the last), between two the narrower of both (measureAt) */
 function measureOn(Y, at, y) {

@@ -12,7 +12,7 @@
 // unit learns, and the characters the restore counts as accounted for, are the same keys whichever unit took them.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropFields, cropPartsOfSegments, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, SHORT_SKIP, sourcePiecesOf, texToText2 } from './layer2.mjs'
+import { blocksOf2, charKey, charsOfUnit2, cropFields, cropPartsOfSegments, labelOf, learnCite, measureOf, phClass2, phClassProven, PREDISPLAY, SHORT_SKIP, sourcePiecesOf, texToText2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -204,9 +204,11 @@ export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
  * measure). The front end ends a unit where TeX's source ends a paragraph (a blank line, \par), never inside a command's
  * argument, so the unit holds both; laid as one paragraph, its translation ran on from the item's short last line over the
  * frame's top and past its edge. Where TeX set the unit justified (the file's UNIT_FLAG.JUSTIFIED: none of its lines ends
- * short of its measure but a paragraph's last and a forced break's), a line of the file (not held) that ends short of its
- * frame's measure (forcedBreaks' SHORT) ends a paragraph there where the next line holds first the words of a group the
- * source opens after the words the short line holds last: by the alignment (`pieceLines`, prepareUnit's: each source piece's
+ * short of its measure but a paragraph's last and a forced break's), a line of the file (not held) that ends short of its own
+ * measure (forcedBreaks' SHORT; the measure TeX set at its height as the door lays it, `measureOfLine`: layer2.mjs measureOf
+ * over its block, so that a full line of a narrower measure beside a wrapped figure is no short one, the review of #603) ends
+ * a paragraph there where the next line holds first the words of a group the source opens after the words the short line
+ * holds last: by the alignment (`pieceLines`, prepareUnit's: each source piece's
  * first and last line its words stand on), two text pieces next to each other in the source, the first's last line the
  * short one and the second's first the line after it, the group opened between them and closed after the second, and no
  * forced break of the source nor a display between the two lines (forcedBreaks' own: `forced`, by their next lines). The
@@ -216,7 +218,7 @@ export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
  * the open piece's index in the row to { next, room: null, pitch: null }; empty for a unit set centred, flush or as nothing
  * tells.
  */
-export function paragraphBreaks(lu, unit, pieceLines, forced = null) {
+export function paragraphBreaks(lu, unit, pieceLines, forced = null, measureOfLine = null) {
   const out = new Map()
   const source = Array.isArray(unit?.source) ? unit.source : null
   if (!lu || !source || !pieceLines?.size || lu.centred !== false || lu.flush) return out
@@ -233,7 +235,7 @@ export function paragraphBreaks(lu, unit, pieceLines, forced = null) {
   for (let q = 0; q + 1 < located.length; q++) {
     const [ka, [, j]] = located[q], [kb, [lo]] = located[q + 1]
     if (lo !== j + 1 || j + 1 >= n || held.has(j) || held.has(j + 1) || forcedNext.has(j + 1) || frameOf[j] < 0) continue
-    if (!(L[8 * j + 2] < right.get(frameOf[j]) - SHORT * L[8 * j + 6])) continue
+    if (!(L[8 * j + 2] < (measureOfLine?.(j)?.[1] ?? right.get(frameOf[j])) - SHORT * L[8 * j + 6])) continue
     const page = L[8 * j], hi = L[8 * j + 3], low = L[8 * (j + 1) + 3]
     if (L[8 * (j + 1)] === page && displays.some(([pg, base]) => pg === page && base < hi && base > low)) continue
     if (displays.some(([pg, , top, bottom]) => pg === page && Math.min(top, L[8 * j + 4]) > Math.max(bottom, L[8 * j + 5]))) continue
@@ -509,9 +511,21 @@ export function texParts(lu, kOf, { lines, extents = 'v0', shown = Infinity, lin
   // (and where its forced breaks end the file's lines, which its rectangles are: forcedBreaks, by TeX's rule between two
   // lines where the file gives its values; and where it set a group of the source as a paragraph of its own: paragraphBreaks, by
   // the lines the alignment found each source piece's words on)
+  // (each line's measure as the door lays it, by its line in the file: layer2.mjs measureOf over its block, blocksOf2's on the unit's
+  // lines, the measure TeX set at its height where it changed it within the paragraph, else the block's edges; read once, where a
+  // paragraph break is asked of a line)
+  let measures = null
+  const measureOfLine = j => {
+    if (!measures) {
+      measures = new Map()
+      const rs = lines.rects ?? [], jOf = new Map(rs.map(r => [rectKey(r), lineOf.get(r)]))
+      for (const b of blocksOf2(rs, [], new Set(held), null, null, null, null, false)) b.rects.forEach((r, k) => { const at = jOf.get(rectKey(r)); if (at !== undefined) measures.set(at, measureOf(b, null, k)) })
+    }
+    return measures.get(j) ?? null
+  }
   parts.breaks = (unit, pieceLines = null) => {
     const out = forcedBreaks(lu, unit, kOf, lineskip)
-    for (const [i, b] of paragraphBreaks(lu, unit, pieceLines, out)) if (!out.has(i)) out.set(i, b)
+    for (const [i, b] of paragraphBreaks(lu, unit, pieceLines, out, measureOfLine)) if (!out.has(i)) out.set(i, b)
     return out
   }
   if (extents === 'tex') {

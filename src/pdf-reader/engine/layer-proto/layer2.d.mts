@@ -288,6 +288,9 @@ export declare function extendRects2(rects: Rect[], charsByPage: readonly (reado
 /** a block's lines by the measure TeX set each to, where it changed within the paragraph (a wrapped figure, \parshape,
  *  \hangindent): each line's key to its measure's [x0, x1], or null where the block is one measure */
 export declare function measuresOf(rects: readonly Rect[], keep?: ReadonlySet<string> | null): Map<string, [number, number]> | null
+/** a block's measure at slot `k` of its lines or at baseline `y`, as its lines are laid (slotsAt): the measure TeX set there where it
+ *  changed it within the paragraph (measuresOf), else the block's edges; [x0, x1] */
+export declare function measureOf(b: Block2 | Block, y: number | null, k: number): [number, number]
 export declare function blocksOf2(rects: readonly Rect[], pageViews: readonly number[][], keep?: ReadonlySet<string> | null, regionOf?: ReadonlyMap<string, number> | null, referenced?: ReadonlySet<number> | null, breakAt?: ReadonlyMap<string, number> | null, joinAt?: ReadonlyMap<string, number> | null, centred?: boolean): (Block & { measures?: Map<string, [number, number]> | null })[]
 export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: ReadonlySet<string> | null): { text: string; chars: Char[] }[]
 /** the unit against its page, in the layout file's parts (the per-unit reading's contract above) */
