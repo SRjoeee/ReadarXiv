@@ -113,6 +113,12 @@ if (ins) {
   }
 }
 const tBack = performance.now()
+// ---- (--claims) the A glyphs a unit holds with no partner on B, classed (claims.mjs)
+if (tally && process.argv.includes('--claims')) {
+  const { claimsOf } = await import('./claims.mjs')
+  mkdirSync(join(OUT, 'claims'), { recursive: true })
+  writeFileSync(join(OUT, 'claims', `${id}.json`), `${JSON.stringify(claimsOf(ins, tally))}\n`)
+}
 // ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
 // --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)

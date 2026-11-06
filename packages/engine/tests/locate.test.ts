@@ -107,6 +107,45 @@ describe('locate', () => {
   })
 })
 
+describe('locate: the glyphs of A with no partner on B inside a unit', () => {
+  const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+  const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+  it('claims a line-end hyphen arXiv sets where our compile does not break the word', () => {
+    const A = docOf([{ lines: ['a paragraph whose word con-', 'tinues on its last line'] }])
+    const L = locate(ins, A, align(B, A))
+    const hyphen = 'a paragraph whose word con'.length
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.members[0]!.text).toContain(hyphen)
+    expect(L.groups[0]!.glyphs[hyphen]).toBe('0.1.t')
+    expect(L.born.size).toBe(0)
+  })
+  it('leaves an included figure that only A draws between two lines of a unit to the figure, not to the unit', () => {
+    // (a float set "here" inside a paragraph: TeX puts it after the current line, and where B is a draft, its figure's own
+    // glyphs are A's alone)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'Loss', y: 640, form: true },
+          { text: 'continues on its last line', y: 600 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A))
+    const fig = ['a paragraph whose word'.length, 'a paragraph whose word'.length + 3]
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.members[0]!.text).not.toContain(fig[0])
+    expect(L.groups[0]!.glyphs[fig[0]!]).not.toBe('0.1.t')
+    expect([...L.born.values()]).toEqual([{ kind: 'inkfigures', content: [text('Loss')] }])
+  })
+  it('leaves a unit the original’s where A sets text inside it that our compile does not', () => {
+    const A = docOf([{ lines: ['a paragraph whose (X) word', 'continues on its last line'] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'content difference: aonly' })
+    expect(L.groups[0]!.glyphs.every((g) => g === null || !g.startsWith('0.'))).toBe(true)
+  })
+})
+
 describe('bundle', () => {
   const B = docOf([
     { lines: ['page one text', 'runs on'] },

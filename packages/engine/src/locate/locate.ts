@@ -305,6 +305,47 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const ta = inkA.pages[ap - 1]!.turned![aj]!
       if (ap !== p + 1 || Math.abs(ta.ox - tb.ox) > 0.01 || Math.abs(ta.oy - tb.oy) > 0.01) turnedSame = false
     }
+    // its A ink by role
+    const roleOfB = (b: number): [number, number] => [roleB[b] as number, pieceB[b] as number]
+    const roleAt = new Map<number, [number, number]>()
+    for (const b of list) {
+      const a = m.bToA[b] as number
+      if (a >= 0) roleAt.set(a, roleOfB(b))
+    }
+    // (A's glyphs with no partner inside its span, between two matched glyphs of its own: its ink only where the alignment
+    // shows they are its text. That is a hunk align classes `hyphen` (A's glyphs there spell B's once line-end hyphens are out:
+    // a word arXiv's page broke at a line end where our compile did not) whose B side holds the unit's glyphs alone, or none.
+    // A glyph drawn inside a form XObject between glyphs that are not is an included figure's own text, no glyph of the unit's
+    // text: it stays unclaimed (born.ts gives it to a figure text). Any other is text A sets inside the unit that our compile
+    // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue))
+    if (aIdx.length) {
+      const sorted = [...aIdx].sort((x, y) => x - y)
+      const lo = sorted[0] as number
+      const hi = sorted.at(-1) as number
+      for (let a = lo; a <= hi && !bad; a++) {
+        if ((m.aToB[a] as number) >= 0 || m.offpageA[a] || (claimedA[a] as number) >= 0) continue
+        let pv = a - 1
+        while (pv >= lo && (m.aToB[pv] as number) < 0) pv--
+        let nx = a + 1
+        while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
+        if (pv < lo || nx > hi) continue
+        const bp = m.aToB[pv] as number
+        const bn = m.aToB[nx] as number
+        if (unitB[bp] !== u || unitB[bn] !== u) continue
+        let own = m.hunkA[a] === HUNK.hyphen
+        for (let b = Math.min(bp, bn) + 1; own && b < Math.max(bp, bn); b++)
+          if ((m.bToA[b] as number) < 0 && unitB[b] !== u) own = false
+        if (own) {
+          const rp = roleOfB(bp)
+          const rn = roleOfB(bn)
+          roleAt.set(a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1])
+          continue
+        }
+        if (gA(a).form && !gA(pv).form && !gA(nx).form) continue
+        const h = hunkName(m.hunkA[a] as number)
+        bad = `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
+      }
+    }
     if (bad || (!aIdx.length && !turnedA.length)) {
       mem.cause = bad ?? 'no ink'
       return mem
@@ -314,30 +355,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (!aIdx.length) {
       mem.place = turnedSame ? 'same' : 'shifted'
       return mem
-    }
-    // its A ink by role
-    const roleOfB = (b: number): [number, number] => [roleB[b] as number, pieceB[b] as number]
-    const roleAt = new Map<number, [number, number]>()
-    for (const b of list) {
-      const a = m.bToA[b] as number
-      if (a >= 0) roleAt.set(a, roleOfB(b))
-    }
-    const sorted = [...aIdx].sort((x, y) => x - y)
-    const lo = sorted[0] as number
-    const hi = sorted.at(-1) as number
-    for (let a = lo; a <= hi; a++) {
-      if ((m.aToB[a] as number) >= 0 || m.offpageA[a] || (claimedA[a] as number) >= 0) continue
-      let pv = a - 1
-      while (pv >= lo && (m.aToB[pv] as number) < 0) pv--
-      let nx = a + 1
-      while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
-      if (pv < lo || nx > hi) continue
-      const bp = m.aToB[pv] as number
-      const bn = m.aToB[nx] as number
-      if (unitB[bp] !== u || unitB[bn] !== u) continue
-      const rp = roleOfB(bp)
-      const rn = roleOfB(bn)
-      roleAt.set(a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1])
     }
     for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
       claimedA[a] = mem.ord
