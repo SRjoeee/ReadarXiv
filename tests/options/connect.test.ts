@@ -49,6 +49,12 @@ describe('connectService (§6.3)', () => {
     expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate' })])
   })
 
+  it("an endpoint that does not keep the sample's placeholders fails in today's words for a malformed translation, no field at fault", async () => {
+    // the transport's answer for it (tests/providers/transport.test.ts: the runs floor's rebuild is not the endpoint's)
+    wire.answer = { ok: true, results: [{ id: 'sample', ok: false, why: { kind: 'refused' }, error: { kind: 'invalid-response', message: 'no translator rebuilt the placeholders of the source' } }], cached: 0 }
+    expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: null, reason: O.services.failed(reasonText('invalid-response', SVC.id)) })
+  })
+
   it('a permission refused says so at the address, in today\'s words, and asks nothing of the endpoint', async () => {
     wire.denied = true
     expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'baseURL', reason: O.services.permission.denied('https://api.example.com/*') })

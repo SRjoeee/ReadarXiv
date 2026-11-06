@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { KeyValues } from '@/cache/translate-store'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
+import { unitOfWire } from '@/core/protector/units'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type LocalTransportDeps, type TranslateResponse } from '@/providers/transport'
 
@@ -160,6 +161,15 @@ describe('the connection test', () => {
     expect(r.ok && r.results[0]).toMatchObject({ ok: false, error: { kind: 'auth', status: 401 } })
     expect(stores.answers.entries.size + stores.rows.entries.size).toBe(0)
     expect(h.sent).toEqual({ microsoft: 0, google: 0 })
+  })
+  it("the sample's placeholders are the endpoint's to keep: one that drops them fails as a malformed translation, though the runs floor could rebuild them (§6.3)", async () => {
+    // the settings page's sample (options/connect.ts), as the page sends it
+    const sample = unitOfWire('sample', 'Let <x id="1"/> be a <t id="2">connected</t> graph; see <x id="3"/>.', 'tags').unit
+    const replies = (f: (wire: string) => string): Translator['send'] => async function* (wires) { for (const [i, w] of wires.entries()) yield [i, f(w)] as const }
+    const strips = await harness({ services: [SVC] }, { llm: fakeLlm(replies(w => w.replace(/<[^>]*>/g, ''))) as never }).make()
+    expect(ids(await strips.translate({ units: [sample], target: 'cmn', providerId: SVC.id, candidate: SVC }))).toEqual(['sample:invalid-response'])
+    const keeps = await harness({ services: [SVC] }, { llm: fakeLlm(replies(w => w)) as never }).make()
+    expect(ids(await keeps.translate({ units: [sample], target: 'cmn', providerId: SVC.id, candidate: SVC }))).toEqual([`sample:${SVC.id}`])
   })
   it('a candidate that is not the service named is refused; an engine not on the chain is said so', async () => {
     const t = await harness().make()

@@ -234,8 +234,9 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
     `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
 
-  /** one call of `chain` with `order`: results by unit, the rows read first and written after */
-  async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string): Promise<TranslateResponse> {
+  /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
+   *  own answer is one (the connection test's) */
+  async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string, own = false): Promise<TranslateResponse> {
     const context = paperContextOf(call.context)
     // the session's own target, as its status gave it (a session holds to the transport it started on, whose target it is)
     const lang = call.target ? langOf(call.target) : target
@@ -272,7 +273,10 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       const writes: [string, string][] = []
       if (todo.length) {
         for await (const r of chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
-          if (r.ok) {
+          // the connection test asks whether the endpoint keeps the sample's placeholders (options/connect.ts): what the
+          // runs floor rebuilt from its stretches is the chain's, and fails the test as the endpoint's reply alone would
+          if (r.ok && own && !order.some(t => t.identity === r.by)) out.set(r.id, { id: r.id, ok: false, why: { kind: 'refused' }, error: errorOf({ kind: 'refused' }) })
+          else if (r.ok) {
             const e = engineOf(r.by, answerers)
             if (e.engine) answered(e.engine)
             out.set(r.id, { ...r, ...e })
@@ -336,7 +340,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         if (!call.candidate && !serviceOf(config, id) && !translators.some(t => built.answerers.get(t.identity)?.id === id)) return { ok: false, error: { kind: 'unknown', message: `engine ${id} is not on the current chain` } }
         lastStatus = undefined
         const one = translatorOf(id, config, tdeps, call.candidate ?? serviceOf(config, id))
-        return await run(deps.probe, [one.translator], new Map([[one.translator.identity, one.answerer]]), call, undefined, call.scope ?? '')
+        return await run(deps.probe, [one.translator], new Map([[one.translator.identity, one.answerer]]), call, undefined, call.scope ?? '', true)
       }
       return await run(deps.chain, translators, built.answerers, call, deps.rows, call.scope ?? '')
     } catch (e) {
