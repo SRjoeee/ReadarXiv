@@ -65,6 +65,9 @@ export type AdaptInput = {
   rulesOf: (page: number) => readonly number[] | null | undefined
   lineskip: readonly [number, number] | null
   reading: Reading
+  /** the page's lowest unit line, as today's pageBottom (RUN:911: a rectangle's bottom and 0.24 of its height, the lowest of
+   *  the page's units'): no unit borrows below it; undefined where the page has none */
+  bottomOf?: (page: number) => number | undefined
 }
 export type Adapted = { member: FlowMember } | { stop: string }
 
@@ -177,6 +180,25 @@ export function adapt(i: AdaptInput): Adapted {
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]
+  // (the borrow room under its last block (today's freeFor RUN:1677, read where the walk asks): down from a third of its size
+  // under its last baseline to the first ink under it (Room.below: under its last line, to the first ink not its own), a
+  // borrowGap of pitches clear of it, and never past the page's lowest unit line; the blocks before it none)
+  const lastBlock = blocks.at(-1)
+  const bottom = lastBlock ? i.bottomOf?.(lastBlock.page) : undefined
+  // (set after the size below is read)
+  const borrowRoom = (s: number) => {
+    if (!lastBlock || bottom === undefined) return
+    const last = lastBlock.B.at(-1)!,
+      l = lines.at(-1)!
+    const yStart = last - 0.3 * s,
+      yLimit = bottom - 0.3 * s
+    if (yLimit >= yStart) return
+    const inkTop = l[6] - m.room.below
+    const pitch = lastBlock.pitch0 ?? 1.2 * s
+    const lowest =
+      inkTop <= yLimit + 0.01 ? bottom : inkTop + Number((R as { borrowGap?: number }).borrowGap ?? 0) * pitch + 0.3 * s
+    lastBlock.free = Math.max(0, last - lowest)
+  }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
   // lines' bands over 0.894 (RUN:2088))
   const fromText = !(m.read ?? []).includes('size:lines')
@@ -184,6 +206,7 @@ export function adapt(i: AdaptInput): Adapted {
   const s =
     (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps: !!m.style.sc } } }, R) : undefined) ??
     (heights[heights.length >> 1] as number) / 0.894
+  borrowRoom(s)
   // (the row kept after it: the next member's join says ink stays between the two on their shared line)
   const last = lines.at(-1)!
   const after = i.after
@@ -274,6 +297,19 @@ export function adapt(i: AdaptInput): Adapted {
               ? [0, m.label.ink[0], m.label.ink[1], m.label.ink[5], m.label.ink[3], m.label.ink[4], m.label.ink[2]]
               : null,
           keptBetween: () => !!m.join![1],
+          // (its label's crop, where the tokens are its own: RUN:2215-2224, the crop as a carried label's, set by the row's
+          // baseline)
+          ...(i.reading.own && label
+            ? {
+                label: {
+                  crop: (baseline: number) => {
+                    const c = carriedCrop(label, { page: lines[0]![0], B: [baseline] }, firstX0, s, [baseline])
+                    return { ...c, ownLabel: true } as unknown as FlowMember['tokens'][number]
+                  },
+                  head: edges.first,
+                },
+              }
+            : {}),
         }
       : undefined
   const fl = after?.lines[0]

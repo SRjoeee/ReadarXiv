@@ -95,3 +95,35 @@ describe('adapt: a member set from its part’s facts', () => {
     })
   })
 })
+
+describe('adapt: a shared row’s own label (review of #606, finding 3)', () => {
+  const before = member({ ord: 2, lines: [line(712, 300), line(700, 120)] })
+  const follower = member({
+    join: [4],
+    lines: [[1, 0, 140, 300, 700, 707, 698, 72, 300, 0], line(688, 300)],
+    label: {
+      kind: 'mark',
+      ink: [1, 128, 698, 134, 707, 703],
+      style: { role: 'serif', size: 7 },
+      num: ['1', [1, 128, 698, 134, 707, 703]],
+    },
+  })
+  it('gives the flow its label’s crop on the row’s baseline where its tokens are its own, and none where today’s hold it', () => {
+    const own = adapt(input(follower, { before, reading: { ...input(follower).reading, own: true } }))
+    if (!('member' in own)) throw new Error(own.stop)
+    const lab = own.member.rowStart?.label
+    expect(lab).toBeDefined()
+    const t = lab!.crop(700) as unknown as {
+      crop: { crop: number[]; baseline: number }
+      ownLabel: boolean
+      glue: boolean
+    }
+    expect(t.ownLabel).toBe(true)
+    expect(t.glue).toBe(false)
+    expect(t.crop.baseline).toBe(700)
+    expect(t.crop.crop[0]).toBeCloseTo(127.6, 5)
+    const today = adapt(input(follower, { before }))
+    if (!('member' in today)) throw new Error(today.stop)
+    expect(today.member.rowStart?.label).toBeUndefined()
+  })
+})

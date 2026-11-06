@@ -23,6 +23,10 @@ export type FlowMember = Prepared & {
     ownLabel: readonly number[] | null
     /** a character of the page stays on the row between the member before's end and x (Placed.join kept) */
     keptBetween: (x: number) => boolean
+    /** where the tokens are the member's own (the adapter's, lay/read.ts): its label's crop, set on the row's baseline as its first
+     *  line's start where its label on the row goes with it (RUN:2215-2224), and its first line's head edge then (the label
+     *  drawn: U.params' halfLead.head). Today's tokens handed in hold the crop already */
+    label?: { crop: (baseline: number) => Prepared['tokens'][number]; head: boolean }
   }
 }
 export type FlowLay = { ord: number; lay: MemberLay; ledBy?: number; slots: LedgerSlot[] }
@@ -48,6 +52,20 @@ export function layFlowPrepared(members: readonly FlowMember[], R: RuleParams, t
       })
       ledBy = rs.ledBy
       p = { ...p, blocks: b0 ? [b0, ...m.blocks.slice(1)] : m.blocks, onLeadOf: rs.onLeadOf }
+      // (its label on the row goes with it: its ink's crop before its first token, which no line ends after alone (its first
+      // word glued to it), on the row's baseline; the label so drawn, its first line's head is the line's own: RUN:2215-2224)
+      const lab = m.rowStart.label
+      if (rs.rowLabel && lab) {
+        const toks = [...p.tokens]
+        if (toks[0] && !toks[0].space) toks[0] = { ...toks[0], glue: true }
+        p = {
+          ...p,
+          tokens: Object.assign([lab.crop(rs.rowLabel.baseline), ...toks], {
+            base: (p.tokens as { base?: unknown }).base,
+          }),
+          P: p.P.halfLead ? { ...p.P, halfLead: { ...p.P.halfLead, head: lab.head } } : p.P,
+        }
+      }
       t?.put('F1', 'S.rowStart', {
         applied: rs.ledBy !== undefined,
         start: fin(b0?.start),
@@ -60,27 +78,38 @@ export function layFlowPrepared(members: readonly FlowMember[], R: RuleParams, t
     return { ord: m.ord, lay, ...(ledBy !== undefined ? { ledBy } : {}), slots: t?.slots ?? [] }
   }
   members.forEach((m, i) => {
-    const before = out[i - 1]
-    let got = layOne(m, before, false)
-    // F9 S.relay: the member before laid over this one's row, and this one not laid from its end
-    if (before && i > 0) {
-      const lead = before.lay
-      const r = relay(
-        { id: members[i - 1]!.ord, over: lead.state === 'laid' && !!lead.over, refused: lead.state !== 'laid' },
-        {
-          refused: got.lay.state !== 'laid',
-          ledBy: got.ledBy,
-          knob: got.lay.state === 'laid' ? got.lay.lay.layout.knob : null,
-          kept: true,
-        },
-        true,
-      )
-      if (r.lead) {
-        out[i - 1] = layOne(members[i - 1]!, out[i - 2], true)
-        if (r.follower) got = layOne(m, out[i - 1], false)
-      }
-    }
-    out.push(got)
+    out.push(layOne(m, out[i - 1], false))
+    settleBack(out, members, i, layOne)
   })
   return out
+}
+
+/** F9 S.relay (settleLeadOf RUN:2550-2558, relay RUN:2565): where the member before member j was laid over j's row and j is
+ *  not laid from its end, the one before is laid again in its row alone, which settles in turn the pair before it (today's
+ *  relay ends a lay, and the lay's end settles its own lead: a row three members share comes back whole), and j again from
+ *  where it now ends, alone too */
+export function settleBack(
+  out: FlowLay[],
+  members: readonly FlowMember[],
+  j: number,
+  layOne: (m: FlowMember, before: FlowLay | undefined, noOver: boolean) => FlowLay,
+): void {
+  if (j < 1) return
+  const lead = out[j - 1]!.lay,
+    got = out[j]!
+  const r = relay(
+    { id: members[j - 1]!.ord, over: lead.state === 'laid' && !!lead.over, refused: lead.state !== 'laid' },
+    {
+      refused: got.lay.state !== 'laid',
+      ledBy: got.ledBy,
+      knob: got.lay.state === 'laid' ? got.lay.lay.layout.knob : null,
+      kept: true,
+    },
+    true,
+  )
+  if (!r.lead) return
+  out[j - 1] = layOne(members[j - 1]!, out[j - 2], true)
+  settleBack(out, members, j - 1, layOne)
+  // (laid again as today's relay lays a unit: never over the row after it, noOver)
+  if (r.follower) out[j] = layOne(members[j]!, out[j - 1], true)
 }

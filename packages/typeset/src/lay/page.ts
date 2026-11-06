@@ -71,8 +71,12 @@ export function layPagePrepared(
       slots: [],
     })
     let out: PreparedPage
+    // (the members of the flows left out, 'error' with their reason: a table group one of whose cells is among them is left
+    // the original's whole, one verdict for a group's members)
+    const failed = new Map<number, { m: FlowMember; why: string }>()
+    for (const { flow, why: w } of bad) for (const m of flow) failed.set(m.ord, { m, why: w })
     try {
-      out = layPageOnce(page, good, ties, R, trace)
+      out = layPageOnce(page, good, ties, R, trace, failed)
     } catch (x) {
       if (x instanceof RangeError) throw x
       // (the flows throw together and none alone: the page's every member stays the original's)
@@ -86,11 +90,34 @@ export function layPagePrepared(
         tables: [],
       }
     }
-    const errors = bad.flatMap(({ flow, why: w }) =>
-      flow.filter((m) => m.pages.includes(page)).map((m) => errorOf(m, w)),
-    )
-    return { ...out, members: [...out.members, ...errors].sort((a, b) => a.ord - b.ord) }
+    return out
   }
+}
+
+type Lay = { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
+/** L11, S.table.settle: each table group decided by one verdict for its members (RUN:2401-2425); a group a member of which is
+ *  not laid by its own lay (its flow threw: 'error'; refused) is left the original's whole, every cell with it; a group the
+ *  call holds no member of is not this page's. Its members' states set in `lays` */
+export function settleTies(
+  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  lays: ReadonlyMap<number, Lay>,
+): PreparedPage['tables'] {
+  const tables: PreparedPage['tables'] = []
+  for (const t of ties) {
+    const cells = t.cells.map((o) => lays.get(o)).filter((x) => x !== undefined)
+    // (a group whose members the caller did not hand in, but for those its flows' lays hold: not decided here)
+    if (cells.length < t.cells.length) continue
+    const why = tableSettle(
+      cells.map((x) => ({ pages: x.m.pages, refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })),
+    )
+    tables.push({ cells: [...t.cells], why })
+    if (why)
+      for (const x of cells) {
+        if (x.state === 'laid') x.state = 'cells'
+        x.unit = undefined
+      }
+  }
+  return tables
 }
 
 /** the page laid once: a throw of a flow's own lay is that flow's (its members 'error'); any other throw is the caller's */
@@ -100,12 +127,11 @@ function layPageOnce(
   ties: readonly { rule: 'cells'; cells: readonly number[] }[],
   R: RuleParams,
   trace: boolean,
+  failed: ReadonlyMap<number, { m: FlowMember; why: string }> = new Map(),
 ): PreparedPage {
   // L8, L9
-  const lays = new Map<
-    number,
-    { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
-  >()
+  const lays = new Map<number, Lay>()
+  for (const [o, { m, why }] of failed) lays.set(o, { m, state: 'error', slots: [], error: why })
   for (const flow of flows) {
     // (a flow whose lay throws leaves its members the original's, 'error' with the reason, and touches no other flow (design-a
     // §1.4; today any throw refuses its unit, RUN:2521-2526); a memory error is the caller's)
@@ -128,7 +154,8 @@ function layPageOnce(
     }
   }
   const all = [...lays.values()].sort((a, b) => a.m.ord - b.m.ord)
-  // L10: the pass pages, ascending, each over the members laid with a line on it
+  // L10: the pass pages, ascending, each over the members laid with a line on it (a part holds every flow with a line on the
+  // first page of each member on this one, design-a §1.3 (b): each pass page's members here are all of that page's)
   const passPages = [
     ...new Set([page, ...all.filter((x) => x.m.pages.includes(page)).map((x) => firstPage(x.m))]),
   ].sort((a, b) => a - b)
@@ -139,21 +166,8 @@ function layPageOnce(
       const { told } = fillPass(f, laid, R as unknown as PageRules)
       passes.push({ page: f, target: told })
     }
-  // L11: each table group whose members are all laid or decided
-  const tables: PreparedPage['tables'] = []
-  for (const t of ties) {
-    const cells = t.cells.map((o) => lays.get(o)).filter((x) => x !== undefined)
-    if (cells.length < t.cells.length) continue
-    const why = tableSettle(
-      cells.map((x) => ({ pages: x.m.pages, refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })),
-    )
-    tables.push({ cells: [...t.cells], why })
-    if (why)
-      for (const x of cells) {
-        x.state = 'cells'
-        x.unit = undefined
-      }
-  }
+  // L11: each table group, one verdict for its members
+  const tables = settleTies(ties, lays)
   // E1: the members with a line on the page
   const members: PageMember[] = all
     .filter((x) => x.m.pages.includes(page))

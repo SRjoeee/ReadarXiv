@@ -340,6 +340,18 @@ export function gateL1Pair(
     paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
     heads ??= (JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as { targets: typeof heads }).targets
   }
+  // (each page's lowest unit line, as today's pageBottom: RUN:911 over every unit's rectangles but a figure's)
+  const bottoms = new Map<number, number>()
+  for (const part of bundle.parts.values())
+    for (const flow of part.flows)
+      for (const m of flow) {
+        if (m.kind === 'figure' || m.kind === 'inkfigures' || m.kind === 'name') continue
+        for (const l of m.lines) {
+          const r = rectOf(l, m)
+          const y = r[2] + 0.24 * (r[4] - r[2])
+          bottoms.set(r[0], Math.min(bottoms.get(r[0]) ?? Number.POSITIVE_INFINITY, y))
+        }
+      }
   // (every member once, from the part of its first page; its flow's neighbours)
   const byOrd = new Map<number, { m: L1Placed; before: L1Placed | null; after: L1Placed | null }>()
   for (const part of bundle.parts.values())
@@ -483,6 +495,7 @@ export function gateL1Pair(
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,
+      bottomOf: (pg) => bottoms.get(pg),
     })
     out.adaptMs += performance.now() - ta
     if ('stop' in got) {
@@ -508,6 +521,10 @@ export function gateL1Pair(
         (d) => !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$/.test(d),
       )
       if (rest.length) setting = `prepared: ${rest[0]!.replace(/\[\d+\]/g, '[]').replace(/: .*$/, '')}`
+      if (process.env.AXT_GATE_FREE && rest[0]?.includes('.free'))
+        console.log(
+          `FREE ${pair} ${u.ord} ${rest[0]} blocks ${mem.blocks.length} last ${mem.blocks.at(-1)!.B.at(-1)} below ${x.m.room.below} bottom ${bottoms.get(mem.blocks.at(-1)!.page)}`,
+        )
     }
     out.setting.set(u.ord, setting)
     if (o.reading === 'part') out.inputs.set(u.ord, setting !== 'equal' ? setting : (tokensVerdict ?? 'equal'))
