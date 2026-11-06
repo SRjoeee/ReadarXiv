@@ -9,7 +9,7 @@
 // after the left's first page or 1.5 s), the composed document (the add-on by ranges over the same store, its groups, composing
 // switched on), the rows (the server's objects, or the host's translate), the timers. The first range of the original is asked
 // before openReader returns.
-import { type Head, type Part, read, type Row, type Unit, type Units } from '@readarxiv/format'
+import { BOUNDS, type Head, type Part, read, type Row, type Unit, type Units } from '@readarxiv/format'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { composedSource } from './bytes/composed.ts'
 import { openRanged } from './bytes/ranged.ts'
@@ -18,12 +18,14 @@ import { CHUNK, chunkStore } from './bytes/store.ts'
 import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
-import type { Lay } from './compose/page.ts'
+import { committed, type Lay } from './compose/page.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit } from './pdfjs/kit.ts'
-import { dirOf, follow, object, open, Refused, segOf } from './session/client.ts'
+import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
+import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
   type Doc,
+  displayOf,
   type Effect,
   init,
   type LayerWhy,
@@ -31,11 +33,14 @@ import {
   type PaperRef,
   type Prefs,
   type Ref,
+  type RowsStop,
   type RowsWhy,
   type State,
   targetOf,
   wanted,
 } from './session/machine.ts'
+import { abstractPage, htmlVersionOf, originalPdfOf, titleOf, VIEWER_HASH } from './session/paper.ts'
+import { anchorOf, contextOf, countsOf, keep, missingOf, type PaperContext, ranked, stopOf } from './session/rows.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
@@ -43,6 +48,7 @@ import { DEFAULTS } from './prefs.ts'
 import { addSheets } from './styles.ts'
 
 export { DEFAULTS }
+export type { OutlineEntry, PaperContext }
 
 /** a translation result as the host's translate yields it (packages/translate's Result: format's Row) */
 export type Result = Row
@@ -56,7 +62,14 @@ export interface Host {
   fetch: Fetch
   original(ref: string): string
   prefs: PrefStore
-  translate?(units: readonly Unit[], target: string, o: { signal: AbortSignal }): AsyncIterable<Result>
+  /** rows made here: one Result per unit, as each settles, the units in the order they are wanted (the page in view's first, then
+   *  ahead before behind); a later call (the units a new reading place waits on) goes first. `context`: the paper's title and
+   *  abstract, for a translator whose replies depend on them */
+  translate?(
+    units: readonly Unit[],
+    target: string,
+    o: { signal: AbortSignal; context?: PaperContext },
+  ): AsyncIterable<Result>
 }
 
 export type Command =
@@ -66,16 +79,23 @@ export type Command =
   | { do: 'pinch'; side: Side; factor: number; at: [number, number] }
   | { do: 'page'; side: Side; page: number }
   | { do: 'unit'; id: number }
+  /** a contents entry (its `id`) gone to on both sides, a line of room above its heading; else its page */
+  | { do: 'heading'; id: number }
   | { do: 'lead'; side: Side }
   | { do: 'narrow'; on: boolean }
   | { do: 'retry' }
+  /** arXiv's own PDF opened by the browser in a tab of its own, for it to stream and save (`paper.pdf`): never read through
+   *  the reader */
+  | { do: 'original' }
 
 export interface ReaderState {
-  paper: { id: string; version: number | null; title: string; html: string | null }
+  /** `title`: the PDF's own, else arXiv's abstract page's ('' until known, never put back); `html`: arXiv's HTML version with
+   *  the hash that translates it, once the bilingual version cannot be had (null: none, or not asked); `pdf`: arXiv's PDF */
+  paper: { id: string; version: number | null; title: string; html: string | null; pdf: string }
   prefs: Prefs
   settings: { s: 'reading' | 'landed' | 'unreadable'; refused: number }
   original:
-    | { s: 'opening'; loaded: number }
+    | { s: 'opening'; loaded: number; total: number }
     | { s: 'open'; pages: number; ours: boolean }
     | { s: 'failed'; why: OriginalWhy }
   layer:
@@ -85,7 +105,9 @@ export interface ReaderState {
     | { s: 'refused'; why: LayerWhy; retryAt: number | null }
   rows: { target: string; from: 'server' | 'here' } & (
     | { s: 'none' }
-    | { s: 'arriving' | 'complete'; got: number; total: number; lost: number }
+    | { s: 'arriving'; got: number; total: number; lost: number }
+    /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
+    | { s: 'complete'; got: number; total: number; lost: number; stopped: RowsStop | null }
     | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number }
   )
   view: {
@@ -95,6 +117,10 @@ export interface ReaderState {
     zoom: Zoom | null
     narrow: boolean
     sides: Record<Side, { page: number; pages: number }>
+    /** the contents: the paper's headings, their levels, pages and titles (translated once their rows are in) */
+    outline: readonly OutlineEntry[]
+    /** the contents entry being read: the last heading at or above the reading line of the pane read; null before the first */
+    heading: number | null
   }
   crashed: boolean
 }
@@ -113,13 +139,27 @@ export interface Engine {
   faces?: FaceTable
   /** what a page not laid is drawn from (way a: the original document; way b: the composed one) */
   unlaid?: 'original' | 'composed'
+  /** the target languages the typesetter sets (BCP 47); another holds the original for the visit (rows failed `target`) until
+   *  a language it sets is chosen. None: every target */
+  targets?: readonly string[]
 }
 
 const PAPER = /^((?:[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|(?:\d{4}\.\d{4,5}))(?:v(\d+))?$/
+/** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
+const NEAR_MS = 150
+}
 
 export function openReader(
   root: HTMLElement,
-  o: { host: Host; paper: string; visit?: Partial<Pick<Prefs, 'display' | 'target' | 'sync'>>; engine?: Engine },
+  o: {
+    host: Host
+    paper: string
+    visit?: Partial<Pick<Prefs, 'display' | 'target' | 'sync'>>
+    engine?: Engine
+    /** the two panes' elements, where the host's chrome renders them (its scrollers): drawn into, never removed; none: the
+     *  reader makes `div.axt-pane.left` and `.right` under `root` */
+    panes?: { left: HTMLElement; right: HTMLElement }
+  },
 ): Reader {
   const m = PAPER.exec(o.paper)
   if (!m) throw new TypeError(`not an arXiv paper: ${o.paper}`)
@@ -137,13 +177,20 @@ export function openReader(
   const mark = (k: string) => {
     if (!(k in moments)) moments[k] = Math.round(performance.now() - t0)
   }
-  // ---- the root: its marks, its sheets, its two panes
+  // ---- the root: its marks, its sheets, its two panes (the host's, where it gives them: what was in them and in the root
+  // before stays, and close takes away only what the reader put there)
   root.classList.add('axt-reader')
-  const left = document.createElement('div'),
-    right = document.createElement('div')
-  left.className = 'axt-pane left'
-  right.className = 'axt-pane right'
-  root.append(left, right)
+  const given = o.panes ?? null
+  const left = given?.left ?? document.createElement('div'),
+    right = given?.right ?? document.createElement('div')
+  const had = new Map<HTMLElement, Set<Element>>(
+    [root, left, right].map((el) => [el, new Set(el.children)] as [HTMLElement, Set<Element>]),
+  )
+  if (!given) {
+    left.className = 'axt-pane left'
+    right.className = 'axt-pane right'
+    root.append(left, right)
+  }
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit()
   let kit: Kit | null = null,
@@ -171,6 +218,12 @@ export function openReader(
       if (e.side === 'right' && e.page === 1) mark('rightDrawn')
     })
     for (const k2 of ['page', 'scale', 'sync', 'display'] as const) panes.on(k2, () => tellSoon())
+    // (the heading being read follows the scroll of either pane; the rows made here, the reading place)
+    panes.on('scrolled', () => headingSoon())
+    panes.on('page', () => {
+      headingSoon()
+      nearSoon()
+    })
     return k
   })
   const openExternal = (url: string) => {
@@ -193,47 +246,168 @@ export function openReader(
       return () => rowsListeners.delete(f)
     },
   })
-  const rowsIn = (rs: Iterable<Row>) => {
-    for (const r of rs) rows.set(r.id, r)
+  const rowsIn = (rs: readonly Row[]) => {
+    for (const r of rs) keep(rows, r)
+    if (contents?.take(rs)) outlineSoon()
     for (const f of [...rowsListeners]) f()
   }
-  // ---- the head, the parts, the units: objects by digest, read once
+  // ---- the head, the parts, the units: objects by digest, each fetched once while wanted (a failure forgotten), held to it
   let head: Head | null = null
-  const objects = new Map<string, Promise<Uint8Array>>()
-  const objectOf = (r: Ref) => {
-    let p = objects.get(r.sha256)
-    if (!p) {
-      p = object(host.fetch, r)
-      objects.set(r.sha256, p)
-      p.catch(() => objects.delete(r.sha256))
-    }
-    return p
-  }
+  const objects = objectStore({ fetch: host.fetch })
+  const objectOf = (r: Ref) => objects.of(r)
   const catalogOf = (): Ref | null => (rt.state.layer.s === 'ready' ? rt.state.layer.catalog : null)
-  /** an object whose length the head does not state (a part, by its digest alone): read whole, then held to its digest */
-  const byDigest = (path: string, sha256: string): Promise<Uint8Array> => {
-    let p = objects.get(sha256)
-    if (!p) {
-      p = (async () => {
-        const r = await host.fetch(`/api/v2/o/${path}`)
-        if (!r.ok) throw new Refused(r.status === 404 ? 'gone' : 'bad')
-        const b = new Uint8Array(await r.arrayBuffer())
-        const d = [...new Uint8Array(await crypto.subtle.digest('SHA-256', b))]
-          .map((x) => x.toString(16).padStart(2, '0'))
-          .join('')
-        if (d !== sha256) throw new Refused('bad')
-        return b
-      })()
-      objects.set(sha256, p)
-      p.catch(() => objects.delete(sha256))
-    }
-    return p
-  }
+  /** an object whose length the head does not state (a part, by its digest alone): read within its kind's bound, held to its
+   *  digest */
+  const byDigest = (path: string, sha256: string): Promise<Uint8Array> =>
+    objects.ofDigest(path, sha256, BOUNDS.part.bytes)
   const partOf = async (n: number): Promise<Part | null> => {
     const c = catalogOf(),
       d = head?.parts[n - 1]
     if (!c || !head || !d) return null
-    return read('part', await byDigest(`${dirOf(c)}/${d}`, d), d) as Part
+    const part = read('part', await byDigest(`${dirOf(c)}/${d}`, d), d) as Part
+    // (the contents' headings placed by the part's members)
+    if (contents?.place(part.flows.flat())) outlineSoon()
+    return part
+  }
+  /** the layer's units, in their objects' order, read once a head (the contents' headings, the rows made here) */
+  let unitsHeld: { key: string; units: Promise<Unit[]> } | null = null
+  const unitsOf = (refs: readonly Ref[]): Promise<Unit[]> => {
+    const key = refs.map((r) => r.sha256).join()
+    if (unitsHeld?.key !== key) {
+      const p = Promise.all(refs.map(async (u) => (read('units', await objectOf(u), u.sha256) as Units).units)).then(
+        (l) => l.flat(),
+      )
+      unitsHeld = { key, units: p }
+      p.catch(() => {
+        if (unitsHeld?.units === p) unitsHeld = null
+      })
+    }
+    return unitsHeld.units
+  }
+  // ---- the contents and the heading being read: told at the head's units and after each change, once a frame
+  let contents: Contents | null = null,
+    contentsOf = ''
+  let outline: readonly OutlineEntry[] = []
+  let heading: number | null = null
+  let outlineFrame = 0,
+    headingFrame = 0
+  function outlineSoon() {
+    if (outlineFrame || closed || !contents) return
+    outlineFrame = clock.frame(() => {
+      outlineFrame = 0
+      if (!contents) return
+      outline = contents.entries()
+      tellSoon()
+      headingSoon()
+    })
+  }
+  /** the side the reader reads: the one shown (the translation's in its own display, or where the bilingual display shows it
+   *  alone in a narrow window) */
+  const sideRead = (): Side =>
+    displayOf(rt.state) === 'translation' ||
+    (displayOf(rt.state) === 'bilingual' && root.hasAttribute('data-axt-narrow'))
+      ? 'right'
+      : 'left'
+  /** how far down its page a rectangle's top is, as a share of the page's height on the side read */
+  const topOf = (r: Rect): number | null => {
+    const side = sideRead()
+    const box = panes?.boxOf(side, r[0], [r[1], r[2], r[3], r[4]]),
+      h = panes?.pageElement(side, r[0])?.offsetHeight
+    return box && h ? box.top / h : null
+  }
+  function headingSoon() {
+    if (headingFrame || closed || !contents) return
+    headingFrame = clock.frame(() => {
+      headingFrame = 0
+      if (!contents || !panes) return
+      const at = panes.reading()
+      const id = at ? contents.headingAt(at.page, at.at, topOf) : null
+      if (id === heading) return
+      heading = id
+      tellSoon()
+    })
+  }
+  /** the contents of a head made once its units are in, the original's own outline matched for the headings it does not place */
+  function contentsFor(h: Head, refs: readonly Ref[]) {
+    const key = `${h.units.join()}|${refs.map((r) => r.sha256).join()}`
+    if (contentsOf === key) return
+    contentsOf = key
+    void unitsOf(refs).then(
+      (units) => {
+        if (closed || contentsOf !== key) return
+        const c = createContents(units, h)
+        contents = c
+        c.take([...rows.values()])
+        const doc = original?.doc
+        if (doc) void c.outline(doc as never).then((m) => m && contents === c && outlineSoon())
+        outlineSoon()
+      },
+      () => {
+        if (contentsOf === key) contentsOf = ''
+      },
+    )
+  }
+  /** a contents entry gone to: its first rectangle where a part places it (the part of its page read where it is not yet), a
+   *  line of room above it on the side read, the other following; else the page the contents give it */
+  async function goToHeading(id: number) {
+    const c = contents
+    if (!c || !panes) return
+    let r = c.firstRect(id)
+    const page = c.pageOf(id)
+    if (!r && page) {
+      await partOf(page).catch(() => null)
+      r = c.firstRect(id)
+    }
+    if (closed || !panes) return
+    if (r) panes.goToRect(r)
+    else if (page) panes.goToPage(sideRead(), page)
+  }
+  // ---- the rows made here under way, and the reading place they are asked by
+  let making: { units: readonly Unit[]; signal: AbortSignal; asked: Set<string>; run(want: Unit[]): void } | null = null
+  let nearPage = 0,
+    nearTimer = 0
+  /** the units the page read and the next wait on (their laid pages' closures), and the reading place as an index of `units` */
+  function nearOf(units: readonly Unit[]) {
+    const page = panes?.reading()?.page ?? 1
+    const ids = new Set<string>()
+    for (const n of [page, page + 1]) for (const id of composer?.page(n)?.wait.rows ?? []) ids.add(id)
+    return { page, ids, anchor: anchorOf(units, ids, page, head?.paper.pages ?? 1) }
+  }
+  /** a new reading place while rows are made here: its units still missing asked again in a call of their own, which the
+   *  translator answers first (the units that page waits on, else two pages' worth from the place on) */
+  function nearSoon() {
+    if (!making || nearTimer || closed) return
+    nearTimer = clock.later(() => {
+      nearTimer = 0
+      const m = making
+      if (!m || m.signal.aborted) return
+      const near = nearOf(m.units)
+      if (near.page === nearPage) return
+      nearPage = near.page
+      const todo = missingOf(m.units, rows).filter((u) => !m.asked.has(u.id))
+      let want = todo.filter((u) => near.ids.has(u.id))
+      if (!want.length) {
+        const span = Math.max(1, Math.ceil((2 * m.units.length) / Math.max(1, head?.paper.pages ?? 1)))
+        want = ranked(todo, near.ids, near.anchor).slice(0, span)
+      }
+      if (!want.length) return
+      for (const u of want) m.asked.add(u.id)
+      m.run(want)
+    }, NEAR_MS)
+  }
+  /** the pages near the view the layer shows as arXiv's by the rule (none of theirs laid: no part, or laid with nothing of its
+   *  own), told to the host as settled, never as laid; once a page a composed document and target */
+  const asOriginal = new Set<number>()
+  function asOriginalNow(): number {
+    const h = head
+    if (!h || !panes || rt.state.layer.s !== 'ready' || !composed) return asOriginal.size
+    for (let n = 1; n <= h.paper.pages; n++) {
+      if (asOriginal.has(n) || !panes.right.near(n)) continue
+      const p = composer?.page(n)
+      if (h.parts[n - 1] === null || (p && committed(p) && !p.members.some((m) => m.state === 'laid')))
+        asOriginal.add(n)
+    }
+    return asOriginal.size
   }
   // ---- the original's document, the composed one
   let original: { source: OriginalSource; doc: PDFDocumentProxy | null } | null = null
@@ -241,13 +415,25 @@ export function openReader(
   /** the lay of the layer open: the engine's, made over its parts once its head is read; none lays nothing */
   const none: Lay = (part) => ({ page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] })
   let current: Lay = none
+  /** the paper's title: its PDF's Info Title (arXiv's margin stamp is none), else the abstract page's (one request a visit,
+   *  asked again by the next open where it could not be read); the first known stays */
+  const abstract = abstractPage(host.fetch, ref)
+  async function titleFrom(doc: PDFDocumentProxy, signal: AbortSignal) {
+    if (rt.state.title) return
+    const meta = await doc.getMetadata().catch(() => null)
+    let title = titleOf(meta?.info)
+    if (!title) title = await abstract()
+    if (!signal.aborted && title) rt.input({ i: 'paper.title', title })
+  }
 
   const handlers: Handlers = {
     original(spec, t, emit, signal) {
       const url = spec.pin
         ? `/api/v2/o/arxiv/${segOf(paper, paper.version ?? head?.paper.version ?? 1)}.pdf`
         : host.original(ref)
-      let opened = false
+      let opened = false,
+        told1 = -2,
+        told2 = -1
       const source = rangeSource({
         fetch: host.fetch,
         url,
@@ -255,7 +441,15 @@ export function openReader(
         store,
         signal,
         keepReading: () => opened,
-        onProgress: (loaded) => emit({ i: 'original.progress', t, loaded }),
+        // (the bytes come in as the progress line shows them: told by hundredths of the file, once its length is known)
+        onProgress: (loaded) => {
+          const total = source.bound?.total ?? 0
+          const at = total ? Math.floor((100 * loaded) / total) : -1
+          if (at === told1 && total === told2) return
+          told1 = at
+          told2 = total
+          emit({ i: 'original.progress', t, loaded, total })
+        },
         refused: (e) =>
           emit(
             e.kind === 'digest'
@@ -278,6 +472,8 @@ export function openReader(
           if (head) void source.prove(head.original.chunks)
           mark('originalOpen')
           emit({ i: 'original.opened', t, pages: doc.numPages, bytes: source.bound?.total ?? 0 })
+          void titleFrom(doc, signal)
+          if (contents) void contents.outline(doc as never).then((m) => m && outlineSoon())
           await panes?.open(doc)
           composer?.setDocuments({ original: doc, composed: composed?.doc ?? null, groups: composed?.groups ?? null })
         } catch (e) {
@@ -303,7 +499,6 @@ export function openReader(
         paper,
         target: spec.target,
         signal,
-        now: () => Date.now(),
         onDoc: (doc) => emit({ i: 'paper', t, doc }),
       }).catch((e) => {
         if (signal.aborted) return
@@ -311,18 +506,23 @@ export function openReader(
           i: 'follow.lost',
           t,
           why: e instanceof Refused ? e.why : 'network',
-          retryAt: e instanceof Refused ? e.retryAt : null,
+          afterMs: e instanceof Refused ? e.afterMs : null,
+          doc: e instanceof Refused ? e.doc : null,
         })
       })
       return undefined
     },
     open(spec, t, emit, signal) {
-      open({ fetch: host.fetch, paper, target: spec.target, signal, now: () => Date.now() }).then(
+      open({ fetch: host.fetch, paper, target: spec.target, signal }).then(
         (a) => emit({ i: 'open.answered', t, doc: a.doc, ...(a.refused ? { refused: a.refused } : {}) }),
         (e) => {
-          if (!signal.aborted) emit({ i: 'open.failed', t, why: String((e as Error)?.message ?? e) })
+          if (!signal.aborted) emit({ i: 'open.failed', t, why: e instanceof Refused ? e.why : 'network' })
         },
       )
+      return undefined
+    },
+    html(_spec, t, emit) {
+      void htmlVersionOf(host.fetch, ref).then((url) => emit({ i: 'html.answered', t, url }))
       return undefined
     },
     code(_spec, t, emit, signal) {
@@ -377,17 +577,23 @@ export function openReader(
         emit({ i: 'composed.failed', t })
         return undefined
       }
+      // (a range refused, of the add-on or of the original under it: the composed document let go, its pages arXiv's, never a
+      // page waiting for ever on a range PDF.js will not get)
+      const failed = () => {
+        if (!signal.aborted) emit({ i: 'composed.failed', t })
+      }
       const addOn = rangeSource({
         fetch: host.fetch,
         url: `/api/v2/o/${dirOf(c)}/${h.addOn.digest}`,
         own: true,
         bound: { total: h.addOn.bytes, etag: null },
         signal,
+        refused: failed,
       })
       const src = composedSource(original.source, h.original.bytes, addOn, h.addOn.bytes)
       let task: ReturnType<typeof openRanged> | null = null
       void ready.then(async (k) => {
-        task = openRanged(k.lib as never, src, { options: k.options('composed') })
+        task = openRanged(k.lib as never, src, { options: k.options('composed'), refused: failed })
         try {
           const doc = await task.promise
           const { groupsOf } = await import('./compose/groups.ts')
@@ -396,6 +602,7 @@ export function openReader(
           current = o.engine?.lay ? await o.engine.lay(partOf, h.paper.pages) : none
           if (signal.aborted) return
           composed = { doc, groups }
+          asOriginal.clear()
           composer?.setDocuments({ original: original?.doc ?? null, composed: doc, groups })
           composer?.setLayer({ part: partOf, pages: h.paper.pages }, rowsSource())
           mark('composedOpen')
@@ -413,36 +620,84 @@ export function openReader(
       }
     },
     rows(spec, t, emit, signal) {
-      rows = new Map()
-      rowsTarget = spec.target
-      rowsDone = false
-      composer?.setLayer(composed ? { part: partOf, pages: head?.paper.pages ?? 0 } : null, rowsSource())
-      const total = () => [...rows.values()].length
+      // a retry of the same target keeps every row held, its pages kept, and asks for the missing alone; another target lets the
+      // rows before go (the contents' titles with them) and lays the pages again as its rows come
+      if (spec.target !== rowsTarget) {
+        rows = new Map()
+        rowsTarget = spec.target
+        asOriginal.clear()
+        if (contents?.clearTexts()) outlineSoon()
+        rowsDone = false
+        composer?.setLayer(composed ? { part: partOf, pages: head?.paper.pages ?? 0 } : null, rowsSource())
+      } else rowsDone = false
       void (async () => {
         try {
           if (spec.from === 'here' && host.translate) {
-            // the units read from the layer's units objects, translated here, in view order (the host's chain)
-            const units: Unit[] = []
-            for (const u of spec.units) units.push(...(read('units', await objectOf(u), u.sha256) as Units).units)
-            let got = 0,
-              lost = 0
-            const batch: Row[] = []
-            for await (const r of host.translate(units, spec.target, { signal })) {
+            const translate = host.translate.bind(host)
+            // the layer's units (those the paper keeps as they are aside), translated here: the page in view's first, then ahead
+            // before behind; a new reading place's asked again first (nearSoon), the paper's title and abstract the context
+            const all = await unitsOf(spec.units)
+            if (signal.aborted) return
+            const units = all.filter((u) => !u.kept)
+            const context = contextOf(all, rt.state.title)
+            const pending: Row[] = []
+            let flushing = 0
+            const flush = () => {
+              clock.clear(flushing)
+              flushing = 0
               if (signal.aborted) return
-              batch.push(r)
-              got++
-              if (!r.ok) lost++
-              if (batch.length >= 16) {
-                rowsIn(batch.splice(0))
-                emit({ i: 'rows.batch', t, got, total: units.length, lost })
-              }
+              if (pending.length) rowsIn(pending.splice(0))
+              const c = countsOf(units, rows)
+              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
             }
-            rowsIn(batch)
+            const take = (r: Row) => {
+              pending.push(r)
+              if (pending.length >= 16) flush()
+              else if (!flushing) flushing = clock.later(flush, 0)
+            }
+            const nearAc = new AbortController()
+            signal.addEventListener('abort', () => nearAc.abort(signal.reason), { once: true })
+            const near = nearOf(units)
+            nearPage = near.page
+            making = {
+              units,
+              signal: nearAc.signal,
+              asked: new Set(),
+              run: (want) =>
+                void (async () => {
+                  try {
+                    for await (const r of translate(want, spec.target, { signal: nearAc.signal, context })) {
+                      if (nearAc.signal.aborted) return
+                      take(r)
+                    }
+                  } catch {
+                    // (a near call's failure is the first call's to tell: it asks for every unit too)
+                  }
+                })(),
+            }
+            {
+              const c = countsOf(units, rows)
+              emit({ i: 'rows.batch', t, got: c.got, total: units.length, lost: c.lost })
+            }
+            const order = ranked(missingOf(units, rows), near.ids, near.anchor)
+            try {
+              for await (const r of translate(order, spec.target, { signal, context })) {
+                if (signal.aborted) return
+                take(r)
+              }
+            } finally {
+              nearAc.abort()
+              if (making?.signal === nearAc.signal) making = null
+            }
+            if (signal.aborted) return
+            flush()
             rowsDone = true
             rowsIn([])
-            emit({ i: 'rows.end', t, got, total: units.length, lost })
+            const c = countsOf(units, rows)
+            emit({ i: 'rows.end', t, got: c.got, total: units.length, lost: c.lost, stopped: stopOf(units, rows) })
             return
           }
+          const total = () => rows.size
           // the server's rows: every ref the documents name for the target, each once, until the target is done
           const read1 = new Set<string>()
           for (;;) {
@@ -511,6 +766,7 @@ export function openReader(
       here: !!host.translate,
       defaults: DEFAULTS,
       visit: o.visit,
+      targets: o.engine?.targets ?? null,
       now: Date.now(),
       visible: document.visibilityState !== 'hidden',
       online: navigator.onLine !== false,
@@ -526,8 +782,10 @@ export function openReader(
   // ---- the objects wanted (the head), and the view following the state
   const fetching = new Set<string>()
   const onState = (s: State) => {
+    // (the layer's units, once its head is read: the contents' headings, and the rows made here read them from the same objects)
+    if (s.layer.s === 'ready' && s.layer.head && wanted(s).length) contentsFor(s.layer.head, s.layer.units)
     for (const r of wanted(s)) {
-      if (fetching.has(r.sha256)) continue
+      if (s.layer.s !== 'ready' || r.sha256 !== s.layer.catalog.sha256 || fetching.has(r.sha256)) continue
       fetching.add(r.sha256)
       objectOf(r).then(
         (b) => {
@@ -544,9 +802,10 @@ export function openReader(
       )
     }
     void ready.then(() => {
-      panes?.setDisplay(s.visit.display ?? s.prefs.value.display)
+      // (the display shown: the one chosen, the original where it is held for the visit)
+      panes?.setDisplay(displayOf(s))
       panes?.setSync(s.visit.sync ?? s.prefs.value.sync)
-      composer?.setShown((s.visit.display ?? s.prefs.value.display) !== 'original')
+      composer?.setShown(displayOf(s) !== 'original')
     })
     tellSoon()
   }
@@ -579,8 +838,15 @@ export function openReader(
     const r = s.rows
     const rowsView = { target: r.target, from: s.here ? ('here' as const) : ('server' as const) }
     const p = panes as Panes | null
+    const l = s.link
     told = {
-      paper: { id: paper.id, version: paper.version ?? head?.paper.version ?? null, title: '', html: null },
+      paper: {
+        id: paper.id,
+        version: paper.version ?? s.doc?.version ?? head?.paper.version ?? null,
+        title: s.title,
+        html: s.html.s === 'known' ? s.html.url : null,
+        pdf: originalPdfOf(ref),
+      },
       prefs: s.prefs.value,
       settings: { s: s.prefs.s, refused: s.prefs.refused },
       original:
@@ -588,23 +854,29 @@ export function openReader(
           ? { s: 'open', pages: s.original.pages, ours: s.original.pin }
           : s.original.s === 'failed'
             ? { s: 'failed', why: s.original.why }
-            : { s: 'opening', loaded: s.original.loaded },
+            : { s: 'opening', loaded: s.original.loaded, total: s.original.total },
+      // (the look stopped with no layer to show: a 429's wait or our server out of reach, as a passing refusal; a prepare under
+      // way keeps its units, and rows made from them go on)
       layer:
         s.layer.s === 'ready'
-          ? { s: 'ready', laid: s.panes.laid, total: head?.paper.pages ?? 0, asOriginal: 0 }
-          : s.layer.s === 'preparing'
-            ? { s: 'preparing', position: s.layer.position, progress: s.layer.progress }
-            : s.layer.s === 'refused'
-              ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt }
-              : { s: 'none' },
+          ? { s: 'ready', laid: s.panes.laid, total: head?.paper.pages ?? 0, asOriginal: asOriginalNow() }
+          : s.layer.s === 'refused'
+            ? { s: 'refused', why: s.layer.why, retryAt: s.layer.retryAt }
+            : l.s === 'stopped'
+              ? { s: 'refused', why: l.why, retryAt: l.retryAt }
+              : s.layer.s === 'preparing'
+                ? { s: 'preparing', position: s.layer.position, progress: s.layer.progress }
+                : { s: 'none' },
       rows:
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
           : r.s === 'failed'
             ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost }
-            : { ...rowsView, s: r.s, got: r.got, total: r.total, lost: r.lost },
+            : r.s === 'complete'
+              ? { ...rowsView, s: 'complete', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped }
+              : { ...rowsView, s: 'arriving', got: r.got, total: r.total, lost: r.lost },
       view: {
-        display: s.visit.display ?? s.prefs.value.display,
+        display: displayOf(s),
         sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc },
         scale: p?.scale ?? 1,
         zoom: p?.zoom ?? null,
@@ -613,6 +885,8 @@ export function openReader(
           left: { page: p?.pageOf('left') ?? 0, pages: p?.right.pages ?? 0 },
           right: { page: p?.pageOf('right') ?? 0, pages: p?.right.pages ?? 0 },
         },
+        outline,
+        heading,
       },
       crashed,
     }
@@ -635,6 +909,11 @@ export function openReader(
         rt.input({ i: 'cmd.retry' })
         return
       }
+      if (c.do === 'original') {
+        // (the browser's own viewer of arXiv's file, in a tab of its own: no opener, no referrer)
+        window.open(`${originalPdfOf(ref)}${VIEWER_HASH}`, '_blank', 'noopener,noreferrer')
+        return
+      }
       // (a command on the panes before they exist waits for them, in order; never dropped)
       if (!panes) {
         held.push(c)
@@ -654,13 +933,14 @@ export function openReader(
       else if (c.do === 'unit') {
         const l = composer?.member(c.id)?.lines[0]
         if (l) p.goToRect([l[0], l[2], l[6], l[3], l[5]])
-      }
+      } else if (c.do === 'heading') void goToHeading(c.id)
     },
     probe() {
       const s = rt.state
       return {
         original: s.original.s,
         layer: s.layer.s,
+        link: s.link.s,
         rows: s.rows.s,
         live: rt.live.size,
         inputs: rt.counts.inputs,
@@ -671,6 +951,8 @@ export function openReader(
         laidPages: (composer?.probe().laidPages as number) ?? 0,
         lit: highlight?.lit?.id ?? null,
         crashed,
+        // (the moments, ms from the open; the open itself, ms from performance's origin, to place them on the page's clock)
+        'at.open': Math.round(t0),
         ...Object.fromEntries(Object.entries(moments).map(([k, v]) => [`at.${k}`, v])),
       }
     },
@@ -687,7 +969,8 @@ export function openReader(
         scheduler.dispose()
         kit?.destroy()
         clock.dispose()
-        root.replaceChildren()
+        // (what the reader put in the root and the panes taken away; what the host had there stays)
+        for (const [el, kept] of had) for (const c of [...el.children]) if (!kept.has(c)) c.remove()
         root.classList.remove('axt-reader')
         for (const a of ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped']) root.removeAttribute(a)
       })

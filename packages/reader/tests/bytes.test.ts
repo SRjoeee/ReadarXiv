@@ -234,4 +234,40 @@ describe('a ranged open', () => {
     await t.destroy()
     await expect(t.promise).rejects.toThrow()
   })
+  it('tells its owner a range PDF.js asked for that the source refuses, once, so that the page waiting on it fails', async () => {
+    let n = 0
+    // (the fifth ask answers other bytes: chunks 0, 4, 5 at the open, then 1, then 2)
+    const s = rangedServer(objects(), () => (++n === 5 ? { kind: 'shift' } : null))
+    const src = own(s.fetch)
+    let transport: { requestDataRange(b: number, e: number): void } | null = null
+    const lib: RangedLib = {
+      PDFDataRangeTransport: class {
+        constructor() {
+          transport = this
+        }
+        requestDataRange() {}
+        onDataRange() {}
+        abort() {}
+      } as unknown as RangedLib['PDFDataRangeTransport'],
+      getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {}, onProgress: null }) as never,
+    }
+    const refused: string[] = []
+    openRanged(lib, src, { options: {}, refused: (e) => refused.push(e.kind) })
+    for (let i = 0; i < 4; i++) await flush()
+    const t = transport as unknown as { requestDataRange(b: number, e: number): void }
+    t.requestDataRange(CHUNK, 3 * CHUNK)
+    t.requestDataRange(3 * CHUNK, 4 * CHUNK)
+    for (let i = 0; i < 8; i++) await flush()
+    expect(refused).toEqual(['bytes'])
+    // (a source let go is no refusal: never told)
+    const quiet: string[] = []
+    const s2 = rangedServer(objects(), () => null)
+    const src2 = own(s2.fetch)
+    openRanged(lib, src2, { options: {}, refused: (e) => quiet.push(e.kind) })
+    for (let i = 0; i < 4; i++) await flush()
+    src2.abort()
+    ;(transport as unknown as { requestDataRange(b: number, e: number): void }).requestDataRange(CHUNK, 2 * CHUNK)
+    for (let i = 0; i < 4; i++) await flush()
+    expect(quiet).toEqual([])
+  })
 })

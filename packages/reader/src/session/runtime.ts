@@ -17,7 +17,7 @@ export type Handler<S extends Spec = Spec> = (
 export type Handlers = { [K in Spec['slot']]: Handler<Extract<Spec, { slot: K }>> }
 
 /** the order resources are let go in: what depends on another first (the composed document before the original's source) */
-const ORDER: Spec['slot'][] = ['rows', 'composed', 'code', 'open', 'link', 'original', 'timer']
+const ORDER: Spec['slot'][] = ['rows', 'composed', 'code', 'open', 'link', 'html', 'original', 'timer']
 
 export interface Runtime {
   readonly state: State
@@ -37,6 +37,8 @@ export function createRuntime(o: {
   /** a throw of step itself: a bug; the state is kept as it was */
   crash(e: unknown): void
   check?: boolean
+  /** the time an input is applied at (the machine's clock: every timer is minted from it); Date.now by default */
+  now?: () => number
 }): Runtime {
   let state = o.state
   const live = new Map<Ticket, { slot: Spec['slot']; ac: AbortController; release?: () => void | Promise<void> }>()
@@ -110,7 +112,7 @@ export function createRuntime(o: {
         counts.inputs++
         let out: ReturnType<typeof step>
         try {
-          out = step(state, x)
+          out = step(state, x, (o.now ?? Date.now)())
         } catch (e) {
           o.crash(e)
           continue

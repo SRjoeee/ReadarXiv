@@ -3,8 +3,12 @@
 // startxref and cross-reference right after its first chunk), and every range PDF.js asks for read chunk by chunk through the
 // source (the store shares and joins them) and given whole once its chunks are in. The source is not the document's:
 // the original's is the reader's, shared by both documents; letting the document go stops its reads, not the source.
+//
+// PDF.js waits for a range it asked for ever: a range the source refuses (its answers not the object, a chunk not the head's,
+// the network) is told to the owner (`refused`), who fails the page with it by letting the document go (W session/prefetch.ts
+// prefetchDocument; reader-hosts-data §16). A source let go (`gone`) is never told.
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
-import type { ByteSource } from './source.ts'
+import { RangeRefusal, type ByteSource } from './source.ts'
 import { CHUNK } from './store.ts'
 
 /** the chunks at a document's end asked beside its first: its trailer and cross-reference (2602.23285v2: its last 2 chunks
@@ -36,11 +40,15 @@ export interface RangedTask {
 export interface RangedOptions {
   /** getDocument's other options: the kit's (cMapUrl, standardFontDataUrl, wasmUrl, enableHWA, …) and the document's worker */
   options: Record<string, unknown>
+  /** told once, where a range PDF.js asked for is refused (its first chunk's refusal rejects the promise instead): the page or
+   *  the open waiting on it would wait for ever, so the owner lets the document go */
+  refused?: (e: RangeRefusal) => void
 }
 
 /** PDF.js's document over `source`, ranges of CHUNK */
 export function openRanged(lib: RangedLib, source: ByteSource, o: RangedOptions): RangedTask {
-  let destroyed = false
+  let destroyed = false,
+    told = false
   let task: PDFDocumentLoadingTask | null = null
   /** the chunks asked before PDF.js asks them (the document's end), by index */
   const early = new Map<number, Promise<Uint8Array>>()
@@ -104,7 +112,15 @@ export function openRanged(lib: RangedLib, source: ByteSource, o: RangedOptions)
             // (its reader let go meanwhile, PDF.js's own cancel: the bytes are no one's)
           }
         },
-        () => {},
+        (e) => {
+          if (destroyed || cancelled || told || !(e instanceof RangeRefusal) || e.kind === 'gone') return
+          told = true
+          try {
+            o.refused?.(e)
+          } catch {
+            /* the owner's own */
+          }
+        },
       )
     }
     transport.abort = () => {
