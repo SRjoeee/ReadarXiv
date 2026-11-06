@@ -7,6 +7,9 @@ node_modules
 stats.html
 stats-*.json
 
+# The workspace packages' incremental type-check state (tsc -b packages)
+*.tsbuildinfo
+
 # Tests
 coverage/
 tests/e2e/.profile*/

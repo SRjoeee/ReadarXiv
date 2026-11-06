@@ -9,6 +9,9 @@
 // (`@/`, `~/`, `@@/`, `~~/` — the four .wxt/tsconfig.json configures), a relative path and a bare module now all
 // reach the same destination test, so a forbidden module cannot come back by being spelled differently.
 //
+// The workspace packages (packages/*) are held by the same scanner: they import nothing of the extension, of WXT or of a
+// package that PACKAGES does not allow them (packageViolations).
+//
 // No parser: TypeScript 7 exposes none publicly, and a transitive Babel is not a dependency this repository declares.
 // Comments and literals are removed by a small scanner, the import forms are matched tolerantly (compact syntax,
 // re-exports, dynamic imports, require), and `tests/scripts/boundary.test.ts` pins every one of those forms.
@@ -274,6 +277,92 @@ export function engineViolations(files, { root = '.' } = {}) {
   return out
 }
 
+/** The workspace packages (packages/<name>, `@readarxiv/<name>`) and the other packages each may import: the directions
+ *  of the design (§4.8), one way. A package is listed here when it is created; a directory under packages/ that is not
+ *  listed is a violation, so the table cannot lag the tree. A package imports another through its entry, `@readarxiv/<name>`,
+ *  and never a deep path or a relative one, and it imports nothing of the extension (`src/`, its aliases) or of WXT */
+export const PACKAGES = {
+  format: [],
+  text: [],
+  engine: ['format', 'text'],
+  typeset: ['format', 'text'],
+  translate: ['text'],
+  reader: ['format', 'typeset', 'text', 'ui'],
+  ui: [],
+}
+const SCOPE = '@readarxiv/'
+const IN_PACKAGE = /^packages\/([^/]+)\/./
+const MANIFEST_DEPENDENCIES = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+
+/** a package name the platform layer is made of: WXT and its helpers, and the extension API polyfill */
+const isPlatformPackage = name => name === 'wxt' || name.startsWith('@wxt-dev/') || name === 'webextension-polyfill'
+
+/** Why package `pkg` may not name a module so, or null: a `node:` module, a relative path that stays inside the package, a
+ *  package of another origin that is not the platform's, or a `@readarxiv/` package PACKAGES lets it import, by its entry */
+function whyPackageRefused(file, pkg, spec) {
+  if (spec.startsWith('node:')) return null
+  if (spec.startsWith('./') || spec.startsWith('../')) {
+    const target = dropExtension(norm(relative('.', resolve(dirname(file), spec.replace(QUERY, '')))))
+    if (target.startsWith(`packages/${pkg}/`)) return null
+    const other = /^packages\/([^/]+)\//.exec(target)
+    if (other) return `a relative path into packages/${other[1]}: a package imports another by its entry, ${SCOPE}${other[1]}`
+    if (target === 'src' || target.startsWith('src/')) return 'the extension\'s src/: the packages are under the extension, not over it'
+    return 'a file outside the package: a package names what it imports by its entry, a package name or a node: module'
+  }
+  if (ALIASES.some(([prefix]) => spec.startsWith(prefix)) || EXACT.has(spec)) return 'an alias of the extension\'s src/ (@/, ~/, @@/, ~~/): a package resolves by relative path and package name'
+  if (spec.startsWith('#') || spec.startsWith('virtual:')) return 'a virtual module of WXT or of a bundler: a package imports only what Node resolves'
+  const name = packageOf(spec)
+  if (name === null) return 'neither a relative path, a node: module nor a package: a package names a module by one of those alone'
+  if (isPlatformPackage(name)) return 'the platform layer (WXT, the extension API): a package is platform-free'
+  if (!name.startsWith(SCOPE)) return null
+  const dep = name.slice(SCOPE.length)
+  if (spec !== name) return `a deep path into ${name}: import its entry, "${name}"`
+  if (dep === pkg) return 'the package itself by name: it imports its own files by relative path'
+  if (!(dep in PACKAGES)) return `${name}, which PACKAGES does not list`
+  return PACKAGES[pkg].includes(dep) ? null : `${name}, a direction PACKAGES does not allow (${pkg} may import ${PACKAGES[pkg].length > 0 ? PACKAGES[pkg].map(d => SCOPE + d).join(', ') : 'no other package'})`
+}
+
+/** What the files of the workspace packages among `files` name that they may not, and what a package's manifest declares
+ *  that it may not: every module a file names (the whole of namedModulesOf, a type-only import included: a consumer's build
+ *  resolves a type as it resolves a value), a directory PACKAGES does not list, a manifest not named for its directory or
+ *  depending on a package the table forbids, and a hand-written declaration file. Every file is read from `root` */
+export function packageViolations(files, { root = '.' } = {}) {
+  const out = []
+  const unlisted = new Set()
+  for (const file of files) {
+    const m = IN_PACKAGE.exec(file)
+    if (!m) continue
+    const pkg = m[1]
+    if (!(pkg in PACKAGES)) {
+      if (!unlisted.has(pkg)) out.push({ file, spec: `packages/${pkg}`, why: 'a directory under packages/ that PACKAGES does not list: add it, with the packages it may import' })
+      unlisted.add(pkg)
+      continue
+    }
+    if (DECLARATION.test(file)) { out.push({ file, spec: file, why: 'a hand-written declaration file: the types of a package are its TypeScript source' }); continue }
+    if (file === `packages/${pkg}/package.json`) {
+      const manifest = JSON.parse(readFileSync(resolve(root, file), 'utf8'))
+      if (manifest.name !== `${SCOPE}${pkg}`) out.push({ file, spec: String(manifest.name), why: `a manifest named for its directory: ${SCOPE}${pkg}` })
+      for (const kind of MANIFEST_DEPENDENCIES) {
+        for (const dep of Object.keys(manifest[kind] ?? {})) {
+          const why = isPlatformPackage(dep) ? 'the platform layer (WXT, the extension API): a package is platform-free'
+            : dep.startsWith(SCOPE) && !PACKAGES[pkg].includes(dep.slice(SCOPE.length)) ? `${dep}, a direction PACKAGES does not allow`
+              : null
+          if (why !== null) out.push({ file, spec: dep, why })
+        }
+      }
+      continue
+    }
+    if (!(CODE.test(file) || STYLESHEET.test(file))) continue
+    const text = readFileSync(resolve(root, file), 'utf8')
+    for (const { spec, display, why: given } of STYLESHEET.test(file) ? stylesheetModulesOf(text) : namedModulesOf(text)) {
+      if (spec === null) { out.push({ file, spec: display, why: given ?? 'a module named by a computed specifier: the imports of a package are literal, so that where they lead can be told' }); continue }
+      const why = whyPackageRefused(file, pkg, spec)
+      if (why !== null) out.push({ file, spec, why })
+    }
+  }
+  return out
+}
+
 /** The file a repository path names as the compiler finds it: the path itself, an extension added, an index file, a
  *  TypeScript source behind a `.js` name; null where there is none */
 function sourceOf(path, root) {
@@ -340,6 +429,8 @@ export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { 
   .split('\0')
   .filter(f => f && /\.(m|c)?tsx?$/.test(f) && CORE.some(re => re.test(f)))
 
+export const packageFiles = () => execFileSync('git', ['ls-files', '-z', 'packages'], { encoding: 'utf8' }).split('\0').filter(Boolean)
+
 export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
   .split('\0')
   .filter(f => f && (CODE.test(f) || STYLESHEET.test(f)))
@@ -363,4 +454,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const tolerated = found.length > 0 ? ` (${found.length} imports tolerated until ${[...ENGINE_MOVE_OUT.map(f => `${f} leaves`), ...ENGINE_MOVE_IN.map(m => `${m} enters`)].join(', ')})` : ''
   console.log(`boundary check: ${engine.length} engine files import only the engine, ${ENGINE_ALLOW.length} core modules and the layout rules' validator, by relative path${tolerated}`)
+  const packages = packageFiles()
+  const stray = packageViolations(packages)
+  if (stray.length > 0) {
+    console.error('A workspace package imports what its direction forbids (packages import no extension code and no platform module; PACKAGES holds the directions between them):')
+    for (const v of stray) console.error(`  ${v.file}: ${v.spec} (${v.why})`)
+    process.exit(1)
+  }
+  console.log(`boundary check: ${packages.length} package files import no extension code, no platform module and only the packages PACKAGES allows, by entry`)
 }

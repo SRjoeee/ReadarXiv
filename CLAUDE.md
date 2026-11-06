@@ -25,7 +25,7 @@ Each is a product promise, a legal requirement, or a contract with something out
 5. **Secrets**: API keys live only in WXT storage — never in logs, cache keys, fixtures or git. A third party's public client constant (the Google web translator's key in `providers/google-web.ts`) is not a secret.
 6. **Attribution**: code ported from the reference projects (KISS Translator, Read Frog, FluentRead — GPL-3.0) keeps the header `// Ported from reference/<repo>/<path>@<commit> (GPL-3.0), <YYYY-MM-DD>, modified` and an entry in `docs/THIRD_PARTY.md`.
 7. **External contracts** get migration or compatibility handling, never silent replacement: the saved configuration schema (`CONFIG_VERSION` and a migration, DESIGN §9), and whatever a reader's machine or another program holds that a new version must still meet.
-8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence.
+8. **The platform boundary** (DESIGN §4.2, checked by `pnpm lint` through `scripts/check-boundary.mjs`): `src/core`, `src/providers` and `src/cache` import nothing from `wxt`, the entry points, the UI, the locale packs, the WXT configuration store or runtime messaging; what the core needs from the host enters as a dependency, and what it shows a reader is a code the host turns into a sentence. The same gate holds `packages/**` (the workspace packages, `packages/README.md`): they import nothing from `src/`, `wxt` or its virtual modules, only the packages `PACKAGES` allows, and only through their entry.
 9. **No `:has()` in the injected style sheets** (DESIGN §7.2, gate `tests/styles/no-has.test.ts`): Chrome answers a `:has()` in an author sheet by recalculating the whole document's styles on every DOM insertion. Every structural condition the layout needs is a `data-axt-*` mark written by the code that creates the structure; `:has()` stays available to TypeScript queries.
 
 Two defaults, open to re-evaluation with evidence: `ltx_*` selectors live only in `src/core/rules/latexml.ts` (style sheets may use them for layout only); the wire format (tags / markers / runs) is negotiated from the provider's declared `wireFormats`, never chosen by provider identity in the renderer.
@@ -55,8 +55,8 @@ Chinese, Japanese and Korean that is product data stays: the locale packs (`src/
 ```
 pnpm install
 pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
-pnpm typecheck           # tsc --noEmit — vitest does not type-check
-pnpm lint                # Biome linter, the English gate, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
+pnpm typecheck           # tsc --noEmit, then tsc -b packages (each workspace package under its own tsconfig) — vitest does not type-check
+pnpm lint                # Biome linter, the English gate, Biome's formatter over packages/, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet

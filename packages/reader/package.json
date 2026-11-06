@@ -1,0 +1,21 @@
+{
+  "name": "@readarxiv/reader",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "the page stack, composing, session, highlight and the Host a reader runs in",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@readarxiv/format": "workspace:*",
+    "@readarxiv/typeset": "workspace:*",
+    "@readarxiv/text": "workspace:*",
+    "@readarxiv/ui": "workspace:*"
+  }
+}

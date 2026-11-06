@@ -17,6 +17,11 @@
 	},
 	"overrides": [
 		{
+			"includes": ["packages/**"],
+			"formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
+			"javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded", "trailingCommas": "all" } }
+		},
+		{
 			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs"],
 			"linter": {
 				"rules": {

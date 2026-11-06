@@ -1,0 +1,15 @@
+{
+  "name": "@readarxiv/text",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "sentence cuts and paper ids: the small facts several packages share",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

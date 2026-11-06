@@ -97,6 +97,51 @@ importers:
         specifier: ^0.21.4
         version: 0.21.4(esbuild@0.28.2)(rolldown@1.2.15)(typescript@7.0.2)(vite@8.3.5(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
+  packages/engine:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/format: {}
+
+  packages/reader:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+      '@readarxiv/typeset':
+        specifier: workspace:*
+        version: link:../typeset
+      '@readarxiv/ui':
+        specifier: workspace:*
+        version: link:../ui
+
+  packages/text: {}
+
+  packages/translate:
+    dependencies:
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/typeset:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/ui: {}
+
 packages:
 
   '@1natsu/wait-element@4.2.0':
