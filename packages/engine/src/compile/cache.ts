@@ -1,6 +1,6 @@
 // The instrument's cache (design §4.3 "The instrument is cached"; contract stage 1b, deliverable 4): what the TeX runs of a
 // paper's prepare made — the definitions the unmarked first pass wrote and the files it made for the reader (a job's .bbl),
-// the probe's answers while the probe stands, the plan, and the marked compile's draft PDF and last log — stored under the
+// the probe's answers (asked in that first pass), the plan, and the marked compile's draft PDF and last log — stored under the
 // digest of what decides them: the source as received, the marks code (MARKS_CODE: the reader and the marks writer), the
 // tree (its image), the compiler, the date the compiles run under and the compile plan's name. A new engine build that
 // does not change the marks runs only the JavaScript stages on the stored B; a try that dies after the compile resumes
@@ -23,8 +23,6 @@ export interface InstrumentInputs {
   sourceDate?: number | null
   /** the compile plan, by name and options (drafts only, the recovery's step) */
   steps: string
-  /** the probe's answers, while the probe decides the placement (an input of markSource) */
-  answers?: unknown
   /** the marks code; MARKS_CODE unless a test names another */
   marks?: string
 }
@@ -62,7 +60,6 @@ export function instrumentKey(i: InstrumentInputs): string {
         sourceDate: i.sourceDate ?? null,
         steps: i.steps,
         main: i.main,
-        answers: i.answers === undefined ? null : sha256Hex(utf8(canonical(i.answers))),
         files,
       }),
     ),
@@ -87,7 +84,8 @@ export interface StoredInstrument {
   definitions: string
   /** the files that pass made for the source reader (path, bytes): the job's .bbl where the package ships none */
   made: [string, Uint8Array][]
-  /** the probe's answers the placement took (JSON-able), null where none */
+  /** the probe's answers the placement took, as the first pass's log states them (JSON-able), null where none: a function of
+   *  the key's inputs (the source, the tree, the marks code that writes the probe), never one of them */
   answers: unknown
   plan: Plan
   /** the marked compile's PDF (B: the draft) and its last TeX pass's log, as TeX wrote it (bytes read as Latin-1) */

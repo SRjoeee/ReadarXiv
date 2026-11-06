@@ -23,7 +23,6 @@ const inputs = (o: Partial<InstrumentInputs> = {}): InstrumentInputs => ({
   compiler: 'pdflatex',
   sourceDate: 1700000000,
   steps: 'drafts',
-  answers: { switches: { '\\cite': '00000000' }, inkless: [] },
   ...o,
 })
 
@@ -51,7 +50,7 @@ describe('the instrument cache', () => {
         .update('\0')
     expect(MARKS_CODE).toBe(h.digest('hex'))
   })
-  it('keys on every input: a file’s bytes or name, the tree, the compiler, the date, the steps, the answers, the code', () => {
+  it('keys on every input: a file’s bytes or name, the tree, the compiler, the date, the steps, the code', () => {
     const k = instrumentKey(inputs())
     expect(instrumentKey(inputs())).toBe(k)
     // (the files' order is not an input)
@@ -63,8 +62,6 @@ describe('the instrument cache', () => {
       inputs({ compiler: 'xelatex' }),
       inputs({ sourceDate: null }),
       inputs({ steps: 'drafts, unit marks only' }),
-      inputs({ answers: { switches: { '\\cite': '22220000' }, inkless: [] } }),
-      inputs({ answers: undefined }),
       inputs({ marks: 'another code' }),
       inputs({ main: 'fig.pdf' }),
     ].map(instrumentKey)

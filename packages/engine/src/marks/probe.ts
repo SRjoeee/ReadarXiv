@@ -379,17 +379,20 @@ export function bblHead(tree: Tree): string {
 }
 
 /**
- * The file the first pass reads at its end (`enddocument/end`, compile/first.ts): in a group, a box that is never shipped
- * holds the marks' definitions (the marked compile's: MARK_DEF, LAYOUT_TEX and the DVI drivers') and the probe's sections; a
- * row `probe-begin` first, so that the pass's own log is what stands before it (unprobed)
+ * The file the first pass reads at its end (`enddocument/end`): the marks' definitions (the marked compile's: MARK_DEF,
+ * LAYOUT_TEX and the DVI drivers'), then in a group a box that is never shipped, holding the bibliography's own definitions
+ * and the probe's sections; a row `probe-begin` first, so that the pass's own log is what stands before it (unprobed)
  */
 export function probeFile(s: ProbeSamples, compiler: string, bbl = ''): string {
   const dvi = compiler === 'latex'
   return [
     "% readarxiv: the mark probe, asked at the first pass's end (packages/engine/src/marks/probe.ts)",
     probeRow('probe-begin', s.punct.length, s.ink.length, s.leads.length, s.ahead.length),
-    '\\begingroup\\setbox0\\vbox{%',
+    // (the marks' definitions at the top level: their hooks are global, and a sample that closes more groups than it opens
+    // (acronym's \\ac at the document's end, 2609.20976v1) would leave the hooks with no definition for every paragraph after)
     X.MARK_DEF + (dvi ? X.DVI_MARK_DEF : '') + X.LAYOUT_TEX + (dvi ? X.DVI_LAYOUT_TEX : ''),
+    PRELUDE,
+    '\\begingroup\\setbox0\\vbox{%',
     bbl,
     probeTex(s),
     '}\\endgroup',
@@ -414,6 +417,18 @@ export function probeBytes(text: string, encoding: SourceDoc['encoding']): Uint8
     return back.get(c) ?? 0x3f
   })
 }
+/**
+ * Before the sections, at the top level: the state today's probe began in, a document's start (the footnote counter at 0,
+ * no file written: the aux is closed by then, and a write to it goes to the log); and global copies of what the sections
+ * define in their groups (their boxes, PROBE_RESET's, the look-ahead's \axt@qat, the guard's conditional), so that a sample
+ * that closes more groups than it opens (2610.20266v1, 2610.40576v1: the sections' \axt@qreset gone, every box after it an
+ * error) leaves the probe after it as it was
+ */
+const PRELUDE =
+  '\\makeatletter\\@fileswfalse\\ifdefined\\c@footnote\\global\\c@footnote=0\\fi' +
+  '\\newbox\\axt@qbox\\newbox\\axt@ibox\\newif\\ifaxt@qok' +
+  '\\xdef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\gdef\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}' +
+  '\\gdef\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
 /** the hook that reads it, for the first pass's command line */
 export const PROBE_HOOK = `\\AddToHook{enddocument/end}{\\input{${PROBE_FILE}}}`
 

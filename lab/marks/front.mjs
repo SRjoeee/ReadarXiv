@@ -12,11 +12,10 @@
 // inputs as replay.mjs and lane L1 read them (`mine`), with today's owners.
 // --first=<dir>: the first pass's outputs with the mark probe asked at its end (lab/source/definitions.mjs --probe: <id>.axtdefs,
 // <id>.log, <id>.probe.json): the definitions, the probe's answers (packages/engine/src/marks/probe.ts readAnswers, with TeX's
-// complete macros, SourceDoc `complete`) and the unmarked log the recovery reads (the log before the probe's rows), in place
-// of --defs and today's probe answers (--answers).
+// complete macros, SourceDoc `complete`) and the unmarked log the recovery reads (the log before the probe's rows). Today's
+// probe answers (lab/marks/answers.json) are no input of it since stage 1b's fifth owner (runs d1-d5 took them).
 //   node --max-old-space-size=6144 --import tsx lab/marks/front.mjs --id=<id> --dir=<paper dir> --out=<dir> --store=<dir>
-//        --today=<gate6 keep dir> (--first=<dir> | --defs=<dir> --answers=<answers.json>) --bbl=<dir> --compiles=<dir>
-//        [--keep=<dir>]
+//        --today=<gate6 keep dir> --first=<dir> --bbl=<dir> --compiles=<dir> [--keep=<dir>] [--probe=off] [--with=…]
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -29,7 +28,6 @@ import { readAnswers, unprobed } from '../../packages/engine/src/marks/probe.ts'
 import { readDefinitions } from '../../packages/engine/src/source/definitions.ts'
 import { sha256Hex } from '../../packages/format/src/index.ts'
 import { readSource } from '../../packages/engine/src/source/read.ts'
-import { answersOf } from './answers-of.mjs'
 import { compare, draftPage } from './compare.mjs'
 import { compiler, PINS } from './today.mjs'
 
@@ -47,7 +45,8 @@ const arg = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length
 const id = arg('id'), DIR = arg('dir'), OUT = arg('out'), STORE = arg('store')
 /** the compile plan's name, a key input: drafts only (stage 1b deliverable 1) */
 const STEPS = 'drafts: latexmk over the marked tree, graphicx draft; no final pass; the bounded recovery'
-/** --probe=off: the placement without the probe's answers (stage 1b's count) */
+/** --probe=off: the placement without the probe's answers (stage 1b's count): the first pass's definitions, none of its
+ *  answers */
 const PROBE = arg('probe') !== 'off'
 /** the first pass's outputs, the probe asked at its end */
 const FIRST = arg('first')
@@ -64,7 +63,7 @@ const t0 = performance.now()
 const ms = { source: 0, key: 0, marks: 0, tex: 0, store: 0, pdf: 0, instrument: 0, compare: 0 }
 const lap = (k, t) => { ms[k] += performance.now() - t; return performance.now() }
 const k6 = deserialize(readFileSync(join(arg('today'), `${id}.v8`)))
-const A = FIRST ? null : JSON.parse(readFileSync(arg('answers'), 'utf8'))[id]
+if (!FIRST) throw new Error('--first=<dir>: the first pass (lab/source/definitions.mjs --probe) states the definitions and the probe\'s answers')
 const { files: source } = await tar.unpackSource(new Uint8Array(readFileSync(join(DIR, 'source.gz'))))
 
 // ---- the paper as the box receives it: main file, compiler, tree, date (today's decisions, as the gate's run 6 took them)
@@ -86,7 +85,7 @@ const stem = main.split('/').pop().replace(/\.[^.]+$/, '')
 let t = lap('source', t0)
 
 // ---- the key, and the store
-const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: `${STEPS}${FIRST ? '; the probe at the first pass\'s end' : ''}${Object.keys(WITH).length ? `; with ${Object.keys(WITH).sort().join(', ')}` : ''}`, answers: FIRST ? null : PROBE ? (A ?? null) : null })
+const key = instrumentKey({ files: source, main, tree: image, compiler: compilerName, sourceDate, steps: `${STEPS}; the probe at the first pass's end${PROBE ? '' : ', its answers not taken'}${Object.keys(WITH).length ? `; with ${Object.keys(WITH).sort().join(', ')}` : ''}` })
 const file = join(STORE, `${key}.axti`)
 t = lap('key', t)
 const made = { compiler: compilerName, tree: year }
@@ -97,8 +96,8 @@ async function instrumentOf({ doc, plan, pdf, log, answers }) {
   const read = await readPdf(pdfjs, pdf, { options: { ...docOpts, ...LITE }, turned: true })
   const pages = read.pages.map(({ raw, page }) => (raw ? { glyphs: raw.glyphs, boxes: raw.boxes, paths: raw.paths ?? [], boxAt: raw.boxAt ?? [], points: raw.points.map(x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], view: [...page.view] } : { glyphs: [], boxes: [], paths: [], boxAt: [], points: [], paras: [], paraEnds: [], view: [...page.view] }))
   t1 = lap('pdf', t1)
-  // (the first pass's answers as stored, or today's probe's)
-  const a = answers?.first ? { inkless: answers.first.inkless, texts: new Map(answers.first.texts), lineskip: answers.first.lineskip } : answersOf(answers)
+  // (the first pass's answers as stored)
+  const a = answers?.first ? { inkless: answers.first.inkless, texts: new Map(answers.first.texts), lineskip: answers.first.lineskip } : {}
   const ins = instrumentFromPlan({ ink: read.doc, pages, plan, doc, log, made, inkless: a.inkless ?? [], texts: a.texts, lineskip: a.lineskip ?? null })
   lap('instrument', t1)
   return { ins, pages, a }
@@ -109,7 +108,7 @@ let stored, fresh = null, hit = existsSync(file)
 if (hit) stored = decodeStored(new Uint8Array(readFileSync(file)), key)
 else {
   // (the first pass's outputs: TeX's definitions dump and the job's .bbl today made, lanes/L2/defs and marks/bbl)
-  const definitions = readFileSync(join(FIRST ?? arg('defs'), `${id}.axtdefs`), 'utf8')
+  const definitions = readFileSync(join(FIRST, `${id}.axtdefs`), 'utf8')
   const bblPath = join(arg('bbl'), `${id}.bbl`)
   const madeFiles = !source.has(`${stem}.bbl`) && existsSync(bblPath) ? [[`${stem}.bbl`, new Uint8Array(readFileSync(bblPath))]] : []
   const tree = treeWith(madeFiles)
@@ -117,10 +116,10 @@ else {
   t = lap('marks', t)
   // (the marked compile with its bounded recovery, packages/engine/src/compile/recover.ts; the unmarked first pass's log is
   // the dump's, lanes/L2/defs/<id>.log)
-  const unmarkedLog = first ? unprobed(first.log) : existsSync(join(arg('defs'), `${id}.log`)) ? readFileSync(join(arg('defs'), `${id}.log`), 'latin1') : ''
-  // (the probe's answers: the first pass's, with TeX's complete macros; or today's probe's)
-  const pa = first ? readAnswers(first.log, first.samples) : null
-  const marking = pa ? { switches: pa.switches, inkless: pa.inkless, apart: pa.apart, complete: doc.complete, probed: pa.probed, seen: pa.seen } : PROBE ? answersOf(A) : null
+  const unmarkedLog = unprobed(first.log)
+  // (the probe's answers: the first pass's, with TeX's complete macros)
+  const pa = PROBE ? readAnswers(first.log, first.samples) : null
+  const marking = pa ? { switches: pa.switches, inkless: pa.inkless, apart: pa.apart, complete: doc.complete, probed: pa.probed, seen: pa.seen } : null
   const rec = await compileMarked({
     tree, doc, unmarkedLog,
     options: { compiler: compilerName, ...WITH, ...(marking ? { answers: marking } : {}) },
@@ -139,7 +138,7 @@ else {
   const { plan } = rec
   const markedC = { pdf: rec.pdf, log: rec.log }
   attempts = rec.attempts
-  fresh = { key, definitions, made: madeFiles, answers: pa ? { first: pa, complete: doc.complete } : PROBE ? (A ?? null) : null, plan, pdf: markedC.pdf, log: markedC.log ?? '', compiles: attempts.map(x => ({ step: x.step, ok: x.ok, ...(x.why ? { why: x.why } : {}), unmarked: x.unmarked.length, errors: x.errors, ...(x.ms !== undefined ? { ms: x.ms } : {}) })), doc }
+  fresh = { key, definitions, made: madeFiles, answers: pa ? { first: pa, complete: doc.complete } : null, plan, pdf: markedC.pdf, log: markedC.log ?? '', compiles: attempts.map(x => ({ step: x.step, ok: x.ok, ...(x.why ? { why: x.why } : {}), unmarked: x.unmarked.length, errors: x.errors, ...(x.ms !== undefined ? { ms: x.ms } : {}) })), doc }
   const { doc: _d, ...entry } = fresh
   writeFileSync(`${file}.tmp`, encodeStored(entry))
   renameSync(`${file}.tmp`, file)
@@ -183,6 +182,6 @@ if (arg('keep')) {
   const slim = mine.pages.map(pg => ({ ...pg, glyphs: pg.glyphs.map(g => ({ u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, ...(g.blank ? { blank: true } : {}) })) }))
   writeFileSync(join(arg('keep'), `${id}.v8`), serialize({ id, out: k6.out, key, mine: { pages: slim, plan: stored.plan, doc: sDoc, log: stored.log, inkless: mine.a.inkless ?? [], texts: mine.a.texts, made } }))
 }
-const result = { id, year, compiler: compilerName, probe: FIRST ? 'first' : PROBE, attempts: stored.compiles, guard: k6.out.guard ?? null, ms: Math.round(performance.now() - t0), stages: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])), cache, compiles: { mine: statsMine, stored: stored.compiles }, draftDiffer, ...cmp, units: { mine: mine.ins.units.length, unplacedMine: stored.plan.units.filter(u => u.why).length } }
+const result = { id, year, compiler: compilerName, probe: PROBE ? 'first' : 'off', attempts: stored.compiles, guard: k6.out.guard ?? null, ms: Math.round(performance.now() - t0), stages: Object.fromEntries(Object.entries(ms).map(([k, v]) => [k, Math.round(v)])), cache, compiles: { mine: statsMine, stored: stored.compiles }, draftDiffer, ...cmp, units: { mine: mine.ins.units.length, unplacedMine: stored.plan.units.filter(u => u.why).length } }
 writeFileSync(join(OUT, `${id}.json`), JSON.stringify(result, null, 1))
 console.log(id, JSON.stringify({ pages: result.pages, glyphs: result.glyphs, boxes: result.boxes, cache, draftDiffer: draftDiffer.length }))
