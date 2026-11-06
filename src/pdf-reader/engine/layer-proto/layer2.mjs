@@ -1040,6 +1040,8 @@ export function prepareUnit(unit, rects, charsByPage, citeMap, deny, parts) {
   // (where TeX ended a line at a forced break `\\`: each of its pieces with the line set after it; and where it set a group
   // of the source as a paragraph of its own, by the lines the alignment found its words on: the group's open piece)
   out.breaks = parts.breaks(unit, out.pieceLines ?? null)
+  // (read here alone: no unit keeps it, the speed check's heap a laid page)
+  out.pieceLines = null
   finishUnit(out, unit, rects, charsByPage)
   // a displayed formula found, whose lines hold words the alignment took for the source's ("RMSE" in "RMSE_i(t) =",
   // while the text says "…using the RMSE:"): aligned again without its lines' words, once
@@ -1500,12 +1502,12 @@ function finishUnit(out, unit, rects, charsByPage) {
   }
   // (a group TeX set as a paragraph of its own, tex.mjs paragraphBreaks: its open piece, which no rendering is, holds the region
   // before the line TeX set its text from, `openBreaks` by its index, tokensOf2)
-  out.openBreaks = new Map()
+  out.openBreaks = null
   for (const [i, { next, room }] of out.breaks ?? []) {
     const r = out.get(i)
     if (!r) {
       const g = room === null && unit.pieces[i]?.t === 'open' ? breakOf.get(next) : undefined
-      if (g !== undefined) { out.openBreaks.set(i, g); out.referenced.add(g) }
+      if (g !== undefined) { (out.openBreaks ??= new Map()).set(i, g); out.referenced.add(g) }
       continue
     }
     // (inside a frame: its room, and the line after it, by which its group's pieces are one break, tokensOf2)

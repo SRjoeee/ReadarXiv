@@ -119,7 +119,7 @@ export interface Prepared extends Map<number, Resolved> {
   regionOf: Map<string, number>
   referenced: Set<number>
   /** the file's lines each source piece's words stand on, by the alignment: its index in `unit.source` to [first, last]
-   *  (tex.mjs paragraphBreaks) */
+   *  (tex.mjs paragraphBreaks), null once the breaks have read it */
   pieceLines?: Map<number, [number, number]> | null
   /** a source's forced breaks (tex.mjs forcedBreaks), and the open pieces of the groups TeX set as paragraphs of their own
    *  (paragraphBreaks): each break piece's index to the file's line TeX set after it and TeX's room between the two (null:
@@ -127,7 +127,7 @@ export interface Prepared extends Map<number, Resolved> {
   breaks?: Map<number, { next: number; room: number | null; pitch: number | null }> | null
   /** the finish: a group TeX set as a paragraph of its own, its open piece's index to its region (tokensOf2: the laid line
    *  ends before it) */
-  openBreaks?: Map<number, number>
+  openBreaks?: Map<number, number> | null
   /** the finish: a forced break whose next line opens another frame, its region (no lines of its own) by the key of that
    *  line, which its pieces hold (their resolutions' `region`, with `brk`) */
   breakAt?: Map<string, number>
