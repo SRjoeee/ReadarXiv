@@ -720,6 +720,104 @@ describe('DECISION "Where pacing state lives": an object the host makes once (ch
   })
 })
 
+describe("DECISION \"Where pacing state lives\": the pacing is the identity's; what an object's send did is that object's", () => {
+  // two objects of one identity: a host's key replaced while a page still translates (an identity never holds a key, so
+  // rows and stored replies survive the change); `delayMs` keeps a request in flight while the other object asks
+  const wireOf = (u: UnitIn) => JSON.stringify(u.content)
+  const twin = (id: string) => unit(id, plain.content as never)
+  it('equal content from two objects of one identity: each sent by its own send; a refused key answers none of the other', async () => {
+    const clock = fakeClock()
+    const old = fakeTranslator({
+      identity: 'llm:one',
+      script: () => ({ fault: new Fault('off', 'key-refused', '401') }),
+    })
+    const send = old.send.bind(old)
+    old.send = async function* (wires, call, signal) {
+      await clock.sleep(100, signal)
+      yield* send(wires, call, signal)
+    }
+    const fresh = fakeTranslator({ identity: 'llm:one', clock, script: () => ({ delayMs: 100 }) })
+    const chain = chainOf({ clock })
+    const [ra, rb, rc] = await Promise.all([
+      all(chain.translate([plain], 'ja', { translators: [old] })),
+      all(chain.translate([twin('p2')], 'ja', { translators: [fresh] })),
+      all(chain.translate([twin('p3')], 'ja', { translators: [fresh] })),
+    ])
+    expect(ra[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unconfigured', code: 'key-refused' } })
+    expect(rb[0]).toMatchObject({ id: 'p2', ok: true, by: 'llm:one' })
+    expect(rc[0]).toMatchObject({ id: 'p3', ok: true, by: 'llm:one' })
+    expect(old.sent(plain)).toBe(1)
+    // equal content twice from the same object is still sent once
+    expect(fresh.sent(plain)).toBe(1)
+  })
+  it("two objects' units are never one request: each object's request holds its own units alone", async () => {
+    const clock = fakeClock()
+    const a = fakeTranslator({ identity: 'llm:one', clock, script: () => ({ delayMs: 100 }) })
+    const b = fakeTranslator({ identity: 'llm:one', clock, script: () => ({ delayMs: 100 }) })
+    const [ua, ub] = [many(2, 'a'), many(2, 'b')]
+    const chain = chainOf({ clock })
+    const rs = await Promise.all([
+      all(chain.translate(ua, 'ja', { translators: [a] })),
+      all(chain.translate(ub, 'ja', { translators: [b] })),
+    ])
+    expect(rs.flat().every((r) => r.ok)).toBe(true)
+    expect(a.calls).toEqual([ua.map(wireOf)])
+    expect(b.calls).toEqual([ub.map(wireOf)])
+  })
+  it("the lane's in-flight limit and its cooldown bind both objects together", async () => {
+    const clock = fakeClock()
+    let live = 0
+    let peak = 0
+    const counted = () => {
+      const f = fakeTranslator({
+        identity: 'llm:one',
+        clock,
+        limits: { inFlight: 1, units: 1 },
+        script: () => ({ delayMs: 10 }),
+      })
+      const send = f.send.bind(f)
+      f.send = async function* (wires, call, signal) {
+        live++
+        peak = Math.max(peak, live)
+        try {
+          yield* send(wires, call, signal)
+        } finally {
+          live--
+        }
+      }
+      return f
+    }
+    const [a, b] = [counted(), counted()]
+    const chain = chainOf({ clock })
+    await Promise.all([
+      all(chain.translate(many(2, 'a'), 'ja', { translators: [a] })),
+      all(chain.translate(many(3, 'b'), 'ja', { translators: [b] })),
+    ])
+    expect([a.calls.length, b.calls.length]).toEqual([2, 3])
+    expect(peak).toBe(1)
+    // one object's 429 cools the identity: another object of it is passed by
+    const cooling = fakeTranslator({
+      identity: 'llm:one',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 30_000 }) }),
+    })
+    const other = echo('llm:one')
+    const e = echo()
+    expect((await all(chain.translate([plain], 'ja', { translators: [cooling, e] })))[0]).toMatchObject({
+      by: 'echo:0',
+    })
+    const notes: Note[] = []
+    const later = await all(chain.translate([withMath], 'ja', { translators: [other, e], note: (n) => notes.push(n) }))
+    expect(later[0]).toMatchObject({ ok: true, by: 'echo:0' })
+    expect(other.calls.length).toBe(0)
+    expect(notes).toContainEqual({
+      kind: 'passed',
+      by: 'llm:one',
+      id: 'm',
+      why: { kind: 'unavailable', retryAfterMs: 30_000 },
+    })
+  })
+})
+
 describe('DECISION "Who builds translators": the host passes Translator objects; the package builds the free engines over the fetch it is given', () => {
   it('microsoft({ fetch }) asks through that fetch alone, through the chain', async () => {
     const f = scriptedFetch((_url, init) => ({

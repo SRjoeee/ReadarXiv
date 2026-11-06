@@ -124,6 +124,9 @@ export async function identityOf(translators: readonly Translator[]): Promise<st
 }
 
 // ---------------------------------------------------------------- the lanes: one per translator identity
+// A lane's pacing (requests in flight, the cooldown, the breaker) is its identity's: one endpoint, one budget. Its entries
+// are a translator object's: two objects of one identity (a host's key replaced while a page still translates; an
+// identity never holds a key) share no request, no batch and no `off`, so each object's units go by its own `send`
 
 /** what a request brings back for one waiter */
 type Answer =
@@ -191,6 +194,17 @@ export function chainOf(ports: Ports = {}): Chain {
   const lanes = new Map<string, Lane>()
   /** translators off for their configuration, by object: a changed configuration makes new objects */
   const offs = new WeakMap<Translator, UnconfiguredCode>()
+  /** each translator object's number, in its lane's entry keys: equal wires of one object are asked once, of two never together */
+  const objects = new WeakMap<Translator, number>()
+  let made = 0
+  const objectOf = (t: Translator): number => {
+    let n = objects.get(t)
+    if (n === undefined) {
+      n = ++made
+      objects.set(t, n)
+    }
+    return n
+  }
   const supported = new WeakMap<Translator, Map<Lang, Promise<boolean>>>()
   let calls = 0
 
@@ -276,7 +290,7 @@ export function chainOf(ports: Ports = {}): Chain {
     new Promise<Answer>((resolve) => {
       if (signal.aborted) return resolve({ aborted: true })
       const lane = laneOf(t)
-      const k = alone ? `${key}|again` : key
+      const k = `${objectOf(t)}|${alone ? `${key}|again` : key}`
       let e = lane.byKey.get(k)
       if (!e) {
         e = {
@@ -348,7 +362,10 @@ export function chainOf(ports: Ports = {}): Chain {
       const request: Entry[] = [first]
       if (!first.alone && first.wire.length <= limits.chars) {
         let chars = first.wire.length
-        for (const e of lane.queue.filter((x) => x !== first && x.group === first.group && !x.alone).sort(urgent)) {
+        const peers = lane.queue.filter(
+          (x) => x !== first && x.translator === first.translator && x.group === first.group && !x.alone,
+        )
+        for (const e of peers.sort(urgent)) {
           if (request.length >= limits.units) break
           if (chars + e.wire.length > limits.chars) continue
           request.push(e)

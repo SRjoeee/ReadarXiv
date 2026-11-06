@@ -557,6 +557,9 @@ inserting sentence markers, is the package's now, per unit: write, store read, r
 with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
 translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last.
+The pacing, the cooldown and the breaker are a translator identity's (one endpoint, one budget); the equal wires sent once
+and the batches are a translator object's, so a service whose key was replaced while a page still translates (one
+identity, two objects) never has the new key's units answered by the old key's request.
 What stays in the app: the reader's LLM services as a translator (`providers/llm.ts`, §8.2's prompt and structured output
 over the package's tags wire), which translators a configuration offers and in what order (`providers/translators.ts`:
 §8.5's chain and its format rule, unchanged), the rows a page reads again (§9), and what the popup is told of the engine that
