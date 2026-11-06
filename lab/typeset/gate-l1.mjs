@@ -32,6 +32,9 @@ const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDi
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
 const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
+const inv = { laid: 0, lines: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
+const pageMs = []
+let adaptMs = 0
 /** the first difference beyond the baseline comparator's tolerance (diff.mjs: numbers within 0.01 pt are one) */
 const nearDifference = (a, b, path) => {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) <= 0.01 + 1e-9 ? null : `${path}: ${a} against ${b}`
@@ -54,6 +57,14 @@ for (const pair of pairs) {
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
+  pageMs.push(...g.ms)
+  adaptMs += g.adaptMs
+  inv.laid += g.inv.laid
+  inv.lines += g.inv.lines
+  for (const k of ['I3', 'I4', 'I5']) {
+    inv[k] += g.inv[k].length
+    for (const x of g.inv[k]) if (invEx[k].length < 3) invEx[k].push(`${pair} ${x}`)
+  }
   count.twoPages += g.twoPages
   count.twoPagesDiffer += g.selfDiffer.length
   for (const [k, n] of g.stops) add(stops, k, n)
@@ -108,7 +119,12 @@ for (const pair of pairs) {
 }
 const top = m => [...m].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join('; ')
 console.log(JSON.stringify(count))
+{
+  const q = [...pageMs].sort((a, b) => a - b), at = f => Math.round(q[Math.min(q.length - 1, Math.floor(f * q.length))] * 100) / 100
+  console.log(`a page's lay (layPagePrepared, L8-E1), ms: p50 ${at(0.5)}, p90 ${at(0.9)}, p99 ${at(0.99)}, max ${at(1)} over ${q.length} pages; the adapter (L6) ${Math.round(adaptMs)} ms in all, ${Math.round((adaptMs / q.length) * 100) / 100} a page`)
+}
 console.log(`not set by the adapter: ${top(stops)}`)
+console.log(`invariants over the laid members (page by page): ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)
 console.log(`setting against today's (first differing field): ${top(setting)}`)
 console.log('the baseline\'s laid units, by verdict and the first differing field of their setting:')
 for (const [v, n] of [...verdicts].sort((a, b) => b[1] - a[1])) {

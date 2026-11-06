@@ -6,6 +6,7 @@
 // Answers the pair's laid units in the baseline's reader-dump format (FORMAT.md §4: size, leading, lines with their text,
 // crops), and risk 1 of the page decision: whether a member on two pages is laid alike from each page's part.
 import { layPagePrepared } from '../../src/lay/page.ts'
+import { type GateL1, invariantsOf } from './gate-l1.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
@@ -23,6 +24,8 @@ export type GatePair = {
   /** members laid otherwise from another page's part than from their first page's (risk 1) */
   selfDiffer: string[]
   ms: number
+  /** I3-I5 over the laid members (gate-l1.ts invariantsOf) */
+  inv: GateL1['inv']
 }
 
 let rules: { targets: Record<string, { params: Record<string, unknown> }> } | null = null
@@ -57,7 +60,15 @@ export function gatePair(pair: string): GatePair {
     number,
     { first: number; d: DumpUnit; lines: DumpUnit['lines']; elements: NonNullable<DumpUnit['elements']> }
   >()
-  const out: GatePair = { units: [], prepared: new Set(members.keys()), pages: 0, twoPages: 0, selfDiffer: [], ms: 0 }
+  const out: GatePair = {
+    units: [],
+    prepared: new Set(members.keys()),
+    pages: 0,
+    twoPages: 0,
+    selfDiffer: [],
+    ms: 0,
+    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [] },
+  }
   const t0 = performance.now()
   for (const pg of [...onPage.keys()].sort((a, b) => a - b)) {
     out.pages++
@@ -78,6 +89,7 @@ export function gatePair(pair: string): GatePair {
       ties.filter((t) => t.cells.some((o) => part.has(o))),
       R,
     )
+    invariantsOf(pg, got.members, R, out.inv)
     for (const pm of got.members) {
       if (pm.state !== 'laid' || !pm.lay) continue
       const d = dumpUnit(pm.lay, (p) => views.get(p))

@@ -20,6 +20,7 @@ const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => 
 mkdirSync(join(OUT, 'reader'), { recursive: true })
 const count = { pairs: 0, prepared: 0, laid: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, ms: 0 }
 const selfDiffer = []
+const inv = { laid: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
 for (const pair of pairs) {
   count.pairs++
   const g = gatePair(pair)
@@ -29,6 +30,8 @@ for (const pair of pairs) {
   count.twoPages += g.twoPages
   count.twoPagesDiffer += g.selfDiffer.length
   count.ms += g.ms
+  for (const k of ['I3', 'I4', 'I5']) { inv[k] += g.inv[k].length; for (const x of g.inv[k]) if (invEx[k].length < 3) invEx[k].push(`${pair} ${x}`) }
+  inv.laid += g.inv.laid
   for (const x of g.selfDiffer.slice(0, 3)) selfDiffer.push(`${pair} ${x}`)
   const base = readerDump(pair)
   const laid = new Set(g.units.map(u => u.ord))
@@ -39,5 +42,6 @@ for (const pair of pairs) {
   writeFileSync(join(OUT, 'reader', `${pair}.reader.json`), JSON.stringify({ format: 'readarxiv-baseline/reader 1', paper: base.paper, target: base.target, units: g.units, left, notLaid: base.notLaid ?? [], figures: base.figures ?? [], names: base.names ?? [] }))
 }
 console.log(JSON.stringify({ ...count, ms: Math.round(count.ms), msPerPage: Math.round((count.ms / count.pages) * 100) / 100 }))
+console.log(`invariants over the laid members: ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 console.log(`dumps: ${join(OUT, 'reader')}`)

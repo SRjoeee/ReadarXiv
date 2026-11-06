@@ -193,7 +193,9 @@ export function adapt(i: AdaptInput): Adapted {
     const side = m.room.side,
       j = lineInfo.get(rectKey(b.rects[0] as number[]))?.j
     const l = j === undefined ? undefined : lines[j]
-    if (!side || !l) return undefined
+    if (!l) return undefined
+    // (no side stated: a member across columns, whose lines' sides the one interval cannot hold; its line runs to its column)
+    if (!side) return { column: [l[7], l[8]], left: [], right: [] }
     const half = 0.5 * (b.sizes?.[0] ?? m.style.size)
     return {
       column: [l[7], l[8]],

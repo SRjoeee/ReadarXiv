@@ -655,7 +655,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  columnsAndMeasures(members, inkA)
+  columnsAndMeasures(members, inkA, gA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB })
@@ -873,7 +873,7 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */
-function columnsAndMeasures(members: Member[], inkA: Doc): void {
+function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => DocGlyph): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
   for (const [p, lines] of byPage) {
@@ -890,14 +890,26 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
   // overfull: an end past the furthest end two lines share (within 0.2 pt) by less than the line's size is no edge)
   const paras = new Map<number, Line[]>()
   const area = new Map<number, [number, number]>()
-  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none)
-  for (const mem of members)
-    for (const l of mem.lines) {
-      if (l[9] & 1) continue
+  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none; each by the extent of its
+  // own text glyphs, which today's rectangles are (its words', an inline formula that overruns the line's end aside))
+  for (const mem of members) {
+    const text = new Set(mem.text)
+    mem.lines.forEach((l, j) => {
+      if (l[9] & 1) return
+      const own = (mem.lineGlyphs[j] ?? []).filter((a) => text.has(a)).map(gA)
+      const t: Line = own.length
+        ? ([
+            ...l.slice(0, 2),
+            Math.min(...own.map((g) => g.x0)),
+            Math.max(...own.map((g) => g.x1)),
+            ...l.slice(4),
+          ] as Line)
+        : l
       const a = area.get(l[0])
-      area.set(l[0], a ? [Math.min(a[0], l[2]), Math.max(a[1], l[3])] : [l[2], l[3]])
-      if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(l)
-    }
+      area.set(l[0], a ? [Math.min(a[0], t[2]), Math.max(a[1], t[3])] : [t[2], t[3]])
+      if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(t)
+    })
+  }
   const columnOf = (l: Line): [number, number] => {
     const mid = (l[2] + l[3]) / 2
     const over = (q: number) => (paras.get(q) ?? []).filter((c) => c[2] <= mid && c[3] >= mid)

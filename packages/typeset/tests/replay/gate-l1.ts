@@ -7,7 +7,7 @@
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { adapt } from '../../src/lay/adapt.ts'
-import { layPagePrepared } from '../../src/lay/page.ts'
+import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
 import { fitMeasure } from '../../src/breaker/measure.ts'
 import type { Metrics, RuleParams } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
@@ -34,7 +34,59 @@ export type GateL1 = {
   thrown: Map<number, string>
   /** members of a table group one of whose cells the adapter did not set: the group stays the original's */
   tieHeld: Set<number>
+  /** the invariants over every laid member (design §4.9: I3 its ink overlaps no other laid unit's, I4 each element drawn once,
+   *  I5 no line wider than its slot, no fit under the floor): what breaks each, by member */
+  inv: { laid: number; lines: number; I3: string[]; I4: string[]; I5: string[] }
+  /** each page's lay (layPagePrepared: L8-E1), ms; the adapter's setting of every member (L6), ms in all */
+  ms: number[]
+  adaptMs: number
 }
+
+/** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
+export function invariantsOf(page: number, members: readonly PageMember[], R: RuleParams, inv: GateL1['inv']) {
+  const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
+  const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
+  for (const pm of members) {
+    const L = pm.lay?.layout
+    if (pm.state !== 'laid' || !L) continue
+    inv.laid++
+    const size = L.f
+    for (const l of L.lines) {
+      if (l.page !== page) continue
+      inv.lines++
+      const used = (l.used as number | undefined) ?? l.x1 - l.x0
+      if (used > l.x1 - l.x0 + 0.1)
+        inv.I5.push(`ord ${pm.ord}: a line ${(used - (l.x1 - l.x0)).toFixed(2)} pt wider than its slot`)
+      boxes.push({
+        ord: pm.ord,
+        x0: l.x0,
+        x1: l.x0 + used,
+        y0: l.baseline - 0.215 * size,
+        y1: l.baseline + 0.683 * size,
+      })
+    }
+    if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
+    // (each element's crop token drawn once over its lines, every page's)
+    const seen = new Map<unknown, number>()
+    for (const l of L.lines)
+      for (const it of l.items) if ((it.t as { crop?: unknown }).crop) seen.set(it.t, (seen.get(it.t) ?? 0) + 1)
+    if (l0Page(L) === page)
+      for (const t of pm.lay!.tokens as readonly { crop?: unknown; ownLabel?: boolean }[])
+        if (t.crop && !t.ownLabel && (seen.get(t) ?? 0) !== 1) {
+          inv.I4.push(`ord ${pm.ord}: an element drawn ${seen.get(t) ?? 0} times`)
+          break
+        }
+  }
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i]!,
+        b = boxes[j]!
+      if (a.ord === b.ord) continue
+      if (Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5)
+        inv.I3.push(`ords ${a.ord} and ${b.ord}: their lines overlap on p${page}`)
+    }
+}
+const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
 /** AXT_GATE_DEEP=<pair>:<ord>: every field of that member's preparation that differs from today's, printed */
@@ -129,6 +181,9 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     threw: [],
     thrown: new Map(),
     tieHeld: new Set(),
+    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [] },
+    ms: [],
+    adaptMs: 0,
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -191,6 +246,7 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
+    const ta = performance.now()
     const got = adapt({
       m: x.m,
       before: x.before,
@@ -215,6 +271,7 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
         ),
       },
     })
+    out.adaptMs += performance.now() - ta
     if ('stop' in got) {
       stop(got.stop)
       continue
@@ -273,11 +330,14 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
     // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null
+    const t0 = performance.now()
     try {
       got = layPagePrepared(pg, flows, ties, R)
+      out.ms.push(performance.now() - t0)
     } catch (e) {
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
+    if (got) invariantsOf(pg, got.members, R, out.inv)
     for (const pm of got?.members ?? [])
       if (pm.error && !out.thrown.has(pm.ord))
         out.thrown.set(pm.ord, pm.error.replace(/^MissingMeasure:.*/, 'MissingMeasure'))

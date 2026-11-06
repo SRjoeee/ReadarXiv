@@ -358,12 +358,16 @@ export interface InkBox {
   x1: number
   y0: number
   y1: number
+  /** a glyph's baseline (a painted box has none) */
+  y?: number
 }
 /**
- * The free paper beside a member's lines on their baselines (Room.side): from the nearest ink not its own on each line's band
- * (its fonts' box, top to bottom) to the left and to the right, within the text block `block` (its column's extent on the
- * page), the narrowest over its lines. Today's widenings read it with clearances of their own (RUN:1557-1587, 6 pt clear,
- * half an em; RUN:1689-1753, a quarter em): those are the typesetter's choices, the paper is the part's
+ * The free paper beside a member's lines on their baselines (Room.side): from the nearest glyph not its own standing on each
+ * line's baseline (within 0.4 of its size: today's widen, RUN:1580, reads the page's characters on the line's baseline so,
+ * and no rule or image) to the left and to the right, within the text block `block` (its column's extent on the page), the
+ * narrowest over its lines. Today's widen keeps clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
+ * which stood for the unit's own glyphs past its rectangle: ownership says which are its own (a named correction where
+ * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's
  */
 export function sideOf(
   lines: readonly Line[],
@@ -377,8 +381,9 @@ export function sideOf(
     const [b0, b1] = block(l)
     let left = Math.min(b0, l[2])
     let right = Math.max(b1, l[3])
+    const band = 0.4 * (l[10] ?? l[5] - l[6])
     for (const k of foreign(l[0])) {
-      if (k.y1 <= l[6] || k.y0 >= l[5]) continue
+      if (k.y === undefined || Math.abs(k.y - l[4]) >= band) continue
       if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
       else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
     }

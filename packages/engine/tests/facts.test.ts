@@ -139,11 +139,15 @@ describe('short skips (E15)', () => {
 })
 
 describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', () => {
-  it('reads the free paper on the line’s band to the nearest ink not its own, within its block', () => {
+  it('reads the free paper on the line’s baseline to the nearest glyph not its own, within its block', () => {
+    // (glyphs on its baseline left and right of it; a glyph of the line under it; a rule across its band, which today's
+    // widening does not read; a glyph whose box reaches into its band from a baseline 5 pt over it)
     const ink = [
-      { x0: 40, x1: 60, y0: 698, y1: 706 },
-      { x0: 400, x1: 420, y0: 698, y1: 706 },
-      { x0: 200, x1: 300, y0: 600, y1: 610 },
+      { x0: 40, x1: 60, y0: 698, y1: 706, y: 700 },
+      { x0: 400, x1: 420, y0: 698, y1: 706, y: 700.5 },
+      { x0: 200, x1: 300, y0: 600, y1: 610, y: 602 },
+      { x0: 300, x1: 380, y0: 699, y1: 701 },
+      { x0: 250, x1: 260, y0: 703, y1: 712, y: 705 },
     ]
     expect(
       sideOf(

@@ -339,7 +339,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
       const o = m.offA[p - 1] as number
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
         if (/\S/.test(g.u) && (claimedA[o + j] as number) !== mem.ord)
-          f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top })
+          f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)
       foreignCache.set(p, f)
