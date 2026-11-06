@@ -218,7 +218,10 @@ if (FRONT && BASELINE) {
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
   for (const u of JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units) {
     if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
-    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why: STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit', replaced: true })
+    // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
+    // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
+    const why = /^ink/.test(u.kind) ? `no source unit owns it: ${u.kind} (today's ledger or figure text)` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }
 }

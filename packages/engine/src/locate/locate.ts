@@ -913,17 +913,21 @@ function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
   // page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text, label
   // and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next ink
   // the fill meets); of the highest, those within half a size, their median baseline)
-  const own = mem.lines.filter((l) => !(l[9] & 1))
-  const lastText = own.at(-1) ?? last
+  let at = mem.lines.length - 1
+  while (at > 0 && (mem.lines[at] as Line)[9] & 1) at--
+  const lastText = mem.lines[at] as Line
   const tp = lastText[0]
-  let bx0 = lastText[2]
-  let bx1 = lastText[3]
+  // (its last block: from that line up, its lines on the page each standing above the one under it and across its column, to a
+  // kept row (a display, a held line: today's blocks split there); across: the block's column, its lines' measures, as design-a's
+  // "the next text line of its column" reads it, which a translation's last line may fill whatever the original's extent)
+  let bx0 = Math.min(lastText[7], lastText[2])
+  let bx1 = Math.max(lastText[8], lastText[3])
   let over = lastText[4]
-  for (let q = own.length - 2; q >= 0; q--) {
-    const l = own[q] as Line
-    if (l[0] !== tp || l[4] <= over || l[3] <= bx0 || l[2] >= bx1) break
-    bx0 = Math.min(bx0, l[2])
-    bx1 = Math.max(bx1, l[3])
+  for (let q = at - 1; q >= 0; q--) {
+    const l = mem.lines[q] as Line
+    if (l[9] & 1 || l[0] !== tp || l[4] <= over || Math.max(l[8], l[3]) <= bx0 || Math.min(l[7], l[2]) >= bx1) break
+    bx0 = Math.min(bx0, l[7], l[2])
+    bx1 = Math.max(bx1, l[8], l[3])
     over = l[4]
   }
   const travels = new Set<number>([...mem.text, ...mem.label])
