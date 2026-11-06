@@ -20,7 +20,7 @@
 // listWithin let it through, so that the run ends on it as the service's memory failure, not as a dark page of a degraded layer.
 //
 // An original module (no port statement). Imports the engine's memory predicate alone: PDF.js is the caller's.
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 
 /** `read()`'s value, or null where it fails, whether it throws at once or its promise rejects (PDF.js's page proxy can throw
  *  before it returns a promise); a memory-class failure is thrown */

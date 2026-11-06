@@ -3,7 +3,7 @@ import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/pa
 import { baseRefusalRetryable, RETRY_LIMITS } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, driverOutputGiven, driverOutputTruncated } from '@/pdf-reader/engine/layout/base.mjs'
 import { type Compiled, type CompileRequest, DRAFT_OPTION, NO_DRIVER_GROUP, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { ALLOCATION_FAILED } from '@readarxiv/engine'
 
 // Our compile as the base page (layout/paper.mjs markedOfPaper `base`, design note §3.1 and §3.3.2): once the guard accepts a
 // marked compile, the final pass — its files with graphicx's draft option's line made the drivers' hooks (NO_DRIVER_GROUP), over

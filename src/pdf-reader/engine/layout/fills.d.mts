@@ -1,5 +1,5 @@
 // fills.mjs's types (JavaScript until the engine's port), for the maker's draw, the reader's page and their tests
-import type { Glyph } from './ink.mjs'
+import type { Glyph } from '@readarxiv/engine'
 /** an item, or a character, whose fill is not told */
 export declare const UNKNOWN: -1
 /** an item's fills: its every character's fill (0xRRGGBB, or UNKNOWN), or runs [offset, fill, offset, fill, …] by code point */

@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, OPS_CAP, STACK_MAX } from '@readarxiv/engine'
 import { encodeLayoutMarks, layoutMarksOf, type MarkClass, parseLayoutMarks, type Switches } from '@/pdf-reader/engine/layout/marks.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { lineCheckOf as checkOf } from '@/pdf-reader/engine/layout/carry.mjs'

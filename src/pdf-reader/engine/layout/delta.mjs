@@ -31,12 +31,12 @@
 //
 // An original module (no port statement). It imports the object layer's reading (xref.mjs), the section writer, the delta's
 // wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { textRecordDiffers, textRecordOf } from './page-text.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
-import { appendSection } from './section.mjs'
-import { OBJECT_MAX, startxrefOf } from './tail.mjs'
-import { openObjects, XrefRefusal } from './xref.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, pagesOf, rangesOf } from '@readarxiv/engine'
+import { appendSection } from '@readarxiv/engine'
+import { OBJECT_MAX, startxrefOf } from '@readarxiv/engine'
+import { openObjects, XrefRefusal } from '@readarxiv/engine'
 
 /** the canonical forms' text the builder holds at most (each distinct form once), and the bytes its object and cross-reference
  *  streams decode to at most, per document (as the remover's HELD_MAX and BYTES_MAX bound its walk) */

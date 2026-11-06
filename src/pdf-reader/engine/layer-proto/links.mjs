@@ -22,7 +22,7 @@
 // more than MAX_GLYPHS glyph points is not carried, the glyph points are found through a grid (not links x points), and the
 // freeze spends at most WORK_MAX point-against-operation comparisons, dropping what is left as `unplaced`.
 
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 
 /** the schemes a record's `url` may have (the contract's allow-list: PDF.js also lets ftp: and tel: through) */
 export const LINK_SCHEMES = ['http:', 'https:', 'mailto:']

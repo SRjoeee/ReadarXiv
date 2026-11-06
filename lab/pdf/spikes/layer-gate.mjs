@@ -185,6 +185,7 @@
 // names); the fixtures carry groups and captions as spikes/table-groups.mjs --write gives them (--fixtures).
 // Exits 1 on any completeness failure (the brief's gate; under --check the merge rule decides, each completeness count
 // being one of its measures), on a regression under --check, or where a fixture could not be run.
+import { movedIn } from '../moved-in.mjs'
 import { execFile, execFileSync } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -193,6 +194,7 @@ import { gzipSync } from 'node:zlib'
 import { availableParallelism, homedir } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
+import { packageFile, ZOD_PATH } from '../packages-route.mjs'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
@@ -456,7 +458,7 @@ function fileFor(path) {
   if (path === NO_START_PATH) return NO_START_FILE
   if (path === BREAK_ROOM_PATH) return BREAK_ROOM_FILE
   if (path === '/rules/layout-rules.json') return RULES_FILE
-  if (path.startsWith('/zod/')) return /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice(5)) : null
+  if (path.startsWith('/zod/')) return ZOD_PATH.test(path) ? under(ZOD, path.slice(5)) : null
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
   if (path.startsWith('/pdfjs/')) return /^\/pdfjs\/(build|cmaps|standard_fonts|wasm|iccs)\//.test(path) ? under(PDFJS, path.slice(7)) : null
   if (path.startsWith('/fonts/')) return /^\/fonts\/[A-Za-z0-9._-]+\.(otf|ttf)$/.test(path) ? under(FONTS, path.slice(7)) : null
@@ -516,6 +518,12 @@ const server = createServer((req, res) => {
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
   // (--door: the engine's own `../../../core/…` imports, read from /engine/translate/mt.mjs, clamp at the root and name /core, the repository's src/core)
   if (DOOR !== null && path.startsWith('/core/')) path = `/src${path}`
+  // (the workspace packages the engine under test imports, TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) {
+    const f = packageFile(ENGINE, path)
+    res.writeHead(f ? 200 : 404, { 'content-type': f ? f.type : 'text/plain', 'cache-control': 'no-store' })
+    return res.end(f ? f.body : 'not found')
+  }
   const hy = /^\/hyph\/([a-z]+)\.json$/.exec(path)
   if (PROTO && hy) {
     if (!HYPH.has(hy[1])) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
@@ -909,7 +917,7 @@ async function drawsOf(name) {
   if (!DRAWS.has(pdf)) {
     DRAWS.set(pdf, (async () => {
       const script = join(GATE, 'draws.mjs')
-      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
+      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).map(f => (existsSync(f) ? f : join(ENGINE, 'packages/engine/src', f.split('/').pop()))).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
       if (!existsSync(file)) {
@@ -931,7 +939,7 @@ function drawCutOf(name) {
     DRAW_CUTS.set(name, (async () => {
       const made = await doorBundleOf(name)
       const D = await drawsOf(name)
-      const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+      const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
       const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
       const ours = made.composed.page
       const read3 = readBundle(new Uint8Array(made.bytes))
@@ -1093,7 +1101,7 @@ function doorBaseOf(page, xref, pages, wrap = null) {
 async function doorPartsFixture(page, name, errors) {
   const { paper, target } = nameOf(name)
   const made = await doorBundleOf(name)
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   const [{ readBundle }, { cutBundle }, { startxrefOf }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/cut.mjs', 'layout/tail.mjs'].map(f => import(E(f))))
   const ours = made.composed.page
   const cutTo = targetOf(DOOR_PARTS)
@@ -1173,7 +1181,7 @@ async function sourcesOf(name) {
   const { paper } = nameOf(name)
   const source = sourceOf(paper), recordFile = trFile(name, 'record.json')
   if (!source || !existsSync(recordFile)) return null
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   const [{ bundleUnitsOf }, { sourceUnitsOf }, { openPaper }, { unpackSource }, { sourceHash }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'pipeline/cache.mjs'].map(f => import(E(f))))
   if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)))
   const src = sourceUnitsOf({ units: PAPER_UNITS.get(paper) }), record = readJson(recordFile)
@@ -1189,7 +1197,7 @@ async function sourcesOf(name) {
  */
 async function doorBundleOf(name) {
   const { paper, target } = nameOf(name)
-  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const E = f => movedIn(join(ENGINE, 'src/pdf-reader/engine'), f)
   // (--ink: the wrap's ink units in the bundle after the source units', their rows in the layout, as the page pass carries them:
   // pipeline/ink-pass.mjs; an echo is drawn with its source unit's row, the others stay the original's, the gate holding no
   // translation of theirs; on the left their kinds and no anchor, the gate's geometry holding no tokens)

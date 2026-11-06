@@ -1,5 +1,5 @@
 // stream.mjs's types (JavaScript until the engine's port), for the marks file and its tests
-import type { InkPoint, PackedGlyphs } from './ink.mjs'
+import type { InkPoint, PackedGlyphs } from '@readarxiv/engine'
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned */
 export declare const OWNED_HOW: readonly string[]

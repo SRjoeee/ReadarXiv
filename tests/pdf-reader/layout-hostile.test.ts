@@ -1,7 +1,7 @@
 import { deflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { BOXES_CAP, GLYPHS_PAGE, OPS_CAP, pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_CAP, GLYPHS_PAGE, OPS_CAP, pageInk } from '@readarxiv/engine'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // A page's ink is bounded whatever the page (E2b stage 1, the per-part memory ceiling): what the maker holds of a page is its

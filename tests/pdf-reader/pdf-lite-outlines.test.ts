@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { outlineBox } from '@/pdf-reader/engine/layout/ink.mjs'
+import { outlineBox } from '@readarxiv/engine'
 import { float32Outlines, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 
 // A glyph's outline as the engine's ink reading takes it (layout/ink.mjs outlineBox) is Float32 whatever the runtime

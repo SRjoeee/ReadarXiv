@@ -1,6 +1,6 @@
 import { deflateSync } from 'node:zlib'
-import { rangesOf } from '@/pdf-reader/engine/layout/delta-wire.mjs'
-import { appendSection } from '@/pdf-reader/engine/layout/section.mjs'
+import { rangesOf } from '@readarxiv/engine'
+import { appendSection } from '@readarxiv/engine'
 
 // Synthetic PDFs for the delta's tests (layout/delta.mjs), written byte by byte so that every case the builder must meet is
 // there exactly: a classic table or a cross-reference stream (PNG Up predictor, Flate) with its objects in an object stream,

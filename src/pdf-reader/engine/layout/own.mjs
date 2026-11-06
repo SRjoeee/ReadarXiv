@@ -46,7 +46,7 @@
 // An original module (no port statement).
 import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
-import { UNHIDDEN } from './delta-wire.mjs'
+import { UNHIDDEN } from '@readarxiv/engine'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
 import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'

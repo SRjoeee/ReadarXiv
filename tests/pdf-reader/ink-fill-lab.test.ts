@@ -13,7 +13,7 @@ import { LAB } from './helpers/lab-data'
 /** each page's glyphs by fill, the inked ones (a blank Unicode left out), and the runs of glyphs of one colour not black */
 async function fillsOf(file: string, pages: number[] | null) {
   const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const { pageInk } = await import('@/pdf-reader/engine/layout/ink.mjs')
+  const { pageInk } = await import('@readarxiv/engine')
   const task = getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0, disableFontFace: true, fontExtraProperties: true })
   const doc = await task.promise
   const count = new Map<number, number>(), runs: string[] = []
