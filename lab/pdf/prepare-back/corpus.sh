@@ -1,16 +1,16 @@
 #!/bin/bash
-# lab/pdf/prepare-back/corpus.sh <papers.tsv> <out> <caches> [parallel]: every paper of the list (id <tab> dir) through run.mjs,
+# lab/pdf/prepare-back/corpus.sh <papers.tsv> <out> <caches> [parallel] [run.mjs flags…]: every paper of the list (id <tab> dir) through run.mjs,
 # at most `parallel` (default 2) at once, none started under 12 GiB free. One line a paper in <out>/log.tsv: id, exit, the
 # summary line (exit 3: a compile no cache holds). Run it inside the lab's heavy slot (its machine is short of memory).
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
-LIST=${1:?papers.tsv}; OUT=${2:?out}; CACHES=${3:?caches}; PAR=${4:-2}
+LIST=${1:?papers.tsv}; OUT=${2:?out}; CACHES=${3:?caches}; PAR=${4:-2}; shift 4 2>/dev/null || shift $#; FLAGS=("$@")
 mkdir -p "$OUT/logs"; : > "$OUT/log.tsv"
 one() {
   local id=$1 dir=$2 rc free
   free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')
   if [ "$free" -lt 12 ]; then printf '%s\trefused\t%s GiB free\n' "$id" "$free" >> "$OUT/log.tsv"; return; fi
-  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/run.mjs" --dir="$dir" --id="$id" --out="$OUT" --caches="$CACHES") > "$OUT/logs/$id.log" 2>&1
+  (cd "$ROOT" && node --max-old-space-size=6144 --import tsx "$HERE/run.mjs" --dir="$dir" --id="$id" --out="$OUT" --caches="$CACHES" "${FLAGS[@]}") > "$OUT/logs/$id.log" 2>&1
   rc=$?
   printf '%s\t%s\t%s\n' "$id" "$rc" "$(grep -v '^\s*at ' "$OUT/logs/$id.log" | grep -v '^$' | grep -v '^Node.js' | tail -1 | tr '\t' ' ' | cut -c1-400)" >> "$OUT/log.tsv"
 }
