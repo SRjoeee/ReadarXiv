@@ -10,6 +10,7 @@ import { type Instrument, ROLE } from '../instrument.ts'
 import {
   alignOf,
   bandOf,
+  bracketsOf,
   breakEnd,
   cellCentred,
   FORCED_BREAK,
@@ -70,26 +71,28 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
   }
-  const isDisplayGlyph = new Uint8Array(m.offA[inkA.pages.length] as number)
-  for (const mem of members)
-    for (const [id, el] of mem.elements)
-      if (el.kind === 'display') for (const a of mem.els.get(id) ?? []) isDisplayGlyph[a] = 1
-  // (ink that stays whatever the translation: owned by no located member, a kept block's, a display's)
-  const stays = (a: number) => {
-    const o = claimedA[a] as number
-    return o < 0 || !!members[o]?.fixed || !!isDisplayGlyph[a]
-  }
-  const staysByPage = new Map<number, { x0: number; x1: number; y: number }[]>()
-  const staysOn = (p: number) => {
-    let l = staysByPage.get(p)
-    if (l) return l
-    l = []
-    const o = m.offA[p - 1] as number
-    inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-      if (/\S/.test(g.u) && stays(o + j)) l!.push({ x0: g.x0, x1: g.x1, y: g.y })
-    })
-    staysByPage.set(p, l)
-    return l
+  // (a page's glyphs by baseline, the blank aside, each with its global index; those whose baseline is within [lo, hi])
+  const inkByPage = new Map<number, { x0: number; x1: number; y: number; a: number }[]>()
+  const bandOn = (p: number, lo: number, hi: number) => {
+    let l = inkByPage.get(p)
+    if (!l) {
+      const o = m.offA[p - 1] as number
+      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) =>
+        /\S/.test(g.u) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : [],
+      )
+      l.sort((x, y) => x.y - y.y)
+      inkByPage.set(p, l)
+    }
+    let a = 0
+    let b = l.length
+    while (a < b) {
+      const mid = (a + b) >> 1
+      if ((l[mid] as { y: number }).y < lo) a = mid + 1
+      else b = mid
+    }
+    const out: typeof l = []
+    for (let i = a; i < l.length && (l[i] as { y: number }).y <= hi; i++) out.push(l[i]!)
+    return out
   }
   // (a page's painted boxes: rules and images, the page-sized backgrounds aside)
   const boxesOn = (p: number) => {
@@ -160,14 +163,14 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
-      if (fill !== undefined) el.style = { ...styleOf(gs), fill }
+      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated)
+      if (fill !== undefined || el.text !== undefined)
+        el.style = { ...styleOf(gs), ...(fill !== undefined ? { fill } : {}) }
       // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
       // the stated half of T12, which a translation that brackets it takes)
-      const tg = gs.filter((x) => /\S/.test(x.u))
-      const b0 = tg[0]
-      const b1 = tg.at(-1)
-      const PAIRS: Record<string, string> = { '[': ']', '(': ')', '{': '}', '\u27e8': '\u27e9' }
-      if (tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u) {
+      const pair = bracketsOf(gs)
+      if (pair) {
+        const [b0, b1] = pair
         const p0 = pageA[(mem.els.get(id) ?? [])[0] as number] as number
         const box = (x: DocGlyph) => [p0, r2(x.x0), r2(x.bottom), r2(x.x1), r2(x.top), r2(x.y)] as El['ink'][number]
         el.brackets = [box(b0), box(b1)]
@@ -297,7 +300,34 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     }
 
     // -- its lines' flags: PINNED (shares its baseline with ink that stays), SHORTSKIP (a display under it with TeX's short skip)
-    for (const [l, j] of own) if (pinnedOf(l, sizeOf(j), staysOn(l[0]), blockOf(l))) l[9] |= 2
+    // (PINNED as today's edgesOf reads a line alone, RUN:1638-1650: any glyph of the page on its baseline's band within its
+    // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
+    // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
+    const label = new Set(mem.label)
+    // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
+    // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
+    const spans: [number, number][] = []
+    {
+      const same = (x: Line, y: Line) => x[0] === y[0] && x[1] === y[1] && x[4] > y[4]
+      let a = 0
+      for (let q = 1; q <= own.length; q++) {
+        if (q < own.length && same(own[q - 1]![0], own[q]![0])) continue
+        let x0 = Number.POSITIVE_INFINITY
+        let x1 = Number.NEGATIVE_INFINITY
+        for (let k = a; k < q; k++) {
+          x0 = Math.min(x0, own[k]![0][2])
+          x1 = Math.max(x1, own[k]![0][3])
+        }
+        for (let k = a; k < q; k++) spans.push([x0, x1])
+        a = q
+      }
+    }
+    const spanOf = (q: number): [number, number] => spans[q]!
+    own.forEach(([l, j], q) => {
+      const size = l[10] ?? sizeOf(j)
+      const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !label.has(g.a))
+      if (pinnedOf(l, size, ink, spanOf(q))) l[9] |= 2
+    })
     const displays = mem.elements.filter(([, el]) => el.kind === 'display').flatMap(([, el]) => el.ink)
     const short = shortSkipLines(mem.lines, displays, sizeOf)
     for (const j of short) (mem.lines[j] as Line)[9] |= 4
@@ -314,7 +344,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
       const o = m.offA[p - 1] as number
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
         if (/\S/.test(g.u) && (claimedA[o + j] as number) !== mem.ord)
-          f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top })
+          f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)
       foreignCache.set(p, f)

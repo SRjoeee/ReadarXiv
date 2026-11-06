@@ -16,7 +16,9 @@ import {
   sideOf,
   sourceEndMarks,
   styleOf,
+  fillRunsOf,
   tailOf,
+  textOf,
 } from '../src/locate/facts.ts'
 import { locate } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
@@ -139,11 +141,15 @@ describe('short skips (E15)', () => {
 })
 
 describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', () => {
-  it('reads the free paper on the line’s band to the nearest ink not its own, within its block', () => {
+  it('reads the free paper on the line’s baseline to the nearest glyph not its own, within its block', () => {
+    // (glyphs on its baseline left and right of it; a glyph of the line under it; a rule across its band, which today's
+    // widening does not read; a glyph whose box reaches into its band from a baseline 5 pt over it)
     const ink = [
-      { x0: 40, x1: 60, y0: 698, y1: 706 },
-      { x0: 400, x1: 420, y0: 698, y1: 706 },
-      { x0: 200, x1: 300, y0: 600, y1: 610 },
+      { x0: 40, x1: 60, y0: 698, y1: 706, y: 700 },
+      { x0: 400, x1: 420, y0: 698, y1: 706, y: 700.5 },
+      { x0: 200, x1: 300, y0: 600, y1: 610, y: 602 },
+      { x0: 300, x1: 380, y0: 699, y1: 701 },
+      { x0: 250, x1: 260, y0: 703, y1: 712, y: 705 },
     ]
     expect(
       sideOf(
@@ -249,6 +255,24 @@ describe('locate states the facts on arXiv’s page', () => {
     expect(M.lines.map((l) => [l[4], l[9] & 1])).toEqual([
       [700, 0],
       [688, 1],
+      [676, 0],
+    ])
+  })
+  it('takes no held line of glyphs no unit owns that stand on one of its own text lines (L1’s first held-line fault)', () => {
+    // (the middle line: its first and last glyphs the unit's, its middle five owned by no unit: they stand on the unit's own
+    // line, ink in no group, never a KEPT line over it (2610.20595v1 ord 55's case))
+    const pages: PageSpec[] = [{ lines: ['first line of it', 'a held line here', 'last line of it'] }]
+    const B = docOf(pages)
+    const u: InstrumentUnit = {
+      id: unitId('para', [text('x')]),
+      kind: 'para',
+      content: [text('first line of it a here last line of it')],
+    }
+    const ins = instrument(B, [u], (_, n, j) => (n === 1 && j >= 18 && j <= 22 ? [-1, 0, -1] : [0, ROLE.text, -1]))
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.lines.map((l) => [l[4], l[9] & 1])).toEqual([
+      [700, 0],
+      [688, 0],
       [676, 0],
     ])
   })
@@ -408,5 +432,43 @@ describe('a glyph whose Unicode is no reading of it (A17, today’s nu)', () => 
     const el = locate(ins, B, align(B, B)).members[0]!.elements.find(([id]) => id === '1')?.[1]
     expect(el?.ink).toHaveLength(1)
     expect(el?.text).toBeUndefined()
+  })
+})
+
+describe('an element’s text as the page’s text layer reads it (PDF.js’s spaces)', () => {
+  it('sets a space where a glyph starts past the one before by more than 0.102 of the size, or on another line', () => {
+    // "[22," then TeX's interword glue (3.3 pt at 10 pt), "21]" (each glyph 6 pt wide in the helper)
+    const gs = [g('['), g('2', 78), g('2', 84), g(',', 90), g('2', 99.3), g('1', 105.3), g(']', 111.3)]
+    expect(textOf(gs)).toBe('[22, 21]')
+    // a kern under 1.02 pt is no space; an expanded font's size along the line is the one PDF.js reads
+    expect(textOf([g('a'), g('b', 78.9)])).toBe('ab')
+    expect(textOf([g('a'), g('b', 79.1)])).toBe('a b')
+    expect(textOf([g('a', 72, 700, { along: 12 }), g('b', 79.1)])).toBe('ab')
+    // the next line's first glyph, left of the last one's end
+    expect(textOf([g('a', 300), g('b', 72, 688)])).toBe('a b')
+  })
+})
+
+describe('a unit set in capitals its source writes in lowercase (Style.upper, today’s smallCapsOf rule)', () => {
+  const word = (s: string) => [...s].map((c, i) => g(c, 72 + 6 * i))
+  it('is upper where most of the source’s lowercase letters are set as capitals, not where the source writes capitals', () => {
+    expect(styleOf(word('INTRODUCTION'), 10, 'Introduction').upper).toBe(1)
+    expect(styleOf(word('PASCAL'), 10, 'PASCAL').upper).toBeUndefined()
+    expect(styleOf(word('Introduction'), 10, 'Introduction').upper).toBeUndefined()
+    // (without a source, most letters capitals, as before)
+    expect(styleOf(word('PASCAL')).upper).toBe(1)
+  })
+})
+
+describe('an element’s text in runs of one fill (today’s fillRunsOf)', () => {
+  it('cuts a link’s coloured text from its black brackets, each space the fill of the glyph before it', () => {
+    const blue = { fill: 0x80 }
+    const gs = [g('('), g('P', 78, 700, blue), g('e', 84, 700, blue), g('2', 93.3, 700, blue), g(')', 99.3)]
+    expect(fillRunsOf(gs)).toEqual([
+      ['(', 0],
+      ['Pe 2', 0x80],
+      [')', 0],
+    ])
+    expect(fillRunsOf([g('a'), g('b', 78)])).toBeNull()
   })
 })

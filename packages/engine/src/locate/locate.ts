@@ -22,10 +22,10 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, ROLE } from '../instrument.ts'
-import { styleOf } from './facts.ts'
+import { bracketsOf, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { type CutLine, cutLines, r2 } from './lines.ts'
+import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 
 /** where a located unit stands on A against B */
@@ -107,6 +107,8 @@ export const HELD = -2
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
+/** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
+const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
@@ -471,6 +473,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? ins.units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
+    const classOf = new Map(unit?.classes ?? [])
     // (an element whose ink stands apart from the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
     // and no line of the unit's)
     const textCut = cutLines(
@@ -533,7 +536,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         if ((claimedA[a] as number) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
         const g = gA(a)
         const q = box.get(pageA[a] as number)
-        if (q && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
+        // (a glyph that stands on one of its own text lines (the line rule's band, within the line's extent) is none of a held
+        // line's: ink in no group on the unit's line, never a KEPT line over it)
+        const onOwn = cut.some(
+          (l) =>
+            l.page === pageA[a] &&
+            Math.abs(g.y - l.base) < 0.5 * Math.max(l.size, g.size) &&
+            g.x1 > l.x0 &&
+            g.x0 < l.x1,
+        )
+        if (q && !onOwn && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
       }
       kept.push(...cutLines(held, atA))
     }
@@ -542,7 +554,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     )
     mem.lines = all.map(
       ({ l, kept: k }) =>
-        [l.page, 0, r2(l.x0), r2(l.x1), l.base, r2(l.top), r2(l.bottom), r2(l.x0), r2(l.x1), k ? 1 : 0] as Line,
+        [
+          l.page,
+          0,
+          r2(l.x0),
+          r2(l.x1),
+          l.base,
+          r2(l.top),
+          r2(l.bottom),
+          r2(l.x0),
+          r2(l.x1),
+          k ? 1 : 0,
+          lineSize(l.gs.map(gA)),
+        ] as Line,
     )
     mem.lineGlyphs = all.map(({ l }) => l.gs)
     // (a run set turned: its band's box on the page, from its first glyph's origin to its last one's end, its descent to its
@@ -579,11 +603,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.pages = [...new Set(mem.lines.filter((l) => !(l[9] & 1)).map((l) => l[0]))]
     // style: TeX's font state is not stated by today's instrument: read off its own glyphs on A as today's reader reads it
     // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage 1b states it)
+    // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
+    // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
+    const read = unitSize(txt)
     const size =
+      read ??
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
-    mem.style = { ...styleOf(mem.text.map(gA), size), size }
+    if (read === undefined && mem.lines.length) mem.read.push('size:lines')
+    mem.style = { ...styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null), size }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
@@ -595,13 +624,42 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
     // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
-    for (const [id, p] of pieces) {
-      if (p.t !== 'el') continue
+    for (const [id, p0] of pieces) {
+      if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
+      // (a nested unit, a footnote set inside the unit: its mark, the glyphs TeX set for it in the unit's text, an element of
+      // the unit's as today's placeholdersOf reads it (L2:1066, a footnote mark), where B gives it any)
+      if (p0.t === 'unit' && !gl.length) continue
+      const p = p0.t === 'unit' ? { kind: 'note-mark' } : p0
       const bx = mem.elBoxes.get(id) ?? []
-      const ink: Ink[] = (p.kind === 'display' ? (displayRows.get(id) ?? []) : cutLines(gl, atA)).map(
-        (l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink,
-      )
+      // (each line's box of its own ink: across its glyphs' advances and their outlines (an italic glyph's overhang past its
+      // advance is its ink), top to bottom; on the baseline of the unit's own text line it stands on, where it stands on one (the line TeX
+      // set it on: a radical's glyph origin is at its bar, a subscript's below the line), else its own. As today's file's
+      // segment of a piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. A
+      // display's rows are its own lines)
+      const textLines = mem.lines.filter((l) => !(l[9] & 1))
+      const onLine = (page: number, lo: number, hi: number, own: number) => {
+        let best: number | null = null,
+          d = Number.POSITIVE_INFINITY
+        for (const l of textLines) {
+          if (l[0] !== page || hi < l[6] - 0.5 || lo > l[5] + 0.5) continue
+          const e = Math.abs(l[4] - own)
+          if (e < d) {
+            d = e
+            best = l[4]
+          }
+        }
+        return best ?? own
+      }
+      const ink: Ink[] =
+        p.kind === 'display'
+          ? (displayRows.get(id) ?? []).map((l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink)
+          : cutLines(gl, atA).map((l) => {
+              const outlined = l.gs.map(gA).filter((g) => g.ix1 > g.ix0)
+              const x0 = Math.min(l.x0, ...outlined.map((g) => g.ix0))
+              const x1 = Math.max(l.x1, ...outlined.map((g) => g.ix1))
+              return [l.page, r2(x0), r2(l.bottom), r2(x1), r2(l.top), onLine(l.page, l.bottom, l.top, l.base)] as Ink
+            })
       for (const [ap, ai] of bx) {
         const pg = inkA.pages[ap - 1]!
         const [x0, y0, x1, y1] = [
@@ -620,8 +678,23 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
-      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420)
-      if (TEXT_KINDS.has(p.kind) && gl.length && !gl.some((a) => gA(a).nu)) el.text = gl.map((a) => gA(a).u).join('')
+      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
+      // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
+      // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
+      // kind of text, a class drawn as the page's text (a citation, a reference, a macro: the instrument's), its own brackets
+      // (U.brackets reads the text inside them), ink over lines (a formula broken over lines is drawn as text where its
+      // segments make no crops))
+      const asText =
+        TEXT_KINDS.has(p.kind) ||
+        TEXT_CLASSES.has(classOf.get(id)?.cls ?? '') ||
+        ink.length > 1 ||
+        !!bracketsOf(gl.map(gA))
+      if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
+        el.text = textOf(gl.map(gA))
+        // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
+        const runs = fillRunsOf(gl.map(gA))
+        if (runs) el.fills = runs
+      }
       mem.elements.push([id, el])
     }
     // its label: the class's mark before it
@@ -638,7 +711,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  columnsAndMeasures(members, inkA)
+  columnsAndMeasures(members, inkA, gA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB })
@@ -854,9 +927,9 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
- *  keeps to the left half (0), the right (1), or spans (2); a column's measure is the hull of the lines of its justified
- *  paragraphs of two lines or more, a line with no such column set within its own extent */
-function columnsAndMeasures(members: Member[], inkA: Doc): void {
+ *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
+ *  \hangindent measures: stage 1b) */
+function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => DocGlyph): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
   for (const [p, lines] of byPage) {
@@ -867,25 +940,56 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
     const two = left >= 3 && right >= 3
     for (const l of lines) l[1] = !two ? 0 : l[3] <= mid + 2 ? 0 : l[2] >= mid - 2 ? 1 : 2
   }
-  const measure = new Map<string, [number, number]>()
+  // (each line's measure, today's column of it (run.mjs columnOf RUN:1557-1569, which U.decor widens a line of its own to): the
+  // page's paragraphs' lines over its middle, three at least, else those of the nearest page before it that has three, else
+  // the page's text area (its members' lines' hull); from their leftmost start to their furthest end, but a line TeX set
+  // overfull: an end past the furthest end two lines share (within 0.2 pt) by less than the line's size is no edge)
+  const paras = new Map<number, Line[]>()
+  const area = new Map<number, [number, number]>()
+  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none; each by the extent of its
+  // own text glyphs, which today's rectangles are (its words', an inline formula that overruns the line's end aside))
   for (const mem of members) {
-    if (mem.align !== 'j' || mem.lines.filter((l) => !(l[9] & 1)).length < 2) continue
-    for (const l of mem.lines) {
-      if (l[9] & 1) continue
-      const k = `${l[0]}|${l[1]}`
-      const m = measure.get(k)
-      if (!m) measure.set(k, [l[2], l[3]])
-      else measure.set(k, [Math.min(m[0], l[2]), Math.max(m[1], l[3])])
-    }
+    const text = new Set(mem.text)
+    mem.lines.forEach((l, j) => {
+      if (l[9] & 1) return
+      const own = (mem.lineGlyphs[j] ?? []).filter((a) => text.has(a)).map(gA)
+      const t: Line = own.length
+        ? ([
+            ...l.slice(0, 2),
+            Math.min(...own.map((g) => g.x0)),
+            Math.max(...own.map((g) => g.x1)),
+            ...l.slice(4),
+          ] as Line)
+        : l
+      const a = area.get(l[0])
+      area.set(l[0], a ? [Math.min(a[0], t[2]), Math.max(a[1], t[3])] : [t[2], t[3]])
+      if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(t)
+    })
   }
-  for (const mem of members)
-    for (const l of mem.lines) {
-      const mm = measure.get(`${l[0]}|${l[1]}`)
-      if (mm) {
-        l[7] = r2(Math.min(mm[0], l[2]))
-        l[8] = r2(Math.max(mm[1], l[3]))
-      }
+  const columnOf = (l: Line): [number, number] => {
+    const mid = (l[2] + l[3]) / 2
+    const over = (q: number) => (paras.get(q) ?? []).filter((c) => c[2] <= mid && c[3] >= mid)
+    let own = over(l[0])
+    for (let q = l[0] - 1; own.length < 3 && q >= 1; q--) {
+      const o = over(q)
+      if (o.length >= 3) own = o
     }
+    if (own.length < 3) return area.get(l[0]) ?? [l[2], l[3]]
+    const ends = own.map((c) => c[3]).sort((x, y) => y - x)
+    let right = ends[0] as number
+    for (let i = 0; i + 1 < ends.length; i++)
+      if ((ends[i] as number) - (ends[i + 1] as number) <= 0.2) {
+        if ((ends[0] as number) - (ends[i] as number) < (l[10] ?? 10)) right = ends[i] as number
+        break
+      }
+    return [Math.min(...own.map((c) => c[2])), right]
+  }
+  const measures = new Map<Line, [number, number]>()
+  for (const mem of members) for (const l of mem.lines) measures.set(l, columnOf(l))
+  for (const [l, [m0, m1]] of measures) {
+    l[7] = r2(m0)
+    l[8] = r2(m1)
+  }
 }
 
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's

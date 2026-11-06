@@ -19,7 +19,15 @@ export { align, HOW, HUNK, type HunkClass, hunkName, type Mapping } from './alig
 export { lcs } from './align/myers.ts'
 export { type BundleObject, bundle, type MemberState, stateOf } from './bundle/bundle.ts'
 export type { Doc, DocGlyph, DocPage, DocPoint } from './doc.ts'
-export { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE, type Role } from './instrument.ts'
+export {
+  type Instrument,
+  type InstrumentUnit,
+  type Owners,
+  ownersOf,
+  type PieceClass,
+  ROLE,
+  type Role,
+} from './instrument.ts'
 export { cutLines } from './locate/lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
 export { type PrepareDeps, prepareBack, type Tally } from './prepare.ts'

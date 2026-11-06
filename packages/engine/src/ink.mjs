@@ -597,6 +597,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
     // (its fill where its rendering mode paints one: 0, 2, 4 and 6 fill; 1 and 5 stroke alone; 3 and 7 paint nothing, above)
     const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.tr & 1 ? NO_FILL : s.fill }
+    // (its size along the line, as PDF.js's text content gives an item's (its transform's first column: the font size × the
+    // horizontal scale × the matrix's x scale), where it differs from the size up the line: an expanded font's, pdfTeX's
+    // font expansion setting a line's text matrix wider; the reader's text layer reads it)
+    const along = size * Math.abs(hs) * Math.hypot(M[0], M[1])
+    if (Math.abs(along - sz) > 1e-3) glyph.along = along
     // (a Type 3 glyph whose procedure paints its own colours: `fill` is only the fill it was shown in, no reading of its ink)
     if (paintsOwn(s.font, g.operatorListId)) glyph.ownColour = true
     const box = glyphsOnly ? null : outlineOf(g)

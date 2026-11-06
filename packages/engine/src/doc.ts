@@ -36,6 +36,9 @@ export interface DocGlyph {
   /** its Unicode is no reading of it (A17, today's `nu`): no character of its font's own map, or none Unicode stands for; read
    *  where the document was read `mapped` */
   nu?: true | undefined
+  /** its size along the line (PDF.js's text item's: its transform's x scale), where it differs from `size`, the size up it:
+   *  a font expanded by pdfTeX's font expansion, a horizontal scale */
+  along?: number | undefined
 }
 
 /** a point of a marked compile (`/axt-<name> ri`): its name, and the glyphs and boxes the page showed before it */

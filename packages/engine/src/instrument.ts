@@ -40,6 +40,20 @@ export interface InstrumentUnit {
   figure?: { set: number; dir?: [number, number] }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string
+  /** what its source says of each element (by piece id), which the part states as the element's class, copy text, a symbol's
+   *  drawing and a footnote's mark (format's El: `kind`, `unknown`, `copy`, `sym`, `mark`), so that no rule of the typesetter
+   *  reads a source */
+  classes?: [piece: string, PieceClass][]
+}
+/** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
+export interface PieceClass {
+  cls: string
+  unknown?: true
+  copy?: string
+  sym?: [text: string, up?: true]
+  mark?: true
+  /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
+  literal?: true
 }
 
 export interface Instrument {

@@ -19,6 +19,9 @@ import { ledgerOf } from '../layout/ledger.mjs'
 import { classOf, followsOf, readAlign, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
+import { phClass, texToText } from '../layer-proto/layer1.mjs'
+import { textPieceOf } from '../rules/text-piece.mjs'
+import { symbolText } from '../rules/text-symbols.mjs'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode; a string that is already wide as it is */
@@ -76,6 +79,101 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
     }
   })
   return stack.length ? stack[0].outer : level
+}
+
+// ---- today's reader's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
+// 065c1d973; layer2.mjs builds a canvas as it loads, which no Node run of the prepare has), held equal to them by
+// tests/pdf-reader/instrument-classes.test.ts
+/** a placeholder's source as plain text, its environment, label and alignment marks left out (iteration 1's texToText
+ *  gave "equationeq:identity y= F(x, Wi) + x. equation" for a displayed equation, which no rendering resembles) */
+const MORE_SYMBOLS = { downarrow: '↓', uparrow: '↑', Downarrow: '⇓', Uparrow: '⇑', leftrightarrow: '↔', longrightarrow: '⟶', dagger: '†', ddagger: '‡', varnothing: '∅', emptyset: '∅', ell: 'ℓ', prime: '′', bullet: '•', checkmark: '✓', triangle: '△', square: '□', blacksquare: '■', diamond: '◇', lfloor: '⌊', rfloor: '⌋', lceil: '⌈', rceil: '⌉', hbar: 'ℏ', Re: 'ℜ', Im: 'ℑ', aleph: 'ℵ', wedge: '∧', vee: '∨', neg: '¬', lnot: '¬', setminus: '∖', subsetneq: '⊊', supset: '⊃', supseteq: '⊇', ni: '∋', perp: '⊥', parallel: '∥', angle: '∠', models: '⊨', vdash: '⊢', gg: '≫', ll: '≪', equiv: '≡', cong: '≅', asymp: '≍', doteq: '≐', bigcup: '⋃', bigcap: '⋂', oint: '∮', iint: '∬', coloneqq: '≔', mapsto: '↦', leadsto: '⇝', circledast: '⊛', textdagger: '†', textbullet: '•', S: '§', P: '¶' }
+const ACCENTS = { '~': '\u0303', "'": '\u0301', '"': '\u0308', '`': '\u0300', '^': '\u0302', '=': '\u0304', '.': '\u0307', u: '\u0306', v: '\u030C', H: '\u030B', c: '\u0327', k: '\u0328', r: '\u030A' }
+/** (an alignment tab goes, not an escaped ampersand: "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser", 2026-10-07; a LaTeX
+ *  text symbol, alone or before an empty group, is its character, the maker's table's: rules/text-symbols.mjs) */
+function texToText2(src) {
+  const own = symbolText(src)
+  if (own !== null) return own
+  // an accent over its letter, composed: \~{n} is "ñ", \"u "ü"
+  const acc = src.replace(/\\([~'"`^=.]|[uvHckr](?![A-Za-z]))\s*\{?\\?([A-Za-z])\}?/g, (m, a, l) => `${l}${ACCENTS[a]}`.normalize('NFC'))
+  if (acc !== src) return texToText2(acc)
+  const sym = src.replace(/\\([A-Za-z]+)\b/g, (m, name) => (MORE_SYMBOLS[name] ? MORE_SYMBOLS[name] : m))
+  if (sym !== src) return texToText2(sym)
+  const bare = src.replace(/\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?/g, ' ').replace(/\\(?:label|tag)\*?\{[^}]*\}/g, ' ').replace(/\\(?:nonumber|notag)\b/g, ' ').replace(/\\\\/g, ' ').replace(/(?<!\\)&/g, ' ')
+  return bare === src ? texToText(src) : texToText(bare.trim())
+}
+/**
+ * phClass, with the paper's own macros told apart: a command no table knows (\bert, \oursfull{}, $\dmodel$, $\cla$) has
+ * no plain text, which iteration 1 called a symbol and drew as nothing, though the page renders it ("BERT",
+ * "ImageNet", "d_model"): 'umacro' for one in text (drawn as the page's text), 'other' with `unknown` for one in math
+ * (a crop). Its rendering is looked for on the page like any other.
+ */
+const STRUCTURAL = new Set(['sqrt', 'frac', 'dfrac', 'tfrac', 'left', 'right', 'big', 'Big', 'bigg', 'Bigg', 'bigl', 'bigr', 'Bigl', 'Bigr', 'mathrm', 'mathbf', 'mathit', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'boldsymbol', 'bm', 'text', 'textrm', 'textbf', 'textit', 'mbox', 'hbox', 'operatorname', 'hat', 'widehat', 'tilde', 'widetilde', 'bar', 'overline', 'underline', 'vec', 've', 'dot', 'ddot', 'limits', 'nolimits', 'displaystyle', 'textstyle', 'scriptstyle', 'begin', 'end', 'label', 'nonumber', 'notag', 'quad', 'qquad'])
+/** whether a source holds a command no table renders (a paper's own: \dmodel in $\sqrt{\dmodel}$) */
+const unknownCommand = src => (src.match(/\\([A-Za-z]+)/g) ?? []).some(m => !STRUCTURAL.has(m.slice(1)) && !texToText2(m) && !texToText2(`$${m}$`))
+function phClass2(src) {
+  const c = phClass(src)
+  // a symbol's source that holds a paper's own macro is looked for on the page (iteration 2 drew "√(" for
+  // $\sqrt{\dmodel}$, the macro being nothing to it)
+  if (c === 'symbol' && texToText2(src) && /^\$|^\\\(/.test(src) && unknownCommand(src)) return { cls: 'other', unknown: true }
+  if (c !== 'symbol' || texToText2(src)) return { cls: c }
+  const inner = src.replace(/^\$+|\$+$/g, '').replace(/^\\\(|\\\)$/g, '').trim()
+  if (!inner) return { cls: 'zero' }
+  const ci = phClass(inner)
+  if (ci === 'zero' || ci === 'space') return { cls: ci }
+  if (!/\\[A-Za-z]/.test(inner)) return { cls: c }
+  return /^\$|^\\\(/.test(src) ? { cls: 'other', unknown: true } : { cls: 'umacro', unknown: true }
+}
+/** a 'symbol' placeholder's drawn text (resolvePlaceholders): its source's plain text, less the mark of the superscript
+ *  it is drawn as; a LaTeX text symbol's character as it is (\textasciicircum's caret is no such mark) */
+const symbolDrawn = src => symbolText(src) ?? texToText2(src).replace(/^\^\(?|\)$/g, '')
+const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/** a text's graphemes, each a string: what a reader sees as one character */
+const graphemesOf = t => Array.from(GRAPHEMES.segment(t), g => g.segment)
+/**
+ * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
+ * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
+ * holding none of the marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(` (a text source's one
+ * grapheme is that character: \_ is the maker's TEXT symbol too, marks.mjs TEXT_SYMBOLS). Any other is a formula the page
+ * sets as ink of its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞",
+ * $\frac{\alpha}{\beta}$ "α/β"), which the file must find like any formula: phClassProven's 'other' (the controller's
+ * ruling of 2026-10-15)
+ */
+function textSymbol(src) {
+  const t = symbolDrawn(src)
+  if (/^\$|^\\\(/.test(src) && /[_^/]|√\(/.test(t)) return false
+  return [...GRAPHEMES.segment(t)].length === 1
+}
+/** phClass2 as the layer reads a unit's placeholders: a 'symbol' that is no text symbol (textSymbol) is 'other', a formula
+ *  the layout file must hold */
+function phClassProven(src) {
+  const c = phClass2(src)
+  return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
+}
+
+/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
+ *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id */
+export function classesOf(pieces) {
+  const out = []
+  pieces.forEach((p, k) => {
+    // (a nested unit: its mark a footnote mark's, placeholdersOf L2:1066)
+    if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true }]); return }
+    if (p.t !== 'ph') return
+    const src = unicodeOf(p.src)
+    // (the placeholder's class, placeholdersOf L2:1065: phClassProven, a symbol that is no text symbol a formula; its
+    // drawing as a symbol, `sym`, where phClass2 reads it as one: the tokens' class, cls2)
+    const c = phClassProven(src), copy = texToText2(src) || ''
+    const x = { cls: c.cls, ...(c.unknown ? { unknown: true } : {}), ...(copy ? { copy } : {}) }
+    if (phClass2(src).cls === 'symbol') {
+      const own = symbolText(src)
+      x.sym = own !== null ? [own] : [copy.replace(/^\^\(?|\)$/g, ''), ...(/^\$?\^/.test(src.replace(/^\$/, '')) || /^\^/.test(copy) ? [true] : [])]
+    }
+    if (/^\\footnotemark/.test(src)) x.mark = true
+    // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
+    // L2:1778 formulaOf)
+    if (textPieceOf(src)) x.literal = true
+    out.push([String(k), x])
+  })
+  return out
 }
 
 /** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it on its page,
@@ -144,7 +242,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    out.push({ id, kind: u.kind, content, ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    const classes = classesOf(u.pieces)
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
@@ -152,7 +251,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   }
   for (const u of [...ink, ...kept]) {
     const content = contentOf(u.pieces ?? [], { kindOf })
-    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
+    const classes = classesOf(u.pieces ?? [])
+    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
   }
   const figBase = out.length
   // (the figure units in today's bundle's order: those it draws first, in their order, then those whose ink stays, crowded or
@@ -203,7 +303,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     if (el < 0) return
     for (const [p, g] of u.glyphs?.ph ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] === u.id && G.role[g] === ROLE.element && G.piece[g] < 0) G.piece[g] = el }
   })
-  const lineskip = readSkipProbe(log)
+  // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
+  // what today's file states); the marked compile's log where the options have none)
+  const lineskip = options.lineskip ?? readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins

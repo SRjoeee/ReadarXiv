@@ -219,6 +219,7 @@ function docPageOf(
       clipped: g.clipped,
       unseen: g.unseen,
       ...(nu ? { nu: true as const } : {}),
+      ...((g as { along?: number }).along !== undefined ? { along: (g as { along?: number }).along } : {}),
     })
   }
   const turned: DocTurned[] = []
