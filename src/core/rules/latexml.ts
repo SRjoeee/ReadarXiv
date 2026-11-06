@@ -405,6 +405,12 @@ export const ANNOTATION_SELECTOR = '.ltx_note, .ltx_note_mark, .ltx_note_type'
  * word, a break as a space. A citation is `other`, read as a word: it may be a sentence's subject (`\citet`, the
  * reason it is no annotation above)
  */
+/** A numbering label (a section's, an item's, an equation's `ltx_tag`): to a sentence cutter a word, never its number and
+ *  stop, which would make `2.1.` a sentence of its own in a heading */
+export function isNumberingLabel(node: Node): boolean {
+  return node.nodeType === 1 && (node as Element).matches('.ltx_tag')
+}
+
 export function elementKindOf(node: Node | undefined): 'note-mark' | 'ref' | 'math' | 'break' | 'other' {
   if (node?.nodeType !== 1) return 'other'
   const el = node as Element

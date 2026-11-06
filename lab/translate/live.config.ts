@@ -8,7 +8,7 @@ export default defineConfig({
     root: new URL('../..', import.meta.url).pathname,
     environment: 'happy-dom',
     environmentOptions: { happyDOM: { settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true, disableJavaScriptEvaluation: true, handleDisabledFileLoadingAsSuccess: true, navigation: { disableMainFrameNavigation: true } } } },
-    include: ['lab/translate/html-blocks.lab.ts'],
+    include: ['lab/translate/html-blocks.lab.ts', 'lab/translate/slips.lab.ts', 'lab/translate/cuts.lab.ts'],
     setupFiles: ['tests/setup.ts'],
     testTimeout: 600_000,
     execArgv: ['--max-old-space-size=4096'],

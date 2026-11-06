@@ -54,7 +54,14 @@ function decodedAt(wire: string, from: number, to: number, t: Table): string {
  * A wire as a unit. `kindOf(n)` names placeholder n's element kind (the rule file's, from its slot node). `sentences`:
  * whether the unit lights by sentence (a reference unit does not: DESIGN §8.6's WHOLE_ONLY)
  */
-export function unitOfWire(id: string, wire: string, format: WireFormat, o: { kindOf?: (n: number) => string; sentences?: boolean; kind?: string } = {}): WireUnit {
+/** what a host states of placeholder n's element: its kind, and what the contract lets it say besides (Piece `el`) */
+export interface ElementStatement {
+  kind: string
+  alone?: boolean
+  reads?: string
+}
+
+export function unitOfWire(id: string, wire: string, format: WireFormat, o: { elementOf?: (n: number) => ElementStatement; sentences?: boolean; kind?: string } = {}): WireUnit {
   const root: Piece[] = []
   const stack: Piece[][] = [root]
   const table: Table = { at: [], open: null }
@@ -80,14 +87,14 @@ export function unitOfWire(id: string, wire: string, format: WireFormat, o: { ki
       }
       const n = fromAlpha(m[1] as string)
       push(table, at)
-      here().push({ t: 'el', id: `x${n}`, kind: o.kindOf?.(n) ?? 'other' })
+      here().push(elementPiece(`x${n}`, o.elementOf?.(n)))
       continue
     }
     const v = m[1] ?? m[2] ?? m[3]
     const open = m[4] ?? m[5] ?? m[6]
     if (v !== undefined) {
       push(table, at)
-      here().push({ t: 'el', id: `x${v}`, kind: o.kindOf?.(Number(v)) ?? 'other' })
+      here().push(elementPiece(`x${v}`, o.elementOf?.(Number(v))))
     } else if (open !== undefined) {
       const content: Piece[] = []
       table.open ??= at
@@ -105,6 +112,14 @@ export function unitOfWire(id: string, wire: string, format: WireFormat, o: { ki
     format,
   }
 }
+
+const elementPiece = (id: string, e: ElementStatement | undefined): Piece => ({
+  t: 'el',
+  id,
+  kind: e?.kind ?? 'other',
+  ...(e?.alone ? { alone: true } : {}),
+  ...(e?.reads !== undefined ? { reads: e.reads } : {}),
+})
 
 /** a translation's content as the wire of its source's format, and for each offset of its projection where it begins */
 export function wireOfContent(content: readonly OutPiece[], from: WireUnit): { wire: string; wireAt: number[] } {

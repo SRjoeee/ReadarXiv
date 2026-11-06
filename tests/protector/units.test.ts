@@ -21,7 +21,7 @@ const none: Fetch = async () => {
 describe('a wire as a unit, and back', () => {
   it('tags: a void is an element, a pair a span that must come back, the escapes read; the content written back is the wire', () => {
     const wire = 'Let <x id="1"/> be <t id="2">a &amp; b</t> &lt;ok&gt;. '
-    const r = unitOfWire('u', wire, 'tags', { kindOf: n => (n === 1 ? 'math' : 'other'), sentences: true })
+    const r = unitOfWire('u', wire, 'tags', { elementOf: n => ({ kind: n === 1 ? 'math' : 'other' }), sentences: true })
     expect(r.unit).toEqual({
       id: 'u',
       sentences: true,

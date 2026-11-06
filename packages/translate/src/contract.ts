@@ -6,7 +6,8 @@
 export type Lang = string
 
 /** An element's kind, as the source reader typed it: an open string (`math`, `display`, `cite`, `ref`, `url`, `code`,
- *  `note-mark`, `other`, …). Only `display` changes how a wire is written (it ends a stretch of joined elements) */
+ *  `note-mark`, `other`, …). A wire reads it for two things only: what the element reads as to a sentence cutter where the
+ *  host says nothing (`reads`), and, for `display`, that it keeps a marker of its own (`alone`) */
 export type ElKind = string
 /** A span's style: an open string (`bold`, `italic`, `mono`, `link`, `label`, …). The wire reads `must`, never the style */
 export type SpanStyle = string
@@ -20,7 +21,18 @@ export type SpanStyle = string
  */
 export type Piece =
   | { t: 'text'; s: string }
-  | { t: 'el'; id: string; kind: ElKind; stop?: string | undefined }
+  | {
+      t: 'el'
+      id: string
+      kind: ElKind
+      stop?: string | undefined
+      /** a marker of its own: never joined with the elements beside it on a wire that joins them (Microsoft's). A
+       *  `display` is, whatever this says */
+      alone?: boolean | undefined
+      /** what the element reads as to a sentence cutter, where the host knows it (the HTML page: its visible text); else
+       *  its kind decides (a formula a word, a reference a number, a citation's or a note's mark an annotation) */
+      reads?: string | undefined
+    }
   | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
 
 /** What a translator is given: the unit's id (a label, never a key), its content, and whether it lights by sentence */

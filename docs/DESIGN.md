@@ -387,7 +387,13 @@ interface ProtectedBlock {
 **Since stage 4b (2026-11-07) the judge is the chain's one acceptance rule**, over the unit the shim reads from the block's
 wire (`core/protector/units.ts`): every element once, every pair of the tags wire back exactly once and nested, nothing
 foreign, no text lost (`packages/translate` accept.ts); each adapter reads its own wire, Microsoft's tolerantly (a doubled
-or displaced `#`, a bare marker before CJK text: the PDF wire's reading, now the page's too). What the paragraphs below
+or displaced `#`, a bare marker before CJK text: the PDF wire's reading, now the page's too) **only where the block's text
+holds no `#` of its own**: there every other `#` of a reply is the markers', taken out. Where the text holds one, a marker
+is read only with its `#`, and a `#` right after a marker refuses the reply (it is the closer doubled or the text's own
+moved, and either would show): the reason given below for declining the bare reading, made a rule of the adapter. Offline,
+Microsoft's four known slips (a `#` doubled, `@d# #`, dropped, displaced into brackets) applied to an echo of every fixture
+block with markers: 11,656 replies of the 2,914 blocks whose text holds no `#` all accepted, with no stray `#` or `@`, no
+element out of order, no text lost (`lab/translate/slips.lab.ts`). What the paragraphs below
 describe of the page's resend and its runs path is the chain's per unit now (re-ask, the next translator, the runs floor),
 and nothing is cached before it is accepted. `validate` stays the gate of `rehydrate` on the wire the shim writes back,
 which is the source's own grammar. Measured live the same day (lane L6 stage 4b, the 13 fixtures' 5,999 blocks through
@@ -554,9 +560,11 @@ over the package's tags wire), which translators a configuration offers and in w
 §8.5's chain and its format rule, unchanged), the rows a page reads again (§9), and what the popup is told of the engine that
 answers (`providers/transport.ts`, from the chain's per-unit notes). The engines' measured facts below hold; their code is
 the package's adapters. The HTML page keeps serialising in its session's format (§6) and maps a block's wire to a unit beside
-the protector (`core/protector/units.ts`): every pair of the tags wire a span that must come back; on the markers wire each
-element stated so that it keeps its own marker (Microsoft's adapter joins side-by-side elements for the PDF wire; on the HTML
-page the live run of 2026-11-07 kept 1,375 of 1,378 placeholders of the 159 such blocks one marker an element, 1,372 joined).
+the protector (`core/protector/units.ts`, `core/pipeline/units.ts`): every pair of the tags wire a span that must come back;
+each element its rule-file kind, what it reads as to the tags wire's sentence cutter (`reads`: its visible text, but a
+numbering label, which reads as a word), and on the markers wire `alone`, a marker of its own (Microsoft's adapter joins
+side-by-side elements for the PDF wire; on the HTML page the live run of 2026-11-07 kept 1,375 of 1,378 placeholders of the
+159 such blocks one marker an element, 1,372 joined).
 
 ### 8.0 Requests run in the background
 

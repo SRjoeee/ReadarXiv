@@ -8,6 +8,7 @@
 // Counted: the placeholders that come back (each source element whose marker stands once in the reply), the blocks
 // accepted, and the blocks refused (today: resent alone, then cut into runs, by the page; on the chain: to the next
 // translator). A refusal or a rate limit of the endpoint stops the run (no retry loop).
+// Each row keeps the wire sent and the reply (since 2026-11-07's checks: the first run kept counts only).
 // Run: npx tsx lab/translate/live-html.ts <blocks.jsonl> <out.json> today|package
 import { readFileSync, writeFileSync } from 'node:fs'
 import { accept, type Fetch, type UnitIn } from '../../packages/translate/src/index.ts'
@@ -22,7 +23,9 @@ const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 const [input, output, which] = process.argv.slice(2)
 if (!input || !output || (which !== 'today' && which !== 'package')) throw new Error('usage: live-html.ts <blocks.jsonl> <out.json> today|package')
 type Block = { paper: string; id: string; unit: string; markers: string; kindsM: Record<string, string> }
-const blocks = readFileSync(input, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as Block)
+// (AXT_ONLY: a file of `paper|id` lines, the blocks to send alone, for a run that reads some blocks' replies again)
+const only = process.env.AXT_ONLY ? new Set(readFileSync(process.env.AXT_ONLY, 'utf8').split('\n').filter(Boolean)) : null
+const blocks = readFileSync(input, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as Block).filter(b => !only || only.has(`${b.paper}|${b.id}`))
 
 let stopped: string | null = null
 let requests = 0
@@ -59,7 +62,7 @@ async function paced<T>(items: T[], size: (t: T) => number, send: (batch: T[]) =
 }
 
 const count = (re: RegExp, s: string) => (s.match(re) ?? []).length
-const out: { id: string; paper: string; elements: number; back: number; accepted: boolean; refused: boolean; error?: string }[] = []
+const out: { id: string; paper: string; elements: number; back: number; accepted: boolean; refused: boolean; error?: string; wire?: string; reply?: string }[] = []
 const t0 = Date.now()
 
 if (which === 'today') {
@@ -74,7 +77,7 @@ if (which === 'today') {
         const got = tokenize(reply, 'markers').flatMap(t => (t.kind === 'void' ? [t.id] : []))
         const back = ids.filter(id => got.filter(g => g === id).length === 1).length
         const ok = validate(reply, expectationsFromText(b.markers, 'markers')).ok
-        out.push({ id: b.id, paper: b.paper, elements: ids.length, back, accepted: ok, refused: !ok })
+        out.push({ id: b.id, paper: b.paper, elements: ids.length, back, accepted: ok, refused: !ok, wire: b.markers, reply })
       })
     } catch (e) {
       for (const b of batch) out.push({ id: b.id, paper: b.paper, elements: count(/@[a-z]+#/g, b.markers), back: 0, accepted: false, refused: false, error: String(e) })
@@ -82,7 +85,7 @@ if (which === 'today') {
   })
 } else {
   const ms = microsoft({ fetch: post })
-  const units = blocks.map(b => ({ b, unit: unitOfWire(b.id, b.markers, 'markers', { kindOf: n => b.kindsM[String(n)] ?? 'other', sentences: true }).unit as UnitIn }))
+  const units = blocks.map(b => ({ b, unit: unitOfWire(b.id, b.markers, 'markers', { elementOf: n => ({ kind: b.kindsM[String(n)] ?? 'other' }), sentences: true }).unit as UnitIn }))
   await paced(units, u => ms.write(u.unit, 'zh-Hans').length, async batch => {
     const raws = new Map<number, string>()
     let error: string | undefined
@@ -106,7 +109,7 @@ if (which === 'today') {
       })
       const read = ms.read(unit, raw)
       const ok = !!read && accept(unit, read.content).ok
-      out.push({ id: b.id, paper: b.paper, elements, back: Math.min(back, elements), accepted: ok, refused: !ok })
+      out.push({ id: b.id, paper: b.paper, elements, back: Math.min(back, elements), accepted: ok, refused: !ok, wire: ms.write(unit, 'zh-Hans'), reply: text })
     })
   })
 }
