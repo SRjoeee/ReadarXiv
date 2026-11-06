@@ -59,7 +59,13 @@ for (const f of readdirSync(join(BASE, 'prepare')).filter(f => f.endsWith('.prep
       out.same++
       if (eq) { out.equal++; return }
       out.other++
-      const c = `${ua.kind}: ${classOf(ua.lines, ub.lines)}`
+      // (a baseline line that is a display's row of the unit: the candidate states a display as an element kept in place, its
+      // ink in no group, never a text line; the maker's rows held it as a line of the unit)
+      const disp = (ub.elements ?? []).filter(e => e.kind === 'display').flatMap(e => e.segs)
+      const extra = ua.lines.filter(x => !ub.lines.some(y => sameLine(x, y)))
+      const rest = ub.lines.filter(y => !ua.lines.some(x => sameLine(x, y)))
+      const displayRows = extra.length > 0 && rest.length === 0 && extra.every(x => disp.some(d => d.page === x.page && x.baseline >= d.bottom - 0.5 && x.baseline <= d.top + 0.5))
+      const c = `${ua.kind}: ${displayRows ? 'the baseline holds a display\'s row as a line (here: an element kept)' : classOf(ua.lines, ub.lines)}`
       out.classes[c] = (out.classes[c] ?? 0) + 1
       const ex = (out.examples[c] ??= [])
       if (ex.length < RENDER) ex.push({ id, unit: uid.slice(0, 12), ord: ub.ord, text: ub.text.slice(0, 80), baseline: ua.lines, candidate: ub.lines })
@@ -92,7 +98,10 @@ for (const [c, list] of Object.entries(out.examples)) {
     const x0 = Math.min(...ls.map(l => l.x0)) - 12, x1 = Math.max(...ls.map(l => l.x1)) + 12
     const y0 = Math.min(...ls.map(l => l.bottom ?? l.baseline - 3)) - 10, y1 = Math.max(...ls.map(l => l.top ?? l.baseline + 8)) + 10
     const s = 2
-    spawnSync('pdftoppm', ['-png', '-r', String(72 * s), '-x', String(Math.max(0, Math.round((x0 - vx0) * s))), '-y', String(Math.max(0, Math.round((vy1 - y1) * s))), '-W', String(Math.round((x1 - x0) * s)), '-H', String(Math.round((y1 - y0) * s)), '-singlefile', file, join(R, `${String(n).padStart(3, '0')}`)])
+    // (the page rendered whole, then cropped by macOS's sips: this poppler's pdftoppm renders a whole page with -singlefile)
+    const png = join(R, `${String(n).padStart(3, '0')}`)
+    spawnSync('pdftoppm', ['-png', '-r', String(72 * s), '-singlefile', file, png])
+    spawnSync('sips', ['-c', String(Math.round((y1 - y0) * s)), String(Math.round((x1 - x0) * s)), '--cropOffset', String(Math.max(0, Math.round((vy1 - y1) * s))), String(Math.max(0, Math.round((x0 - vx0) * s))), `${png}.png`])
     e.png = `lines-examples/${String(n).padStart(3, '0')}.png`
     n++
     void q
