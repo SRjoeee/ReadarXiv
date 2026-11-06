@@ -55,6 +55,26 @@ export {
   spacedText,
   type UnitLabel,
 } from './unit/label.ts'
+export {
+  carriedCrop,
+  type DecorAfter,
+  type DecorAfterInput,
+  type DecorBefore,
+  type DecorBeforeInput,
+  type DecorBlock,
+  type DecorChar,
+  type DecorLabel,
+  decorAfter,
+  decorBefore,
+  INK_UNIT_KINDS,
+  type KeptRow,
+  type LabelCrop,
+  originalLines,
+  type ShortSkip,
+  type Side,
+  shortSkipsTo,
+  widen,
+} from './unit/decor.ts'
 export { droppedHeld, dropMarks, type MarksAfter, type MarksTrace, markKind, mergeTail } from './unit/marks.ts'
 export {
   jointOf,

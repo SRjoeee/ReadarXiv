@@ -69,6 +69,16 @@ export const slotOf = (pair: string, ord: number, round: number, by: string): un
     .units.find((u) => u.ord === ord)
     ?.slots.find((s) => s.by === by && s.round === round)?.value
 
+/** a pair's page characters as the run read them (pageChars2), by page: a capture's `chars` names the pages it read */
+const pages = new Map<string, Record<string, unknown[]>>()
+export const pagesOf = (pair: string): Record<string, unknown[]> => {
+  const p =
+    pages.get(pair) ??
+    (readGz(join(TAP, 'samples', 'pages', `${pair}.pages.json.gz`)) as { pages: Record<string, unknown[]> }).pages
+  pages.set(pair, p)
+  return p
+}
+
 /** the rules whose sample files capture a unit's reading (U.elements:in and :out) */
 export const READING_RULES = ['U.breaks', 'U.elements', 'U.label', 'U.marks', 'U.rename', 'B.tokens'] as const
 /** every sampled round that holds a reading, once (by pair|ord|round), from every rule's sample file that captures one */

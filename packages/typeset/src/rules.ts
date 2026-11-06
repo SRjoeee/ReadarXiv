@@ -243,10 +243,17 @@ const SPECS: readonly RuleSpec[] = [
       'L2:3048-3056 shortSkipsTo',
       'RUN:1576-1587 widen (its room: Room.side)',
       'RUN:1596-1607 keptAfter (Placed.join kept)',
+      'L2:4316 originalLines',
     ],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'unit/decor.ts',
+    state: {
+      is: 'ported',
+      replay:
+        "samples/U.decor.json.gz: its blocks by U.blocks' port, each widened line's room read from the captured page (the crop's baseline the reading's: within the line)",
+      cases: 39,
+    },
   },
   {
     id: 'U.params',
