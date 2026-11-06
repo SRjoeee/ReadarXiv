@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LOG_MAX } from '../../src/compile/recover.ts'
 import { markSource } from '../../src/marks/mark.ts'
 import {
   BOX_RESET,
@@ -127,5 +128,13 @@ describe('the mark probe, asked in the first pass', () => {
     expect(marks([])).toBe(2)
     expect(marks(['\\cite'])).toBe(0)
     expect(dec.decode(markSource(t, doc).tree.files.get('main.tex'))).toContain('\\axtpma{p0.')
+  })
+})
+
+describe('the probe’s answers, bounded', () => {
+  it('reads no answer from a first pass whose log is longer than LOG_MAX: the marks as with no probe', () => {
+    const s = probeSamples(readSource(tree('A \\cite{a} b.'), NO_DEFINITIONS))
+    const a = readAnswers(`${row('punct', 0, '00000000')}\n${'x'.repeat(LOG_MAX)}`, s)
+    expect(a).toMatchObject({ switches: {}, inkless: [], texts: [], probed: [], seen: [] })
   })
 })

@@ -15,6 +15,7 @@
 //     defines and its units call is asked about, by its first call (today's: the complete ones'), and the marks writer takes
 //     an answer only for a call of a complete macro (mark.ts `probed`).
 // Not asked: the babel names' capitals (today's `name` section: no reader of the instrument takes them).
+import { LOG_MAX } from '../compile/recover.ts'
 import { jobName, type Tree } from '../source/definitions.ts'
 import { Files } from '../source/files.ts'
 import { LEX_RULES } from '../source/kinds.ts'
@@ -650,8 +651,11 @@ export interface ProbeAnswers {
   probed: { command: string; src: string; glued?: string }[]
   seen: string[]
 }
-/** the probe's answers from the first pass's log and the samples it was written for */
+/** the probe's answers from the first pass's log and the samples it was written for; none from a log longer than LOG_MAX
+ *  (the recovery's resource limit: the marks then as with no probe) */
 export function readAnswers(log: string, s: ProbeSamples): ProbeAnswers {
+  if (log.length > LOG_MAX)
+    return { switches: {}, inkless: [], apart: [], texts: [], lineskip: null, probed: [], seen: [] }
   const ink = listings(log, s.ink.length + s.leads.length)
   const head = ink.slice(0, s.ink.length)
   return {

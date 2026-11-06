@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileMarked, judge, regionOf, texErrors } from '../src/compile/recover.ts'
+import { compileMarked, ERRORS_MAX, judge, LOG_MAX, regionOf, texErrors } from '../src/compile/recover.ts'
 import { markSource } from '../src/marks/mark.ts'
 import { NO_DEFINITIONS } from '../src/source/definitions.ts'
 import { readSource } from '../src/source/read.ts'
@@ -103,5 +103,39 @@ describe('the recovery of a marked compile', () => {
     expect(c).toMatchObject({ ok: false })
     expect(!c.ok && c.why).toMatch(/^the marked compile failed with unit marks only: errors the unmarked pass has not/)
     expect(c.attempts).toHaveLength(3)
+  })
+})
+
+describe('the recovery’s bounds on what it reads of a log', () => {
+  const { tree, doc } = paper('Words $x$ here.')
+  const once = async (log: string, unmarkedLog = ran()) => {
+    const steps: string[] = []
+    const r = await compileMarked({
+      tree,
+      doc,
+      options: {},
+      unmarkedLog,
+      compile: async (_m, _plan, step) => {
+        steps.push(step)
+        return { pdf: PDF, log }
+      },
+    })
+    return { r, steps }
+  }
+  it('ends with a reason, no second compile, where a log is longer than LOG_MAX', async () => {
+    const long = ran('x'.repeat(LOG_MAX))
+    expect(await once(long)).toMatchObject({
+      r: { ok: false, why: expect.stringMatching(/longer than/) },
+      steps: ['marked'],
+    })
+    expect(await once(ran(), long)).toMatchObject({ r: { ok: false, why: expect.stringMatching(/longer than/) } })
+  })
+  it('keeps at most ERRORS_MAX errors, and ends with a reason past them', async () => {
+    const many = ran(error('Undefined control sequence.', 3, 'a', 'b').repeat(ERRORS_MAX + 1))
+    expect(texErrors(many)).toHaveLength(ERRORS_MAX + 1)
+    expect(await once(many)).toMatchObject({
+      r: { ok: false, why: expect.stringMatching(/more than/) },
+      steps: ['marked'],
+    })
   })
 })

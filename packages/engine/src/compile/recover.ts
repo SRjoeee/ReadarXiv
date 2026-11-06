@@ -28,11 +28,18 @@ export function lastTexRun(log: string): string {
   return all.length > 1 ? log.slice((all.at(-1) as RegExpMatchArray).index) : log
 }
 
-/** each error TeX wrote in a log's last run (an error in an output routine or a \write is read as its own context alone) */
-export function texErrors(log: string): TexError[] {
+/** the most of a log the recovery reads, in its characters (a byte each: the log is read Latin-1), and the most errors it
+ *  keeps of one: resource limits, a paper deciding how long its log is. On the corpus the longest log is 1.21 MB
+ *  (2307.16209v1's marked draft, TeX's state stated at every mark) and the most errors 688 (2610.21377v1's first pass); past
+ *  either the recovery ends with its reason */
+export const LOG_MAX = 32 * 2 ** 20
+export const ERRORS_MAX = 10_000
+/** each error TeX wrote in a log's last run (an error in an output routine or a \write is read as its own context alone), at
+ *  most `max` + 1 (one past the bound tells it is passed) */
+export function texErrors(log: string, max = ERRORS_MAX): TexError[] {
   const lines = lastTexRun(log).split('\n')
   const out: TexError[] = []
-  for (let k = 0; k < lines.length; k++) {
+  for (let k = 0; k < lines.length && out.length <= max; k++) {
     const l = lines[k] as string
     if (!l.startsWith('! ')) continue
     let message = l.slice(2)
@@ -97,11 +104,19 @@ export interface Judged {
   why?: string
   /** the marked compile's errors the unmarked pass has not (a letter a font lacks is never the marks') */
   errors: TexError[]
+  /** a resource limit passed (LOG_MAX, ERRORS_MAX): no step after it reads less */
+  bound?: true
 }
 /** a marked compile against the unmarked first pass's log */
 export function judge(c: { pdf: Uint8Array | null | undefined; log: string }, unmarkedLog: string): Judged {
-  const own = new Set(texErrors(unmarkedLog).map(keyOf))
-  const errors = texErrors(c.log).filter((e) => e.char === undefined && !own.has(keyOf(e)))
+  if (c.log.length > LOG_MAX || unmarkedLog.length > LOG_MAX)
+    return { ok: false, why: `a log longer than ${LOG_MAX} bytes`, errors: [], bound: true }
+  const theirs = texErrors(unmarkedLog)
+  const mine = texErrors(c.log)
+  if (theirs.length > ERRORS_MAX || mine.length > ERRORS_MAX)
+    return { ok: false, why: `more than ${ERRORS_MAX} errors in a log`, errors: [], bound: true }
+  const own = new Set(theirs.map(keyOf))
+  const errors = mine.filter((e) => e.char === undefined && !own.has(keyOf(e)))
   if (!c.pdf?.length) return { ok: false, why: 'no PDF', errors }
   if (!ranThrough(c.log)) return { ok: false, why: 'TeX did not run through', errors }
   if (errors.length) return { ok: false, why: `errors the unmarked pass has not: ${errors[0]?.message}`, errors }
@@ -226,6 +241,7 @@ export async function compileMarked(o: {
   const first = await run('marked', o.options)
   if (first.j.ok)
     return { ok: true, step: 'marked', plan: first.plan, pdf: first.c.pdf as Uint8Array, log: first.c.log, attempts }
+  if (first.j.bound) return { ok: false, why: first.j.why as string, attempts }
   const region = regionOf(first.j.errors, first.plan, o.tree, first.tree, first.c.log)
   let unmarked: ReadonlySet<number> = region.units
   if (region.units.size || region.names) {
