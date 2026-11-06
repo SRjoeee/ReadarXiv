@@ -20,7 +20,7 @@ const classOnly = ([k, c]: [string, Record<string, unknown>]) => {
 describe('the instrument adapter’s element classes', () => {
   it('states the class, the copy text, a symbol’s drawing and a footnote’s mark, by piece id', () => {
     const got = new Map(
-      (classesOf as (p: unknown[]) => [string, Record<string, unknown>][])([
+      (classesOf as unknown as (p: unknown[]) => [string, Record<string, unknown>][])([
         { t: 'text', s: 'see ' },
         ph('\\cite{a,b}'),
         ph('\\ref{fig:1}'),
@@ -45,7 +45,7 @@ describe('the instrument adapter’s element classes', () => {
     expect(got.get('8')).toEqual({ cls: 'macro', copy: 'i.e.' })
     expect(got.get('9')).toEqual({ cls: 'other', unknown: true })
     expect(got.get('10')).toEqual({ cls: 'symbol', copy: '%', sym: ['%'] })
-    expect(new Map((classesOf([ph('\\url{http://a.b/c}')]) as [string, Record<string, unknown>][]).map(classOnly)).get('0')).toEqual({ cls: 'other', copy: 'http://a.b/c', literal: true })
+    expect(new Map((classesOf([ph('\\url{http://a.b/c}')]) as unknown as [string, Record<string, unknown>][]).map(classOnly)).get('0')).toEqual({ cls: 'other', copy: 'http://a.b/c', literal: true })
   })
   it('reads each source as layer2.mjs does (its copy held equal to phClassProven and texToText2)', () => {
     const srcs = ['\\cite{a,b}', '\\citep[p.~3]{a}', '\\ref{x}', '\\eqref{e}', '$x$', '$\\sqrt{\\dmodel}$', '$\\frac{a}{b}$', '$\\sum_{\\alpha}^{\\beta}$', '$\\Sigma$', '\\~{n}', '\\"u', '$\\downarrow$', '\\[ a = b \\]', '\\begin{equation}y=F(x)\\label{eq:1}\\end{equation}', '\\bert{}', '$\\cla$', '\\textbf{x}', '\\hspace{1em}', '\\vspace{-2mm}', '\\&', '\\\\', '$$', '$^{1}$', '\\url{http://a.b}']

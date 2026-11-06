@@ -25,6 +25,7 @@ export {
   type Owners,
   ownersOf,
   type PieceClass,
+  type SpanClass,
   ROLE,
   type Role,
 } from './instrument.ts'
