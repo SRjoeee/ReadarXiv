@@ -48,6 +48,7 @@ import {
   analyse,
   bodyFile,
   canonical,
+  completeArity,
   definitionAt,
   envEnd,
   envName,
@@ -128,6 +129,11 @@ export interface SourceDoc {
    *  (no listing package sets its lines): what the marked compile's code regions hook (marks' REGIONS) */
   codeEnvs: string[]
   codeBodies: string[]
+  /** the paper's macros that read nothing past their arguments, with their arity (macros.ts completeArity): the mark probe asks
+   *  about a call of each, and only on TeX's answer does a closing mark stand after one (marks/probe.ts) */
+  complete: [string, number][]
+  /** the commands the paper's own files define (its macros, whatever TeX holds of them) */
+  own: string[]
 }
 
 const ASSIGNMENT_DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:true[ \t]*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|fill?l?|\\[A-Za-z@]+)?`
@@ -182,6 +188,9 @@ interface Ctx {
   calls: Map<string, { n: number; kinds: Set<string> }>
   /** the paper's environments whose begin opens a table their end closes */
   tableWraps: Set<string>
+  /** each of the paper's macros as TeX holds it at the document's start and as each definition the walk meets makes it: its
+   *  arity where it reads nothing past its arguments, else null (macros.ts completeArity) */
+  met: Map<string, (number | null)[]>
 }
 
 const name = (t: Token | undefined): string | null => (t?.k === 'cs' ? t.name : null)
@@ -603,6 +612,8 @@ class Walker {
         const held = definitions(ctx.defs, d.name)
         if (!((d.provide || n === 'newcommand') && (ctx.macros.has(d.name) || held))) {
           ctx.macros.set(d.name, d.macro)
+          const met = ctx.met.get(d.name) ?? (ctx.met.set(d.name, []).get(d.name) as (number | null)[])
+          met.push(completeArity(d.macro, this.isCall))
           const body = d.macro.body.trim()
           if (d.macro.params === 0 && ROW_END.test(body)) ctx.rowEnds.add(d.name)
           else if (ROW_END_TAIL.test(body)) ctx.rowEndsAfter.add(d.name)
@@ -2130,6 +2141,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     rowEnds: facts.rowEnds,
     rowEndsAfter: facts.rowEndsAfter,
     calls: new Map(),
+    met: new Map([...facts.macros].map(([n, m]) => [n, [completeArity(m, isCall)]])),
     // (LaTeX records a package loaded as the macro \ver@<name>.sty; \@ifpackageloaded leaves \relax where it is not)
     backref:
       definitions.names.get('ver@backref.sty')?.meaning.k === 'macro' &&
@@ -2191,6 +2203,19 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     main: tree.main,
     files: ctx.order,
     names: paperWords(definitions, ctx.theorems),
+    // (a macro every definition of which the walk or TeX knows reads nothing past the same arguments; none the paper also
+    // makes by a definer the reader does not read, \let among them)
+    complete: [...ctx.met]
+      .filter(
+        ([n, list]) =>
+          own.has(n) &&
+          list.length > 0 &&
+          list.every((a) => a !== null && a === list[0]) &&
+          !(names.bodies.get(n) ?? []).some((x) => x === null || x.startsWith('\\let ')),
+      )
+      .map(([n, list]): [string, number] => [n, list[0] as number])
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+    own: [...own].sort(),
     units: ordered.map((u) => {
       const out: SourceUnit = {
         id: u.id as string,

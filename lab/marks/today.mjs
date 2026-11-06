@@ -1,7 +1,8 @@
 // lab/marks/today.mjs: the lab's compiles and today's front half for the marks lane. Not shipped.
 // `compiler(id, image, source, mine)`: a compile as the box answers it, cached by what it compiles (the image, the request's
 // shape and every file: the key every lane computes, baseline/tools/prepare.mjs, spike-s1 dump.mjs), read from the lanes'
-// caches, else run in the docker slot (heavy-slot.sh, one runner, no network, the pinned image) and kept in `mine`.
+// caches, else run in the docker slot (heavy-slot.sh, one runner, no network, the pinned image) and kept in `mine`; with
+// FRESH=1 always run, its outputs kept apart in `mine` (the caller removes them).
 // `todayOf(dir, id, compile)`: today's prepare up to the instrument (live.mjs openPaper, the job's BibTeX make, markedOfPaper:
 // the probe, the marked original, our final pass), as the baseline ran it.
 import { execFile } from 'node:child_process'
@@ -36,11 +37,13 @@ export function compiler(id, image, source, mine, stats = { read: 0, made: 0, ms
     for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) h.update(p).update(b)
     const key = h.digest('hex').slice(0, 20)
     const own = join(mine, id, key)
-    let dir = [own, ...CACHES.map(c => join(c, id, key))].find(d => existsSync(join(d, 'done')))
+    // (FRESH=1: every compile made anew, no cache read, the outputs in a directory of their own: the timings of stage 1b)
+    const fresh = process.env.FRESH === '1'
+    let dir = fresh ? null : [own, ...CACHES.map(c => join(c, id, key))].find(d => existsSync(join(d, 'done')))
     if (dir) stats.read++
     else {
       if (process.env.NOCOMPILE === '1') throw Object.assign(new Error(`NEEDS_COMPILE ${key}`), { needs: key })
-      dir = own
+      dir = fresh ? join(mine, id, `fresh-${key}-${process.pid}-${stats.made}`) : own
       const build = join(mine, id, `build-${key}`)
       rmSync(build, { recursive: true, force: true })
       for (const [p, b] of all) { const f = join(build, p); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, b) }

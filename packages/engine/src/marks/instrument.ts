@@ -144,7 +144,8 @@ const before = (a: At, b: At) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 /**
  * The instrument of a marked compile: `pages` B's pages as pageInk read them (the reading `ink` is of, handed through), `plan`
  * and `doc` what markSource wrote and what it wrote it from, `log` the marked compile's last pass's log, `inkless` the macros
- * TeX said set no ink and `texts` the text the probe showed each macro sets (the probe's answers markSource took)
+ * TeX said set no ink, `texts` the text the probe showed each macro sets and `lineskip` the paper's \lineskip and
+ * \lineskiplimit (the probe's answers markSource took: marks/probe.ts, asked in the first pass; else a probe row in `log`)
  */
 export function instrumentFromPlan({
   ink,
@@ -155,6 +156,7 @@ export function instrumentFromPlan({
   made,
   inkless = [],
   texts = null,
+  lineskip: stated = null,
   work = OWN_WORK,
 }: {
   ink: Doc
@@ -162,6 +164,7 @@ export function instrumentFromPlan({
   work?: number
   inkless?: readonly string[]
   texts?: ReadonlyMap<string, string> | null
+  lineskip?: [number, number] | null
   pages: readonly PageRead[]
   plan: Plan
   doc: SourceDoc
@@ -765,7 +768,7 @@ export function instrumentFromPlan({
     const state = told.get(m.name)
     if (state) states.push({ unit: m.unit, piece: m.kind === 'open' ? m.pieceId : null, state })
   }
-  const lineskip = readLineskip(log)
+  const lineskip = stated ?? readLineskip(log)
   return {
     ink,
     units,

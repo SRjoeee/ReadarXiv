@@ -350,6 +350,37 @@ function readsOn(f: SourceFile, isCall: (name: string) => boolean): boolean {
   return !readArgs(f, at + 1, params, f.toks.length, isCall).complete
 }
 
+/** the commands that define or change a command, a register or a counter (a body that runs one changes what the paper's
+ *  commands are where it is called: latex-front.mjs readsOnToo) */
+const CHANGES =
+  /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|global|futurelet|csdef|csgdef|newtoks|newcounter|newlength|setlength|addtolength|setcounter|addtocounter)$/
+/** the commands that set more than a piece of a line: an environment, a paragraph's end, an alignment's row or cell, a list's
+ *  item, a page's end (latex-front.mjs STRUCTURAL): no mark stands beside a call of one in a line */
+const STRUCTURAL = /^(?:begin|end|par|item|cr|crcr|noalign|hline|tabularnewline|newline|newpage|clearpage|\\)$/
+/**
+ * A macro that reads nothing past its arguments: its arity, or null (latex-front.mjs completeMacros, on the macro as TeX holds
+ * it). None for one with an optional first argument (its call looks ahead for the bracket) or delimited parameters; nor for a
+ * body that reads on (\@ifnextchar and its kin, a last command that takes arguments it does not give: readsOn), ends in a
+ * parameter (the call's last argument is the body's last token: `\pair[2]{#1#2}`), defines or changes a command, names a
+ * parameter past its arity (a definition inside another's body), or sets more than a piece of a line. The mark probe asks TeX
+ * about a call of such a macro, and only then does a closing mark stand after it
+ */
+export function completeArity(m: Macro, isCall: (name: string) => boolean): number | null {
+  if (m.opt || m.delimited) return null
+  const f = bodyFile(m.body)
+  const toks = f.toks.filter((t) => t.k !== 'space' && t.k !== 'comment')
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i] as Token
+    if (t.k === 'cs' && (CHANGES.test(t.name) || STRUCTURAL.test(t.name))) return null
+    if (t.k === 'char' && t.cat === CAT.align) return null
+    if (t.k === 'char' && t.cat === CAT.param) {
+      const n = toks[i + 1]
+      if (n?.k === 'char' && /^\d$/.test(n.ch) && (Number(n.ch) > m.params || i + 1 === toks.length - 1)) return null
+    }
+  }
+  return readsOn(f, isCall) ? null : m.params
+}
+
 /** the command a body ends in (its last token, a control word), which reads its arguments past the call's own; not one
  *  that is another's operand (\string\x, \let\a\b) */
 function tailOf(f: SourceFile): string | null {

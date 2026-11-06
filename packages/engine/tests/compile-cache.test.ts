@@ -35,6 +35,7 @@ describe('the instrument cache', () => {
         .filter((f) => f.endsWith('.ts'))
         .map((f) => `source/${f}`),
       'marks/mark.ts',
+      'marks/probe.ts',
       'marks/classes.ts',
       'marks/tex.ts',
       'marks/statements.ts',

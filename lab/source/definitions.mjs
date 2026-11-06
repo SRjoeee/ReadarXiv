@@ -6,14 +6,21 @@
 // runner, no network). Keeps `<id>.axtdefs` (the records TeX wrote), `<id>.log` and `<id>.json` (main, compiler, image,
 // names asked, time) in --out; the build directory is removed. Licensed sources never leave lab-data: --out must be there.
 //
+// --probe: the same pass asks the mark probe at its end (packages/engine/src/marks/probe.ts): its samples from a reading of the
+// source with no definitions, its file read at `enddocument/end`; keeps `<id>.probe.json` (the samples the rows are numbered by).
+// --bbl=<dir>: a job's .bbl made before (that dir's `<id>.bbl`) in the tree, where the paper ships none (else --out's own).
+//
 //   node --experimental-strip-types lab/source/definitions.mjs --papers=<papers.json> --set=87 --out=<dir> [--only=id,id]
 //        [--prepare=<baseline prepare dir>]   (the tree and compiler the baseline compiled each paper with)
+//        [--probe] [--bbl=<dir>]
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { askFile, jobName, namesUsed } from '../../packages/engine/src/source/definitions.ts'
+import { bblHead, PROBE_FILE, PROBE_HOOK, probeBytes, probeFile, probeSamples } from '../../packages/engine/src/marks/probe.ts'
+import { askFile, jobName, NO_DEFINITIONS, namesUsed } from '../../packages/engine/src/source/definitions.ts'
 import { ASKED, LEX_RULES } from '../../packages/engine/src/source/kinds.ts'
+import { readSource } from '../../packages/engine/src/source/read.ts'
 import { analyze } from '../../src/pdf-reader/engine/source/paper-meta.mjs'
 import { inMemory } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 import { unpackSource } from '../../src/pdf-reader/engine/source/tar.mjs'
@@ -39,7 +46,7 @@ for (const p of papers) {
   const image = base?.image ?? PINS.images[PINS.default].texlive
   const main = meta.main
   // (a bibliography an earlier pass made is read by this one, as the compile's later passes read it: its names asked too)
-  const made = join(OUT, `${p.id}.bbl`)
+  const made = join(arg('bbl') ?? OUT, `${p.id}.bbl`)
   const madeBbl = !files.has(`${jobName(main)}.bbl`) && existsSync(made)
   if (madeBbl) files.set(`${jobName(main)}.bbl`, new Uint8Array(readFileSync(made)))
   const names = namesUsed({ main, files }, LEX_RULES, ASKED)
@@ -52,7 +59,14 @@ for (const p of papers) {
   }
   writeFileSync(join(build, 'axt-ask.tex'), askFile(names))
   const stem = jobName(main)
-  const first = `\\AddToHook{begindocument/end}{\\input{axt-ask.tex}}\\input{${main}}`
+  // (the probe's samples, chosen before TeX: the reader with no definitions)
+  const PROBE = process.argv.includes('--probe')
+  const t1 = performance.now()
+  const pre = PROBE ? readSource({ main, files }, NO_DEFINITIONS) : null
+  const samples = pre ? probeSamples(pre) : null
+  const preMs = Math.round(performance.now() - t1)
+  if (samples) writeFileSync(join(build, PROBE_FILE), probeBytes(probeFile(samples, compiler, bblHead({ main, files })), pre.encoding))
+  const first = `\\AddToHook{begindocument/end}{\\input{axt-ask.tex}}${samples ? PROBE_HOOK : ''}\\input{${main}}`
   const engine = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex'] }[compiler] ?? ['pdflatex', '-draftmode']
   // (and, where the package ships no .bbl of the job, the bibliography the pass asks for: BibTeX's, or biber's where the pass
   // wrote biblatex's control file, as the prepare's first pass makes it; kept as <id>.bbl)
@@ -66,7 +80,8 @@ for (const p of papers) {
   if (bib && existsSync(bbl)) writeFileSync(join(OUT, `${p.id}.bbl`), readFileSync(bbl))
   if (madeBbl) rmSync(join(build, `${stem}.bbl`), { force: true })
   if (existsSync(log)) writeFileSync(join(OUT, `${p.id}.log`), readFileSync(log))
-  const info = { id: p.id, main, compiler, image, names: names.size, bbl: madeBbl ? 'made before' : bib ? existsSync(bbl) : 'shipped', exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
+  if (samples) writeFileSync(join(OUT, `${p.id}.probe.json`), JSON.stringify(samples))
+  const info = { id: p.id, main, compiler, image, names: names.size, ...(samples ? { probe: { punct: samples.punct.length, ahead: samples.ahead.length, ink: samples.ink.length, leads: samples.leads.length, preMs } } : {}), bbl: madeBbl ? 'made before' : bib ? existsSync(bbl) : 'shipped', exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
   writeFileSync(join(OUT, `${p.id}.json`), `${JSON.stringify(info)}\n`)
   rmSync(build, { recursive: true, force: true })
   console.log(JSON.stringify(info))

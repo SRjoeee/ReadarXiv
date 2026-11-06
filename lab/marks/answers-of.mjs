@@ -8,6 +8,7 @@ export const answersOf = a => ({
   inkless: a?.inkless?.map(unicodeOf) ?? null,
   complete: a?.complete ?? null,
   apart: a?.apart?.map(unicodeOf) ?? null,
-  /** the text the probe showed each macro sets (readInkTexts' pairs, flat): a Map, source -> text */
-  texts: Array.isArray(a?.texts) ? new Map(Array.from({ length: Math.floor(a.texts.length / 2) }, (_, j) => [unicodeOf(a.texts[2 * j]), unicodeOf(a.texts[2 * j + 1])])) : null,
+  /** the text the probe showed each macro sets (readInkTexts' pairs: answers.json keeps them as pairs, or flat): a Map,
+   *  source -> text. Until the fifth owner of stage 1b this read the pairs as a flat list, and every run took no text */
+  texts: Array.isArray(a?.texts) ? new Map(Array.isArray(a.texts[0]) ? a.texts.map(([s, t]) => [unicodeOf(s), unicodeOf(t)]) : Array.from({ length: Math.floor(a.texts.length / 2) }, (_, j) => [unicodeOf(a.texts[2 * j]), unicodeOf(a.texts[2 * j + 1])])) : null,
 })

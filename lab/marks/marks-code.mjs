@@ -7,10 +7,12 @@ import { join } from 'node:path'
 
 const ROOT = new URL('../../', import.meta.url).pathname
 const SRC = 'packages/engine/src/'
-/** the code a marked tree is a function of: every file of the source reader, the marks writer, its classes and its TeX */
+/** the code a marked tree is a function of: every file of the source reader, the marks writer, the probe the first pass asks
+ *  (its answers decide marks), its classes and its TeX */
 export const MARKS_FILES = [
   ...readdirSync(join(ROOT, SRC, 'source')).filter(f => f.endsWith('.ts')).map(f => `${SRC}source/${f}`),
   `${SRC}marks/mark.ts`,
+  `${SRC}marks/probe.ts`,
   `${SRC}marks/classes.ts`,
   `${SRC}marks/tex.ts`,
   `${SRC}marks/statements.ts`,

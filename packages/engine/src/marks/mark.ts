@@ -55,6 +55,13 @@ export interface Answers {
     | Readonly<Record<string, number>>
     | null
   apart?: readonly string[] | null
+  /** the paper's macros' calls the probe asked about (marks/probe.ts: chosen before TeX, from a reading of the source with no
+   *  definitions), each command's one call and the placeholder glued after it; where absent, the complete macros' first calls
+   *  in these units (today's probe chose them so) */
+  probed?: readonly { command: string; src: string; glued?: string }[] | null
+  /** the commands of the asked classes the probe's reading holds: one the probe did not see is placed as with no probe; one it
+   *  saw and did not answer has no mark (today's: every command of an asked class TeX did not answer) */
+  seen?: readonly string[] | null
 }
 export interface MarkOptions {
   /** the paper's compiler: `latex` adds the DVI drivers' marks */
@@ -182,8 +189,8 @@ function frontMarked(units: readonly SourceUnit[]): Set<SourceUnit> {
 // ---------------------------------------------------------------- the placeholders' marks (marks.mjs layoutMarking)
 const PUNCT = '.,;:!?'
 const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
-const COMPLETE_PROBE_MAX = 512
-const COMPLETE_SRC_MAX = 200
+export const COMPLETE_PROBE_MAX = 512
+export const COMPLETE_SRC_MAX = 200
 const completeMap = (c: Answers['complete']): Map<string, number> =>
   c instanceof Map
     ? new Map(c)
@@ -191,7 +198,7 @@ const completeMap = (c: Answers['complete']): Map<string, number> =>
 const srcOf = (p: MarkPiece | undefined) => (p && 'src' in p && typeof p.src === 'string' ? p.src : '')
 const textOf = (p: MarkPiece | undefined) => (p?.t === 'text' ? p.s : '')
 /** a call of one of the paper's complete macros with all its arguments (marks.mjs completeCall) */
-function completeCall(p: MarkPiece | undefined, complete: ReadonlyMap<string, number>): boolean {
+export function completeCall(p: MarkPiece | undefined, complete: ReadonlyMap<string, number>): boolean {
   if (!complete.size || p?.t !== 'ph' || typeof p.src !== 'string') return false
   const m = /^\\([A-Za-z@]+)/.exec(p.src)
   const arity = m ? complete.get(m[1] as string) : undefined
@@ -229,7 +236,7 @@ function completeCall(p: MarkPiece | undefined, complete: ReadonlyMap<string, nu
   }
   return k === s.length
 }
-const probeFit = (src: string) => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
+export const probeFit = (src: string) => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
 const BIB = (u: SourceUnit) => u.kind === 'reference' || u.kind === 'refnames'
 /** the complete macros' probed calls (marks.mjs probeSamples' `own`), in the probe's order */
 function ownSamples(
@@ -254,10 +261,10 @@ function ownSamples(
     }
   return [...own.values()]
 }
-const gapOf = (s: string) => (s === '' ? '' : /^[ \t]*(?:\r?\n)?[ \t]*$/.test(s) ? ' ' : null)
-const aheadKey = (src: string, gap: string, follows: string) => `${src}#${gap}#${follows}`
+export const gapOf = (s: string) => (s === '' ? '' : /^[ \t]*(?:\r?\n)?[ \t]*$/.test(s) ? ' ' : null)
+export const aheadKey = (src: string, gap: string, follows: string) => `${src}#${gap}#${follows}`
 /** the paper's macro the placeholder at q follows (marks.mjs pairOf) */
-function pairOf(pieces: readonly MarkPiece[], q: number): [MarkPiece, string, number] | null {
+export function pairOf(pieces: readonly MarkPiece[], q: number): [MarkPiece, string, number] | null {
   const p = pieces[q]
   if (p?.t !== 'ph') return null
   const gapped = pieces[q - 1]?.t === 'text'
@@ -284,7 +291,7 @@ const colourPiece = (p: MarkPiece | undefined) =>
   (p?.t === 'open' && X.COLOUR_OPEN.test(p.src ?? '')) ||
   (p?.t === 'ph' && !isMark(p) && X.COLOUR_SWITCH.test(p.src ?? ''))
 /** where a unit's start mark goes, as patch places it (marks.mjs headEnd) */
-function headEnd(pieces: readonly MarkPiece[], from = 0): number {
+export function headEnd(pieces: readonly MarkPiece[], from = 0): number {
   for (let k = from; k < pieces.length; k++) {
     const p = pieces[k] as MarkPiece
     if (p.t === 'text') {
@@ -329,7 +336,13 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
   const on = new Set(o.classes ?? MARK_CLASSES)
   const none = new Set(answers.inkless ?? [])
   const closed = completeMap(answers.complete)
-  const asked = switches && closed.size ? ownSamples(units, closed) : []
+  // (a probed call answers for its command only where it is a call of a complete macro with all its arguments, by TeX's arity)
+  const asked = answers.probed
+    ? answers.probed.filter((s) => completeCall({ t: 'ph', src: s.src, kind: 'other', at: 0, to: 0 }, closed))
+    : switches && closed.size
+      ? ownSamples(units, closed)
+      : []
+  const seen = answers.seen ? new Set(answers.seen) : null
   const probed = new Map(asked.map((s) => [s.command, s.src]))
   const glued = new Map(asked.filter((s) => s.glued).map((s) => [s.command, s.glued as string]))
   const answered = (p: MarkPiece | null | undefined) => {
@@ -350,7 +363,7 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
   const answer = (p: MarkPiece, next: MarkPiece | undefined): string | undefined => {
     if (!switches) return undefined
     const codes = switches[commandOf(p) as string]
-    if (!codes) return ASKED.has(classOf(p) as string) ? '2' : undefined
+    if (!codes) return ASKED.has(classOf(p) as string) && !(seen && !seen.has(commandOf(p) as string)) ? '2' : undefined
     const first = next?.t === 'text' ? (next.s[0] ?? '') : ''
     const code =
       classOf(next) === 'footnote' && classOf(p) === 'footnote'
