@@ -105,6 +105,13 @@ const ASSIGNMENT_DIMEN = String.raw`[-+]?[ \t]*(?:\d+(?:\.\d*)?|\.\d+)[ \t]*(?:t
 const ASSIGNMENT = new RegExp(
   String.raw`^[ \t]*(?:[=<>][ \t]*(?:${ASSIGNMENT_DIMEN}|\\[A-Za-z@]+)|${ASSIGNMENT_DIMEN})(?:[ \t]*(?:plus|minus)[ \t]*${ASSIGNMENT_DIMEN})*(?![A-Za-z])`,
 )
+/** a body that ends a table's row and does nothing else but draw its rules (`\\`, \tabularnewline, \cr, booktabs' or
+ *  LaTeX's rules after it), and one that ends with such a row end after what it sets */
+const ROW_RULES = String.raw`(?:\\(?:hline|midrule|toprule|bottomrule|cline\s*\{[^}]*\}|cmidrule\s*(?:\([^)]*\))?\s*\{[^}]*\}|addlinespace(?:\s*\[[^\]]*\])?)\s*)*$`
+const ROW_END = new RegExp(String.raw`^(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*${ROW_RULES}`)
+const ROW_END_TAIL = new RegExp(
+  String.raw`(?:^|[^\\])(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*${ROW_RULES}`,
+)
 const RULE_SPEC = new RegExp(String.raw`^(?:[ \t]*(?:height|depth|width)[ \t]*${ASSIGNMENT_DIMEN})+(?![A-Za-z])`)
 const THEOREM_PARAMS = paramsOf('[t')
 const PDF_STRING = 'texorpdfstring'
@@ -135,7 +142,9 @@ interface Ctx {
   dirs: string[]
   bbl: string | null
   /** a cell's row ends of the paper's own (a macro whose body is `\\`) */
-  rowEnds: ReadonlySet<string>
+  rowEnds: Set<string>
+  /** the paper's macros whose body ends a row after its arguments */
+  rowEndsAfter: Set<string>
   /** backref is loaded with its parscan: an entry's list stands after its first paragraph */
   backref: boolean
   /** the calls of the paper's macros of no argument the walk met: how many, in which kinds of unit */
@@ -528,7 +537,12 @@ class Walker {
         // (\providecommand and \newcommand define nothing defined already: TeX's meaning at the document's start, or a
         // definition the walk met; \renewcommand and \def always define)
         const held = definitions(ctx.defs, d.name)
-        if (!((d.provide || n === 'newcommand') && (ctx.macros.has(d.name) || held))) ctx.macros.set(d.name, d.macro)
+        if (!((d.provide || n === 'newcommand') && (ctx.macros.has(d.name) || held))) {
+          ctx.macros.set(d.name, d.macro)
+          const body = d.macro.body.trim()
+          if (d.macro.params === 0 && ROW_END.test(body)) ctx.rowEnds.add(d.name)
+          else if (ROW_END_TAIL.test(body)) ctx.rowEndsAfter.add(d.name)
+        }
         return ph(d.end, 'other')
       }
     }
@@ -741,6 +755,17 @@ class Walker {
         ? this.macroArgs(f, end, macro, to)
         : null
     if (call && macro) {
+      // (one whose body ends the row after its arguments, in a cell: a row of its own, its prose a cell of its own)
+      if (b.cellMode && ctx.rowEndsAfter.has(n) && !macro.stores) {
+        endText()
+        b.flush()
+        const arg = macro.prose ? call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)] : undefined
+        if (arg?.group) {
+          this.walk(f, arg.a + 1, arg.b - 1, b)
+          b.flush()
+        }
+        return { next: call.end }
+      }
       if (!macro.prose && frontRole(n)?.[1]) {
         endText()
         const e = this.frontCommand(f, end, n, to, b, true)
@@ -1704,6 +1729,7 @@ function paperFacts(
   const displayEnvs = new Set<string>()
   const envMacros = new Map<string, { side: 'begin' | 'end'; env: string }>()
   const rowEnds = new Set<string>()
+  const rowEndsAfter = new Set<string>()
   const envParams = new Map<string, readonly Param[]>()
   for (const [n, d] of defs.names) {
     const m = d.meaning
@@ -1731,7 +1757,8 @@ function paperFacts(
       const body = m.body.trim()
       const sh = /^\\(begin|end) \{([^{}]+)\}$/.exec(body)
       if (sh && m.params === '') envMacros.set(n, { side: sh[1] as 'begin' | 'end', env: (sh[2] as string).trim() })
-      if (/^\\\\ ?(?:\[[^\]]*\])?$|^\\tabularnewline ?$|^\\cr ?$/.test(body) && m.params === '') rowEnds.add(n)
+      if (m.params === '' && ROW_END.test(body)) rowEnds.add(n)
+      else if (ROW_END_TAIL.test(body)) rowEndsAfter.add(n)
     }
   }
   // the paper's own environments that set a display: their begin opens a math environment their end closes
@@ -1768,7 +1795,7 @@ function paperFacts(
     )
       tableWraps.add(n)
   }
-  return { macros, ifs, theorems, displayEnvs, envMacros, rowEnds, envParams, tableWraps }
+  return { macros, ifs, theorems, displayEnvs, envMacros, rowEnds, rowEndsAfter, envParams, tableWraps }
 }
 
 /** the paper's own environments read by lines: those whose begin code begins one of the packages' (\newenvironment{code}
@@ -1924,6 +1951,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
     dirs: [],
     bbl,
     rowEnds: facts.rowEnds,
+    rowEndsAfter: facts.rowEndsAfter,
     calls: new Map(),
     // (LaTeX records a package loaded as the macro \ver@<name>.sty; \@ifpackageloaded leaves \relax where it is not)
     backref:
