@@ -46,13 +46,14 @@ export async function wrap(
     // (a turned glyph's group by its place in its show, as a level one's (wrapFinal's way); and one of no group is read as
     // its own, none, so that a show it shares with a group's glyphs is split at it rather than giving it their group: the
     // proof that each group encloses exactly its ink found 3 such glyphs on 2 papers of the corpus)
-    groups.turned.forEach((g, k) => {
-      const t = pg.raw?.turned?.[k]
-      if (!t || !(t.n >= 0) || (g === null && !plan.shows.has(t.n))) return
-      const row = plan.shows.get(t.n) ?? []
-      plan.shows.set(t.n, row)
-      row[t.k] = g
-    })
+    for (const grouped of [true, false])
+      groups.turned.forEach((g, k) => {
+        const t = pg.raw?.turned?.[k]
+        if (!t || !(t.n >= 0) || (g !== null) !== grouped || (g === null && !plan.shows.has(t.n))) return
+        const row = plan.shows.get(t.n) ?? []
+        plan.shows.set(t.n, row)
+        row[t.k] = g
+      })
     plans.set(i + 1, { facts: pg.extra, ...plan, isFigure, textOf: textGroupOf })
   })
   const made = await wrapOf(bytesA, plans, deps)
