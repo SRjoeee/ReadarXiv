@@ -32,3 +32,13 @@ export type {
 } from './types.ts'
 export { type Block, type BlocksInput, blocks, type LineInfo } from './unit/blocks.ts'
 export { type Break, type Breaks, type BreaksInput, breaks, type LayoutUnit, type V0Piece } from './unit/breaks.ts'
+export { type CropPart, cropFields, cropOfBox, cropPartsOfSegments, type SegBox } from './unit/crops.ts'
+export {
+  bracketed,
+  type ElementReading,
+  type Elements,
+  type ElementsInput,
+  elements,
+  type Gap,
+  type Res,
+} from './unit/elements.ts'

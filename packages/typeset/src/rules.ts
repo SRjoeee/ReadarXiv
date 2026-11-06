@@ -82,7 +82,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     reads: [],
     file: 'unit/elements.ts',
-    state: open,
+    state: { is: 'ported', replay: 'every sampled reading with lanes/L3/replay/U.elements.json.gz', cases: 101 },
   },
   {
     id: 'U.leadMark',
@@ -96,7 +96,7 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'unit/elements.ts',
     parent: 'U.elements',
-    state: open,
+    state: { is: 'ported', replay: 'every sampled reading with lanes/L3/replay/U.elements.json.gz', cases: 101 },
   },
   {
     id: 'U.brackets',
@@ -111,7 +111,7 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'unit/elements.ts',
     parent: 'U.elements',
-    state: open,
+    state: { is: 'ported', replay: 'every sampled reading with lanes/L3/replay/U.elements.json.gz', cases: 101 },
   },
   {
     id: 'U.render',
@@ -126,7 +126,7 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'unit/elements.ts',
     parent: 'U.elements',
-    state: open,
+    state: { is: 'ported', replay: 'every sampled reading with lanes/L3/replay/U.elements.json.gz', cases: 101 },
   },
   {
     id: 'U.rename',
