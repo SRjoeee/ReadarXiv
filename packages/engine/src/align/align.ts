@@ -15,7 +15,8 @@
 //   unmatched A glyphs, the two runs by LCS; a run of unmatched B glyphs of one owner (where the caller gives B's owners)
 //   found exactly once among A's unmatched glyphs.
 // - The glyphs B prints in place of an included figure (a draft frame and its file name, between its points g<n>a and
-//   g<n>b) belong to no sequence.
+//   g<n>b) belong to no sequence: those between the points that are not the figure's own (a figure's own glyphs are shown in
+//   its form XObject: the final pass's included figure keeps its text, the draft's frame prints its name as page text).
 // - Every difference between two matched glyphs is a hunk, classed: `hyphen` (both sides spell the same once line-end hyphens
 //   are taken out and compatibility forms decomposed: the one difference that counts as equal), `aonly`, `bonly`, `font`
 //   (the same text by another font or code), `char`. A glyph wholly outside its page's view is `offpage`.
@@ -53,6 +54,9 @@ export interface Mapping {
   /** per B page, each box's partner on A: its A page (1-based, 0 none) and its index there */
   boxPage: Int32Array[]
   boxIndex: Int32Array[]
+  /** per B page, each turned glyph's partner on A: its A page (1-based, 0 none) and its index among that page's turned */
+  turnedPage: Int32Array[]
+  turnedIndex: Int32Array[]
   /** per B page: identical to its partner */
   identical: boolean[]
   stretches: { pages: [number, number]; b: number; a: number; mode: 'code' | 'uni' | null; stopped: boolean }[]
@@ -93,7 +97,7 @@ function flatOf(doc: Doc, skip: Uint8Array | null): { flat: Flat; offGlobal: Int
   }
   offGlobal[doc.pages.length] = n
   let m = 0
-  for (let i = 0; i < n; i++) if (!skip || !skip[i]) m++
+  for (let i = 0; i < n; i++) if (!skip?.[i]) m++
   const f: Flat = {
     at: new Int32Array(m),
     page: new Int32Array(m),
@@ -126,7 +130,7 @@ function flatOf(doc: Doc, skip: Uint8Array | null): { flat: Flat; offGlobal: Int
   return { flat: f, offGlobal }
 }
 
-/** B's glyphs inside a draft frame: from a page's g<n>a point to its g<n>b */
+/** B's glyphs inside a draft frame: from a page's g<n>a point to its g<n>b, the included figure's own (in its form) aside */
 function framedOf(doc: Doc, offGlobal: Int32Array): Uint8Array {
   const skip = new Uint8Array(offGlobal[doc.pages.length] as number)
   doc.pages.forEach((pg, p) => {
@@ -137,7 +141,7 @@ function framedOf(doc: Doc, offGlobal: Int32Array): Uint8Array {
       if (a) open.set(a[1] as string, pt.glyph)
       else if (b && open.has(b[1] as string)) {
         const from = open.get(b[1] as string) as number
-        for (let j = from; j < pt.glyph; j++) skip[(offGlobal[p] as number) + j] = 1
+        for (let j = from; j < pt.glyph; j++) if (!pg.glyphs[j]?.form) skip[(offGlobal[p] as number) + j] = 1
         open.delete(b[1] as string)
       }
     }
@@ -585,6 +589,50 @@ export function align(inkB: Doc, inkA: Doc, o: AlignOptions = {}): Mapping {
     }
   })
 
+  // ---- turned glyphs, as boxes are: by their slot between the same level glyphs, with the same keys in it
+  const turnedPage: Int32Array[] = []
+  const turnedIndex: Int32Array[] = []
+  const tclaimed = inkA.pages.map((pg) => new Uint8Array(pg.turned?.length ?? 0))
+  const tkey = (t: { u: string; base: string }) => `${t.base}|${t.u}`
+  inkB.pages.forEach((b, p) => {
+    const T = b.turned ?? []
+    const tp = new Int32Array(T.length)
+    const ti = new Int32Array(T.length).fill(-1)
+    turnedPage.push(tp)
+    turnedIndex.push(ti)
+    const n = b.glyphs.length
+    for (let s0 = 0; s0 < T.length; ) {
+      const k = T[s0]!.at
+      let s1 = s0
+      while (s1 < T.length && T[s1]!.at === k) s1++
+      const slot = T.slice(s0, s1)
+      const prev = k > 0 ? (bToA[(offB[p] as number) + k - 1] as number) : null
+      const next = k < n ? (bToA[(offB[p] as number) + k] as number) : null
+      s0 = s1
+      if ((prev !== null && prev < 0) || (next !== null && next < 0)) continue
+      const pp = prev !== null ? pageOfA(prev) : null
+      const pn = next !== null ? pageOfA(next) : null
+      if (pp !== null && pn !== null && (pp !== pn || (next as number) <= (prev as number))) continue
+      const ap = pp ?? pn ?? (inkB.pages.length === inkA.pages.length ? p : null)
+      if (ap === null) continue
+      const pa = inkA.pages[ap]!
+      const la = prev !== null ? prev - (offA[ap] as number) : -1
+      const lb = next !== null ? next - (offA[ap] as number) : pa.glyphs.length
+      const TA = pa.turned ?? []
+      const cand: number[] = []
+      TA.forEach((t, j) => {
+        if (t.at >= la + 1 && t.at <= lb) cand.push(j)
+      })
+      if (cand.length !== slot.length || cand.some((j, q) => tkey(TA[j]!) !== tkey(slot[q]!) || tclaimed[ap]![j]))
+        continue
+      cand.forEach((j, q) => {
+        tclaimed[ap]![j] = 1
+        tp[s1 - slot.length + q] = ap + 1
+        ti[s1 - slot.length + q] = j
+      })
+    }
+  })
+
   const hunkAG = new Uint8Array(nA)
   for (let q = 0; q < NA; q++) hunkAG[FA.at[q] as number] = hunkA[q] as number
   return {
@@ -600,6 +648,8 @@ export function align(inkB: Doc, inkA: Doc, o: AlignOptions = {}): Mapping {
     offpageA: offpageOf(inkA, offA, nA),
     boxPage,
     boxIndex,
+    turnedPage,
+    turnedIndex,
     identical: identical.slice(0, inkB.pages.length),
     stretches,
     moves,

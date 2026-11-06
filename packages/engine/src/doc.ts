@@ -42,8 +42,32 @@ export interface DocPoint {
   box: number
 }
 
+/** a glyph set turned (pageInk's `turned`: a figure's y-axis title, arXiv's margin stamp), which no line of the page holds:
+ *  its Unicode and code, its font's base name, its show and place there, the level glyphs before it in the stream (`at`), its
+ *  baseline from its origin to its advance's end, its direction, size, and its font's band in em */
+export interface DocTurned {
+  u: string
+  code: number
+  base: string
+  n: number
+  k: number
+  at: number
+  ox: number
+  oy: number
+  ex: number
+  ey: number
+  ux: number
+  uy: number
+  size: number
+  ascent: number
+  descent: number
+  form: boolean
+}
+
 export interface DocPage {
   glyphs: DocGlyph[]
+  /** the glyphs set turned, in stream order (none where the page was read without `turned`) */
+  turned?: DocTurned[]
   /** every painted box, x0, y0, x1, y1 a box, in stream order */
   boxes: number[]
   /** each box's kind (pageInk's `paths`): a path by its constructPath's index (≥ 0), an image -3, an annotation -1, a

@@ -11,3 +11,17 @@ export * from './section.types.ts'
 export * from './tail.types.ts'
 export * from './wrap.types.ts'
 export * from './xref.types.ts'
+
+// ---- the back half of the prepare
+// (the unit's id, which the front half's adapter computes for the seam: format's)
+export { unitId } from '@readarxiv/format'
+export { align, HOW, HUNK, type HunkClass, hunkName, type Mapping } from './align/align.ts'
+export { lcs } from './align/myers.ts'
+export { type BundleObject, bundle, type MemberState, stateOf } from './bundle/bundle.ts'
+export type { Doc, DocGlyph, DocPage, DocPoint } from './doc.ts'
+export { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE, type Role } from './instrument.ts'
+export { cutLines } from './locate/lines.ts'
+export { type Located, locate, type Member, type Place } from './locate/locate.ts'
+export { type PrepareDeps, prepareBack, type Tally } from './prepare.ts'
+export { type PdfJs, type ReadPage, readPdf } from './read.ts'
+export { type AddOn, textGroupOf, wrap } from './wrap/wrap.ts'
