@@ -13,7 +13,15 @@ import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
 import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
-import { type DecorLabel, decorAfter, decorBefore, type KeptRow, type ShortSkip, type Side } from '../unit/decor.ts'
+import {
+  carriedCrop,
+  type DecorLabel,
+  decorAfter,
+  decorBefore,
+  type KeptRow,
+  type ShortSkip,
+  type Side,
+} from '../unit/decor.ts'
 import { params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 import type { FlowMember } from './flow.ts'
@@ -37,6 +45,9 @@ export type Reading = {
   cjkSize: number | undefined
   /** the kept regions (runs of KEPT lines, in order) the translation passes (U.breaks' referenced): what its tokens block to */
   referenced: ReadonlySet<number>
+  /** the tokens are the unit's own (lay/read.ts): the adapter sets a carried label's crop before them (RUN:2225-2238), which
+   *  today's tokens handed in already hold */
+  own?: boolean
 }
 export type AdaptInput = {
   m: Placed
@@ -65,7 +76,7 @@ const BELOW = 0.215,
 const r2 = (v: number) => Math.round(v * 100) / 100
 /** a line's size: the median of its main glyphs' sizes as the prepare states it (Line's 11th field), else the member's */
 const sizeOf = (l: Line, m: Placed): number => (l[10] as number | undefined) ?? m.style.size
-const rectOf = (l: Line, m: Placed): Rect => [
+export const rectOf = (l: Line, m: Placed): Rect => [
   l[0],
   r2(l[2]),
   r2(l[4] - BELOW * sizeOf(l, m)),
@@ -266,11 +277,24 @@ export function adapt(i: AdaptInput): Adapted {
         }
       : undefined
   const fl = after?.lines[0]
+  // (a label carried to its first line's start: its own ink's crop before the unit's own tokens, the line's own glyphs'
+  // baselines its own: RUN:2225-2238)
+  let tokens = i.reading.tokens
+  if (i.reading.own && decor.carried && label && blocks[0]) {
+    const own = lines
+      .filter((l) => l[0] === blocks[0]!.page)
+      .slice(0, 1)
+      .map((l) => l[4])
+    const c = carriedCrop(label, blocks[0], firstX0, s, own)
+    tokens = Object.assign([c as unknown as (typeof tokens)[number], ...tokens], {
+      base: (tokens as { base?: unknown }).base,
+    }) as typeof tokens
+  }
   const member: FlowMember = {
     ord: m.ord,
     kind,
     pages,
-    tokens: i.reading.tokens,
+    tokens,
     blocks,
     s,
     P,

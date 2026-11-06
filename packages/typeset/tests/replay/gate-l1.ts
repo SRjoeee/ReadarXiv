@@ -6,7 +6,20 @@
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { FlowMember } from '../../src/lay/flow.ts'
-import { adapt } from '../../src/lay/adapt.ts'
+import { readFileSync } from 'node:fs'
+import { adapt, rectOf } from '../../src/lay/adapt.ts'
+import {
+  paperOf as paperReading,
+  type PaperReading,
+  readMember,
+  type RowUnit,
+  sourcePieces,
+} from '../../src/lay/read.ts'
+import { fontString } from '../../src/breaker/measure.ts'
+import { rulesFor } from '../../src/rules-for.ts'
+import type { V0Piece } from '../../src/unit/breaks.ts'
+import { doorRows } from './rows.ts'
+import { todayFile } from './tap.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
 import { fitMeasure } from '../../src/breaker/measure.ts'
 import type { Metrics, RuleParams } from '../../src/types.ts'
@@ -36,10 +49,24 @@ export type GateL1 = {
   tieHeld: Set<number>
   /** the invariants over every laid member (design §4.9: I3 its ink overlaps no other laid unit's, I4 each element drawn once,
    *  I5 no line wider than its slot, no fit under the floor): what breaks each, by member */
-  inv: { laid: number; lines: number; I3: string[]; I4: string[]; I5: string[] }
+  inv: {
+    laid: number
+    lines: number
+    I3: string[]
+    I4: string[]
+    I5: string[]
+    I5by: Map<string, { n: number; max: number }>
+  }
   /** each page's lay (layPagePrepared: L8-E1), ms; the adapter's setting of every member (L6), ms in all */
   ms: number[]
   adaptMs: number
+  /** E1 (with the reading from the part): per adapted member, the first of its typesetter's inputs that differs from today's
+   *  (the setting's first, then the tokens'), or 'equal' */
+  inputs: Map<number, string>
+  /** the reading's time (L5, L7: lay/read.ts), ms in all */
+  readMs: number
+  /** E1's reading level alone (with the reading from the part): per member, the first difference of its tokens from today's */
+  tokens: Map<number, string>
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
@@ -55,8 +82,32 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
       if (l.page !== page) continue
       inv.lines++
       const used = (l.used as number | undefined) ?? l.x1 - l.x0
-      if (used > l.x1 - l.x0 + 0.1)
-        inv.I5.push(`ord ${pm.ord}: a line ${(used - (l.x1 - l.x0)).toFixed(2)} pt wider than its slot`)
+      const over = used - (l.x1 - l.x0)
+      // (I5 restated, the placement's own guarantee (B.place placeItems L2:3976-4038): a line ends within its slot but for the
+      // blank half of a closing mark it ends with (`hang`, half the size, at a compression under 2), and for a line whose
+      // items cannot be set narrower: no word space to shrink and no gap a squeeze took (an overfull box, TeX's); each line
+      // past its slot classed by which, its largest excess beside its count)
+      if (over > 1e-6) {
+        const end = l.items.at(-1) as { t?: { punct?: string }; cut?: boolean } | undefined
+        const hang =
+          end?.t?.punct === 'close' && !end.cut && Number((pm.lay!.P as Raw | undefined)?._compress ?? 0) < 2
+            ? 0.5 * size
+            : 0
+        const spaces = l.items.some((it) => (it as { t?: { space?: boolean } }).t?.space)
+        const cls =
+          over <= hang + 1e-6
+            ? 'a closing mark’s blank half past the slot'
+            : !spaces && !l.squeezed
+              ? 'overfull: no space to shrink, not squeezed'
+              : spaces
+                ? 'past the slot with spaces to shrink'
+                : 'squeezed past the slot'
+        const b = inv.I5by.get(cls) ?? inv.I5by.set(cls, { n: 0, max: 0 }).get(cls)!
+        b.n++
+        b.max = Math.max(b.max, over)
+        if (cls.startsWith('past') || cls.startsWith('squeezed'))
+          inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
+      }
       boxes.push({
         ord: pm.ord,
         x0: l.x0,
@@ -120,7 +171,7 @@ let rules: { targets: Record<string, { params: Raw }> } | null = null
 const r2 = (v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
-export function settingDiff(mine: FlowMember, today: FlowMember): string {
+export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true): string {
   if (mine.blocks.length !== today.blocks.length) return 'U.blocks: block count'
   for (let k = 0; k < mine.blocks.length; k++) {
     const a = mine.blocks[k]!,
@@ -162,15 +213,92 @@ export function settingDiff(mine: FlowMember, today: FlowMember): string {
           Math.abs(r[3] - today.blocks[k]!.rects[j]![3]) > 0.005,
       )
     )
-      return `U.blocks: line ends (x0, x1)${DETAIL ? ` ${JSON.stringify(mine.blocks[k]!.rects.map((r, j) => [r[1], r[3], today.blocks[k]!.rects[j]![1], today.blocks[k]!.rects[j]![3]]).filter((x) => Math.abs(x[1]! - x[3]!) > 0.005 || Math.abs(x[0]! - x[2]!) > 0.005))}` : ''}`
-  if (JSON.stringify(mine.tokens.length) !== JSON.stringify(today.tokens.length)) return 'B.tokens: count'
+      return `U.blocks: line ends (x0, x1)${mine.blocks[k]!.rects.every((r, j) => Math.abs(r[1] - today.blocks[k]!.rects[j]![1]) <= 0.0100001 && Math.abs(r[3] - today.blocks[k]!.rects[j]![3]) <= 0.0100001) ? ', a hundredth apart (half hundredths)' : ''}${DETAIL ? ` ${JSON.stringify(mine.blocks[k]!.rects.map((r, j) => [r[1], r[3], today.blocks[k]!.rects[j]![1], today.blocks[k]!.rects[j]![3]]).filter((x) => Math.abs(x[1]! - x[3]!) > 0.005 || Math.abs(x[0]! - x[2]!) > 0.005))}` : ''}`
+  if (tokens && mine.tokens.length !== today.tokens.length) return 'B.tokens: count'
   return 'equal'
 }
 
+type Tok = Record<string, unknown>
+const FLAGS = [
+  'space',
+  'glue',
+  'brk',
+  'cont',
+  'asp',
+  'punct',
+  'hyph',
+  'sc',
+  'keep',
+  'sup',
+  'ph',
+  'k',
+  'math',
+  'label',
+  'leadEnd',
+  'leadGap',
+  'kern',
+  'kernEm',
+  'kernW',
+  'kernEnd',
+  'newline',
+  'room',
+  'blockTo',
+  'cls',
+]
+const near = (a: unknown, b: unknown) =>
+  typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 0.01 : a === b || (a == null && b == null)
+/** the first difference of two measured token lists (B.tokens, B.measure), with its place; null where equal */
+export function tokensDiff(mine: readonly Tok[], today: readonly Tok[]): string | null {
+  for (let j = 0; j < Math.max(mine.length, today.length); j++) {
+    const a = mine[j],
+      b = today[j]
+    const at = (k: string) =>
+      `${k} [${j}: ${JSON.stringify(a?.s ?? (a?.crop ? 'crop' : a?.space ? ' ' : ''))?.slice(0, 24)} against ${JSON.stringify(b?.s ?? (b?.crop ? 'crop' : b?.space ? ' ' : ''))?.slice(0, 24)}]`
+    if (!a || !b) return at('B.tokens: count')
+    if (!!a.crop !== !!b.crop) return at('U.elements: crop or text')
+    if (a.crop && b.crop) {
+      const ca = a.crop as { crop: number[]; baseline: number },
+        cb = b.crop as { crop: number[]; baseline: number }
+      if (ca.crop.some((v, q) => !near(v, cb.crop[q])) || !near(ca.baseline, cb.baseline)) {
+        // (every coordinate a hundredth off at most: a value at half a hundredth that the two reads of A round apart)
+        const half =
+          ca.crop.every((v, q) => Math.abs(v - cb.crop[q]!) <= 0.0100001) &&
+          Math.abs(ca.baseline - cb.baseline) <= 0.0100001
+        if (process.env.AXT_GATE_CROPS)
+          console.log(
+            `CROP ${ca.crop.map((v, q) => (v - cb.crop[q]!).toFixed(2)).join(' ')} ${(ca.baseline - cb.baseline).toFixed(2)} ${(a as { crop: { src?: string } }).crop.src ?? ''}`,
+          )
+        return at(half ? 'U.elements: a crop’s box, a hundredth apart (half hundredths)' : 'U.elements: a crop’s box')
+      }
+      if (!near(a.cw, b.cw)) return at('U.elements: a crop’s width')
+      continue
+    }
+    if ((a.s ?? null) !== (b.s ?? null)) return at('B.tokens: text')
+    for (const f of FLAGS) if (!near(a[f], b[f])) return at(`B.tokens: ${f}`)
+    const fa = a.face ? fontString(a.face as never, 100) : null,
+      fb = b.face ? fontString(b.face as never, 100) : null
+    if (fa !== fb) return at(`B.faces: face (${fa} against ${fb})`)
+    if (!near(a.w100, b.w100)) return at('B.measure: width')
+    const sa = (a.st ?? {}) as Tok,
+      sb = (b.st ?? {}) as Tok
+    for (const f of ['color', 'upper'])
+      if (JSON.stringify(sa[f] ?? null) !== JSON.stringify(sb[f] ?? null)) return at(`B.tokens: style ${f}`)
+    // (a link's group by its presence: its id is the group's, today's a number of the paper's, the part's the open piece's)
+    if ((sa.link === undefined) !== (sb.link === undefined)) return at('B.tokens: style link')
+    if (!near(a.at, b.at) || !near(a.end, b.end)) return at('B.tokens: word table (at, end)')
+  }
+  return null
+}
+let heads: Record<string, { heads: Record<string, string> }> | null = null
+
 /** a pair laid page by page from L1's parts, the reading and tokens today's; `metricsOf` the Metrics its lays measure with
  *  (default: the tap's table of today's measures, which throws MissingMeasure for a measure today never made) */
-export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metrics } = {}): GateL1 {
+export function gateL1Pair(
+  pair: string,
+  o: { metricsOf?: (pair: string) => Metrics; reading?: 'today' | 'part' } = {},
+): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
+  const metrics = o.metricsOf?.(pair) ?? null
   const out: GateL1 = {
     units: [],
     stops: new Map(),
@@ -181,9 +309,12 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     threw: [],
     thrown: new Map(),
     tieHeld: new Set(),
-    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [] },
+    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map() },
     ms: [],
     adaptMs: 0,
+    inputs: new Map(),
+    readMs: 0,
+    tokens: new Map(),
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -194,9 +325,21 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     return out
   }
   rules ??= derived('rules')
-  const R = { ...rules!.targets[L.target]!.params, adaptiveFill: L.info.adaptiveFill ?? null } as unknown as RuleParams
+  // (AXT_GATE_NOFILL: no page fill, to time a page without it)
+  const R = {
+    ...rules!.targets[L.target]!.params,
+    adaptiveFill: process.env.AXT_GATE_NOFILL ? null : (L.info.adaptiveFill ?? null),
+  } as unknown as RuleParams
   const today = todayBundle(paper)
   const views = viewsOf(paper)
+  // (the reading from the part: the door's rows, the paper's designs and roles from its part's fonts, the label's names)
+  const part0 = bundle.parts.values().next().value
+  const doors = o.reading === 'part' ? doorRows(pair) : null
+  let paperR: PaperReading | null = null
+  if (o.reading === 'part' && part0) {
+    paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
+    heads ??= (JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as { targets: typeof heads }).targets
+  }
   // (every member once, from the part of its first page; its flow's neighbours)
   const byOrd = new Map<number, { m: L1Placed; before: L1Placed | null; after: L1Placed | null }>()
   for (const part of bundle.parts.values())
@@ -246,6 +389,87 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
+    // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
+    let reading = {
+      tokens: c.tokens as never,
+      labelDrawn: label?.drawn ?? null,
+      lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
+      title: u.kind === 'heading' && !decor?.heading,
+      front: false,
+      cjkSize: undefined as number | undefined,
+      // (the regions today's tokens block to: U.breaks' referenced, as the tokens were made with)
+      referenced: new Set(
+        (c.tokens as { blockTo?: number }[]).flatMap((t) => (Number.isInteger(t.blockTo) ? [t.blockTo!] : [])),
+      ) as ReadonlySet<number>,
+      own: false,
+    }
+    let tokensVerdict: string | null = null
+    if (o.reading === 'part') {
+      const row = doors?.get(u.ord)
+      const src = bundle.units.get(x.m.text)
+      if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial') || !metrics || !paperR) {
+        stop(`the reading: ${!row ? 'no door row' : !src ? 'no unit of the part' : `a row ${row[2]}`}`)
+        continue
+      }
+      if (x.m.els?.some(([, e]) => e.ends || e.opens !== undefined)) {
+        stop('breaks (U.breaks not adapted)')
+        continue
+      }
+      const source = sourcePieces(src.content)
+      const pieces = row[1].map((q) =>
+        typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
+      ) as V0Piece[]
+      if (pieces.some((q) => !q)) {
+        stop('the reading: a row piece no source piece is')
+        continue
+      }
+      const tr = performance.now()
+      const rd = readMember({
+        m: x.m,
+        unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+        rects: x.m.lines.map((l) => rectOf(l, x.m)),
+        to: L.target,
+        P: R as never,
+        paper: paperR,
+        labels: {
+          words: (rules!.targets[L.target] as { labels?: Record<string, string> }).labels ?? null,
+          captions: { figure: 'target', table: 'target' },
+          heads: heads?.[L.target]?.heads ?? null,
+          names: null,
+        },
+        relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
+        metrics,
+        shown: Number.POSITIVE_INFINITY,
+      })
+      out.readMs += performance.now() - tr
+      // (today's own tokens: those the tap recorded, before the label crops the run set ahead of them)
+      let todays = c.tokens as unknown as Tok[]
+      if (c.slot('U.decor', 'carriedCrop')?.carriedCrop) todays = todays.slice(1)
+      if ((todays[0] as { ownLabel?: boolean } | undefined)?.ownLabel) todays = todays.slice(1)
+      tokensVerdict = rd.unproven >= 0 ? 'U.elements: unproven' : tokensDiff(rd.tokens as unknown as Tok[], todays)
+      out.tokens.set(u.ord, tokensVerdict ?? 'equal')
+      if (DEEP === `${pair}:${u.ord}`)
+        console.log(
+          JSON.stringify({
+            unproven: rd.unproven,
+            verdict: tokensVerdict,
+            res: [...rd.resolutions],
+            els: x.m.els,
+            mine: (rd.tokens as unknown as Tok[]).map((t) => ({ ...t, face: undefined, st: t.st })),
+            today: todays.map((t) => ({ ...t, face: undefined, st: t.st })),
+          }),
+        )
+      reading = {
+        tokens: rd.tokens as never,
+        labelDrawn: rd.labelDrawn,
+        lead: rd.lead,
+        title: reading.title,
+        front: false,
+        cjkSize: rd.cjkSize,
+        referenced: rd.referenced,
+        own: true,
+      }
+    }
     const ta = performance.now()
     const got = adapt({
       m: x.m,
@@ -258,26 +482,15 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
       view: (pg) => views.get(pg),
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
-      reading: {
-        tokens: c.tokens as never,
-        labelDrawn: label?.drawn ?? null,
-        lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
-        title: u.kind === 'heading' && !decor?.heading,
-        front: false,
-        cjkSize: undefined,
-        // (the regions today's tokens block to: U.breaks' referenced, as the tokens were made with)
-        referenced: new Set(
-          (c.tokens as { blockTo?: number }[]).flatMap((t) => (Number.isInteger(t.blockTo) ? [t.blockTo!] : [])),
-        ),
-      },
+      reading,
     })
     out.adaptMs += performance.now() - ta
     if ('stop' in got) {
       stop(got.stop)
       continue
     }
-    // (the CJK body face's size correction, B.faces': today's trackStart, as U.params read it)
-    got.member.P.trackStart = up?.trackStart as number
+    // (the CJK body face's size correction, B.faces': today's trackStart, as U.params read it, where the reading is today's)
+    if (o.reading !== 'part') got.member.P.trackStart = up?.trackStart as number
     // (named by today's ords, which the ledger and the dumps hold: L1's ord of a unit can differ)
     const todayOrd = (o: number) => unitOf.get(o)?.ord ?? o
     const mem = got.member
@@ -287,7 +500,17 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
       mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
     adapted.set(ord, mem)
     const td = prepare(c)
-    out.setting.set(u.ord, settingDiff(mem, td))
+    let setting = settingDiff(mem, td, o.reading !== 'part')
+    // (every other field of the prepared member the lay reads, beyond the named ones: the first that differs, by its path; a
+    // block's h and pitch the walk sets on today's, and noOver unset against false, are no input)
+    if (setting === 'equal') {
+      const rest = differences(mem, td).filter(
+        (d) => !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$/.test(d),
+      )
+      if (rest.length) setting = `prepared: ${rest[0]!.replace(/\[\d+\]/g, '[]').replace(/: .*$/, '')}`
+    }
+    out.setting.set(u.ord, setting)
+    if (o.reading === 'part') out.inputs.set(u.ord, setting !== 'equal' ? setting : (tokensVerdict ?? 'equal'))
     if (DEEP === `${pair}:${u.ord}`) console.log(JSON.stringify(differences(mem, td), null, 1))
   }
   pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
@@ -334,6 +557,8 @@ export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metr
     try {
       got = layPagePrepared(pg, flows, ties, R)
       out.ms.push(performance.now() - t0)
+      if (process.env.AXT_GATE_PAGE === String(pg))
+        console.log(`PAGE ${pg}: ${got.members.length} members, ${(performance.now() - t0).toFixed(2)} ms`)
     } catch (e) {
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }

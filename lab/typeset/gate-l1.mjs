@@ -27,14 +27,21 @@ mkdirSync(join(OUT, 'reader'), { recursive: true })
 // measurer alone)
 const METRICS = args.find(a => a.startsWith('--metrics='))?.slice(10) ?? 'layered'
 const served = METRICS === 'table' ? null : servedMetrics()
+// (--reading=part: the reading and the tokens from the part (lay/read.ts), today's the oracle; default today's, the tap's)
+const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
 const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
+const I5by = new Map()
 const inv = { laid: 0, lines: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
 const pageMs = []
-let adaptMs = 0
+let adaptMs = 0, readMs = 0
+// E1-E3 (the coordinator's exit): each unit the baseline lays by its inputs (equal, or the first that differs: E1), the units
+// of equal inputs on pages whose every unit's inputs are equal (E2: laid as today), and those of equal inputs on a page another
+// unit of which differs (E3: through the page's shared decision, each traced to the units of its page that differ)
+const T1 = new Map(), T1ex = new Map(), E1 = new Map(), E1ex = new Map(), E2 = { alike: 0, changed: 0 }, E2ex = [], E3 = { alike: 0, changed: 0 }, E3by = new Map(), E3ex = new Map()
 /** the first difference beyond the baseline comparator's tolerance (diff.mjs: numbers within 0.01 pt are one) */
 const nearDifference = (a, b, path) => {
   if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) <= 0.01 + 1e-9 ? null : `${path}: ${a} against ${b}`
@@ -53,14 +60,16 @@ const add = (m, k, n = 1) => m.set(k, (m.get(k) ?? 0) + n)
 for (const pair of pairs) {
   count.pairs++
   let g
-  try { g = gateL1Pair(pair, METRICS === 'table' ? {} : { metricsOf }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
   adaptMs += g.adaptMs
+  readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
   inv.lines += g.inv.lines
+  for (const [k, b] of g.inv.I5by ?? []) { const t = I5by.get(k) ?? I5by.set(k, { n: 0, max: 0 }).get(k); t.n += b.n; t.max = Math.max(t.max, b.max) }
   for (const k of ['I3', 'I4', 'I5']) {
     inv[k] += g.inv[k].length
     for (const x of g.inv[k]) if (invEx[k].length < 3) invEx[k].push(`${pair} ${x}`)
@@ -113,6 +122,27 @@ for (const pair of pairs) {
     const ck = m ? cls : `not laid: ${why} | ${cls}`
     if (d && (classEx.get(ck)?.length ?? 0) < 3) (classEx.get(ck) ?? classEx.set(ck, []).get(ck)).push(ex)
   }
+  // (E1-E3: each unit's inputs; a page's differing units)
+  const inputs = g.inputs?.size ? g.inputs : g.setting
+  const inOf = u => { const v = inputs.get(u.ord); return v === undefined ? `not adapted: ${g.thrown.get(u.ord) ? 'its flow threw' : 'not set'}` : v.replace(/ \[.*$| [-\d.,]+$/, '') }
+  const exOf = (u, d) => { const l0 = u.lines[0]; return `${pair} p${l0?.page ?? '?'} ord ${u.ord} ${u.kind} [${l0 ? [l0.x0, l0.baseline, l0.x1].join(', ') : ''}]${d ? `: ${String(d).slice(0, 110)}` : ''}` }
+  const unequalOn = new Map()
+  for (const u of base.units) if (inOf(u) !== 'equal') for (const pg of pagesOf(u)) (unequalOn.get(pg) ?? unequalOn.set(pg, []).get(pg)).push(u)
+  for (const u of base.units) {
+    const cls = inOf(u)
+    add(E1, cls)
+    const tv = g.tokens?.get(u.ord)
+    if (tv !== undefined) { const k = tv.replace(/ \[.*$/, ''); add(T1, k); if (k !== 'equal' && (T1ex.get(k)?.length ?? 0) < 3) (T1ex.get(k) ?? T1ex.set(k, []).get(k)).push(exOf(u, tv)) }
+    if ((E1ex.get(cls)?.length ?? 0) < 3 && cls !== 'equal') (E1ex.get(cls) ?? E1ex.set(cls, []).get(cls)).push(exOf(u, inputs.get(u.ord)))
+    if (cls !== 'equal') continue
+    const d = diffOf.get(u.ord)
+    const others = pagesOf(u).flatMap(pg => (unequalOn.get(pg) ?? []).filter(v => v.ord !== u.ord))
+    if (!others.length) { if (d) { E2.changed++; if (E2ex.length < 5) E2ex.push(exOf(u, d)) } else E2.alike++; continue }
+    if (!d) { E3.alike++; continue }
+    E3.changed++
+    // (traced to the units of its pages whose inputs differ, by their classes)
+    for (const k of new Set(others.map(inOf))) { add(E3by, k); if ((E3ex.get(k)?.length ?? 0) < 3) (E3ex.get(k) ?? E3ex.set(k, []).get(k)).push(`${exOf(u, d)} <- ord ${others.find(v => inOf(v) === k).ord}`) }
+  }
   const left = (base.left ?? []).filter(l => !laid.has(l.ord))
   for (const u of base.units) if (!laid.has(u.ord)) left.push({ id: u.id, ord: u.ord, kind: u.kind, code: 'unadapted', why: 'not laid from L1’s part', pages: [] })
   writeFileSync(join(OUT, 'reader', `${pair}.reader.json`), JSON.stringify({ format: 'readarxiv-baseline/reader 1', paper: base.paper, target: base.target, units: g.units, left, notLaid: base.notLaid ?? [] }))
@@ -124,6 +154,7 @@ console.log(JSON.stringify(count))
   console.log(`a page's lay (layPagePrepared, L8-E1), ms: p50 ${at(0.5)}, p90 ${at(0.9)}, p99 ${at(0.99)}, max ${at(1)} over ${q.length} pages; the adapter (L6) ${Math.round(adaptMs)} ms in all, ${Math.round((adaptMs / q.length) * 100) / 100} a page`)
 }
 console.log(`not set by the adapter: ${top(stops)}`)
+console.log(`I5, each line past its slot by the placement's rule (count, largest excess pt): ${[...I5by].map(([k, b]) => `${k} ${b.n} (${b.max.toFixed(2)})`).join('; ')}`)
 console.log(`invariants over the laid members (page by page): ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)
 console.log(`setting against today's (first differing field): ${top(setting)}`)
 console.log('the baseline\'s laid units, by verdict and the first differing field of their setting:')
@@ -136,6 +167,13 @@ for (const [k, n] of [...classes].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${n} ${k}`)
   for (const x of classEx.get(k) ?? []) console.log(`      ${x}`)
 }
+console.log(`E1, every unit the baseline lays by its typesetter's inputs (reading: ${READING}; the setting's first difference, then the tokens'):`)
+for (const [k, n] of [...E1].sort((a, b) => b[1] - a[1])) { console.log(`  ${n} ${k}`); for (const x of E1ex.get(k) ?? []) console.log(`      ${x}`) }
+if (T1.size) { console.log('E1, the reading level alone (each unit\'s tokens against today\'s, whatever its setting):'); for (const [k, n] of [...T1].sort((a, b) => b[1] - a[1])) { console.log(`  ${n} ${k}`); for (const x of T1ex.get(k) ?? []) console.log(`      ${x}`) } }
+console.log(`E2, equal inputs on a page whose every unit's are equal: ${E2.alike} laid alike, ${E2.changed} changed${E2ex.length ? `: ${E2ex.join(' | ')}` : ''}`)
+console.log(`E3, equal inputs on a page another unit of which differs: ${E3.alike} laid alike, ${E3.changed} changed; the changed traced to their pages' differing units, by those units' classes:`)
+for (const [k, n] of [...E3by].sort((a, b) => b[1] - a[1]).slice(0, 25)) { console.log(`  ${n} ${k}`); for (const x of E3ex.get(k) ?? []) console.log(`      ${x}`) }
+console.log(`the reading (L5, L7 from the part) ${Math.round(readMs)} ms in all`)
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)
 console.log(`dumps: ${join(OUT, 'reader')}`)

@@ -22,7 +22,7 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, ROLE } from '../instrument.ts'
-import { styleOf, unitSize } from './facts.ts'
+import { bracketsOf, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
@@ -107,6 +107,8 @@ export const HELD = -2
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
+/** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
+const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
@@ -471,6 +473,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? ins.units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
+    const classOf = new Map(unit?.classes ?? [])
     // (an element whose ink stands apart from the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
     // and no line of the unit's)
     const textCut = cutLines(
@@ -609,7 +612,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
     if (read === undefined && mem.lines.length) mem.read.push('size:lines')
-    mem.style = { ...styleOf(mem.text.map(gA), size), size }
+    mem.style = { ...styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null), size }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
@@ -621,13 +624,42 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
     // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
-    for (const [id, p] of pieces) {
-      if (p.t !== 'el') continue
+    for (const [id, p0] of pieces) {
+      if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
+      // (a nested unit, a footnote set inside the unit: its mark, the glyphs TeX set for it in the unit's text, an element of
+      // the unit's as today's placeholdersOf reads it (L2:1066, a footnote mark), where B gives it any)
+      if (p0.t === 'unit' && !gl.length) continue
+      const p = p0.t === 'unit' ? { kind: 'note-mark' } : p0
       const bx = mem.elBoxes.get(id) ?? []
-      const ink: Ink[] = (p.kind === 'display' ? (displayRows.get(id) ?? []) : cutLines(gl, atA)).map(
-        (l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink,
-      )
+      // (each line's box of its own ink: across its glyphs' advances and their outlines (an italic glyph's overhang past its
+      // advance is its ink), top to bottom; on the baseline of the unit's own text line it stands on, where it stands on one (the line TeX
+      // set it on: a radical's glyph origin is at its bar, a subscript's below the line), else its own. As today's file's
+      // segment of a piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. A
+      // display's rows are its own lines)
+      const textLines = mem.lines.filter((l) => !(l[9] & 1))
+      const onLine = (page: number, lo: number, hi: number, own: number) => {
+        let best: number | null = null,
+          d = Number.POSITIVE_INFINITY
+        for (const l of textLines) {
+          if (l[0] !== page || hi < l[6] - 0.5 || lo > l[5] + 0.5) continue
+          const e = Math.abs(l[4] - own)
+          if (e < d) {
+            d = e
+            best = l[4]
+          }
+        }
+        return best ?? own
+      }
+      const ink: Ink[] =
+        p.kind === 'display'
+          ? (displayRows.get(id) ?? []).map((l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink)
+          : cutLines(gl, atA).map((l) => {
+              const outlined = l.gs.map(gA).filter((g) => g.ix1 > g.ix0)
+              const x0 = Math.min(l.x0, ...outlined.map((g) => g.ix0))
+              const x1 = Math.max(l.x1, ...outlined.map((g) => g.ix1))
+              return [l.page, r2(x0), r2(l.bottom), r2(x1), r2(l.top), onLine(l.page, l.bottom, l.top, l.base)] as Ink
+            })
       for (const [ap, ai] of bx) {
         const pg = inkA.pages[ap - 1]!
         const [x0, y0, x1, y1] = [
@@ -646,8 +678,23 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
-      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420)
-      if (TEXT_KINDS.has(p.kind) && gl.length && !gl.some((a) => gA(a).nu)) el.text = gl.map((a) => gA(a).u).join('')
+      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
+      // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
+      // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
+      // kind of text, a class drawn as the page's text (a citation, a reference, a macro: the instrument's), its own brackets
+      // (U.brackets reads the text inside them), ink over lines (a formula broken over lines is drawn as text where its
+      // segments make no crops))
+      const asText =
+        TEXT_KINDS.has(p.kind) ||
+        TEXT_CLASSES.has(classOf.get(id)?.cls ?? '') ||
+        ink.length > 1 ||
+        !!bracketsOf(gl.map(gA))
+      if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
+        el.text = textOf(gl.map(gA))
+        // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
+        const runs = fillRunsOf(gl.map(gA))
+        if (runs) el.fills = runs
+      }
       mem.elements.push([id, el])
     }
     // its label: the class's mark before it

@@ -330,3 +330,49 @@ describe('review of #605', () => {
     expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
   })
 })
+
+describe('the element classes the part states', () => {
+  it('writes each element with its source’s class, copy text, a symbol’s drawing and a footnote’s mark (the instrument’s)', () => {
+    const B = docOf([{ lines: ['see the result'] }])
+    const content = [text('see '), { t: 'el' as const, id: '1', kind: 'cite', src: '\\cite{a}' }, text(' the result')]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [['1', { cls: 'cite', copy: '[·]', sym: ['†', true], mark: true, unknown: true, literal: true }]],
+      },
+    ]
+    const ins = instrumentOf(B, units, [[0]])
+    const L = locate(ins, B, align(B, B))
+    // (the element as locate made it, with the instrument's kind: the class replaces it in the part alone)
+    const mem = L.members.find((m) => m.unit === 0)!
+    mem.elements = [['1', { kind: 'cite', ink: [[1, 30, 700, 40, 708, 701]] }]]
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    const els = read('part', part.bytes).flows.flat()[0]!.els
+    expect(els).toEqual([
+      [
+        '1',
+        {
+          kind: 'cite',
+          unknown: 1,
+          copy: '[·]',
+          sym: ['†', 1],
+          mark: 1,
+          literal: 1,
+          ink: [[1, 30, 700, 40, 708, 701]],
+        },
+      ],
+    ])
+  })
+})

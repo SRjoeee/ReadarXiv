@@ -75,7 +75,7 @@ const real = (g: DocGlyph) => /\S/.test(g.u)
  * capitals): role, bold, slant from the fonts' names, size, fill (0xRRGGBB where not black), the design (the dominant font's
  * base name). TeX's own font state is stage 1b's: this is the value read, not stated
  */
-export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10): Style {
+export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10, source: string | null = null): Style {
   const txt = gs.filter(real)
   const text = txt.filter((g) => classifyFont(g.base).fam !== 'math')
   const by = text.length ? text : txt
@@ -90,7 +90,16 @@ export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10): Style {
   const fill = mostOf(by.map((g) => g.fill))
   const design = mostOf(by.map((g) => g.base))
   const letters = text.filter((g) => g.u.toLowerCase() !== g.u.toUpperCase())
-  const upper = letters.length > 1 && letters.filter((g) => g.u === g.u.toUpperCase()).length > letters.length / 2
+  // (with its source's text, today's rule (smallCapsOf L2:837, L2:1099): capitals the source writes lowercase, more than half
+  // of its lowercase letters, set at their full size: a class's \MakeTextUppercase heading; an acronym the source writes in
+  // capitals is no case change. Without it, most letters capitals)
+  const capitals = letters.filter((g) => g.u === g.u.toUpperCase())
+  const srcLows = source === null ? 0 : [...source].filter((c) => c !== c.toUpperCase() && c === c.toLowerCase()).length
+  const glyphLows = letters.length - capitals.length
+  const upper =
+    source === null
+      ? letters.length > 1 && capitals.length > letters.length / 2
+      : srcLows > 0 && 2 * (srcLows - glyphLows) > srcLows && capitals.length > 0
   return {
     role,
     size,
@@ -131,6 +140,74 @@ export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {
  *  today's TAIL_MAX (L2:1577), a fact of the classes */
 export const TAIL_MAX = 3
 const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
+/** the text a unit's source writes in its text pieces, its groups' too (no element's source) */
+export function sourceText(content: readonly Piece[]): string {
+  let out = ''
+  for (const p of content) {
+    if (p.t === 'text') out += p.s
+    else if (p.t === 'span') out += sourceText(p.content)
+  }
+  return out
+}
+/** PDF.js's text content's spaces (pdf.worker evaluator compareWithLastPosition and addFakeSpaces): a glyph whose advance
+ *  starts past the one before's end by more than TRACKING_SPACE_FACTOR of the font's size along the line, or on another
+ *  line (its baseline moved by more than half the size: an end of line), is a space after it in the text layer */
+export const TRACKING_SPACE_FACTOR = 0.102
+/** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
+ *  characters inside its segments, a space of it between two of them, white space as one space, trimmed) */
+export function textOf(gs: readonly DocGlyph[]): string {
+  let out = ''
+  gs.forEach((g, q) => {
+    const p = gs[q - 1]
+    if (p) {
+      const size = p.along ?? p.size
+      if (Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size) || g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size) out += ' '
+    }
+    out += g.u
+  })
+  return out.replace(/\s+/g, ' ').trim()
+}
+/** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
+ *  before it), [text, fill] each; null where every glyph's fill is one (its style's) */
+export function fillRunsOf(gs: readonly DocGlyph[]): [string, number][] | null {
+  const runs: [string, number][] = []
+  const push = (ch: string, f: number) => {
+    const last = runs.at(-1)
+    if (last && last[1] === f) last[0] += ch
+    else runs.push([ch, f])
+  }
+  gs.forEach((g, q) => {
+    const p = gs[q - 1]
+    if (p) {
+      const size = p.along ?? p.size
+      if (Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size) || g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size)
+        push(' ', p.fill)
+    }
+    for (const ch of g.u) /\s/.test(ch) ? push(' ', g.fill) : push(ch, g.fill)
+  })
+  // (white space as one space, trimmed, as textOf)
+  const out: [string, number][] = []
+  for (const [t, f] of runs) {
+    const prevEnds = /\s$/.test(out.at(-1)?.[0] ?? '')
+    const u = t.replace(/\s+/g, ' ').replace(prevEnds ? /^ / : /$^/, '')
+    if (!u) continue
+    if (out.at(-1)?.[1] === f) out.at(-1)![0] += u
+    else out.push([u, f])
+  }
+  if (out[0]) out[0][0] = out[0][0].replace(/^\s+/, '')
+  if (out.at(-1)) out.at(-1)![0] = out.at(-1)![0].replace(/\s+$/, '')
+  const kept = out.filter(([t]) => t.length)
+  return new Set(kept.map(([, f]) => f)).size > 1 ? kept : null
+}
+/** an element's own brackets: its first and last glyphs that set ink, where they pair ([ ], ( ), { }, ⟨ ⟩) around more (T12) */
+export function bracketsOf(gs: readonly DocGlyph[]): [DocGlyph, DocGlyph] | null {
+  const PAIRS: Record<string, string> = { '[': ']', '(': ')', '{': '}', '\u27e8': '\u27e9' }
+  const tg = gs.filter((x) => /\S/.test(x.u))
+  const b0 = tg[0],
+    b1 = tg.at(-1)
+  return tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u ? [b0, b1] : null
+}
+
 /** a mark's kind (today's markKind L2:2363) */
 export function markKind(ch: string): string {
   if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'

@@ -10,6 +10,7 @@ import { type Instrument, ROLE } from '../instrument.ts'
 import {
   alignOf,
   bandOf,
+  bracketsOf,
   breakEnd,
   cellCentred,
   FORCED_BREAK,
@@ -162,14 +163,14 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
-      if (fill !== undefined) el.style = { ...styleOf(gs), fill }
+      // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated)
+      if (fill !== undefined || el.text !== undefined)
+        el.style = { ...styleOf(gs), ...(fill !== undefined ? { fill } : {}) }
       // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
       // the stated half of T12, which a translation that brackets it takes)
-      const tg = gs.filter((x) => /\S/.test(x.u))
-      const b0 = tg[0]
-      const b1 = tg.at(-1)
-      const PAIRS: Record<string, string> = { '[': ']', '(': ')', '{': '}', '\u27e8': '\u27e9' }
-      if (tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u) {
+      const pair = bracketsOf(gs)
+      if (pair) {
+        const [b0, b1] = pair
         const p0 = pageA[(mem.els.get(id) ?? [])[0] as number] as number
         const box = (x: DocGlyph) => [p0, r2(x.x0), r2(x.bottom), r2(x.x1), r2(x.top), r2(x.y)] as El['ink'][number]
         el.brackets = [box(b0), box(b1)]
@@ -303,21 +304,25 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
     // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
     const label = new Set(mem.label)
-    const spanOf = (q: number): [number, number] => {
-      const l = own[q]![0]
-      let a = q
-      let z = q
-      const same = (x: Line, y: Line) => x[0] === y[0] && x[1] === y[1]
-      while (a > 0 && same(own[a - 1]![0], own[a]![0]) && own[a - 1]![0][4] > own[a]![0][4]) a--
-      while (z + 1 < own.length && same(own[z + 1]![0], own[z]![0]) && own[z + 1]![0][4] < own[z]![0][4]) z++
-      let x0 = l[2]
-      let x1 = l[3]
-      for (let k = a; k <= z; k++) {
-        x0 = Math.min(x0, own[k]![0][2])
-        x1 = Math.max(x1, own[k]![0][3])
+    // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
+    // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
+    const spans: [number, number][] = []
+    {
+      const same = (x: Line, y: Line) => x[0] === y[0] && x[1] === y[1] && x[4] > y[4]
+      let a = 0
+      for (let q = 1; q <= own.length; q++) {
+        if (q < own.length && same(own[q - 1]![0], own[q]![0])) continue
+        let x0 = Number.POSITIVE_INFINITY
+        let x1 = Number.NEGATIVE_INFINITY
+        for (let k = a; k < q; k++) {
+          x0 = Math.min(x0, own[k]![0][2])
+          x1 = Math.max(x1, own[k]![0][3])
+        }
+        for (let k = a; k < q; k++) spans.push([x0, x1])
+        a = q
       }
-      return [x0, x1]
     }
+    const spanOf = (q: number): [number, number] => spans[q]!
     own.forEach(([l, j], q) => {
       const size = l[10] ?? sizeOf(j)
       const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !label.has(g.a))
