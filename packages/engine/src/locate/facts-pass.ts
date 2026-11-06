@@ -156,7 +156,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     // -- its elements
     const pieces = unit ? elsOf(unit.content) : new Map()
     const breaks: [El, number][] = []
-    const unplaced: El[] = []
+    const unplaced: [string, El][] = []
     for (const [id, el] of mem.elements) {
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
@@ -209,13 +209,36 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
         while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
         const j = b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
         if (j !== undefined) breaks.push([el, j])
-        else unplaced.push(el)
+        else unplaced.push([id, el])
       }
     }
     // (a break the marked compile set no point for, an invisible piece's: today's reading of the line it ended (forcedBreaks
     // TEX:120), its own lines that end short of their column's right edge by SHORT of a size, not its last and none over a
-    // display, taken in order where they are as many as such breaks; the line read, not stated)
+    // display, taken in order where they are as many as such breaks; the line read, not stated. Breaks the source sets one after
+    // the other, nothing but white space between them, end one line: TeX ends it at the first, each next one sets an empty line)
     if (unplaced.length) {
+      const order = new Map<string, number>()
+      const blankAfter: boolean[] = []
+      const walk = (ps: readonly Piece[]) => {
+        for (const p of ps) {
+          if (p.t === 'span') walk(p.content)
+          else if (p.t === 'el') {
+            order.set(p.id, blankAfter.length)
+            blankAfter.push(true)
+          } else if (p.t === 'text' && /\S/.test(p.s) && blankAfter.length) blankAfter[blankAfter.length - 1] = false
+          else if (p.t === 'unit' && blankAfter.length) blankAfter[blankAfter.length - 1] = false
+        }
+      }
+      walk(unit?.content ?? [])
+      const groups: El[][] = []
+      let prev = -2
+      for (const [id, el] of unplaced) {
+        const k = order.get(id) ?? -2
+        // (consecutive: the piece right after the one before, with nothing but white space between them)
+        if (groups.length && k === prev + 1 && blankAfter[prev]) groups.at(-1)!.push(el)
+        else groups.push([el])
+        prev = k
+      }
       const right = new Map<string, number>()
       for (const [l] of own) right.set(`${l[0]}|${l[1]}`, Math.max(right.get(`${l[0]}|${l[1]}`) ?? -1e9, l[3]))
       const short: number[] = []
@@ -224,9 +247,9 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
         if (q === own.length - 1 || !next || next[9] & 1) return
         if (l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)) short.push(j)
       })
-      if (short.length === unplaced.length) {
-        unplaced.forEach((el, q) => {
-          breaks.push([el, short[q] as number])
+      if (short.length === groups.length) {
+        groups.forEach((g, q) => {
+          for (const el of g) breaks.push([el, short[q] as number])
         })
         mem.read.push('breaks')
       }

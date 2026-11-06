@@ -25,7 +25,8 @@ import { type Instrument, ROLE } from '../instrument.ts'
 import { styleOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { cutLines, r2 } from './lines.ts'
+import { type CutLine, cutLines, r2 } from './lines.ts'
+import { type RowBox, rowsOf } from './rows.ts'
 
 /** where a located unit stands on A against B */
 export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
@@ -178,6 +179,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
   }
   const atA = (a: number) => ({ page: pageA[a] as number, g: gA(a) })
+  /** A's boxes ([page, index]) as rows.ts takes them */
+  const boxesOf_ = (l: readonly [number, number][]): RowBox[] =>
+    l.map(([ap, ai]) => {
+      const b = inkA.pages[ap - 1]!.boxes
+      return { page: ap, x0: b[4 * ai]!, y0: b[4 * ai + 1]!, x1: b[4 * ai + 2]!, y1: b[4 * ai + 3]! }
+    })
   const atB = (b: number) => ({ page: pageB[b] as number, g: gB(b) })
 
   // each unit's B glyphs and boxes
@@ -496,8 +503,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
     // span on A that B printed and no unit owns: the lines its source does not write (B17; today's heldOf MAKE:1855 read them
     // by the source's words, under a 0.2 share: ownership says it))
-    const kept: number[][] = []
-    for (const [id, l] of mem.els) if (kindOf(id) === 'display') for (const c of cutLines(l, atA)) kept.push(c.gs)
+    // (a display's rows by rows.ts: its ink's bands joined where its glyphs interleave in the stream, never the text line rule,
+    // which cuts a row's stacked parts apart)
+    const kept: CutLine[] = []
+    const displayRows = new Map<string, CutLine[]>()
+    for (const [id, l] of mem.els)
+      if (kindOf(id) === 'display') {
+        const rows = rowsOf(l, atA, boxesOf_(mem.elBoxes.get(id) ?? []))
+        displayRows.set(id, rows)
+        kept.push(...rows)
+      }
     if (inline.length && unit) {
       const own = [...inline, ...mem.label].sort((x, y) => x - y)
       // (within its own lines' extent on each page: a page's furniture, a float the stream passes between two of its lines
@@ -520,12 +535,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const q = box.get(pageA[a] as number)
         if (q && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
       }
-      for (const c of cutLines(held, atA)) kept.push(c.gs)
+      kept.push(...cutLines(held, atA))
     }
-    const all = [
-      ...cut.map((l) => ({ l, kept: false })),
-      ...kept.flatMap((gs) => cutLines(gs, atA).map((l) => ({ l, kept: true }))),
-    ].sort((x, y) => (x.l.gs[0] as number) - (y.l.gs[0] as number))
+    const all = [...cut.map((l) => ({ l, kept: false })), ...kept.map((l) => ({ l, kept: true }))].sort(
+      (x, y) => (x.l.gs[0] as number) - (y.l.gs[0] as number),
+    )
     mem.lines = all.map(
       ({ l, kept: k }) =>
         [l.page, 0, r2(l.x0), r2(l.x1), l.base, r2(l.top), r2(l.bottom), r2(l.x0), r2(l.x1), k ? 1 : 0] as Line,
@@ -585,7 +599,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (p.t !== 'el') continue
       const gl = mem.els.get(id) ?? []
       const bx = mem.elBoxes.get(id) ?? []
-      const ink: Ink[] = cutLines(gl, atA).map(
+      const ink: Ink[] = (p.kind === 'display' ? (displayRows.get(id) ?? []) : cutLines(gl, atA)).map(
         (l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink,
       )
       for (const [ap, ai] of bx) {
@@ -624,8 +638,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   }
   columnsAndMeasures(members, inkA)
-  for (const mem of members)
-    if (mem.lines.length) mem.room = roomOf(mem, inkA, claimedA, m.offA[mem.lines.at(-1)![0] - 1] as number)
+  for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB })
 
@@ -876,9 +889,9 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
 
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
  *  bottom edge where there is none; and the distance to the next text line of its column, baseline to baseline */
-function roomOf(mem: Member, inkA: Doc, claimedA: Int32Array, offA: number): Room {
+function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
   const last = mem.lines.at(-1)!
-  const [p, , x0, x1, base, , bottom] = last
+  const [p, , x0, x1, , , bottom] = last
   const pg = inkA.pages[p - 1]!
   const foot = bottom - 0.5
   let next = Number.NEGATIVE_INFINITY
@@ -893,17 +906,32 @@ function roomOf(mem: Member, inkA: Doc, claimedA: Int32Array, offA: number): Roo
     if (by1 < foot && bx1 > x0 && bx0 < x1 && by1 > next && !(bx1 - bx0 >= 0.9 * W && by1 - by0 >= 0.75 * H)) next = by1
   }
   const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
-  // (the next line of its column under its last: the page's glyphs not its own, across its lines' extent in that column, under
-  // its baseline by more than three quarters of its pitch; of the highest, those within half a size, their median baseline;
-  // the distance from baseline to baseline (today's edgesOf `below` RUN:1655))
-  const on = mem.lines.filter((l) => l[0] === p && l[1] === last[1] && !(l[9] & 1))
-  const cx0 = Math.min(...on.map((l) => l[2]), x0)
-  const cx1 = Math.max(...on.map((l) => l[3]), x1)
-  const T = base - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
+  // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
+  // block — the lines of its own on that page stacked over it, each standing above the one under it and across it (a caption
+  // whose short last line keeps to one column of a block across both), never a column of its before a column break — the
+  // page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text, label
+  // and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next ink
+  // the fill meets); of the highest, those within half a size, their median baseline)
+  const own = mem.lines.filter((l) => !(l[9] & 1))
+  const lastText = own.at(-1) ?? last
+  const tp = lastText[0]
+  let bx0 = lastText[2]
+  let bx1 = lastText[3]
+  let over = lastText[4]
+  for (let q = own.length - 2; q >= 0; q--) {
+    const l = own[q] as Line
+    if (l[0] !== tp || l[4] <= over || l[3] <= bx0 || l[2] >= bx1) break
+    bx0 = Math.min(bx0, l[2])
+    bx1 = Math.max(bx1, l[3])
+    over = l[4]
+  }
+  const travels = new Set<number>([...mem.text, ...mem.label])
+  for (const [id, l] of mem.els) if (!mem.elements.find(([k]) => k === id)?.[1].keep) for (const a of l) travels.add(a)
+  const T = lastText[4] - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
+  const off = offA[tp - 1] as number
   const under: DocGlyph[] = []
-  pg.glyphs.forEach((g, j) => {
-    if (/\S/.test(g.u) && g.y < T && g.x1 > cx0 && g.x0 < cx1 && (claimedA[offA + j] as number) !== mem.ord)
-      under.push(g)
+  inkA.pages[tp - 1]!.glyphs.forEach((g, j) => {
+    if (/\S/.test(g.u) && g.y < T && g.x1 > bx0 && g.x0 < bx1 && !travels.has(off + j)) under.push(g)
   })
   let nextBase: number | null = null
   if (under.length) {
@@ -914,5 +942,5 @@ function roomOf(mem: Member, inkA: Doc, claimedA: Int32Array, offA: number): Roo
       .sort((a, b) => a - b)
     nextBase = ys[(ys.length - 1) >> 1] as number
   }
-  return { below, ...(nextBase !== null ? { next: r2(base - nextBase) } : {}) }
+  return { below, ...(nextBase !== null ? { next: r2(lastText[4] - nextBase) } : {}) }
 }

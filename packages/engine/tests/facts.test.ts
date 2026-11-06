@@ -331,3 +331,59 @@ describe('a forced break with no point on B', () => {
     expect(M.read).toContain('breaks')
   })
 })
+
+describe('a display’s rows through locate', () => {
+  it('states a fraction’s display as one KEPT row and one box of ink, its parts not rows of their own', () => {
+    // (the numerator 6.8 pt over the row's baseline, the denominator 6.9 pt under it and set back left: the text line rule
+    // cuts the denominator off as a line of its own)
+    const B = docOf([
+      {
+        lines: [
+          'a sum',
+          { text: 'x=', x: 200, y: 680 },
+          { text: 'ab', x: 224, y: 686.8 },
+          { text: 'c', x: 222, y: 673.1 },
+          { text: 'and so on', y: 660 },
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('a sum '),
+      { t: 'el', id: '1', kind: 'display', src: '\\[x=\\frac{ab}{c}\\]' },
+      text(' and so on'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, n) => (n >= 1 && n <= 3 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.lines.map((l) => [l[4], l[9] & 1])).toEqual([
+      [700, 0],
+      [680, 1],
+      [660, 0],
+    ])
+    expect(M.elements.find(([id]) => id === '1')?.[1].ink).toHaveLength(1)
+  })
+})
+
+describe('forced breaks with no point on B, set one after the other', () => {
+  it('reads two breaks that end one line as one short line (TeX ends the line at the first, the second sets an empty one)', () => {
+    const B = docOf([
+      { lines: ['a long first line of it here', 'short', { text: 'a long third line of it here', y: 664 }, 'end'] },
+    ])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'other', src: '\\\\' },
+      text('\na long third line of it here end'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    const ends = (id: string) => M.elements.find(([k]) => k === id)?.[1].ends
+    expect(ends('1')?.[0]).toBe(1)
+    expect(ends('2')?.[0]).toBe(1)
+    expect(ends('1')?.[1]).toBeCloseTo(1, 1)
+  })
+})

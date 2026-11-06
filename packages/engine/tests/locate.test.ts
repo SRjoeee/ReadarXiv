@@ -212,6 +212,29 @@ describe('bundle', () => {
   })
 })
 
+describe('locate: the room under a unit', () => {
+  it('reads the next line under a unit across its last block, which spans both columns where its short last line does not', () => {
+    // (a caption across the page whose last line keeps to the left column; under it the right column's text begins 14 pt
+    // lower, the left column's 30 pt lower)
+    const wide = 'w'.repeat(78)
+    const B = docOf([
+      {
+        lines: [
+          { text: wide, y: 700 },
+          { text: wide, y: 688 },
+          { text: 'short end', y: 676 },
+          ...[662, 650, 638].map((y) => ({ text: 'right column text one', x: 320, y })),
+          ...[646, 634, 622].map((y) => ({ text: 'left column text one', y })),
+        ],
+      },
+    ])
+    const units = [unitOf('caption', 'a caption'), unitOf('para', 'right'), unitOf('para', 'left')]
+    const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
+    expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
+    expect(L.members[0]!.room.next).toBe(14)
+  })
+})
+
 describe('review of #605', () => {
   const original = new Uint8Array(70000).map((_, i) => i & 255)
   it('places a unit of turned glyphs alone (a figure’s y-axis title) on its page, in that page’s part', () => {
