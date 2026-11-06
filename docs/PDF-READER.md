@@ -1269,7 +1269,7 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
   as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
   with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by the view's placeholder:
-  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
+  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/host/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Moved with the text they are over** (`layer-proto/links.mjs` `matchUnit`, `placeUnit`): an annotation over ink the layer
   redraws is matched to what the unit draws of it (a citation, a reference, a url, an `\href` pair, a footnote's mark) and laid
@@ -2619,18 +2619,14 @@ extension's compile client (`parked/extension-compile/`).
   `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
   `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
 - **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
-  package (the web's R21 detector, `portedInClosure`). The shared interface (`controller.ts`, `src/pdf-reader/ui/**`,
-  `packages/ui/src/**`) reaches four GPL-ported files today, by one import each: `src/config/languages.ts` (the language
-  table), `src/providers/microsoft.ts`, `src/providers/prompt-library.ts` and `src/providers/request/retry-policy.ts`. The
-  web imports `controller.ts` and `src/pdf-reader/ui/**` through its pin today and replaces modules by its own seams (an
-  importer-scoped alias: `@/config/languages` and `pdf-reader/ui/languages` are its own files), so it must carry none of the
-  four in its bundle: each is either replaced by a web seam or not imported, which the web's own R21 gate checks. That holds
-  until Task 7 cuts the four from the shared interface's closure (the `ReaderHost` seams). The test pins the four as a list
-  that may shrink and never grow.
+  package (the web's R21 detector, `portedInClosure`). The shared interface (the reader's chrome,
+  `packages/reader/src/chrome/**`, and `packages/ui/src/**`) reaches no GPL-ported file since the chrome moved into the
+  package (stage 5a): the language tables, the service menu and the keyed reasons that reached them are the extension's
+  host (`src/pdf-reader/host/`), given to the chrome as its slots and words. The test pins that list as empty.
 - **Notices.** What the web carries with the engine and the shared interface: the LaTeXML acknowledgement now
   (`rules/latexml-args.mjs` is in the closures of `pipeline` and `layer`; `docs/THIRD_PARTY.md` has its row), and Lucide (ISC)
   and Noto Sans SC (OFL) with the shared interface (the icons of `packages/ui/src/controls/Icon.tsx`, the glyphs of
-  `src/pdf-reader/ui/display-glyphs.ts`).
+  `packages/ui/src/controls/display-glyphs.ts`).
 - **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by a file under
   `src/` or `lab/` outside the engine (`unreached`: the shipped extension and every file of the lab, its bench and spikes, not
   only its kept gates); a module only a test or a script reaches is parked with its tests.
@@ -2682,8 +2678,7 @@ The web moves its imports to the five entries, once: its server takes `pipeline`
 `translate` and `rules`; its fork-session script and the copies of the session it makes go with the reading view that replaces
 them. The extension's own modules are not importable from the web, and a module the web needs that no entry exports is a
 request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
-(`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the four ported files are replaced by
-its seams or left out of its bundle until they are cut from it.
+(the reader's chrome and `packages/ui`) stays under the licence rule of section 19.3: it reaches no ported file.
 
 ### 19.6 The page pass
 
