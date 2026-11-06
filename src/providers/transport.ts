@@ -1,18 +1,20 @@
-// The abstraction of where a translation request runs (DESIGN §8.0). One interface, two implementations, so page
-// translation and the settings page's connection test share one path and “the test passes, the translation fails”
-// (issue #42) cannot recur:
-// - createLocalTransport (this file): builds the chain, queues and sends in the background;
-// - createMessageTransport (src/shared/transport.ts): turns every method into a message in content / options.
-// Two files for bundle size: this one pulls in three providers and the AI SDK, which the content script would parse on every paper opened.
+// Where a translation request runs (DESIGN §8.0), over the one chain of `@readarxiv/translate` (stage 4b): the
+// background makes the chain once (`chainOf`, background/index.ts), so every tab and every configuration's transport
+// shares its pacing, cooldowns and breaker; a transport is one configuration's translators on it, the rows its pages read
+// before anything is asked, and what the popup is told of the engine that answers. Two implementations of the interface,
+// so page translation and the settings page's connection test share one path (issue #42):
+// - createLocalTransport (this file), in the background;
+// - createMessageTransport (src/shared/transport.ts): every method a message, in content scripts and extension pages.
+import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
+import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
-import { chosenService, serviceOf, type Service } from '@/config/services'
-import { translationIdentity, type RenderPath } from '@/cache/key'
-import { availableWithin, buildChain } from '.'
-import { createOpenAICompatProvider } from './openai-compat'
-import { createFallbackService, type DemotedInfo } from './fallback'
+import { chosenService, serviceOf, serviceRuns, type Service } from '@/config/services'
+import type { WireFormat } from '@/core/protector/tokens'
+import type { KeyValues } from '@/cache/translate-store'
+import { batchLine, redact } from '@/shared/diagnostics'
 import type { CancelledScopeRegistry } from './request/cancellation'
-import { createTranslateService, type CachePort, type TranslateCall, type TranslateMessageResponse, type TranslateService, type TranslateServiceDeps } from './translate-service'
-import type { ProviderErrorKind, TranslationProvider } from './types'
+import { type Answerer, langOf, translatorOf, translatorsOf, type TranslatorDeps } from './translators'
+import type { ProviderErrorKind, ProviderKind, TranslateContext } from './types'
 
 /** The engine actually in use right now and the latest hand-over reason (§8.5); the popup explains by it why the translation changed engine */
 export interface EngineStatus {
@@ -24,266 +26,358 @@ export interface EngineStatus {
 export interface ProviderStatus {
   /** The engine at the head of the chain — what the chosen service resolved to */
   providerId: string
-  /**
-   * The service id as saved. Differs from `providerId` when the saved id names nothing (a service deleted from
-   * another tab): `getProvider` then substitutes a built-in, and the toggle must not call that runnable when the
-   * popup, deciding from the settings, says it is not (`savedFromStatus`, shared/page-action.ts)
-   */
+  /** The service id as saved; differs from `providerId` when the saved id names nothing (a service deleted from another tab) */
   chosen: string
   /** Can it be used */
   available: boolean
-  /**
-   * With the first choice unavailable, the first usable engine on the fallback chain (§8.5). With it a translation can
-   * run — the popup's “translate” button decides by it, or “Google on the chain as fallback, yet the button greyed out” shows up (Codex on #50)
-   */
+  /** With the first choice unavailable, the first engine on the chain that can answer (§8.5) */
   fallback?: { id: string }
   model?: string
-  /** What the content side needs to plan batches and choose the render path (§2 item 3) */
+  /** What the content side cuts its calls by: the chosen service's request size */
   maxBatchChars: number
   maxBatchItems: number
-  /** The negotiated render path (§8.5): one per session; the content side serialises and computes cache keys by it */
-  renderPath: RenderPath
+  /** The session's wire format (§8.5): one per session; the page serialises its blocks in it */
+  renderPath: WireFormat
   /** The config this chain was built from: the popup waits for these to match what it just saved before restarting a page */
   targetLanguage: string
   promptId: string
   /** `chainRevision` of the configuration this chain was built from; the toggle compares a page's revision with it */
   revision: string
   engine: EngineStatus
-  /** The ids of the engines on the chain, by priority. The popup tells by it whether an engine whose pack just downloaded joined the chain; e2e asserts hand-overs by it */
+  /** The ids of the engines on the chain that serve the target now, by priority */
   chain: string[]
-  /**
-   * Every hand-over still in force, by engine. The page uses it to ask about **the engine its own
-   * session started on**: `engine.demoted` is only the most recent one, so an intermediate free
-   * engine failing transiently would hide the permanent one that displaced the reader's service
-   * (Codex on #157). `status` is the failure's HTTP status where it had one: `auth` is a 401 or a 403, and the
-   * retranslate cue reads a refused key by the 401 (shared/page-action.ts keyMadeGood)
-   */
+  /** Every hand-over still in force, by engine; `status` the failure's HTTP status where one is known (a refused key's 401) */
   demotions: { id: string; kind: ProviderErrorKind; status?: number }[]
-  /**
-   * The identity (cache/key.ts translationIdentity) of the engine that would answer now: the first choice, or its
-   * fallback while it cannot. The PDF reader's cached copies are current by it
-   */
+  /** The chain's identity (`identityOf` its translators): what a row is keyed by besides the unit and the target */
   identity: string
 }
 
+/** A request: a session's units, its target as the status gave it (ISO 639-3), the paper's context */
+export interface TranslateCall {
+  units: UnitIn[]
+  target: string
+  context?: TranslateContext
+  /** The cancellation scope: one id per run, withdrawn as a whole on restore */
+  scope?: string
+  /** A named service off the chain: the settings page's connection test; nothing of it is stored */
+  providerId?: string
+  /** A service as the settings page would save it, asked as the call carries it (its id is `providerId`). Carries a key
+   *  across runtime messaging, as the stored configuration does across storage: never logged (hard rule 5) */
+  candidate?: Service
+}
+
+/** A failure as it crosses the message boundary; `status` is the HTTP status where one is known (only a 401 is a key refused) */
+export interface ErrorInfo { kind: ProviderErrorKind; message: string; status?: number }
+
+/** A unit's result as a page takes it: the chain's, with the service that answered (`engine`, `kind`), or the failure's
+ *  kind for the page's words */
+export type UnitResult =
+  | (Extract<Result, { ok: true }> & { engine?: string; kind?: ProviderKind })
+  | (Extract<Result, { ok: false }> & { error: ErrorInfo })
+
+export type TranslateResponse =
+  | { ok: true; results: UnitResult[]; cached: number }
+  | { ok: false; error: ErrorInfo }
+
 export interface TranslationTransport {
-  translate(call: TranslateCall): Promise<TranslateMessageResponse>
-  /** Drain the scope's queued and in-flight requests; returns how many. Whether the scope is dead afterwards is the session router's decision (DESIGN §8.5) */
+  translate(call: TranslateCall): Promise<TranslateResponse>
+  /** Withdraw the scope's calls; returns how many. Whether the scope is dead afterwards is the session router's decision (DESIGN §8.5) */
   cancel(scope: string): Promise<number>
-  /** `scope` asks about that session's own chain rather than the current global one (§8.5) */
-  /**
-   * `scope`: the session's own chain. `fresh` (with a scope, over the message transport): a chain built from the
-   * configuration as stored now, and the session bound to it — what a session starting on freshly saved settings asks
-   * for, so what it records and what serves it are one chain (background/provider-status.ts). The local transport
-   * is one chain and ignores the option
-   */
+  /** `scope`: the session's own chain. `fresh`: a chain built from the configuration as stored now (provider-status.ts) */
   status(scope?: string, options?: { fresh?: boolean }): Promise<ProviderStatus>
-  /**
-   * Local chains only (absent on the content side). Every scoped request queued or in flight on the chain is
-   * drained, whichever session left it here — a session moved on by a language pack leaves its earlier requests
-   * behind — and returned as the count; after this, a call still inside the chain (suspended on its cache read,
-   * outside every queue, or a connection test's retry) is refused when it wakes and caches nothing. The chain
-   * holder retires the chains a deletion replaces: the scope stays live, on the replacement (DESIGN §8.5)
-   */
+  /** Local only: every call withdrawn and every later one refused; the chain holder retires the chains a deletion replaces */
   retire?(): number
-  /** Local chains only: whether retire() has been called — the router never binds a session to such a chain */
   isRetired?(): boolean
-  /**
-   * Local chains only: a call is still inside the chain — suspended on its cache read, at the endpoint, in a
-   * retry backoff. The chain holder keeps a superseded chain while this is true, so a deleted service's chain
-   * can still be retired (DESIGN §8.5)
-   */
+  /** Local only: a call is inside this transport now */
   busy?(): boolean
 }
 
-export interface LocalTransportDeps extends Pick<TranslateServiceDeps, 'queue' | 'batch' | 'cacheReadBudgetMs'> {
-  /** The registry of scopes ended for certain, shared with the session router that writes it (DESIGN §8.5); every service built here reads it */
+export interface LocalTransportDeps extends TranslatorDeps {
+  /** the background's chain, with its store of answers */
+  chain: Chain
+  /** a chain with no store, for the connection test: its question is whether the endpoint answers now */
+  probe: Chain
+  /** the rows a page opened again reads; absent, none (tests) */
+  rows?: KeyValues
+  /** The registry of scopes ended for certain, written by the session router (DESIGN §8.5) */
   cancelled: Pick<CancelledScopeRegistry, 'has'>
-  /** The cache port. The background passes the local Dexie; without it nothing is cached (tests) */
-  cache?: CachePort
-  /** Replace the chain building (for tests) */
-  buildChain?: (config: Config) => Promise<{ chain: TranslationProvider[]; renderPath: RenderPath }>
-  /** Where the services' warnings go besides the console: the diagnostics log (issue #156) */
   warn?: (line: string) => void
-  /** Where the routine records go: a call's cost, a hand-over's outcome (issue #237; `TranslateServiceDeps.note`) */
+  /** a call's cost, for the diagnostics log (issue #237) */
   note?: (line: string) => void
-  /** The reader's services whose key the endpoint refused (the service health record): demoted from the start */
+  /** The reader's services whose key the endpoint refused (the service health record): not asked, from the start */
   rejected?: ReadonlySet<string>
-  /** Told of every failed step, demoted or not — with fallback off the one step never demotes (Codex review, round 1) */
-  onFailure?: (info: DemotedInfo) => void
+  /** a refused key of one of the reader's services (a 401), for the health record */
+  onFailure?: (info: { id: string; kind: ProviderErrorKind; message: string; status?: number }) => void
+}
+
+/** How long a hand-over of an engine that could not answer stands in the popup's words (fallback.ts's cooldown before) */
+const HANDOVER_MS = 60_000
+/** a probe of whether an engine serves the target now, for the status (providers/index.ts PROBE_MS before) */
+const PROBE_MS = 2_000
+/** the rows' key grammar: rises only if the key changes */
+const ROWS = 'r1'
+
+/** What a failure is to a page: one of the kinds its words are keyed on (locale packs, `ui/strings.ts`) */
+export function errorOf(why: Why, status?: number): ErrorInfo {
+  switch (why.kind) {
+    case 'refused':
+      return { kind: 'invalid-response', message: 'no translator rebuilt the placeholders of the source' }
+    case 'unavailable':
+      return why.retryAfterMs ? { kind: 'rate-limit', message: `unavailable for ${why.retryAfterMs} ms` } : { kind: 'network', message: 'the translators could not be reached' }
+    case 'aborted':
+      return { kind: 'aborted', message: 'cancelled' }
+    case 'unconfigured':
+      switch (why.code) {
+        case 'no-key':
+        case 'needs-gesture':
+          return { kind: 'no-key', message: why.code === 'no-key' ? 'no API key configured' : 'the language pack needs a user gesture to download' }
+        case 'key-refused':
+          return { kind: 'auth', message: 'the endpoint refused the key', ...(status !== undefined ? { status } : {}) }
+        case 'no-model':
+          return { kind: 'bad-request', message: 'the endpoint has no such model' }
+        case 'no-language':
+          return { kind: 'bad-request', message: 'no translator serves the target language' }
+      }
+  }
+}
+
+const within = <T>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  new Promise(resolve => {
+    const t = setTimeout(() => resolve(fallback), ms)
+    p.then(v => { clearTimeout(t); resolve(v) }, () => { clearTimeout(t); resolve(fallback) })
+  })
+
+/** the chain's context of a page's: the paper, the section, the glossary */
+function paperContextOf(c: TranslateContext | undefined): PaperContext | undefined {
+  if (!c) return undefined
+  const out: PaperContext = {
+    ...(c.paperTitle ? { title: c.paperTitle } : {}),
+    ...(c.abstract ? { abstract: c.abstract } : {}),
+    ...(c.sectionTitle ? { section: c.sectionTitle } : {}),
+    ...(c.glossary?.length ? { glossary: c.glossary } : {}),
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 /**
- * One chain and one set of queues for the whole browser (the cross-tab quota policy of issue #43). Rate limits are
- * per API key, not per tab: two tabs each with a queue of their own make the real concurrency against one endpoint
- * 2×8, the recipe for 429. Shared, two papers split one concurrency budget — translating both at once halves the
- * throughput, but neither pushes the other into the limit.
+ * Whether a result is a row: what the chain gives again for the unit, whatever is asked, until the chain changes. An
+ * answer by the first translator is; an answer by a later one only where each translator before it refused the unit —
+ * not one that could not be reached, was cooling, had no key or no language pack, which may answer the next time — and
+ * the runs floor only where every pass of the unit and its stretches was a refusal
  */
+function isRow(r: Result, order: readonly Translator[], passed: ReadonlyMap<string, Map<string, Why['kind'][]>>): boolean {
+  if (!r.ok || r.by === 'self') return false
+  const refusedAll = (id: string, by: string) => {
+    const whys = passed.get(id)?.get(by)
+    return !!whys?.length && whys.every(w => w === 'refused')
+  }
+  if (r.by.startsWith('runs:')) {
+    for (const [id, byT] of passed) {
+      if (id !== r.id && !id.startsWith(`${r.id}~`)) continue
+      for (const whys of byT.values()) if (whys.some(w => w !== 'refused')) return false
+    }
+    return order.every(t => refusedAll(r.id, t.identity))
+  }
+  const k = order.findIndex(t => t.identity === r.by)
+  return k >= 0 && order.slice(0, k).every(t => refusedAll(r.id, t.identity))
+}
+
 export async function createLocalTransport(config: Config, deps: LocalTransportDeps): Promise<TranslationTransport> {
   const revision = await chainRevision(config)
-  const { chain, renderPath } = await (deps.buildChain ?? buildChain)(config)
-  const primary = chain[0]!
+  /** a refused key's status, from the reader's service, as its request failed */
+  let lastStatus: number | undefined
+  const tdeps: TranslatorDeps = { ...deps, onStatus: s => { lastStatus = s; deps.onStatus?.(s) } }
+  const built = translatorsOf(config, tdeps)
   const chosen = chosenService(config)
-  const model = chosen?.model
-  /**
-   * Set by retire(): this chain has been replaced. A scope moved to the replacement stays live in the registry,
-   * so a call of it suspended in one of these services would go on to the deleted provider when it wakes; and a
-   * connection test has no scope at all. The services read this gate next to the registry and stop both (#157)
-   */
-  let retired = false
-  const isRetired = () => retired
-  const steps = chain.map(engine => ({
-    provider: engine,
-    service: createTranslateService({
-      getProvider: async () => engine,
-      // The model name means something for an LLM only; the free engines carry none, so a model change does not invalidate their cache for nothing
-      getModel: async () => (engine.id === chosen?.id ? chosen.model : undefined),
-      cancelled: deps.cancelled,
-      retired: isRetired,
-      ...(deps.warn ? { warn: deps.warn } : {}),
-      ...(deps.note ? { note: deps.note } : {}),
-      ...(deps.cache ? { cache: deps.cache } : {}),
-      ...(deps.queue ? { queue: deps.queue } : {}),
-      ...(deps.batch ? { batch: deps.batch } : {}),
-      ...(deps.cacheReadBudgetMs !== undefined ? { cacheReadBudgetMs: deps.cacheReadBudgetMs } : {}),
-    }),
-  }))
-  // the record holds a 401 alone (background/health-guard.ts), and its hand-over says so
-  const seeded = chain.filter(engine => deps.rejected?.has(engine.id)).map(engine => ({ id: engine.id, kind: 'auth' as const, message: 'the endpoint refused this key before', status: 401 }))
-  const service = createFallbackService(steps, {
-    ...(deps.warn ? { warn: deps.warn } : {}),
-    ...(deps.note ? { note: deps.note } : {}),
-    ...(seeded.length ? { demoted: seeded } : {}),
-    ...(deps.onFailure ? { onFailure: deps.onFailure } : {}),
+  const rejected = (id: string) => deps.rejected?.has(id) === true
+  // a service whose key the endpoint refused before is asked nothing: off at its first request, before any is sent
+  const translators: Translator[] = built.translators.map(t => {
+    const a = built.answerers.get(t.identity)
+    if (!a || !rejected(a.id)) return t
+    const refuse = (): never => {
+      throw new Fault('off', 'key-refused', 'the endpoint refused this key before')
+    }
+    return { ...t, send: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => refuse() }) }) }
   })
+  const chainId = await identityOf(translators)
+  const target = langOf(config.targetLanguage)
+  const usesContext = translators.some(t => t.context)
 
-  /**
-   * A service of the reader's that this chain is not built around: the connection test has to answer for the
-   * endpoint named, and editing a service does not make it the chosen one, so the one tested is usually not on the
-   * chain (Codex on #157) — or it is not stored at all yet (a candidate). It gets a provider of its own, with no
-   * cache behind it: the question is whether the endpoint answers, and a cached sample would report success for
-   * one that no longer does
-   */
-  const offChainFor = (own: Service) => {
-    const engine = createOpenAICompatProvider(own, { prompts: config.prompts })
-    // the cost of the test's call goes to the ring as any call's does (issue #237): the usual way a connection test is
-    // asked is through here, and a ring that leaves the endpoint's request out would tell nothing of the one asked
-    return createTranslateService({ getProvider: async () => engine, getModel: async () => own.model, cancelled: deps.cancelled, retired: isRetired, ...(deps.warn ? { warn: deps.warn } : {}), ...(deps.note ? { note: deps.note } : {}) })
-  }
-  /** Off-chain services with a call inside: built per named call, they are drained and retired with the chain */
-  const offChainLive = new Set<TranslateService>()
-  const askOffChain = async (own: Service, call: TranslateCall): Promise<TranslateMessageResponse> => {
-    const off = offChainFor(own)
-    offChainLive.add(off)
-    try {
-      return await off.translate(call)
-    } finally {
-      offChainLive.delete(off)
-    }
-  }
-
-  /**
-   * A call naming an engine **takes no fallback chain**: the settings page's “test connection” asks “does the endpoint
-   * I configured work”, and a free fallback on the chain showing as success would be issue #42's “two inconsistent
-   * paths” committed the other way round — the reader would think the endpoint fine while the whole page translated through Google
-   */
-  const route = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
-    if (call.candidate) {
-      if (call.candidate.id !== call.providerId) return { ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named', isolatable: false } }
-      return askOffChain(call.candidate, call)
-    }
-    if (call.providerId === undefined) return service.translate(call)
-    const step = steps.find(s => s.provider.id === call.providerId)
-    if (step) return step.service.translate(call)
-    const own = serviceOf(config, call.providerId)
-    // This one has nothing to do with the segments; split smaller, the engine is still not on the chain
-    if (!own) return { ok: false, error: { kind: 'unknown', message: `engine ${call.providerId} is not on the current chain`, isolatable: false } }
-    return askOffChain(own, call)
-  }
-  /** Calls inside this chain right now; `busy()` reports it to the chain holder */
+  let retired = false
+  /** calls in flight, by scope (`''` for none), each withdrawn by its controller */
+  const live = new Map<string, Set<AbortController>>()
   let inFlight = 0
-  const translate = async (call: TranslateCall): Promise<TranslateMessageResponse> => {
+  /** the hand-overs in force, by service id, and the service that answered last (the popup's `engine`) */
+  const demoted = new Map<string, { kind: ProviderErrorKind; message: string; status?: number; until: number }>()
+  for (const t of translators) {
+    const a = built.answerers.get(t.identity)
+    if (a && rejected(a.id)) demoted.set(a.id, { kind: 'auth', message: 'the endpoint refused this key before', status: 401, until: Number.POSITIVE_INFINITY })
+  }
+  let lastAnswer: string = built.primary.id
+  let lastDemoted: { id: string; kind: ProviderErrorKind; message: string } | undefined
+
+  const rowKey = (u: UnitIn, context: PaperContext | undefined) =>
+    `${ROWS}|${chainId}|${target}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
+
+  /** one call of `chain` with `order`: results by unit, the rows read first and written after */
+  async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string): Promise<TranslateResponse> {
+    const context = paperContextOf(call.context)
+    const ac = new AbortController()
+    const mine = live.get(scope) ?? new Set()
+    live.set(scope, mine)
+    mine.add(ac)
     inFlight++
     try {
-      return await route(call)
+      const out = new Map<string, UnitResult>()
+      // the rows first: a unit with one is answered by it, nothing asked
+      const keys = rows ? call.units.map(u => rowKey(u, context)) : []
+      const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
+      const todo: UnitIn[] = []
+      call.units.forEach((u, i) => {
+        const raw = held[i]
+        const row = typeof raw === 'string' ? (JSON.parse(raw) as Omit<Extract<Result, { ok: true }>, 'id'>) : null
+        if (row?.content) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
+        else todo.push(u)
+      })
+      const cached = call.units.length - todo.length
+      const passed = new Map<string, Map<string, Why['kind'][]>>()
+      let sent = 0
+      const note = (n: Note) => {
+        if (n.kind === 'sent') {
+          sent++
+          return
+        }
+        const byT = passed.get(n.id) ?? new Map<string, Why['kind'][]>()
+        passed.set(n.id, byT)
+        byT.set(n.by, [...(byT.get(n.by) ?? []), n.why.kind])
+        handover(answerers.get(n.by), n.why)
+      }
+      const writes: [string, string][] = []
+      if (todo.length) {
+        for await (const r of chain.translate(todo, target, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
+          if (r.ok) {
+            const e = engineOf(r.by, answerers)
+            if (e.engine) answered(e.engine)
+            out.set(r.id, { ...r, ...e })
+            if (rows && isRow(r, order, passed)) {
+              const { id: _, ...row } = r
+              writes.push([rowKey(todo.find(u => u.id === r.id) as UnitIn, context), JSON.stringify(row)])
+            }
+          } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
+        }
+      }
+      if (rows && writes.length) await within(rows.write(writes), 5_000, undefined)
+      const results = call.units.map(u => out.get(u.id) ?? { id: u.id, ok: false as const, why: { kind: 'aborted' as const }, error: errorOf({ kind: 'aborted' }) })
+      const failed = results.find(r => !r.ok)
+      deps.note?.(batchLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), segments: call.units.length, cached, calls: sent, done: results.filter(r => r.ok).length, ...(failed && !failed.ok ? { failed: failed.error.kind } : {}) }))
+      return { ok: true, results, cached }
     } finally {
       inFlight--
+      mine.delete(ac)
+      if (!mine.size) live.delete(scope)
+    }
+  }
+
+  const engineOf = (by: string, answerers: ReadonlyMap<string, Answerer>): { engine?: string; kind?: ProviderKind } => {
+    const identity = by.startsWith('runs:') ? by.slice(5) : by
+    const a = answerers.get(identity) ?? (by === 'runs:mixed' ? built.primary : undefined)
+    return a ? { engine: a.id, kind: a.kind } : {}
+  }
+  /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's */
+  const handover = (a: Answerer | undefined, why: Why) => {
+    if (!a || why.kind === 'refused' || why.kind === 'aborted') return
+    if (why.kind === 'unconfigured' && why.code === 'no-language') return
+    const info = errorOf(why, why.kind === 'unconfigured' && why.code === 'key-refused' ? lastStatus : undefined)
+    const lasting = info.kind === 'no-key' || info.kind === 'auth'
+    // a lasting hand-over already known (the health record's refused key, with its 401) keeps what it says
+    if (lasting && demoted.get(a.id)?.until === Number.POSITIVE_INFINITY) return
+    demoted.set(a.id, { kind: info.kind, message: info.message, ...(info.status !== undefined ? { status: info.status } : {}), until: lasting ? Number.POSITIVE_INFINITY : Date.now() + HANDOVER_MS })
+    lastDemoted = { id: a.id, kind: info.kind, message: info.message }
+    // a refused key of a stored service of the reader's (a 401): the health record's (background/health-guard.ts)
+    if (info.kind === 'auth' && info.status === 401 && serviceOf(config, a.id)) deps.onFailure?.({ id: a.id, kind: 'auth', message: info.message, status: 401 })
+    deps.warn?.(`[axt] ${a.id} passed over: ${redact(info.message)}`)
+  }
+  const answered = (id: string) => {
+    lastAnswer = id
+    demoted.delete(id)
+  }
+
+  const refusal = (scope: string | undefined): TranslateResponse => ({ ok: false, error: { kind: 'aborted', message: scope === undefined ? 'cancelled (chain retired)' : `cancelled (scope: ${scope})` } })
+
+  const translate = async (call: TranslateCall): Promise<TranslateResponse> => {
+    if (retired || (call.scope !== undefined && deps.cancelled.has(call.scope))) return refusal(call.scope)
+    try {
+      // A call naming a service takes no fallback and nothing stored: the settings page's "test connection" asks whether
+      // the endpoint it names answers (issue #42), and a cached sample would report success for one that no longer does
+      if (call.providerId !== undefined || call.candidate) {
+        if (call.candidate && call.candidate.id !== call.providerId) return { ok: false, error: { kind: 'unknown', message: 'the candidate is not the service named' } }
+        const id = call.providerId as string
+        if (!call.candidate && !serviceOf(config, id) && !translators.some(t => built.answerers.get(t.identity)?.id === id)) return { ok: false, error: { kind: 'unknown', message: `engine ${id} is not on the current chain` } }
+        lastStatus = undefined
+        const one = translatorOf(id, config, tdeps, call.candidate ?? serviceOf(config, id))
+        return await run(deps.probe, [one.translator], new Map([[one.translator.identity, one.answerer]]), call, undefined, call.scope ?? '')
+      }
+      return await run(deps.chain, translators, built.answerers, call, deps.rows, call.scope ?? '')
+    } catch (e) {
+      return { ok: false, error: { kind: 'unknown', message: redact(e instanceof Error ? e.message : String(e)) } }
     }
   }
 
   const status = async (): Promise<ProviderStatus> => {
-    // every probe bounded (availableWithin, #88 E1): a probe that hangs answers "unavailable" in time, rather than the status
-    // answering nobody until its deadline
-    const available = !deps.rejected?.has(primary.id) && await availableWithin(primary)
-    // The first choice unavailable, look for a usable one on the chain: with one the translation runs as usual, on the fallback engine
-    let fallback: ProviderStatus['fallback']
-    if (!available) {
-      for (const engine of chain.slice(1)) {
-        if (await availableWithin(engine)) {
-          fallback = { id: engine.id }
-          break
-        }
-      }
+    const now = Date.now()
+    for (const [id, d] of demoted) if (d.until <= now) demoted.delete(id)
+    // every probe bounded: a probe that hangs answers "unavailable" in time
+    const serves = async (t: Translator): Promise<boolean> => {
+      const a = built.answerers.get(t.identity)
+      if (!a || rejected(a.id)) return false
+      const service = serviceOf(config, a.id)
+      if (service && !serviceRuns(service)) return false
+      return within(Promise.resolve().then(() => t.supports(target)), PROBE_MS, false)
     }
-    const live = service.status()
-    const active = chain.find(engine => engine.id === live.activeId) ?? primary
-    // The engine that would answer now: the first on the chain that is not demoted and whose probe says it can — a key
-    // refused demotes an engine for the session, and its probe still says yes (final review; Devin on #298). None, the
-    // chain's own choice
-    const demoted = new Set(live.demotions.map(d => d.id))
-    let serving = active
-    for (const engine of chain) {
-      if (demoted.has(engine.id)) continue
-      if (engine === primary ? available : await availableWithin(engine)) {
-        serving = engine
-        break
-      }
-    }
-    // the same parts the service tags its segments with (translate-service.ts): its model is the chosen service's alone
-    const identity = await translationIdentity({ providerId: serving.cacheId ?? serving.id, model: serving.id === chosen?.id ? (chosen.model ?? '') : '', promptKey: serving.promptKey ?? '', target: config.targetLanguage, renderPath })
+    const ready = await Promise.all(translators.map(serves))
+    const available = ready[0] === true
+    const firstReady = ready.findIndex((r, i) => r && !demoted.has(built.answerers.get((translators[i] as Translator).identity)?.id ?? ''))
+    const fallbackAt = available ? -1 : ready.findIndex((r, i) => r && i > 0)
+    const idAt = (i: number) => built.answerers.get((translators[i] as Translator).identity)?.id ?? built.primary.id
+    const active = demoted.has(lastAnswer) && firstReady >= 0 ? idAt(firstReady) : lastAnswer
     return {
-      providerId: primary.id,
+      providerId: built.primary.id,
       chosen: config.provider,
       revision,
       available,
-      ...(fallback ? { fallback } : {}),
-      model,
-      maxBatchChars: primary.maxBatchChars,
-      maxBatchItems: primary.maxBatchItems,
-      renderPath,
+      ...(fallbackAt > 0 ? { fallback: { id: idAt(fallbackAt) } } : {}),
+      ...(chosen?.model ? { model: chosen.model } : {}),
+      maxBatchChars: built.maxBatchChars,
+      maxBatchItems: built.maxBatchItems,
+      renderPath: built.renderPath,
       targetLanguage: config.targetLanguage,
       promptId: config.prompts.promptId,
-      chain: chain.map(engine => engine.id),
-      demotions: live.demotions.map(d => ({ id: d.id, kind: d.kind, ...(d.status !== undefined ? { status: d.status } : {}) })),
-      identity,
-      engine: {
-        id: active.id,
-        ...(live.activeId !== live.configuredId && live.demoted
-          ? { demoted: { id: live.demoted.id, kind: live.demoted.kind, message: live.demoted.message } }
-          : {}),
-      },
+      chain: translators.flatMap((_, i) => (ready[i] ? [idAt(i)] : [])),
+      demotions: [...demoted].map(([id, d]) => ({ id, kind: d.kind, ...(d.status !== undefined ? { status: d.status } : {}) })),
+      identity: chainId,
+      engine: { id: active, ...(active !== built.primary.id && lastDemoted ? { demoted: lastDemoted } : {}) },
     }
   }
 
+  const withdraw = (scopes: Iterable<string>): number => {
+    let n = 0
+    for (const scope of scopes) {
+      for (const ac of live.get(scope) ?? []) {
+        ac.abort()
+        n++
+      }
+    }
+    return n
+  }
   return {
     translate,
-    cancel: async scope => {
-      let cancelled = service.cancel(scope)
-      for (const own of offChainLive) cancelled += own.cancel(scope)
-      return cancelled
-    },
+    cancel: async scope => withdraw([scope]),
     status,
     retire: () => {
       retired = true
-      let cancelled = service.cancelAll()
-      for (const own of offChainLive) cancelled += own.cancelAll()
-      return cancelled
+      return withdraw([...live.keys()])
     },
     isRetired: () => retired,
     busy: () => inFlight > 0,
   }
 }
-
-// The chain-config table and the digest live in config/revision.ts: the popup and the toggle compare a page with the
-// saved settings through the same digest, and neither may pull this module's providers into its bundle
-import { chainRevision } from '@/config/revision'

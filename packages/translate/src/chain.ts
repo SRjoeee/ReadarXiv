@@ -104,8 +104,14 @@ async function within<T>(clock: Clock, p: Promise<T>, ms: number, fallback: T): 
 // ---------------------------------------------------------------- identities and keys
 
 /** a context's digest, for the key of a translator whose replies depend on it */
-const contextDigest = (context: PaperContext | undefined): string =>
-  context ? sha256Hex(JSON.stringify([context.title ?? null, context.abstract ?? null, context.terms ?? null])) : '-'
+const contextDigest = (context: PaperContext | undefined): string => {
+  if (!context) return '-'
+  const parts: unknown[] = [context.title ?? null, context.abstract ?? null, context.terms ?? null]
+  // (a section or a glossary only where given: a context without them keys as it did before they existed)
+  if (context.section !== undefined || context.glossary !== undefined)
+    parts.push(context.section ?? null, context.glossary?.map((g) => [g.term, g.translation]) ?? null)
+  return sha256Hex(JSON.stringify(parts))
+}
 /** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->` */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
   `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(context) : '-'}`
@@ -582,11 +588,15 @@ export function chainOf(ports: Ports = {}): Chain {
       // the translators that serve the target, off ones out
       const served: Translator[] = []
       const offCodes: UnconfiguredCode[] = []
+      const skipped: { by: string; code: UnconfiguredCode }[] = []
       for (const t of o.translators) {
         const off = offs.get(t)
-        if (off) offCodes.push(off)
-        else if (await supports(t, target)) served.push(t)
-        else offCodes.push('no-language')
+        const code = off ?? ((await supports(t, target)) ? null : 'no-language')
+        if (code === null) served.push(t)
+        else {
+          offCodes.push(code)
+          skipped.push({ by: t.identity, code })
+        }
       }
       const work = units.map((u, i) =>
         settle(u, i, {
@@ -594,6 +604,7 @@ export function chainOf(ports: Ports = {}): Chain {
           context: o.context,
           served,
           offCodes,
+          skipped,
           seq,
           signal,
           note,
@@ -628,6 +639,8 @@ export function chainOf(ports: Ports = {}): Chain {
     context: PaperContext | undefined
     served: readonly Translator[]
     offCodes: readonly UnconfiguredCode[]
+    /** the call's translators that do not serve the target or are off, told to the host as passed for every unit */
+    skipped: readonly { by: string; code: UnconfiguredCode }[]
     seq: number
     signal: Signal
     note: (n: Note) => void
@@ -651,6 +664,8 @@ export function chainOf(ports: Ports = {}): Chain {
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
     if (!hasLetter(u)) return { id: u.id, ok: true, content: asOut(u.content), by: 'self' }
+    for (const s of c.skipped)
+      c.note({ kind: 'passed', by: s.by, id: u.id, why: { kind: 'unconfigured', code: s.code } })
     if (!c.served.length)
       return { id: u.id, ok: false, why: { kind: 'unconfigured', code: c.offCodes[0] ?? 'no-language' } }
     // every translator's wire and key, read from the store at once
@@ -678,14 +693,16 @@ export function chainOf(ports: Ports = {}): Chain {
       const t = c.served[k] as Translator
       const last = k === c.served.length - 1
       const wk = wires[k]
-      const passed = (why: Why) => c.note({ kind: 'passed', by: t.identity, why })
+      const passed = (why: Why) => c.note({ kind: 'passed', by: t.identity, id: u.id, why })
       if (!wk) {
         refused = true
+        passed({ kind: 'refused' })
         continue
       }
       const offNow = offs.get(t)
       if (offNow) {
         off ??= offNow
+        passed({ kind: 'unconfigured', code: offNow })
         continue
       }
       // a stored reply, judged again as a fresh one is

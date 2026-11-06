@@ -5,20 +5,20 @@
 // “whole paper done” end: what is scrolled to is translated.
 import { toBcp47 } from '@/config/languages'
 import { type Block, type TextBlock, markBlocks } from '@/core/extractor'
-import type { SentenceAlignment } from '@/providers/alignment'
+import type { SentenceAlignment } from '@/core/protector/alignment'
 import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
-import { PlaceholderIntegrityError, joinRuns, rehydrate, splitRuns, staleSlot, type WireSpan } from '@/core/protector'
+import { PlaceholderIntegrityError, rehydrate, staleSlot, type WireFormat, type WireSpan } from '@/core/protector'
+import { alignmentOf, wholeAlignment, wireOfContent } from '@/core/protector/units'
 import {
   clearAllPending, enable, markPartial, markStructure, registerSentences, renderFailed, renderPending, renderTable, renderText, setState, type Look, type Mode,
 } from '@/core/renderer'
 import { type CallBase, translateCall } from '@/core/run/call'
 import { createRunLedger } from '@/core/run/ledger'
 import type { PreloadOptions } from '@/core/scheduler/lazy'
-import type { RenderPath } from '@/cache/key'
-import { failureReason, splitLine } from '@/shared/diagnostics'
-import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
+import { failureReason } from '@/shared/diagnostics'
+import type { ErrorInfo, TranslateCall, TranslateResponse } from '@/providers/transport'
 import { planBatches, sectionTitles, type Batch, type Segment } from './batches'
-import { cutsOf } from './cuts'
+import { unitOfSegment } from './units'
 
 export interface Progress {
   /** on: the session is open and scrolling keeps triggering; stopped: the reader restored the original, or a fatal error stopped it */
@@ -35,7 +35,7 @@ export interface Progress {
   fatal?: string
 }
 
-export type Transport = (request: TranslateCall) => Promise<TranslateMessageResponse>
+export type Transport = (request: TranslateCall) => Promise<TranslateResponse>
 
 export interface RunOptions {
   doc: Document
@@ -45,7 +45,7 @@ export interface RunOptions {
   /** The reader's active appearance (§7.5); without it the page keeps whatever attributes it has */
   appearance?: Look
   paper: string
-  capabilities: { maxBatchChars: number; maxBatchItems: number; renderPath: RenderPath }
+  capabilities: { maxBatchChars: number; maxBatchItems: number; renderPath: WireFormat }
   transport: Transport
   onProgress?: (progress: Progress) => void
   /**
@@ -106,7 +106,6 @@ type BatchResult = Map<Segment, SegmentResult>
  * the reader sees the sentence in the interface's language, and the half after `kind` is for diagnosis and never
  * reaches the interface (Codex on #161)
  */
-const CANCELLED: SegmentResult = { error: 'aborted: cancelled' }
 const MISMATCH: SegmentResult = { error: 'invalid-response: the translation placeholders do not match the source' }
 /**
  * The page changed under the block while its translation was out (a slot node replaced or moved). Not
@@ -119,7 +118,7 @@ const stale = (e: PlaceholderIntegrityError): SegmentResult => ({ error: `stale:
  * kind, the HTTP status and the length of the message — the log's rule (`failureReason`, DESIGN §7.6). The reasons
  * above are this file's own words and stay as written
  */
-const errorOf = (res: Extract<TranslateMessageResponse, { ok: false }>): SegmentResult => ({ error: failureReason(res.error.kind, res.error.message, res.error.status) })
+const errorOf = (error: ErrorInfo): SegmentResult => ({ error: failureReason(error.kind, error.message, error.status) })
 
 export function startTranslation(options: RunOptions): TranslationRun {
   const { doc, blocks, transport } = options
@@ -174,132 +173,56 @@ export function startTranslation(options: RunOptions): TranslationRun {
   for (const block of blocks) setState(block, 'pending')
 
   // The envelope is the session's, the same for the image labels and the title (run/call.ts)
-  const base: CallBase = { target: options.target, paper: options.paper, ...(options.scope ? { scope: options.scope } : {}), ...(options.context ? { context: options.context } : {}) }
-  const send = (items: { id: string; text: string; cuts?: number[] }[], renderPath: RenderPath, sectionTitle?: string, opts: { bypassCache?: boolean } = {}) =>
-    transport(translateCall(base, items, renderPath, { ...(sectionTitle ? { sectionTitle } : {}), ...(opts.bypassCache ? { bypassCache: true } : {}) }))
-
-  /**
-   * The sentence boundaries travel with the request (§8.6). Choosing the cut points needs the block itself — is a
-   * placeholder an annotation or a formula, is this block a reference — and the service has only the wire text, so
-   * the decision is made here and the service only inserts markers by position
-   */
-  const cutsFor = (segment: Segment): { cuts?: number[] } => {
-    const cuts = cutsOf(segment, options.capabilities.renderPath)
-    // An empty array is sent all the same: it says “this block is one sentence, whole to whole”, unlike “this block is not aligned”
-    return cuts === undefined ? {} : { cuts }
-  }
+  const base: CallBase = { target: options.target, ...(options.scope ? { scope: options.scope } : {}), ...(options.context ? { context: options.context } : {}) }
+  const format = options.capabilities.renderPath
 
   // A wrong configuration would only fail again: recorded, the observers disconnected, no new batch queued; the batches in flight finish as usual
-  const noteFatal = (res: Extract<TranslateMessageResponse, { ok: false }>) => {
-    if (isPermanentErrorKind(res.error.kind)) ledger.fatal(res.error.kind, res.error.message)
+  const noteFatal = (error: ErrorInfo) => {
+    if (isPermanentErrorKind(error.kind)) ledger.fatal(error.kind, error.message)
   }
 
   /**
-   * The translation filled back into its block, or why it cannot be. `rehydrate` is the one gate (validating
-   * here first checked the same text twice): an integrity failure of the translation's own comes back as
-   * `undefined` for the caller to resend; a block the page changed under (`stale`) is a result, since resending the
-   * same wire text could only fail the same way
+   * The segments as units of the chain (protector/units.ts), their results filled back. The chain does what this side
+   * did before (DESIGN §8.2, stage 4b): a unit a translator refused is asked again or goes to the next translator, and
+   * past the last one is cut into its runs of text, a failure of the service is retried, cooled or handed over, a request
+   * one unit sinks is halved. What comes back is one result per unit: a translation every placeholder of which is there,
+   * or why there is none. `rehydrate` is the one gate on this side still: a block the page changed under (`stale`) is a
+   * result, never resent
    */
-  const filled = (hit: { text: string; alignment?: SentenceAlignment }, segment: Segment): SegmentResult | undefined => {
-    try {
-      return { fragment: rehydrate(hit.text, segment.protected, doc, hit.alignment), alignment: hit.alignment }
-    } catch (e) {
-      if (!(e instanceof PlaceholderIntegrityError)) throw e
-      return e.reason === 'stale' ? stale(e) : undefined
-    }
-  }
-  /** The runs joined back into their block; a count that does not match is the translation's fault, a stale block is not */
-  const joined = (texts: string[], layout: ReturnType<typeof splitRuns>, segment: Segment): SegmentResult => {
-    try {
-      return { fragment: joinRuns(texts, layout, segment.protected, doc) }
-    } catch (e) {
-      return e instanceof PlaceholderIntegrityError && e.reason === 'stale' ? stale(e) : MISMATCH
-    }
-  }
-
-  /** The runs fallback (§6.5): cut into runs at voids, translated run by run and joined back */
-  async function viaRuns(segment: Segment, sectionTitle?: string): Promise<SegmentResult> {
-    if (halted()) return CANCELLED
-    const layout = splitRuns(segment.protected)
-    if (layout.runs.length === 0) return joined([], layout, segment)
-    const res = await send(layout.runs.map((text, i) => ({ id: `${segment.id}#r${i}`, text })), 'runs', sectionTitle)
-    if (!res.ok) {
-      noteFatal(res)
-      return errorOf(res)
-    }
-    cached += res.cached
-    served(res.result.provider)
-    const byId = new Map(res.result.segments.map(s => [s.id, s.text]))
-    const texts = layout.runs.map((_, i) => byId.get(`${segment.id}#r${i}`))
-    if (texts.some(t => t === undefined)) return { error: 'invalid-response: the translation count does not match the source' }
-    return joined(texts as string[], layout, segment)
-  }
-
-  /**
-   * Placeholder validation failed: the block alone is sent once more, and a second failure takes the runs path (§6.3).
-   * The resend does not read the cache: the bad translation went into the cache before validation, and a normal read
-   * would only bring it back as it is (Codex on #9)
-   */
-  async function retrySingle(segment: Segment, sectionTitle?: string): Promise<SegmentResult> {
-    if (halted()) return CANCELLED
-    const res = await send([{ id: segment.id, text: segment.text, ...cutsFor(segment) }], options.capabilities.renderPath, sectionTitle, { bypassCache: true })
-    if (res.ok) {
-      cached += res.cached
-      served(res.result.provider)
-      const hit = res.result.segments[0]
-      const result = hit === undefined ? undefined : filled(hit, segment)
-      if (result) return result
-    } else {
-      noteFatal(res)
-    }
-    return viaRuns(segment, sectionTitle)
-  }
-
   async function translateSegments(segments: Segment[], sectionTitle: string | undefined, out: BatchResult): Promise<void> {
     if (halted()) return
-    if (options.capabilities.renderPath === 'runs') {
-      for (const segment of segments) out.set(segment, await viaRuns(segment, sectionTitle))
-      return
-    }
-    const res = await send(segments.map(s => ({ id: s.id, text: s.text, ...cutsFor(s) })), options.capabilities.renderPath, sectionTitle)
+    const units = segments.map(s => unitOfSegment(s, format))
+    const res = await transport(translateCall(base, units.map(u => u.unit), { ...(sectionTitle ? { sectionTitle } : {}) }))
     if (ledger.stopped()) return
     if (!res.ok) {
-      noteFatal(res)
-      // One call may be cut into several batches, and one batch failing does not mean another did not succeed: the
-      // successful ones come back with the failure and are rendered first (they are in the cache already; unrendered
-      // the reader would see “all failed” and a retry would answer instantly). Only the rest goes into the judgement
-      // below (Codex on #163)
-      const done = new Map((res.partial ?? []).map(s => [s.id, s]))
-      const left = segments.filter(segment => {
-        const hit = done.get(segment.id)
-        const result = hit === undefined ? undefined : filled(hit, segment)
-        if (!result) return true
-        out.set(segment, result)
-        return false
-      })
-      if (left.length === 0) return
-      // A batch failure: only one **caused by some segment** is split in half and retried (§8.2). A systemic failure
-      // gives the same result split, only multiplied by the segment count — measured: a `bad-request` over 4 segments
-      // became 7 calls (`4,2,1,1,2,1,1`), and a quota failure is worse than useless. The criterion comes from the
-      // service side with the error (`ISOLATABLE_BY_KIND` of providers/types.ts, a provider may override it); the
-      // content layer no longer guesses for itself
-      if (ledger.fatalReason() === undefined && left.length > 1 && res.error.isolatable) {
-        const mid = Math.ceil(left.length / 2)
-        options.trace?.(splitLine(options.scope, left.length, [mid, left.length - mid]))
-        await translateSegments(left.slice(0, mid), sectionTitle, out)
-        await translateSegments(left.slice(mid), sectionTitle, out)
-      } else {
-        for (const segment of left) out.set(segment, errorOf(res))
-      }
+      noteFatal(res.error)
+      for (const segment of segments) out.set(segment, errorOf(res.error))
       return
     }
     cached += res.cached
-    served(res.result.provider)
-    const byId = new Map(res.result.segments.map(s => [s.id, s]))
-    for (const segment of segments) {
-      const hit = byId.get(segment.id)
-      const result = hit === undefined ? undefined : filled(hit, segment)
-      out.set(segment, result ?? await retrySingle(segment, sectionTitle))
+    const first = res.results.find(r => r.ok && r.engine)
+    if (first?.ok && first.engine) served(first.engine)
+    const byId = new Map(res.results.map(r => [r.id, r]))
+    for (const [i, segment] of segments.entries()) {
+      const r = byId.get(segment.id)
+      const from = units[i] as (typeof units)[number]
+      if (!r) {
+        out.set(segment, { error: 'unknown: no result for this segment' })
+        continue
+      }
+      if (!r.ok) {
+        noteFatal(r.error)
+        out.set(segment, errorOf(r.error))
+        continue
+      }
+      const back = wireOfContent(r.content, from)
+      const alignment = from.whole ? wholeAlignment(segment.text, back.wire) : alignmentOf(r.sentences, from, segment.text, back)
+      try {
+        out.set(segment, { fragment: rehydrate(back.wire, segment.protected, doc, alignment), ...(alignment ? { alignment } : {}) })
+      } catch (e) {
+        if (!(e instanceof PlaceholderIntegrityError)) throw e
+        out.set(segment, e.reason === 'stale' ? stale(e) : MISMATCH)
+      }
     }
   }
 

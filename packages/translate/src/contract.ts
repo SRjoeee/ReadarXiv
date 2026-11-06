@@ -44,11 +44,15 @@ export interface Sentences {
   tr: readonly number[]
 }
 
-/** The paper's context, one per paper version; it reaches only a translator whose replies depend on it */
+/** The paper's context, one per paper version; it reaches only a translator whose replies depend on it. `section` (the
+ *  heading the units sit under, or an image's caption) and `glossary` (the reader's term table) are a host's where its
+ *  prompt reads them; like the rest, they enter the key of a translator whose replies depend on the context */
 export interface PaperContext {
   title?: string
   abstract?: string
   terms?: readonly string[]
+  section?: string
+  glossary?: readonly { readonly term: string; readonly translation: string }[]
 }
 
 /** What the caller does next, never an HTTP cause */
@@ -69,8 +73,12 @@ export type Result =
   | { id: string; ok: true; content: OutPiece[]; by: string; sentences?: Sentences }
   | { id: string; ok: false; why: Why }
 
-/** What a host may count or tell a reader: a request sent, a translator passed over for a unit and why */
-export type Note = { kind: 'sent'; by: string; chars: number; units: number } | { kind: 'passed'; by: string; why: Why }
+/** What a host may count or tell a reader: a request sent; a translator passed over for a unit (`id`: the unit's, or
+ *  `<id>~<k>` for a stretch of the runs floor) and why, told for every translator of the call the unit did not get an
+ *  answer from, the ones that do not serve the target or are off included */
+export type Note =
+  | { kind: 'sent'; by: string; chars: number; units: number }
+  | { kind: 'passed'; by: string; id: string; why: Why }
 
 // ---------------------------------------------------------------- the platform's members the package uses
 

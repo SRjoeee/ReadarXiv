@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { translationCache } from '@/cache'
 import { sweepAtStart } from '@/entrypoints/background/handlers'
 
 // What the worker does of itself when it starts (the background, index.ts), run as the browser runs it: the cache's expired
@@ -28,7 +27,8 @@ describe('the worker\'s start (#88 E6)', () => {
     background.main()
     expect(vi.mocked(sweepAtStart)).toHaveBeenCalledOnce()
     const [deps] = vi.mocked(sweepAtStart).mock.calls[0]!
-    expect(deps.cache).toBe(translationCache)
+    // the stores the worker serves from (cache/translate-store.ts), made once at its start
+    expect(typeof deps.cache.cleanup).toBe('function')
     expect(typeof deps.diagnostics.record).toBe('function')
   })
 })

@@ -56,6 +56,8 @@ const REWRITE: Record<string, string> = {
   lg: 'lug',
 }
 export const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
+/** whether the endpoint serves a target, synchronously (a host's settings say it before any call) */
+export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
 
@@ -146,7 +148,7 @@ export function microsoft(o: MicrosoftOptions): Translator {
     digest: MICROSOFT_DIGEST,
     context: false,
     limits,
-    supports: async (target) => SUPPORTED.has(microsoftTarget(target)),
+    supports: async (target) => microsoftServesTarget(target),
     write: (unit) => planMarkers(unit).wire,
     read: readMicrosoft,
     async *send(wires, call, signal) {

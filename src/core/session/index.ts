@@ -5,7 +5,6 @@
 // One session = one run (observer and requests) + one id as the cancellation scope (DESIGN §10).
 // The id belongs to this object: `start()` mints one and every callback of that run closes over
 // `alive()`; after `restore()` or a restart, results that arrive late are dropped there.
-import { type RenderPath, wireFormatOf } from '@/cache/key'
 import { type Look, lookOf } from '@/config/appearance'
 import { DEFAULT_CONFIG, MODE_VALUES, type Config } from '@/config/schema'
 import type { Block } from '@/core/extractor'
@@ -13,12 +12,12 @@ import type { PaperContext } from '@/core/extractor/context'
 import { collectImageTargets, startImageTranslation, type ImageBytes, type ImageRun, type ImageTarget } from '@/core/image'
 import { type NameEvidence, nameEvidence } from '@/core/names'
 import { startTranslation, type Progress, type TranslationRun } from '@/core/pipeline'
-import { escapeText, unescapeText } from '@/core/protector/escape'
+import type { WireFormat } from '@/core/protector/tokens'
 import {
   applyStyle, createModeController, createPlaceKeeper, createPrep, installAnchorFallback, type Mode, type ModeController, relabelFailed, restore, type SentenceHighlight, setImageModes,
   startSentenceHighlight,
 } from '@/core/renderer'
-import { translateCall } from '@/core/run/call'
+import { textOf, textUnit, translateCall } from '@/core/run/call'
 import { preloadOf } from '@/core/scheduler/lazy'
 import { createSerialQueue } from '@/core/scheduler/serial'
 import { newSessionId } from '@/core/scheduler/session'
@@ -108,7 +107,7 @@ interface LiveSession {
   /** The start-time inputs, for the parts a settings change can restart on their own (images) */
   config: Config
   context: TranslateContext
-  renderPath: RenderPath
+  renderPath: WireFormat
   /** What the session runs on (PageStatus.running) */
   running: NonNullable<PageStatus['running']>
   /**
@@ -401,12 +400,9 @@ export function createPageSession(deps: SessionDeps): PageSession {
       warn: trace,
       translate: async text => {
         // The same envelope as the runs' (run/call.ts): an empty context is left out here too
-        const res = await backend.translate(translateCall(
-          { target, paper, scope: session, context },
-          [{ id: 'document.title', text: escapeText(text, wireFormatOf(status.renderPath)) }],
-          status.renderPath,
-        ))
-        return res.ok ? unescapeText(res.result.segments[0]?.text ?? '', wireFormatOf(status.renderPath)) || null : null
+        const res = await backend.translate(translateCall({ target, scope: session, context }, [textUnit('document.title', text)]))
+        const r = res.ok ? res.results[0] : undefined
+        return r?.ok ? textOf(r.content) || null : null
       },
     })
     started.images = startImages(started, config)
@@ -444,7 +440,6 @@ export function createPageSession(deps: SessionDeps): PageSession {
       return `; waiting: ${shown.join(', ')}${left.length > 8 ? `, +${left.length - 8}` : ''}; observer holds ${run?.observing() ?? 0}`
     }
     run = startImageTranslation({
-      renderPath: session.renderPath,
       doc,
       targets,
       paper,

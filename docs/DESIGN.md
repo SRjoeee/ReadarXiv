@@ -323,8 +323,7 @@ The whole **outermost** `.ltx_tabular` is one unit (15 of the fixtures' 58 tabul
 
 ### 5.5 Rule versioning
 
-- `RULES_VERSION` (`0.11.0` today) is exported by the rule file and is the HTML page's alone: it is part of the cache key of an HTML block, and of nothing a PDF is read by (the PDF reader's units are cut by its engine, `PIPELINE_VERSION`; its texts' keys hold none, §9). A change that makes the same text translate differently must bump it.
-- **When not to bump**: a purely additive change (a shape newly extracted, a group newly protected) may keep the version **only when the wire text of every block of every fixture is byte for byte unchanged** — then a changed block's key changes by itself through `normalizedText`, and no stale entry can be hit. A bump voids every reader's whole cache and costs LLM users real money; the criterion is measured, not argued (issue #152 kept `0.10.1` this way; protecting inline listings did not meet it — the wire text of 12 blocks of 2312.17141 changed — and moved it to `0.10.2`).
+- **No version number since stage 4b** (2026-11-07): `RULES_VERSION` (`0.11.0` last) was the `rules` slot of an HTML block's cache key, and went with that key (§9). A block's key is now the bytes of the wire a translator is sent, so a rule that makes the same block go out differently changes the key by itself, and one that changes nothing on the wire needs nothing: the criterion that once decided a bump by hand ("the wire text of every block of every fixture byte for byte unchanged", issue #152) is the key's own rule now. A change that makes the same text *read back* differently needs nothing either: the store holds raw replies, read again.
 - The fixtures record their generator version. arXiv has reconverted its whole history with oxide 0.7.6, so no older output exists online and the year of a paper is no proxy for a version; should a future LaTeXML differ enough, the answer is a second rule file plus a detection function, not conditionals inside one.
 
 ### 5.6 Rule interface and precedence
@@ -384,6 +383,17 @@ interface ProtectedBlock {
 - A block whose voids exceed a threshold is formula-dense: it still takes the session's format but forms a batch of its own (§8.2).
 
 ### 6.3 Validation
+
+**Since stage 4b (2026-11-07) the judge is the chain's one acceptance rule**, over the unit the shim reads from the block's
+wire (`core/protector/units.ts`): every element once, every pair of the tags wire back exactly once and nested, nothing
+foreign, no text lost (`packages/translate` accept.ts); each adapter reads its own wire, Microsoft's tolerantly (a doubled
+or displaced `#`, a bare marker before CJK text: the PDF wire's reading, now the page's too). What the paragraphs below
+describe of the page's resend and its runs path is the chain's per unit now (re-ask, the next translator, the runs floor),
+and nothing is cached before it is accepted. `validate` stays the gate of `rehydrate` on the wire the shim writes back,
+which is the source's own grammar. Measured live the same day (lane L6 stage 4b, the 13 fixtures' 5,999 blocks through
+Microsoft, one run each): today's wire and reading had 5,912 blocks accepted and 87 refused; the package's adapter, in its
+run of the same blocks, all 5,999. Not examined there: whether a reply now taken shows a stray `#` (the reason given below for declining the bare
+reading on the HTML page).
 
 A translation passes when the set of void ids equals the source's exactly, each once; paired tags are matched and legally nested; and no id absent from the source appears. The expectations are derived from the request text itself (`expectationsFromText`) — after escaping, every `<x>` / `<t>` in it is necessarily a real placeholder — so the check sits right beside the cache write in the background (§9) and needs no callback across the message boundary.
 
@@ -529,7 +539,24 @@ When the pointer rests on a sentence of the original or the translation, **both 
 
 ## 8. Providers and the translation service
 
-`src/providers/`. One file per engine; the details of an unpublished interface are never shared across files.
+**Since stage 4b (2026-11-07) the extension translates through one chain**, `packages/translate`
+(`interfaces/translate/DECISION.md`): the background makes it once (`chainOf`, `background/index.ts`), so every tab and
+every configuration shares one owner of the pacing, the 429 cooldowns and the breaker; the HTML page and the PDF reader
+send it units (`axt:translate`: `{ units, target, context?, scope? }` → one result per unit) and take back results. What
+the sections below describe of the ported request layer (Read Frog's queues, retry policy and token bucket), of the
+per-call fallback service and its 60 s demotions, of the page's own resend, runs fallback and halving, and of the service
+inserting sentence markers, is the package's now, per unit: write, store read, requests cut by each translator's limits
+with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
+translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
+fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last.
+What stays in the app: the reader's LLM services as a translator (`providers/llm.ts`, §8.2's prompt and structured output
+over the package's tags wire), which translators a configuration offers and in what order (`providers/translators.ts`:
+§8.5's chain and its format rule, unchanged), the rows a page reads again (§9), and what the popup is told of the engine that
+answers (`providers/transport.ts`, from the chain's per-unit notes). The engines' measured facts below hold; their code is
+the package's adapters. The HTML page keeps serialising in its session's format (§6) and maps a block's wire to a unit beside
+the protector (`core/protector/units.ts`): every pair of the tags wire a span that must come back; on the markers wire each
+element stated so that it keeps its own marker (Microsoft's adapter joins side-by-side elements for the PDF wire; on the HTML
+page the live run of 2026-11-07 kept 1,375 of 1,378 placeholders of the 159 such blocks one marker an element, 1,372 joined).
 
 ### 8.0 Requests run in the background
 
@@ -662,14 +689,51 @@ Hard rule 3: a failure must be recoverable and must trigger the chain. `provider
 
 ### The translation cache
 
-IndexedDB through **Dexie** (`src/cache/store.ts`, ported from FluentRead and reshaped), held by the background alone; the content side never touches it (§8.0). Disposable by decision: clearing it costs a re-translation and nothing else, so a schema change may drop it.
+Since stage 4b (2026-11-07) the extension translates through the one chain of `packages/translate` (§8), and what it keeps
+of a translation is the chain's and its hosts': three tables of one IndexedDB database through **Dexie**
+(`src/cache/translate-store.ts`), held by the background alone; the content side never touches it (§8.0). Disposable by
+decision: clearing it costs a re-translation and nothing else.
 
-- **The key** (`cache/key.ts`) is `sha256` over `CACHE_KEY_VERSION (6) | providerId | model | PROMPT_VERSION | promptKey | context | rules | target | renderPath | normalizedText | cuts`, `rules` being `RULES_VERSION` for a block of the HTML page and null for a text read from a PDF (the caller's, named by every cache descriptor's required `source`, so that a PDF caller cannot put the rule file back into its keys; the PDF reader's units are cut by its engine, and the cache holds the translator's raw answer to a text, which no rule of reading changes), and `marked-over-cap` for a segment marked over its engine's batch cap (§8.6: sent unmarked before 2026-10-02, its old entries left behind rather than every key retired) — every input that changes a translation, and the tests guard each distinction. `providerId` is `provider.cacheId ?? provider.id`: `openai-compat` is the same id for every endpoint, so a service declares `openai-compat:<origin><path>` (the path included — two gateway routes under one domain may be different models; never the key, hard rule 5), with `|thinking=on` or `|thinking=off` appended wherever the endpoint has an adapter that sends the switch (§8.2) — a reasoning model's translation is another output. Both states are named: before the switch entered the identity, on and off shared the unmarked one, and naming both retires those entries for this provider alone rather than bumping `CACHE_KEY_VERSION` for every engine. An endpoint that is sent nothing either way has one request and no suffix. `renderPath` shares its names with `WireFormat` plus `runs`; the same source text has the same wire text on all three, and only this field tells them apart. `normalizedText` is NFC, whitespace collapsed, trimmed — for the key only; the text sent is untouched. The version history: 3 when `renderPath` entered, 4 on its rename, 5 when serialisation began collapsing whitespace, 6 when the sentence markers changed the request (§8.6). Making the `rules` slot the caller's moved no number: no HTML key changed, and a PDF text's old entries, which held `RULES_VERSION` in the slot, are no key of the new ones.
-- **The value**: `{ translation, alignment?, paper, createdAt, lastAccessedAt, expiresAt, byteSize }`, `paper` being the arXiv id. TTL 30 days; caps of 20 000 entries and 50 MB, 256 KB per entry; an in-memory hot layer of 256 entries. The OCR results share the store under `OCR_KEY_VERSION | imageHash | OCR_VERSION` (§15.2, §15.4).
-- **Eviction does not scan the store**: count and bytes are kept incrementally (a `byteSize` index, initialised by reading index keys alone), and only when a cap is really exceeded are the oldest entries fetched by `lastAccessedAt` in batches. The original summed every record on every `set`; measured with fake-indexeddb, 5.5 ms per set at 2 000 entries and growing, against a steady 0.11 ms after.
-- **A read has a budget**: the service waits at most 2 s (`CACHE_READ_BUDGET_MS`) for a cache answer, and a timeout or a count that does not match the request is treated as all misses — one extra request beats a whole page stuck on a hung read. Measured hit round trip: tens of milliseconds. Every hit writes its access time back in its own transaction (for the LRU to be right); measured 2026-09-17 under fake-indexeddb, `getMany` of 880 keys takes 1.9 s while a batch of fresh writes costs 0.11 ms each — the service reads per request, so a screen costs tens of milliseconds; coalescing the access-time writes is a recorded candidate, not a change.
-- **Bad translations never enter**: only translations that passed the placeholder check are written (§6.3), the single-block re-send carries `cache.bypass`, and nothing is written for a cancelled scope (the registry is checked once more before the write).
-- **Management is a global clear on the settings page** (`axt:cache-stats`, `axt:cache-clear`): the count and size shown, expired entries removed before counting (`cleanup()`, whose failure is thrown rather than reported as success), and a failure is reported as a failure — never as "the cache is empty". **A worker's start runs `cleanup()` too** (`sweepAtStart`, `background/handlers.ts`; #88 E6): nothing else deletes an entry nobody asks for (`get()` drops only an expired one it is asked for), so the rows a `CACHE_KEY_VERSION` bump leaves behind, which no key reaches again, stayed until the caps evicted them; now they go once they expire, and each start deletes only what expired since the last. Its failure is a line in the log. No per-paper clear: the key already carries engine, model, prompt and glossary, so a changed setting misses the old entry by itself.
+- **The answers** (`answers`): the chain's Store. The key is the package's `keyOf`, `t1 | translator identity | target |
+  sha256 of the wire the translator is sent for the unit | the context's digest, or -` (`packages/translate` chain.ts), the
+  context entering only for a translator whose replies depend on it (an LLM's: title, abstract, section, glossary; never a
+  free engine's, so a free engine's answer serves every paper and every heading). The value is the translator's raw reply
+  for that unit, **kept only once accepted, and read again and judged again on every use**: a better reading of an old reply
+  needs no new request, and a reply the acceptance rule now refuses is asked again. No number is raised by hand: what a
+  translator is sent changes its key by itself (the wire's bytes are in it); how a reply is read changes nothing stored. A
+  translator's identity is its endpoint, model and prompt, never its key (hard rule 5): Microsoft's, Google's and the
+  built-in engine's are the package's; one of the reader's services is `llm:` + 16 hex of its endpoint (origin and path),
+  model, `PROMPT_VERSION` with the prompt's key, and the thinking switch where the endpoint is sent one
+  (`src/providers/llm.ts`), so a prompt whose meaning changes raises `PROMPT_VERSION` and its answers and rows are new.
+- **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
+  unit (its kind, content, whether it lights by sentence) | the context's digest where a translator reads it`
+  (`src/providers/transport.ts`). A page opened again reads its units' rows before anything is asked, and sends nothing for
+  them. Kept only where the result is what the chain would give again: the first translator's answer, or a later one's
+  where every translator before it **refused** the unit — not one that could not be reached, was cooling, had no key or no
+  language pack, which may answer next time (the chain's per-unit notes tell which). So a block Microsoft mangles and
+  Google answers is not asked of Microsoft again on the next open, the case the chain's answer store alone cannot avoid
+  (it keeps no refusal). A row's key moves with the chain: another engine, another order, a translator's behaviour digest,
+  the acceptance rule's.
+- **The recogniser's readings** (`ocr`, §15.2): by `ocrCacheKey` (`src/cache/ocr-key.ts`), apart from translation's.
+- **Bounds, per table**: 30 days from the write, 20,000 entries and 50 MiB, the least recently read going first past either
+  cap (counted incrementally from a `bytes` index; the reading time written back apart, not awaited); a value of at most
+  64 KiB (an OCR reading 256 KiB). **Bulk on both sides**: one transaction a read and one a write (the old per-key read and
+  write of the FluentRead port, 1.9 s for 880 keys under fake-indexeddb, is gone with it). A failing or hanging store is a
+  miss and keeps nothing: the chain bounds a read at 2 s and a write at 5 s, and never waits on its store to translate.
+- **The version step** (hard rule 7): the database is the old cache's, `axt-translation-cache`, at **version 3**, whose step
+  drops the old table of per-text translations (`entries`, version 2: the HTML page's blocks and the PDF reader's texts
+  under `CACHE_KEY_VERSION` 6, which no key of the chain could reach) once, on the first open by this release
+  (`tests/cache/translate-store.test.ts` opens a database made by version 2's schema). Every page is translated once more
+  on its first open: the free engines cost nothing, an LLM the reader's own key one more request a unit.
+- **Management is a global clear on the settings page** (`axt:cache-stats`, `axt:cache-clear`) over the three tables: the
+  count and size shown, expired entries removed before counting, a failure reported as a failure — never as "the cache is
+  empty". **A worker's start sweeps the expired entries too** (`sweepAtStart`, #88 E6): its failure is a line in the log.
+- **What left the key, and why**: `CACHE_KEY_VERSION` (deleted with `cache/key.ts`: the wire's bytes stand where its
+  request shaping did), the `rules` slot and `RULES_VERSION` (an HTML block's wire is in the key, and a rule that changes
+  what is sent changes the wire), `renderPath` (the wire again), the cuts and `marked-over-cap` (the tags adapter writes its
+  boundary markers into the wire it is keyed by), `normalizedText` (the adapters collapse white space as they write).
+  `TRANSLATE_VERSION` keeps its meaning for the PDF engine's own wire (`src/pdf-reader/engine/translate/`, the website's rows
+  until its stage 3c and the extension's old reader), which no key of the extension reads any more.
 
 ### The configuration
 

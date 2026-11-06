@@ -4,7 +4,7 @@ import type { Progress } from '@/core/pipeline/run'
 import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
 import type { ProviderStatus } from '@/providers/transport'
-import type { TranslateCall, TranslateMessageResponse } from '@/providers/translate-service'
+import type { TranslateCall, TranslateResponse } from '@/providers/transport'
 import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
 import type { DiagnosticSource, DiagnosticsExport } from '@/shared/diagnostics'
@@ -120,8 +120,14 @@ export interface AxtMessages {
    * The answer carries the state stored now: on a failure that is the old one, and the page shows it again
    */
   'axt:set-floating-entry': { request: { patch: Partial<FloatingEntryState> }; response: { saved: boolean; floating: FloatingEntryState } }
-  /** content / options → background: translate a batch of segments (§8.0: the chain, the queues and the requests all live in the background) */
-  'axt:translate': { request: TranslateCall; response: TranslateMessageResponse }
+  /**
+   * content / options / the PDF reader → background: translate units through the background's one chain (§8.0, stage 4b).
+   * The request: `{ units: UnitIn[] (@readarxiv/translate), target: the session's ISO 639-3 code, context?, scope?,
+   * providerId?, candidate? }`; the response `{ ok: true, results, cached }`, one result per unit in the units' order — the
+   * chain's `Result`, an accepted one with the service that answered (`engine`, `kind`), a refused or lost one with the
+   * failure's kind for the page's words (`error`) — or `{ ok: false, error }` for a call that could not run at all
+   */
+  'axt:translate': { request: TranslateCall; response: TranslateResponse }
   /** content → background: withdraw a session's queued and in-flight requests (restore, restart) */
   'axt:cancel-scope': { request: { scope: string }; response: { cancelled: number } }
   /**

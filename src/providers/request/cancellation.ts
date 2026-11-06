@@ -1,27 +1,7 @@
-// Ported from reference/read-frog/src/utils/request/cancellation.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: header only;
-// 2026-09-12 (DESIGN §8.5): CancelledScopeRegistry rewritten — no prefix marks, no expiry (its comment says why); the error class is as ported.
-// The cancellation error is recognised by name (prototype chains do not survive a message boundary);
-// CancelledScopeRegistry remembers cancelled scopes to close the window in which a request sits in no cancellable structure.
-export const TRANSLATION_CANCELLED_ERROR_NAME = "TranslationCancelledError"
-
-/**
- * Rejection used when the user cancels a page-translation session and its
- * queued/in-flight requests are drained (#1881). Detection is name-based so it
- * survives the content↔background messaging boundary: background rejections
- * are re-created on the sender side by zero-serialize-error, which preserves
- * `name` but not the prototype chain.
- */
-export class TranslationCancelledError extends Error {
-  constructor(scope?: string) {
-    super(`Translation request cancelled${scope ? ` (scope: ${scope})` : ""}`)
-    this.name = TRANSLATION_CANCELLED_ERROR_NAME
-  }
-}
-
-export function isTranslationCancelledError(error: unknown): boolean {
-  return error instanceof Error && error.name === TRANSLATION_CANCELLED_ERROR_NAME
-}
-
+// Ported from reference/read-frog/src/utils/request/cancellation.ts@9b44f82 (GPL-3.0), 2026-09-05, modified: 2026-09-12
+// (DESIGN §8.5) CancelledScopeRegistry rewritten — no prefix marks, no expiry (its comment says why); 2026-11-07 (stage 4b)
+// the ported error class removed, nothing calling it. CancelledScopeRegistry remembers cancelled scopes to close the window
+// in which a call sits in no cancellable structure.
 /**
  * The scopes ended for certain (DESIGN §8.5): the session router marks, every service that takes a scope reads, so a
  * call that was suspended on an await (the cache read, a chain build) when its scope was drained is refused when it

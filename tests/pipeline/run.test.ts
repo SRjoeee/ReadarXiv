@@ -1,15 +1,14 @@
-import { MockLanguageModelV4 } from 'ai/test'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { asOut, type UnitIn, type Why } from '@readarxiv/translate'
+import { describe, expect, it, vi } from 'vitest'
 import { extract, type Block } from '@/core/extractor'
 import { startTranslation, type Progress, type Transport } from '@/core/pipeline/run'
 import { T_CLASS } from '@/core/marks'
+import { unitOfWire, wireOfContent } from '@/core/protector/units'
 import { ERROR_CLASS, FOR_ATTR, INLINE_ATTR, ON_ATTR, PARTIAL_ATTR, PENDING_CLASS, STATE_ATTR } from '@/core/renderer/attrs'
 import { TABLE_RULES } from '@/core/rules/latexml'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
-import { createOpenAICompatProvider } from '@/providers/openai-compat'
-import { CancelledScopeRegistry } from '@/providers/request/cancellation'
-import { createTranslateService, type TranslateCall } from '@/providers/translate-service'
-import { RECORD_SHAPES } from '@/shared/diagnostics'
+import type { TranslateCall, UnitResult } from '@/providers/transport'
+import type { ProviderErrorKind } from '@/providers/types'
 import { reasonText } from '@/ui/strings'
 
 const PAGE =
@@ -22,27 +21,29 @@ const PAGE =
 
 const docOf = (page = PAGE) => new DOMParser().parseFromString(`<!doctype html><html><head></head><body><article class="ltx_document">${page}</article></body></html>`, 'text/html')
 
-/** An identity transport: returns as it was; mutate can tamper with some segments */
-function makeTransport(mutate?: (req: TranslateCall, seg: { id: string; text: string }, calls: number) => string | { error: string; isolatable?: boolean; partial?: boolean }) {
+/** a unit as the tags wire it was read from (its edges aside): what a test of the page reads a request by */
+const wireOf = (u: UnitIn) => wireOfContent(asOut(u.content), { unit: u, wireAt: [], lead: '', trail: '', format: 'tags' }).wire
+const segmentsOf = (req: TranslateCall) => req.units.map(u => ({ id: u.id, text: wireOf(u) }))
+/** the chain's result for a unit: a reply's tags wire read back as content, by `engine` */
+const resultOf = (id: string, wire: string, engine = 'mock', kind: 'mt' | 'llm' = 'mt'): UnitResult => ({ id, ok: true, content: asOut(unitOfWire(id, wire, 'tags').unit.content), by: `${engine}:0`, engine, kind })
+const WHY: Partial<Record<ProviderErrorKind, Why>> = { 'invalid-response': { kind: 'refused' }, 'no-key': { kind: 'unconfigured', code: 'no-key' }, auth: { kind: 'unconfigured', code: 'key-refused' }, aborted: { kind: 'aborted' } }
+const failureOf = (id: string, kind: ProviderErrorKind, message: string = kind, status?: number): UnitResult => ({ id, ok: false, why: WHY[kind] ?? { kind: 'unavailable' }, error: { kind, message, ...(status !== undefined ? { status } : {}) } })
+
+/** An identity transport, as the background's chain answers each unit: as it was sent; mutate can give some a reply or a failure */
+function makeTransport(mutate?: (req: TranslateCall, seg: { id: string; text: string }, calls: number) => string | { error: string }) {
   const requests: TranslateCall[] = []
   const transport: Transport = async req => {
     requests.push(req)
-    const segments: { id: string; text: string }[] = []
-    for (const seg of req.request.segments) {
+    const results = segmentsOf(req).map(seg => {
       const out = mutate?.(req, seg, requests.length)
-      // Counted as “caused by one segment” by default: on a batch error translateSegments halves down to single segments,
-      // and the existing cases rely on that path to mark only the block that really failed. Systemic failures have cases passing isolatable: false explicitly
-      if (out && typeof out === 'object') {
-        // partial: the segments another batch of this call had translated already come back with the failure (§8.2)
-        const partial = out.partial ? req.request.segments.filter(s => s.id !== seg.id).map(s => ({ id: s.id, text: s.text })) : undefined
-        return { ok: false, error: { kind: out.error as 'unknown', message: out.error, isolatable: out.isolatable ?? true }, ...(partial && partial.length > 0 ? { partial } : {}) }
-      }
-      segments.push({ id: seg.id, text: typeof out === 'string' ? out : seg.text })
-    }
-    return { ok: true, result: { segments, provider: 'mock', kind: 'mt' }, cached: 1 }
+      if (out && typeof out === 'object') return failureOf(seg.id, out.error as ProviderErrorKind)
+      return resultOf(seg.id, typeof out === 'string' ? out : seg.text)
+    })
+    return { ok: true, results, cached: 1 }
   }
   return { transport, requests }
 }
+const echoing = (req: TranslateCall, engine = 'mock', kind: 'mt' | 'llm' = 'mt') => ({ ok: true as const, results: segmentsOf(req).map(s => resultOf(s.id, s.text, engine, kind)), cached: 0 })
 
 /** Start a session; happy-dom has no IntersectionObserver, so blocks are handed over by translate by hand */
 async function start(doc: Document, blocks: Block[], transport: Transport, extra: Partial<Parameters<typeof startTranslation>[0]> = {}) {
@@ -61,8 +62,7 @@ describe('startTranslation', () => {
     let calls = 0
     const transport: Transport = async req => {
       calls++
-      const provider = calls <= 1 ? 'llm' : 'free'
-      return { ok: true, result: { segments: req.request.segments.map(seg => ({ id: seg.id, text: seg.text })), provider, kind: calls <= 1 ? 'llm' : 'mt' }, cached: 0 }
+      return echoing(req, calls <= 1 ? 'llm' : 'free', calls <= 1 ? 'llm' : 'mt')
     }
     const seen: string[] = []
     const run = await start(doc, blocks, transport, { onProvider: id => seen.push(id) })
@@ -86,7 +86,6 @@ describe('startTranslation', () => {
     expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
     // One text batch per section + one table batch
     expect(requests).toHaveLength(3)
-    expect(requests[0]?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html' })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('math')).not.toBeNull()
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="T1"]`)?.querySelector(TABLE_RULES.cell)?.textContent).toBe('Model')
     expect(doc.documentElement.hasAttribute('data-axt-on')).toBe(true)
@@ -99,8 +98,8 @@ describe('startTranslation', () => {
     const run = await start(doc, blocks, transport)
     await run.translate([byId(blocks, 'p3')])
     expect(requests).toHaveLength(1)
-    expect(requests[0]!.request.segments.map(s => s.id)).toEqual(['p3'])
-    expect(requests[0]!.request.context?.sectionTitle).toBe('Method')
+    expect(segmentsOf(requests[0]!).map(s => s.id)).toEqual(['p3'])
+    expect(requests[0]!.context?.sectionTitle).toBe('Method')
     expect(doc.getElementById('s2')?.getAttribute(STATE_ATTR)).toBe('pending')
     expect(run.progress()).toMatchObject({ requested: 1, done: 1 })
     // The same block handed over again: skipped while in flight, translated again as a retry once done
@@ -115,7 +114,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
+      return echoing(req)
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -130,22 +129,6 @@ describe('startTranslation', () => {
     expect(doc.getElementById('p1')!.nextElementSibling!.classList.contains(PENDING_CLASS)).toBe(false)
     expect(doc.querySelectorAll('.axt-skel')).toHaveLength(0)
     expect(seen.at(-1)).toMatchObject({ inFlight: 0, done: 1 })
-  })
-
-  it('placeholders damaged once: the single block is resent (cache write only, no read) and succeeds', async () => {
-    const doc = docOf()
-    const blocks = extract(doc)
-    let corrupted = false
-    const { transport, requests } = makeTransport((_req, seg) => {
-      if (seg.id === 'p2' && !corrupted) { corrupted = true; return '坏了' }
-      return undefined as unknown as string
-    })
-    const run = await start(doc, blocks, transport)
-    await run.translate(blocks)
-    expect(run.progress()).toMatchObject({ done: 6, failed: 0 })
-    const retry = requests.find(r => r.request.segments.length === 1 && r.request.segments[0]?.id === 'p2')
-    expect(retry?.cache).toEqual({ paper: 'test', renderPath: 'tags', source: 'html', bypass: true })
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.querySelector('math')).not.toBeNull()
   })
 
   it('the page replaced a formula while the request was out: the block fails as `stale`, nothing is inserted, no resend; a retry serialises it afresh and succeeds', async () => {
@@ -171,88 +154,17 @@ describe('startTranslation', () => {
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]:not(.${ERROR_CLASS})`)).toBeNull()
     expect(doc.querySelector(`.${ERROR_CLASS}`)?.getAttribute('data-axt-reason')).toBe('stale: slot 1 <math> is not the node it was')
     // Resending the same wire text would only fail the same way: one request carried p1
-    expect(requests.filter(r => r.request.segments.some(s => s.id === 'p1'))).toHaveLength(1)
+    expect(requests.filter(r => r.units.some(u => u.id === 'p1'))).toHaveLength(1)
     // The Retry path serialises the block afresh: the translation shows what the page shows now
     await run.translate(run.failed())
     expect(run.progress()).toMatchObject({ done: 1, failed: 0 })
     expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
   })
 
-  it('the page changed under a block whose fragment was already in hand while the batch waited on another block\'s retry: checked again at the commit, it fails as stale (Devin on #212)', async () => {
-    const doc = docOf()
-    const blocks = extract(doc)
-    let corrupted = false
-    const { transport } = makeTransport((_req, seg, calls) => {
-      if (seg.id === 'p2' && !corrupted) { corrupted = true; return 'broken' } // p2 goes to a single resend
-      if (seg.id === 'p2' && calls === 2) {
-        // While that resend is out, the page swaps p1's formula — p1's fragment, built on the first reply, holds the old clone
-        const fresh = doc.createElement('math')
-        fresh.className = 'ltx_Math'
-        fresh.innerHTML = '<mi>y</mi>'
-        doc.querySelector('#p1 math')!.replaceWith(fresh)
-      }
-      return undefined as unknown as string
-    })
-    const run = await start(doc, blocks, transport)
-    await run.translate([byId(blocks, 'p1'), byId(blocks, 'p2')])
-    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
-    expect(doc.querySelector(`.${ERROR_CLASS}[${FOR_ATTR}="p1"]`)?.getAttribute('data-axt-reason')).toMatch(/^stale: /)
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]:not(.${ERROR_CLASS})`)).not.toBeNull()
-    expect(run.progress()).toMatchObject({ done: 1, failed: 1 })
-    await run.translate(run.failed())
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('mi')?.textContent).toBe('y')
-  })
-
-  it('placeholders always damaged: the runs fallback; the request no longer carries a validation callback (issue #42: the service derives it from the request text)', async () => {
-    const doc = docOf()
-    const blocks = extract(doc)
-    const { transport, requests } = makeTransport((req, seg) => {
-      if (seg.id === 'p2' && req.cache?.renderPath === 'tags') return '坏了'
-      return undefined as unknown as string
-    })
-    const run = await start(doc, blocks, transport)
-    await run.translate(blocks)
-    expect(run.progress().failed).toBe(0)
-    const runsReq = requests.find(r => r.cache?.renderPath === 'runs')
-    expect(runsReq?.request.segments.map(s => s.id)).toEqual(['p2#r0', 'p2#r1'])
-    const tags = requests.find(r => r.cache?.renderPath === 'tags')!
-    // The request carries only what travels: segments, cache parameters, scope. A validation callback cannot cross the message boundary and is no longer needed
-    expect(Object.keys(tags).sort()).toEqual(['cache', 'request'])
-    const node = doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)
-    expect(node?.querySelector('math')).not.toBeNull()
-    expect(node?.textContent).toContain('Two')
-  })
-
-  it('a batch error: halved down to single segments, only the blocks that really failed are marked, their pending removed', async () => {
-    const doc = docOf()
-    const blocks = extract(doc)
-    let fail = true
-    const { transport } = makeTransport((_req, seg) => (fail && seg.id === 'p1' ? { error: 'unknown' } : undefined as unknown as string))
-    const run = await start(doc, blocks, transport)
-    await run.translate(blocks)
-    expect(run.progress()).toMatchObject({ failed: 1, done: 5, inFlight: 0 })
-    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
-    // Next to a failed block is the widget with the reason (§7.6), not a translation
-    const widget = doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)!
-    expect(widget.classList.contains(ERROR_CLASS)).toBe(true)
-    // Hovering shows the sentence in the interface language; the raw diagnostic is in the attribute (Codex on #161)
-    expect(widget.getAttribute('title')).toBe(reasonText('unknown'))
-    expect(widget.getAttribute('data-axt-reason')).toBe('unknown: message withheld (7 chars)')
-    expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.classList.contains(ERROR_CLASS)).toBe(false)
-    // failed() lists the failed blocks; handing them to translate again is a retry, and on success the widget is replaced by the translation
-    expect(run.failed().map(b => b.id)).toEqual(['p1'])
-    fail = false
-    await run.translate(run.failed())
-    expect(run.progress()).toMatchObject({ failed: 0, done: 6 })
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.classList.contains(ERROR_CLASS)).toBe(false)
-    expect(doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p1"]`)?.querySelector('math')).not.toBeNull()
-  })
-
   it('the reason the page carries is the kind, the status and the length of the message — an endpoint\'s words never reach the page (issue #237)', async () => {
     const doc = docOf()
     const blocks = extract(doc)
-    const transport: Transport = async () => ({ ok: false, error: { kind: 'auth', message: 'Unauthorized: key=sk-live-0123456789 echoed; the Fourier transform of f', isolatable: false, status: 401 } })
+    const transport: Transport = async req => ({ ok: true, results: req.units.map(u => failureOf(u.id, 'auth', 'Unauthorized: key=sk-live-0123456789 echoed; the Fourier transform of f', 401)), cached: 0 })
     const run = await start(doc, blocks, transport)
     await run.translate(blocks.slice(1, 2))
     const reason = doc.querySelector(`.${ERROR_CLASS}`)!.getAttribute('data-axt-reason')!
@@ -261,98 +173,17 @@ describe('startTranslation', () => {
     expect(doc.querySelector(`.${ERROR_CLASS}`)!.getAttribute('title')).toBe(reasonText('auth'))
   })
 
-  it('records the halving of a batch that failed because of one of its segments, and only that', async () => {
+  it('a unit that failed beside units that came back: the others are rendered, only it counts as failed', async () => {
     const doc = docOf()
     const blocks = extract(doc)
-    const lines: string[] = []
-    const { transport } = makeTransport((_req, seg) => (seg.id === 'p2' ? { error: 'unknown' } : undefined as unknown as string))
-    const run = await start(doc, blocks, transport, { scope: 'abcdef12-3456-4789', trace: line => lines.push(line) })
-    await run.translate(blocks)
-    const splits = lines.filter(line => line.startsWith('split '))
-    // The section's three segments, halved once: the two that came through, and p2 alone, which is the one that failed
-    expect(splits).toEqual(['split abcdef12 segments=3 into=2+1'])
-    for (const line of splits) expect(RECORD_SHAPES.some(shape => shape.test(line)), line).toBe(true)
-    // a clean run records no split
-    const clean: string[] = []
-    const cleanDoc = docOf()
-    const cleanBlocks = extract(cleanDoc)
-    const second = await start(cleanDoc, cleanBlocks, makeTransport().transport, { scope: 'abcdef12-3456-4789', trace: line => clean.push(line) })
-    await second.translate(cleanBlocks)
-    expect(clean).toEqual([])
-  })
-
-  it('a lost placeholder does not move the formula to the end of the sentence: each clause keeps its own (the acceptance criterion of research audit F03)', async () => {
-    // Read Frog's fallback **appends lost formulas at the end of the translation** — with two clauses and two formulas in one sentence,
-    // which belongs to which half is gone. Our runs fallback reassembles by position, so the position can be asserted
-    const page = '<p class="ltx_p" id="two">If <math class="ltx_Math"><mi>x</mi></math> is positive then '
-      + '<math class="ltx_Math"><mi>y</mi></math> is negative.</p>'
-    const doc = docOf(page)
-    const blocks = extract(doc)
-    const { transport } = makeTransport((req, seg) => (seg.id === 'two' && req.cache?.renderPath === 'tags' ? '占位符全丢了' : undefined as unknown as string))
+    const { transport } = makeTransport((_req, seg) => (seg.id === 'p1' ? { error: 'timeout' } : undefined as unknown as string))
     const run = await start(doc, blocks, transport)
     await run.translate(blocks)
-    const node = doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="two"]`)!
-    expect(node.querySelectorAll('math')).toHaveLength(2)
-    // The two formulas still sit inside their own halves: x inside "If … is positive", y inside "then … is negative"
-    const parts = Array.from(node.childNodes).map(n => n.nodeType === 1 ? (n as Element).textContent : n.textContent).join('|')
-    expect(parts.indexOf('x')).toBeGreaterThan(parts.indexOf('If'))
-    expect(parts.indexOf('x')).toBeLessThan(parts.indexOf('then'))
-    expect(parts.indexOf('y')).toBeGreaterThan(parts.indexOf('then'))
-    // The known cost (research audit A04 wants it visible): runs are translated run by run and the sentence context is lost,
-    // so what is asserted here is “content and position”, not “translation quality”
-    expect(node.textContent).toContain('If')
-  })
-
-  /** Run the same page once; returns how many segments each request carried */
-  const requestSizes = async (mutate?: Parameters<typeof makeTransport>[0]) => {
-    const doc = docOf()
-    const blocks = extract(doc)
-    const { transport, requests } = makeTransport(mutate)
-    const run = await start(doc, blocks, transport)
-    await run.translate(blocks)
-    return { sizes: requests.map(r => r.request.segments.length), run, doc }
-  }
-
-  it('a systemic failure is no longer halved: one call per batch (the counter-example of research audit B20)', async () => {
-    // Every kind of failure used to be split, and a batch of N segments became 2N-1 calls (measured: 4 segments → `4,2,1,1,2,1,1`) —
-    // the same failure multiplied by the segment count, counter-productive for quota failures above all. The criterion comes from the service side with the error
-    const base = await requestSizes()
-    const systemic = await requestSizes((_req, seg) => (seg.id === 'p1' ? { error: 'bad-request', isolatable: false } : undefined as unknown as string))
-    expect(systemic.sizes).toEqual(base.sizes)
-    // The whole batch counts as failed (no segment of it could succeed), but as retryable failed blocks, not a crash
-    expect(systemic.run.progress().failed).toBeGreaterThan(0)
-    expect(systemic.doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
-  })
-
-  it('a timeout is not split at the content layer: recovery belongs to the queue; the two layers multiplied, measured 8 segments fanning out into 15 calls', async () => {
-    const base = await requestSizes()
-    const timedOut = await requestSizes(() => ({ error: 'timeout', isolatable: false }))
-    expect(timedOut.sizes).toEqual(base.sizes)
-  })
-
-  // Codex on #163: one call is split across several batches, and one batch failing does not mean another did not succeed.
-  // The service sends the successful ones back with the failure, and this layer has to render them — or the reader sees “all failed”
-  // while on retry they come back from the cache in an instant
-  it('the segments that succeeded inside a systemic failure are rendered all the same; only the ones that really failed count as failed', async () => {
-    const systemic = await requestSizes((_req, seg) => (seg.id === 'p1' ? { error: 'timeout', isolatable: false, partial: true } : undefined as unknown as string))
-    // No extra call (a systemic failure is still not split)
-    expect(systemic.sizes).toEqual((await requestSizes()).sizes)
-    // p1 failed, the other segments of the same batch have translations
-    expect(systemic.doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
-    const others = ['p2', 'p3'].map(id => systemic.doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="${id}"]`))
+    expect(doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
+    const others = ['p2', 'p3'].map(id => doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="${id}"]`))
     expect(others.map(el => el !== null && !el.classList.contains(ERROR_CLASS))).toEqual([true, true])
-    expect(systemic.run.progress().failed).toBe(1)
-    expect(systemic.doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
-  })
-
-  it('a failure caused by one segment is still split down to single segments, the good ones rescued as before', async () => {
-    const base = await requestSizes()
-    const isolatable = await requestSizes((_req, seg) => (seg.id === 'p1' ? { error: 'invalid-response' } : undefined as unknown as string))
-    expect(isolatable.sizes.length).toBeGreaterThan(base.sizes.length)
-    expect(isolatable.sizes).toContain(1)
-    expect(isolatable.run.progress()).toMatchObject({ failed: 1 })
-    expect(isolatable.doc.getElementById('p1')?.getAttribute(STATE_ATTR)).toBe('failed')
-    expect(isolatable.doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="p2"]`)?.classList.contains(ERROR_CLASS)).toBe(false)
+    expect(run.progress().failed).toBe(1)
+    expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(0)
   })
 
   it('the Retry button on the widget takes the same retry path', async () => {
@@ -395,7 +226,7 @@ describe('startTranslation', () => {
     const gate = new Promise<void>(resolve => { release = resolve })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
+      return echoing(req)
     }
     const seen: Progress[] = []
     const run = await start(doc, blocks, transport, { onProgress: p => seen.push(p) })
@@ -435,10 +266,10 @@ describe('startTranslation', () => {
     await (await start(doc, blocks, transport, { context: { paperTitle: 'P', abstract: 'A' } })).translate(blocks)
     expect(requests.length).toBeGreaterThan(0)
     for (const r of requests) {
-      expect(r.request.context?.paperTitle).toBe('P')
-      expect(r.request.context?.abstract).toBe('A')
+      expect(r.context?.paperTitle).toBe('P')
+      expect(r.context?.abstract).toBe('A')
     }
-    expect(requests.map(r => r.request.context?.sectionTitle)).toContain('Introduction')
+    expect(requests.map(r => r.context?.sectionTitle)).toContain('Introduction')
   })
 
   it('a table half translated: the cells translated show as usual, the source table stays translated plus a partial mark, counted failed', async () => {
@@ -518,7 +349,7 @@ describe('the gate: a block refused is not asked for, and is offered again when 
     let figures = false
     const run = await start(doc, blocks, transport, { admit: block => block.id !== 'label' || figures })
     await run.translate(blocks)
-    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1'])
+    expect(requests.flatMap(r => r.units.map(u => u.id))).toEqual(['p1'])
     expect(doc.getElementById('label')!.nextElementSibling).toBeNull()
     expect(run.progress()).toMatchObject({ total: 2, requested: 1, done: 1 })
 
@@ -530,7 +361,7 @@ describe('the gate: a block refused is not asked for, and is offered again when 
     figures = true
     run.resume()
     await vi.waitFor(() => expect(run.progress()).toMatchObject({ requested: 2, done: 2 }))
-    expect(requests.flatMap(r => r.request.segments.map(seg => seg.id))).toEqual(['p1', 'label'])
+    expect(requests.flatMap(r => r.units.map(u => u.id))).toEqual(['p1', 'label'])
     expect(doc.getElementById('label')!.nextElementSibling?.classList.contains(T_CLASS)).toBe(true)
 
     // Nothing is held any more: a second resume asks for nothing
@@ -562,7 +393,7 @@ describe('onRendered: hands over the blocks whose DOM just changed, for each bat
     const gate = new Promise<void>(r => { release = r })
     const transport: Transport = async req => {
       await gate
-      return { ok: true, result: { segments: req.request.segments.map(s => ({ id: s.id, text: s.text })), provider: 'mock', kind: 'mt' }, cached: 0 }
+      return echoing(req)
     }
     const seen: Block[][] = []
     const run = await start(doc, blocks, transport, { onRendered: b => seen.push(b) })
@@ -625,66 +456,7 @@ describe('the start of a run reads the layout before it writes to the page', () 
     expect(doc.querySelectorAll(`.${PENDING_CLASS}`)).toHaveLength(1)
     expect(doc.querySelector(`.${PENDING_CLASS}`)?.getAttribute(FOR_ATTR)).toBe('s1')
     expect(requests).toHaveLength(1)
-    expect(requests[0]!.request.segments.map(seg => seg.id)).toEqual(['s1'])
+    expect(requests[0]!.units.map(u => u.id)).toEqual(['s1'])
     vi.unstubAllGlobals()
-  })
-})
-
-// Issue #78: what one 4-segment batch costs when the model's replies cannot be used, counted at the model across the three
-// layers that each retried or split it — the content side here, the service's queues and the provider. Before, a reply in
-// no usable shape cost 40 requests (T(4) = 8 + 2·T(2), T(2) = 16) and so did a reply with the wrong ids every time
-describe('a batch whose replies cannot be used costs a small constant, counted end to end (issue #78)', () => {
-  afterEach(() => { vi.useRealTimers() })
-  const FOUR = ['p1', 'p2', 'p3', 'p4'].map(id => `<p class="ltx_p" id="${id}">Paragraph ${id} of the section.</p>`).join('')
-  const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } }
-  /** the ids the request carried: the protocol sends the segments as a JSON array in the user message */
-  const idsIn = (prompt: unknown) => [...JSON.stringify(prompt).matchAll(/\\"id\\":\\"([^"\\]+)\\"/g)].map(m => m[1]!).filter(id => id !== '<id>')
-  /** an OpenAI-compatible model whose reply is `answer(ids)`; every request counted */
-  async function costOf(answer: (ids: string[]) => string) {
-    vi.useFakeTimers()
-    let requests = 0
-    const model = new MockLanguageModelV4({
-      doGenerate: async ({ prompt }) => {
-        requests++
-        return { content: [{ type: 'text', text: answer(idsIn(prompt)) }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] }
-      },
-    })
-    const provider = createOpenAICompatProvider({ baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k', model: 'm' }, { model })
-    const service = createTranslateService({ getProvider: async () => provider, cancelled: new CancelledScopeRegistry() })
-    const doc = docOf(FOUR)
-    const blocks = extract(doc)
-    const run = await start(doc, blocks, call => service.translate(call), { capabilities: { maxBatchChars: provider.maxBatchChars, maxBatchItems: provider.maxBatchItems, renderPath: 'tags' } })
-    const done = run.translate(blocks)
-    await vi.runAllTimersAsync()
-    await done
-    return { requests, run, doc }
-  }
-  const translated = (ids: string[], skip = '') => JSON.stringify({ segments: ids.filter(id => id !== skip).map(id => ({ id, text: `T ${id}` })) })
-
-  it('every reply in no usable shape (prose for JSON): 2 requests — the batch and its one retry, then no split', async () => {
-    const { requests, run } = await costOf(() => 'I translated your text, here it is: T p1, T p2, T p3, T p4.')
-    expect(requests).toBe(2)
-    expect(run.progress()).toMatchObject({ failed: 4, done: 0 })
-  })
-
-  it('every reply parsed with ids the request never had: 8 — the batch, 3 retries and each segment alone — and the content side splits it no further', async () => {
-    const { requests, run } = await costOf(() => JSON.stringify({ segments: [{ id: 'q1', text: 'x' }] }))
-    expect(requests).toBe(1 + 3 + 4)
-    expect(run.progress()).toMatchObject({ failed: 4, done: 0 })
-  })
-
-  it('one segment that leads the model astray is still isolated: the other three are translated, it alone fails', async () => {
-    // the model drops p2 whenever it is in the batch: the batch fails, its retries too, then each segment goes alone
-    const { requests, run, doc } = await costOf(ids => translated(ids, 'p2'))
-    expect(requests).toBe(1 + 3 + 4)
-    expect(run.progress()).toMatchObject({ failed: 1, done: 3 })
-    expect(doc.getElementById('p2')?.getAttribute(STATE_ATTR)).toBe('failed')
-    expect(['p1', 'p3', 'p4'].map(id => doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="${id}"]`)?.textContent)).toEqual(['T p1', 'T p3', 'T p4'])
-  })
-
-  it('a sound model costs one request for the batch (the control: the counter counts what is sent)', async () => {
-    const { requests, run } = await costOf(ids => translated(ids))
-    expect(requests).toBe(1)
-    expect(run.progress()).toMatchObject({ failed: 0, done: 4 })
   })
 })

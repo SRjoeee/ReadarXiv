@@ -161,9 +161,7 @@ function makeTracker(format: WireFormat, parts: string[], spans: WireSpan[], spa
       // this whitespace when rendering anyway, so the DOM loses no meaning.
       //
       // Safe for placeholders: `<x id="N"/>` and `<t id="N">` hold only single spaces and
-      // `@abc#` holds none, so collapsing cannot touch them. `normalizeText` does the same thing
-      // on the cache-key side, so keys are unchanged and old entries keep hitting —
-      // `CACHE_KEY_VERSION` does not move.
+      // `@abc#` holds none, so collapsing cannot touch them.
       //
       // Skipped blocks (`<pre>`, code) never reach here: the rules module classifies them void
       // and the whole node goes into a slot untouched.

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ACCEPT_DIGEST } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'
 import { Fault, type Note, type Result, type Translator, type UnitIn } from '../src/contract.ts'
+import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
@@ -310,7 +311,12 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     const second = await all(chain.translate([withMath], 'ja', { translators: [rate, e], note: (n) => notes.push(n) }))
     expect(second[0]).toMatchObject({ ok: true, by: 'echo:0' })
     expect(rate.calls.length).toBe(1)
-    expect(notes).toContainEqual({ kind: 'passed', by: 'rate:0', why: { kind: 'unavailable', retryAfterMs: 30_000 } })
+    expect(notes).toContainEqual({
+      kind: 'passed',
+      by: 'rate:0',
+      id: 'm',
+      why: { kind: 'unavailable', retryAfterMs: 30_000 },
+    })
     // a second chain shares nothing (DECISION "Where pacing state lives")
     const fresh = await all(chainOf({ clock }).translate([withMath], 'ja', { translators: [rate, e] }))
     expect(fresh[0]).toMatchObject({ ok: true, by: 'rate:0' })
@@ -442,6 +448,70 @@ describe('the contract: the store', () => {
     expect(keyOf(e, 'ja', 'w', { title: 'A' })).toBe(base)
     expect(keyOf(c, 'ja', 'w', { title: 'A' })).not.toBe(keyOf(c, 'ja', 'w', { title: 'B' }))
     expect(base.startsWith('t1|echo:0|ja|')).toBe(true)
+  })
+  it("a section and a glossary key a context translator's entries, and a context without them keys as before", () => {
+    const c = fakeTranslator({ identity: 'ctx:0', context: true })
+    const was = keyOf(c, 'ja', 'w', { title: 'A' })
+    // (the digest of [title, abstract, terms] as it was before the two fields existed)
+    expect(was.split('|')[4]).toBe(sha256Hex(JSON.stringify(['A', null, null])))
+    expect(keyOf(c, 'ja', 'w', { title: 'A', section: 'Intro' })).not.toBe(was)
+    expect(keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'y' }] })).not.toBe(was)
+    expect(keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'y' }] })).not.toBe(
+      keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'z' }] }),
+    )
+    expect(keyOf(echo(), 'ja', 'w', { title: 'A', section: 'Intro' })).toBe(keyOf(echo(), 'ja', 'w'))
+  })
+})
+
+describe("the contract: a host's note says, per unit, why each translator before the answer gave none", () => {
+  it('a refusal, an unavailable translator, one off and one that does not serve the target are each told with the id', async () => {
+    const clock = fakeClock()
+    const off = fakeTranslator({
+      identity: 'off:0',
+      script: () => ({ fault: new Fault('off', 'no-key', 'no key') }),
+    })
+    const unserved = fakeTranslator({ identity: 'unserved:0', supports: () => false })
+    const notes: Note[] = []
+    const chain = chainOf({ clock })
+    const translators = [off, unserved, mangler('drop-el', 'mangle:0'), echo()]
+    const rs = await all(chain.translate([withMath], 'ja', { translators, note: (n) => notes.push(n) }))
+    expect(rs[0]).toMatchObject({ ok: true, by: 'echo:0' })
+    const passed = notes.filter((n) => n.kind === 'passed')
+    expect(passed).toContainEqual({
+      kind: 'passed',
+      by: 'off:0',
+      id: 'm',
+      why: { kind: 'unconfigured', code: 'no-key' },
+    })
+    expect(passed).toContainEqual({
+      kind: 'passed',
+      by: 'unserved:0',
+      id: 'm',
+      why: { kind: 'unconfigured', code: 'no-language' },
+    })
+    expect(passed).toContainEqual({ kind: 'passed', by: 'mangle:0', id: 'm', why: { kind: 'refused' } })
+    // the next call: the translator off for its object is told as off before anything is asked
+    const later: Note[] = []
+    await all(chain.translate([plain], 'ja', { translators, note: (n) => later.push(n) }))
+    expect(later).toContainEqual({
+      kind: 'passed',
+      by: 'off:0',
+      id: 'p',
+      why: { kind: 'unconfigured', code: 'no-key' },
+    })
+  })
+  it("the runs floor's stretches are told by the unit's id and the stretch's", async () => {
+    const notes: Note[] = []
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate([withMath], 'ja', {
+        translators: [mangler('drop-el', 'mangle:0')],
+        note: (n) => notes.push(n),
+      }),
+    )
+    expect(rs[0]).toMatchObject({ ok: true, by: 'runs:mangle:0' })
+    const ids = notes.flatMap((n) => (n.kind === 'passed' ? [n.id] : []))
+    expect(ids).toContain('m')
+    expect(ids.every((id) => id === 'm' || id.startsWith('m~'))).toBe(true)
   })
 })
 

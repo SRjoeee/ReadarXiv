@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
-import { VOID_DENSE_THRESHOLD, joinRuns, rehydrate, serialize, splitRuns, validate } from '@/core/protector'
+import { VOID_DENSE_THRESHOLD, rehydrate, serialize, validate } from '@/core/protector'
 import { htmlOf, sameModuloWhitespace, stripIds } from './helpers'
 
 const FIXTURE_DIR = join(import.meta.dirname, '../fixtures/arxiv')
@@ -36,8 +36,6 @@ describe('fixture round trip', () => {
         expect(v.ok, `${f} identity validation failed: ${target.id || target.className}`).toBe(true)
         const [got, want] = sameModuloWhitespace(htmlOf(rehydrate(block.text, block, doc)), stripIds(target.innerHTML))
         expect(got, `${f} rehydration not equivalent: ${target.id || target.className}`).toBe(want)
-        const layout = splitRuns(block)
-        joinRuns(layout.runs, layout, block, doc)
       }
       const ms = Math.round(performance.now() - t0)
       // A reading, not an assertion: the time is mostly happy-dom's and the runner's (6.5–8.5 s here, 11.6 s once on a

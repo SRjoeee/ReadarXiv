@@ -272,21 +272,7 @@ describe('the preload, v15 to v20', () => {
 })
 
 describe('provider selection', () => {
-  it('both providers can be stored and read, getProvider returns the matching implementation', async () => {
-    const { getProvider } = await import('@/providers')
-    // A reader's service becomes an engine carrying that service's id and name
-    const llm = getProvider({ ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] })
-    expect(llm.id).toBe(SVC.id)
-    expect(llm.kind).toBe('llm')
-    // A service the reader deleted while it was chosen: the shipped default, not a crash
-    expect(getProvider({ ...DEFAULT_CONFIG, provider: 'svc-gone0000', services: [] }).id).toBe('microsoft')
-
-    const free = getProvider({ ...DEFAULT_CONFIG, provider: 'google-web' })
-    expect(free.id).toBe('google-web')
-    expect(free.kind).toBe('mt')
-    expect(free.wireFormats).toEqual(['tags', 'markers'])
-    expect(await free.isAvailable()).toBe(true)
-
+  it('a provider can be stored and read (the translators it makes: tests/providers/translators.test.ts)', async () => {
     await setConfig({ ...DEFAULT_CONFIG, provider: 'google-web' })
     expect((await getConfig()).provider).toBe('google-web')
   })
@@ -855,35 +841,6 @@ describe('provider selection', () => {
     const at = Array.from({ length: 100 }, () => ({ term: 'a'.repeat(30), translation: '译'.repeat(30) }))
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: at })).resolves.toBeUndefined()
     await expect(setConfig({ ...DEFAULT_CONFIG, glossary: [...at, { term: 'a', translation: '译' }] })).rejects.toThrow()
-  })
-
-  it('the fallback chain: the configured engine first, the free engines behind it; with the switch off only the configured one remains', async () => {
-    const { buildChain } = await import('@/providers')
-    const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
-    // An environment without the built-in translation API (happy-dom, an old Chrome): the built-in engine is filtered out by isAvailable
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    expect((await buildChain({ ...withKey, fallback: { enabled: false } })).chain.map(p => p.id)).toEqual([SVC.id])
-    // A free engine as the first choice does not appear twice
-    expect((await buildChain({ ...withKey, provider: 'google-web' })).chain.map(p => p.id)).toEqual(['google-web'])
-    // A first choice without a key stays at the head of the chain: the popup points to the settings page by it rather than swapping the engine quietly
-    expect((await buildChain({ ...DEFAULT_CONFIG, provider: SVC.id, services: [{ ...SVC, apiKey: '' }] })).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    // The shipped default is the free service that needs no key (UI.md §2)
-    expect((await buildChain(DEFAULT_CONFIG)).chain.map(p => p.id)).toEqual(['microsoft', 'google-web'])
-  })
-
-  it('with the language pack ready the built-in engine comes before google-web; not ready, it is skipped', async () => {
-    const { buildChain } = await import('@/providers')
-    const withKey = { ...DEFAULT_CONFIG, provider: SVC.id, services: [SVC] }
-    const stub = (availability: string) => ({ availability: async () => availability, create: async () => ({ translate: async () => '' }) })
-
-    vi.stubGlobal('Translator', stub('available'))
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'chrome-builtin', 'google-web'])
-    // The built-in as the first choice does not appear again in the fallback
-    expect((await buildChain({ ...withKey, provider: 'chrome-builtin' })).chain.map(p => p.id)).toEqual(['chrome-builtin', 'google-web'])
-
-    vi.stubGlobal('Translator', stub('downloadable'))
-    expect((await buildChain(withKey)).chain.map(p => p.id)).toEqual([SVC.id, 'google-web'])
-    vi.unstubAllGlobals()
   })
 
   it('a preload that is neither of the two choices is refused by the schema', async () => {
