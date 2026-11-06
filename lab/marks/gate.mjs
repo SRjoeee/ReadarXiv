@@ -71,7 +71,8 @@ if (!source.has(`${stem}.bbl`) && existsSync(bblPath)) tree.set(`${stem}.bbl`, n
 const doc = readSource({ main, files: tree }, readDefinitions(readFileSync(join(arg('defs'), `${id}.axtdefs`), 'utf8')))
 const { tree: marked, plan } = markSource({ main, files: tree }, doc, { compiler: out.compiler, answers: answersOf(A) })
 const overrides = new Map(plan.files.map(p => [p, marked.files.get(p)]))
-for (const [p, b] of tree) if (!source.has(p)) overrides.set(p, b)
+// (a file the source does not hold, today's made .bbl, as the tree has it where markSource wrote nothing in it)
+for (const [p, b] of tree) if (!source.has(p) && !overrides.has(p)) overrides.set(p, b)
 const compileMine = compiler(id, image, source, arg('compiles'), statsMine)
 const date = Number.isSafeInteger(day) ? { sourceDate: day } : {}
 const engine = paper.meta.compiler
