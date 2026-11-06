@@ -55,6 +55,7 @@ export {
   spacedText,
   type UnitLabel,
 } from './unit/label.ts'
+export { droppedHeld, dropMarks, type MarksAfter, type MarksTrace, markKind, mergeTail } from './unit/marks.ts'
 export {
   jointOf,
   type Lead,
@@ -96,10 +97,8 @@ export { drawnText, plainTracker, shown, transformMap } from './breaker/text.ts'
 export {
   caseRuns,
   cropPartsOf,
-  droppedHeld,
   type Face,
   glueOf,
-  markKind,
   type Reading,
   renameRuns,
   type Token,

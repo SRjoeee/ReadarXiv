@@ -183,10 +183,15 @@ const SPECS: readonly RuleSpec[] = [
     home: 'unit',
     step: 'L5',
     owns: ['T16', 'T17'],
-    ports: ['L2:2666-2680', 'L2:2379 droppedHeld', 'L2:2773-2778', 'L2:2845-2878'],
+    ports: ['L2:2666-2680', 'L2:2379 droppedHeld', 'L2:2363 markKind', 'L2:2773-2778', 'L2:2845-2878'],
     how: 'ported',
     reads: ['breaking.noStart'],
-    state: open,
+    file: 'unit/marks.ts',
+    state: {
+      is: 'ported',
+      replay: "every sampled round of tokensOf2 (U.marks' and B.tokens' samples) against the ledger's U.marks slot",
+      cases: 50,
+    },
   },
   {
     id: 'U.breaks',

@@ -12,7 +12,7 @@
 // - `U.elements`: for the same rounds, each placeholder's reading whatever the row (readingsOf): what today's resolution sets
 //   it to in each case the row decides, by today's own renderings and drawnAs, unbracketed, displayLines, leadMark (L1: El).
 // - `U.admit`: for every sampled verdict, each row piece's class as locatedWhole reads it (phClassProven: L1's El.kind).
-// - `B.tokens`: for every sampled round, the faces today's faceOf gave (B.faces' answers), each face's own small capitals,
+// - `B.tokens`: for every sampled round of tokensOf2 (B.tokens' sample and U.marks'), the faces today's faceOf gave (B.faces' answers), each face's own small capitals,
 //   each rendering's runs of one fill and its faked small capitals (El.style per run), whether the source writes CJK spaced.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -165,13 +165,15 @@ const CJK_SPACED = new RegExp(`${SCRIPT.SPACELESS.source}\\s+${SCRIPT.SPACELESS.
 const tokens = { format: 'readarxiv-L3/derived 1', rule: 'B.tokens', note: 'per sampled round (pair|ord|round): faces (faceOf\'s answers by fam|design|bold|italic|caps|cls: B.faces), ownCaps (font-roles ownSmallCaps by face id), fills and smallCaps by resolution (fillRunsOf, smallCapsAt: El.style per run), spaced (the source writes CJK with spaces between)', cases: {} }
 let tokOk = 0, tokAll = 0
 const metricsOf = new Map(), ledgerOf = new Map()
-for (const e of read(join(TAP, 'samples', 'B.tokens.json.gz')).entries) {
+// (every sampled round that captures tokensOf2's call: B.tokens' sample and U.marks', whose decisions are made inside it)
+const tokenEntries = ['B.tokens', 'U.marks'].flatMap(rule => read(join(TAP, 'samples', `${rule}.json.gz`)).entries)
+for (const e of tokenEntries) {
   const L = ledgerOf.get(e.pair) ?? ledgerOf.set(e.pair, read(join(TAP, 'ledgers', `${e.pair}.ledger.json.gz`))).get(e.pair)
   const widths = metricsOf.get(e.pair) ?? metricsOf.set(e.pair, new Map(read(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)).widths.map(([f, t, w]) => [`${f}|${t}`, w]))).get(e.pair)
   const byRound = new Map()
   for (const c of e.captures) (byRound.get(c.round) ?? byRound.set(c.round, {}).get(c.round))[c.rule] = c.value
   for (const [round, c] of byRound) {
-    if (!c['B.tokens:in'] || !c['B.tokens:out'] || !c['U.elements:in']) continue
+    if (!c['B.tokens:in'] || !c['B.tokens:out'] || !c['U.elements:in'] || tokens.cases[`${e.pair}|${e.ord}|${round}`]) continue
     tokAll++
     const paper = L.info.paper
     FONTS.setRoleFaces(paper.to, paper.family, paper.cjkFaces)

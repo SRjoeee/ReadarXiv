@@ -6,33 +6,14 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { measure } from '../../src/breaker/measure.ts'
-import { type Face, type TokensInput, tokens, type TStyle } from '../../src/breaker/tokens.ts'
+import { type TStyle, tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
-import type { LayoutUnit } from '../../src/unit/breaks.ts'
-import { derived, firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } from './tap.ts'
-
-type Facts = {
-  faces: [string, Face][]
-  ownCaps: Record<string, boolean>
-  fills: Record<string, { text: string; fill: number }[] | null>
-  smallCaps: Record<string, boolean[] | null>
-  spaced: boolean
-}
-type In = {
-  unit: TokensInput['unit']
-  prep: TokensInput['resolved']
-  to: string
-  base: TStyle
-  designs: TokensInput['designs']
-  P: TokensInput['P']
-  lead: TokensInput['lead']
-}
-const faceKey = (st: TStyle, cls: string) => `${st.fam}|${st.design}|${!!st.bold}|${!!st.italic}|${!!st.caps}|${cls}`
+import { firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } from './tap.ts'
+import { type In, type Reading, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('B.tokens: replayed on the tap', () => {
   it('makes and measures today’s tokens on every sampled round', () => {
-    const facts = derived<{ cases: Record<string, Facts> }>('B.tokens').cases
-    const classes = derived<{ cases: Record<string, { cls2: (string | null)[] }> }>('U.breaks').cases
+    const { facts, classes } = tokenFacts()
     const metrics = new Map<string, ReturnType<typeof tableMetrics>>()
     const differ: string[] = []
     let rounds = 0,
@@ -42,7 +23,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
       for (const [round, c] of roundsOf(e)) {
         const a = c['B.tokens:in'] as In | undefined,
           want = c['B.tokens:out'] as (Record<string, unknown>[] & { base?: TStyle }) | undefined,
-          e0 = c['U.elements:in'] as { lu: LayoutUnit & { colours?: Map<number, number> }; kOf: number[] } | undefined
+          e0 = c['U.elements:in'] as Reading | undefined
         if (!a || !want || !e0) continue
         const key = `${e.pair}|${e.ord}|${round}`
         const f = facts[key],
@@ -54,33 +35,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
         rounds++
         if (!metrics.has(e.pair))
           metrics.set(e.pair, tableMetrics(readGz(join(TAP, 'metrics', `${e.pair}.metrics.json.gz`)) as MeasureTable))
-        const faces = new Map(f.faces)
-        const { lu, kOf } = e0
-        const got = tokens({
-          unit: a.unit,
-          resolved: a.prep,
-          colourOf: (k) => (kOf[k]! >= 0 ? (lu.colours?.get(kOf[k]!) ?? null) : null),
-          fillOf: (k) =>
-            kOf[k]! >= 0 ? ((lu.ph.get(kOf[k]!) as { fill?: number | null } | undefined)?.fill ?? null) : null,
-          fills: new Map(Object.entries(f.fills).map(([k, v]) => [Number(k), v])),
-          smallCaps: new Map(Object.entries(f.smallCaps).map(([k, v]) => [Number(k), v])),
-          cls2: cls.cls2,
-          spacedSource: f.spaced,
-          to: a.to,
-          base: a.base,
-          designs: a.designs,
-          P: a.P,
-          lead: a.lead,
-          faces: {
-            of: (st, c) => {
-              const face = faces.get(faceKey(st, c))
-              if (!face) throw new Error(`no face of today's for ${faceKey(st, c)}`)
-              return face
-            },
-            ownSmallCaps: (id) => !!f.ownCaps[id],
-          },
-          tagWords: true,
-        })
+        const got = tokens(tokensInput(a, e0, f, cls.cls2))
         const measured = measure(got.tokens, metrics.get(e.pair)!)
         count += measured.length
         for (const t of measured)

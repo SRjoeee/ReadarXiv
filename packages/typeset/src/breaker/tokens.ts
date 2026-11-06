@@ -2,10 +2,10 @@
 // the style stack over the row's groups and switches, script chunks, glue, the line-break marks, UAX 14's kept pairs,
 // CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small capitals, TeX's explicit glue
 // as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the marks dropped after a display or
-// a held line's mark (U.marks' decisions, T16), the class's tail marks (T17), the spaces a spaceless script does not set, and
+// a held line's mark and the class's tail marks (U.marks' decisions, T16, T17: unit/marks.ts, called where today decides them,
+// its trace in the answer), the spaces a spaceless script does not set, and
 // each token's place in the unit's plain text (the word table's). Ported from engine 065c1d973 layer2.mjs: tokensOf2
-// L2:2524-2890, baseOf L2:2253-2297, STYLE_CMDS and applyCmd L2:2106-2122, glueOf L2:2394-2416, markKind L2:2363-2372,
-// droppedHeld L2:2379-2391, spacelessEdge L2:2417-2430, selfCaps / plainOf / upperOf / caseRuns L2:2448-2483, renameRuns
+// L2:2524-2890, baseOf L2:2253-2297, STYLE_CMDS and applyCmd L2:2106-2122, glueOf L2:2394-2416, spacelessEdge L2:2417-2430, selfCaps / plainOf / upperOf / caseRuns L2:2448-2483, renameRuns
 // L2:1309-1320, cropPartsOf L2:1875-1878, LINK_OPEN L2:2245, hexOf L2:4569.
 //
 // What it reads, and the field each comes from once the part states it (until then the tap's recorded values):
@@ -20,6 +20,7 @@
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
 import { cjkClassRe, kinsokuOf, keptPair, noStart, PUNCT_CLOSE, PUNCT_OPEN, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
+import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
 
 /** a run's style as the tokens carry it: today's style object (family, weight, slant, small capitals, design, colour, link…) */
@@ -148,8 +149,8 @@ export type TokensInput = {
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean
 }
-/** the tokens, with the unit's base style (today's `tokens.base`) */
-export type Tokens = { tokens: Token[]; base: TStyle }
+/** the tokens, with the unit's base style (today's `tokens.base`) and U.marks' decisions taken while they were made */
+export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 
 export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
@@ -286,35 +287,6 @@ export function glueOf(src: string): { em?: number; bp?: number; brk: boolean } 
   if (!d || !(Number(d[1]) > 0)) return null
   const brk = m[1] !== 'kern'
   return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]!]!, brk }
-}
-
-/** the kind a mark no line may start with is, across scripts (L2:2363 markKind) */
-export function markKind(ch: string): string {
-  if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
-  if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
-  if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
-  if (/^[:\uFF1A]$/u.test(ch)) return 'colon'
-  if (/^[!\uFF01]$/u.test(ch)) return 'excl'
-  if (/^[?\uFF1F]$/u.test(ch)) return 'quest'
-  if (/^[)\]}\uFF09\uFF3D\uFF5D\u3009\u300B\u300D\u300F\u3011\u3015\u3017\u3019\u301B’”]$/u.test(ch)) return 'close'
-  return ch
-}
-/** the text after a placeholder kept on its held line, without the leading marks that stand for one the line shows after it
- *  (L2:2379 droppedHeld; U.marks' T16) */
-export function droppedHeld(s: string, held: readonly string[]): string {
-  const left = held.map(markKind)
-  let t = s,
-    kept = ''
-  while (left.length) {
-    const lead = /^\s*/.exec(t)![0],
-      ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
-    if (lead.length >= t.length || !noStart(ch)) break
-    const at = left.indexOf(markKind(ch))
-    if (at >= 0) left.splice(at, 1)
-    else kept += lead + ch
-    t = t.slice(lead.length + ch.length)
-  }
-  return kept + t
 }
 
 const SPACELESS_QUOTES = /[“”‘’—…·]/u
@@ -581,17 +553,8 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   // (U.marks, T16: a mark no line starts with that the translation sets after a display, or after a held line's own mark)
-  let after: { origAfter?: string | null; held?: string[] } | null = null
-  const dropped = (s: string) => {
-    if (after!.held) return droppedHeld(s, after!.held)
-    let t = s
-    for (;;) {
-      const lead = /^\s*/.exec(t)![0],
-        ch = String.fromCodePoint(t.codePointAt(lead.length) ?? 0x20)
-      if (lead.length >= t.length || !noStart(ch) || noStart(after!.origAfter)) return t
-      t = t.slice(lead.length + ch.length)
-    }
-  }
+  let after: MarksAfter | null = null
+  const marks: MarksTrace = { drops: [], tail: null }
   let headId: unknown = null
   for (const [k, p] of unit.pieces.entries()) {
     if (p.t === 'text') {
@@ -620,7 +583,7 @@ export function tokens(i: TokensInput): Tokens {
       const sh = plain ? shown(p as TextPiece) : null,
         at = plain?.text(sh!)
       if (after && /\S/.test(s)) {
-        s = dropped(s)
+        s = dropMarks(s, after, marks)
         after = null
       }
       const text = s
@@ -761,43 +724,7 @@ export function tokens(i: TokensInput): Tokens {
   })
   // (U.marks, T17: the class's own marks after the unit's text, in place of the translation's of their kinds at its end)
   if (resolved.tail?.length) {
-    const left = new Map<string, number>()
-    for (const c of resolved.tail) left.set(markKind(c.ch), (left.get(markKind(c.ch)) ?? 0) + 1)
-    const trailing = new Map<string, number>(),
-      own = new Map<string, number>()
-    for (const ch of resolved.tailOwn ?? []) own.set(markKind(ch), (own.get(markKind(ch)) ?? 0) + 1)
-    scan: for (let q = tokens.length - 1; q >= 0; q--) {
-      const t = tokens[q]!
-      if (t.space) continue
-      if (typeof t.s !== 'string' || t.ph || t.sup || t.label) break
-      const cps = [...t.s]
-      for (let x = cps.length - 1; x >= 0; x--) {
-        if (!/^\p{P}$/u.test(cps[x]!)) break scan
-        trailing.set(markKind(cps[x]!), (trailing.get(markKind(cps[x]!)) ?? 0) + 1)
-      }
-    }
-    for (const [kind, n] of left)
-      left.set(kind, Math.min(n, Math.max(0, (trailing.get(kind) ?? 0) - (own.get(kind) ?? 0))))
-    const take = (ch: string) => {
-      const n = left.get(markKind(ch)) ?? 0
-      if (n > 0) left.set(markKind(ch), n - 1)
-      return n > 0
-    }
-    for (;;) {
-      while (tokens.at(-1)?.space) tokens.pop()
-      const t = tokens.at(-1)
-      if (!t || typeof t.s !== 'string' || t.ph || t.sup || t.label) break
-      const cps = [...t.s]
-      let n = cps.length
-      while (n > 0 && take(cps[n - 1]!)) n--
-      if (n === cps.length) break
-      if (n === 0) {
-        tokens.pop()
-        continue
-      }
-      t.s = cps.slice(0, n).join('')
-      break
-    }
+    marks.tail = [resolved.tail.length, mergeTail(tokens, resolved.tail, resolved.tailOwn ?? null)]
     for (const c of resolved.tail) {
       const cs =
         c.st && c.st.fam !== 'math'
@@ -831,5 +758,5 @@ export function tokens(i: TokensInput): Tokens {
       for (const t of kept) tokens.push(t)
     }
   }
-  return { tokens, base }
+  return { tokens, base, marks }
 }
