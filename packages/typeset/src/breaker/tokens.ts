@@ -438,7 +438,9 @@ export function tokens(i: TokensInput): Tokens {
         prev.cls &&
         t.cls !== prev.cls &&
         /[A-Za-z0-9]/.test((t.cls === 'latin' ? t.s![0] : ((prev.s ?? '').at(-1) ?? '')) as string) &&
-        !/^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B“”‘’]$/.test(cjkSide as string)
+        !/^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF08\uFF09\u300C\u300D\u300E\u300F\u3010\u3011\u3014\u3015\u3008\u3009\u300A\u300B“”‘’]$/.test(
+          cjkSide as string,
+        )
       )
         t.asp = true
     }

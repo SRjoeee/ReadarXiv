@@ -35,7 +35,8 @@ const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
 const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)] as const
 /** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too (L2:2104) */
 export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
-export const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
+export const PUNCT_CLOSE =
+  /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 export const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
 
 /** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 (no-start.mjs NO_START) */
