@@ -22,10 +22,10 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import { type Instrument, ROLE } from '../instrument.ts'
-import { styleOf } from './facts.ts'
+import { styleOf, unitSize } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { type CutLine, cutLines, r2 } from './lines.ts'
+import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 
 /** where a located unit stands on A against B */
@@ -542,7 +542,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     )
     mem.lines = all.map(
       ({ l, kept: k }) =>
-        [l.page, 0, r2(l.x0), r2(l.x1), l.base, r2(l.top), r2(l.bottom), r2(l.x0), r2(l.x1), k ? 1 : 0] as Line,
+        [
+          l.page,
+          0,
+          r2(l.x0),
+          r2(l.x1),
+          l.base,
+          r2(l.top),
+          r2(l.bottom),
+          r2(l.x0),
+          r2(l.x1),
+          k ? 1 : 0,
+          lineSize(l.gs.map(gA)),
+        ] as Line,
     )
     mem.lineGlyphs = all.map(({ l }) => l.gs)
     // (a run set turned: its band's box on the page, from its first glyph's origin to its last one's end, its descent to its
@@ -579,10 +591,15 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.pages = [...new Set(mem.lines.filter((l) => !(l[9] & 1)).map((l) => l[0]))]
     // style: TeX's font state is not stated by today's instrument: read off its own glyphs on A as today's reader reads it
     // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage 1b states it)
+    // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
+    // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
+    const read = unitSize(txt)
     const size =
+      read ??
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
+    if (read === undefined && mem.lines.length) mem.read.push('size:lines')
     mem.style = { ...styleOf(mem.text.map(gA), size), size }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
@@ -854,8 +871,8 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
- *  keeps to the left half (0), the right (1), or spans (2); a column's measure is the hull of the lines of its justified
- *  paragraphs of two lines or more, a line with no such column set within its own extent */
+ *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
+ *  \hangindent measures: stage 1b) */
 function columnsAndMeasures(members: Member[], inkA: Doc): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
@@ -867,25 +884,44 @@ function columnsAndMeasures(members: Member[], inkA: Doc): void {
     const two = left >= 3 && right >= 3
     for (const l of lines) l[1] = !two ? 0 : l[3] <= mid + 2 ? 0 : l[2] >= mid - 2 ? 1 : 2
   }
-  const measure = new Map<string, [number, number]>()
-  for (const mem of members) {
-    if (mem.align !== 'j' || mem.lines.filter((l) => !(l[9] & 1)).length < 2) continue
-    for (const l of mem.lines) {
-      if (l[9] & 1) continue
-      const k = `${l[0]}|${l[1]}`
-      const m = measure.get(k)
-      if (!m) measure.set(k, [l[2], l[3]])
-      else measure.set(k, [Math.min(m[0], l[2]), Math.max(m[1], l[3])])
-    }
-  }
+  // (each line's measure, today's column of it (run.mjs columnOf RUN:1557-1569, which U.decor widens a line of its own to): the
+  // page's paragraphs' lines over its middle, three at least, else those of the nearest page before it that has three, else
+  // the page's text area (its members' lines' hull); from their leftmost start to their furthest end, but a line TeX set
+  // overfull: an end past the furthest end two lines share (within 0.2 pt) by less than the line's size is no edge)
+  const paras = new Map<number, Line[]>()
+  const area = new Map<number, [number, number]>()
+  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none)
   for (const mem of members)
     for (const l of mem.lines) {
-      const mm = measure.get(`${l[0]}|${l[1]}`)
-      if (mm) {
-        l[7] = r2(Math.min(mm[0], l[2]))
-        l[8] = r2(Math.max(mm[1], l[3]))
-      }
+      if (l[9] & 1) continue
+      const a = area.get(l[0])
+      area.set(l[0], a ? [Math.min(a[0], l[2]), Math.max(a[1], l[3])] : [l[2], l[3]])
+      if (mem.kind === 'para' && mem.located) (paras.get(l[0]) ?? paras.set(l[0], []).get(l[0])!).push(l)
     }
+  const columnOf = (l: Line): [number, number] => {
+    const mid = (l[2] + l[3]) / 2
+    const over = (q: number) => (paras.get(q) ?? []).filter((c) => c[2] <= mid && c[3] >= mid)
+    let own = over(l[0])
+    for (let q = l[0] - 1; own.length < 3 && q >= 1; q--) {
+      const o = over(q)
+      if (o.length >= 3) own = o
+    }
+    if (own.length < 3) return area.get(l[0]) ?? [l[2], l[3]]
+    const ends = own.map((c) => c[3]).sort((x, y) => y - x)
+    let right = ends[0] as number
+    for (let i = 0; i + 1 < ends.length; i++)
+      if ((ends[i] as number) - (ends[i + 1] as number) <= 0.2) {
+        if ((ends[0] as number) - (ends[i] as number) < (l[10] ?? 10)) right = ends[i] as number
+        break
+      }
+    return [Math.min(...own.map((c) => c[2])), right]
+  }
+  const measures = new Map<Line, [number, number]>()
+  for (const mem of members) for (const l of mem.lines) measures.set(l, columnOf(l))
+  for (const [l, [m0, m1]] of measures) {
+    l[7] = r2(m0)
+    l[8] = r2(m1)
+  }
 }
 
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's

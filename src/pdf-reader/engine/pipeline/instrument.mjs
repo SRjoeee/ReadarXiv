@@ -203,7 +203,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     if (el < 0) return
     for (const [p, g] of u.glyphs?.ph ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] === u.id && G.role[g] === ROLE.element && G.piece[g] < 0) G.piece[g] = el }
   })
-  const lineskip = readSkipProbe(log)
+  // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
+  // what today's file states); the marked compile's log where the options have none)
+  const lineskip = options.lineskip ?? readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins

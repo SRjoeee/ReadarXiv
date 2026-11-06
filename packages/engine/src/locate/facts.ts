@@ -102,6 +102,21 @@ export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10): Style {
   }
 }
 
+/**
+ * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796, its characters'
+ * sizes by pageChars2 L2:188): the median (the upper one of an even count) of its own text glyphs' sizes along the line, the
+ * size PDF.js's text content gives their items (an expanded font's wider than its size up the line), its math fonts' glyphs
+ * aside; undefined where it has none (today then reads the size off its lines' bands). Faked small capitals, which today
+ * leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b: TeX's font state)
+ */
+export function unitSize(gs: readonly DocGlyph[]): number | undefined {
+  const sizes = gs
+    .filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
+    .map((g) => g.along ?? g.size)
+    .sort((a, b) => a - b)
+  return sizes.length ? r2(sizes[sizes.length >> 1] as number) : undefined
+}
+
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
  *  not black; undefined else */
 export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {

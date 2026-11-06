@@ -8,7 +8,8 @@
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { adapt } from '../../src/lay/adapt.ts'
 import { layPagePrepared } from '../../src/lay/page.ts'
-import type { RuleParams } from '../../src/types.ts'
+import { fitMeasure } from '../../src/breaker/measure.ts'
+import type { Metrics, RuleParams } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
@@ -36,6 +37,33 @@ export type GateL1 = {
 }
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
+/** AXT_GATE_DEEP=<pair>:<ord>: every field of that member's preparation that differs from today's, printed */
+const DEEP = process.env.AXT_GATE_DEEP
+/** every difference between two values beyond 0.005, by path (functions and the tokens aside), at most 40 */
+export function differences(a: unknown, b: unknown, path = '', out: string[] = []): string[] {
+  if (out.length >= 40 || path.endsWith('.tokens') || path.endsWith('.measure') || path.endsWith('.patterns'))
+    return out
+  if (typeof a === 'function' || typeof b === 'function') return out
+  if (typeof a === 'number' && typeof b === 'number') {
+    if (!(Math.abs(a - b) <= 0.005 || a === b)) out.push(`${path}: ${a} against ${b}`)
+    return out
+  }
+  if (a instanceof Map && b instanceof Map) return differences(Object.fromEntries(a), Object.fromEntries(b), path, out)
+  if (a instanceof Set && b instanceof Set) return differences([...a], [...b], path, out)
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) out.push(`${path}.length: ${a.length} against ${b.length}`)
+    for (let i = 0; i < Math.min(a.length, b.length); i++) differences(a[i], b[i], `${path}[${i}]`, out)
+    return out
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)]))
+      differences((a as Raw)[k], (b as Raw)[k], `${path}.${k}`, out)
+    return out
+  }
+  if (a !== b && !(a == null && b == null))
+    out.push(`${path}: ${JSON.stringify(a)?.slice(0, 80)} against ${JSON.stringify(b)?.slice(0, 80)}`)
+  return out
+}
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 const r2 = (v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
 
@@ -73,12 +101,24 @@ export function settingDiff(mine: FlowMember, today: FlowMember): string {
       )
     )
       return 'U.blocks: line boxes (top, bottom)'
+  // (each line's extent, x0 and x1: its glyphs' advances on A against the file's line today)
+  for (let k = 0; k < mine.blocks.length; k++)
+    if (
+      mine.blocks[k]!.rects.some(
+        (r, j) =>
+          Math.abs(r[1] - today.blocks[k]!.rects[j]![1]) > 0.005 ||
+          Math.abs(r[3] - today.blocks[k]!.rects[j]![3]) > 0.005,
+      )
+    )
+      return `U.blocks: line ends (x0, x1)${DETAIL ? ` ${JSON.stringify(mine.blocks[k]!.rects.map((r, j) => [r[1], r[3], today.blocks[k]!.rects[j]![1], today.blocks[k]!.rects[j]![3]]).filter((x) => Math.abs(x[1]! - x[3]!) > 0.005 || Math.abs(x[0]! - x[2]!) > 0.005))}` : ''}`
   if (JSON.stringify(mine.tokens.length) !== JSON.stringify(today.tokens.length)) return 'B.tokens: count'
   return 'equal'
 }
 
-/** a pair laid page by page from L1's parts, the reading and tokens today's */
-export function gateL1Pair(pair: string): GateL1 {
+/** a pair laid page by page from L1's parts, the reading and tokens today's; `metricsOf` the Metrics its lays measure with
+ *  (default: the tap's table of today's measures, which throws MissingMeasure for a measure today never made) */
+export function gateL1Pair(pair: string, o: { metricsOf?: (pair: string) => Metrics } = {}): GateL1 {
+  const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
   const out: GateL1 = {
     units: [],
     stops: new Map(),
@@ -157,7 +197,7 @@ export function gateL1Pair(pair: string): GateL1 {
       after: x.after,
       afterOpen: !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,
       R,
-      measure: (c.P as Raw).measure as never,
+      measure: (measure ?? (c.P as Raw).measure) as never,
       patterns: (c.P as Raw).patterns as never,
       view: (pg) => views.get(pg),
       rulesOf: (pg) => today?.rules(pg),
@@ -189,7 +229,9 @@ export function gateL1Pair(pair: string): GateL1 {
     if (mem.rowStart)
       mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
     adapted.set(ord, mem)
-    out.setting.set(u.ord, settingDiff(mem, prepare(c)))
+    const td = prepare(c)
+    out.setting.set(u.ord, settingDiff(mem, td))
+    if (DEEP === `${pair}:${u.ord}`) console.log(JSON.stringify(differences(mem, td), null, 1))
   }
   pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
   const dumped = new Map<

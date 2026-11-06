@@ -70,26 +70,28 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
   }
-  const isDisplayGlyph = new Uint8Array(m.offA[inkA.pages.length] as number)
-  for (const mem of members)
-    for (const [id, el] of mem.elements)
-      if (el.kind === 'display') for (const a of mem.els.get(id) ?? []) isDisplayGlyph[a] = 1
-  // (ink that stays whatever the translation: owned by no located member, a kept block's, a display's)
-  const stays = (a: number) => {
-    const o = claimedA[a] as number
-    return o < 0 || !!members[o]?.fixed || !!isDisplayGlyph[a]
-  }
-  const staysByPage = new Map<number, { x0: number; x1: number; y: number }[]>()
-  const staysOn = (p: number) => {
-    let l = staysByPage.get(p)
-    if (l) return l
-    l = []
-    const o = m.offA[p - 1] as number
-    inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-      if (/\S/.test(g.u) && stays(o + j)) l!.push({ x0: g.x0, x1: g.x1, y: g.y })
-    })
-    staysByPage.set(p, l)
-    return l
+  // (a page's glyphs by baseline, the blank aside, each with its global index; those whose baseline is within [lo, hi])
+  const inkByPage = new Map<number, { x0: number; x1: number; y: number; a: number }[]>()
+  const bandOn = (p: number, lo: number, hi: number) => {
+    let l = inkByPage.get(p)
+    if (!l) {
+      const o = m.offA[p - 1] as number
+      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) =>
+        /\S/.test(g.u) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : [],
+      )
+      l.sort((x, y) => x.y - y.y)
+      inkByPage.set(p, l)
+    }
+    let a = 0
+    let b = l.length
+    while (a < b) {
+      const mid = (a + b) >> 1
+      if ((l[mid] as { y: number }).y < lo) a = mid + 1
+      else b = mid
+    }
+    const out: typeof l = []
+    for (let i = a; i < l.length && (l[i] as { y: number }).y <= hi; i++) out.push(l[i]!)
+    return out
   }
   // (a page's painted boxes: rules and images, the page-sized backgrounds aside)
   const boxesOn = (p: number) => {
@@ -297,7 +299,30 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
     }
 
     // -- its lines' flags: PINNED (shares its baseline with ink that stays), SHORTSKIP (a display under it with TeX's short skip)
-    for (const [l, j] of own) if (pinnedOf(l, sizeOf(j), staysOn(l[0]), blockOf(l))) l[9] |= 2
+    // (PINNED as today's edgesOf reads a line alone, RUN:1638-1650: any glyph of the page on its baseline's band within its
+    // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
+    // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
+    const label = new Set(mem.label)
+    const spanOf = (q: number): [number, number] => {
+      const l = own[q]![0]
+      let a = q
+      let z = q
+      const same = (x: Line, y: Line) => x[0] === y[0] && x[1] === y[1]
+      while (a > 0 && same(own[a - 1]![0], own[a]![0]) && own[a - 1]![0][4] > own[a]![0][4]) a--
+      while (z + 1 < own.length && same(own[z + 1]![0], own[z]![0]) && own[z + 1]![0][4] < own[z]![0][4]) z++
+      let x0 = l[2]
+      let x1 = l[3]
+      for (let k = a; k <= z; k++) {
+        x0 = Math.min(x0, own[k]![0][2])
+        x1 = Math.max(x1, own[k]![0][3])
+      }
+      return [x0, x1]
+    }
+    own.forEach(([l, j], q) => {
+      const size = l[10] ?? sizeOf(j)
+      const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !label.has(g.a))
+      if (pinnedOf(l, size, ink, spanOf(q))) l[9] |= 2
+    })
     const displays = mem.elements.filter(([, el]) => el.kind === 'display').flatMap(([, el]) => el.ink)
     const short = shortSkipLines(mem.lines, displays, sizeOf)
     for (const j of short) (mem.lines[j] as Line)[9] |= 4

@@ -57,8 +57,21 @@ export type AdaptInput = {
 }
 export type Adapted = { member: FlowMember } | { stop: string }
 
-/** a Line as today's rectangle: page, x0, bottom, x1, top */
-const rectOf = (l: Line): Rect => [l[0], l[2], l[6], l[3], l[5]]
+/** today's rectangle of a line (tex.mjs texRects, TEX:269-286): across its ink, and up and down a band of its size from its
+ *  baseline, BELOW under it and ABOVE over it, to a hundredth (the line's top and bottom, its fonts' boxes, are its `exact`
+ *  facts, which the \lineskip rule reads) */
+const BELOW = 0.215,
+  ABOVE = 0.683
+const r2 = (v: number) => Math.round(v * 100) / 100
+/** a line's size: the median of its main glyphs' sizes as the prepare states it (Line's 11th field), else the member's */
+const sizeOf = (l: Line, m: Placed): number => (l[10] as number | undefined) ?? m.style.size
+const rectOf = (l: Line, m: Placed): Rect => [
+  l[0],
+  r2(l[2]),
+  r2(l[4] - BELOW * sizeOf(l, m)),
+  r2(l[3]),
+  r2(l[4] + ABOVE * sizeOf(l, m)),
+]
 /** the label as U.decor reads it: its parts' ink as its characters */
 function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNullable<DecorLabel['chars']> }) | null {
   const lb = m.label
@@ -88,7 +101,7 @@ export function adapt(i: AdaptInput): Adapted {
   if (!m.lines.length) return { stop: 'no lines' }
   if (m.els?.some(([, e]) => e.ends || e.opens !== undefined)) return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
-  const rects = lines.map(rectOf)
+  const rects = lines.map((l) => rectOf(l, m))
   // (each line's frame: its run of lines on one page and column)
   const frames: number[] = []
   lines.forEach((l, j) => {
@@ -99,7 +112,7 @@ export function adapt(i: AdaptInput): Adapted {
   lines.forEach((l, j) => {
     const info: LineInfo = {
       baseline: l[4],
-      size: m.style.size,
+      size: sizeOf(l, m),
       top: l[5],
       bottom: l[6],
       exact: true,
@@ -153,9 +166,13 @@ export function adapt(i: AdaptInput): Adapted {
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]
+  // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
+  // lines' bands over 0.894 (RUN:2088))
+  const fromText = !(m.read ?? []).includes('size:lines')
+  const heights = rects.map((r) => r[4] - r[2]).sort((a, b) => a - b)
   const s =
-    unitSizeOf({ orig: { size: m.style.size, st: { caps: !!m.style.sc } } }, R) ??
-    rects.reduce((a, r) => a + r[4] - r[2], 0) / rects.length / 0.894
+    (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps: !!m.style.sc } } }, R) : undefined) ??
+    (heights[heights.length >> 1] as number) / 0.894
   // (the row kept after it: the next member's join says ink stays between the two on their shared line)
   const last = lines.at(-1)!
   const after = i.after

@@ -11,13 +11,23 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
 import { gateL1Pair } from '../../packages/typeset/tests/replay/gate-l1.ts'
-import { LAB, TAP } from '../../packages/typeset/tests/replay/tap.ts'
+import { LAB, readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
+import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
+import { layered, servedMetrics } from './served-metrics.mjs'
 
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
 const named = args.filter(a => !a.startsWith('--'))
+// (AXT_GATE_LIST=<class prefix>: each member whose setting's first difference starts so, printed with its pair and ord)
+const LIST = process.env.AXT_GATE_LIST
 const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
 mkdirSync(join(OUT, 'reader'), { recursive: true })
+// (--metrics=table: the tap's table alone, a measure it lacks throws MissingMeasure; default: the table, then the served
+// measurer (served-metrics.mjs: the reader's faces, Skia's canvas) for a measure today never made; --metrics=served: the
+// measurer alone)
+const METRICS = args.find(a => a.startsWith('--metrics='))?.slice(10) ?? 'layered'
+const served = METRICS === 'table' ? null : servedMetrics()
+const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
@@ -40,14 +50,17 @@ const add = (m, k, n = 1) => m.set(k, (m.get(k) ?? 0) + n)
 for (const pair of pairs) {
   count.pairs++
   let g
-  try { g = gateL1Pair(pair) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, METRICS === 'table' ? {} : { metricsOf }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
   count.twoPages += g.twoPages
   count.twoPagesDiffer += g.selfDiffer.length
   for (const [k, n] of g.stops) add(stops, k, n)
-  for (const v of g.setting.values()) add(setting, v)
+  for (const [o, v] of g.setting) {
+    add(setting, v.replace(/ \[.*$| [-\d.,]+$/, ''))
+    if (LIST && v.startsWith(LIST)) console.log(`LIST ${pair} ord ${o} ${v}`)
+  }
   for (const t of g.threw) threw.push(`${pair} ${t}`)
   for (const why of g.thrown.values()) add(stops, `its flow's lay threw: ${why}`)
   for (const x of g.selfDiffer.slice(0, 2)) selfDiffer.push(`${pair} ${x}`)
@@ -56,7 +69,7 @@ for (const pair of pairs) {
   const mine = new Map(g.units.map(u => [u.ord, u]))
   for (const u of base.units) {
     const m = mine.get(u.ord)
-    const cls = g.setting.get(u.ord) ?? 'not adapted'
+    const cls = (g.setting.get(u.ord) ?? 'not adapted').replace(/ \[.*$| [-\d.,]+$/, '')
     const pick = x => ({ size: x.size, leading: x.leading, lines: x.lines, elements: x.elements ?? [] })
     const d = m ? nearDifference(pick(m), pick(u), '') : 'not laid'
     // (how far a changed unit moved: its lines' count, else the largest difference of a line's ends, baseline or the size)

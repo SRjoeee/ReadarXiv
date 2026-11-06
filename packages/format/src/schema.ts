@@ -107,8 +107,10 @@ export const Style = z.object({
 })
 
 /** a line on A: page, column, x0, x1 (its ink), baseline, top, bottom (its fonts' boxes), m0, m1 (TeX's measure for it),
- *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored) */
-export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int])
+ *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored), and
+ *  its size (the median of its main glyphs' sizes, the glyphs within 0.85 of its largest where they set a quarter of its
+ *  characters: today's line size, MAKE:382-401, by which the typesetter draws the line's band; absent: the member's size) */
+export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int, num.optional()])
 export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
 
 export const El = z.object({
