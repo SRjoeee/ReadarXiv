@@ -33,6 +33,7 @@ export const COST = remove_js.COST as Readonly<
 export const HELD_MAX = remove_js.HELD_MAX as number
 export const BYTES_MAX = remove_js.BYTES_MAX as number
 /** the PDF object layer's exports the remover reads (@cantoo/pdf-lib) */
+// biome-ignore lint/suspicious/noExplicitAny: today's declaration of the object layer's exports, as callers read it
 export type PdfLib = Record<string, any>
 /** the operators a page's walk may visit, its forms' as often as they are painted; past it the page is refused */
 export const WALK_MAX = remove_js.WALK_MAX as number

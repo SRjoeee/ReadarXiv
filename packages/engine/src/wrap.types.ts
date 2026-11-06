@@ -19,13 +19,17 @@ export interface WrapPlan {
   shows: Map<number, (string | null | undefined)[]>
   paths: Map<number, string>
   images?: Map<number, string>
+  /** the plan's naming where it is not today's: which groups are figure texts' (their runs in a form are wrapped in the form)
+   *  and the text group an element's or a label's folds into on a page past its bounds */
+  isFigure?: (group: string) => boolean
+  textOf?: (group: string) => string
 }
 export const planOf = wrap_js.planOf as (
   glyphs: { n?: number; k?: number }[],
   groupOfGlyph: (string | null)[],
   paths: ArrayLike<number>,
   groupOfBox: (string | null)[],
-  facts?: { images?: number } | null,
+  facts?: { codes?: unknown; paths?: unknown; images?: number } | null,
 ) => Omit<WrapPlan, 'facts'> & { images: Map<number, string>; lost: Set<string> }
 export type WrapRefusal = { refused: WrapWhy; why: string }
 export type WrapPage = {

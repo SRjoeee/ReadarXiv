@@ -287,7 +287,10 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
   const decode = (st, limit = Infinity) => {
     if (decoded.has(st)) { const out = decoded.get(st); if (out.length > limit) throw new DecodeLimit(limit); return out }
     let out
-    if (st instanceof PDFRawStream) {
+    // (a stream of no bytes is no bytes, whatever its filters, as PDF.js reads it: arXiv's rewrite (pikepdf) writes an empty
+    // form's stream with /FlateDecode, which the object layer's inflater and zlib refuse; spike S1c, 2610.21924v1 p10)
+    if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
+    else if (st instanceof PDFRawStream) {
       try { out = readAtMost(decodePDFRawStream(st), limit) } catch (e) {
         if (e instanceof DecodeLimit) throw e
         // a stream the object layer's inflater refuses (a damaged zlib header, a stream cut short) that PDF.js reads:

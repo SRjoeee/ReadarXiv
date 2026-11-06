@@ -35,7 +35,7 @@
 // alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
 // (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
 import { isMemoryError } from './memory.mjs'
-import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
+import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
 import { appendSection } from './section.mjs'
 import { startxrefOf } from './tail.mjs'
@@ -287,14 +287,19 @@ function lexWithin(bytes, budget) {
   try { const ops = lex(bytes, WRAP_HELD_PAGE - budget.held); budget.held += ops.bytes; return ops } catch (e) { if (e instanceof LexLimit) return null; throw e }
 }
 
-/** a figure's group (layout/figure-text.mjs figureGroup): `f<k>` */
+/** a figure's group (layout/figure-text.mjs figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
+ *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). Today's naming: a plan that names its groups otherwise states
+ *  both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
 const isFigure = g => typeof g === 'string' && g.startsWith('f')
+const isFigureToday = isFigure
+const textOf = g => g.replace(/\.[pl]$/, '')
 /** whether a page's plan holds a figure's group, and which (wrapOf's ladder) */
 const planHasFigures = plan => figureGroupsOf(plan).size > 0
 function figureGroupsOf(plan) {
   if (plan.figureGroups) return plan.figureGroups
   const out = new Set()
-  for (const row of plan.shows.values()) for (const g of row) if (isFigure(g)) out.add(g)
+  const fig = plan.isFigure ?? isFigure
+  for (const row of plan.shows.values()) for (const g of row) if (fig(g)) out.add(g)
   plan.figureGroups = out
   return out
 }
@@ -314,7 +319,8 @@ function wrapPage(R, p, plan, { merge, figures = true, rewritten = new Map() }) 
   if (!al.ok) return { ok: false, why: al.why.slice(0, 3).join('; ') }
   const figureWhy = new Map()
   const drop = new Set()
-  const fold = g => (g === null || g === undefined ? g : drop.has(g) || (!figures && isFigure(g)) ? null : !merge ? g : g.replace(/\.[pl]$/, ''))
+  const isFigure = plan.isFigure ?? isFigureToday, textOfPlan = plan.textOf ?? textOf
+  const fold = g => (g === null || g === undefined ? g : drop.has(g) || (!figures && isFigure(g)) ? null : !merge ? g : textOfPlan(g))
   const walk = al.walk, pc = walk.pc
   const showN = new Map(al.shows.map((e, n) => [e, n])), paintM = new Map((al.paints ?? []).map((e, m) => [e, m])), imageJ = new Map((al.images ?? []).map((e, j) => [e, j]))
   if (!al.paints && plan.paths.size) return { ok: false, why: 'its painted paths do not align' }
@@ -558,7 +564,10 @@ function flatOf(mine, groups) {
       flat.push(o)
       continue
     }
-    if (open && (o.op === 'q' || o.op === 'Q' || o.op === 'BT' || o.op === 'ET' || o.op === 'BI')) return { why: `a group of ours over ${o.op}` }
+    // (an inline image, BI … EI, is one whole operator that changes no state: it may lie inside a group of ours, as wrapPage
+    // wraps it, an image event, as it wraps a Do. The dvips + Ghostscript chain paints every TeX rule as one, an image mask:
+    // spike S1d, 2 papers of the corpus, every proof held with it)
+    if (open && (o.op === 'q' || o.op === 'Q' || o.op === 'BT' || o.op === 'ET')) return { why: `a group of ours over ${o.op}` }
     flat.push(o)
   }
   if (open) return { why: 'a group left open' }
