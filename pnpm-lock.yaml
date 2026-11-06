@@ -14,6 +14,9 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 2.11.1
         version: 2.11.1(html-entities@2.6.0)
+      '@readarxiv/engine':
+        specifier: workspace:*
+        version: link:packages/engine
       ai:
         specifier: ^7.0.91
         version: 7.0.91(zod@4.5.4)

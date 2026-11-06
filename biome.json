@@ -22,7 +22,11 @@
 			"javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded", "trailingCommas": "all" } }
 		},
 		{
-			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs"],
+			"includes": ["packages/engine/src/**/*.mjs"],
+			"formatter": { "enabled": false }
+		},
+		{
+			"includes": ["lab/**", "src/pdf-reader/engine/**", "src/pdf-reader/session/**", "src/pdf-reader/addresses.mjs", "packages/engine/src/**/*.mjs"],
 			"linter": {
 				"rules": {
 					"complexity": { "noCommaOperator": "off" },

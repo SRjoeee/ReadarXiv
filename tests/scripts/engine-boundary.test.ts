@@ -22,7 +22,6 @@ import {
   statesPort,
   unreached,
   valueImportsOf,
-  // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 } from '../../scripts/check-boundary.mjs'
 
 type Violation = { file: string; spec: string; why: string }
@@ -200,7 +199,7 @@ describe('the engine\'s packages', () => {
     expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/wrap.mjs`)).toEqual(['@cantoo/pdf-lib'])
   })
   it('keeps the layout rules\' validator: zod in rules/ alone, as the rules-as-data plan allowed', () => {
-    expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }])
+    expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }, { name: '@readarxiv/engine', under: `${E}/` }])
     expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/rules/layout.mjs`)).toEqual([])
     expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/layer-proto/run.mjs`)).toEqual(['zod/mini'])
   })

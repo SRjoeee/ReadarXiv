@@ -22,7 +22,7 @@ export { LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, LayoutRef
 export { COORD_MAX, PAGES_MAX, PIECES_MAX, STRING_MAX, boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, isVersionToken, told, utf8Strict } from './layout/json.mjs'
 export { DISPLAY, FOLLOWERS, GLYPHS_PIECE, INK_BUDGET, INK_TEXT_MAX, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, MARKS_CAP, MARKS_DEPTH, MARKS_SCHEMA, MARKS_VALUES, MARK_CLASSES, MARK_NAME, OWNED_ALL, POINTS_TEX, PROBE_MAX, PROBE_SCHEMA, RULE, RULES_PIECE, TEXT_SYMBOLS, asSet, askedCommands, classOf, commandOf, encodeLayoutMarks, headEnd, inkSamples, inkSection, layoutMarking, layoutMarksOf, markProbeTex, marksFile, parseLayoutMarks, probeRow, probeSamples, probeTex, punctuationSection, readInkProbe, readInkTexts, readMarked, readMarkProbe, readProbe, switchedOf, symbolText } from './layout/marks.mjs'
 export { DEFAULT_RULES, WHOLE_RULES, fontName, makeLayout } from './layout/make.mjs'
-export { GLYPHS_PAGE, OPS_CAP } from './layout/ink.mjs'
+export { GLYPHS_PAGE, OPS_CAP } from '@readarxiv/engine'
 export { readArxivText } from './layout/arxiv.mjs'
 export { handoverOf, layoutMarksOfPaper, markedOfPaper } from './layout/paper.mjs'
 export type { FinalPass, OwnVerdict } from './layout/paper.mjs'

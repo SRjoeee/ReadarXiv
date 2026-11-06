@@ -9,7 +9,6 @@
 import { relative, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { ENGINE_ALLOW, ENGINE_PACKAGES } from '../../scripts/check-boundary.mjs'
 
 const ROOT = resolve(__dirname, '../..')

@@ -4,12 +4,11 @@
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error — a plain node module of the lab
 import { engineKindOf } from '../../lab/pdf/spikes/layer-gate/kind.mjs'
 
 const ROOT = resolve(__dirname, '../..')
 const gone = () => false
-const there = (path: string) => path.endsWith('src/pdf-reader/engine/layer/layer.mjs')
+const there = (path: unknown) => String(path).endsWith('src/pdf-reader/engine/layer/layer.mjs')
 
 describe('engineKindOf', () => {
   it('is proto when none is given, and proto when proto is', () => {

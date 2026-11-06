@@ -12,6 +12,9 @@ on:
     # (and the wrap's: the base page wrapped by optional content, whose ownership spells each unit against its source text through
     # layout/own.mjs's translate/mt.mjs, and with it the protector's and the front end's files below)
     paths:
+      - 'packages/engine/src/**'
+      - 'packages/format/src/**'
+      - 'lab/pdf/packages-route.mjs'
       - 'src/pdf-reader/engine/rules/**'
       - 'src/pdf-reader/engine/layer-proto/**'
       - 'src/pdf-reader/engine/layer/check.mjs'
@@ -24,7 +27,6 @@ on:
       - 'src/pdf-reader/engine/layout/file.mjs'
       - 'src/pdf-reader/engine/layout/fills.mjs'
       - 'src/pdf-reader/engine/layout/ink-units.mjs'
-      - 'src/pdf-reader/engine/layout/ink.mjs'
       - 'src/pdf-reader/engine/layout/label-form.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'
       - 'src/pdf-reader/engine/layout/ledger.mjs'

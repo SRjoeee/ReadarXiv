@@ -35,7 +35,7 @@
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { figureUnitsOf, FIGURE_WHYS } from './figure-text.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from '@readarxiv/engine'
 import { claimInk, inkOff, inkUnitsOf, keptUnitsOf } from './ink-units.mjs'
 import { inkLeft, ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'

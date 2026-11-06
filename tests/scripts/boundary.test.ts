@@ -2,7 +2,6 @@
 // only, and the adversarial review of 2026-09-13 walked past it with a relative path; every bypass it named is a case
 // here, so the next rewrite cannot lose one.
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { platformImportsOf, resolveSpecifier, valueImportsOf, withoutComments } from '../../scripts/check-boundary.mjs'
 
 const FROM = 'src/core/renderer/failed.ts'

@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-// @ts-expect-error — a plain node script the build config imports, deliberately dependency-free and untyped
 import { BUNDLED_DATA, noticesText, packageDirOf } from '../../scripts/third-party-notices.mjs'
 
 // The notices that ship in every build (docs/THIRD_PARTY.md, "npm packages"): which package a module belongs to, and

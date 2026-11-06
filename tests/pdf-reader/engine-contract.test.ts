@@ -8,7 +8,6 @@ import { spawnSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { closureOf, ENGINE_ALLOW, engineFiles, engineViolations, namedModulesOf, portedInClosure, trackedFiles, unreached, withoutComments } from '../../scripts/check-boundary.mjs'
 
 const ENGINE = 'src/pdf-reader/engine'

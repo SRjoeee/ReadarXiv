@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
 import { figureUnitsOf } from '@/pdf-reader/engine/layout/figure-text.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own

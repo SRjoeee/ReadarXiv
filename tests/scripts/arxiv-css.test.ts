@@ -2,9 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { get } from 'node:http'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-// @ts-expect-error — plain node scripts the e2e suites and the refresh command share, deliberately untyped
 import { serveOffline } from '../e2e/lib/offline-arxiv.mjs'
-// @ts-expect-error — as above
 import { VENDORED, importsOf, stylesheetLinks } from '../../scripts/refresh-arxiv-css.mjs'
 
 // The style sheets vendored for the offline accessibility audit (tests/e2e/fixtures/arxiv-css/README.md, issue #100).

@@ -193,6 +193,7 @@ import { gzipSync } from 'node:zlib'
 import { availableParallelism, homedir } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
+import { packageFile, ZOD_PATH } from '../packages-route.mjs'
 import { engineKindOf } from './layer-gate/kind.mjs'
 import { encodePng } from './layer-gate/png.mjs'
 import { geometryFile, nameOf, PROTO_GEOMETRY, refBytesOf, refPages, sha256, shownPath, withNames } from './layer-gate/ref.mjs'
@@ -456,7 +457,7 @@ function fileFor(path) {
   if (path === NO_START_PATH) return NO_START_FILE
   if (path === BREAK_ROOM_PATH) return BREAK_ROOM_FILE
   if (path === '/rules/layout-rules.json') return RULES_FILE
-  if (path.startsWith('/zod/')) return /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice(5)) : null
+  if (path.startsWith('/zod/')) return ZOD_PATH.test(path) ? under(ZOD, path.slice(5)) : null
   if (path.startsWith('/engine/')) return /\.(m?js|json)$/.test(path) ? under(join(ENGINE, 'src/pdf-reader/engine'), path.slice(8)) : null
   if (path.startsWith('/pdfjs/')) return /^\/pdfjs\/(build|cmaps|standard_fonts|wasm|iccs)\//.test(path) ? under(PDFJS, path.slice(7)) : null
   if (path.startsWith('/fonts/')) return /^\/fonts\/[A-Za-z0-9._-]+\.(otf|ttf)$/.test(path) ? under(FONTS, path.slice(7)) : null
@@ -516,6 +517,12 @@ const server = createServer((req, res) => {
   try { path = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname) } catch { res.writeHead(400); return res.end() }
   // (--door: the engine's own `../../../core/…` imports, read from /engine/translate/mt.mjs, clamp at the root and name /core, the repository's src/core)
   if (DOOR !== null && path.startsWith('/core/')) path = `/src${path}`
+  // (the workspace packages the engine under test imports, TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) {
+    const f = packageFile(ENGINE, path)
+    res.writeHead(f ? 200 : 404, { 'content-type': f ? f.type : 'text/plain', 'cache-control': 'no-store' })
+    return res.end(f ? f.body : 'not found')
+  }
   const hy = /^\/hyph\/([a-z]+)\.json$/.exec(path)
   if (PROTO && hy) {
     if (!HYPH.has(hy[1])) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('not found') }
@@ -909,7 +916,7 @@ async function drawsOf(name) {
   if (!DRAWS.has(pdf)) {
     DRAWS.set(pdf, (async () => {
       const script = join(GATE, 'draws.mjs')
-      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
+      const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).map(f => (existsSync(f) ? f : join(ENGINE, 'packages/engine/src', f.split('/').pop()))).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
       if (!existsSync(file)) {

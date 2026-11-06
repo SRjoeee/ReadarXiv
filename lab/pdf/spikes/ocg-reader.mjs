@@ -52,7 +52,7 @@ if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   writeFileSync(headPath, JSON.stringify({ stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, own: r.own, ms: Math.round(performance.now() - t0) }))
   // (each page's glyphs as ownership read them, with their group, in device px at the page's k (2.5), y down: what a hidden pixel
   // outside the layout file's rectangles belongs to)
-  const { pageInk } = await import(join(REPO, 'src/pdf-reader/engine/layout/ink.mjs'))
+  const { pageInk } = await import(join(REPO, 'packages/engine/src/ink.mjs'))
   const task = getDocument({ data: baseBytes.slice(), verbosity: 0, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true })
   const doc = await task.promise, glyphs = []
   for (let p = 1; p <= doc.numPages; p++) {
