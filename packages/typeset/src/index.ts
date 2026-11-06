@@ -28,7 +28,7 @@ export type {
   Script,
   Step,
   Trace,
-  Why,
+  Unlaid,
 } from './types.ts'
 export { type Block, type BlocksInput, blocks, type LineInfo } from './unit/blocks.ts'
 export { type Break, type Breaks, type BreaksInput, breaks, type LayoutUnit, type V0Piece } from './unit/breaks.ts'

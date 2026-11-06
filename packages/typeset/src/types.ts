@@ -1,7 +1,7 @@
 // The typesetter's entry and its result, as decided (interfaces/page/DECISION.md: the objects and the entry are design A's,
 // design-a.md §1.2; the inside and the ledger are design B's, design-b.md §1.5 to §1.7). Types only: the composition
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
-import type { Box, Id, Ink, Link, Part, Placed, Row } from '@readarxiv/format'
+import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
 export type Lang = string
@@ -109,19 +109,18 @@ export type FaceTable = Readonly<{
 }>
 
 /** a shared decision handed to one member by layPage (design-a §1.2) */
-export type Given = { lead?: number; track?: number; size?: number; leave?: Why }
+export type Given = { lead?: number; track?: number; size?: number; leave?: Unlaid }
 
-/** why a member stays the original's: the prepare's, the rows', the typesetter's (design-a §1.2) */
-export type Why =
-  | 'unlocated'
-  | 'unwrapped'
-  | 'page'
+/**
+ * Why a member stays the original's (design-a §1.2's typesetter `Why`, named `Unlaid` here: `packages/format`'s `Why` is a
+ * row's failure, what the translate chain yields): the prepare's reasons (format's PrepWhy), the rows' reason kinds
+ * (format's Why['kind']), no row (`none`), the reader's leave (`left`), and the typesetter's own
+ */
+export type Unlaid =
+  | PrepWhy
+  | RowWhy['kind']
   | 'none'
   | 'left'
-  | 'refused'
-  | 'unavailable'
-  | 'unconfigured'
-  | 'aborted'
   | 'waiting'
   | 'unfit'
   | 'face'
@@ -145,7 +144,7 @@ export type Item =
 export type Laid = {
   ord: number
   page: number
-  state: 'laid' | Why
+  state: 'laid' | Unlaid
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
   fit?: { size: number; lead: number; track: number; borrowed: number }
