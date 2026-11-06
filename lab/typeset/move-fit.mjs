@@ -108,7 +108,7 @@ const FILES = {
     head: ['// B.place (design-b §1.5, G1): each line\'s items placed (justified within the caps, ragged, centred, flush), and a fit\'s',
       '// breaking made a layout (laidOut). Today\'s code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by',
       '// lab/typeset/move-fit.mjs; typed by place.types.ts.'],
-    imports: ["import { latinishOf, lineExtent, squeezable } from './break.mjs'", "import { inFlow, slotsAt } from './slots.mjs'", "import { toLastLines } from '../fit/last-lines.mjs'"],
+    imports: ["import { latinishOf, lineExtent, squeezable } from './break.mjs'", "import { inFlow, slotsAt } from './slots.mjs'", "import { toLastLines } from '../fit/last-lines.ts'"],
     names: ['placeItems', 'laidOut'],
     exports: ['laidOut'],
     changes: [
@@ -125,34 +125,6 @@ const FILES = {
     names: ['statesOf', 'sameState', 'sharedStates', 'layoutUnit2'],
     exports: ['statesOf'],
     changes: [['    work.fit++\n', '', 1]],
-  },
-  'fit/cut.mjs': {
-    rule: 'X.cut',
-    head: ['// X.cut (design-b §1.5): a unit laid over its frame breaks, kept where it fits at its plain layout\'s state. Today\'s',
-      '// code (layer2.mjs L2:3944-3962), moved by lab/typeset/move-fit.mjs; typed by cut.types.ts.'],
-    imports: ["import { pageCutsOf, withPageBreaks } from '../breaker/cuts.mjs'", "import { layoutAt } from './at.mjs'", "import { layoutUnit2 } from './walk.mjs'"],
-    names: ['layoutCut'],
-    exports: [],
-    changes: [],
-  },
-  'fit/at.mjs': {
-    rule: 'X.at',
-    head: ['// X.at (design-b §1.5): a unit laid at one state of the fit, with no search (the page fill\'s). Today\'s code',
-      '// (layer2.mjs L2:4259-4267), moved by lab/typeset/move-fit.mjs; typed by at.types.ts.'],
-    imports: ["import { breakLines } from '../breaker/break.mjs'", "import { laidOut } from '../breaker/place.mjs'", "import { slotsAt } from '../breaker/slots.mjs'"],
-    names: ['layoutAt'],
-    exports: [],
-    changes: [['  work.fit++\n', '', 1]],
-  },
-  'fit/last-lines.mjs': {
-    rule: 'X.lastLines',
-    head: ['// X.lastLines (design-b §1.5, T25; the ruling of 2026-10-19: a heading on the original\'s last baseline): a heading set in',
-      '// fewer lines than the original\'s stands on its last ones. Today\'s code (layer2.mjs L2:4268-4314), moved by',
-      '// lab/typeset/move-fit.mjs; typed by last-lines.types.ts.'],
-    imports: ["import { originalLines } from '../unit/decor.ts'"],
-    names: ['toLastLines'],
-    exports: ['toLastLines'],
-    changes: [],
   },
   'fit/runs.mjs': {
     rule: 'X.runs',
@@ -172,7 +144,7 @@ const FILES = {
       '// (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs; typed by',
       '// fill-leads.types.ts. The layout found, which the page\'s fill reuses (today\'s fillLaid, a module WeakMap), is a field of',
       '// the unit, `fillLaid` (design-b §1.5: FillLeads.laid).'],
-    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.mjs'", "import { keepsPages } from '../fit/runs.mjs'"],
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.mjs'"],
     names: ['fillLeadsOf', 'closerLead', 'guessCloser'],
     exports: ['fillLeadsOf', 'closerLead', 'guessCloser'],
     changes: [
@@ -192,8 +164,8 @@ const FILES = {
       '// S.fill.target\'s port, its settling S.settle\'s, the layout S.fill.leads found the unit\'s field `fillLaid` (today\'s module',
       '// WeakMap), the shared row\'s ink ends measured by the unit\'s own measure (`p.P.measure`); an optional `trace` is told what the',
       '// tap read inside it, at its probes\' places (baseline/tap/engine.diff): each unit\'s decision, the page\'s size, each unit filled.'],
-    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.mjs'", "import { keepsPages } from '../fit/runs.mjs'",
-      "import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'", "import { BODY_KINDS, fillTarget } from './fill-target.ts'", "import { keepsShare } from './share.mjs'",
+    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.mjs'",
+      "import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'", "import { BODY_KINDS, fillTarget } from './fill-target.ts'", "import { keepsShare } from './share.ts'",
       "import { settleLayout } from './settle.ts'", '', '/** a unit as S.fill.target reads it */', 'const voterOf = p => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines })'],
     names: ['fillUnitsOf', 'fillPage'],
     exports: [],
@@ -215,28 +187,16 @@ const FILES = {
       ['    onFilled(p, target)\n', '    trace?.filled(p, st, l, target)\n    onFilled(p, target)\n', 1],
     ],
   },
-  'shared/share.mjs': {
-    rule: 'S.share',
-    head: ['// S.share (design-b §1.5, E29): the shared row as a unit\'s layout leaves it (where its text and its ink end there), and',
-      '// whether a layout keeps it (keepsShare, read by S.fill.page). Today\'s code (layer2.mjs L2:4321-4424), moved by',
-      '// lab/typeset/move-fit.mjs; typed by share.types.ts. Its ink measures are the call\'s (`m`).'],
-    imports: [],
-    names: ['onShare', 'inkEndOf', 'shareOf', 'keepsShare'],
-    exports: [],
-    changes: [
-      ['function inkEndOf(line, L) {', 'function inkEndOf(line, L, m) {', 1],
-      ['const r = inkRight100(t.s, t.face)', 'const r = m.inkRight100(t.s, t.face)', 1],
-      ['(ink100(t.s, t.face).a * k * f)', '(m.ink100(t.s, t.face).a * k * f)', 1],
-      ['export function shareOf(layout, blocks, row) {', 'export function shareOf(layout, blocks, row, m) {', 1],
-      ['inkEndOf(l, layout)', 'inkEndOf(l, layout, m)', 2],
-      ['inkEndOf(last, layout)', 'inkEndOf(last, layout, m)', 2],
-      ['export function keepsShare(share, layout) {', 'export function keepsShare(share, layout, m) {', 1],
-    ],
-  },
 }
 
+// (the declarations moved first and since ported to TypeScript, each still today's: held by the same replays)
+const PORTED = {
+  'fit/at.ts': ['layoutAt'], 'fit/cut.ts': ['layoutCut'], 'fit/last-lines.ts': ['toLastLines'],
+  'shared/share.ts': ['onShare', 'inkEndOf', 'shareOf', 'keepsShare'],
+}
 let differ = 0
 const moved = new Set()
+for (const names of Object.values(PORTED)) for (const n of names) { text(n); moved.add(n) }
 for (const [file, spec] of Object.entries(FILES)) {
   let body = spec.names.map(n => { moved.add(n); return text(n, spec.from) }).join('\n')
   for (const [find, repl, times] of spec.changes) {
@@ -254,5 +214,5 @@ for (const [file, spec] of Object.entries(FILES)) {
   if (check) { let cur = null; try { cur = readFileSync(path, 'utf8') } catch {} if (cur !== out) { differ++; console.log(`move-fit: ${file} differs`) } } else writeFileSync(path, out)
 }
 const left = [...DECL.keys()].filter(n => !moved.has(n) && DECL.get(n).decl >= 3112)
-console.log(`move-fit: ${Object.keys(FILES).length} files, ${moved.size} declarations moved; not moved: ${left.join(', ')}`)
+console.log(`move-fit: ${Object.keys(FILES).length} files, ${moved.size} declarations moved (${Object.values(PORTED).flat().length} since ported); not moved: ${left.join(', ')}`)
 if (check) process.exit(differ ? 1 : 0)

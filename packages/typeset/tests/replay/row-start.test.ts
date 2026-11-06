@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FitBlock } from '../../src/fit/types.ts'
 import { type Row, rowStart } from '../../src/shared/row-start.ts'
-import type { Share } from '../../src/shared/share.types.ts'
+import type { Share } from '../../src/shared/share.ts'
 import { blockOfTap, num } from './fit-input.ts'
 import { firstDifference, hasTap, type Ledger, ledger, TAP } from './tap.ts'
 

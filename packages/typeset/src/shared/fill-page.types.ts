@@ -6,7 +6,7 @@ import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 import type { Band } from '../unit/params.ts'
 import type { FillRules } from './fill-leads.types.ts'
 import type { FillTarget } from './fill-target.ts'
-import type { Share } from './share.types.ts'
+import type { Share } from './share.ts'
 
 /** a unit (or a run of one) as the page's fill reads and lays it anew: what its lay left, its fill leadings, its row */
 export type FillLaid = {

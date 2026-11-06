@@ -5,7 +5,7 @@
 // follower (S.share); then its fill leadings (S.fill.leads). Today's layOnce RUN:2255-2316 and unitFillLeads RUN:2617-2624, as
 // tests/replay/round.ts proved them step by step against the tap on every round of the corpus; each step's answer is written
 // to the trace in the tap's slot.
-import { layoutCut } from '../fit/cut.types.ts'
+import { layoutCut } from '../fit/cut.ts'
 import { fitFurther } from '../fit/further.ts'
 import { type NumberCrop, numberedLayout } from '../fit/numbered.ts'
 import { layoutRuns } from '../fit/runs.types.ts'
@@ -16,7 +16,7 @@ import type { FillLaid } from '../shared/fill-page.types.ts'
 import { onLeadRetry } from '../shared/on-lead.ts'
 import { type OverFollowerInput, overFollower } from '../shared/over-follower.ts'
 import { settleLayout } from '../shared/settle.ts'
-import { type Share, shareOf } from '../shared/share.types.ts'
+import { type Share, shareOf } from '../shared/share.ts'
 import type { Json, RuleParams, Unlaid } from '../types.ts'
 import { type Band, cellBands } from '../unit/params.ts'
 import { fin, layoutOf, linesOf, stateOf, type Trace } from './trace.ts'

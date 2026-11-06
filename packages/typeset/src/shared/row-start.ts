@@ -11,7 +11,7 @@
 // the file's label row: Placed.join, the label) and whether a character of the page stays between the two on the row
 // (keptBetween RUN:1592: Placed.join kept).
 import type { FitBlock } from '../fit/types.ts'
-import type { Share } from './share.types.ts'
+import type { Share } from './share.ts'
 
 export type Row = { id: number; page: number; baseline: number; x0: number; x1: number; size: number }
 export type RowStartInput = {

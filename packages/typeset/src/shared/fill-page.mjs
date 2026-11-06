@@ -5,11 +5,11 @@
 // WeakMap), the shared row's ink ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
 // tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
 import { footFloorOf } from '../breaker/slots.mjs'
-import { layoutAt } from '../fit/at.mjs'
+import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.mjs'
 import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'
 import { BODY_KINDS, fillTarget } from './fill-target.ts'
-import { keepsShare } from './share.mjs'
+import { keepsShare } from './share.ts'
 import { settleLayout } from './settle.ts'
 
 /** a unit as S.fill.target reads it */

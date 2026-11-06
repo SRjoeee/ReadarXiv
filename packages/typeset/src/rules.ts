@@ -464,7 +464,7 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:3952-3962 layoutCut'],
     how: 'ported',
     reads: [],
-    file: 'fit/cut.mjs',
+    file: 'fit/cut.ts',
     state: {
       is: 'ported',
       replay:
@@ -480,7 +480,7 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:4263 layoutAt'],
     how: 'ported',
     reads: [],
-    file: 'fit/at.mjs',
+    file: 'fit/at.ts',
     state: {
       is: 'ported',
       replay:
@@ -513,7 +513,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: "2026-10-19 a heading on the original's last baseline",
     reads: [],
-    file: 'fit/last-lines.mjs',
+    file: 'fit/last-lines.ts',
     state: {
       is: 'ported',
       replay:
@@ -706,7 +706,7 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:4363-4378 shareOf', 'L2:4331-4347 inkEndOf', 'L2:4322 onShare', 'RUN:2312-2316'],
     how: 'ported',
     reads: [],
-    file: 'shared/share.mjs',
+    file: 'shared/share.ts',
     state: {
       is: 'ported',
       replay:

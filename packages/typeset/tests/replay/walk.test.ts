@@ -3,7 +3,7 @@
 // the ledger, the tokens file and the metrics table (fit-input.ts); its layout against F2's slot, every field the tap
 // summarizes. The whole corpus: lab/typeset/replay-fit.mjs.
 import { describe, expect, it } from 'vitest'
-import { layoutCut } from '../../src/fit/cut.types.ts'
+import { layoutCut } from '../../src/fit/cut.ts'
 import type { FitBlock, FitParams, Tokens } from '../../src/fit/types.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { firstDifference, hasDerived, hasTap, ledger, sample } from './tap.ts'

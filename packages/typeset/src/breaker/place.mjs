@@ -3,7 +3,7 @@
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
 import { latinishOf, lineExtent, squeezable } from './break.mjs'
 import { inFlow, slotsAt } from './slots.mjs'
-import { toLastLines } from '../fit/last-lines.mjs'
+import { toLastLines } from '../fit/last-lines.ts'
 
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, spaces per space), else left
  *  aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a

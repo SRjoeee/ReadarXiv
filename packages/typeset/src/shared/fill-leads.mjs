@@ -4,7 +4,7 @@
 // fill-leads.types.ts. The layout found, which the page's fill reuses (today's fillLaid, a module WeakMap), is a field of
 // the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
 import { footFloorOf } from '../breaker/slots.mjs'
-import { layoutAt } from '../fit/at.mjs'
+import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.mjs'
 
 /**
