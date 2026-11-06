@@ -131,7 +131,9 @@ function keepAddresses(pieces: Raw[]): Raw[] {
 const cut = (p: Raw & { t: 'text' }, x: number, y: number): Raw =>
   p.src === undefined ? { t: 'text', s: p.s.slice(x, y) } : { t: 'text', s: p.s.slice(x, y), src: p.src }
 
-const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
+// (today's rule read the text's UTF-8 bytes as Latin-1, where a character past ASCII begins with a letter: it is kept so, a
+// character past ASCII no part of a number, so that the units' ids stay today's)
+const NUMBER_TOKEN = /[^\s\p{L}\u0080-\uffff]*\d[^\s\p{L}\u0080-\uffff]*/gu
 const DOI_TOKEN = /10\.\d{4,9}\/\S+/gu
 function numberTokens(s: string): { index: number; text: string; doi: boolean }[] {
   const dois = [...s.matchAll(DOI_TOKEN)].map((m) => ({ index: m.index, text: m[0], doi: true }))
@@ -172,7 +174,10 @@ function keepNumbers(pieces: Raw[]): Raw[] {
     let last = 0
     for (const m of numberTokens(p.s)) {
       const end = m.index + m.text.length
-      const left = m.index > 0 ? (m.doi ? /[^\p{L}\d]/u : /\s/).test(p.s[m.index - 1] as string) : APART(pieces[k - 1])
+      const left =
+        m.index > 0
+          ? (m.doi ? /[^\p{L}\d\u0080-\uffff]/u : /\s/).test(p.s[m.index - 1] as string)
+          : APART(pieces[k - 1])
       const right = end < n ? /\s/.test(p.s[end] as string) : APART(pieces[k + 1])
       if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
       if (m.index > last) out.push(part(last, m.index))
