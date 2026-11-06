@@ -63,7 +63,7 @@ export class Files {
   readonly rules: LexRules
   readonly inputs: ReadonlySet<string>
   /** how a file that is not UTF-8 is read: the encoding the paper declares */
-  encoding: 'latin1' | 'cp1252' = 'latin1'
+  encoding: 'utf8' | 'latin1' | 'cp1252' = 'utf8'
   private readonly read = new Map<string, SourceFile>()
   constructor(tree: Tree, rules: LexRules, inputs: ReadonlySet<string>) {
     this.tree = tree

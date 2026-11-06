@@ -167,13 +167,16 @@ export interface Tree {
 }
 
 const UTF8 = new TextDecoder('utf-8', { fatal: true })
+const UTF8_LAX = new TextDecoder('utf-8')
 const CP1252 = new TextDecoder('windows-1252')
 /** a file's text as the reader reads it, lines ended at LF: UTF-8, or, a file that is not, the encoding the paper declares
- *  to inputenc (`cp1252`, `ansinew`), else Latin-1 (each byte its code point) */
-export function fileText(bytes: Uint8Array, fallback: 'latin1' | 'cp1252' = 'latin1'): string {
+ *  to inputenc (`latin1`, `latin9`: each byte its code point; `cp1252`, `ansinew`), else UTF-8 still (an invalid byte U+FFFD,
+ *  as inputenc's utf8, LaTeX's default, reads it) */
+export function fileText(bytes: Uint8Array, fallback: 'utf8' | 'latin1' | 'cp1252' = 'utf8'): string {
   try {
     return texText(UTF8.decode(bytes))
   } catch {
+    if (fallback === 'utf8') return texText(UTF8_LAX.decode(bytes))
     if (fallback === 'cp1252') return texText(CP1252.decode(bytes))
     let s = ''
     for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode(...bytes.subarray(i, i + 8192))
@@ -242,6 +245,11 @@ export function namesUsed(tree: Tree, rules: LexRules, always: Iterable<string> 
     let prev: Token | null = null
     for (let t = lx.next(); t; t = lx.next()) {
       if (t.k !== 'cs') {
+        // (an environment read by lines is asked too: whether TeX sets its lines is what its meaning says)
+        if (t.k === 'verbatim') {
+          names.add(t.env)
+          names.add(`end${t.env}`)
+        }
         if (t.k !== 'space' && t.k !== 'comment') prev = t
         continue
       }

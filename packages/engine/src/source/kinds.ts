@@ -13,8 +13,9 @@ export const INLINE_CODE: ReadonlyMap<string, 'verb' | 'listing' | 'minted'> = n
 
 /** environments a package reads line by line up to their \end: the kernel's and verbatim.sty's verbatim, fancyvrb's,
  *  listings', minted's, moreverb's, filecontents, the packages that write their lines out (asy, dot2tex, pythontex,
- *  sagetex), comment.sty's, tcolorbox's listings; acmart's comment environments (\excludecomment{CCSXML} and its kin in the
- *  class, which a paper need not ship). A star is the same environment's */
+ *  sagetex), comment.sty's, tcolorbox's listings. A star is the same environment's. Any other environment comment.sty
+ *  defines is read by lines where TeX's meaning shows it excluded (acmart's \excludecomment{CCSXML}); one it processes
+ *  (acmart's \specialcomment{acks}) is typeset, its lines TeX's tokens (read.ts ownLineEnvs) */
 export const LINE_ENVIRONMENTS: ReadonlySet<string> = new Set([
   'verbatim',
   'Verbatim',
@@ -41,11 +42,6 @@ export const LINE_ENVIRONMENTS: ReadonlySet<string> = new Set([
   'sagesilent',
   'sageblock',
   'sagecommandline',
-  'acks',
-  'CCSXML',
-  'printonly',
-  'screenonly',
-  'anonsuppress',
 ])
 
 /** the commands that read their argument with `%` a character (url.sty's \url and \path, hyperref's \nolinkurl and \href's

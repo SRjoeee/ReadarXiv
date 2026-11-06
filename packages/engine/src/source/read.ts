@@ -473,10 +473,33 @@ class Walker {
     const a = this.accentLetter(f, k, c)
     if (a && skipBlanks(f, a.end, c) === c) return a.letter
     if (k === i + 1) {
-      const l = this.letterCommand(f, k, c)
+      const l = this.letterCommand(f, k, c) ?? (t.name === 'ifmmode' ? this.ifmmodeLetter(f, k, c) : null)
       if (l && l.end === c) return l.letter
     }
     return null
+  }
+  /** \ifmmode whose \else is one letter an accent or a letter command makes (REVTeX's .bbl: `\ifmmode\acute{a}\else\'{a}
+   *  \fi`): in text TeX takes the \else, so the letter, in its word; a blank after the \fi on its line and a `{}` with it */
+  ifmmodeLetter(f: SourceFile, k: number, to: number): { letter: string; end: number } | null {
+    const first = this.branchEnd(f, k + 1, to, false)
+    if (first < 0 || name(f.toks[first - 1]) !== 'else') return null
+    const fi = this.branchEnd(f, first, to, true)
+    if (fi < 0) return null
+    const elseTo = fi - 1
+    const j = skipBlanks(f, first, elseTo)
+    let one: { letter: string; end: number } | null = null
+    if (f.toks[j]?.k === 'cs') one = this.accentLetter(f, j, elseTo) ?? this.letterCommand(f, j, elseTo)
+    else if (isBegin(f.toks[j]) && f.toks[j + 1]?.k === 'cs') {
+      const c = f.close[j] ?? -1
+      const inner = c > 0 && c < elseTo ? (this.accentLetter(f, j + 1, c) ?? this.letterCommand(f, j + 1, c)) : null
+      if (inner && inner.end === c) one = { letter: inner.letter, end: c + 1 }
+    }
+    if (!one || one.end !== elseTo) return null
+    let e = fi
+    const sp = f.toks[e]
+    if (sp?.k === 'space' && !f.text.slice(sp.s, sp.e).includes('\n')) e++
+    if (isBegin(f.toks[e]) && f.close[e] === e + 1) e += 2
+    return e <= to ? { letter: one.letter, end: e } : null
   }
   /** an accent at token k and its letter, where the accented letter is one every target font sets */
   accentLetter(f: SourceFile, k: number, to: number): { letter: string; end: number } | null {
@@ -584,6 +607,14 @@ class Walker {
         endText()
         b.flush()
         return { next: stop }
+      }
+    }
+    if (n === 'ifmmode' && name(toks[i - 1]) !== 'unless') {
+      const l = this.ifmmodeLetter(f, i, to)
+      if (l) {
+        endText()
+        b.letter(l.letter, f.src(i, l.end), at, (toks[l.end - 1] as Token).e)
+        return { next: l.end }
       }
     }
     if (this.isConditional(n) && n !== 'ifcase') {
@@ -1745,7 +1776,11 @@ class Walker {
     // (a conditional whose own text decides nothing, none of whose branches sets a word or anything but inline material:
     // one element, whatever TeX takes — no text either way. Today's reading, kept: \ifdefined\Preprint\url{…}\else
     // \url{…}\fi)
-    if (value === null && !this.setsText(f, end, thenTo, b) && (elseFrom < 0 || !this.setsText(f, elseFrom, elseTo, b))) {
+    if (
+      value === null &&
+      !this.setsText(f, end, thenTo, b) &&
+      (elseFrom < 0 || !this.setsText(f, elseFrom, elseTo, b))
+    ) {
       endText()
       const toks = f.toks
       b.ph(f.src(i, stop), 'other', (toks[i] as Token).s, (toks[stop - 1] as Token).e)
@@ -1885,8 +1920,13 @@ function paperFacts(
 function ownLineEnvs(defs: Definitions, own: ReadonlySet<string>, base: (env: string) => boolean): Set<string> {
   const out = new Set<string>()
   for (const [n, d] of defs.names) {
-    if (!own.has(n)) continue
     const m = d.meaning
+    // (comment.sty's excluded comment, whoever defines it: TeX sets none of its lines)
+    if (m.k === 'macro' && /\\def \\ProcessCutFile \{\}/.test(m.body) && /\\ProcessComment /.test(m.body)) {
+      out.add(n)
+      continue
+    }
+    if (!own.has(n)) continue
     const first =
       m.k === 'macro'
         ? /^\\(?:begin \{)?([A-Za-z]+\*?)/.exec(m.body.trim())?.[1]
@@ -1966,10 +2006,14 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
       const d = definitions.names.get(n)
       const list = names.bodies.get(n) ?? []
       if (!d || d.meaning.k === 'undefined' || list.some((x) => x === null)) return true
+      // (a \let of the paper's is in force where TeX's meaning of it is its target's)
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+      if (list.some((x) => x?.startsWith('\\let ') && same(definitions.names.get(x.slice(5))?.meaning, d.meaning)))
+        return true
       const held = [d.meaning, d.opt, d.robust, d.code]
         .filter((m) => m?.k === 'macro')
         .map((m) => canonical((m as { body: string }).body))
-      return list.some((x) => held.includes(canonical(x as string)))
+      return list.some((x) => !x?.startsWith('\\let ') && held.includes(canonical(x as string)))
     }),
   )
   // (an environment is the paper's where it defines it by an environment's definer, or by a command's: \let\code\verbatim)
@@ -1978,7 +2022,7 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
   const lines = ownLineEnvs(definitions, ownEnv, (e) => base.lineEnv(e))
   const rules = lexRules(lines)
   // (the encoding the main file declares to inputenc: what a file that is not UTF-8 is read in)
-  let encoding: 'latin1' | 'cp1252' = 'latin1'
+  let encoding: 'utf8' | 'latin1' | 'cp1252' = 'utf8'
   const mainScan = scan.file(tree.main, null)
   if (mainScan)
     for (let k = 0; k < mainScan.toks.length; k++) {
@@ -1990,13 +2034,13 @@ export function readSource(tree: Tree, definitions: Definitions): SourceDoc {
         pkg &&
         opts &&
         mainScan.src(pkg.a + 1, pkg.b - 1).trim() === 'inputenc' &&
-        /\b(?:cp1252|ansinew)\b/.test(mainScan.src(opts.a, opts.b))
+        /\b(?:cp1252|ansinew|latin1|latin9)\b/.test(mainScan.src(opts.a, opts.b))
       )
-        encoding = 'cp1252'
+        encoding = /\b(?:cp1252|ansinew)\b/.test(mainScan.src(opts.a, opts.b)) ? 'cp1252' : 'latin1'
     }
   // (the files read once more only where they read otherwise: the paper has line environments of its own, or a file is in
   // cp1252)
-  const files = lines.size || encoding !== 'latin1' ? new Files(tree, rules, inputs) : scan
+  const files = lines.size || encoding !== 'utf8' ? new Files(tree, rules, inputs) : scan
   files.encoding = encoding
   const bindings = bindingsOf(shipped)
   const isCall = (n: string) => {

@@ -501,6 +501,17 @@ export function ownNames(files: readonly SourceFile[]): {
           j++
         }
       else {
+        // (\let\x\y: its target, whose meaning TeX gives \x where this definition is the one in force)
+        if (t.name === 'let') {
+          let m = skipBlanks(f, k + 1, f.toks.length)
+          if (isOther(f.toks[m], '=')) m = skipBlanks(f, m + 1, f.toks.length)
+          const target = f.toks[m]
+          if (target?.k === 'cs') {
+            bodies.set(n.name, [...(bodies.get(n.name) ?? []), `\\let ${target.name}`])
+            defined.set(n.name, (defined.get(n.name) ?? 0) + 1)
+            continue
+          }
+        }
         bodies.set(n.name, [...(bodies.get(n.name) ?? []), null])
         defined.set(n.name, (defined.get(n.name) ?? 0) + 1)
         continue
