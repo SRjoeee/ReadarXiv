@@ -12,6 +12,7 @@
 // - `U.elements`: for the same rounds, each placeholder's reading whatever the row (readingsOf): what today's resolution sets
 //   it to in each case the row decides, by today's own renderings and drawnAs, unbracketed, displayLines, leadMark (L1: El).
 // - `U.admit`: for every sampled verdict, each row piece's class as locatedWhole reads it (phClassProven: L1's El.kind).
+// - `rules`: each target's rules as the run resolved them (resolveRules: the fit's P, the patterns, the labels).
 // - `B.tokens`: for every sampled round of tokensOf2 (B.tokens' sample and U.marks'), the faces today's faceOf gave (B.faces' answers), each face's own small capitals,
 //   each rendering's runs of one fill and its faked small capitals (El.style per run), whether the source writes CJK spaced.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -205,8 +206,31 @@ for (const e of tokenEntries) {
   }
 }
 gz(join(OUT, 'B.tokens.json.gz'), tokens)
+
+// the target's rules as the run resolved them (resolveRules over the door's rule set, BUILTIN_RULES: R.params, the hyphenation
+// patterns it loads, the float labels), by target; checked equal to every target P a sample captured (B.tokens:in's, which
+// tokensOf2 is handed; U.params:in's, before the unit's own)
+const LAYOUT = await import(`${E}../rules/layout.mjs`)
+const targets = {}
+for (const f of readdirSync(join(TAP, 'ledgers'))) {
+  const to = read(join(TAP, 'ledgers', f)).target
+  if (targets[to]) continue
+  const R = LAYOUT.resolveRules(LAYOUT.BUILTIN_RULES, to)
+  targets[to] = { params: R.params, patterns: R.patterns, labels: R.labels }
+}
+let pSeen = 0, pOff = 0
+for (const rule of ['B.tokens', 'U.marks', 'U.params'])
+  for (const e of read(join(TAP, 'samples', `${rule}.json.gz`)).entries)
+    for (const c of e.captures) {
+      if (c.rule !== 'B.tokens:in' && c.rule !== 'U.params:in') continue
+      const P = unser(c.value).P, to = read(join(TAP, 'ledgers', `${e.pair}.ledger.json.gz`)).target
+      pSeen++
+      if (norm(P) !== norm(targets[to].params)) { pOff++; console.log(`derive: ${e.pair} ord ${e.ord}: the captured P is not resolveRules' for ${to}`) }
+    }
+gz(join(OUT, 'rules.json.gz'), { format: 'readarxiv-L3/derived 1', rule: 'rulesFor', note: "per target: today's resolveRules(BUILTIN_RULES, target): params (the fit's P before a unit's own), the hyphenation patterns it loads, the float labels", targets })
+console.log(`derive: rules for ${Object.keys(targets).length} targets, equal to ${pSeen - pOff} of ${pSeen} captured target P`)
 console.log(`derive: B.tokens ${tokOk} of ${tokAll} sampled rounds made again equal to the recorded`)
 gz(join(OUT, 'U.breaks.json.gz'), breaks)
 gz(join(OUT, 'U.elements.json.gz'), elements)
 console.log(`derive: ${n} readings re-read, ${n - unequal} equal to the recorded (${unequal} not, left out); U.breaks ${Object.keys(breaks.cases).length} cases, U.elements ${Object.keys(elements.cases).length}`)
-process.exit(unequal || tokOk !== tokAll ? 1 : 0)
+process.exit(unequal || tokOk !== tokAll || pOff ? 1 : 0)

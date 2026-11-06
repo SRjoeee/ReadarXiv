@@ -35,7 +35,9 @@ export type RuleSpec = {
   ruling?: string
   /** the Rules fields and constants it reads */
   reads: readonly string[]
-  /** the file it lives in, under packages/typeset/src, once ported */
+  /** the file it lives in, under packages/typeset/src, once ported. A `.mjs` file is today's code moved as it is, its
+   *  inputs made explicit (lab/typeset/move-fit.mjs lists every change), typed by the `.types.ts` beside it: its TypeScript
+   *  port is still to come, held by the same replay */
   file?: string
   parent?: RuleId
   state: RuleState
@@ -352,20 +354,40 @@ const SPECS: readonly RuleSpec[] = [
     home: 'breaker',
     step: 'F2',
     owns: [],
-    ports: ['L2:3206-3281 slotsAt', 'L2:3137-3148 footFloorAt', 'L2:3190 texRoomOf'],
+    ports: [
+      'L2:3206-3281 slotsAt',
+      'L2:3137-3148 footFloorAt',
+      'L2:3190 texRoomOf',
+      'L2:597-610 flowMeasureAt',
+      'L2:3061 inFlow',
+    ],
     how: 'ported',
     reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3'],
-    state: open,
+    file: 'breaker/slots.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
+      cases: 164,
+    },
   },
   {
     id: 'B.break',
     home: 'breaker',
     step: 'F2',
     owns: ['T22'],
-    ports: ['L2:3365-3893 breakLines', 'L2:3333-3355 squeeze'],
+    ports: [
+      'L2:3365-3893 breakLines',
+      'L2:3289-3355 cropExtent, lineExtent, tokW, squeeze',
+      'hyph.mjs:68-142 hyphenationOf, breakPoints (breaker/hyph.ts)',
+    ],
     how: 'ported',
     reads: ['fit.cjkJust', 'fit.spaceMax', 'fit.spaceMin', 'breaking.*', 'lineskip'],
-    state: open,
+    file: 'breaker/break.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
+      cases: 164,
+    },
   },
   {
     id: 'B.place',
@@ -375,7 +397,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:3980-4037 placeItems', 'L2:4139-4160 laidOut'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'breaker/place.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
+      cases: 164,
+    },
   },
   {
     id: 'B.cuts',
@@ -386,7 +413,12 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-30 frames fill as TeX does',
     reads: [],
-    state: open,
+    file: 'breaker/cuts.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (3 cut)",
+      cases: 164,
+    },
   },
   // ---------------------------------------------------------------- the fit
   {
@@ -406,7 +438,12 @@ const SPECS: readonly RuleSpec[] = [
       'fit.floor',
       'fit.step',
     ],
-    state: open,
+    file: 'fit/walk.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot",
+      cases: 164,
+    },
   },
   {
     id: 'X.cut',
@@ -416,7 +453,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:3952-3962 layoutCut'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'fit/cut.mjs',
+    state: {
+      is: 'ported',
+      replay: "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (3 cut)",
+      cases: 164,
+    },
   },
   {
     id: 'X.at',
@@ -426,7 +468,12 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['L2:4263 layoutAt'],
     how: 'ported',
     reads: [],
-    state: open,
+    file: 'fit/at.mjs',
+    state: {
+      is: 'ported',
+      replay: "inside layoutCut where a unit is cut at its frames (the walk's replay at F2)",
+      cases: 3,
+    },
   },
   {
     id: 'X.numbered',
@@ -447,7 +494,13 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: "2026-10-19 a heading on the original's last baseline",
     reads: [],
-    state: open,
+    file: 'fit/last-lines.mjs',
+    state: {
+      is: 'ported',
+      replay:
+        "the walk whole at F2 (layoutCut) on every laid round of every sampled unit: F2's slot (11 with lastLines)",
+      cases: 164,
+    },
   },
   {
     id: 'X.runs',

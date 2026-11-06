@@ -121,7 +121,7 @@ type Measured = Pick<Block, 'measures' | 'centred' | 'rects' | 'x0' | 'x1' | 'G'
 export const measureOf = (b: Measured, y: number | null, k: number | null): [number, number] =>
   b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1]
 /** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)` (L2:588 measureOn) */
-function measureOn(Y: readonly number[], at: (i: number) => [number, number], y: number): [number, number] {
+export function measureOn(Y: readonly number[], at: (i: number) => [number, number], y: number): [number, number] {
   if (y >= Y[0]! - 0.05) return at(0)
   for (let i = 0; i + 1 < Y.length; i++) {
     if (Math.abs(y - Y[i + 1]!) <= 0.05) return at(i + 1)

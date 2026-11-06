@@ -22,3 +22,26 @@ export function measure(tokens: readonly Token[], metrics: Metrics): Token[] {
     return t
   })
 }
+
+/** the measures the breaker and the fit read of a run, at 100 px in its face (layer2.mjs w100 L2:2303, ink100 L2:2319,
+ *  inkRight100 L2:2347; tokenInk L2:2340 is ink100 of a token's text): from Metrics, the canvas's numbers in the reader and
+ *  the tap's recorded ones in the replays and the gate */
+export type FitMeasure = {
+  w100(s: string, face: Face): number
+  ink100(s: string, face: Face): { a: number; d: number }
+  /** how far right of its start its ink ends; null where the canvas gives none */
+  inkRight100(s: string, face: Face): number | null
+}
+export function fitMeasure(metrics: Metrics): FitMeasure {
+  return {
+    w100: (s, face) => metrics.advance(fontString(face, 100), 100, s),
+    ink100: (s, face) => {
+      const [a, d] = metrics.ink(fontString(face, 100), 100, s)
+      return { a, d }
+    },
+    inkRight100: (s, face) => {
+      const r = metrics.ink(fontString(face, 100), 100, s)[2]
+      return Number.isNaN(r) ? null : r
+    },
+  }
+}
