@@ -4,7 +4,7 @@
 // element's own transition of a colour off for the flip, or a pressed button and a switch would fade on their own and
 // flash in the crossfade (better-ui: suppress transitions on a theme switch; the maintainer, 2026-09-26). A motion is
 // kept: the appearance's thumb slides to the one chosen in the very change (holding it too had made it jump)
-import { withoutTransitions } from '@/ui/controls/transitions'
+import { withoutTransitions } from '@readarxiv/ui'
 
 export type Appearance = 'light' | 'dark' | 'system'
 

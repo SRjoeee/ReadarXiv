@@ -9,7 +9,7 @@ const SHEET = readFileSync(join(import.meta.dirname, '../../src/styles/ui.css'),
 
 describe('ui.css', () => {
   it('imports the generated tokens, so that the controls the pages share find them', () => {
-    expect(SHEET).toContain('@import "./tokens.css";')
+    expect(SHEET).toContain('@import "@readarxiv/ui/tokens.css";')
   })
 
   it('holds no token of the old pages: every colour a role of the generated sheet', () => {
@@ -27,7 +27,7 @@ describe('ui.css: a list under a search field', () => {
   })
 
   it('is the only cap on a menu\'s list among the pages\' sheets: the popup\'s is gone, the settings page adds none', () => {
-    const pages = rules(sheet('../../src/entrypoints/popup/popup.css', '../../src/entrypoints/options/ui/settings.css', '../../src/styles/controls.css'))
+    const pages = rules(sheet('../../src/entrypoints/popup/popup.css', '../../src/entrypoints/options/ui/settings.css', '../../packages/ui/src/controls.css'))
     expect(pages.filter(r => /\[role="(listbox|menu)"\]/.test(r.selector) && /max-height/.test(r.body)).map(r => r.selector)).toEqual([])
   })
 })

@@ -4,7 +4,7 @@
 // for what is at the foot of the page, aside for the sidebar. `tip`: other words for the tooltip than the name, where the
 // name is the thing acted on and the tooltip says what the press does (a section's fold: its title, and expand or collapse)
 import type { ButtonHTMLAttributes, CSSProperties } from 'react'
-import { useTip } from '@/ui/controls/tip'
+import { useTip } from '@readarxiv/ui'
 
 export function TippedButton({ label, tip: words = label, side, style, ...rest }: { label: string; tip?: string; side?: 'bottom' | 'right' | 'top' } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label'>) {
   const { props, tip } = useTip(words, undefined, { side })

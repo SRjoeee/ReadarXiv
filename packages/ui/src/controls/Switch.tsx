@@ -3,7 +3,7 @@
 // its thumb white, by their own sheets (the maintainer, 2026-09-28); named by its row's words. Out of reach it is greyed
 // and presses nothing, but stays a stop (aria-disabled, not `disabled`: the browser's would take its tooltip), and
 // `why` is the tooltip then, beside its name (the reader, S-R-21)
-import { useTip } from './tip'
+import { useTip } from './tip.tsx'
 
 export function Switch({ label, checked, onChange, disabled = false, why }: { label: string; checked: boolean; onChange: (on: boolean) => void; disabled?: boolean; why?: string }) {
   const { props, tip } = useTip(label, why)

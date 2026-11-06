@@ -5,11 +5,7 @@
 // the style menu opens above the foot (menu-fit.ts); the rows inside are drawn from the frame after the first
 import { ChevronDown } from 'lucide'
 import { type CSSProperties, useCallback, useEffect, useRef } from 'react'
-import { Icon } from '@/ui/controls/Icon'
-import { MenuList } from '@/ui/controls/MenuList'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { useTip } from '@/ui/controls/tip'
-import { S } from '@/ui/strings'
+import { Icon, MenuList, Popover, usePopover, useTip, S } from '@readarxiv/ui'
 import type { PopupActions } from '../data'
 import type { MenuKind, MenuView, Row } from '../view-model'
 import { fitMenu } from './menu-fit'

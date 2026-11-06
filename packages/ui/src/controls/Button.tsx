@@ -6,8 +6,8 @@
 // keeps its look and its words, a loader turning in its icon's place, and does not act again (controls.css .btn)
 import { type IconNode, Loader } from 'lucide'
 import type { ComponentProps, MouseEvent } from 'react'
-import { Icon } from './Icon'
-import { Kbd } from './Kbd'
+import { Icon } from './Icon.tsx'
+import { Kbd } from './Kbd.tsx'
 
 export type ButtonKind = 'brand' | 'neutral' | 'text' | 'raised'
 export type ButtonSize = 'lg' | 'md' | 'sm'

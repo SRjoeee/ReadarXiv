@@ -2,8 +2,7 @@
 // prompts and the glossary; with no LLM service, one line that says how to have them. The prompts and the glossary
 // stay the reader's while a free service is chosen: only an LLM reads them
 import { useState } from 'react'
-import { Reveal } from '@/ui/controls/Reveal'
-import { O, S } from '@/ui/strings'
+import { Reveal, O, S } from '@readarxiv/ui'
 import type { OptionsData } from '../data'
 import { Card, GroupHeading } from '../ui/Card'
 import { Row, Value } from '../ui/Row'

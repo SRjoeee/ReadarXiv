@@ -5,10 +5,10 @@
 // digits (3件, 12段落); a text ends in 。 where the Chinese one does (UI.md §1, the Japanese line). A name set into a
 // sentence is spaced by ./spacing, which knows whether it begins or ends in Latin.
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.
-import type { ProviderErrorKind } from '@/providers/types'
-import type { Locale } from './index'
-import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
-import { spacedBeforeCjk, spacedWithinCjk } from './spacing'
+import type { ProviderErrorKind } from './index.ts'
+import type { Locale } from './index.ts'
+import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview.ts'
+import { spacedBeforeCjk, spacedWithinCjk } from './spacing.ts'
 
 const FIELD: Record<string, string> = {
   provider: '有効な翻訳サービスではありません',

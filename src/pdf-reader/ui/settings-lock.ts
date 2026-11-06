@@ -3,7 +3,7 @@
 // pressed and does nothing says nothing of why. They stay in their places, greyed (aria-disabled, so that they keep
 // the focus and the tooltip), so that the bar does not reflow when the settings arrive (P3-M16); the tooltip tells the
 // reason once it is known, not for the short time before the first answer
-import { R } from '@/ui/strings'
+import { R } from '@readarxiv/ui'
 import type { ReaderController } from '../controller'
 import { useReader } from './use-reader'
 

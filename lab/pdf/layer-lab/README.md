@@ -44,7 +44,7 @@ The address holds the view, for example:
 
 ## Views and controls
 
-The page is drawn in the extension's tokens and controls (`/styles/tokens.css` and `controls.css`, from `src/styles`),
+The page is drawn in the extension's tokens and controls (`/styles/tokens.css` and `controls.css`, from `packages/ui/src`),
 light or dark as the system is. Its words are `strings.mjs`'s: Chinese by default, English with `ui=en` (the switch at
 the foot of the settings); the target languages are always named in their own languages.
 

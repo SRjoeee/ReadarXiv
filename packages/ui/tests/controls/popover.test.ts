@@ -1,8 +1,8 @@
 import { act, createElement, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { mountElement } from '../../ui/render-hook'
-import { isOpen, stubPopovers } from './popover-stub'
+import { Popover, usePopover } from '../../src/index.ts'
+import { mountElement } from '../render-hook.ts'
+import { isOpen, stubPopovers } from '../popover-stub.ts'
 
 let restore = () => {}
 beforeEach(() => { restore = stubPopovers() })

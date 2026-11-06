@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { FailureCard } from '@/pdf-reader/ui/FailureCard'
 import { StatusCapsule } from '@/pdf-reader/ui/StatusCapsule'
-import { O, R, S, setLocale } from '@/ui/strings'
+import { O, R, S, setLocale } from '@readarxiv/ui'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
 import { stubPopovers } from './popover-stub'

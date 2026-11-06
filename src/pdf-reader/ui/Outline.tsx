@@ -5,11 +5,9 @@
 import { ChevronRight } from 'lucide'
 import { useEffect, useMemo, useState } from 'react'
 import { toBcp47 } from '@/config/languages'
-import { R } from '@/ui/strings'
+import { R, Icon, useTip } from '@readarxiv/ui'
 import type { ReaderController } from '../controller'
 import type { OutlineEntry } from '../engine/view/outline'
-import { Icon } from '@/ui/controls/Icon'
-import { useTip } from '@/ui/controls/tip'
 import { TippedButton } from './TippedButton'
 import { useReader } from './use-reader'
 

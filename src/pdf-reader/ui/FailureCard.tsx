@@ -4,9 +4,8 @@
 // pane: its action is a link to arXiv, opened where the settings say (S-O-49b) as S-R-18's is
 import { CircleAlert } from 'lucide'
 import { browser } from 'wxt/browser'
-import { R, S } from '@/ui/strings'
+import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from '../controller'
-import { Icon } from '@/ui/controls/Icon'
 import { cardOf } from './status'
 import { useReader } from './use-reader'
 

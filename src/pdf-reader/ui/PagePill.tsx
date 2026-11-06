@@ -3,9 +3,8 @@
 // (reader.css); the page is PDF.js's as it reports it, never read ahead of it
 import { ChevronLeft, ChevronRight } from 'lucide'
 import { forwardRef, useState } from 'react'
-import { R } from '@/ui/strings'
+import { R, Icon } from '@readarxiv/ui'
 import type { ReaderController, Side } from '../controller'
-import { Icon } from '@/ui/controls/Icon'
 import { TippedButton } from './TippedButton'
 import { useReader } from './use-reader'
 

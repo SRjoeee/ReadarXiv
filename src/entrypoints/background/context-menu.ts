@@ -7,7 +7,7 @@
 
 import type { PageStatus } from '@/shared/messages'
 import { messageFor, type PageDecision, pageDecision, type SavedSettings } from '@/shared/page-action'
-import { S } from '@/ui/strings'
+import { S } from '@readarxiv/ui'
 import { STATUS_DEADLINE_MS } from './provider-status'
 
 /** The menu item's id; the old one is removed by it on rebuild, since the worker runs create again on every wake-up */

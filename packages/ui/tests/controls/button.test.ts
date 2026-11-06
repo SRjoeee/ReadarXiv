@@ -2,9 +2,8 @@
 import { Globe } from 'lucide'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Button } from '@/ui/controls/Button'
-import { Kbd } from '@/ui/controls/Kbd'
-import { mountElement } from '../render-hook'
+import { Button, Kbd } from '../../src/index.ts'
+import { mountElement } from '../render-hook.ts'
 
 afterEach(() => { document.body.innerHTML = '' })
 const button = async (props: Parameters<typeof Button>[0]) => (await mountElement(createElement(Button, props))).container.querySelector('button')!

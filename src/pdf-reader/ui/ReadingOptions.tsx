@@ -5,19 +5,15 @@
 import { type IconNode, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun } from 'lucide'
 import { useId, useRef } from 'react'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import { R, S, profileName } from '@/ui/strings'
+import { R, S, Icon, Popover, usePopover, radioKeys, Switch, useTip } from '@readarxiv/ui'
+import { profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { CLASS_ROWS } from '../settings'
-import { Icon } from '@/ui/controls/Icon'
 import { leaveReader, settingsUrl } from './links'
 import { DownloadMenu, LanguageMenu, ServiceMenu } from './Menus'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { radioKeys } from '@/ui/controls/radio'
-import { Switch } from '@/ui/controls/Switch'
 import { useSettingsLock } from './settings-lock'
 import { ToolbarButton } from './ToolbarButton'
 import { useReader } from './use-reader'
-import { useTip } from '@/ui/controls/tip'
 
 /** the system's first (the maintainer, 2026-09-26); as icons, equal whatever the interface's language, as the display
  *  switch's are, their words in tooltips and to screen readers: a word per third ran off its thumb in English */

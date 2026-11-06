@@ -6,9 +6,9 @@
 // a name set into a sentence**: 을/를, 이/가, 은/는, (으)로 depend on the name's last sound, which a template cannot know,
 // so a name stands before a colon, before a noun, or before a particle that never varies (에, 에서, 에게, 의).
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.
-import type { ProviderErrorKind } from '@/providers/types'
-import type { Locale } from './index'
-import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
+import type { ProviderErrorKind } from './index.ts'
+import type { Locale } from './index.ts'
+import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview.ts'
 
 const FIELD: Record<string, string> = {
   provider: '유효한 번역 서비스가 아님',

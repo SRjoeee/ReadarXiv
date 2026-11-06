@@ -2,9 +2,9 @@
 // with the pages' four additions
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MenuList, type MenuListItem } from '@/ui/controls/MenuList'
-import { stubPopovers } from '../../pdf-reader/ui/popover-stub'
-import { mountElement } from '../render-hook'
+import { MenuList, type MenuListItem } from '../../src/index.ts'
+import { stubPopovers } from '../popover-stub.ts'
+import { mountElement } from '../render-hook.ts'
 
 afterEach(() => { document.body.innerHTML = '' })
 const key = (target: Element, k: string) => act(async () => { target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })) })
@@ -209,7 +209,7 @@ describe('MenuList: what takes the focus as a searchable menu opens (the owner, 
     const media = pointer(false)
     const restore = stubPopovers()
     try {
-      const { Popover } = await import('@/ui/controls/Popover')
+      const { Popover } = await import('../../src/index.ts')
       const { container } = await mountElement(createElement(Popover, { id: 'pop-test', anchor: '--pop-test', onOpenChange: () => {}, role: 'listbox', label: 'Language' },
         createElement(MenuList, { items: LANGS, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
       const holders = () => [...container.querySelectorAll('[autofocus]')].map(e => e.getAttribute('role'))
@@ -234,7 +234,7 @@ describe('MenuList: what takes the focus as a searchable menu opens (the owner, 
     pointer(true)
     const restore = stubPopovers()
     try {
-      const { Popover } = await import('@/ui/controls/Popover')
+      const { Popover } = await import('../../src/index.ts')
       const { container } = await mountElement(createElement(Popover, { id: 'pop-test', anchor: '--pop-test', onOpenChange: () => {}, role: 'listbox', label: 'Language' },
         createElement(MenuList, { items: LANGS, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
       await act(async () => { container.querySelector<HTMLElement>('[popover]')!.showPopover() })

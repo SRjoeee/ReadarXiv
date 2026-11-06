@@ -5,7 +5,7 @@ import { serviceRuns } from '@/config/services'
 import { supportsTarget } from '@/providers/microsoft'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from './menu-item'
-import { S } from './strings'
+import { S } from '@readarxiv/ui'
 
 /** The last row of the service menu: not a service, it opens the settings page */
 export const MANAGE_SERVICES = '__manage'

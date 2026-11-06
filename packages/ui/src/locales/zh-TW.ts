@@ -4,10 +4,10 @@
 // Same register as the Simplified pack: a state is a noun, a button a verb, and an error says what happened and what to
 // do; full-width punctuation, 「」 for quotes, a space between Chinese and Latin text or digits (UI.md §1).
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.
-import type { ProviderErrorKind } from '@/providers/types'
-import type { Locale } from './index'
-import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
-import { spacedAfterCjk } from './spacing'
+import type { ProviderErrorKind } from './index.ts'
+import type { Locale } from './index.ts'
+import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview.ts'
+import { spacedAfterCjk } from './spacing.ts'
 
 const FIELD: Record<string, string> = {
   provider: '不是有效的翻譯服務',

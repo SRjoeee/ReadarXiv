@@ -3,8 +3,8 @@
 // nouns for states, verbs for buttons, and an error says what happened and what to do.
 //
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.
-import type { Locale } from './index'
-import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
+import type { Locale } from './index.ts'
+import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview.ts'
 
 const FIELD: Record<string, string> = {
   provider: 'not a valid translation service',

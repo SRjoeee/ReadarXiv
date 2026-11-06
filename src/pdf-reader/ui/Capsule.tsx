@@ -7,7 +7,7 @@
 // another key brings the new one in with the motion, and the old one leaves as a picture of it
 import { type IconNode, Loader } from 'lucide'
 import { type HTMLAttributes, type ReactNode, useLayoutEffect, useRef } from 'react'
-import { Icon } from '@/ui/controls/Icon'
+import { Icon } from '@readarxiv/ui'
 import { capsuleMotion, type Motion } from './capsule-motion'
 import { type CapsuleWords, textOf } from './capsule-words'
 

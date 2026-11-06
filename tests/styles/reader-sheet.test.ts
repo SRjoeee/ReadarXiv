@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { type Rule, ruleOf, rules, sheet } from './css-rules'
 
 /** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
-const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
+const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../packages/ui/src/tokens.css', '../../packages/ui/src/controls.css']
   .map(p => join(import.meta.dirname, p))
   .map(p => readFileSync(p, 'utf8'))
   .join('\n')

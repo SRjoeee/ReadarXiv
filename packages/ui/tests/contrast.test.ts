@@ -1,8 +1,8 @@
 // The pairs the redesign draws, measured from the tokens themselves and held to their floors (the redesign's design,
 // §12; better-colors: measure the rendered pair). Text 4.5:1, icons and edges 3:1 (WCAG 1.4.3, 1.4.11)
 import { describe, expect, it } from 'vitest'
-import { type Mode, resolve } from '@/shared/tokens'
-import { contrast, over, parseOklch, type Rgba } from './wcag'
+import { type Mode, resolve } from '../src/index.ts'
+import { contrast, over, parseOklch, type Rgba } from './wcag.ts'
 
 /** a colour of the sheet, or a literal; `name@9%` is it mixed with transparent, as color-mix(in oklab, …, transparent) draws it */
 const colour = (name: string, mode: Mode): Rgba => {

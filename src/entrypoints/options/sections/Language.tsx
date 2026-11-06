@@ -7,11 +7,7 @@
 // (shared/surface-config.ts), so nothing is ever half translated and no draft is lost
 import { ChevronDown, Globe } from 'lucide'
 import type { CSSProperties } from 'react'
-import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode } from '@/locales'
-import { Icon } from '@/ui/controls/Icon'
-import { MenuList } from '@/ui/controls/MenuList'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { O, localeInUse } from '@/ui/strings'
+import { LOCALE_CODES, LOCALE_NAMES, type LocaleCode, Icon, MenuList, Popover, usePopover, O, localeInUse } from '@readarxiv/ui'
 import type { OptionsData } from '../data'
 import { Card } from '../ui/Card'
 import { shut } from '../ui/lists'

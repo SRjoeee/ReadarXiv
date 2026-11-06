@@ -26,6 +26,10 @@
 			"formatter": { "enabled": false }
 		},
 		{
+			"includes": ["packages/ui/src/locales/**"],
+			"formatter": { "enabled": false }
+		},
+		{
 			"includes": ["packages/engine/src/**/*.types.ts", "packages/reader/src/**/*.types.ts"],
 			"linter": { "rules": { "suspicious": { "noTsIgnore": "off" } } }
 		},

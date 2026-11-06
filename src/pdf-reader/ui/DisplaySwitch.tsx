@@ -6,11 +6,9 @@
 // it: the translated ones with no translation, and those the host says this window cannot show (`off`: the website's
 // side by side on a phone, §6.2)
 import { useRef } from 'react'
-import { R } from '@/ui/strings'
+import { R, radioKeys, useTip } from '@readarxiv/ui'
 import type { Display } from '../controller'
 import { DisplayIcon } from './icons'
-import { radioKeys } from '@/ui/controls/radio'
-import { useTip } from '@/ui/controls/tip'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
 

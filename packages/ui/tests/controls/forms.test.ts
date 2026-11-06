@@ -2,10 +2,8 @@
 // text field, a radio's mark, a reveal
 import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Field, TextInput, useField } from '@/ui/controls/Field'
-import { Radio } from '@/ui/controls/radio'
-import { Reveal } from '@/ui/controls/Reveal'
-import { mountElement } from '../render-hook'
+import { Field, Radio, Reveal, TextInput, useField } from '../../src/index.ts'
+import { mountElement } from '../render-hook.ts'
 
 afterEach(() => { document.body.innerHTML = '' })
 

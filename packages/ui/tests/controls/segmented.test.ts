@@ -1,9 +1,9 @@
 // Segmented controls (Part 3's interfaces; the redesign's design, §2.3, §5.1, §6.4, §8, §9)
 import { act, createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type SegmentOption, Segmented } from '@/ui/controls/Segmented'
-import { stubPopovers } from '../../pdf-reader/ui/popover-stub'
-import { mountElement } from '../render-hook'
+import { type SegmentOption, Segmented } from '../../src/index.ts'
+import { stubPopovers } from '../popover-stub.ts'
+import { mountElement } from '../render-hook.ts'
 
 let restore = () => {}
 beforeEach(() => { restore = stubPopovers() })

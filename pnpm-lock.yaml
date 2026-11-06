@@ -17,6 +17,9 @@ importers:
       '@readarxiv/engine':
         specifier: workspace:*
         version: link:packages/engine
+      '@readarxiv/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       ai:
         specifier: ^7.0.91
         version: 7.0.91(zod@4.5.4)
@@ -150,7 +153,17 @@ importers:
         specifier: workspace:*
         version: link:../text
 
-  packages/ui: {}
+  packages/ui:
+    dependencies:
+      lucide:
+        specifier: 1.47.0
+        version: 1.47.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
 
 packages:
 

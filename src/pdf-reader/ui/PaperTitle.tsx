@@ -16,9 +16,7 @@
 import { ArrowUpRight } from 'lucide'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { R, S } from '@/ui/strings'
-import { Icon } from '@/ui/controls/Icon'
-import { useTip } from '@/ui/controls/tip'
+import { R, S, Icon, useTip } from '@readarxiv/ui'
 
 export function PaperTitle({ id, title }: { id: string; title: string }) {
   const whole = useTip(title)

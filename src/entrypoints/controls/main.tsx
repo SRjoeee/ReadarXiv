@@ -6,9 +6,7 @@ import '@/styles/ui.css'
 import './sheet.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LOCALE_CODES, type LocaleCode } from '@/locales'
-import { trackModality } from '@/ui/controls/modality'
-import { setLocale } from '@/ui/strings'
+import { LOCALE_CODES, type LocaleCode, trackModality, setLocale } from '@readarxiv/ui'
 import { SPECIMENS } from './specimens'
 
 const asked = new URLSearchParams(location.search).get('lang') as LocaleCode | null

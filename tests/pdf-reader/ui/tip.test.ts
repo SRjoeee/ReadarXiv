@@ -2,7 +2,7 @@ import { act, createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TippedButton } from '@/pdf-reader/ui/TippedButton'
 import { ToolbarButton } from '@/pdf-reader/ui/ToolbarButton'
-import { R } from '@/ui/strings'
+import { R } from '@readarxiv/ui'
 import { mountElement } from '../../ui/render-hook'
 import { isOpen, stubPopovers } from './popover-stub'
 

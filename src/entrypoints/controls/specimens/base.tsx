@@ -1,6 +1,6 @@
 // The pages' base (Part 3, Task 14): a link and a bare field in a `ui` root — the keyboard's ring on each, and none for
 // the pointer on the field
-import { O, S } from '@/ui/strings'
+import { O, S } from '@readarxiv/ui'
 
 export function Base() {
   return (

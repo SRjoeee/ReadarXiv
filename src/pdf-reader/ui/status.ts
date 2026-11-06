@@ -4,7 +4,8 @@
 // language's own name drawn in that language
 import { toBcp47 } from '@/config/languages'
 import type { ProviderErrorKind } from '@/providers/types'
-import { O, R, S, reasonText } from '@/ui/strings'
+import { O, R, S } from '@readarxiv/ui'
+import { reasonText } from '@/ui/strings'
 import type { ReaderState } from '../controller'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words'
 import { ownName } from './languages'

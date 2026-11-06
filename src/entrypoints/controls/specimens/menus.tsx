@@ -7,10 +7,8 @@ import { BUILT_IN_STYLES } from '@/config/appearance'
 import { toBcp47 } from '@/config/languages'
 import { languageItems } from '@/pdf-reader/ui/languages'
 import { styleSample } from '@/ui/style-sample'
-import { Button } from '@/ui/controls/Button'
-import { MenuList, type MenuListItem } from '@/ui/controls/MenuList'
-import { Popover, usePopover } from '@/ui/controls/Popover'
-import { PREVIEW_LANG, PREVIEW_TARGET, S, profileName } from '@/ui/strings'
+import { Button, MenuList, type MenuListItem, Popover, usePopover, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
+import { profileName } from '@/ui/strings'
 
 function Menu({ name, label, items, layout, search, noMatch, onEvent }: { name: string; label: string; items: MenuListItem[]; layout?: 'inline' | 'two-line'; search?: string; noMatch?: string; onEvent: (event: string) => void }) {
   const pop = usePopover('listbox')

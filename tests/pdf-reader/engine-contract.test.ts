@@ -139,7 +139,7 @@ describe('what the translation, the rules and the browser load', () => {
 describe('the licence of what a reader loads', () => {
   const tracked: string[] = trackedFiles()
   const code = (f: string) => /\.(?:[cm]?[jt]sx?)$/.test(f) && !/\.d\.[cm]?ts$/.test(f)
-  const shared = ['src/pdf-reader/controller.ts', ...tracked.filter(f => /^(?:src\/pdf-reader\/ui|src\/ui\/controls)\//.test(f) && code(f))]
+  const shared = ['src/pdf-reader/controller.ts', ...tracked.filter(f => /^(?:src\/pdf-reader\/ui|packages\/ui\/src)\//.test(f) && code(f))]
 
   it('states no port anywhere in the closure of the five entries (the web\'s R21 detector)', () => {
     expect(portedInClosure(ENTRIES.map(entryFile))).toEqual([])
@@ -150,7 +150,7 @@ describe('the licence of what a reader loads', () => {
     for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain(`${ENGINE}/rules/latexml-args.mjs`)
     const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
     for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
-    expect(shared).toContain('src/ui/controls/Icon.tsx')
+    expect(shared).toContain('packages/ui/src/controls/Icon.tsx')
     expect(shared).toContain('src/pdf-reader/ui/display-glyphs.ts')
   })
 
@@ -159,7 +159,7 @@ describe('the licence of what a reader loads', () => {
   // modules by its own seams, so it must carry none of the four: each is replaced by a web seam or not imported, which the
   // web's own R21 gate checks. The list is a ratchet — it may shrink, never grow — until Task 7 cuts the four from the closure
   // (the ReaderHost seams)
-  it('keeps the closure of controller.ts, src/pdf-reader/ui/** and src/ui/controls/** to the four ported files it reaches today, and no more', () => {
+  it('keeps the closure of controller.ts, src/pdf-reader/ui/** and packages/ui/src/** to the four ported files it reaches today, and no more', () => {
     expect(shared.length).toBeGreaterThan(30)
     expect(portedInClosure(shared)).toEqual([
       'src/config/languages.ts',          // controller.ts: the language table

@@ -2,7 +2,7 @@
 // link goes, in the interface's language, said to screen readers as the link's name (set as text: links.mjs)
 import { afterEach, describe, expect, it } from 'vitest'
 import { linkNameOf } from '@/pdf-reader/ui/link-names'
-import { setLocale } from '@/ui/strings'
+import { setLocale } from '@readarxiv/ui'
 
 afterEach(() => setLocale('en'))
 

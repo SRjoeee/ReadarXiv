@@ -12,9 +12,8 @@
 // navigate its page). A failure never takes the focus; the card's reason is said in this region
 import { Info, X } from 'lucide'
 import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
-import { R, S } from '@/ui/strings'
+import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from '../controller'
-import { Icon } from '@/ui/controls/Icon'
 import { Capsule as Drawn } from './Capsule'
 import { settingsUrl } from './links'
 import { TippedButton } from './TippedButton'

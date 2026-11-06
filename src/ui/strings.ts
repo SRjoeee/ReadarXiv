@@ -1,24 +1,21 @@
-// The reader-visible strings of the extension's pages, in whichever language the interface is set to
-// (docs/UI.md §3 and §6). The words themselves live in `src/locales/*`; this module is what picks a
-// pack and what everything else imports.
+// The extension's own helpers over the string catalogue (docs/UI.md §3 and §6). The catalogue — the packs, the live
+// bindings `S`, `O`, `R` and `setLocale` — is `@readarxiv/ui`'s; what stays here reads what only the extension holds:
+// its configuration tables, the language names ported from Read Frog, its services and the core.
 //
-// **`S` and `O` are live bindings, not constants.** `setLocale` swaps them, and an importer sees the
-// swap because ES modules bind by reference. What does *not* see it is a value computed at module
-// load: `const NAMES = { side: S.mode.side }` at the top of a file freezes the pack that happened to
-// be current when that file was imported. Build such tables inside the component instead.
-//
-// The pack is chosen once, before anything renders (`applyLocale`), so nothing on screen is ever
-// half translated.
+// It also hands the core its sentences (the failure widget's), at load and on every switch: a module that switches the
+// pack loads this one (ui/apply-locale.ts does).
+import { LOCALES, type LocaleCode, localeInUse, O, onLocale, type ProviderErrorKind as CatalogueErrorKind, S } from '@readarxiv/ui'
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, NAME_MAX } from '@/config/appearance'
 import { LANG_CODE_TO_JA_NAME, LANG_CODE_TO_KO_NAME, LANG_CODE_TO_ZH_TW_NAME } from '@/config/language-names'
 import { LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_ZH_NAME, type LangCode, label } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import type { FallbackReason } from '@/config/storage'
-import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locales'
 import type { ProviderErrorKind } from '@/providers/types'
 import { setCoreStrings } from '@/core/strings'
 
-export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
+/** The catalogue states the error kinds it words a reason for (it imports nothing of the extension); they are the
+ *  providers' own, both ways: a kind added on one side and not on the other does not compile */
+const _kindsAgree: [ProviderErrorKind, CatalogueErrorKind] extends [CatalogueErrorKind, ProviderErrorKind] ? true : false = true
 
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
@@ -35,35 +32,10 @@ const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>
   en: LANG_CODE_TO_EN_UI_NAME,
 }
 
-let currentCode: LocaleCode = FALLBACK_LOCALE
-let current: Locale = LOCALES[FALLBACK_LOCALE]
-
-/** The popup's words (docs/UI.md §3.1) */
-export let S: Locale['S'] = current.S
-/** The settings page's words (docs/UI.md §3.2) */
-export let O: Locale['O'] = current.O
-/** The PDF reader's words (the reader's design §15) */
-export let R: Locale['R'] = current.R
-
-/** Swap the pack. Everything already rendered has to be rendered again; see the note above */
-export function setLocale(code: LocaleCode): void {
-  currentCode = code
-  current = LOCALES[code]
-  S = current.S
-  O = current.O
-  R = current.R
-  installCoreStrings()
-}
-
 /** The core renders the failure widget itself and knows no pack (DESIGN §4.2): hand it this locale's sentences, at load and on every switch */
 function installCoreStrings(): void {
   // (the widget knows the kind alone, not the engine: its key reasons are the keyless words)
-  setCoreStrings({ lang: currentCode, retry: S.page.retry, failureTitle: kind => reasonText(kind) })
-}
-
-/** Which pack is in use; the settings page marks it in its menu */
-export function localeInUse(): LocaleCode {
-  return currentCode
+  setCoreStrings({ lang: localeInUse(), retry: S.page.retry, failureTitle: kind => reasonText(kind) })
 }
 
 /**
@@ -73,7 +45,7 @@ export function localeInUse(): LocaleCode {
  * showed the tidy "简体中文" (reported 2026-09-11). The reader's own name for it lives in the menu
  */
 export function languageName(code: LangCode): string {
-  return LOCALE_LANGUAGE_NAMES[currentCode][code] ?? LANG_CODE_TO_EN_UI_NAME[code]
+  return LOCALE_LANGUAGE_NAMES[localeInUse()][code] ?? LANG_CODE_TO_EN_UI_NAME[code]
 }
 
 /**
@@ -83,7 +55,7 @@ export function languageName(code: LangCode): string {
  * finds it by how it is written at home
  */
 export function languageLabel(code: LangCode): string {
-  return label(code, LOCALE_LANGUAGE_NAMES[currentCode])
+  return label(code, LOCALE_LANGUAGE_NAMES[localeInUse()])
 }
 
 /**
@@ -146,6 +118,7 @@ export const MODE_ORDER = ['side', 'stack', 'only'] as const
  * not known, is told it without naming a key (#88 E5)
  */
 export function reasonText(kind: ProviderErrorKind, engine?: string): string {
+  const current = LOCALES[localeInUse()]
   if ((kind === 'auth' || kind === 'no-key') && (engine === undefined || isBuiltInService(engine))) return current.REASON_KEYLESS[kind]
   return current.REASON[kind]
 }
@@ -169,4 +142,5 @@ export function serviceName(id: string, services: readonly { id: string; name: s
   }
 }
 
+onLocale(installCoreStrings)
 installCoreStrings()

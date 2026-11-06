@@ -2,8 +2,7 @@
 // coming in with §8's row motion. It takes the focus when the deletion was the keyboard's, so that Enter undoes it; the
 // owner decides where the focus goes when it expires
 import { useEffect, useRef } from 'react'
-import { Button } from '@/ui/controls/Button'
-import { O } from '@/ui/strings'
+import { Button, O } from '@readarxiv/ui'
 
 export const UNDO_MS = 5000
 

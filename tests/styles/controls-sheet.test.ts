@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { ruleOf, rules, sheet } from './css-rules'
 
-const all = rules(sheet('../../src/styles/controls.css'))
+const all = rules(sheet('../../packages/ui/src/controls.css'))
 const C = ['@layer components']
 const RM = ['@media (prefers-reduced-motion: reduce)']
 const HOVER = [...C, '@media (hover: hover)']

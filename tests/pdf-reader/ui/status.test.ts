@@ -1,11 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_LOCALE_NAME, toBcp47 } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { LOCALE_CODES } from '@/locales'
+import { LOCALE_CODES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { plain, textOf, withCount } from '@/pdf-reader/ui/capsule-words'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
-import { O, R, S, setLocale } from '@/ui/strings'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, settings: DEFAULT_CONFIG, display: 'bilingual', ...over })
 const none = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }

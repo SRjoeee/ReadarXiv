@@ -4,7 +4,7 @@
 // control that reads useField() (a combobox) and puts the wiring on its own element
 import { CircleAlert } from 'lucide'
 import { type ComponentProps, createContext, type ReactNode, useContext, useId } from 'react'
-import { Icon } from './Icon'
+import { Icon } from './Icon.tsx'
 
 interface FieldWiring { id: string; describedBy: string | undefined; invalid: boolean }
 const FieldContext = createContext<FieldWiring | null>(null)

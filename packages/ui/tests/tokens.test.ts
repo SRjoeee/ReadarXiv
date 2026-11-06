@@ -3,9 +3,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RAMP, resolve, tokenSheet } from '@/shared/tokens'
+import { RAMP, resolve, tokenSheet } from '../src/index.ts'
 
-const SHEET = join(import.meta.dirname, '../../src/styles/tokens.css')
+const SHEET = join(import.meta.dirname, '../src/tokens.css')
 
 describe('the token source', () => {
   it('is what the committed sheet holds: `pnpm tokens` rewrites it', () => {

@@ -7,11 +7,11 @@
 // this table. English is the fallback — not because the readers are English speakers (a reader of
 // English needs no translator on arXiv) but because it is the one language a paper-reading audience
 // can be assumed to get by in when their own is not here yet.
-import { en } from './en'
-import { ja } from './ja'
-import { ko } from './ko'
-import { zh } from './zh-CN'
-import { zhTW } from './zh-TW'
+import { en } from './en.ts'
+import { ja } from './ja.ts'
+import { ko } from './ko.ts'
+import { zh } from './zh-CN.ts'
+import { zhTW } from './zh-TW.ts'
 
 /**
  * The Chinese pack's shape with its literals widened: `brand: 'Read arXiv'` becomes `string`, so
@@ -26,6 +26,13 @@ type Widen<T> =
 
 export type Locale = Widen<typeof zh>
 export type LocaleCode = keyof typeof LOCALES
+
+/**
+ * The kinds of failure a pack words a reason for (`REASON`, `REASON_KEYLESS`): a translator's error kinds, stated here
+ * because the catalogue imports nothing of the extension; the extension holds them equal to its own at compile time
+ * (src/ui/strings.ts)
+ */
+export type ProviderErrorKind = 'no-key' | 'network' | 'rate-limit' | 'auth' | 'bad-request' | 'invalid-response' | 'timeout' | 'aborted' | 'unknown'
 
 /**
  * The order is the menu's (the settings page's, and the website's list held to it): Simplified Chinese first, the

@@ -1,7 +1,7 @@
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DisplaySwitch } from '@/pdf-reader/ui/DisplaySwitch'
-import { setLocale } from '@/ui/strings'
+import { setLocale } from '@readarxiv/ui'
 import { mountElement } from '../../ui/render-hook'
 import { stubPopovers } from './popover-stub'
 

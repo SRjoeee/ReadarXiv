@@ -22,7 +22,8 @@ vi.mock('@/entrypoints/options/permissions', () => ({
 
 import { connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
-import { O, reasonText, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
+import { reasonText } from '@/ui/strings'
 
 const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-new', model: 'x/y', thinking: 'disabled' }
 

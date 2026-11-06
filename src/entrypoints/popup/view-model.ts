@@ -27,9 +27,9 @@ import { promptName } from '@/ui/prompt-name'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
-import type { MenuListItem } from '@/ui/controls/MenuList'
+import { type MenuListItem, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
 import { languageKeywords } from '@/ui/language-keywords'
-import { PREVIEW_LANG, PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
+import { languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 import { isPaperAddress, offeredQuery, readQuery } from './find'
 
 export type { PackState }

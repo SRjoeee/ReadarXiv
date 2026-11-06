@@ -17,15 +17,16 @@ import { appearanceSheet } from '@/core/renderer/page'
 import { installFigureViewer, SPOT_CLASS, VIEWER_CLASS } from '@/core/viewer'
 import { enableDebug } from '@/entrypoints/content/debug'
 
-const STYLES = join(import.meta.dirname, '../../src/styles')
+/** the extension's sheets, and the kit's and the tokens' that moved into the interface package (packages/ui) */
+const STYLES = [join(import.meta.dirname, '../../src/styles'), join(import.meta.dirname, '../../packages/ui/src')]
 
 describe('the injected style sheets', () => {
-  const files = readdirSync(STYLES).filter(f => f.endsWith('.css')).sort()
+  const files = STYLES.flatMap(dir => readdirSync(dir).filter(f => f.endsWith('.css')).sort().map(f => join(dir, f)))
 
   it('carry no :has() outside comments', () => {
-    expect(files.length).toBeGreaterThan(0)
+    expect(files.length).toBeGreaterThan(2)
     for (const file of files) {
-      const rules = readFileSync(join(STYLES, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      const rules = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
       expect(rules, `${file} uses :has()`).not.toContain(':has(')
     }
   })

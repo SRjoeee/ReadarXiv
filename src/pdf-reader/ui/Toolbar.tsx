@@ -5,10 +5,9 @@
 // What leaves it in a narrow window is marked (`data-wide`, `data-side-by-side`; reader.css). Everything here goes
 // through the controller; nothing reads the viewers
 import { ArrowLeftRight, Link2, LogOut, Minus, PanelLeft, Plus, Settings } from 'lucide'
-import { R, S } from '@/ui/strings'
+import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from '../controller'
 import { DisplaySwitch } from './DisplaySwitch'
-import { Icon } from '@/ui/controls/Icon'
 import { leaveReader, settingsUrl } from './links'
 import { DownloadMenu, LanguageMenu, ServiceMenu, ZoomMenu } from './Menus'
 import { PaperTitle } from './PaperTitle'

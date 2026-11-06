@@ -5,8 +5,8 @@
 // each `.seg.fit` scopes to itself (controls.css). A segment's title is its tooltip, and its description to a screen
 // reader (why a disabled one cannot be had); a segment of icons alone is named by its words, which its tooltip says
 import { type CSSProperties, type ReactNode, useId, useRef } from 'react'
-import { radioKeys } from './radio'
-import { useTip } from './tip'
+import { radioKeys } from './radio.ts'
+import { useTip } from './tip.tsx'
 
 export interface SegmentOption<T extends string> {
   value: T

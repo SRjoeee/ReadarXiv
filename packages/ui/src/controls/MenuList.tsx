@@ -13,8 +13,8 @@
 // list (`touchFirst`)
 import { Check, Loader } from 'lucide'
 import { type CSSProperties, Fragment, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { useMenuNav } from '@/ui/menu-nav'
-import { Icon } from './Icon'
+import { useMenuNav } from './menu-nav.ts'
+import { Icon } from './Icon.tsx'
 
 /**
  * A row brought into view inside the scroll boxes between it and `stop` (its popover): the list under a search field,

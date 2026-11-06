@@ -3,9 +3,9 @@
 // The voice is the product's, not a conversation's: a state is a noun, a button a verb, and an error says what
 // happened and what to do. The copy ids are those of docs/UI.md §3. Comments here are for developers and are in
 // English like the rest of the code; only the strings are Chinese.
-import type { ProviderErrorKind } from '@/providers/types'
-import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
-import { spacedAfterCjk } from './spacing'
+import type { ProviderErrorKind } from './index.ts'
+import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview.ts'
+import { spacedAfterCjk } from './spacing.ts'
 
 /** What the settings page says about a field the schema refused (config/schema.ts, config/appearance.ts, config/services.ts) */
 const FIELD: Record<string, string> = {
