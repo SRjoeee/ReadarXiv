@@ -31,6 +31,8 @@ export type GateL1 = {
   threw: string[]
   /** members whose flow's lay threw, and why (a width the table lacks: MissingMeasure) */
   thrown: Map<number, string>
+  /** members of a table group one of whose cells the adapter did not set: the group stays the original's */
+  tieHeld: Set<number>
 }
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
@@ -61,6 +63,17 @@ export function settingDiff(mine: FlowMember, today: FlowMember): string {
   if (ha && hb && Math.abs(ha.below - hb.below) > 0.01 && Number.isFinite(ha.below + hb.below))
     return 'U.params: edges (below)'
   if (!!mine.follower !== !!today.follower) return 'F.chains: follower'
+  // (each line's box, top and bottom: TeX's fonts' boxes on A against the file's lines today)
+  for (let k = 0; k < mine.blocks.length; k++)
+    if (
+      mine.blocks[k]!.rects.some(
+        (r, j) =>
+          Math.abs(r[2] - today.blocks[k]!.rects[j]![2]) > 0.01 ||
+          Math.abs(r[4] - today.blocks[k]!.rects[j]![4]) > 0.01,
+      )
+    )
+      return 'U.blocks: line boxes (top, bottom)'
+  if (JSON.stringify(mine.tokens.length) !== JSON.stringify(today.tokens.length)) return 'B.tokens: count'
   return 'equal'
 }
 
@@ -75,6 +88,7 @@ export function gateL1Pair(pair: string): GateL1 {
     selfDiffer: [],
     threw: [],
     thrown: new Map(),
+    tieHeld: new Set(),
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -95,16 +109,32 @@ export function gateL1Pair(pair: string): GateL1 {
       flow.forEach((m, k) => {
         if (!byOrd.has(m.ord)) byOrd.set(m.ord, { m, before: flow[k - 1] ?? null, after: flow[k + 1] ?? null })
       })
-  const units = new Map(L.units.map((u) => [u.ord, u]))
+  // (L1's members joined to today's units by content id, equal ids by order among equals: the baseline's join rule)
+  const todayById = new Map<string, (typeof L.units)[number][]>()
+  for (const u of [...L.units].sort((a, b) => a.ord - b.ord)) {
+    if (!u.id) continue
+    const list = todayById.get(u.id) ?? []
+    todayById.set(u.id, list)
+    list.push(u)
+  }
+  const unitOf = new Map<number, (typeof L.units)[number]>()
+  const seenId = new Map<string, number>()
+  for (const [ord, x] of [...byOrd].sort((a, b) => a[0] - b[0])) {
+    if (typeof x.m.text !== 'string') continue
+    const k = seenId.get(x.m.text) ?? 0
+    seenId.set(x.m.text, k + 1)
+    const u = todayById.get(x.m.text)?.[k]
+    if (u) unitOf.set(ord, u)
+  }
   const adapted = new Map<number, FlowMember>()
   for (const [ord, x] of byOrd) {
-    const u = units.get(ord)
+    const u = unitOf.get(ord)
     if (typeof x.m.text !== 'string') {
       stop(`a ${x.m.kind} member (a babel name or a figure text: S.names, S.figures)`)
       continue
     }
-    if (!u || u.id !== x.m.text) {
-      stop('no unit of today at its ord with its id')
+    if (!u) {
+      stop('no unit of today with its id')
       continue
     }
     const rounds = [...new Set(u.slots.filter((s) => s.by === 'X.cut').map((s) => s.round))]
@@ -112,7 +142,7 @@ export function gateL1Pair(pair: string): GateL1 {
       stop('not laid by today (no tokens of its to take)')
       continue
     }
-    const c = walkCase(pair, ord, rounds.at(-1)!)
+    const c = walkCase(pair, u.ord, rounds.at(-1)!)
     if (typeof c === 'string') {
       stop(`today's round: ${c}`)
       continue
@@ -120,7 +150,7 @@ export function gateL1Pair(pair: string): GateL1 {
     const label = c.slot('U.label', 'label')?.label as { drawn?: string } | null | undefined
     const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
-    const nextUnit = x.after ? units.get(x.after.ord) : undefined
+    const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     const got = adapt({
       m: x.m,
       before: x.before,
@@ -151,14 +181,33 @@ export function gateL1Pair(pair: string): GateL1 {
     }
     // (the CJK body face's size correction, B.faces': today's trackStart, as U.params read it)
     got.member.P.trackStart = up?.trackStart as number
-    adapted.set(ord, got.member)
-    out.setting.set(ord, settingDiff(got.member, prepare(c)))
+    // (named by today's ords, which the ledger and the dumps hold: L1's ord of a unit can differ)
+    const todayOrd = (o: number) => unitOf.get(o)?.ord ?? o
+    const mem = got.member
+    mem.ord = u.ord
+    if (mem.follower) mem.follower = { ...mem.follower, id: todayOrd(mem.follower.id) }
+    if (mem.rowStart)
+      mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
+    adapted.set(ord, mem)
+    out.setting.set(u.ord, settingDiff(mem, prepare(c)))
   }
   pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
   const dumped = new Map<
     number,
     { first: number; d: DumpUnit; lines: DumpUnit['lines']; elements: NonNullable<DumpUnit['elements']> }
   >()
+  // (a table group is laid whole or not at all, design-a §1.4: a group one of whose cells the adapter did not set stays the
+  // original's whole, as today's withhold leaves a group a cell of which is not drawn)
+  const tieHeld = new Set<number>()
+  for (const part of bundle.parts.values())
+    for (const t of (part.ties ?? []) as { rule: string; cells?: number[][] }[]) {
+      const cells = (t.cells ?? []).flat()
+      // (a cell today leaves the original's, its row kept or none, does not hold its group: the kept cell of 2026-10-24)
+      const laidToday = (o: number) => !!unitOf.get(o)?.slots.some((x) => x.by === 'X.cut')
+      if (t.rule === 'cells' && cells.some((o) => !adapted.has(o) && laidToday(o)))
+        for (const o of cells) tieHeld.add(o)
+    }
+  for (const o of tieHeld) if (adapted.has(o)) out.tieHeld.add(adapted.get(o)!.ord)
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
     // (its flows, cut where a member is not set: the one after it starts where TeX set it, as after a member left)
@@ -166,7 +215,7 @@ export function gateL1Pair(pair: string): GateL1 {
     for (const flow of part.flows) {
       let cur: FlowMember[] = []
       for (const m of flow) {
-        const a = adapted.get(m.ord)
+        const a = tieHeld.has(m.ord) ? undefined : adapted.get(m.ord)
         if (!a) {
           if (cur.length) flows.push(cur)
           cur = []
@@ -178,7 +227,7 @@ export function gateL1Pair(pair: string): GateL1 {
     }
     const ties = ((part.ties ?? []) as { rule: string; cells?: number[][] }[])
       .filter((t) => t.rule === 'cells')
-      .map((t) => ({ rule: 'cells' as const, cells: (t.cells ?? []).flat() }))
+      .map((t) => ({ rule: 'cells' as const, cells: (t.cells ?? []).flat().map((o) => unitOf.get(o)?.ord ?? o) }))
     // (a flow whose lay throws is left the original's alone, design-a §1.4: found by laying each flow of the page by itself,
     // then the page again without it; a width the table lacks is a measure the stated facts asked that today's run never made)
     let got: ReturnType<typeof layPagePrepared> | null = null
