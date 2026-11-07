@@ -676,6 +676,38 @@ function waitingLay(loaded: Set<string>): ReturnType<typeof standInLay> & { earl
   lay.early = 0
   return lay
 }
+/** faces each loaded when the test says so: what each `ready` asked, and the faces loaded */
+function heldFaces(loaded: Set<string>) {
+  const waits = new Map<string, () => void>()
+  const gates = new Map<string, Promise<void>>()
+  const gate = (id: string) => {
+    let p = gates.get(id)
+    if (!p) {
+      p = new Promise<void>((go) => waits.set(id, go))
+      gates.set(id, p)
+    }
+    return p
+  }
+  const stub = facesStub()
+  const asked: string[][] = []
+  const faces = {
+    ...stub,
+    asked,
+    ready: async (ids: Iterable<string | readonly [string, string]>) => {
+      const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
+      asked.push(list)
+      await Promise.all(list.map(gate))
+    },
+    /** face `id` loaded */
+    load(id: string) {
+      loaded.add(id)
+      gate(id)
+      waits.get(id)?.()
+    },
+  }
+  return faces as unknown as ReturnType<typeof facesStub> & { asked: string[][]; load(id: string): void }
+}
+
 describe('the units the paper keeps', () => {
   it('a unit the paper keeps as it is holds no page, and is never marked as translating', async () => {
     const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1, 'inkheads')])]])
@@ -697,14 +729,31 @@ describe('the units the paper keeps', () => {
 })
 
 describe('the faces, in one wave', () => {
-  it('the near pages that wait for a face ask it once, together, the middle page first', async () => {
-    const pages = new Map([1, 2, 3].map((n) => [n, partOf(n, [member(n * 10, n, 0, 'needs-face')])] as const))
-    const ready = new Set(['sans'])
-    const w = world({ pages, ready })
+  it("the near pages' faces asked in the view's order, the middle page first; each page laid once its own are in, never held by another's", async () => {
+    const loaded = new Set<string>()
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0, 'face:b')])],
+      [2, partOf(2, [member(20, 2, 0, 'face:a'), member(21, 2, 1, 'face:b')])],
+      [3, partOf(3, [member(30, 3, 0, 'face:c')])],
+    ])
+    const faces = heldFaces(loaded)
+    const w = world({ pages, lay: waitingLay(loaded), faces })
     w.stack.setNear([1, 2, 3])
     open(w, rowsOf('de', allIds(w), true))
     await settle()
-    expect(w.faces.waves).toEqual([['cjk']])
+    // (the middle page first, then the page after it at an equal distance)
+    expect(faces.asked).toEqual([['a', 'b'], ['c'], ['b']])
+    // (page 1's own face in: page 1 laid while pages 2 and 3 still wait for theirs)
+    faces.load('b')
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    expect(w.composer.laid(2)).toBeNull()
+    expect(w.composer.laid(3)).toBeNull()
+    w.stack.put(1)
+    faces.load('a')
+    faces.load('c')
+    await settle()
+    expect(w.composer.laid(2)).not.toBeNull()
   })
   it('reads WAVE_SLOTS at a time, each face once; a 404 never asked again, a 503 asked by the next wave', async () => {
     let inFlight = 0,

@@ -12,8 +12,8 @@
 // - **Laying, one page at a time.** The near pages are laid the page in the middle of the view first (then the pages after it
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
-//   or its faces (asked in one wave for the near pages, the middle page first). Committed is final: a late row changes nothing on
-//   screen until the language, the toggles or the paper change.
+//   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in).
+//   Committed is final: a late row changes nothing on screen until the language, the toggles or the paper change.
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -456,20 +456,20 @@ export function createComposer(o: ComposerOptions): Composer {
     })
     return changed ? { ...page, members: out } : page
   }
-  /** the faces the round's pages wait for, in one wave: the page in the middle of the view first */
+  /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
+   *  again once its own faces are in: never held by another page's (staging, 2026-11-08: 2611.07042v1's page 1, whose own
+   *  faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
   function flushWave() {
     if (!wave.size) return
     const c = stack.centre() || 1
     const order = [...wave.keys()].sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)
-    // (each face with the texts the pages wait on it for, once)
-    const asked = new Map<string, readonly [string, string]>()
-    for (const n of order) for (const [f, t] of wave.get(n) ?? []) asked.set(`${f}\u0000${t}`, [f, t])
-    wave.clear()
     const mine = gen
-    void faces.ready(asked.values()).then(() => {
-      if (mine !== gen) return
-      for (const n of order) if (stack.near(n)) askLay(n)
-    })
+    // (each page's faces asked in that order: a slice another page asked first is read once, and this page waits for it too)
+    for (const n of order)
+      void faces.ready(wave.get(n) ?? []).then(() => {
+        if (mine === gen && stack.near(n)) askLay(n)
+      })
+    wave.clear()
   }
   function failed(n: number) {
     const P = rec(n)
