@@ -339,8 +339,15 @@ const h = {
     const copied = sel.toString()
     sel.removeAllRanges()
     const p = h.composer?.laid(n)
-    const items = (await (await (h.doc as import('pdfjs-dist').PDFDocumentProxy).getPage(n)).getTextContent())
-      .items as { str: string; transform: number[]; width: number }[]
+    // (where each member's first line stands in the stream: the composed document's text, A's in its order split at every
+    // group's seam, so that an item A sets across two members is each one's: 2609.26457v1's "and Zhengyao Jiang", an ink
+    // orphan's "and" and a name)
+    const doc = (h.composed ?? h.doc) as import('pdfjs-dist').PDFDocumentProxy
+    const items = (await (await doc.getPage(n)).getTextContent()).items as {
+      str: string
+      transform: number[]
+      width: number
+    }[]
     const firstOf = (ord: number) => {
       const m = h.composer?.member(ord)
       const l = m?.lines.find((x) => x[0] === n)
@@ -358,12 +365,19 @@ const h = {
     const runs = (p?.members ?? [])
       .filter((m) => m.state === 'laid')
       .map((m) => ({
+        ord: m.ord,
         at: firstOf(m.ord),
         t: m.lines.flatMap(([, , , its]) => its.filter((i) => !('src' in i)).map((i) => i.s)).filter((s) => s.trim()),
       }))
       .sort((a, b) => a.at - b.at)
-      .map((x) => x.t)
-    return { spans: spans.length, text: spans.join(''), copied, laid: runs.map((r) => r.join('')), runs }
+    return {
+      spans: spans.length,
+      text: spans.join(''),
+      copied,
+      laid: runs.map((r) => r.t.join('')),
+      runs: runs.map((r) => r.t),
+      ords: runs.map((r) => r.ord),
+    }
   },
   /**
    * The split residue and I1 on pages `pages` (all where none) at `scale` and the device's ratio, each rendered as the page views

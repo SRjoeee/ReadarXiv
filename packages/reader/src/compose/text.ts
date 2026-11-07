@@ -16,8 +16,9 @@
 //
 // Which group an item is under: PDF.js's text content reports our `/OC /<prop> BDC` as a marked content of tag OC with no name
 // (pdf.worker.mjs 6.3.289: its id is an MCID only), and splits its items at every BDC and EMC, so that every item lies in one run
-// of one group, and a run is one group's. A run is that group's whose ink it stands on: a member's lines on this page (text), an
-// element's ink (elements), its label's (label), with half a point to spare; exact ownership makes them disjoint. (The add-on
+// of one group, and a run is one group's. A run is that group's whose ink its items stand on: a member's lines on this page (text),
+// an element's ink (elements), its label's (label), with half a point to spare; exact ownership makes them disjoint. Each item is
+// placed on its own, since a run may span several of its member's lines and its middle stand on none (I8). (The add-on
 // naming each run, a `/axt:<ord>.<page>.<g> BMC` inside it, would put the name in the text content itself: asked of the prepare.)
 import type { Placed } from '@readarxiv/format'
 import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
@@ -58,26 +59,8 @@ const upright = (it: TextItem, c: TextContent) => {
   return b === 0 && cc === 0 && (a as number) > 0 && (d as number) > 0 && !style?.vertical
 }
 const sizeOf = (it: TextItem) => Math.abs((it.transform[3] as number) || (it.transform[0] as number)) || 1
-/** a run's place: the middle of its items (PDF units; their transforms, unrotated text) */
-function centreOf(items: TextItem[]): [number, number] | null {
-  let x0 = Number.POSITIVE_INFINITY,
-    x1 = Number.NEGATIVE_INFINITY,
-    y = 0,
-    n = 0
-  for (const it of items) {
-    if (!it.str.trim()) continue
-    const [, , , , e, f] = it.transform as number[]
-    x0 = Math.min(x0, e as number)
-    x1 = Math.max(x1, (e as number) + it.width)
-    y += f as number
-    n++
-  }
-  return n ? [(x0 + x1) / 2, y / n] : null
-}
-
-/** the group (member's ord and bit) a run at `at` (its middle, the baseline its items share) is under, of the members given */
-function groupAt(at: [number, number], page: number, members: Map<number, Placed>): [number, number] | null {
-  const [x, y] = at
+/** the group (member's ord and bit) a point is under, of the members given */
+function groupAt(x: number, y: number, page: number, members: Map<number, Placed>): [number, number] | null {
   for (const m of members.values()) {
     for (const l of m.lines)
       if (l[0] === page && x >= l[2] - EPS && x <= l[3] + EPS && y >= l[6] - EPS && y <= l[5] + EPS) return [m.ord, 1]
@@ -89,6 +72,27 @@ function groupAt(at: [number, number], page: number, members: Map<number, Placed
       return [m.ord, 4]
   }
   return null
+}
+/** the group a run is under: the one its items stand on (each item's middle across, on its baseline), by their characters.
+ *  Each item, not the run's middle: a run holds as many of its member's lines as the stream sets in a row, and their middle can
+ *  stand on none of them (a title's long line over its short one: the gap between the two) or on another member (a paragraph
+ *  whose last line heads the next column: the paragraph above it) */
+function groupOf(run: TextItem[], page: number, members: Map<number, Placed>): [number, number] | null {
+  const chars = new Map<string, { g: [number, number]; n: number }>()
+  let best: { g: [number, number]; n: number } | null = null
+  for (const it of run) {
+    const n = it.str.trim().length
+    if (!n) continue
+    const [, , , , e, f] = it.transform as number[]
+    const g = groupAt((e as number) + it.width / 2, f as number, page, members)
+    if (!g) continue
+    const k = `${g[0]}.${g[1]}`
+    const c = chars.get(k) ?? { g, n: 0 }
+    c.n += n
+    chars.set(k, c)
+    if (!best || c.n > best.n) best = c
+  }
+  return best?.g ?? null
 }
 
 /** the items of a crop's source among the dropped items of its member (each item's middle inside the source's ink), moved by
@@ -165,8 +169,7 @@ export function laidText(
       }
       run.push(x)
     }
-    const at = centreOf(run)
-    const g = at ? groupAt(at, page.page, here) : null
+    const g = groupOf(run, page.page, here)
     const m = g ? laid.get(g[0]) : undefined
     if (m && g && m.off & g[1]) {
       dropped += run.length

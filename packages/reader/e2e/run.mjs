@@ -545,16 +545,17 @@ for (const name of Object.keys(fixtures)) {
         ...ink,
         // (each member's runs of text, in order, in the layer's text: the translation read in reading order)
         textOk: text.runs.every((rs) => rs.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, '')))),
-        inOrder: (() => {
+        // (the first member whose translation the layer reads before the one before it, or not at all past it; none: in order)
+        outOfOrder: (() => {
           let at = 0
           const all = text.text.replace(/\s+/g, '')
-          for (const rs of text.runs)
+          for (const [k, rs] of text.runs.entries())
             for (const t of rs) {
               const i = all.indexOf(t.replace(/\s+/g, ''), at)
-              if (i < 0) return false
+              if (i < 0) return text.ords[k]
               at = i
             }
-          return true
+          return null
         })(),
         copied: text.copied.length,
       })
@@ -574,8 +575,8 @@ for (const name of Object.keys(fixtures)) {
       if (!lab) assert(x.crops === x.elements, `page ${x.n}: ${x.crops} crops for ${x.elements} elements`)
       // I8: the text layer reads each laid member's translation, in order; a selection of it copies it
       assert(
-        x.textOk && x.inOrder && x.copied > 0,
-        `page ${x.n}: the text layer reads ${x.textOk ? 'out of order' : 'not every translation'}`,
+        x.textOk && x.outOfOrder === null && x.copied > 0,
+        `page ${x.n}: the text layer reads ${x.textOk ? `member ${x.outOfOrder} out of order` : 'not every translation'}`,
       )
     }
     return {
