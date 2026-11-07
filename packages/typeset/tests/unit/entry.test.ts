@@ -83,6 +83,23 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.lines[0]![0]).toBe(700)
     expect(laid!.lines.flatMap((l) => l[3]).some((it) => 'src' in it && it.piece === '1')).toBe(true)
   })
+  it('turns its elements off where one is drawn as text, not kept where it stands (today’s hide.mjs: its placeholders hidden)', () => {
+    // (a citation drawn as the page's text in the translation: its ink on A must go with the text, or it shows twice)
+    const m = member({
+      els: [
+        ['1', { kind: 'cite', ink: [[1, 150, 698, 170, 707, 700]], text: '[3]', style: { role: 'serif', size: 10 } }],
+      ],
+    })
+    const r = row([
+      { t: 'text', s: 'Ein Satz mit ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' darin, der weiter läuft.' },
+    ])
+    const [laid] = layPage(part(m), rowsOf([r]), rules, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.lines.flatMap((l) => l[3]).some((it) => 'src' in it && it.piece === '1')).toBe(false)
+    expect(laid!.off & 2).toBe(2)
+  })
 })
 
 describe('a row’s pieces from the member’s facts (rowPieces): each test a rule makes of a source answers as on the source', () => {

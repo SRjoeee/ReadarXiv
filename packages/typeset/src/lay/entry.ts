@@ -93,6 +93,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const faces: [string, string][] = []
   const prepared = new Map<number, FlowMember>()
   const relabelled = new Set<number>()
+  // (the members whose elements on this page are drawn otherwise than kept where they stand: a crop or text in the translation)
+  const moved = new Set<number>()
   for (const flow of part.flows)
     flow.forEach((m, k) => {
       const content = contentOf(m, rows)
@@ -102,10 +104,11 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       }
       const relabels = !!m.label && !((m.fixed ?? 0) & LABEL_KEPT)
       let rd: ReturnType<typeof readMember>
+      const pieces = rowPieces(m, content)
       try {
         rd = readMember({
           m,
-          unit: { kind: m.kind, state: 'whole', pieces: rowPieces(m, content) },
+          unit: { kind: m.kind, state: 'whole', pieces },
           rects: m.lines.map((l) => rectOf(l, m)),
           to: rules.target,
           P: R as never,
@@ -162,6 +165,15 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         return
       }
       if (rd.labelDrawn !== null) relabelled.add(m.ord)
+      // (today's hide.mjs: its placeholders' group hidden on a page where one with ink there, no display, is not kept where it
+      // stands; an element kept in place by the part (El.keep) is in no group)
+      const els = new Map(m.els ?? [])
+      for (const [k, r] of rd.resolutions) {
+        const p = pieces[k] as { t: string; k?: number } | undefined
+        const e = p?.t === 'ph' || p?.t === 'nested' ? els.get(String(p.k)) : undefined
+        if (!e || e.keep || e.kind === 'display' || r.mode === 'kept' || r.inPlace) continue
+        if (e.ink.some((q) => q[0] === page)) moved.add(m.ord)
+      }
       prepared.set(m.ord, got.member)
     })
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
@@ -192,14 +204,14 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const lines = (x?.lines ?? []).map(
       ([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number],
     )
-    // (its groups turned off: its text where laid, its elements where one is drawn at a place of its own (a crop on a laid line),
-    // its label where it is drawn anew or carried as a crop)
+    // (its groups turned off: its text where laid, its elements where one is drawn otherwise than kept where it stands (a crop on
+    // a laid line, or text in the translation: today's hide.mjs), its label where it is drawn anew or carried as a crop)
     const crops = lines.flatMap((l) => l[3]).filter((it): it is Extract<Item, { src: unknown }> => 'src' in it)
     const off =
       st !== 'laid'
         ? 0
         : 1 |
-          (crops.some((c) => c.piece !== 'label' && c.piece !== 'counter') ? 2 : 0) |
+          (moved.has(m.ord) || crops.some((c) => c.piece !== 'label' && c.piece !== 'counter') ? 2 : 0) |
           (relabelled.has(m.ord) || crops.some((c) => c.piece === 'label') ? LABEL_KEPT : 0)
     return {
       ord: m.ord,
