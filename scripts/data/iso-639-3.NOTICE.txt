@@ -21,5 +21,5 @@ SIL's terms, as stated on that page on 2026-11-07 ("ISO 639-3 Code Tables Terms 
 
 So this repository holds only the rows its language table is built from, never the code set: the whole table is to be
 had from the address above. Not part of the standard, and named as such where they are used: the menus' order, the
-BCP 47 tags the translators are sent, the names in other languages (Unicode CLDR, scripts/languages.ts), the script
-notes and the product's own words in the generator's tables.
+BCP 47 tags the translators are sent, the names (Unicode CLDR's, scripts/languages.ts; the table's reference name only
+for a language CLDR does not name in English), the script notes and the product's own words in the generator's tables.
