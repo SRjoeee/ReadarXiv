@@ -13,6 +13,7 @@ import { adapt, rectOf } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
+  measured,
   readMember,
   type RowUnit,
   rowPieces,
@@ -568,9 +569,9 @@ export function gateL1Pair(
             names: null,
           },
           relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
-          metrics,
           shown: Number.POSITIVE_INFINITY,
         })
+        rd = { ...rd, tokens: measured(rd.tokens, metrics!) }
       } catch (e) {
         // (a width the Metrics given lacks: the tap's table holds today's measures alone)
         if ((e as Error)?.name !== 'MissingMeasure') throw e

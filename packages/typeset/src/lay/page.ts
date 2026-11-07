@@ -29,6 +29,8 @@ export type PreparedPage = {
   members: PageMember[]
   passes: { page: number; target: FillTarget | null }[]
   tables: { cells: number[]; why: string | null }[]
+  /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its size */
+  fits: [ord: number, size: number][]
 }
 
 /** the pages a member has lines on (its pages) begin with its first */
@@ -55,9 +57,10 @@ export function layPagePrepared(
   const first = layPageTied(page, flows, cells, R, trace)
   const sizes = ties.filter((t): t is Extract<PageTie, { rule: 'size' }> => t.rule === 'size')
   if (!sizes.length) return first
-  const fitOf = new Map(
-    first.members.flatMap((x) => (x.state === 'laid' && x.fit ? [[x.ord, x.fit.size] as const] : [])),
-  )
+  // (every tied member laid in the call, whether or not it has a line on this page: the part holds the tie's every flow, so each
+  // page a tie is laid for caps alike; read off the page's members alone, a member on pages 1-2 tied to one on page 2 was laid
+  // at its own size for page 1 and at the other's for page 2)
+  const fitOf = new Map(first.fits)
   const cap = new Map<number, number>()
   for (const t of sizes) {
     const laid = t.ords.filter((o) => fitOf.has(o))
@@ -130,6 +133,7 @@ function layPageTied(
           .map((m) => errorOf(m, why(x))),
         passes: [],
         tables: [],
+        fits: [],
       }
     }
     return out
@@ -248,5 +252,6 @@ function layPageOnce(
         slots,
       }
     })
-  return { page, members, passes, tables }
+  const fits = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.f] as [number, number]] : []))
+  return { page, members, passes, tables, fits }
 }
