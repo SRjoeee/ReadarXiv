@@ -5,6 +5,7 @@
 // with each difference named: a class the census does not hold, a count that moved, a paper that moved. The compiles'
 // counts and times are no part of it. --write: the census made from <out>, carrying the notes of the classes it keeps (after
 // the owner has read every difference the check named). Not shipped.
+import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -14,7 +15,7 @@ if (!OUT) {
   console.error('usage: node lab/marks/census.mjs <out> [--census=<file>] [--write]')
   process.exit(2)
 }
-const FILE = arg('census') ?? new URL('census.json', import.meta.url).pathname
+const FILE = arg('census') ?? fileURLToPath(new URL('census.json', import.meta.url))
 
 /** the run's totals and classes, every paper's count of each */
 function runOf(dir) {
