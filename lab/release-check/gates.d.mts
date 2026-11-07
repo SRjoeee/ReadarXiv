@@ -22,7 +22,7 @@ export interface Gate {
   judge?: (ctx: Ctx, steps: StepRun[]) => Judged
 }
 export interface Invariant { id: string; says: string; gap: string | null }
-export interface Target { id: string; measure: string; baseline: string; target: string; from: string | null; why?: string; value?: (n: Numbers) => string | false; met?: (n: Numbers) => boolean }
+export interface Target { id: string; measure: string; baseline: string; target: string; from: string | null; why?: string; value?: (n: Numbers) => string | false; met?: (n: Numbers) => boolean | null }
 export declare const TIERS: Tier[]
 export declare const STAGES: Stage[]
 export declare const INVARIANTS: Invariant[]

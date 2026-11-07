@@ -20,7 +20,8 @@ const tierOfAll = gates => gates.map(g => g.tier).sort((a, b) => TIERS.indexOf(a
 
 /**
  * One invariant's line in a tier. `results`: the gates' results by id (`{ status: 'pass'|'fail'|'skipped'|'private',
- * reason?, findings? }`). GO only where gates of this tier hold it, each passed, none counted a breach, and no part of it is
+ * reason?, findings? }`). GO only where gates of this tier hold it, each passed (or, where it counts the invariant, counted
+ * no breach of it), and no part of it is
  * left without a gate (`gap`); "GO in part" where gates of a higher tier hold it too; "beyond this tier" where only higher
  * tiers' gates hold it; NO-GO where no gate holds it.
  */
@@ -32,9 +33,12 @@ export function invariantLine(inv, gates, tier, results) {
   const why = []
   for (const g of here) {
     const r = results[g.id] ?? { status: 'not run' }
-    if (r.status !== 'pass') why.push(`${g.id}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
+    // (a gate that counts this invariant is read by its count, whatever else made it fail: the typeset runners' I4 is 0
+    // though their differential loses units; a gate that states no count holds it by passing)
     const f = r.findings?.[inv.id]
-    if (f && !f.held) why.push(`${g.id} counts ${f.count} against it`)
+    if (f) {
+      if (!f.held) why.push(`${g.id} counts ${f.count} against it`)
+    } else if (r.status !== 'pass') why.push(`${g.id}: ${r.status}${r.reason ? ` (${r.reason})` : ''}`)
   }
   if (inv.gap) why.push(`no gate for the rest: ${inv.gap}`)
   // (an invariant a higher tier holds too is held here in part only: GO is said of the whole, at the tier that runs them all)
@@ -51,7 +55,9 @@ export function targetLines(results) {
     const r = results[t.from]
     const value = r?.numbers && t.value ? t.value(r.numbers) : null
     if (!value) return { ...base, status: 'not measured', value: null, why: r ? `${t.from}: ${r.status}${r.reason ? ` (${r.reason})` : ''}` : t.why ?? `${t.from} not in this tier` }
-    return { ...base, status: t.met ? (t.met(r.numbers) ? 'met' : 'missed') : 'reported', value, from: t.from }
+    // (met: true, false, or null where the numbers cannot tell)
+    const met = t.met ? t.met(r.numbers) : null
+    return { ...base, status: met === true ? 'met' : met === false ? 'missed' : 'reported', value, from: t.from }
   })
 }
 

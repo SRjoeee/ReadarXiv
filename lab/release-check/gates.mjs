@@ -83,7 +83,8 @@ export const TARGETS = [
     target: 'under 10 / 30 ms',
     from: 'typeset-parts',
     value: n => n.layP50 != null && `p50 ${n.layP50}, p90 ${n.layP90}, p99 ${n.layP99} ms over ${n.layPages} pages (the runner prints no p95)`,
-    met: n => n.layP50 < 10 && n.layP99 < 30,
+    // (no p95 printed: under 30 where the p99 is; over it where the p90 is; else the numbers cannot tell)
+    met: n => (n.layP50 >= 10 || n.layP90 >= 30 ? false : n.layP99 < 30 ? true : null),
   },
   { id: 'commit', measure: "A page's commit at 1×, p50", baseline: '42 ms', target: 'under 20 ms', from: 'harness', value: n => n.commitP50 != null && `${n.commitP50} ms over ${n.commitPages} laid pages of the fixtures (the fixtures' pages are lighter than a paper's)`, met: n => n.commitP50 < 20 },
   { id: 'switch', measure: 'Switching language', baseline: 'every page read again', target: 'rows and layout only', from: 'harness', value: n => n.languageSwitch != null && (n.languageSwitch ? 'no object asked again (the harness\'s check)' : 'objects asked again'), met: n => n.languageSwitch === true },

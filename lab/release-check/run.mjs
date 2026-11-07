@@ -147,7 +147,9 @@ async function runGate(g, results) {
   }
   const failed = steps.find(s => s.exit !== 0)
   const status = judged.skip ? 'skipped' : judged.pass ? 'pass' : 'fail'
-  const reason = judged.skip ?? (status === 'fail' ? (failed ? `${failed.cmd.slice(0, 3).join(' ')} … exit ${failed.exit}` : 'its counts') : undefined)
+  // (a failed step named by its script, or its command's first words)
+  const stepName = st => st.cmd.find(a => /\.(?:m?js|sh|ts)$/.test(a))?.split('/').pop() ?? st.cmd.slice(0, 2).join(' ')
+  const reason = judged.skip ?? (status === 'fail' ? (failed ? `${stepName(failed)} exit ${failed.exit}` : 'its counts') : undefined)
   console.log(`release-check: ${g.id}: ${status}${reason ? ` (${reason})` : ''}, ${Math.round(ms / 1000)} s${waited ? ` (and ${Math.round(waited / 1000)} s waiting for the heavy slot)` : ''}`)
   return { ...base, status, reason, note: judged.note || undefined, ms, waited, numbers: judged.numbers, findings: judged.findings, steps: stepsOut }
 }

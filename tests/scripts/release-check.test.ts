@@ -62,6 +62,8 @@ describe('a tier', () => {
     expect(invariantLine(I1, table.slice(1), 'fast', { r: { status: 'pass' } })).toMatchObject({ status: 'GO in part', why: ['the rest in tier full (b)'] })
     expect(invariantLine(I1, table, 'full', { r: { status: 'pass' }, b: { status: 'skipped', reason: 'needs the tap' } })).toMatchObject({ status: 'NO-GO', why: ['b: skipped (needs the tap)'] })
     expect(invariantLine(I1, table, 'fast', { r: { status: 'pass', findings: { I1: { held: false, count: 3 } } } })).toMatchObject({ status: 'NO-GO', why: ['r counts 3 against it'] })
+    // (a gate that counts the invariant is read by its count, though its own verdict failed on something else)
+    expect(invariantLine(I1, table, 'full', { r: { status: 'pass' }, b: { status: 'fail', reason: 'diff.mjs exit 1', findings: { I1: { held: true, count: 0 } } } }).status).toBe('GO')
     expect(invariantLine({ ...I1, gap: 'the corpus' }, table, 'fast', { r: { status: 'pass' } })).toMatchObject({ status: 'NO-GO', why: ['no gate for the rest: the corpus'] })
   })
 
@@ -123,6 +125,9 @@ describe('the report', () => {
     expect(lines.find(t => t.id === 'commit')).toMatchObject({ status: 'missed' })
     expect(lines.find(t => t.id === 'reuse')).toMatchObject({ status: 'not measured', why: expect.stringMatching(/no gate/) })
     expect(lines.find(t => t.id === 'layout')).toMatchObject({ status: 'not measured', why: 'typeset-parts not in this tier' })
+    // (the runner prints p50, p90 and p99: a p95 under 30 ms is told only where the p99 is under it, missed where the p90 is over)
+    const lay = (p50: number, p90: number, p99: number) => targetLines({ 'typeset-parts': { status: 'fail', numbers: { layP50: p50, layP90: p90, layP99: p99, layPages: 9 } } }).find(t => t.id === 'layout')?.status
+    expect([lay(7.6, 20.7, 33.5), lay(7.6, 20.7, 29), lay(7.6, 31, 40), lay(11, 20, 25)]).toEqual(['reported', 'met', 'missed', 'missed'])
   })
 
   it('writes the verdict, every gate with its result and every invariant with its reasons', () => {
