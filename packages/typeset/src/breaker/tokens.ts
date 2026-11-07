@@ -144,7 +144,7 @@ export type TokensInput = {
   base: TStyle
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
-  lead: { parts?: { text: string; st: TStyle }[]; gap?: number } | null
+  lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
   faces: { of(st: TStyle, cls: 'cjk' | 'latin'): Face; ownSmallCaps(id: string): boolean }
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean

@@ -62,7 +62,9 @@ const urlCut = (t, room, scale, least) => {
   const head = { ...c, crop: [rect[0], rect[1], at[0], rect[3]], text: text.slice(0, at[1]), breaks: undefined, cut: ((c.cut ?? 0) & 1) | 2 }
   const rest = c.breaks.filter(b => b[0] > at[0]).map(b => [b[0], b[1] - at[1]])
   const tail = { ...c, crop: [at[0], rect[1], rect[2], rect[3]], text: text.slice(at[1]), breaks: rest.length ? rest : undefined, cut: ((c.cut ?? 0) & 2) | 1 }
-  return { head: headOfCut(t, { crop: head, cw: at[0] - rect[0] }), tail: { ...t, crop: tail, cw: rect[2] - at[0], glue: false, asp: false } }
+  // (`of`: the token cut, the whole URL each part is of, which the gate's I4 reads as drawn once where its parts tile it)
+  const of = t.of ?? t
+  return { head: headOfCut(t, { crop: head, cw: at[0] - rect[0], of }), tail: { ...t, crop: tail, cw: rect[2] - at[0], glue: false, asp: false, of } }
 }
 /** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
  *  its width (`kern`) */

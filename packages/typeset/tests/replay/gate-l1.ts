@@ -134,10 +134,25 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
     }
     if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
     if (L.scale < Number((R as Raw).floor ?? 0) - 1e-9 && l0Page(L) === page) inv.below.push(pm.ord)
-    // (each element's crop token drawn once over its lines, every page's)
+    // (each element's crop token drawn once over its lines, every page's; a URL cut where TeX's url package breaks it, the
+    // breaker's urlCut, is drawn once where its parts tile its crop: each part `of` it, from its left edge to its right)
     const seen = new Map<unknown, number>()
+    const cuts = new Map<unknown, number[][]>()
     for (const l of L.lines)
-      for (const it of l.items) if ((it.t as { crop?: unknown }).crop) seen.set(it.t, (seen.get(it.t) ?? 0) + 1)
+      for (const it of l.items) {
+        const t = it.t as { crop?: { crop: number[] }; of?: unknown }
+        if (!t.crop) continue
+        if (t.of) (cuts.get(t.of) ?? cuts.set(t.of, []).get(t.of)!).push(t.crop.crop)
+        else seen.set(it.t, (seen.get(it.t) ?? 0) + 1)
+      }
+    for (const [of, rects] of cuts) {
+      const whole = (of as { crop: { crop: number[] } }).crop.crop
+      const xs = rects.map((r) => [r[0]!, r[2]!]).sort((a, b) => a[0]! - b[0]!)
+      const tiles = xs.every((r, k) =>
+        k ? Math.abs(r[0]! - xs[k - 1]![1]!) < 1e-9 : Math.abs(r[0]! - whole[0]!) < 1e-9,
+      )
+      if (tiles && Math.abs(xs.at(-1)![1]! - whole[2]!) < 1e-9) seen.set(of, (seen.get(of) ?? 0) + 1)
+    }
     if (l0Page(L) === page)
       for (const t of pm.lay!.tokens as readonly { crop?: unknown; ownLabel?: boolean }[])
         if (t.crop && !t.ownLabel && (seen.get(t) ?? 0) !== 1) {
