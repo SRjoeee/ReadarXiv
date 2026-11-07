@@ -138,3 +138,13 @@ describe('the probe’s answers, bounded', () => {
     expect(a).toMatchObject({ switches: {}, inkless: [], texts: [], probed: [], seen: [] })
   })
 })
+
+describe('the probe writes nothing of the paper’s (review of #608, 4)', () => {
+  it('turns file writing off inside its own group only, and gives the footnote counter back', () => {
+    const f = probeFile(probeSamples(readSource(tree('A \\cite{a} b.'), NO_DEFINITIONS)), 'pdflatex')
+    const inside = f.slice(f.indexOf('\\begingroup\\setbox0\\vbox{'), f.lastIndexOf('}\\endgroup'))
+    expect(f.split('\\@fileswfalse').length - 1).toBe(1)
+    expect(inside).toContain('\\@fileswfalse')
+    expect(f.slice(f.lastIndexOf('}\\endgroup'))).toContain('\\global\\c@footnote=\\axt@fnsave')
+  })
+})

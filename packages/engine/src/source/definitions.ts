@@ -114,7 +114,8 @@ const ASKABLE = /^[A-Za-z@*][A-Za-z0-9@*.-]*$/
 /**
  * The ask file: TeX that writes `<job>.axtdefs` when it is read at `begindocument/end`. Every name once; names that cannot
  * stand in a group as they are (a control symbol, an expl3 name) are not asked. Read with `@` a letter; changes nothing
- * TeX sets: one write stream, its records, a group around its own definitions
+ * TeX sets: one write stream that \newwrite hands out (a fixed number would close a file the paper holds open on it, and its
+ * later writes would go to the log), its records, a group around its own definitions
  */
 export function askFile(names: Iterable<string>): string {
   const list = [...new Set(names)].filter((n) => ASKABLE.test(n)).sort()
@@ -123,34 +124,35 @@ export function askFile(names: Iterable<string>): string {
     '\\makeatletter',
     '\\begingroup',
     '\\newlinechar=-1\\relax',
-    '\\immediate\\openout15=\\jobname.axtdefs\\relax',
-    `\\immediate\\write15{H ${DEFINITIONS_FORMAT}}%`,
+    '\\ifdefined\\axt@defs\\else\\newwrite\\axt@defs\\fi',
+    '\\immediate\\openout\\axt@defs=\\jobname.axtdefs\\relax',
+    `\\immediate\\write\\axt@defs{H ${DEFINITIONS_FORMAT}}%`,
     '\\count@=0\\relax',
     // (an ltcmd command's meaning begins `->\\__cmd_start`; asking another for its specification is an error)
     '\\edef\\axt@cmd{\\detokenize{->\\__cmd_start}}%',
     '\\def\\axt@ask#1{%',
     '  \\advance\\count@ 1\\relax',
     '  \\ifcsname #1\\endcsname',
-    '    \\immediate\\write15{M #1 \\expandafter\\meaning\\csname #1\\endcsname}%',
+    '    \\immediate\\write\\axt@defs{M #1 \\expandafter\\meaning\\csname #1\\endcsname}%',
     '    \\ifcsname\\expandafter\\string\\csname #1\\endcsname\\endcsname',
-    '      \\immediate\\write15{O #1 \\expandafter\\meaning\\csname\\expandafter\\string\\csname #1\\endcsname\\endcsname}%',
+    '      \\immediate\\write\\axt@defs{O #1 \\expandafter\\meaning\\csname\\expandafter\\string\\csname #1\\endcsname\\endcsname}%',
     '    \\fi',
     '    \\ifcsname #1\\space\\endcsname',
-    '      \\immediate\\write15{R #1 \\expandafter\\meaning\\csname #1\\space\\endcsname}%',
+    '      \\immediate\\write\\axt@defs{R #1 \\expandafter\\meaning\\csname #1\\space\\endcsname}%',
     '    \\fi',
     '    \\edef\\axt@m{\\expandafter\\meaning\\csname #1\\endcsname}%',
     '    \\edef\\axt@t{\\noexpand\\in@{\\axt@cmd}{\\axt@m}}\\axt@t',
     '    \\ifin@\\ifdefined\\GetDocumentCommandArgSpec',
     '      \\expandafter\\GetDocumentCommandArgSpec\\csname #1\\endcsname',
-    '      \\immediate\\write15{S #1 \\detokenize\\expandafter{\\ArgumentSpecification}}%',
-    '      \\immediate\\write15{C #1 \\expandafter\\meaning\\csname #1 code\\endcsname}%',
+    '      \\immediate\\write\\axt@defs{S #1 \\detokenize\\expandafter{\\ArgumentSpecification}}%',
+    '      \\immediate\\write\\axt@defs{C #1 \\expandafter\\meaning\\csname #1 code\\endcsname}%',
     '    \\fi\\fi',
     '  \\else',
-    '    \\immediate\\write15{M #1 undefined}%',
+    '    \\immediate\\write\\axt@defs{M #1 undefined}%',
     '  \\fi}%',
     ...list.map((n) => `\\axt@ask{${n}}%`),
-    '\\immediate\\write15{END \\the\\count@}%',
-    '\\immediate\\closeout15\\relax',
+    '\\immediate\\write\\axt@defs{END \\the\\count@}%',
+    '\\immediate\\closeout\\axt@defs\\relax',
     '\\endgroup',
     '\\makeatother',
     '',

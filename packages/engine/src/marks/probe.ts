@@ -393,10 +393,12 @@ export function probeFile(s: ProbeSamples, compiler: string, bbl = ''): string {
     // (acronym's \\ac at the document's end, 2609.20976v1) would leave the hooks with no definition for every paragraph after)
     X.MARK_DEF + (dvi ? X.DVI_MARK_DEF : '') + X.LAYOUT_TEX + (dvi ? X.DVI_LAYOUT_TEX : ''),
     PRELUDE,
-    '\\begingroup\\setbox0\\vbox{%',
+    // (no file written inside the probe's group: the kernel and biblatex write on after it in the same hook, \@abspage@last to
+    // the aux, the rest of the control file; the footnote counter as the document left it after)
+    '\\begingroup\\setbox0\\vbox{\\@fileswfalse%',
     bbl,
     probeTex(s),
-    '}\\endgroup',
+    '}\\endgroup\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@fnsave\\relax\\fi',
     probeRow('probe-end'),
     '',
   ].join('\n')
@@ -420,13 +422,13 @@ export function probeBytes(text: string, encoding: SourceDoc['encoding']): Uint8
 }
 /**
  * Before the sections, at the top level: the state today's probe began in, a document's start (the footnote counter at 0,
- * no file written: the aux is closed by then, and a write to it goes to the log); and global copies of what the sections
+ * put back after the probe's group, where no file is written); and global copies of what the sections
  * define in their groups (their boxes, PROBE_RESET's, the look-ahead's \axt@qat, the guard's conditional), so that a sample
  * that closes more groups than it opens (2610.20266v1, 2610.40576v1: the sections' \axt@qreset gone, every box after it an
  * error) leaves the probe after it as it was
  */
 const PRELUDE =
-  '\\makeatletter\\@fileswfalse\\ifdefined\\c@footnote\\global\\c@footnote=0\\fi' +
+  '\\makeatletter\\xdef\\axt@fnsave{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\ifdefined\\c@footnote\\global\\c@footnote=0\\fi' +
   '\\newbox\\axt@qbox\\newbox\\axt@ibox\\newif\\ifaxt@qok' +
   '\\xdef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\gdef\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}' +
   '\\gdef\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'

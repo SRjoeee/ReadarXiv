@@ -85,3 +85,11 @@ describe('the definitions: the names a source uses', () => {
     expect(findFile(t, 'missing')).toBeNull()
   })
 })
+
+describe('the ask file writes nothing of the paper’s (review of #608, 4)', () => {
+  it('writes the dump through a stream \\newwrite hands out, never a stream the paper may hold open', () => {
+    const t = askFile(['foo'])
+    expect(t).toContain('\\newwrite\\axt@defs')
+    expect(t).not.toMatch(/\\(?:openout|write|closeout)\s*\d/)
+  })
+})

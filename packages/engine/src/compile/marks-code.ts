@@ -3,4 +3,4 @@
 //   compile/recover.ts, marks/classes.ts, marks/mark.ts, marks/probe.ts, marks/statements.ts, marks/tex.ts
 //   source/build.ts, source/definitions.ts, source/files.ts, source/kinds.ts, source/macros.ts, source/read.ts
 //   source/roles.ts, source/tables.ts, source/tokens.ts
-export const MARKS_CODE = 'c25a874b603382695d005916cebb143dc5849ac3adff9b992a0e07e1894d7d4e'
+export const MARKS_CODE = '945474e2a79b8a22f18c54d6466a1cf06b7659b402678918366a1fe756cf0ba3'

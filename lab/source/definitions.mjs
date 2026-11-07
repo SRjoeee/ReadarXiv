@@ -12,9 +12,13 @@
 //
 //   node --experimental-strip-types lab/source/definitions.mjs --papers=<papers.json> --set=87 --out=<dir> [--only=id,id]
 //        [--prepare=<baseline prepare dir>]   (the tree and compiler the baseline compiled each paper with)
-//        [--probe] [--bbl=<dir>]
+//        [--probe] [--bbl=<dir>] [--plain] [--digests]
+// --plain: the pass with neither the ask file nor the probe (the paper's own first pass); --digests: every file the pass wrote
+// or changed but the log, the output and the dump, by its SHA-256, in <id>.json `files`, the date fixed (SOURCE_DATE_EPOCH) so
+// that two passes compare (review of #608, 4: a measuring pass writes nothing of the paper's otherwise).
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { bblHead, PROBE_FILE, PROBE_HOOK, probeBytes, probeFile, probeSamples } from '../../packages/engine/src/marks/probe.ts'
@@ -60,20 +64,22 @@ for (const p of papers) {
   writeFileSync(join(build, 'axt-ask.tex'), askFile(names))
   const stem = jobName(main)
   // (the probe's samples, chosen before TeX: the reader with no definitions)
-  const PROBE = process.argv.includes('--probe')
+  const PLAIN = process.argv.includes('--plain')
+  const PROBE = process.argv.includes('--probe') && !PLAIN
   const t1 = performance.now()
   const pre = PROBE ? readSource({ main, files }, NO_DEFINITIONS) : null
   const samples = pre ? probeSamples(pre) : null
   const preMs = Math.round(performance.now() - t1)
   if (samples) writeFileSync(join(build, PROBE_FILE), probeBytes(probeFile(samples, compiler, bblHead({ main, files })), pre.encoding))
-  const first = `\\AddToHook{begindocument/end}{\\input{axt-ask.tex}}${samples ? PROBE_HOOK : ''}\\input{${main}}`
+  const first = PLAIN ? `\\input{${main}}` : `\\AddToHook{begindocument/end}{\\input{axt-ask.tex}}${samples ? PROBE_HOOK : ''}\\input{${main}}`
   const engine = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex'] }[compiler] ?? ['pdflatex', '-draftmode']
   // (and, where the package ships no .bbl of the job, the bibliography the pass asks for: BibTeX's, or biber's where the pass
   // wrote biblatex's control file, as the prepare's first pass makes it; kept as <id>.bbl)
   const bib = files.has(`${stem}.bbl`) && !madeBbl ? '' : madeBbl ? '' : `; if [ -f ${stem}.bcf ]; then biber ${stem}; elif grep -q bibdata ${stem}.aux 2>/dev/null; then bibtex ${stem}; fi`
   const cmd = ['sh', '-c', `"$@" >/dev/null 2>&1${bib} >/dev/null 2>&1; true`, 'sh', ...engine, '-interaction=nonstopmode', `-jobname=${stem}`, first]
   const t0 = performance.now()
-  const said = await run(SLOT, ['docker', '--', 'nice', '-n', '10', 'docker', 'run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', '-v', `${build}:/work`, '-w', '/work', image, 'sh', '-c', 's=$(date +%s%N); timeout 300 "$@" >/dev/null 2>&1; e=$?; echo "axt-l2: exit $e ms $(( ($(date +%s%N) - s) / 1000000 ))"', 'sh', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
+  const DIGESTS = process.argv.includes('--digests')
+  const said = await run(SLOT, ['docker', '--', 'nice', '-n', '10', 'docker', 'run', '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...(DIGESTS ? ['-e', 'SOURCE_DATE_EPOCH=1700000000', '-e', 'FORCE_SOURCE_DATE=1'] : []), '-v', `${build}:/work`, '-w', '/work', image, 'sh', '-c', 's=$(date +%s%N); timeout 300 "$@" >/dev/null 2>&1; e=$?; echo "axt-l2: exit $e ms $(( ($(date +%s%N) - s) / 1000000 ))"', 'sh', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
   const m = /axt-l2: exit (\d+) ms (\d+)/.exec(said)
   const defs = join(build, `${stem}.axtdefs`), log = join(build, `${stem}.log`), bbl = join(build, `${stem}.bbl`)
   if (existsSync(defs)) writeFileSync(join(OUT, `${p.id}.axtdefs`), readFileSync(defs))
@@ -81,8 +87,18 @@ for (const p of papers) {
   if (madeBbl) rmSync(join(build, `${stem}.bbl`), { force: true })
   if (existsSync(log)) writeFileSync(join(OUT, `${p.id}.log`), readFileSync(log))
   if (samples) writeFileSync(join(OUT, `${p.id}.probe.json`), JSON.stringify(samples))
-  const info = { id: p.id, main, compiler, image, names: names.size, ...(samples ? { probe: { punct: samples.punct.length, ahead: samples.ahead.length, ink: samples.ink.length, leads: samples.leads.length, preMs } } : {}), bbl: madeBbl ? 'made before' : bib ? existsSync(bbl) : 'shipped', exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
+  const digests = {}
+  if (DIGESTS) {
+    const walkDir = (d, rel = '') => readdirSync(join(d, rel), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? walkDir(d, join(rel, x.name)) : [join(rel, x.name)]))
+    for (const f of walkDir(build)) {
+      if (/^axt-(?:ask|probe)\.tex$|\.(?:axtdefs|log|pdf|dvi|xdv|fls)$|\.synctex(?:\.gz)?$/.test(f)) continue
+      const b = readFileSync(join(build, f)), had = files.get(f)
+      if (had && Buffer.compare(Buffer.from(had), b) === 0) continue
+      digests[f] = createHash('sha256').update(b).digest('hex')
+    }
+  }
+  const info = { id: p.id, main, compiler, image, names: names.size, ...(DIGESTS ? { files: digests } : {}), ...(samples ? { probe: { punct: samples.punct.length, ahead: samples.ahead.length, ink: samples.ink.length, leads: samples.leads.length, preMs } } : {}), bbl: madeBbl ? 'made before' : bib ? existsSync(bbl) : 'shipped', exit: m ? Number(m[1]) : null, texMs: m ? Number(m[2]) : null, wallMs: Math.round(performance.now() - t0), defs: existsSync(defs) }
   writeFileSync(join(OUT, `${p.id}.json`), `${JSON.stringify(info)}\n`)
-  rmSync(build, { recursive: true, force: true })
+  if (!process.argv.includes('--keep-build')) rmSync(build, { recursive: true, force: true })
   console.log(JSON.stringify(info))
 }
