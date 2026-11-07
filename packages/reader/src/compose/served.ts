@@ -7,8 +7,12 @@
 //   GET /hyph/<lang>.json                         a language's hyphenation patterns ({ patterns, exceptions })
 //
 // every one through the host's fetch, a path its fetch resolves against our server (the website's origin; the extension's our
-// server's). A slice is fetched as data and made a FontFace of its face's family, weight and style, its code points as its
-// unicode-range (never imported: compose/faces.ts says why), added to the document while the reader lives and taken out with it.
+// server's). A table (the index, a group's, a language's patterns) is asked as every ask of our server is (session/client.ts
+// `request`): its answer and its body within REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS;
+// one that cannot be had then, or whose answer is not it (a 4xx, past its cap, of another shape), is none for the visit: the
+// faces it would give are lost (told once each), the language hyphenates nothing. A slice is fetched as data and made a FontFace
+// of its face's family, weight and style, its code points as its unicode-range (never imported: compose/faces.ts says why),
+// added to the document while the reader lives and taken out with it.
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
@@ -18,11 +22,12 @@
 // character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
 // between two adjacent CJK punctuation marks (no text-spacing-trim), the runs' widths summed; the ink their highest ascent,
 // deepest descent and furthest right. `ready` is true where every slice the text needs is loaded, 'never' where a character is
-// in no slice of the string's faces, or its slice is lost (an answer no ask would mend, or a failure met twice), else false: the
-// typesetter waits for the face (the page's `wait.faces`), and the composer asks it here (`faces.ready`).
+// in no slice of the string's faces (a face whose table cannot be had holds none), or its slice is lost (an answer no ask would
+// mend, or a failure met twice), else false: the typesetter waits for the face (the page's `wait.faces`), and the composer asks
+// it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait asked again at once.
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
-import type { Fetch } from '../bytes/source.ts'
-import { bodyWithin } from '../session/client.ts'
+import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
+import { bodyWithin, request } from '../session/client.ts'
 import { type Faces, WAVE_SLOTS } from './faces.ts'
 import type { FaceId } from './page.ts'
 
@@ -189,15 +194,6 @@ export interface Served {
   hyphNow(lang: string): Patterns | null | undefined
 }
 
-/** an answer's JSON, within its cap (the body read as it comes, and let go at the cap) */
-async function jsonOf(r: Response, cap: number): Promise<unknown> {
-  if (!r.ok) {
-    void r.body?.cancel().catch(() => {})
-    throw new Answer(r.status)
-  }
-  const bytes = await bodyWithin(r, cap, () => new Error(`an answer past ${cap} bytes`))
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
-}
 class Answer extends Error {
   readonly status: number
   constructor(status: number) {
@@ -224,10 +220,33 @@ export function createServed(o: {
   root: HTMLElement
   platform?: Platform
   warn?(what: string, e: unknown): void
-  /** a face lost (one of its slices), told once a face */
+  /** a face lost (one of its slices, or its table), told once a face */
   lost?(id: FaceId): void
+  /** the clock the tables' asks are bounded by and paused on (a test's own) */
+  timers?: Timers
 }): Served {
   const P = o.platform ?? browserPlatform()
+  // (the reader closed: a table's ask let go, its pause before the next ask too)
+  const closed = new AbortController()
+  const ask = { fetch: o.fetch, signal: closed.signal, timers: o.timers ?? realTimers }
+  let gone = false
+  /** a table of our site's read by `shape`, or null where it cannot be had (warned): its ask and its body within REQUEST_MS,
+   *  asked once more after RETRY_MS where the network fails, a 5xx comes or nothing in time (session/client.ts `request`); an
+   *  answer that is not it (a 4xx, a body past `cap`, not JSON, of another shape) at once */
+  const tableOf = async <T>(what: string, url: string, cap: number, shape: (v: unknown) => T): Promise<T | null> => {
+    try {
+      const got = await request(ask, url, {}, async (r) => {
+        if (r.ok) return bodyWithin(r, cap)
+        void r.body?.cancel().catch(() => {})
+        return r.status
+      })
+      if (typeof got === 'number') throw new Answer(got)
+      return shape(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(got)))
+    } catch (e) {
+      if (!gone) o.warn?.(what, e)
+      return null
+    }
+  }
   // ---- the catalogue: each family's faces, their slices once their group's table is read
   const families = new Map<string, ServedFace[]>()
   const byId = new Map<string, ServedFace>()
@@ -238,29 +257,24 @@ export function createServed(o: {
     list.push(face)
     families.set(f.family, list)
   }
-  let index: Promise<{ groups: Record<string, string>; fonts: string | null }> | null = null
-  const groups = new Map<string, Promise<void>>()
+  // (each table asked once a visit: its answer, or null where it cannot be had, kept)
+  let index: Promise<{ groups: Record<string, string>; fonts: string | null } | null> | null = null
+  const groups = new Map<string, Promise<boolean>>()
   const theIndex = () =>
-    (index ??= (async () => {
-      const v = await jsonOf(await o.fetch('/static-fonts/index.json'), CAPS.index)
+    (index ??= tableOf("the faces' index", '/static-fonts/index.json', CAPS.index, (v) => {
       if (!isObject(v) || v.schema !== 1 || !isObject(v.faces)) throw new Error("the faces' index is of another shape")
       const out: Record<string, string> = {}
       for (const [id, e] of Object.entries(v.faces))
         if (isObject(e) && typeof e.group === 'string' && GROUP.test(e.group)) out[id] = e.group
       return { groups: out, fonts: typeof v.fonts === 'string' && FONTS.test(v.fonts) ? v.fonts : null }
-    })().catch((e) => {
-      index = null
-      throw e
     }))
-  /** a face's group read: every face of the group given its slices (a face the group holds none of: none) */
+  /** a face's group read: every face of the group given its slices (a face the group holds none of: none); false where the
+   *  table cannot be had */
   const theGroup = (name: string, fonts: string | null) => {
     let g = groups.get(name)
     if (!g) {
-      g = (async () => {
-        const v = await jsonOf(
-          await o.fetch(`/static-fonts/${name}.json${fonts === null ? '' : `?fonts=${encodeURIComponent(fonts)}`}`),
-          CAPS.group,
-        )
+      const url = `/static-fonts/${name}.json${fonts === null ? '' : `?fonts=${encodeURIComponent(fonts)}`}`
+      g = tableOf(`the faces' table ${name}`, url, CAPS.group, (v) => {
         if (!isObject(v) || v.schema !== 1 || v.group !== name || !Array.isArray(v.slices) || !isObject(v.faces))
           throw new Error(`the faces' table ${name} is of another shape`)
         const slices = v.slices.map(rangesOf)
@@ -275,10 +289,8 @@ export function createServed(o: {
           })
           face.slices = out
         }
-      })()
-      g.catch(() => {
-        if (groups.get(name) === g) groups.delete(name)
-      })
+        return true
+      }).then((read) => read !== null)
       groups.set(name, g)
     }
     return g
@@ -339,8 +351,13 @@ export function createServed(o: {
     lost = new Set<string>(),
     told = new Set<string>()
   const added: FontFaceLike[] = []
-  let gone = false,
-    busy = 0,
+  /** a face lost: its texts left the original's, told once */
+  const tellLost = (id: string) => {
+    if (told.has(id)) return
+    told.add(id)
+    o.lost?.(id)
+  }
+  let busy = 0,
     asked = 0,
     most = 0
   const waiting: ((held: boolean) => void)[] = []
@@ -391,10 +408,7 @@ export function createServed(o: {
       // (an answer no ask would mend, or a failure met twice: lost, its texts left the original's; else asked again next time)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
-        if (!told.has(face.id)) {
-          told.add(face.id)
-          o.lost?.(face.id)
-        }
+        tellLost(face.id)
       }
       failed.add(slice.key)
     })
@@ -413,21 +427,23 @@ export function createServed(o: {
     if (!fs.read) {
       const ix = await theIndex()
       if (gone) return
-      await Promise.all(
-        fs.faces
-          .filter((f) => f.slices === null)
-          .map((f) => {
-            const g = ix.groups[f.id]
-            if (!g) {
-              f.slices = []
-              return undefined
-            }
-            return theGroup(g, ix.fonts)
-          }),
+      const unread = fs.faces.filter((f) => f.slices === null)
+      // (a face the index names no group of holds no character, and is no loss; one whose index or table cannot be had is)
+      const had = await Promise.all(
+        unread.map((f) => {
+          const g = ix?.groups[f.id]
+          return !ix ? false : g ? theGroup(g, ix.fonts) : true
+        }),
       )
-      for (const f of fs.faces) f.slices ??= []
-      runsCache.clear()
       if (gone) return
+      unread.forEach((f, k) => {
+        if (had[k]) f.slices ??= []
+        else {
+          f.slices = []
+          tellLost(f.id)
+        }
+      })
+      runsCache.clear()
     }
     const runs = runsOf(font, text)
     if (!runs || runs === 'never') return
@@ -439,24 +455,19 @@ export function createServed(o: {
   const hyphOf = (lang: string): Promise<Patterns | null> => {
     let p = hyphs.get(lang)
     if (!p) {
-      p = (async () => {
-        if (!LANG.test(lang)) return null
-        try {
-          const v = await jsonOf(await o.fetch(`/hyph/${lang}.json`), CAPS.hyph)
-          if (!isObject(v) || !Array.isArray(v.patterns))
-            throw new Error(`the patterns of ${lang} are of another shape`)
-          return hyphenationOf({
-            patterns: v.patterns.filter((x): x is string => typeof x === 'string'),
-            exceptions: Array.isArray(v.exceptions)
-              ? v.exceptions.filter((x): x is string => typeof x === 'string')
-              : [],
+      // (a language whose patterns cannot be had, in time, hyphenates nothing this visit: no page waits on them again)
+      p = !LANG.test(lang)
+        ? Promise.resolve(null)
+        : tableOf(`the patterns of ${lang}`, `/hyph/${lang}.json`, CAPS.hyph, (v) => {
+            if (!isObject(v) || !Array.isArray(v.patterns))
+              throw new Error(`the patterns of ${lang} are of another shape`)
+            return hyphenationOf({
+              patterns: v.patterns.filter((x): x is string => typeof x === 'string'),
+              exceptions: Array.isArray(v.exceptions)
+                ? v.exceptions.filter((x): x is string => typeof x === 'string')
+                : [],
+            })
           })
-        } catch (e) {
-          // (a language whose patterns cannot be had hyphenates nothing this visit: no page waits on them again)
-          o.warn?.(`the patterns of ${lang}`, e)
-          return null
-        }
-      })()
       void p.then((v) => hyphDone.set(lang, v))
       hyphs.set(lang, p)
     }
@@ -545,6 +556,7 @@ export function createServed(o: {
     },
     dispose() {
       gone = true
+      closed.abort()
       for (const go of waiting.splice(0)) go(false)
       for (const f of added) f.remove()
       added.length = 0

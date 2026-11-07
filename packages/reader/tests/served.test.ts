@@ -1,11 +1,15 @@
 // The served faces and the reader's Metrics over them (compose/served.ts), over a fake of our site's tables and slices and a fake
 // canvas: nothing is ready before the tables are read; the slices a text needs are loaded, no other; a character no served face
 // holds is never ready; a text is measured in runs cut where its slice changes, a CJK run unkerned and cut between two
-// punctuation marks, never in small capitals; a slice not there is lost (its face told once); the patterns read as the
-// typesetter reads them.
+// punctuation marks, never in small capitals; a slice not there is lost (its face told once); a table not to be had loses its
+// faces; the patterns read as the typesetter reads them, none where they do not come in time.
+import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
+import type { Timers } from '../src/bytes/source.ts'
 import { WAVE_SLOTS } from '../src/compose/faces.ts'
 import { createServed, HYPH_WAIT, partsOf, type Platform, unicodeRangeOf } from '../src/compose/served.ts'
+import { typesetLay } from '../src/compose/typeset.ts'
+import { REQUEST_MS, RETRY_MS } from '../src/session/client.ts'
 
 const LATIN = [0x20, 0x7e],
   ACCENTS = [0xa0, 0x17f],
@@ -38,12 +42,16 @@ const TABLES: Record<string, unknown> = {
 }
 const FONT = '400 100px "axt-nimbus-roman", "axt-shs-sc"'
 
-function site(o: { missing?: string[]; failing?: string[] } = {}) {
+function site(
+  o: { missing?: string[]; failing?: string[]; malformed?: string[]; offline?: string[]; timers?: Timers } = {},
+) {
   const asked: string[] = []
   const fetch = async (url: string) => {
     asked.push(url)
     if (o.missing?.includes(url)) return new Response('', { status: 404 })
     if (o.failing?.includes(url)) return new Response('', { status: 503 })
+    if (o.malformed?.includes(url)) return new Response('{"schema":1,', { status: 200 })
+    if (o.offline?.includes(url)) throw new TypeError('Failed to fetch')
     if (url in TABLES) return new Response(JSON.stringify(TABLES[url]), { status: 200 })
     if (/^\/static-fonts\/[0-9a-f]{16}\.woff2$/.test(url))
       return new Response(new Uint8Array([1, 2, 3]), { status: 200 })
@@ -72,8 +80,43 @@ function site(o: { missing?: string[]; failing?: string[] } = {}) {
     },
   }
   const lost: string[] = []
-  const s = createServed({ fetch, root: document.body, platform, lost: (id) => lost.push(id) })
+  const s = createServed({
+    fetch,
+    root: document.body,
+    platform,
+    lost: (id) => lost.push(id),
+    ...(o.timers ? { timers: o.timers } : {}),
+  })
   return { s, asked, faces, measured, lost }
+}
+/** timers moved by hand: `run` lets what falls due run, in order, the promises they start settled between (a timer one of them
+ *  sets that falls due within the run included) */
+function handTimers() {
+  let now = 0,
+    id = 0
+  const due = new Map<number, { at: number; f: () => void }>()
+  const flush = async () => {
+    for (let i = 0; i < 6; i++) await new Promise((go) => setTimeout(go, 0))
+  }
+  return {
+    later(f: () => void, ms: number) {
+      due.set(++id, { at: now + ms, f })
+      return id
+    },
+    clear: (t: unknown) => void due.delete(t as number),
+    async run(ms: number) {
+      const end = now + ms
+      for (;;) {
+        await flush()
+        const next = [...due].sort((a, b) => a[1].at - b[1].at)[0]
+        if (!next || next[1].at > end) break
+        due.delete(next[0])
+        now = next[1].at
+        next[1].f()
+      }
+      now = end
+    },
+  }
 }
 
 describe('the served faces and the Metrics over them', () => {
@@ -129,6 +172,54 @@ describe('the served faces and the Metrics over them', () => {
     await flaky.s.faces.ready([[FONT, 'Satz']])
     expect([flaky.s.metrics.ready(FONT, 'Satz'), flaky.lost]).toEqual(['never', ['nimbus-roman-regular']])
   })
+  it('a table not there or of another shape loses its faces at once, each told once; one that fails for now is asked once more after a pause, then its faces are lost', async () => {
+    const INDEX = '/static-fonts/index.json',
+      CJK = '/static-fonts/shs-sc.json?fonts=6'
+    const BOTH = ['nimbus-roman-regular', 'shs-sc-regular']
+    for (const [url, how] of [
+      [INDEX, 'missing'],
+      [INDEX, 'malformed'],
+      [CJK, 'missing'],
+      [CJK, 'malformed'],
+    ] as const) {
+      const lost = url === INDEX ? BOTH : ['shs-sc-regular']
+      const at = site(how === 'missing' ? { missing: [url] } : { malformed: [url] })
+      await at.s.faces.ready([
+        [FONT, 'Satz'],
+        [FONT, '\u4e2d\u6587'],
+      ])
+      const ready = [at.s.metrics.ready(FONT, 'Satz'), at.s.metrics.ready(FONT, '\u4e2d\u6587')]
+      expect(ready).toEqual([lost.length === 2 ? 'never' : true, 'never'])
+      expect(at.lost).toEqual(lost)
+      // (asked once: a page laid again with the faces lost asks nothing, tells nothing again)
+      const asked = at.asked.length
+      await at.s.faces.ready([
+        [FONT, 'Wort'],
+        [FONT, '\u4e2d'],
+      ])
+      expect(at.asked).toHaveLength(asked)
+      expect(at.asked.filter((u) => u === url)).toHaveLength(1)
+      expect(at.lost).toEqual(lost)
+    }
+    for (const failing of [INDEX, CJK]) {
+      const timers = handTimers()
+      for (const how of ['offline', 'failing'] as const) {
+        const at = site(how === 'offline' ? { offline: [failing], timers } : { failing: [failing], timers })
+        let done = false
+        void at.s.faces.ready([[FONT, '\u4e2d']]).then(() => {
+          done = true
+        })
+        await timers.run(RETRY_MS - 1)
+        expect([done, at.asked.filter((u) => u === failing)]).toEqual([false, [failing]])
+        await timers.run(1)
+        expect([done, at.asked.filter((u) => u === failing)]).toEqual([true, [failing, failing]])
+        expect(at.s.metrics.ready(FONT, '\u4e2d')).toBe('never')
+        expect(at.lost).toEqual(failing === INDEX ? BOTH : ['shs-sc-regular'])
+        await at.s.faces.ready([[FONT, '\u4e2d']])
+        expect(at.asked.filter((u) => u === failing)).toHaveLength(2)
+      }
+    }
+  })
   it("reads a language's patterns as the typesetter reads them, once; one not to be had is none; the lay's wait for them loads them", async () => {
     const { s, asked } = site()
     expect(s.hyphNow('de')).toBeUndefined()
@@ -141,6 +232,31 @@ describe('the served faces and the Metrics over them', () => {
     const late = site()
     await late.s.faces.ready([[HYPH_WAIT, 'de']])
     expect(late.s.hyphNow('de')).not.toBeUndefined()
+  })
+  it("a language's patterns that do not come are none by the bound of an ask (REQUEST_MS, asked once more after RETRY_MS): the lay comes back", async () => {
+    const timers = handTimers()
+    const asked: string[] = []
+    const fetch = (url: string, init?: RequestInit) => {
+      asked.push(url)
+      // (a connection taken and never answered: only the ask's own abort ends it, as a browser's fetch)
+      return new Promise<Response>((_, no) => {
+        const signal = init?.signal
+        signal?.addEventListener('abort', () => no(signal.reason), { once: true })
+      })
+    }
+    const s = createServed({ fetch, root: document.body, platform: platformOf(), timers })
+    const langs = T.rulesFor('de').patterns
+    let lay: unknown = null
+    void typesetLay({ served: s, target: () => 'de', classes: () => null }).then((l) => {
+      lay = l
+    })
+    const BOUND = REQUEST_MS + RETRY_MS + REQUEST_MS
+    await timers.run(BOUND - 1)
+    expect(lay).toBeNull()
+    await timers.run(1)
+    expect(lay).toBeTypeOf('function')
+    expect(langs.map((l) => s.hyphNow(l))).toEqual(langs.map(() => null))
+    expect(asked.sort()).toEqual(langs.flatMap((l) => [`/hyph/${l}.json`, `/hyph/${l}.json`]).sort())
   })
   it('draws a font string by a class of its own: its families, weight, style and small capitals, nothing synthesized', () => {
     const { s } = site()
@@ -274,7 +390,8 @@ describe('the reader closed, and the bounds of what is read', () => {
     })
     await s.faces.ready([[FONT, 'a']])
     expect(bad.seen).toEqual({ pulled: 3, cancelled: true })
-    expect(warned.some((w) => /answer/.test(w))).toBe(true)
-    expect(s.metrics.ready(FONT, 'a')).toBe(false)
+    expect(warned).toHaveLength(1)
+    // (an answer no ask would mend: its faces lost)
+    expect(s.metrics.ready(FONT, 'a')).toBe('never')
   })
 })
