@@ -71,7 +71,7 @@ export const configSchema = z.object({
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
   targetLanguage: langCodeSchema,
   mode: modeSchema,
-  /** The prompt library (ported from Read Frog): the id in use + the reader's own */
+  /** The prompt library (DESIGN §8.2): the id in use + the reader's own */
   prompts: z.object({
     promptId: z.string().min(1),
     patterns: z.array(z.object({ id: z.string().min(1), name: z.string(), systemPrompt: z.string(), prompt: z.string() })),

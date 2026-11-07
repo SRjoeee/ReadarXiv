@@ -1,4 +1,4 @@
-// The prompt library (ported from Read Frog): template variables, built-in / custom selection, fingerprints.
+// The prompt library (DESIGN §8.2): template variables, built-in / custom selection, fingerprints.
 import { describe, expect, it } from 'vitest'
 import {
   BUILT_IN_PROMPTS, DEFAULT_PROMPT_ID, PRECISION_REWRITE_PROMPT_ID, PROMPT_TOKENS,
@@ -35,7 +35,7 @@ describe('prompt library', () => {
     expect(selectPrompt({ promptId: '', patterns: [] }).id).toBe(DEFAULT_PROMPT_ID)
   })
 
-  it('a custom prompt is matched by id; with the same name as a built-in the built-in wins (as in Read Frog)', () => {
+  it('a custom prompt is matched by id; with the id of a built-in the built-in wins', () => {
     const mine = { id: 'mine', name: 'mine', systemPrompt: 'S {{targetLanguage}}', prompt: '{{input}}' }
     expect(selectPrompt({ promptId: 'mine', patterns: [mine] })).toBe(mine)
     const shadow = { ...mine, id: DEFAULT_PROMPT_ID }
