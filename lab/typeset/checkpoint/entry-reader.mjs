@@ -46,7 +46,7 @@ for (const d of head.parts) {
 }
 const rows = { format: 1, rows: [...ids].map((u) => ({ id: u, ok: true, content: [{ t: 'text', s: '' }], by: 'entry' })) }
 // (the entry's Pages: its members and links; a run's face named for the harness's table, the drawing's face is not checked)
-const cjk = /[぀-ヿ㐀-鿿가-힯]/
+const cjk = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/
 const pages = Object.fromEntries(
   Object.entries(LAID.pages).map(([n, members]) => [
     n,
