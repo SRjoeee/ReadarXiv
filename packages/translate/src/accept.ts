@@ -56,6 +56,21 @@ export function textOf(content: readonly (Piece | OutPiece)[]): string {
   }
   return out
 }
+/** whether a piece list holds an element, at any depth */
+const holdsEl = (content: readonly Piece[]): boolean =>
+  content.some((p) => p.t === 'el' || (p.t === 'span' && holdsEl(p.content)))
+/** A span's head: how many of its pieces stand before its first word, up to its last element there; 0 where no element does.
+ *  Where TeX sets a declaration that holds for the rest of its group (`{\em all}`, `{\bf \bert}`): a span that goes on no wire
+ *  brings its head back in a copy of itself, so that the declaration holds for nothing past the group (1810.04805v2: `\em`
+ *  back loose before "all"'s translation slanted the unit to its end) */
+export function headLength(content: readonly Piece[]): number {
+  let n = 0
+  for (const [k, p] of content.entries()) {
+    if (p.t === 'text' ? SOLID.test(p.s) : p.t === 'span' && SOLID.test(textOf(p.content))) break
+    if (p.t === 'el' || (p.t === 'span' && holdsEl(p.content))) n = k + 1
+  }
+  return n
+}
 /** the projection's length with white space runs as one and its ends trimmed: what the length floor compares */
 export const plainLength = (content: readonly (Piece | OutPiece)[]): number =>
   projectionOf(content).replace(/\s+/g, ' ').trim().length

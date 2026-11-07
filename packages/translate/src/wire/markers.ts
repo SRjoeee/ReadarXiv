@@ -3,9 +3,12 @@
 // and nowhere else. Restated from the measured facts the PDF engine's wire (mt.mjs) carries, now that the source reader
 // types each piece:
 // - each marker is a hard sentence boundary to the endpoint, so a span that is not `must` goes on no wire: its words join
-//   the sentence and its style may be lost (the decision: such a span may come back unstyled); a span holding the whole
-//   unit goes on no wire either and comes back around the translation; a `must` span is kept as two markers, or as one
-//   when it holds no text;
+//   the sentence and its style may be lost (the decision: such a span may come back unstyled), and its head (accept.ts
+//   headLength: the elements before its first word, a declaration's place, `{\em all}`) is one marker that comes back in a
+//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging, 2026-11-08: all
+//   after "all"'s translation slanted, all after BERT bold); a style that cannot be mapped is dropped, never spread. A
+//   span holding the whole unit goes on no wire either and comes back around the translation; a `must` span is kept as
+//   two markers, or as one when it holds no text;
 // - side-by-side elements, white space alone between them, go as one marker read back as all of them in order (28,203 of
 //   the 53 sweep papers' 97,053 markers touched the one before); a display, and an element its host states `alone`, ends
 //   such a stretch (`display` below is that property and nothing else);
@@ -16,7 +19,7 @@
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
-import { asOut, textOf } from '../accept.ts'
+import { asOut, headLength, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, SAYS } from './text.ts'
 
@@ -103,8 +106,26 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           stop: p.stop,
         })
         at += 1
-      } else if (!p.must) at = walk(p.content, at, depth)
-      else if (SOLID.test(textOf(p.content))) {
+      } else if (!p.must) {
+        // a span on no wire: its head (the elements before its first word, where TeX sets a declaration that holds
+        // for the rest of the group) one marker in a copy of it, its words the sentence's, back unstyled
+        const k = headLength(p.content)
+        if (k) {
+          const head = p.content.slice(0, k)
+          const len = projLength(head)
+          const last = [...head].reverse().find((q) => q.t === 'el')
+          items.push({
+            t: 'void',
+            out: [{ t: 'span', id: p.id, content: asOut(head) }],
+            at,
+            len,
+            display: last?.t === 'el' && (last.kind === DISPLAY || last.alone === true),
+            stop: last?.t === 'el' ? last.stop : undefined,
+          })
+          at += len
+        }
+        at = walk(p.content.slice(k), at, depth)
+      } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, at, letters: LETTER.test(textOf(p.content)), depth })
         at = walk(p.content, at, depth + 1)
         items.push({ t: 'close', id: p.id, at })

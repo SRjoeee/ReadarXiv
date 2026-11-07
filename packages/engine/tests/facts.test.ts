@@ -475,6 +475,87 @@ describe('an element’s text as the page’s text layer reads it (PDF.js’s sp
   })
 })
 
+describe('an element’s text across a line TeX ended inside a word', () => {
+  // 1810.04805v2 p1, arXiv's PDF as the engine reads it: the citation "(Peters et al., 2018a; Rad- ford et al., 2018)", whose
+  // "Rad-" ends the abstract's fifth line and "ford" begins the sixth; staging drew "Rad- ford" in the translation
+  const nimbus = (u: string, x0: number, x1: number, y: number, fill = 128): DocGlyph => ({
+    ...g(u, x0, y, { base: 'NimbusRomNo9L-Regu', size: 9.96, fill }),
+    x1,
+    ix1: x1,
+  })
+  const radford = [
+    nimbus('a', 242.37, 246.8, 540.69),
+    nimbus(';', 246.8, 249.57, 540.69, 0),
+    nimbus('R', 253.89, 260.53, 540.69),
+    nimbus('a', 260.53, 264.96, 540.69),
+    nimbus('d', 264.96, 269.94, 540.69),
+    nimbus('-', 269.94, 273.26, 540.69),
+    nimbus('f', 89.01, 92.33, 528.74),
+    nimbus('o', 92.33, 97.31, 528.74),
+    nimbus('r', 97.31, 100.62, 528.74),
+    nimbus('d', 100.62, 105.61, 528.74),
+    nimbus('e', 109.54, 113.96, 528.74),
+    nimbus('t', 113.96, 116.73, 528.74),
+  ]
+  it('takes out the hyphen TeX set to break a word at a line’s end, and the line’s end with it', () => {
+    expect(textOf(radford)).toBe('a; Radford et')
+    expect(fillRunsOf(radford)).toEqual([
+      ['a', 128],
+      ['; ', 0],
+      ['Radford et', 128],
+    ])
+  })
+  it('keeps a word’s own hyphen, joined across the line’s end: before a capital, in a typewriter face, in a URL', () => {
+    const word = (s: string, x: number, y: number, o: Partial<DocGlyph> = {}) =>
+      [...s].map((c, i) => g(c, x + 6 * i, y, o))
+    // (Lee-Thorp: a capital after it starts the name's own part)
+    expect(textOf([...word('Lee-', 270, 700), ...word('Thorp', 72, 688)])).toBe('Lee-Thorp')
+    // (a typewriter face's \hyphenchar is −1 under LaTeX: TeX sets no hyphen of its own in it)
+    const tt = { base: 'CMTT10' }
+    expect(textOf([...word('google-', 270, 700, tt), ...word('research', 72, 688, tt)])).toBe('google-research')
+    // (a URL or a code mark: TeX sets its characters as written)
+    expect(textOf([...word('google-', 270, 700), ...word('research', 72, 688)], { literal: true })).toBe(
+      'google-research',
+    )
+    // (one letter before it: under \lefthyphenmin, no break of TeX's)
+    expect(textOf([...word('e-', 270, 700), ...word('mail', 72, 688)])).toBe('e-mail')
+    // (a hyphen after no letter is no word's: the line's end a space, as before)
+    expect(textOf([...word('3 -', 270, 700), ...word('x', 72, 688)])).toBe('3 - x')
+  })
+  it('keeps the hyphens the corpus showed are a word’s own: TeX hyphenates the first word after a space alone, to its minimums', () => {
+    // (the stage 1a corpus, the parts' element texts: 2307.16209v1 p138 "arXiv:gr- qc/0511111", p140 "[hep- th]", p146
+    // "imrn/article- pdf/2015/18/", 2608.06701v1 p5 "SWE- bench Pro"; each was taken for TeX's break and joined)
+    const line = (s: string, x: number, y: number) => {
+      const out: DocGlyph[] = []
+      let at = x
+      for (const c of s) {
+        if (c === ' ') at += 3.3
+        else {
+          out.push(g(c, at, y))
+          at += 6
+        }
+      }
+      return out
+    }
+    // (not the first word after its space: TeX hyphenates no other)
+    expect(textOf([...line('see arXiv:gr-', 200, 700), ...line('qc/0511111', 72, 688)])).toBe('see arXiv:gr-qc/0511111')
+    expect(textOf([...line('url imrn/article-', 200, 700), ...line('pdf/2015', 72, 688)])).toBe(
+      'url imrn/article-pdf/2015',
+    )
+    // (fewer letters after it than \righthyphenmin, LaTeX's 3)
+    expect(textOf([...line('see [hep-', 200, 700), ...line('th].', 72, 688)])).toBe('see [hep-th].')
+    // (a hyphen of its own after the word on the next line, before a space: TeX hyphenates no word an explicit hyphen's
+    // discretionary follows, tex.web §899; 2610.20451v1's "extreme- mass-ratio")
+    expect(textOf([...line('the extreme-', 200, 700), ...line('mass-ratio limit', 72, 688)])).toBe(
+      'the extreme-mass-ratio limit',
+    )
+    // (capitals alone before it, a small letter after: an acronym's compound, SWE-bench, BERT-based)
+    expect(textOf([...line('on SWE-', 200, 700), ...line('bench Pro', 72, 688)])).toBe('on SWE-bench Pro')
+    // (the first word after its space, a bracket before it as TeX skips: TeX's break, out)
+    expect(textOf([...line('see (Col-', 200, 700), ...line('lobert and', 72, 688)])).toBe('see (Collobert and')
+  })
+})
+
 describe('a unit set in capitals its source writes in lowercase (Style.upper, today’s smallCapsOf rule)', () => {
   const word = (s: string) => [...s].map((c, i) => g(c, 72 + 6 * i))
   it('is upper where most of the source’s lowercase letters are set as capitals, not where the source writes capitals', () => {
