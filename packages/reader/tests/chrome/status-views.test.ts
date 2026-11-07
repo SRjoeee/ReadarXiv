@@ -630,3 +630,36 @@ describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11
     expect(fake.controller.retry).toHaveBeenCalledOnce()
   })
 })
+
+describe("the run's chip that shows the translation, where the host words it (StateWords showTranslation; L11's second round, gap 4)", () => {
+  const chip = (c: HTMLElement) => c.querySelector<HTMLElement>('.capsule[data-kind="progress"] button[data-action]')
+  const asked: boolean[] = []
+  const words = {
+    translating: (got: number, total: number, beside?: boolean) => {
+      asked.push(!!beside)
+      return beside ? 'Translating' : `Translating ${got} / ${total}`
+    },
+    showTranslation: 'Show translation',
+  }
+  const run = { phase: 'translating' as const, translated: { got: 4, total: 15 }, layer: { laid: 0, total: 0 } }
+  it('none while nothing of the translation is there, nor where it is on screen; offered on the original once some is', async () => {
+    const fake = fakeController({ ...run, display: 'original' })
+    const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    expect(chip(container)).toBeNull()
+    // (the layer's pages known and rows of them in, or a page laid)
+    await act(async () => fake.set({ layer: { laid: 0, total: 6 } }))
+    expect(chip(container)?.textContent).toBe('Show translation')
+    // (the host asked for its words beside the chip; the stage was said once already, with the count it started at)
+    expect(asked.at(-1)).toBe(true)
+    chip(container)!.click()
+    expect(fake.controller.setDisplay).toHaveBeenCalledWith('translation')
+    await act(async () => fake.set({ display: 'bilingual', layer: { laid: 2, total: 6 } }))
+    expect(chip(container)).toBeNull()
+    expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(true)
+  })
+  it('none where the host words no chip (the extension gives no words of a run at all)', async () => {
+    const fake = fakeController({ ...run, display: 'original', layer: { laid: 2, total: 6 } })
+    const { container } = await mountElement(capsuleOf(fake.controller, { words: { translating: words.translating } }))
+    expect([!!container.querySelector('.capsule[data-kind="progress"]'), chip(container)]).toEqual([true, null])
+  })
+})

@@ -48,10 +48,15 @@ export interface StateWords {
   queued?: (position: number) => string
   /** the paper's layer being made */
   preparing?: string
-  /** the paragraphs translated so far of the paper's: the count drawn as a part of its own where it stands in the sentence */
-  translating?: (got: number, total: number) => string
+  /** the paragraphs translated so far of the paper's: the count drawn as a part of its own where it stands in the sentence.
+   *  `chip`: `showTranslation` stands beside it (the website's says the bare stage there in a window too narrow for both) */
+  translating?: (got: number, total: number, chip?: boolean) => string
   /** our server's document followed, its stream lost and asked again */
   reconnecting?: string
+  /** the run's chip that shows the translation (the reader's own choice of a display), where the translation is not on screen
+   *  and some of it is there to be read: the original's display, or the original held while the paper is made (the
+   *  website's 查看译文); none, no chip */
+  showTranslation?: string
   /** the paper cannot be had as a bilingual PDF (R.status.noPdf) */
   noPdf?: string
   /** the paper too large to prepare (R.status.noPdf) */

@@ -31,8 +31,9 @@ export type Capsule =
   /** a host's passing words (ReaderController.toast: the website's "copied"), in its words and sign, for their time */
   | { kind: 'toast'; words: CapsuleWords; icon: 'check' | 'info' }
   /** a run under way, in the host's words where it gives them (the website's): with the spinner, its count a part of its own;
-   *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25) */
-  | { kind: 'progress'; stage: Stage; words: CapsuleWords }
+   *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25). `show`: the chip that
+   *  shows the translation (StateWords `showTranslation`), where it is not on screen and some of it is there */
+  | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
 /** where a run under way stands, as a host's words say it */
 export type Stage = 'queued' | 'preparing' | 'translating' | 'reconnecting'
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
@@ -63,12 +64,16 @@ export function stageOf(state: ReaderState): Stage | null {
   if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
   return 'translating'
 }
-/** a run's stage in the host's words, or null where it gives none */
-function stageWords(stage: Stage, state: ReaderState, words: StateWords): CapsuleWords | null {
+/** some of the translation is there to be read: a page laid, or the layer's pages known and rows of them in (the website's
+ *  "drawn": the layer's first rows taken this visit) */
+export const translationThere = (state: ReaderState): boolean =>
+  state.layer.laid > 0 || (state.layer.total > 0 && state.translated.got > 0)
+/** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
+function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
   if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
   if (stage === 'translating') {
     const { got, total } = state.translated
-    return words.translating ? withCount(words.translating(got, total), got) : null
+    return words.translating ? withCount(words.translating(got, total, chip), got) : null
   }
   const w = words[stage]
   return w ? plain(w) : null
@@ -115,8 +120,11 @@ export function capsuleOf(
   }
   // a run under way, where the host words it (the website's stage and count); else the progress line alone shows it
   const stage = stageOf(state)
-  const said = stage && stageWords(stage, state, words)
-  if (stage && said) return { kind: 'progress', stage, words: said }
+  // (the translation not on screen and some of it there: the host's chip shows it)
+  const show = !!words.showTranslation && state.display === 'original' && translationThere(state)
+  const said = stage && stageWords(stage, state, words, show)
+  if (stage && said)
+    return show ? { kind: 'progress', stage, words: said, show } : { kind: 'progress', stage, words: said }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
   // (the layer-only plan's "Offline, drafted")
   const why = state.unavailable?.why

@@ -97,7 +97,7 @@ export function StatusCapsule({
   const alone =
     capsule?.kind === 'narrow' ||
     capsule?.kind === 'toast' ||
-    capsule?.kind === 'progress' ||
+    (capsule?.kind === 'progress' && !capsule.show) ||
     (capsule?.kind === 'unavailable' && !capsule.href) ||
     (capsule?.kind === 'notNow' && !retryNow && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
@@ -128,7 +128,7 @@ export function StatusCapsule({
           {...timed}
           {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
-          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : retryNow ? 'retry' : ''}`}
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : retryNow ? 'retry' : capsule.kind === 'progress' ? 'show' : ''}`}
           after={
             alone ? null : (
               <>
@@ -136,6 +136,17 @@ export function StatusCapsule({
                   <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">
                     {S.settings}
                   </a>
+                )}
+                {capsule.kind === 'progress' && capsule.show && (
+                  // the translation shown, as the reader's own choice of a display
+                  <button
+                    type="button"
+                    data-action
+                    className="chip"
+                    onClick={() => controller.setDisplay('translation')}
+                  >
+                    {parts.words?.showTranslation}
+                  </button>
                 )}
                 {((capsule.kind === 'notice' && capsule.action === 'retry') || retryNow) && (
                   <button type="button" data-action className="chip" onClick={controller.retry}>
