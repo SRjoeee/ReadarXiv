@@ -666,6 +666,45 @@ await check(
   },
 )
 await check(
+  'compose: a crop the typesetter cut over two lines (a URL broken) read by the text layer and its copy once, whole, in order (s1-columns)',
+  async () => {
+    // (the formula "f(x)=x+1" is one item of PDF.js's text, as a URL may be; its crop cut after "f(x)=", the item's middle under
+    // the head, the parts given no copy text of their own (2610.21547v1's URLs have none): each part reads the page's characters
+    // under it, no space where the line breaks between them)
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns', { cut: { piece: '1', share: 5 / 8, text: ['', ''] } }))
+    await laidShown(page, 1)
+    await waitFor(page, () => !!window.__h.panes.right.page(1)?.querySelector('.axt-over .textLayer span'))
+    const text = await page.evaluate(() => window.__h.textOf(1))
+    const spans = await page.evaluate(() =>
+      [...window.__h.panes.right.page(1).querySelectorAll('.axt-over .textLayer span')].map((x) => x.textContent),
+    )
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const count = (s, t) => s.split(t).length - 1
+    const around = (s) => {
+      const i = s.indexOf('f(x)')
+      return i < 0 ? s.slice(0, 120) : s.slice(Math.max(0, i - 30), i + 40)
+    }
+    assert(
+      count(text.text, 'f(x)=') === 1 && count(text.text, 'x+1') === 1 && text.text.includes('f(x)=x+1'),
+      `the layer reads ${JSON.stringify(around(text.text))}`,
+    )
+    const at = spans.indexOf('f(x)=')
+    assert(
+      at >= 0 && spans[at + 1] === 'x+1',
+      `the parts' spans ${JSON.stringify(spans.slice(Math.max(0, at - 1), at + 3))}`,
+    )
+    const copied = text.copied
+    assert(
+      count(copied, 'f(x)=') === 1 && count(copied, 'x+1') === 1 && copied.includes('f(x)=x+1'),
+      `the copy reads ${JSON.stringify(around(text.copied))}`,
+    )
+    return { layer: around(text.text), copied: around(text.copied) }
+  },
+)
+await check(
   'compose: a language switch reuses the composed document, the parts and the place; a unit not laid in the new language has its groups back on (s1-columns)',
   async () => {
     const { page, context, errors } = await newPage()
