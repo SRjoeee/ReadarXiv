@@ -1,0 +1,180 @@
+Id	Part2b	Part2t	Part1	Scope	Language_Type	Ref_Name	Comment
+ace	ace	ace		I	L	Achinese	
+afr	afr	afr	af	I	L	Afrikaans	
+aka	aka	aka	ak	M	L	Akan	
+amh	amh	amh	am	I	L	Amharic	
+arb				I	L	Standard Arabic	
+asm	asm	asm	as	I	L	Assamese	
+azj				I	L	North Azerbaijani	
+bam	bam	bam	bm	I	L	Bambara	
+ban	ban	ban		I	L	Balinese	
+bcl				I	L	Central Bikol	
+bel	bel	bel	be	I	L	Belarusian	
+ben	ben	ben	bn	I	L	Bengali	
+bho	bho	bho		I	L	Bhojpuri	
+bis	bis	bis	bi	I	L	Bislama	
+bjn				I	L	Banjar	
+bod	tib	bod	bo	I	L	Tibetan	
+bos	bos	bos	bs	I	L	Bosnian	
+bre	bre	bre	br	I	L	Breton	
+bug	bug	bug		I	L	Buginese	
+bul	bul	bul	bg	I	L	Bulgarian	
+cat	cat	cat	ca	I	L	Catalan	
+ceb	ceb	ceb		I	L	Cebuano	
+ces	cze	ces	cs	I	L	Czech	
+cha	cha	cha	ch	I	L	Chamorro	
+che	che	che	ce	I	L	Chechen	
+chv	chv	chv	cv	I	L	Chuvash	
+ckb				I	L	Central Kurdish	
+cmn				I	L	Mandarin Chinese	
+cos	cos	cos	co	I	L	Corsican	
+cym	wel	cym	cy	I	L	Welsh	
+dan	dan	dan	da	I	L	Danish	
+deu	ger	deu	de	I	L	German	
+div	div	div	dv	I	L	Dhivehi	
+dzo	dzo	dzo	dz	I	L	Dzongkha	
+ekk				I	L	Standard Estonian	
+ell	gre	ell	el	I	L	Modern Greek (1453-)	
+eng	eng	eng	en	I	L	English	
+epo	epo	epo	eo	I	C	Esperanto	
+eus	baq	eus	eu	I	L	Basque	
+ewe	ewe	ewe	ee	I	L	Ewe	
+fao	fao	fao	fo	I	L	Faroese	
+fij	fij	fij	fj	I	L	Fijian	
+fin	fin	fin	fi	I	L	Finnish	
+fra	fre	fra	fr	I	L	French	
+fry	fry	fry	fy	I	L	Western Frisian	
+fuv				I	L	Nigerian Fulfulde	
+gil	gil	gil		I	L	Gilbertese	
+gla	gla	gla	gd	I	L	Scottish Gaelic	
+gle	gle	gle	ga	I	L	Irish	
+glg	glg	glg	gl	I	L	Galician	
+grn	grn	grn	gn	M	L	Guarani	
+guj	guj	guj	gu	I	L	Gujarati	
+hat	hat	hat	ht	I	L	Haitian	
+hau	hau	hau	ha	I	L	Hausa	
+haw	haw	haw		I	L	Hawaiian	
+heb	heb	heb	he	I	L	Hebrew	
+hif				I	L	Fiji Hindi	
+hil	hil	hil		I	L	Hiligaynon	
+hin	hin	hin	hi	I	L	Hindi	
+hms				I	L	Southern Qiandong Miao	
+hnj				I	L	Hmong Njua	
+hrv	hrv	hrv	hr	I	L	Croatian	
+hun	hun	hun	hu	I	L	Hungarian	
+hye	arm	hye	hy	I	L	Armenian	
+ibo	ibo	ibo	ig	I	L	Igbo	
+ido	ido	ido	io	I	C	Ido	
+ilo	ilo	ilo		I	L	Iloko	
+ina	ina	ina	ia	I	C	Interlingua (IALA)	
+ind	ind	ind	id	I	L	Indonesian	
+isl	ice	isl	is	I	L	Icelandic	
+ita	ita	ita	it	I	L	Italian	
+jav	jav	jav	jv	I	L	Javanese	
+jpn	jpn	jpn	ja	I	L	Japanese	
+kab	kab	kab		I	L	Kabyle	
+kan	kan	kan	kn	I	L	Kannada	
+kat	geo	kat	ka	I	L	Georgian	
+kaz	kaz	kaz	kk	I	L	Kazakh	
+khm	khm	khm	km	I	L	Khmer	
+kin	kin	kin	rw	I	L	Kinyarwanda	
+kir	kir	kir	ky	I	L	Kirghiz	
+koi				I	L	Komi-Permyak	
+kor	kor	kor	ko	I	L	Korean	
+lao	lao	lao	lo	I	L	Lao	
+lat	lat	lat	la	I	H	Latin	
+lin	lin	lin	ln	I	L	Lingala	
+lit	lit	lit	lt	I	L	Lithuanian	
+ltz	ltz	ltz	lb	I	L	Luxembourgish	
+lug	lug	lug	lg	I	L	Ganda	
+lvs				I	L	Standard Latvian	
+mad	mad	mad		I	L	Madurese	
+mag	mag	mag		I	L	Magahi	
+mah	mah	mah	mh	I	L	Marshallese	
+mai	mai	mai		I	L	Maithili	
+mak	mak	mak		I	L	Makasar	
+mal	mal	mal	ml	I	L	Malayalam	
+mar	mar	mar	mr	I	L	Marathi	
+min	min	min		I	L	Minangkabau	
+mkd	mac	mkd	mk	I	L	Macedonian	
+mlt	mlt	mlt	mt	I	L	Maltese	
+mon	mon	mon	mn	M	L	Mongolian	
+mri	mao	mri	mi	I	L	Maori	
+mya	bur	mya	my	I	L	Burmese	
+nbl	nbl	nbl	nr	I	L	South Ndebele	
+nde	nde	nde	nd	I	L	North Ndebele	
+niu	niu	niu		I	L	Niuean	
+nld	dut	nld	nl	I	L	Dutch	
+nno	nno	nno	nn	I	L	Norwegian Nynorsk	
+nob	nob	nob	nb	I	L	Norwegian Bokmål	
+npi				I	L	Nepali (individual language)	
+nso	nso	nso		I	L	Pedi	
+nya	nya	nya	ny	I	L	Chichewa	
+oci	oci	oci	oc	I	L	Occitan (post 1500)	
+ori	ori	ori	or	M	L	Oriya (macrolanguage)	
+orm	orm	orm	om	M	L	Oromo	
+oss	oss	oss	os	I	L	Iron Ossetic	
+pam	pam	pam		I	L	Pampanga	
+pan	pan	pan	pa	I	L	Panjabi	
+pau	pau	pau		I	L	Palauan	
+pbu				I	L	Northern Pashto	
+pes				I	L	Iranian Persian	
+plt				I	L	Plateau Malagasy	
+pol	pol	pol	pl	I	L	Polish	
+por	por	por	pt	I	L	Portuguese	
+prs				I	L	Dari	
+qug				I	L	Chimborazo Highland Quichua	
+rar	rar	rar		I	L	Rarotongan	
+ron	rum	ron	ro	I	L	Romanian	
+run	run	run	rn	I	L	Rundi	
+rus	rus	rus	ru	I	L	Russian	
+san	san	san	sa	M	H	Sanskrit	
+sas	sas	sas		I	L	Sasak	
+sin	sin	sin	si	I	L	Sinhala	
+skr				I	L	Saraiki	
+slk	slo	slk	sk	I	L	Slovak	
+slv	slv	slv	sl	I	L	Slovenian	
+smo	smo	smo	sm	I	L	Samoan	
+sna	sna	sna	sn	I	L	Shona	
+snd	snd	snd	sd	I	L	Sindhi	
+som	som	som	so	I	L	Somali	
+sot	sot	sot	st	I	L	Southern Sotho	
+spa	spa	spa	es	I	L	Spanish	
+sqi	alb	sqi	sq	M	L	Albanian	
+srp	srp	srp	sr	I	L	Serbian	
+ssw	ssw	ssw	ss	I	L	Swati	
+sun	sun	sun	su	I	L	Sundanese	
+swe	swe	swe	sv	I	L	Swedish	
+swh				I	L	Swahili (individual language)	
+tah	tah	tah	ty	I	L	Tahitian	
+tam	tam	tam	ta	I	L	Tamil	
+tat	tat	tat	tt	I	L	Tatar	
+tel	tel	tel	te	I	L	Telugu	
+tet	tet	tet		I	L	Tetum	
+tgk	tgk	tgk	tg	I	L	Tajik	
+tgl	tgl	tgl	tl	I	L	Tagalog	
+tha	tha	tha	th	I	L	Thai	
+tir	tir	tir	ti	I	L	Tigrinya	
+ton	ton	ton	to	I	L	Tonga (Tonga Islands)	
+tsn	tsn	tsn	tn	I	L	Tswana	
+tuk	tuk	tuk	tk	I	L	Turkmen	
+tur	tur	tur	tr	I	L	Turkish	
+tvl	tvl	tvl		I	L	Tuvalu	
+uig	uig	uig	ug	I	L	Uighur	
+ukr	ukr	ukr	uk	I	L	Ukrainian	
+urd	urd	urd	ur	I	L	Urdu	
+uzn				I	L	Northern Uzbek	
+ven	ven	ven	ve	I	L	Venda	
+vie	vie	vie	vi	I	L	Vietnamese	
+vol	vol	vol	vo	I	C	Volapük	
+war	war	war		I	L	Waray (Philippines)	
+wls				I	L	Wallisian	
+wol	wol	wol	wo	I	L	Wolof	
+xho	xho	xho	xh	I	L	Xhosa	
+ydd				I	L	Eastern Yiddish	
+yor	yor	yor	yo	I	L	Yoruba	
+yue				I	L	Yue Chinese	
+zlm				I	L	Malay (individual language)	
+zsm				I	L	Standard Malay	
+zul	zul	zul	zu	I	L	Zulu	
+zyb				I	L	Yongbei Zhuang	

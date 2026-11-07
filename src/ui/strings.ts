@@ -20,9 +20,9 @@ const _kindsAgree: [ProviderErrorKind, CatalogueErrorKind] extends [CatalogueErr
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
  * does not carry its own copy of 180 language names — adding a language must stay one small file —
- * so it points at a table instead, and a language without one reads them in English. The Chinese
- * table is Read Frog's, the English one its overlay; Traditional Chinese, Japanese and Korean are
- * CLDR's (config/language-names.ts, generated)
+ * so it points at a table instead, and a language without one reads them in English. Simplified
+ * Chinese and English are the generated table's (config/language-table.ts, UI.md §6's naming policy);
+ * Traditional Chinese, Japanese and Korean are CLDR's (config/language-names.ts, generated)
  */
 const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,

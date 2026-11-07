@@ -9,7 +9,7 @@ import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react
 import { LANG_CODES, type LangCode } from '@/config/languages'
 import { type Config, SERVICES_MAX } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
-import { supportsTarget } from '@/providers/microsoft'
+import { supportsTarget } from '@/providers/targets'
 import { sendMessage } from '@/shared/messages'
 import type { PackState } from '@/shared/pack'
 import { Button, Icon, MenuList, Popover, shut, usePopover, radioKeys, Reveal, Switch, O, S } from '@readarxiv/ui'

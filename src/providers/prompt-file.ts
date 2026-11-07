@@ -1,56 +1,65 @@
-// Ported from reference/read-frog/src/components/prompt-configurator/utils/prompt-file.ts@9b44f82 (GPL-3.0), 2026-09-05,
-// modified — rewritten around the same file shape. Import / export of prompt files: an array of
-// { name, systemPrompt, prompt } without ids, so the two projects can import each other's files; validated with zod,
-// downloaded without file-saver (<a download> works in an extension page as it is).
+// The prompts file (UI.md S-O-61, S-O-61b; DESIGN §8.2): the reader's own prompts exported and imported as JSON. Its
+// shape is an external contract (hard rule 7: files exported by any earlier version, and by the extension it was first
+// shaped after, must still import): `arxiv-translate_prompts.json`, an array of `{ name, systemPrompt, prompt }`, no
+// ids — an import gives each prompt a new one, so a file read twice adds two copies and never overwrites. `name` and
+// `prompt` are strings, `name` not empty; `systemPrompt` may be left out and reads as empty; other fields are ignored.
+// One entry out of shape makes the whole file unusable, and the settings page says which of the two failures it was.
 import { z } from 'zod'
 import { downloadTextFile } from '@/shared/download'
 import type { PromptTemplate } from './prompt-library'
 
+/** The exported file's name, kept from the project's first name (DESIGN §3, Names) */
 export const PROMPT_FILE_NAME = 'arxiv-translate_prompts.json'
 
-/** One entry of the file: as in Read Frog, name and prompt are required and systemPrompt defaults to empty (its older files) */
 const promptFileEntrySchema = z.object({
   name: z.string().min(1),
-  prompt: z.string().min(1),
+  prompt: z.string(),
   systemPrompt: z.string().default(''),
 })
-const promptFileSchema = z.array(promptFileEntrySchema)
 export type PromptFileEntry = z.infer<typeof promptFileEntrySchema>
 
-/**
- * A parse failure reports **which kind** only, no sentence: the sentences live in the locale pack, and this module
- * knows no interface language (Codex on #161). `notJson` and `badShape` are two different things to a reader — not
- * JSON at all, or JSON in another format
- */
+/** What was wrong with a file: not JSON at all, or JSON that is not a list of prompts */
 export type PromptFileError = 'notJson' | 'badShape'
+
 export class PromptFileFormatError extends Error {
-  constructor(readonly kind: PromptFileError) {
-    super(kind)
+  readonly kind: PromptFileError
+  constructor(kind: PromptFileError) {
+    super(`prompt file: ${kind}`)
     this.name = 'PromptFileFormatError'
+    this.kind = kind
   }
 }
 
+/** The prompts a file's text holds, in its order; a PromptFileFormatError where it holds none in the file's shape */
 export function parsePromptFile(json: string): PromptFileEntry[] {
-  let raw: unknown
+  let data: unknown
   try {
-    raw = JSON.parse(json)
+    data = JSON.parse(json)
   } catch {
     throw new PromptFileFormatError('notJson')
   }
-  const parsed = promptFileSchema.safeParse(raw)
+  const parsed = z.array(promptFileEntrySchema).safeParse(data)
   if (!parsed.success) throw new PromptFileFormatError('badShape')
   return parsed.data
 }
 
+/** A file the reader picked, read and parsed; a file that cannot be read as text is not JSON either */
 export async function readPromptFile(file: File): Promise<PromptFileEntry[]> {
-  return parsePromptFile(await file.text())
+  let text: string
+  try {
+    text = await file.text()
+  } catch {
+    throw new PromptFileFormatError('notJson')
+  }
+  return parsePromptFile(text)
 }
 
-/** Exported without ids: the importer assigns fresh ones, so two machines' ids cannot collide */
+/** The file's text for these prompts: each one's name and two parts, without its id, indented for a reader's eye */
 export function serializePrompts(patterns: PromptTemplate[]): string {
-  return JSON.stringify(patterns.map(({ id: _id, ...entry }) => entry), null, 2)
+  return JSON.stringify(patterns.map(({ name, systemPrompt, prompt }) => ({ name, systemPrompt, prompt })), null, 2)
 }
 
+/** Hand the reader the file of these prompts */
 export function downloadPromptFile(patterns: PromptTemplate[], doc: Document = document): void {
   downloadTextFile(PROMPT_FILE_NAME, serializePrompts(patterns), 'application/json', doc)
 }
