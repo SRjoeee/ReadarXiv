@@ -381,7 +381,12 @@ export function factsOf({
       foreignCache.set(p, f)
       return f
     }
-    const side = sideOf(mem.lines, foreign, blockOf)
+    const side = sideOf(
+      mem.lines,
+      foreign,
+      blockOf,
+      unit?.cell ? (p) => boxes(p).filter((b) => !mine.has(`${p}|${b.j}`)) : undefined,
+    )
     if (side) mem.room.side = side
     if (unit?.cell) {
       // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a

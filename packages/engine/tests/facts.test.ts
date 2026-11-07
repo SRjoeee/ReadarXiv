@@ -166,6 +166,23 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       ),
     ).toEqual([50, 500])
   })
+  it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
+    // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
+    // 290.6 and 429; a rule across the line's band above it and the table's horizontal rule under it are no wall)
+    const glyphs = [
+      { x0: 280, x1: 290.6, y0: 676, y1: 685, y: 678.91 },
+      { x0: 429.01, x1: 440, y0: 676, y1: 685, y: 678.91 },
+    ]
+    const walls = [
+      { x0: 296, x1: 296.4, y0: 555.6, y1: 686.6 },
+      { x0: 409, x1: 409.4, y0: 555.6, y1: 686.6 },
+      { x0: 107.5, x1: 505.6, y0: 686.5, y1: 686.9 },
+      { x0: 107.5, x1: 505.6, y0: 676.6, y1: 677 },
+    ]
+    const line = [L(302.56, 402.52, 678.91)]
+    expect(sideOf(line, () => glyphs, () => [107.5, 505.6])).toEqual([290.6, 429.01])
+    expect(sideOf(line, () => glyphs, () => [107.5, 505.6], () => walls)).toEqual([296.4, 409])
+  })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [
       { x0: 50, x1: 400, y0: 712, y1: 712.4 },

@@ -529,12 +529,16 @@ export interface InkBox {
  * and no rule or image) to the left and to the right, within the text block `block` (its column's extent on the page), the
  * narrowest over its lines. Today's widen keeps clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
  * which stood for the unit's own glyphs past its rectangle: ownership says which are its own (a named correction where
- * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's
+ * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's.
+ * A table's cell, which today's never widened (its rectangle was its cell's), is also walled by `walls`, the painted boxes
+ * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (the
+ * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column)
  */
 export function sideOf(
   lines: readonly Line[],
   foreign: (page: number) => readonly InkBox[],
   block: (l: Line) => [number, number],
+  walls?: (page: number) => readonly InkBox[],
 ): [number, number] | undefined {
   let lo = Number.NEGATIVE_INFINITY
   let hi = Number.POSITIVE_INFINITY
@@ -546,6 +550,13 @@ export function sideOf(
     const band = 0.4 * (l[10] ?? l[5] - l[6])
     for (const k of foreign(l[0])) {
       if (k.y === undefined || Math.abs(k.y - l[4]) >= band) continue
+      if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
+      else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
+    }
+    // (a cell's walls: the painted boxes beside its line whose height meets its band, its column's rules and its neighbours'
+    // fills; one across the line is none)
+    for (const k of walls?.(l[0]) ?? []) {
+      if (k.y0 >= l[4] + band || k.y1 <= l[4] - band) continue
       if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
       else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
     }
