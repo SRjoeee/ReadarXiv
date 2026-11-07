@@ -180,6 +180,15 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       pieceB[o0 + j] = ow.piece[j] as number
     }
   })
+  // (each placeholder's span on B between its two points (the marked compile's p<unit>.<piece>a and b), global, by unit and piece)
+  const placeSpan = new Map<string, [number, number]>()
+  for (const pl of ins.places ?? []) {
+    const k = `${pl.unit}|${pl.piece}`
+    const at = (m.offB[pl.page - 1] as number) + pl.glyph
+    const was = placeSpan.get(k)
+    if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? at])
+    else placeSpan.set(k, [was?.[0] ?? at, at])
+  }
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
     for (let j = 0; j < pg.glyphs.length; j++) pageA[(m.offA[p] as number) + j] = p + 1
@@ -791,6 +800,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
         const runs = fillRunsOf(gl.map(gA))
         if (runs) el.fills = runs
+      }
+      // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
+      // text the unit's own text glyphs between its two points on B, as today's reader finds its rendering among the unit's
+      // characters (texParts: TEX:487-495); its ink stays the unit's text's)
+      const cls = classOf.get(id)?.cls
+      const span = placeSpan.get(`${mem.unit}|${id}`)
+      if (!gl.length && (cls === 'macro' || cls === 'umacro') && span) {
+        const mine = new Set(mem.text)
+        const between: number[] = []
+        for (let b = span[0]; b < span[1]; b++) {
+          const a = m.bToA[b] as number
+          if (unitB[b] === mem.unit && roleB[b] === ROLE.text && a >= 0 && mine.has(a)) between.push(a)
+        }
+        if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA))
       }
       mem.elements.push([id, el])
     }

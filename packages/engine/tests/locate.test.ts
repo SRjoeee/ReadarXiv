@@ -360,6 +360,27 @@ describe('review of #605', () => {
 })
 
 describe('the element classes the part states', () => {
+  it('states a text macro’s text from the unit’s glyphs between its two points, where none of them is the element’s', () => {
+    // (1810.04805v2's \bert, set as "BERT": the instrument gives its glyphs to the unit's text, the element none, so the reading
+    // drew nothing where today's draws the rendering it finds by it among the unit's characters; its two points on B (the
+    // marked compile's p<unit>.<piece>a and b) say which they are)
+    const B = docOf([{ lines: ['BERT is a model'] }])
+    const content = [{ t: 'el' as const, id: '0', kind: 'other', src: '\\bert' }, text(' is a model')]
+    const units: InstrumentUnit[] = [
+      { id: unitId('para', content), kind: 'para', content, classes: [['0', { cls: 'umacro' }]] },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      places: [
+        { unit: 0, piece: '0', page: 1, glyph: 0, end: false },
+        { unit: 0, piece: '0', page: 1, glyph: 4, end: true },
+      ],
+    }
+    const L = locate(ins, B, align(B, B))
+    const mem = L.members.find((m) => m.unit === 0)!
+    expect(mem.elements).toEqual([['0', { kind: 'other', ink: [], text: 'BERT', style: { role: 'serif', size: 10 } }]])
+  })
+
   it('writes each element with its source’s class, copy text, a symbol’s drawing and a footnote’s mark (the instrument’s)', () => {
     const B = docOf([{ lines: ['see the result'] }])
     const content = [text('see '), { t: 'el' as const, id: '1', kind: 'cite', src: '\\cite{a}' }, text(' the result')]
