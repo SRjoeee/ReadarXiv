@@ -273,6 +273,12 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   }
 
   // ————— rest, lit, open —————
+  /** the last input was the keyboard's (a key since the last press of a pointer): focus then is the reader's place */
+  let viaKeyboard = false
+  const keyboardInside = () => {
+    const focused = root.activeElement
+    return viaKeyboard && focused !== null && dock.contains(focused)
+  }
   const expand = () => {
     clearDwell()
     expanded = true
@@ -287,7 +293,8 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   const fold = () => {
     clearDwell()
     clearGrace()
-    if (menuOpen() || panelOpen()) return
+    // open while a menu or the panel is up, or while the keyboard is on one of its controls (#614)
+    if (menuOpen() || panelOpen() || keyboardInside()) return
     lit = false
     expanded = false
     mark('axtLit', false)
@@ -451,8 +458,8 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   dock.addEventListener('mouseleave', leave)
   dock.addEventListener('focusin', event => {
     // keyboard focus opens it at once, as a pointer's dwell does
-    let visible = false
-    try { visible = (event.target as Element).matches(':focus-visible') } catch { visible = false }
+    let visible = viaKeyboard
+    try { visible ||= (event.target as Element).matches(':focus-visible') } catch { /* a browser without the pseudo-class: the key decides */ }
     if (!visible) return
     clearGrace()
     light()
@@ -528,7 +535,13 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   }
   items[0]!.addEventListener('click', event => { if (trusted(event)) hide('now') })
   items[1]!.addEventListener('click', event => { if (trusted(event)) hide('always') })
+  // focus leaving the close menu (Tab out of an item) closes it (#614)
+  menu.addEventListener('focusout', event => {
+    const next = (event as FocusEvent).relatedTarget as Node | null
+    if (!next || !menu.contains(next)) closeMenu()
+  })
   menu.addEventListener('keydown', event => {
+    viaKeyboard = true
     const at = items.indexOf(root.activeElement as HTMLButtonElement)
     const step = (by: number) => items[(at + by + items.length) % items.length]!.focus()
     if (event.key === 'ArrowDown') step(1)
@@ -542,12 +555,14 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   })
 
   const onKey = (event: KeyboardEvent) => {
+    viaKeyboard = true
     if (event.key !== 'Escape') return
     if (menuOpen()) closeMenu(true)
     else if (panelOpen()) closePanel(true)
   }
   /** A press anywhere but on the button's column or its panel closes the menu and the panel */
   const onPress = (event: Event) => {
+    viaKeyboard = false
     const path = event.composedPath()
     if (path.includes(column) || path.includes(panelBox)) return
     closeMenu()
@@ -564,7 +579,8 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     if (data?.type === 'axt:panel-size' && typeof data.height === 'number' && data.height > 0) {
       panelHeight = data.height
       placePanel()
-    } else if (data?.type === 'axt:panel-close') closePanel()
+    // closed from inside (Escape in the frame): the focus goes back to the control that opened it, as on Escape outside (#614)
+    } else if (data?.type === 'axt:panel-close') closePanel(true)
   }
   const onResize = () => {
     if (!dragging()) placeTop()
