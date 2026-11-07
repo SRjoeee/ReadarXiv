@@ -40,6 +40,7 @@ import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { cropsFor, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
+import { ATTRIBUTE, decideOn } from './text-rendering.ts'
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
@@ -110,7 +111,7 @@ export interface ComposerOptions {
   links: LinkHooks
   /** the reader's clock (default the browser's timers) */
   clock?: Clock
-  /** the reader's root (the marks read the sheet's paddings there) */
+  /** the reader's root (the marks read the sheet's paddings there; the overlay's text rendering is written on it) */
   root?: HTMLElement
   /** what the right shows of a page not laid (the panes' originalOf); default its own page view of the original */
   original?(n: number, settled: boolean): PageContent | null
@@ -206,6 +207,8 @@ export function createComposer(o: ComposerOptions): Composer {
     o.warn?.(what, e)
   }
   const marks = createMarks({ root: o.root ?? document.documentElement, clock })
+  /** whether the overlay's text rendering is decided (text-rendering.ts, at the first overlay whose page tells) */
+  let textDecided = false
 
   // ---------------------------------------------------------------- the rows a lay reads: a unit of a kind the toggles hide
   // reads as no translation (it stays the original's), whatever was translated
@@ -273,6 +276,10 @@ export function createComposer(o: ComposerOptions): Composer {
       for (const [, , , items] of m.lines)
         for (const it of items) if ('face' in it) drawn.set(it.face, (drawn.get(it.face) ?? '') + it.s)
     await faces.ready([...drawn])
+    // (the overlay's text rendering, decided once a reader by the first laid page whose words tell, in its faces just loaded,
+    // before its drawing is made: `auto` where the browser lays them out alike under geometricPrecision and under it, else the
+    // sheet's geometricPrecision; text-rendering.ts. Written before the page is put in place, so that it is laid out once)
+    if (!textDecided && !disposed && o.root) textDecided = decideOn(o.root, page, faces) !== null
     const el = document.createElement('div')
     el.className = 'axt-over'
     // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
@@ -925,6 +932,7 @@ export function createComposer(o: ComposerOptions): Composer {
       if (holding) clock.clear(holding.timer)
       for (const P of recs.values()) clock.clear(P.clock)
       marks.dispose()
+      o.root?.removeAttribute(ATTRIBUTE)
       o.settle?.(null)
       commits.clear()
       pages.clear()
