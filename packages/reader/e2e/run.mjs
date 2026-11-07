@@ -799,47 +799,80 @@ await check(
     return { follows: mine.length, rows: st.rows }
   },
 )
-await check('reader: close lets everything go; a second reader on the same page goes on', async () => {
-  const { page, context, errors } = await newPage()
-  await page.evaluate(async () => {
-    await window.__h.reader('s1-columns', { host: 'web', width: '50%' })
-    await window.__h.reader('s2-splits', { host: 'web', width: '50%' })
-  })
-  await readerLaid(page, 0)
-  await readerLaid(page, 1)
-  await page.evaluate(() => window.__h.readers[0].reader.close())
-  await page.waitForTimeout(500)
-  const after = await page.evaluate(() => ({
-    root: window.__h.readers[0].root.childElementCount,
-    attrs: window.__h.readers[0].root.getAttributeNames(),
-    a: window.__h.readers[0].reader.probe(),
-    b: window.__h.readers[1].reader.probe(),
-  }))
-  await page.evaluate(() => window.__h.readers[1].reader.do({ do: 'zoomBy', factor: 1.25 }))
-  await page.waitForTimeout(700)
-  const b2 = await page.evaluate(() => ({
-    probe: window.__h.readers[1].reader.probe(),
-    state: window.__h.readers[1].reader.state(),
-  }))
-  await context.close()
-  assert(!errors.length, errors.join('; '))
-  assert(
-    after.root === 0 && !after.attrs.some((a) => a.startsWith('data-axt')),
-    `root after close: ${after.root} children, ${after.attrs}`,
-  )
-  assert(
-    after.a.workers === 0 && after.a.clockDue === 0 && after.a.live === 0,
-    `left after close ${JSON.stringify(after.a)}`,
-  )
-  assert(
-    after.b.workers === 2 && after.b.laidPages > 0 && b2.probe.laidPages > 0 && b2.state.view.scale > 0,
-    `the other reader ${JSON.stringify(b2.probe)}`,
-  )
-  return {
-    a: { workers: after.a.workers, live: after.a.live },
-    b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
-  }
-})
+await check(
+  'reader: close lets everything go, closed before PDF.js is in too; a second reader on the same page goes on',
+  async () => {
+    // (closed in the task that opened it, before PDF.js's modules are in: once they are, for the reader opened after it on the
+    // same page, the closed one has made nothing: no sheet, no pane, no mark, no worker, no timer, no ticket)
+    const early = await newPage()
+    await early.page.evaluate(async () => {
+      await window.__h.reader('s1-columns', { host: 'web', width: '50%', closeAtOnce: true })
+      await window.__h.reader('s2-splits', { host: 'web', width: '50%' })
+    })
+    await readerLaid(early.page, 1)
+    const closedEarly = await early.page.evaluate(() => {
+      const r = window.__h.readers[0]
+      return {
+        root: r.root.childElementCount,
+        attrs: r.root.getAttributeNames(),
+        cls: r.root.className,
+        probe: r.reader.probe(),
+      }
+    })
+    await early.context.close()
+    assert(!early.errors.length, early.errors.join('; '))
+    assert(
+      closedEarly.root === 0 &&
+        !closedEarly.attrs.some((a) => a.startsWith('data-axt')) &&
+        !/axt-/.test(closedEarly.cls),
+      `closed before ready: root ${closedEarly.root} children, ${closedEarly.attrs}, class "${closedEarly.cls}"`,
+    )
+    assert(
+      closedEarly.probe.workers === 0 && closedEarly.probe.clockDue === 0 && closedEarly.probe.live === 0,
+      `closed before ready ${JSON.stringify(closedEarly.probe)}`,
+    )
+    const { page, context, errors } = await newPage()
+    await page.evaluate(async () => {
+      await window.__h.reader('s1-columns', { host: 'web', width: '50%' })
+      await window.__h.reader('s2-splits', { host: 'web', width: '50%' })
+    })
+    await readerLaid(page, 0)
+    await readerLaid(page, 1)
+    await page.evaluate(() => window.__h.readers[0].reader.close())
+    await page.waitForTimeout(500)
+    const after = await page.evaluate(() => ({
+      root: window.__h.readers[0].root.childElementCount,
+      attrs: window.__h.readers[0].root.getAttributeNames(),
+      a: window.__h.readers[0].reader.probe(),
+      b: window.__h.readers[1].reader.probe(),
+    }))
+    await page.evaluate(() => window.__h.readers[1].reader.do({ do: 'zoomBy', factor: 1.25 }))
+    await page.waitForTimeout(700)
+    const b2 = await page.evaluate(() => ({
+      probe: window.__h.readers[1].reader.probe(),
+      state: window.__h.readers[1].reader.state(),
+    }))
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      after.root === 0 && !after.attrs.some((a) => a.startsWith('data-axt')),
+      `root after close: ${after.root} children, ${after.attrs}`,
+    )
+    assert(
+      after.a.workers === 0 && after.a.clockDue === 0 && after.a.live === 0,
+      `left after close ${JSON.stringify(after.a)}`,
+    )
+    assert(
+      after.b.workers === 2 && after.b.laidPages > 0 && b2.probe.laidPages > 0 && b2.state.view.scale > 0,
+      `the other reader ${JSON.stringify(b2.probe)}`,
+    )
+    return {
+      early: { root: closedEarly.root, workers: closedEarly.probe.workers, live: closedEarly.probe.live },
+      a: { workers: after.a.workers, live: after.a.live },
+      b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
+    }
+  },
+)
 
 // ---------------------------------------------------------------- stage 5a, deliverable 2 part A: today's behaviours over the stack
 // (each check names the rows of lanes/L4/list-b.md and list-a.md it holds; docs/PDF-READER.md §11.7-§11.11, §17)

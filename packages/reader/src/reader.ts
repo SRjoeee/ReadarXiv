@@ -212,6 +212,12 @@ export function openReader(
     composer: Composer | null = null,
     highlight: Highlight | null = null
   const ready = kitReady.then((k) => {
+    // (a reader closed while PDF.js was loading makes nothing: no sheet, no pane, no mark on a root it has given back; its kit
+    // let go. Everything below waits on `ready` and finds no panes, or its released ticket)
+    if (closed) {
+      k.destroy()
+      return k
+    }
     kit = k
     addSheets(root, k.sheet)
     panes = createPanes({
@@ -611,6 +617,8 @@ export function openReader(
       const src = composedSource(original.source, h.original.bytes, addOn, h.addOn.bytes)
       let task: ReturnType<typeof openRanged> | null = null
       void ready.then(async (k) => {
+        // (let go before this turn: no document opened, no worker asked of the kit after its release)
+        if (signal.aborted) return
         task = openRanged(k.lib as never, src, { options: k.options('composed'), refused: failed })
         try {
           const doc = await task.promise

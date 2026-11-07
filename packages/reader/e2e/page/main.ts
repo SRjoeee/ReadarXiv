@@ -615,6 +615,8 @@ const h = {
       delayRowsMs?: number
       /** the host's own scrollers (its chrome's), under its root */
       panes?: { root: HTMLElement; left: HTMLElement; right: HTMLElement }
+      /** the reader closed in the task that opened it (before PDF.js is in) */
+      closeAtOnce?: boolean
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -704,6 +706,7 @@ const h = {
         },
       },
     })
+    if (o.closeAtOnce) reader.close()
     const returnedAt = performance.now() - t0
     h.readers.push({ reader, root, asked })
     return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
