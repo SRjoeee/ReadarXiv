@@ -931,6 +931,13 @@ await check(
             .sort(),
         ),
       ])
+    // (a page counts as laid at its commit, before its drawing waits for its faces: both readers' faces in first)
+    await waitFor(
+      page,
+      () => new Set([...document.fonts].map((f) => /^"?axt-(\d+)-/.exec(f.family)?.[1]).filter(Boolean)).size === 2,
+      null,
+      15_000,
+    ).catch(() => {})
     const facesBefore = await facesOf()
     await page.evaluate(() => window.__h.readers[0].reader.close())
     await page.waitForTimeout(500)

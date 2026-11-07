@@ -51,6 +51,8 @@ export function createFaces(o: {
   const classes = new Map<FaceId, string>()
   const loading = new Map<FaceId, Promise<void>>()
   const added: FontFace[] = []
+  /** let go: a face whose read ends after is not added (it would outlive the reader in the document) */
+  let gone = false
   /** the reads waiting for a slot, and the slots taken */
   const waiting: (() => void)[] = []
   let busy = 0,
@@ -117,6 +119,7 @@ export function createFaces(o: {
                 style: e.style ?? 'normal',
               })
               await face.load()
+              if (gone) return
               document.fonts.add(face)
               added.push(face)
             } finally {
@@ -141,6 +144,7 @@ export function createFaces(o: {
       return most
     },
     dispose() {
+      gone = true
       for (const f of added) document.fonts.delete(f)
       added.length = 0
       sheet.remove()

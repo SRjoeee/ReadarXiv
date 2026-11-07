@@ -698,4 +698,45 @@ describe('the faces, in one wave', () => {
       Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
     }
   })
+  it('takes its faces out of the document when let go, and adds none whose read ends after', async () => {
+    const gates: (() => void)[] = []
+    const fetch = vi.fn(async () => {
+      await new Promise<void>((go) => gates.push(go))
+      return new Response(new Uint8Array(4), { status: 200 })
+    })
+    const was = globalThis.FontFace
+    ;(globalThis as { FontFace?: unknown }).FontFace = class {
+      load = async () => this
+    }
+    const fonts = (document as { fonts?: unknown }).fonts
+    const held = new Set<unknown>()
+    Object.defineProperty(document, 'fonts', {
+      value: { add: (f: unknown) => held.add(f), delete: (f: unknown) => held.delete(f) },
+      configurable: true,
+    })
+    try {
+      const faces = createFaces({
+        table: { a: { src: 'a' }, b: { src: 'b' } },
+        fetch: fetch as never,
+        root: document.body,
+      })
+      const a = faces.ready(['a'])
+      await settle()
+      gates.shift()?.()
+      await a
+      expect(held.size).toBe(1)
+      // (b asked, then the reader let go while b is read)
+      const b = faces.ready(['b'])
+      await settle()
+      faces.dispose()
+      expect(held.size).toBe(0)
+      gates.shift()?.()
+      await b
+      await settle()
+      expect(held.size).toBe(0)
+    } finally {
+      ;(globalThis as { FontFace?: unknown }).FontFace = was
+      Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
+    }
+  })
 })
