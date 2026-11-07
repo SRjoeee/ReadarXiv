@@ -44,7 +44,9 @@ export {
   type Session,
   type SessionEvent,
   type SessionHost,
+  type Unavailable,
 } from './chrome/model.ts'
+export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'
 export { mountChrome } from './chrome/mount.tsx'
 export { CATALOGUE_WORDS, linkNameOf, type Words } from './compose/words.ts'
 export { type LanguageItem, type Languages, PARTS, type Parts, type Slots } from './chrome/parts.tsx'

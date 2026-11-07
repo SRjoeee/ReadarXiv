@@ -2,9 +2,9 @@
 // for the members whose adapters are the extension's (fetch, prefs; translate in host-translate.test.ts), and the reader's
 // state told to the chrome as its events
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULTS, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
+import { DEFAULTS, eventsOf, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { eventsOf, hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
+import { hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
 
 const API = 'https://readarxiv.com'
 

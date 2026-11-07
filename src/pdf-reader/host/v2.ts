@@ -1,10 +1,9 @@
 // The reader package whole behind the one chrome (AXT_READER 'v2'): `openReader` with the extension's Host (interfaces/host
 // DECISION, design-a §2 caller 2). The host gives the network (our server and arXiv, nothing else; no credentials, no
 // referrer), where arXiv's bytes are read (the tab's own PDF), the preferences over the extension's configuration, and the
-// rows made here through the background; the reader's state is told to the chrome as the chrome's events, and the chrome's
-// commands are the reader's.
-import type { Prefs, PrefStore, Reader, ReaderState, SessionEvent, Session as ChromeSession, SessionHost as ChromeHost, Host, PrefsPatch } from '@readarxiv/reader'
-import type { ProviderErrorKind } from '@readarxiv/ui'
+// rows made here through the background; the reader's state is told to the chrome as the chrome's events (the package's
+// `eventsOf`), and the chrome's commands are the reader's.
+import { eventsOf, type Prefs, type PrefStore, type Reader, type ReaderState, type Session as ChromeSession, type SessionHost as ChromeHost, type Host, type PrefsPatch } from '@readarxiv/reader'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
 import { prefsOf, withPrefs } from './prefs'
@@ -62,67 +61,6 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
 
 export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string }): Host {
   return { fetch: hostFetch(o), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
-}
-
-/** the chain's error kind a rows' failure is told as (the chrome words it as the popup does) */
-function kindOf(why: { kind: string; code?: string }): ProviderErrorKind {
-  if (why.kind === 'unconfigured') return why.code === 'auth' ? 'auth' : 'no-key'
-  if (why.kind === 'unavailable') return 'network'
-  // refused for good by the service: what the chain calls a request it will not take
-  if (why.kind === 'refused') return 'bad-request'
-  return 'unknown'
-}
-const LAYER_WHY: Record<string, 'no-source' | 'cannot-prepare' | 'unknown-versions' | 'refused' | 'unreachable'> = {
-  'no-source': 'no-source',
-  'not-found': 'no-source',
-  'cannot-prepare': 'cannot-prepare',
-  'too-large': 'cannot-prepare',
-  outdated: 'unknown-versions',
-  mismatch: 'cannot-prepare',
-  broken: 'cannot-prepare',
-  busy: 'refused',
-  limit: 'refused',
-  unreachable: 'unreachable',
-}
-
-/** what changed between two states of the reader, as the chrome's events (the chrome folds them as it folds today's session's) */
-export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEvent[] {
-  const out: SessionEvent[] = []
-  const p = prev
-  if (!p || p.prefs !== next.prefs) out.push({ type: 'prefs', prefs: next.prefs })
-  if (!p || p.paper.title !== next.paper.title || p.paper.id !== next.paper.id) out.push({ type: 'paper', id: next.paper.id + (next.paper.version ? `v${next.paper.version}` : ''), title: next.paper.title })
-  if (next.paper.html !== (p?.paper.html ?? null)) out.push({ type: 'html', url: next.paper.html })
-  if (!p || p.settings.s !== next.settings.s) out.push({ type: 'notice', why: next.settings.s === 'unreadable' ? 'unreadable' : null })
-  for (let n = p?.settings.refused ?? 0; n < next.settings.refused; n++) out.push({ type: 'refused' })
-  const o = next.original
-  if (o.s === 'opening' && (!p || p.original.s !== 'opening' || p.original.loaded !== o.loaded)) out.push({ type: 'loading', loaded: o.loaded, total: o.total })
-  if (o.s === 'open' && p?.original.s !== 'open') out.push({ type: 'opened' })
-  if (o.s === 'failed' && p?.original.s !== 'failed') out.push({ type: 'fail', event: 'fetch failed', text: `the original could not be read (${o.why})`, kind: 'network' })
-  const v = next.view
-  if (!p || p.view.display !== v.display) out.push({ type: 'display', mode: v.display })
-  if (!p || p.view.sync.on !== v.sync.on) out.push({ type: 'sync', on: v.sync.on })
-  if (!p || p.view.scale !== v.scale || p.view.zoom !== v.zoom) out.push({ type: 'scale', scale: v.scale, zoom: v.zoom })
-  for (const side of ['left', 'right'] as const) {
-    const a = p?.view.sides[side], b = v.sides[side]
-    if (!a || a.page !== b.page || a.pages !== b.pages) out.push({ type: 'page', side, page: b.page, pages: b.pages })
-  }
-  if (!p || p.view.outline !== v.outline) out.push({ type: 'outline', entries: [...v.outline] as never })
-  if (!p || p.view.heading !== v.heading) out.push({ type: 'heading', id: v.heading })
-  const l = next.layer, pl = p?.layer
-  if (l.s === 'preparing' && (pl?.s !== 'preparing' || pl.position !== l.position || pl.progress !== l.progress)) out.push({ type: 'preparing', position: l.position, progress: l.progress })
-  if (l.s === 'ready') {
-    if (pl?.s !== 'ready') out.push({ type: 'prepared' }, { type: 'coming' })
-    if (pl?.s !== 'ready' || pl.laid !== l.laid || pl.total !== l.total || pl.asOriginal !== l.asOriginal) out.push({ type: 'layer', state: 'open', laid: l.laid, total: l.total, ...(l.asOriginal ? { original: l.asOriginal } : {}) })
-  }
-  if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why)) out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
-  const r = next.rows, pr = p?.rows
-  if (r.s === 'arriving' && (pr?.s !== 'arriving' || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost)) out.push({ type: 'translating', got: r.got, total: r.total, lost: r.lost })
-  if (r.s === 'complete' && pr?.s !== 'complete') out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped ? kindOf(r.stopped) : null })
-  if (r.s === 'failed' && pr?.s !== 'failed') {
-    if (r.why.kind === 'target') out.push({ type: 'unavailable', why: 'target', retryAt: null })
-    else out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: kindOf(r.why) })
-  }
-  return out
 }
 
 /** the chrome's `open`: the reader package in the chrome's panes */

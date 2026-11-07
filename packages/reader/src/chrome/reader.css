@@ -65,7 +65,10 @@ header.bar {
 .doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
 html[data-axt-contents] .doc { left: var(--side); }
 .pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
-.pane .viewerContainer { scroll-timeline: --pane-y block; scrollbar-width: none; }
+/* a pane's scroller (App.tsx draws it, the reader draws into it): filling the pane, placed as PDF.js's viewer requires of
+   the element it scrolls (it throws where that is not placed absolutely); the chrome's own, so that a host's page sheet needs
+   none of it (the extension's engine.css held it, the website's v2 page carried a copy: L11's gap 4) */
+.pane .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; scroll-timeline: --pane-y block; scrollbar-width: none; }
 /* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3) */
 html[data-axt-pdf-mode="original"] .doc, html[data-axt-pdf-mode="translation"] .doc, html[data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
 html[data-axt-pdf-mode="original"] .pane[data-side="right"],
