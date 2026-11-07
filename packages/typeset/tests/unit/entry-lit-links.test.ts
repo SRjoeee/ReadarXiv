@@ -185,6 +185,29 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const owned = at([150, 697, 170, 708], [0, '5'])
     expect(layPage(part(cite(), [owned]), rowsOf([], true), rules, metrics()).links).toEqual([[owned.box, owned.to]])
   })
+  it('keeps every link at A’s box on a page that waits for its rows or its faces, the original shown there (#626 review)', () => {
+    const owned = at([150, 697, 170, 708], [0, '5'])
+    const free = at([400, 600, 420, 610])
+    // (its row not in yet: the page waits, its members the original's)
+    const forRows = layPage(part(cite(), [owned, free]), rowsOf([]), rules, metrics())
+    expect(forRows.wait.rows.length).toBeGreaterThan(0)
+    expect(forRows.links).toEqual([
+      [owned.box, owned.to],
+      [free.box, free.to],
+    ])
+    // (its row in, a face not loaded yet: the page waits for the face)
+    const forFaces = layPage(
+      part(cite(), [owned, free]),
+      rowsOf([r]),
+      rules,
+      metrics(() => false),
+    )
+    expect(forFaces.wait.faces.length).toBeGreaterThan(0)
+    expect(forFaces.links).toEqual([
+      [owned.box, owned.to],
+      [free.box, free.to],
+    ])
+  })
   it('drops a link over an element whose ink is turned off and that the translation does not draw', () => {
     // (the translation leaves the citation out: its ink goes with the elements' group, a link there would open from the text
     // drawn over it)

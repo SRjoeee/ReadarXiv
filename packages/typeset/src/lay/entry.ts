@@ -176,7 +176,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       lines: [],
       lit: litOfA(m, page),
     })),
-    links: [],
+    // (the page is the original's while it waits: every link at A's box, as for a member not laid; no run is measured)
+    links: linksOf(part, page, new Map(), () => 0, o.linkFates),
   })
   if (waiting.length) return waitAll([])
   const R = rules.set
