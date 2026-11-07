@@ -108,6 +108,7 @@ export interface Located {
       to: { url: string } | { dest: string }
       owner?: [number, string]
       text?: string
+      page?: number
     }[]
   >
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */

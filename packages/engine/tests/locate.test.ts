@@ -461,6 +461,31 @@ describe('bundle', () => {
     expect(head.head.original).toMatchObject({ bytes: 70000, chunk: 65536 })
     expect(head.head.original.chunks).toHaveLength(44)
   })
+  it('gives a part the annotations of its members on their other pages, with their page (#626 review)', () => {
+    // (unit 0 runs on from page 1 to page 2, an annotation over its text on page 2: page 1's part holds it with its page, so
+    // that a translation whose \\href is drawn on page 1 takes its link there; page 2's holds it as its own)
+    const link = { annotationType: 2, rect: [60, 694, 140, 706], url: 'https://example.org/' }
+    const L2 = locate(ins, B, align(B, B), { annotations: [[], [link], []] })
+    const parts = [
+      ...bundle({
+        ins,
+        located: L2,
+        addOn: addOnOf(L2, 3),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 3 },
+        made: 'test',
+      }),
+    ].filter((o) => o.kind === 'part')
+    const linksOf = (n: number) => {
+      const o = parts.find((x) => x.page === n)!
+      return read('part', o.bytes, o.digest).links ?? []
+    }
+    const own = L2.links.get(2)![0]!
+    expect(own.owner?.[0]).toBe(L2.members.find((m) => m.unit === 0)!.ord)
+    expect(linksOf(1)).toEqual([{ ...own, page: 2 }])
+    expect(linksOf(2)).toEqual([own])
+    expect(linksOf(3)).toEqual([])
+  })
   it('holds in a part every flow its page reads: its own, and those of the page a running-on member begins on', () => {
     const parts = objects.filter((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>[]
     // page 2: unit 0 runs on from page 1 (a), and page 1's flows (b) are its own; unit 1's (a)

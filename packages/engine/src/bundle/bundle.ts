@@ -231,6 +231,18 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     const take = [...a, ...b, ...c].sort((x, y) => x - y)
     const held = new Set(take.flatMap((i) => located.flows[i]!))
     const ties = located.ties.filter((_, t) => tieOrds[t]!.some((o) => held.has(o)))
+    // (the page's annotations, and those of the members with a line on it on their other pages, with their page: a translation
+    // draws a member's piece on whichever of its pages its text falls, the link over it there, #626's review)
+    const own = located.links.get(p) ?? []
+    const across: NonNullable<Part['links']> = []
+    for (const i of a)
+      for (const o of located.flows[i]!) {
+        if (!members[o]!.pages.includes(p)) continue
+        for (const q of members[o]!.pages)
+          if (q !== p)
+            for (const l of located.links.get(q) ?? []) if (l.owner?.[0] === o) across.push({ ...l, page: q })
+      }
+    const links = [...own, ...across]
     const part: Part = {
       format: 1,
       page: p,
@@ -241,7 +253,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       },
       flows: take.map((i) => located.flows[i]!.map((o) => placed[o]!)),
       ...(ties.length ? { ties } : {}),
-      ...(located.links.get(p)?.length ? { links: located.links.get(p) } : {}),
+      ...(links.length ? { links } : {}),
     }
     const { bytes, digest } = write('part', part)
     partDigests.push(digest)

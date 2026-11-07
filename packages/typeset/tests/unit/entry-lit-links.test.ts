@@ -313,6 +313,34 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(x[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
     expect(y[0]).toBeCloseTo(x0 + 15 * 0.5 * f, 1)
   })
+  it('lays a link of the member’s other page over its \\href group drawn on this one, and nothing of it where none is (#626 review)', () => {
+    // (a paragraph over pages 1 and 2 whose translated group is drawn on page 1, its annotation on page 2: the part of page 1
+    // holds it with its page)
+    const m = member({
+      spans: [['1', { cmd: 'href' }]],
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10],
+      ],
+    })
+    const link: Link = { box: [72, 697, 160, 708], to: { url: 'https://example.org/' }, owner: [0, ''], page: 2 }
+    const rr = row([
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'Die Seite' }] },
+      { t: 'text', s: ' ist dort.' },
+    ])
+    const p = layPage(part(m, [link]), rowsOf([rr]), rules, metrics())
+    const [b, to] = only(p)
+    expect(to).toEqual(link.to)
+    // (on page 1's first laid line, from its start)
+    const [y, x0] = p.members[0]!.lines[0]!
+    expect(b[0]).toBeCloseTo(x0, 6)
+    expect(b[1]).toBeLessThan(y)
+    // (its group not drawn on page 1: nothing of it there, its box is page 2's)
+    const plain = row([{ t: 'text', s: 'Die Seite ist dort.' }])
+    expect(layPage(part({ ...m, spans: [] }, [link]), rowsOf([plain]), rules, metrics()).links).toEqual([])
+    // (its owner not laid: nothing on page 1 either)
+    expect(layPage(part(m, [link]), rowsOf([], true), rules, metrics()).links).toEqual([])
+  })
   it('lays a link that holds the member’s every line over its whole drawing (a contents entry), drops one over part of it', () => {
     const entry = member({ kind: 'inkcontents', lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]] })
     const whole: Link = { box: [71, 696, 301, 709], to: { dest: '"section.1"' }, owner: [0, ''] }

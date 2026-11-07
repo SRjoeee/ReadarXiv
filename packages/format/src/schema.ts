@@ -219,14 +219,16 @@ export const Tie = z.discriminatedUnion('rule', [
   }),
   z.object({ rule: z.literal('size'), ords: z.array(int) }),
 ])
-/** one of A's link annotations on the page: its rectangle, where it goes, the member and the piece that hold it (an element's
- *  id, '' its text), and the characters under it as PDF.js reads them (its `overlaidText`, white space collapsed: what today's
- *  link match finds among the characters a piece is drawn as; absent where it holds none) */
+/** one of A's link annotations: its rectangle, where it goes, the member and the piece that hold it (an element's id, '' its
+ *  text), the characters under it as PDF.js reads them (its `overlaidText`, white space collapsed: what today's link match
+ *  finds among the characters a piece is drawn as; absent where it holds none), and its page where it is not the part's (an
+ *  annotation of a member of the page on another of its pages, which a translation may draw on this one) */
 export const Link = z.object({
   box: Box,
   to: z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })]),
   owner: z.tuple([int, z.string()]).optional(),
   text: z.string().optional(),
+  page: page.optional(),
 })
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */

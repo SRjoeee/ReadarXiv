@@ -820,7 +820,8 @@ export function gateL1Pair(
       out.entry.ms.push(performance.now() - t1)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
-        const f = linkFates[i] ?? 'none'
+        // (an annotation of a member's other page, which the part holds with its page: counted apart)
+        const f = `${l.page && l.page !== pg ? 'across ' : ''}${linkFates[i] ?? 'none'}`
         out.entry!.links.set(f, (out.entry!.links.get(f) ?? 0) + 1)
         const ex = out.entry!.linkEx.get(f) ?? []
         if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
