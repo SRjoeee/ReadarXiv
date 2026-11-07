@@ -71,6 +71,58 @@ export const UNITS: UnitIn[] = [
   /* 16 */ unit('times', [t('a 3'), el('x', 'math'), t('10 speed-up')]),
 ]
 
+/** 1810.04805v2's units as staging's bundle holds them (2026-11-08; ids the source reader's, `src` not on any wire): a group
+ *  whose head is a declaration TeX holds for the rest of the group (`{\bf \bert}`, `{\em all}`), a span that is not `must` */
+export const BERT_ABSTRACT: UnitIn = unit('bert-abstract', [
+  t('We introduce a new language representation model called '),
+  span('1', 'other', [el('2', 'other'), t(' '), el('4', 'macro')]),
+  t(', which stands for '),
+  span('7', 'bold', [t('B')]),
+  t('idirectional '),
+  span('11', 'bold', [t('E')]),
+  t('ncoder '),
+  span('15', 'bold', [t('R')]),
+  t('epresentations from '),
+  span('19', 'bold', [t('T')]),
+  t('ransformers. Unlike recent language representation models'),
+  el('23', 'other'),
+  el('24', 'cite'),
+  t(',  '),
+  el('26', 'macro'),
+  t(
+    ' is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pre-trained BERT model can be fine-tuned with just one additional output layer to create state-of-the-art models for a wide range of tasks, such as question answering and language inference, without substantial task-specific architecture modifications. ',
+  ),
+])
+export const BERT_STRATEGIES: UnitIn = unit('bert-strategies', [
+  t('\nThere are two existing strategies for applying pre-trained language representations to downstream tasks: '),
+  span('1', 'other', [el('2', 'other'), t(' feature-based')]),
+  t(' and '),
+  span('6', 'other', [el('7', 'other'), t(' fine-tuning')]),
+  t('. The feature-based approach, such as ELMo'),
+  el('11', 'other'),
+  el('12', 'cite'),
+  t(
+    ', uses task-specific architectures that include the pre-trained representations as additional features. The fine-tuning approach, such as the Generative Pre-trained Transformer (OpenAI GPT)',
+  ),
+  el('14', 'other'),
+  el('15', 'cite'),
+  t(', introduces minimal task-specific parameters, and is trained on the downstream tasks by simply fine-tuning '),
+  span('17', 'other', [el('18', 'other'), t(' all')]),
+  t(
+    ' pre-trained parameters. The two approaches share the same objective function during pre-training, where they use unidirectional language models to learn general language representations.',
+  ),
+])
+/** Microsoft's replies to them, as staging stored them: the raw text rebuilt from the stored rows, which today's reading of it
+ *  gives back byte for byte */
+export const BERT_ABSTRACT_REPLY = JSON.stringify({
+  text: '我们引入了一个名为@a#的新语言表示模型，代表Transformers的双向编码器表示。与近期的语言表示模型@b#不同，@c#设计为通过在所有层中对左右上下文联合条件，预训练无标签文本的深度双向表示。因此，预训练的BERT模型只需增加一层输出即可微调，创建适用于多种任务（如问答和语言推理）的先进模型，而无需对任务特定的架构进行重大修改。',
+})
+export const BERT_STRATEGIES_REPLY = JSON.stringify({
+  text: '目前已有两种策略将预训练语言表示应用于下游任务：@a# 基于特征和 @b# 微调。基于特征的方法，如ELMo @c#，使用任务专用架构，将预训练表示作为附加功能。微调方法，如生成预训练变换器（OpenAI GPT）@d#，引入任务特定参数极少，下游任务则通过微调@e#所有预训练参数进行训练。这两种方法在预训练阶段共享相同的目标函数，即使用单向语言模型学习一般语言表示。',
+})
+/** Microsoft's fixture units: the shared ones and the units only its wire reads differently */
+export const MICROSOFT_UNITS: UnitIn[] = [...UNITS, /* 17 */ BERT_ABSTRACT, /* 18 */ BERT_STRATEGIES]
+
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
 const ms = (text: string, src?: number[], tr?: number[]) => JSON.stringify(src && tr ? { text, src, tr } : { text })
 export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why?: string }[] = [
@@ -131,6 +183,13 @@ export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why
   { unit: 6, raw: ms('设置：我们训练模型3个轮次。'), taken: false, why: 'a run-in label lost' },
   { unit: 5, raw: ms('完整的粗体标题'), taken: true, why: 'a span around the whole unit, on no wire' },
   { unit: 8, raw: ms('围绕公式的链接：@a#完成。'), taken: true, why: 'a link with no text, one marker' },
+  { unit: 17, raw: BERT_ABSTRACT_REPLY, taken: true, why: '`{\\bf \\bert}`, a group of no word, as it came' },
+  {
+    unit: 18,
+    raw: BERT_STRATEGIES_REPLY,
+    taken: true,
+    why: '`{\\em all}`: a declaration at a group’s head, as it came',
+  },
 ]
 
 /** Google's raw replies (the translated item as it came back) */

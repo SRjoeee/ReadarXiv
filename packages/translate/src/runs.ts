@@ -1,7 +1,9 @@
 // The runs floor (design-a §1.2 invariant 4): a unit no translator rebuilt is cut into its text stretches, each sent
 // through the whole chain as a unit with no element, and put back between the elements, which stay where the source has
 // them. A span that is not `must` is no edge (its words are its sentence's: cut there, a styled word came back alone,
-// word salad, mt.mjs runsOf); a `must` span is rebuilt around its own stretches.
+// word salad, mt.mjs runsOf), its head kept in a copy of it as on the markers wire (accept.ts headLength: `{\em all}`'s
+// `\em`, which loose holds to the unit's end); a `must` span is rebuilt around its own stretches.
+import { headLength } from './accept.ts'
 import type { OutPiece, Piece, UnitIn } from './contract.ts'
 
 type Tpl =
@@ -42,7 +44,15 @@ export function runsOf(unit: UnitIn): Runs {
         } else if (p.must) {
           close()
           out.push({ t: 'span', id: p.id, content: build(p.content) })
-        } else walk(p.content)
+        } else {
+          // (its head, a declaration's place, stays in a copy of it: never loose, held to the unit's end)
+          const k = headLength(p.content)
+          if (k) {
+            close()
+            out.push({ t: 'span', id: p.id, content: build(p.content.slice(0, k)) })
+          }
+          walk(p.content.slice(k))
+        }
       }
     }
     walk(content)
