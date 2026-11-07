@@ -103,8 +103,8 @@ describe("a gate's output, read as the gate states it", () => {
     const d = mkdtempSync(join(tmpdir(), 'release-check-'))
     dirs.push(d)
     const ok = (id: string, proofs: object) => `${id}\t0\t${JSON.stringify({ id, proofs })}`
-    writeFileSync(join(d, 'log.tsv'), [ok('a', { a: 0, c: 0 }), ok('b', { a: 2, c: 0, on: 0, offOutside: { t: 1, f: 0 } }), 'c\t3\tNEEDS_COMPILE', 'd\trefused\t11 GiB free', 'e\t1\tError: x'].join('\n'))
-    expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 5, made: 2, failed: ['e: exit 1: Error: x'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
+    writeFileSync(join(d, 'log.tsv'), [ok('a', { a: 0, c: 0 }), ok('b', { a: 2, c: 0, on: 0, offOutside: { t: 1, f: 0 } }), 'c\t3\tNEEDS_COMPILE', 'd\trefused\t11 GiB free', 'e\t1\tError: x', 'f\t0\tf {"pages":{}}', 'g\t0\tdone'].join('\n'))
+    expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 7, made: 4, failed: ['e: exit 1: Error: x', 'g: no summary'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
   })
 
   it("holds the canvas's papers to the bound its header names, and the marks' sum to the owner's record but for its compiles", () => {

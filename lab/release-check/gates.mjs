@@ -136,7 +136,7 @@ export function typesetOf(text) {
   return out
 }
 
-/** lab/pdf/prepare-back/corpus.sh's log.tsv: one line a paper, `id <tab> exit <tab> summary` */
+/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh, lab/marks/front.sh): one line a paper, `id <tab> exit <tab> summary` */
 export function corpusLogOf(file) {
   const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'))
   const out = { papers: rows.length, made: 0, failed: [], refused: [], missingCompile: [], proofs: { a: 0, c: 0, on: 0, offOutside: 0 } }
@@ -146,7 +146,8 @@ export function corpusLogOf(file) {
     if (rc !== '0') { out.failed.push(`${id}: exit ${rc}: ${summary}`); continue }
     out.made++
     let s
-    try { s = JSON.parse(summary) } catch { out.failed.push(`${id}: no summary`); continue }
+    // (the summary is the paper's JSON, after its id where the runner prints one: lab/marks/front.sh, gate.sh)
+    try { s = JSON.parse(summary.slice(summary.indexOf('{'))) } catch { out.failed.push(`${id}: no summary`); continue }
     const p = s.proofs ?? {}
     out.proofs.a += p.a ?? 0
     out.proofs.c += p.c ?? 0
@@ -470,10 +471,23 @@ export const GATES = [
     holds: [],
     disk: true,
     needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/defs')), exists('Docker', which('docker')), exists("today's gate run 6 (the count's comparison)", lab(ctx, 'lanes/L2/marks/gate6'))],
+    // (the instrument's store of this run's own, so that lane L2's is not written and every paper's TeX runs are counted; the
+    // instruments' inputs kept, which the count replays)
     steps: ctx => [
-      { cmd: ['bash', 'lab/marks/front.sh', join(ctx.work, 'front')], fresh: join(ctx.work, 'front') },
-      { cmd: ['node', '--import', 'tsx', 'lab/marks/count.mjs', `--today=${lab(ctx, 'lanes/L2/marks/gate6')}`, `--defs=${lab(ctx, 'lanes/L2/defs')}`, `--run=new:${join(ctx.work, 'front')}`] },
+      { cmd: ['bash', 'lab/marks/front.sh', join(ctx.work, 'front')], env: { KEEP: '1', STORE: join(ctx.work, 'front-store') }, fresh: join(ctx.work, 'front') },
+      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/count.mjs', `--today=${lab(ctx, 'lanes/L2/marks/gate6')}`, `--defs=${lab(ctx, 'lanes/L2/defs')}`, `--run=new:${join(ctx.work, 'front')}`] },
     ],
+    judge: (ctx, steps) => {
+      const log = corpusLogOf(join(ctx.work, 'front', 'log.tsv'))
+      if (log.refused.length) return { skip: `the front half's runner refused ${log.refused.length} papers: ${log.refused[0]}` }
+      if (steps[1]?.exit !== 0) return { pass: false, note: log.failed[0] }
+      const row = JSON.parse(steps[1].text.slice(steps[1].text.indexOf('{'))).rows?.new ?? {}
+      return {
+        pass: !log.failed.length && !(row.noLayer ?? []).length,
+        numbers: { papers: row.papers, compiles: row.compiles, texS: Math.round((row.texMs ?? 0) / 1000), noLayer: (row.noLayer ?? []).length, delimited: row.delimited, units: row.units },
+        note: log.failed[0],
+      }
+    },
   },
   {
     id: 'speed',
