@@ -312,20 +312,23 @@ export const GATES = [
   },
   {
     id: 'marks-replay',
-    title: "the marks' equivalence again over run d6's kept inputs, no TeX (lab/marks/replay.mjs): nothing moved since the owner's reading of d6",
+    title: "the marks' equivalence again over run 6's kept inputs, no TeX (lab/marks/replay.mjs): every class as the owner's census of run 6 (r13)",
     tier: 'full',
     stage: 'pipeline',
     holds: [],
-    needs: ctx => [exists("d6's kept inputs", lab(ctx, 'lanes/L2/marks/d6/keep')), exists("d6's sum", lab(ctx, 'lanes/L2/marks/d6-sum.txt'))],
+    // (gate.mjs --keep's inputs: today's owners and the new instrument's B pages, plan and source; the census the lane's owner
+    // read, r13, made over them at c26d4bf7a. Valid while markSource writes the same marks; after a change to the writer the
+    // gate is gate.sh again, the release tier's marks-gate)
+    needs: ctx => [exists("run 6's kept inputs", lab(ctx, 'lanes/L2/marks/gate6/keep')), exists("run 6's census (r13)", lab(ctx, 'lanes/L2/marks/r13-sum.txt'))],
     steps: ctx => [
-      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/replay.mjs', `--keep=${lab(ctx, 'lanes/L2/marks/d6/keep')}`, `--out=${join(ctx.work, 'marks-replay')}`], slot: 'test', fresh: join(ctx.work, 'marks-replay') },
+      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/replay.mjs', `--keep=${lab(ctx, 'lanes/L2/marks/gate6/keep')}`, `--out=${join(ctx.work, 'marks-replay')}`], slot: 'test', fresh: join(ctx.work, 'marks-replay') },
       { cmd: ['node', 'lab/marks/gate-sum.mjs', join(ctx.work, 'marks-replay')] },
     ],
     judge: (ctx, steps) => {
       if (!steps.every(s => s.exit === 0)) return { pass: false }
-      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/d6-sum.txt'), 'utf8'))
+      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
       const head = JSON.parse(steps[1].text.trim().split('\n')[0])
-      return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? 'every class as d6' : "the sum differs from d6's: the owner reads the new classes" }
+      return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
     },
   },
   {
@@ -447,7 +450,7 @@ export const GATES = [
   },
   {
     id: 'marks-gate',
-    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh): every class as the owner read them at d6",
+    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh): every class as the owner's census of run 6 (r13)",
     tier: 'release',
     stage: 'corpus',
     holds: [],
@@ -459,8 +462,8 @@ export const GATES = [
     ],
     judge: (ctx, steps) => {
       if (!steps.every(s => s.exit === 0)) return { pass: false }
-      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/d6-sum.txt'), 'utf8'))
-      return { pass: same, note: same ? 'every class as d6' : "the sum differs from d6's: the owner reads the new classes" }
+      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
+      return { pass: same, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
     },
   },
   {
