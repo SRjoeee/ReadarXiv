@@ -117,6 +117,18 @@ describe('Laid.lit: every member lit whole (no part states cuts)', () => {
     expect(laid!.lit.own).toEqual([['1', [[120, 676, 250, 688]]]])
     expect(laid!.lit.right[0]!.every((b) => b[3] > 690)).toBe(true)
   })
+  it('lights the elements its elements’ group keeps shown where the translation omits them all (#626 review)', () => {
+    // (a text-only translation of a member with a citation: no element is drawn otherwise, the entry leaves the elements' group
+    // on, the citation's ink stays where it stands and lights with the member, its link kept at A's box)
+    const m = member({ els: [['5', { kind: 'cite', ink: [[1, 250, 698, 270, 707, 700]] }]] })
+    const link: Link = { box: [250, 697, 270, 708], to: { dest: '"cite.x"' }, owner: [0, '5'] }
+    const p = layPage(part(m, [link]), rowsOf([row([{ t: 'text', s: 'Kurz.' }])]), rules, metrics())
+    const [laid] = p.members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.off).toBe(1)
+    expect(p.links).toEqual([[link.box, link.to]])
+    expect(laid!.lit.own).toEqual([['5', [[250, 698, 270, 707]]]])
+  })
   it('lights a babel name drawn on its own on both panes: its line on A, its word as drawn', () => {
     const name = member({
       kind: 'name',

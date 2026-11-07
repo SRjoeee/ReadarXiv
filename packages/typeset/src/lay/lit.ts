@@ -53,9 +53,9 @@ export function litOfA(m: Placed, page: number): Lit {
 }
 
 /**
- * A laid member's boxes on page `page`. `L` its layout; `off` its groups turned off on the page (a label drawn anew: 4); `kept`
- * its elements kept where they stand by its reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with
- * it
+ * A laid member's boxes on page `page`. `L` its layout; `off` its groups turned off on the page as the entry decides them (its
+ * elements: 2, the ink it keeps shown follows it; a label drawn anew: 4); `kept` its elements kept where they stand by its
+ * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it
  */
 export function litLaid(
   m: Placed,
@@ -76,6 +76,9 @@ export function litLaid(
     els,
     label: m.label ? { ink: [m.label.ink], drawn: relabelled } : null,
     fixed: m.fixed ?? 0,
+    // (the elements' group as the entry decides it: one the translation omits is drawn nowhere else, its ink stays and lights,
+    // #626's review)
+    elementsOff: !!(o.off & 2),
   })
   const displays = shown.filter((s) => s.kind === 'display')
   // (a KEPT line is a display's row, its display's block, or a held line: its ink stays, on both panes in its unit's shape)
