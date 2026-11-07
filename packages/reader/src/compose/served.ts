@@ -406,10 +406,13 @@ export function createServed(o: {
   }
   /** the tables a font string needs read, then the slices its text needs loaded */
   const load = async (font: string, text: string) => {
+    // (nothing asked once the reader is closed: not before the index, nor after an index or a table that came in since)
+    if (gone) return
     const fs = facesOf(font)
     if (!fs) return
     if (!fs.read) {
       const ix = await theIndex()
+      if (gone) return
       await Promise.all(
         fs.faces
           .filter((f) => f.slices === null)
@@ -424,6 +427,7 @@ export function createServed(o: {
       )
       for (const f of fs.faces) f.slices ??= []
       runsCache.clear()
+      if (gone) return
     }
     const runs = runsOf(font, text)
     if (!runs || runs === 'never') return

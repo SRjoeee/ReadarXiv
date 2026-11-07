@@ -215,6 +215,24 @@ describe('the reader closed, and the bounds of what is read', () => {
     await new Promise((go) => setTimeout(go, 0))
     expect(asked).toHaveLength(before)
   })
+  it('a face table whose index comes in after the reader is closed is never asked', async () => {
+    const asked: string[] = []
+    let release: (() => void) | undefined
+    const fetch = async (url: string) => {
+      asked.push(url)
+      if (url === '/static-fonts/index.json') await new Promise<void>((go) => (release = go))
+      if (url in TABLES) return new Response(JSON.stringify(TABLES[url]), { status: 200 })
+      return new Response(new Uint8Array([1]), { status: 200 })
+    }
+    const s = createServed({ fetch, root: document.body, platform: platformOf() })
+    const ready = s.faces.ready([[FONT, 'Satz']])
+    await vi.waitFor(() => expect(release).toBeDefined())
+    s.faces.dispose()
+    release?.()
+    await ready
+    await new Promise((go) => setTimeout(go, 0))
+    expect(asked).toEqual(['/static-fonts/index.json'])
+  })
   it('a slice past its cap is let go at the chunk that passes it, and is lost as one too large is today', async () => {
     const bad = endless(1024 * 1024)
     const warned: string[] = []
