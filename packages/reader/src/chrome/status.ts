@@ -69,6 +69,11 @@ export function stageOf(state: ReaderState): Stage | null {
  *  "drawn": the layer's first rows taken this visit) */
 export const translationThere = (state: ReaderState): boolean =>
   state.layer.laid > 0 || (state.layer.total > 0 && state.translated.got > 0)
+/** neither side has anything to show: the original could not be read, nothing of the translation is there, and none is to be
+ *  had now (its layer refused, for now or for the paper): the website's `originalLost && layer === 'unavailable'` (its
+ *  reader/Toolbar.tsx), whose bar is then its page's for a paper arXiv does not have (parts.tsx `bar`) */
+export const nothingShown = (state: ReaderState): boolean =>
+  state.failures.pdf !== null && !translationThere(state) && (!state.available || state.unavailable !== null)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
 function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
   if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
