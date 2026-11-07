@@ -12,8 +12,9 @@
 // - **Laying, one page at a time.** The near pages are laid the page in the middle of the view first (then the pages after it
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
-//   or its faces (asked in one wave for the near pages, the middle page first). Committed is final: a late row changes nothing on
-//   screen until the language, the toggles or the paper change.
+//   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
+//   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row changes nothing on screen
+//   until the language, the toggles or the paper change.
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -221,7 +222,10 @@ export function createComposer(o: ComposerOptions): Composer {
     get done() {
       return rows?.done ?? false
     },
+    kept: (id) => rows?.kept?.(id) ?? false,
   }
+  /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
+  const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
 
   // ---------------------------------------------------------------- what a slot shows
   const originalOf = (n: number, isSettled: boolean): PageContent | null => {
@@ -437,6 +441,7 @@ export function createComposer(o: ComposerOptions): Composer {
       return
     }
     if (!committed(page)) {
+      early(n, part)
       markSoon()
       return
     }
@@ -462,20 +467,41 @@ export function createComposer(o: ComposerOptions): Composer {
     })
     return changed ? { ...page, members: out } : page
   }
-  /** the faces the round's pages wait for, in one wave: the page in the middle of the view first */
+  /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */
+  const earlyLeft = new Map<number, number>()
+  /** a near page waiting for rows: the faces of the rows it has asked meanwhile, as it would wait for them were the rows ended
+   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (staging,
+   *  2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its 49 slices,
+   *  2.5 MB, in 16 s). Asked again only once more of its rows are in */
+  function early(n: number, part: Part) {
+    const left = pages.get(n)?.wait.rows.length ?? 0
+    if (!left || rows?.done || (earlyLeft.get(n) ?? Number.POSITIVE_INFINITY) <= left) return
+    earlyLeft.set(n, left)
+    let want: Page['wait']['faces']
+    try {
+      want = o.lay(part, endedView).wait.faces
+    } catch {
+      return
+    }
+    if (want.length) wave.set(n, want)
+  }
+  /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
+   *  again once its own faces are in: never held by another page's (staging, 2026-11-08: 2611.07042v1's page 1, whose own
+   *  faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
   function flushWave() {
     if (!wave.size) return
     const c = stack.centre() || 1
     const order = [...wave.keys()].sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)
-    // (each face with the texts the pages wait on it for, once)
-    const asked = new Map<string, readonly [string, string]>()
-    for (const n of order) for (const [f, t] of wave.get(n) ?? []) asked.set(`${f}\u0000${t}`, [f, t])
-    wave.clear()
     const mine = gen
-    void faces.ready(asked.values()).then(() => {
-      if (mine !== gen) return
-      for (const n of order) if (stack.near(n)) askLay(n)
-    })
+    // (each page's faces asked in that order: a slice another page asked first is read once, and this page waits for it too;
+    // its loads not begun let go once the page is not near or its generation is gone, its early asks too)
+    for (const n of order) {
+      const wanted = () => !disposed && mine === gen && stack.near(n)
+      void faces.ready(wave.get(n) ?? [], wanted).then(() => {
+        if (wanted()) askLay(n)
+      })
+    }
+    wave.clear()
   }
   function failed(n: number) {
     const P = rec(n)
@@ -562,6 +588,7 @@ export function createComposer(o: ComposerOptions): Composer {
     aheadNothing.clear()
     queue.clear()
     wave.clear()
+    earlyLeft.clear()
     if (holding) clock.clear(holding.timer)
     holding = null
     pages.clear()
@@ -593,8 +620,8 @@ export function createComposer(o: ComposerOptions): Composer {
     })
   }
   /** page n's marks: over each paragraph the parts read so far locate on it, while the page is not laid and can still be (the
-   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one whose rows
-   *  ended with no row of it (it stays the original's) */
+   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one the paper
+   *  keeps as it is (never translated), nor for one whose rows ended with no row of it (it stays the original's) */
   function markPage(n: number) {
     const slot = stack.page(n)
     if (disposed || !layer || !rows || !composed || !shown || !slot || settledOriginal(n)) return marks.unmark(n)
@@ -602,6 +629,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const boxes: MarkBox[] = []
     for (const m of members.values()) {
       if (m.why === 'unlocated' || m.why === 'page' || !kindShown(m.kind, classes)) continue
+      if (typeof m.text === 'string' && rowsView.kept?.(m.text)) continue
       if (rows.done && (typeof m.text !== 'string' || !rowsView.get(m.text)?.ok)) continue
       let x0 = Number.POSITIVE_INFINITY,
         y0 = Number.POSITIVE_INFINITY,

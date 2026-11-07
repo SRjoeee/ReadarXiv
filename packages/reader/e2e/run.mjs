@@ -4,6 +4,8 @@
 //
 //   node packages/reader/e2e/run.mjs [--only=<part of a name>|…] [--browser=chromium|webkit|firefox]
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
+//   AXT_LINK=<latency ms>,<KB/s> shapes every page's link in Chromium (the first laid page's measurements: the slices of a CJK
+//   target are its last wait); AXT_DELTA_MS the pace of a corpus paper's rows arriving (one delta of DELTAS a step, 1000 ms)
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -54,6 +56,9 @@ const docs = {},
   rowsObjects = new Map(),
   modes = {},
   v2log = []
+/** each corpus paper's rows in DELTAS objects (`modes[seg]` 'deltas') */
+const DELTAS = 10
+const deltasOf = {}
 /** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
  *  catalog, `recatalog`), its object by path */
 const twins = {},
@@ -98,6 +103,38 @@ for (const [name, f] of Object.entries(fixtures)) {
     const sha = createHash('sha256').update(bytes).digest('hex')
     rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, bytes)
     const n = JSON.parse(bytes.toString('utf8')).rows.length
+    // (a corpus paper: its rows as our server's run writes them, in the units' reading order, every unit but those the paper
+    // keeps (a unit the dump has no row of read as its own text), cut into DELTAS objects: `modes[seg]` 'deltas' gives them one
+    // at a time, a translation under way)
+    if (!rf) {
+      const dumpRows = new Map(JSON.parse(bytes.toString('utf8')).rows.map((r) => [r.id, r]))
+      const plain = (ps) => ps.map((x) => (x.t === 'text' ? x.s : x.content ? plain(x.content) : '')).join('')
+      const all = []
+      for (const u of head.units)
+        for (const x of JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+          if (!x.kept && !all.some((r) => r.id === x.id))
+            all.push(
+              dumpRows.get(x.id) ?? {
+                id: x.id,
+                ok: true,
+                content: [{ t: 'text', s: plain(x.content) || '·' }],
+                by: 'fx',
+              },
+            )
+      const list = []
+      for (let k = 0; k < DELTAS; k++) {
+        const b = Buffer.from(
+          JSON.stringify({
+            format: 1,
+            rows: all.slice(Math.floor((k * all.length) / DELTAS), Math.floor(((k + 1) * all.length) / DELTAS)),
+          }),
+        )
+        const sha = createHash('sha256').update(b).digest('hex')
+        rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, b)
+        list.push({ path: `r/${seg}/${t}/fx/${sha}`, sha256: sha, bytes: b.length })
+      }
+      deltasOf[seg] = { target: t, list, total: all.length }
+    }
     targets[t] = {
       attempt: 1,
       state: 'done',
@@ -219,6 +256,26 @@ const v2Route = {
           rev: 2,
           targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
+      // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
+      if (m?.kind === 'deltas') {
+        const ds = deltasOf[d.pv]
+        m.start ??= performance.now()
+        const k = Math.min(ds.list.length, 1 + Math.floor((performance.now() - m.start) / m.every))
+        m.told = Math.max(m.told ?? 0, k)
+        return json(200, {
+          ...d,
+          rev: 1 + k,
+          targets: {
+            [ds.target]: {
+              ...d.targets[ds.target],
+              state: k < ds.list.length ? 'running' : 'done',
+              rows: ds.list.slice(0, k),
+              done: Math.round((k * ds.total) / ds.list.length),
+              total: ds.total,
+            },
+          },
+        })
+      }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
       // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
       // which nothing runs is followed again a minute on, client.ts IDLE_MS)
@@ -308,6 +365,10 @@ const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fi
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
 const violations = []
+const LINK = (() => {
+  const m = /^(\d+),(\d+)$/.exec(process.env.AXT_LINK ?? '')
+  return m ? { latency: Number(m[1]), bytesPerS: Number(m[2]) * 1024 } : null
+})()
 async function newPage(o = {}) {
   const context = await browser.newContext({
     viewport: o.viewport ?? { width: 1400, height: 900 },
@@ -369,6 +430,16 @@ async function newPage(o = {}) {
     )
       errors.push(m.text())
   })
+  // (AXT_LINK=<latency ms>,<KB/s>: the link shaped by the browser, for the measurements of the first laid page)
+  if (LINK && browserName === 'chromium') {
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: LINK.latency,
+      downloadThroughput: LINK.bytesPerS,
+      uploadThroughput: LINK.bytesPerS,
+    })
+  }
   await page.goto(`${server.origin}/${o.path ?? ''}`)
   return { page, context, errors }
 }
@@ -1063,11 +1134,62 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
       assert(drawn.overlays > 0 && /\p{Script=Han}/u.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
       return {
         firstLaidMs: p['at.firstLaid'],
+        composedOpenMs: p['at.composedOpen'],
+        codeMs: p['at.code'],
         leftDrawnMs: p['at.leftDrawn'],
         laidPages: p.laidPages,
         faces: drawn.faces,
         asked: asked().length,
+        slicesAsked: asked().filter((u) => u.endsWith('.woff2')).length,
         words: drawn.words.slice(0, 40),
+      }
+    },
+  )
+  await check(
+    `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const seg = indexOf[name].seg
+      const every = Number(process.env.AXT_DELTA_MS ?? 1000)
+      modes[seg] = { kind: 'deltas', every }
+      const from = siteLog.length
+      const { page, context, errors } = await newPage()
+      try {
+        await page.evaluate(([n]) => window.__h.reader(n, { host: 'web', typeset: true, target: 'zh' }), [name])
+        // (the reader's own moments, and when its rows were complete, read each 50 ms)
+        let rowsAt = null,
+          slicesAtLaid = null
+        for (const until = Date.now() + 120_000; Date.now() < until; ) {
+          const p = await probe(page)
+          if (rowsAt === null && p.rows === 'complete')
+            rowsAt = Math.round(await page.evaluate(() => performance.now()))
+          if (p.laidPages > 0 && slicesAtLaid === null)
+            slicesAtLaid = siteLog.slice(from).filter((u) => u.endsWith('.woff2')).length
+          if (p.laidPages > 0 && rowsAt !== null) break
+          await page.waitForTimeout(50)
+        }
+        const p = await probe(page)
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(p.laidPages > 0, JSON.stringify(p))
+        // (the rows ended and the first page laid before: a page laid only once the run is over is what this holds against.
+        // Not on a shaped link (AXT_LINK), a measurement: there the composed document itself opens about as the rows end,
+        // the harness's PDF.js worker read twice, no-store, at the shaped rate)
+        assert(rowsAt !== null, `the rows never ended: ${JSON.stringify(p)}`)
+        const open = p['at.open']
+        assert(
+          LINK || p['at.firstLaid'] < rowsAt - open,
+          `the first page laid at ${p['at.firstLaid']} ms, once the rows had ended (${rowsAt - open} ms)`,
+        )
+        return {
+          firstLaidMs: p['at.firstLaid'],
+          rowsCompleteMs: rowsAt - open,
+          composedOpenMs: p['at.composedOpen'],
+          slicesAtLaid,
+          deltasTold: modes[seg].told,
+        }
+      } finally {
+        await context.close()
+        delete modes[seg]
       }
     },
   )

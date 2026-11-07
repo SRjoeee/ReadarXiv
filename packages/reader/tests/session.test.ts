@@ -19,6 +19,7 @@ import {
   type State,
   step,
   type Ticket,
+  translationShown,
   WAIT_MAX_MS,
 } from '../src/session/machine.ts'
 import { createRuntime, type Handlers } from '../src/session/runtime.ts'
@@ -550,6 +551,22 @@ describe('the session: the rows', () => {
     expect([...resources(r.s).values()]).toContainEqual(expect.objectContaining({ slot: 'rows', from: 'here' }))
     r.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
     expect(r.has('link') || r.has('open')).toBe(false)
+  })
+})
+
+describe('the session: a composed translation to be shown', () => {
+  it('where the display shows the translation and the reader sets the target, and not before (what is read ahead for it waits on this)', () => {
+    const m = machine()
+    expect(translationShown(m.s)).toBe(true)
+    m.feed({ i: 'cmd.set', prefs: { display: 'original' } })
+    expect(translationShown(m.s)).toBe(false)
+    m.feed({ i: 'cmd.set', prefs: { display: 'translation' } })
+    expect(translationShown(m.s)).toBe(true)
+    // (a target the reader does not set: none, until a language it sets is chosen)
+    const held = machine({ targets: ['ja'] })
+    expect(translationShown(held.s)).toBe(false)
+    held.feed({ i: 'cmd.set', prefs: { target: 'ja' } })
+    expect(translationShown(held.s)).toBe(true)
   })
 })
 

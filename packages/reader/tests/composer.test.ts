@@ -286,6 +286,8 @@ function world(
     ahead?: number
     holds?: (ord: number) => boolean
     ready?: Set<string>
+    lay?: ReturnType<typeof standInLay>
+    faces?: ReturnType<typeof facesStub>
   } = {},
 ): World {
   const parts =
@@ -293,8 +295,8 @@ function world(
     new Map([1, 2, 3, 4, 5].map((n) => [n, partOf(n, [member(n * 10, n, 0), member(n * 10 + 1, n, 1)])] as const))
   const stack = fakeStack(Math.max(...parts.keys()))
   const clock = handClock()
-  const lay = standInLay(o.ready)
-  const faces = facesStub(o.ready)
+  const lay = o.lay ?? standInLay(o.ready)
+  const faces = o.faces ?? facesStub(o.ready)
   const warns: string[] = []
   const aheadGo = vi.fn()
   let settledFn: (n: number) => boolean = () => false
@@ -635,15 +637,182 @@ describe('the pages ahead', () => {
   })
 })
 
+/** layPage's waits as the typesetter has them (lay/wait.ts, entry.ts): the rows not in while more may come (a unit the paper
+ *  keeps never waited for), and only once none is missing, the face of each member whose row is in (`face:<name>` its kind)
+ *  not loaded; laid once neither */
+function waitingLay(loaded: Set<string>): ReturnType<typeof standInLay> & { early: number } {
+  const plain = standInLay(new Set(['cjk']))
+  const lay = ((part: Part, rows: Rows) => {
+    lay.calls++
+    const ms = part.flows.flat()
+    const ids = ms.map((m) => m.text as string)
+    const missing = rows.done ? [] : ids.filter((id) => !rows.get(id) && !rows.kept?.(id))
+    const waiting = (wait: Page['wait']): Page => ({
+      page: part.page,
+      wait,
+      members: ms.map(
+        (m) =>
+          ({
+            ord: m.ord,
+            page: part.page,
+            state: 'waiting',
+            off: 0,
+            lines: [],
+            lit: { left: [], right: [], own: [] },
+          }) as Laid,
+      ),
+      links: [],
+    })
+    if (missing.length) return waiting({ rows: missing, faces: [] })
+    if (rows.done && ids.some((id) => !rows.get(id))) lay.early++
+    const faces = ms
+      .filter((m) => rows.get(m.text as string)?.ok && m.kind.startsWith('face:') && !loaded.has(m.kind.slice(5)))
+      .map((m) => [m.kind.slice(5), m.text as string] as [string, string])
+    if (faces.length) return waiting({ rows: [], faces })
+    // (nothing waited for: laid as the rows are, a row not in the original's)
+    return plain(part, { get: (id) => rows.get(id), done: true })
+  }) as unknown as ReturnType<typeof standInLay> & { early: number }
+  lay.calls = 0
+  lay.early = 0
+  return lay
+}
+/** faces each loaded when the test says so: what each `ready` asked, and the faces loaded */
+function heldFaces(loaded: Set<string>) {
+  const waits = new Map<string, () => void>()
+  const gates = new Map<string, Promise<void>>()
+  const gate = (id: string) => {
+    let p = gates.get(id)
+    if (!p) {
+      p = new Promise<void>((go) => waits.set(id, go))
+      gates.set(id, p)
+    }
+    return p
+  }
+  const stub = facesStub()
+  const asked: string[][] = []
+  /** each ready()'s demand, as the composer gives it (none: always) */
+  const wants: (() => boolean)[] = []
+  const faces = {
+    ...stub,
+    asked,
+    wants,
+    ready: async (ids: Iterable<string | readonly [string, string]>, wanted?: () => boolean) => {
+      const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
+      asked.push(list)
+      wants.push(wanted ?? (() => true))
+      await Promise.all(list.map(gate))
+    },
+    /** face `id` loaded */
+    load(id: string) {
+      loaded.add(id)
+      gate(id)
+      waits.get(id)?.()
+    },
+  }
+  return faces as unknown as ReturnType<typeof facesStub> & {
+    asked: string[][]
+    wants: (() => boolean)[]
+    load(id: string): void
+  }
+}
+
+describe('the units the paper keeps', () => {
+  it('a unit the paper keeps as it is holds no page, and is never marked as translating', async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1, 'inkheads')])]])
+    const lay = waitingLay(new Set())
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = rowsOf('de', [])
+    const kept = Object.assign(rows, { kept: (id: string) => id === 'u11' })
+    open(w, kept)
+    await settle()
+    const marks = () =>
+      [...(w.stack.page(1)?.querySelectorAll<HTMLElement>('.axt-translating-mark') ?? [])].map((m) => m.dataset.axtU)
+    expect(marks()).toEqual(['10'])
+    // (u10's row in, the rows going on: page 1 laid, u11 the original's)
+    rows.give(['u10'])
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+  })
+})
+
 describe('the faces, in one wave', () => {
-  it('the near pages that wait for a face ask it once, together, the middle page first', async () => {
-    const pages = new Map([1, 2, 3].map((n) => [n, partOf(n, [member(n * 10, n, 0, 'needs-face')])] as const))
-    const ready = new Set(['sans'])
-    const w = world({ pages, ready })
+  it("the near pages' faces asked in the view's order, the middle page first; each page laid once its own are in, never held by another's", async () => {
+    const loaded = new Set<string>()
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0, 'face:b')])],
+      [2, partOf(2, [member(20, 2, 0, 'face:a'), member(21, 2, 1, 'face:b')])],
+      [3, partOf(3, [member(30, 3, 0, 'face:c')])],
+    ])
+    const faces = heldFaces(loaded)
+    const w = world({ pages, lay: waitingLay(loaded), faces })
     w.stack.setNear([1, 2, 3])
     open(w, rowsOf('de', allIds(w), true))
     await settle()
-    expect(w.faces.waves).toEqual([['cjk']])
+    // (the middle page first, then the page after it at an equal distance)
+    expect(faces.asked).toEqual([['a', 'b'], ['c'], ['b']])
+    // (page 1's own face in: page 1 laid while pages 2 and 3 still wait for theirs)
+    faces.load('b')
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
+    expect(w.composer.laid(2)).toBeNull()
+    expect(w.composer.laid(3)).toBeNull()
+    w.stack.put(1)
+    faces.load('a')
+    faces.load('c')
+    await settle()
+    expect(w.composer.laid(2)).not.toBeNull()
+  })
+  it("a page's faces are asked while the page is wanted: gone from the view, or in a generation before, its loads not begun are let go", async () => {
+    const loaded = new Set<string>()
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0, 'face:a')])],
+      [2, partOf(2, [member(20, 2, 0, 'face:b')])],
+    ])
+    const faces = heldFaces(loaded)
+    const w = world({ pages, lay: waitingLay(loaded), faces })
+    w.stack.setNear([1, 2])
+    const rows = rowsOf('de', ['u10'])
+    open(w, rows)
+    await settle()
+    // (page 1 laid as if its rows had ended, page 2 waiting for its own: page 1's faces asked early)
+    expect(faces.asked).toEqual([['a']])
+    expect(faces.wants[0]?.()).toBe(true)
+    // (page 1 out of the view: its demand gone)
+    w.stack.setNear([2])
+    expect(faces.wants[0]?.()).toBe(false)
+    w.stack.setNear([1, 2])
+    expect(faces.wants[0]?.()).toBe(true)
+    // (another generation, the toggles: the demand of the one before gone, whatever the view)
+    w.composer.setClasses({ figures: false, tables: true, heads: true, references: true, names: false })
+    expect(faces.wants[0]?.()).toBe(false)
+  })
+  it('a page waiting for rows asks the faces of the rows it has meanwhile, again only once more of its rows are in', async () => {
+    const loaded = new Set<string>()
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0, 'face:a'), member(11, 1, 1, 'face:b'), member(12, 1, 2)])]])
+    const faces = heldFaces(loaded)
+    const lay = waitingLay(loaded)
+    const w = world({ pages, lay, faces })
+    w.stack.setNear([1])
+    const rows = rowsOf('de', ['u10'])
+    open(w, rows)
+    await settle()
+    // (u11 and u12 still to come: the face of u10, the row in, asked already)
+    expect(faces.asked).toEqual([['a']])
+    expect(lay.early).toBe(1)
+    // (its face in: laid again, still waiting for rows, nothing asked again nor laid as ended again)
+    faces.load('a')
+    await settle()
+    expect(faces.asked).toEqual([['a']])
+    expect(lay.early).toBe(1)
+    rows.give(['u11'])
+    await settle()
+    expect(faces.asked).toEqual([['a'], ['b']])
+    expect(w.composer.laid(1)).toBeNull()
+    faces.load('b')
+    rows.give(['u12'])
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
   })
   it('reads WAVE_SLOTS at a time, each face once; a 404 never asked again, a 503 asked by the next wave', async () => {
     let inFlight = 0,

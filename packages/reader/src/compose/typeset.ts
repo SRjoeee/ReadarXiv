@@ -4,7 +4,7 @@
 // rules read, and the reader's own Metrics over the served faces (served.ts). Bound once the head is read (the composed
 // document's open); the rules are made again as the target or the toggles change, so that a toggle lays the pages again (the
 // composer's new generation) under the rules that leave what it leaves.
-import { LANGUAGES, layPage, type Rules, rulesFor } from '@readarxiv/typeset'
+import { FACES, LANGUAGES, layPage, type Rules, rulesFor } from '@readarxiv/typeset'
 import type { ClassName } from '../prefs.ts'
 import { leftKinds } from './classes.ts'
 import type { Lay, Page } from './page.ts'
@@ -22,6 +22,23 @@ export function ruleTag(target: string): string | null {
   }
   if (loc.language === 'zh') return loc.maximize().script === 'Hant' ? 'zh-TW' : 'zh'
   return Object.hasOwn(LANGUAGES, loc.language) ? loc.language : null
+}
+
+/** what the first page laid in `target` reads before its slices, asked as the code loads (before the head is read, the composed
+ *  document opened or a page laid, so that neither waits for them): the target's hyphenation patterns, the faces' index and the
+ *  tables of the target's CJK faces (its body's and its bold's: Source Han Serif SC's is 39 KB). Staging, 2026-11-08: the
+ *  patterns were the composed document's open's last round trip, and the index and the CJK table two more before page 1's
+ *  first slice */
+export function warmTypeset(s: Pick<Served, 'hyph' | 'warm'>, target: string): void {
+  const tag = ruleTag(target)
+  const group = tag ? rulesFor(tag).cjkFaces?.group : undefined
+  const fonts: string[] = []
+  for (const id of group ? [`${group}-regular`, `${group}-bold`] : []) {
+    const f = FACES[id]
+    if (f) fonts.push(`${f.style === 'italic' ? 'italic ' : ''}${f.weight} 100px "${f.family}"`)
+  }
+  if (tag) void s.hyph(rulesFor(tag).patterns)
+  void s.warm(fonts)
 }
 
 export interface TypesetOptions {
