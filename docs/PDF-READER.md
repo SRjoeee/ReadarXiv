@@ -2573,6 +2573,17 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
 
 ## 19. The engine's contract
 
+**Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
+and the shipped extension's reader (`AXT_READER=today`, DESIGN §16) run until the rebuild's cut-over. Its successor is the
+workspace packages (`packages/README.md`): the prepare in `@readarxiv/engine`, where our marked compile is an instrument
+no reader sees, its ownership of each glyph is carried onto arXiv's own glyphs by aligning the two, and arXiv's PDF itself
+is wrapped in optional content groups by unit, so that both panes show arXiv's page (DESIGN §16, the prepare's two halves);
+the typesetter in `@readarxiv/typeset`, two pure functions of a page's part and the translated text; and the reader in
+`@readarxiv/reader`, `openReader` with a host, whose interface is this document's §1 to §17, unchanged. What this chapter
+calls the maker — the page pass (§19.6), our compile as the base page with its final pass (§19.7), the delta over arXiv's
+PDF (§19.8) and the layout file's geometric ownership — has no counterpart in the packages. The chapter goes with today's
+engine when the cut-over deletes it.
+
 `src/pdf-reader/engine/` is what the web imports, and nothing else of the reader is. The directory is the boundary: a gate
 holds what may be imported into it (`scripts/check-boundary.mjs`, run by `pnpm lint`), a snapshot holds what it exports
 (`tests/pdf-reader/engine-contract.json`), and a test holds that it loads where it is meant to
@@ -3231,6 +3242,9 @@ own), each part carrying its pages' cell rules (`rules`).
   a paper may take each page's parse its own time (no engine bound), and its matching its pages times `MATCH_PAGE_WORK`.
 
 ### 19.7 Our compile as the base page (BUNDLE 8)
+
+(Today's engine. In the rebuild's prepare our compile is only an instrument and the right pane is arXiv's own page with
+the laid units' groups off: this chapter's opening.)
 
 The layer is drawn over a page of our own compile: the **final pass** of the marked original, the paper set as its authors set
 it, with the marks the layout was read from. arXiv's PDF stays the left's (its anchoring and the highlight), the download and
