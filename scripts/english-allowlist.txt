@@ -159,5 +159,6 @@ packages/translate/tests/adapters/chrome.test.ts 3  # 2026-11-07: Chinese replie
 packages/translate/tests/adapters/fixtures.ts 33  # 2026-11-07: Microsoft's Chinese and Japanese replies quoted as they came (tests/pdf-reader/mt-wire.test.ts, readarxiv-web's reading table) and Chinese replies for the adapters' fixture units
 packages/translate/tests/adapters/google.test.ts 3  # 2026-11-07: Chinese replies with boundary markers, inputs and expectations
 packages/translate/tests/adapters/microsoft.test.ts 13  # 2026-11-07: Chinese replies, the inputs and expectations of the markers wire's reading
+lab/translate/equivalence-2026-11-07.md 1  # 2026-11-07: the accepted class's evidence, a Chinese reply of tests/protector/markers.test.ts quoted as the equivalence tool reads it
 
 packages/reader/tests/chrome/parts.ts 4  # 2026-11-07: the host's own target names in the chrome's tests' parts (the extension's tables' words, as the menu shows them)
