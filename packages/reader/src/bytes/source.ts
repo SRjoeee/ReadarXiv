@@ -7,6 +7,10 @@
 //   after). On our server (`own`) a strong entity-tag is required and held (R2's httpEtag). Elsewhere (arXiv's own server, the
 //   extension's left) an entity-tag, where one is answered, is held for every answer after; none is required, since whether
 //   arXiv answers one is stage 5's measurement (host DECISION, open 1) and the chunks' digests hold the bytes once the head is in.
+//   One ask goes out before the length is known, the first read's: a read made while it is out waits for its answer, and takes
+//   its bytes from it where they are in it (the reader's own first read and PDF.js's open both ask the first chunk, and the
+//   website's gateway grants 16 file requests a window). A read made before the length was known ends at the object's last byte
+//   where it asks past it, each of its answers held to its own length (L11 third round, gap 6).
 // - **One URL a chunk on our server.** Chromium lets one request at a time write a URL's HTTP-cache entry, so that the ranges of
 //   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, W ranges.ts:478-488); our
 //   server reads the path alone. arXiv's URL is asked as it is, with `cache: 'no-store'` (unverified, host design-a §1.5).
@@ -238,7 +242,15 @@ export function rangeSource(o: SourceOptions): OriginalSource {
     if (at < length) throw new Error(`the body ended at ${at} of its ${length} bytes`)
     return out
   }
-  async function asked(begin: number, end: number, attempt: AbortSignal, heard: () => void): Promise<Uint8Array> {
+  /** `open`: a read made before the object's length was known, whose answer ends at the object's last byte where it asks past it,
+   *  each of its asks (one made after its first answer's head told the length too) */
+  async function asked(
+    begin: number,
+    end: number,
+    attempt: AbortSignal,
+    heard: () => void,
+    open: boolean,
+  ): Promise<Uint8Array> {
     counts.asks++
     const init: RequestInit = { headers: { range: `bytes=${begin}-${end - 1}` }, signal: attempt }
     if (!o.own) init.cache = 'no-store'
@@ -273,8 +285,9 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       throw fail(
         `an answer of ${total} bytes tagged ${etag}, not the ${bound.total} bytes${bound.etag === null ? '' : ` tagged ${bound.etag}`} it is bound to`,
       )
-    // (the object's last byte where the range asks past it: only while its length is not known, the first read)
-    const want = bound ? end : Math.min(end, total)
+    // (the object's last byte where the range asks past it: a read made before its length was known, held to this answer's own
+    // length, which is the bound's where one was learnt meanwhile)
+    const want = open ? Math.min(end, total) : end
     if (first !== begin || last !== want - 1)
       throw fail(`the bytes ${first} to ${last}, not the ${begin} to ${want - 1} asked`)
     const learnt = !bound || (bound.etag === null && etag !== null)
@@ -289,7 +302,7 @@ export function rangeSource(o: SourceOptions): OriginalSource {
     return bodyOf(r, want - begin, heard)
   }
   /** one ask of the range, bounded by its progress */
-  async function once(begin: number, end: number): Promise<Uint8Array> {
+  async function once(begin: number, end: number, open: boolean): Promise<Uint8Array> {
     const attempt = new AbortController()
     const leave = () => attempt.abort(dead)
     signal.addEventListener('abort', leave, { once: true })
@@ -304,7 +317,7 @@ export function rangeSource(o: SourceOptions): OriginalSource {
     }
     heard()
     try {
-      return await asked(begin, end, attempt.signal, heard)
+      return await asked(begin, end, attempt.signal, heard, open)
     } catch (e) {
       if (stalled && !dead) throw new Stalled(`nothing from the server for ${STALL_MS / 1000} s`)
       throw e
@@ -313,14 +326,14 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       signal.removeEventListener('abort', leave)
     }
   }
-  /** bytes [begin, end) asked until read, refused or let go; each whole chunk digested and checked */
-  async function fetched(begin: number, end: number): Promise<Uint8Array> {
+  /** bytes [begin, end) asked until read, refused or let go; each whole chunk digested and checked (`open`: see `asked`) */
+  async function fetched(begin: number, end: number, open = false): Promise<Uint8Array> {
     if (dead) throw dead
     const failed: string[] = []
     for (let n = 1; ; n++) {
       let stalled = false
       try {
-        const bytes = await once(begin, end)
+        const bytes = await once(begin, end, open)
         if (dead) throw dead
         await digestChunks(begin, bytes)
         if (dead) throw dead
@@ -351,6 +364,10 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       check((begin + at) / CHUNK, await chunkDigest(bytes.subarray(at, Math.min(at + CHUNK, bytes.byteLength))))
   }
   const nameOf = (b: Bound) => `${o.url}|${b.etag ?? ''}|${b.total}`
+  /** the first read's ask while the object's length is not known (its range and its answer): every read made meanwhile waits for
+   *  it, so that one ask goes out before the length is known (the reader's own first read and PDF.js's both asked the first
+   *  chunk; the website's gateway grants 16 file requests a window) */
+  let first: { begin: number; bytes: Promise<Uint8Array> } | null = null
   return {
     get bound() {
       return bound
@@ -387,13 +404,35 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       )
         throw refuse('bytes', `no range of the object: ${begin} to ${end}`)
       const store = o.store
-      // the object's length not known yet (the first read): asked, then its chunks kept under the name the answer gave
-      if (!store || !bound) {
-        const bytes = await fetched(begin, end)
-        if (store && bound) store.keep(nameOf(bound), bound.total, begin, bytes)
-        return bytes
+      // the object's length not known yet: the first read asked, then its chunks kept under the name the answer gave
+      if (!bound && !first) {
+        const bytes = fetched(begin, end, true)
+        first = { begin, bytes }
+        try {
+          const got = await bytes
+          if (store && bound) store.keep(nameOf(bound), bound.total, begin, got)
+          return got
+        } finally {
+          first = null
+        }
       }
-      const bytes = await store.read(nameOf(bound), bound.total, begin, end, fetched, signal)
+      // (a read made while that one is out, the length not known or told by its answer's head while its body comes: that answer
+      // waited for, then this read's bytes taken from it where they are in it, else read as any other; to the object's last byte
+      // where a read made before the length was known asks past it. The first read's failure refused the source)
+      if (first) {
+        const before = !bound,
+          f = first
+        const got = await f.bytes.catch(() => null)
+        if (dead) throw dead
+        const now = bound as Bound | null
+        if (!now) throw refuse('bytes', 'the first answer told no length')
+        if (before) end = Math.min(end, now.total)
+        if (end <= begin) throw refuse('bytes', `no range of the object: ${begin} to ${end}`)
+        if (got && begin >= f.begin && end <= f.begin + got.byteLength) return got.slice(begin - f.begin, end - f.begin)
+      }
+      const b = bound as Bound
+      if (!store) return fetched(begin, end)
+      const bytes = await store.read(nameOf(b), b.total, begin, end, fetched, signal)
       if (dead) throw dead
       return bytes
     },
