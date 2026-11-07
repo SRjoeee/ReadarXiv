@@ -49,6 +49,10 @@ export type MarkKind =
   | 'cell-end'
   | 'heading-start'
   | 'heading-end'
+  /** a paper's macro at a unit's head, before its start mark: its opening point (\axthpk), the start its closing one */
+  | 'head'
+  /** a paper's macro after a unit's last text, after its end mark: a point after the group it stands in (\axttg) */
+  | 'after'
 export const isMark = (p: MarkPiece | undefined): p is Mark => !!p && 'mark' in p && !!p.mark
 
 export const DISPLAY = new RegExp(DISPLAY_SOURCE)

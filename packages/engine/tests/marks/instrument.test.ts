@@ -56,6 +56,61 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     expect(ins.units[0]?.id).toBe(doc.units[0]?.id)
     expect(ROLE.element).toBe(2)
   })
+  it('owns a head macro’s glyphs from its point to the start, the label before it; states the span after an end empty', () => {
+    // (1810.04805v2's `\\bert is simple`: "BERT" between p0.0a (\\axthpk's) and 0s, the piece's, "1. " before the point the
+    // label; 2610.19159v1's `Tool Output\\trajectoryMark{}`: its span from the end point 1e to p1.2g, no glyph between)
+    const tree = {
+      main: 'main.tex',
+      files: new Map([
+        [
+          'main.tex',
+          enc.encode(
+            '\\documentclass{article}\\newcommand\\bert{BERT}\\newcommand\\mark[1]{}\\begin{document}\n\\bert is simple.\n\n\\textbf{Tool Output\\mark{}}\n\\end{document}\n',
+          ),
+        ],
+      ]),
+    }
+    const doc = readSource(tree, NO_DEFINITIONS)
+    const { plan } = markSource(tree, doc)
+    const pg = page('1. BERT is simple.Tool Output', [
+      ['bs1', 0],
+      ['p0.0a', 3],
+      ['0s', 8],
+      ['0e', 18],
+      ['1s', 18],
+      ['1e', 29],
+      ['p1.2g', 29],
+      ['be1', 29],
+    ])
+    const ins = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [pg],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
+    const G = ins.glyphs[0]
+    expect(G && [...G.role].slice(0, 9)).toEqual([4, 4, 4, 2, 2, 2, 2, 2, 1])
+    expect(G?.piece[3]).toBe(0)
+    expect(ins.places).toEqual(
+      expect.arrayContaining([
+        { unit: 0, piece: 'e0', page: 1, glyph: 3, end: false },
+        { unit: 0, piece: 'e0', page: 1, glyph: 8, end: true },
+        { unit: 1, piece: 'e1', page: 1, glyph: 29, end: false },
+        { unit: 1, piece: 'e1', page: 1, glyph: 29, end: true },
+      ]),
+    )
+    // (no glyph but a painted box between the end point and the point after the group: an image the macro set, no span stated)
+    const icon = { ...pg, points: pg.points.map((x) => (x.name === 'p1.2g' ? { ...x, box: 1 } : x)) }
+    const withIcon = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [icon],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
+    expect(withIcon.places?.filter((x) => x.unit === 1 && x.piece === 'e1')).toEqual([])
+  })
   it('reads each unit’s alignment as its end mark states it, none for one set in two', () => {
     const log = [
       'AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt',

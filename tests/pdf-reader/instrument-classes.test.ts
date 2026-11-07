@@ -7,6 +7,7 @@ import {
   classesOf,
   FORCED_BREAK,
   glueOf,
+  placesOf,
   spansOf,
 } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
@@ -87,5 +88,29 @@ describe('the instrument adapter’s element classes', () => {
       expect(glueOf(s)).toEqual(todayGlue(s))
       expect(FORCED_BREAK.test(s)).toBe(todayBreak.test(s))
     }
+  })
+})
+
+describe('the instrument adapter’s places', () => {
+  it('closes a head macro’s span at its unit’s start point, opens a trailing one’s at its unit’s end point', () => {
+    // (a head macro's point \\axthpk's, p3.0a, closed by 3s; two head pieces, p4.0a and p4.1a, each to the next; a trailing
+    // macro's point after its group, p5.2g, its span from 5e; a placeholder's own two points as before; an opening alone after the
+    // start no head piece's)
+    const pt = (name: string, glyph: number) => ({ name, glyph })
+    const pages = [
+      { points: [pt('p3.0a', 0), pt('3s', 5), pt('p3.2a', 8), pt('3e', 12), pt('p4.0a', 12), pt('p4.1a', 16), pt('4s', 20)] },
+      { points: [pt('5s', 0), pt('p5.1a', 3), pt('p5.1b', 4), pt('5e', 9), pt('p5.2g', 9)] },
+    ]
+    const by = (u: number, k: string) => placesOf(pages, 6).filter(x => x.unit === u && x.piece === k).map(x => [x.page, x.glyph, x.end])
+    expect(by(3, '0')).toEqual([[1, 0, false], [1, 5, true]])
+    expect(by(3, '2')).toEqual([[1, 8, false]])
+    expect(by(4, '0')).toEqual([[1, 12, false], [1, 16, true]])
+    expect(by(4, '1')).toEqual([[1, 16, false], [1, 20, true]])
+    expect(by(5, '1')).toEqual([[2, 3, false], [2, 4, true]])
+    expect(by(5, '2')).toEqual([[2, 9, false], [2, 9, true]])
+    // (no glyph but a painted box between: an icon the macro set, so no span is stated; 2610.19159v1's github logo)
+    const icon = [{ points: [{ name: 'p6.0a', glyph: 4, box: 2 }, { name: '6s', glyph: 4, box: 3 }, { name: '6e', glyph: 9, box: 3 }, { name: 'p6.3g', glyph: 9, box: 4 }] }]
+    const got = placesOf(icon, 7)
+    expect(got.map(x => [x.piece, x.end])).toEqual([['0', false]])
   })
 })
