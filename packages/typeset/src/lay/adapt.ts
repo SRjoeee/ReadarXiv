@@ -8,6 +8,7 @@
 // the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
+import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
@@ -37,9 +38,6 @@ export type Reading = {
   labelDrawn: string | null
   /** a name leads the member (U.lead) */
   lead: boolean
-  /** the paper's title, front matter (today's unit flags) */
-  title: boolean
-  front: boolean
   /** the CJK body face's size correction (B.faces), U.params' trackStart reads it */
   cjkSize: number | undefined
   /** the kept regions (runs of KEPT lines, in order) the translation passes (U.breaks' referenced): what its tokens block to */
@@ -243,8 +241,9 @@ export function adapt(i: AdaptInput): Adapted {
   const firstX0 = m.label ? lines[0]![2] : undefined
   const decor = decorAfter(blocks, {
     kind,
-    title: i.reading.title,
-    front: i.reading.front,
+    // (the paper's title and its front matter, the part's: no section heading's rules)
+    title: !!m.title,
+    front: !!m.front,
     luFlush: m.align === 'l' ? 'left' : m.align === 'r' ? 'right' : null,
     label,
     firstX0,
@@ -274,15 +273,12 @@ export function adapt(i: AdaptInput): Adapted {
     rulesOf: i.rulesOf,
     cjkSize: i.reading.cjkSize,
     lineskip: i.lineskip,
-    // (every member anchored at its top, as the original's block is: a translation set in fewer lines than its original keeps
-    // its first line on the original's first baseline and frees the room under its last (the maintainer, 2026-11-08:
-    // 2303.11366v4's title, one line for two, stood on the original's second). Today's X.lastLines and X.numbered moved a
-    // section heading, with its number, onto its original's last lines (the ruling of 2026-10-19, RUN:2136, the title and
-    // front matter aside); the composition sets neither, for any member)
-    heading: false,
-    numbered: false,
+    heading: decor.heading,
+    numbered: decor.numbered,
   })
   const P = { ...(R as object), ...up.P, measure: i.measure, patterns: i.patterns } as FitParams
+  const numberCropOf: NumberCrop | null =
+    decor.numbered && label ? numberCrop(label.chars, label.text, blocks[0]!) : null
   // (the row it starts on, shared with the member before: that member's last line, TeX's separation before its text)
   const b = i.before
   const bl = b?.lines.at(-1)
@@ -342,8 +338,8 @@ export function adapt(i: AdaptInput): Adapted {
     P,
     clear: up.clear,
     rulesOf: i.rulesOf,
-    numbered: false,
-    numberCrop: null,
+    numbered: decor.numbered,
+    numberCrop: numberCropOf,
     onLeadOf: null,
     kept,
     follower:

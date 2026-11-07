@@ -534,7 +534,6 @@ export function gateL1Pair(
     }
     patternsSeen ??= (c.P as Raw).patterns as Record<string, unknown> | undefined
     const label = c.slot('U.label', 'label')?.label as { drawn?: string } | null | undefined
-    const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
@@ -542,8 +541,6 @@ export function gateL1Pair(
       tokens: c.tokens as never,
       labelDrawn: label?.drawn ?? null,
       lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
-      title: u.kind === 'heading' && !decor?.heading,
-      front: false,
       cjkSize: undefined as number | undefined,
       // (the regions today's tokens block to: U.breaks' referenced, as the tokens were made with)
       referenced: new Set(
@@ -597,7 +594,7 @@ export function gateL1Pair(
       try {
         rd = readMember({
           m: mm,
-          unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+          unit: { kind: u.kind, ...(x.m.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
           rects: mm.lines.map((l) => rectOf(l, mm)),
           to: L.target,
           P: R as never,
@@ -646,8 +643,6 @@ export function gateL1Pair(
         tokens: rd.tokens as never,
         labelDrawn: rd.labelDrawn,
         lead: rd.lead,
-        title: reading.title,
-        front: false,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
         own: true,

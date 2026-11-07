@@ -209,6 +209,8 @@ export function instrumentFromPlan({
     kind: u.kind,
     content: u.content,
     ...(u.depth !== undefined ? { depth: u.depth } : {}),
+    ...(u.title ? { title: true as const } : {}),
+    ...(u.front ? { front: true as const } : {}),
   }))
   readAlign(log).forEach((code, i) => {
     if (units[i]) (units[i] as InstrumentUnit).align = code

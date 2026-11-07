@@ -306,6 +306,23 @@ describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', (
     ].find((x) => x.kind === 'part')!
     return read('part', o.bytes, o.digest)
   }
+  it('states the paper’s title and its front matter on the part, from the source’s units', () => {
+    // (2303.11366v4 p1's title, a heading-kind unit: the typesetter keeps it at its top, where a section heading set in
+    // fewer lines stands on its last lines, X.lastLines)
+    const B2 = docOf([{ lines: ['Reflexion: Language Agents', 'Noah Shinn', '1 Introduction'] }])
+    const units2 = [
+      { ...unitOf('heading', 'Reflexion: Language Agents'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Noah Shinn'), front: true as const },
+      unitOf('heading', '1 Introduction'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 1, 2]])
+    const flat = partOf(ins2, locate(ins2, B2, align(B2, B2))).flows.flat()
+    expect(flat.map((m) => [m.title ?? 0, m.front ?? 0])).toEqual([
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ])
+  })
   it('states the unit a name TeX set right before on its line leads: the name bound, before it in its flow', () => {
     // (amsthm's "Proof." on its paragraph's first row: the name, the paragraph's label "." (the joint), its text; the part stated
     // no relation, so the entry read one off any member to the right on the baseline)

@@ -1,6 +1,7 @@
 // Where layPage sets a member's lines on arXiv's page, over hand-made parts modelled on the maintainer's cases of 2026-11-08
-// (staging, 2303.11366v4 p1 and 1706.03762v7 p10): a translation set in fewer lines than its original keeps its first line
-// on the original's first baseline, the block anchored at its top as the original's is (the title, a section heading).
+// (staging, 2303.11366v4 p1 and 1706.03762v7 p10): the paper's title set in fewer lines than its original keeps its first
+// line on the original's first baseline, its block anchored at its top as the original's is; a section heading so set stands
+// on its original's last lines (X.lastLines, the ruling of 2026-10-19), as today's (run.mjs:2135-2137).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -37,22 +38,24 @@ describe('a translation set in fewer lines than its original', () => {
     lead: 19.92,
     style: { role: 'serif', size: 17.2154, bold: 1, design: 'NimbusRomNo9L-Medi' },
     align: 'c',
+    title: 1,
     lines: [
       [1, 2, 183.78, 428.22, 678.95, 690.85, 675.41, 108, 504, 0, 17.22],
       [1, 2, 188.95, 422.43, 659.03, 670.92, 655.48, 108, 504, 0, 17.22],
     ],
     room: { below: 15.35, next: 55.76, side: [108, 504] },
   }
-  it("keeps the title's first line on the original's first baseline (the maintainer's 2303.11366v4 p1)", () => {
+  it("keeps the title's first line on the original's first baseline, the part stating it the title (2303.11366v4 p1)", () => {
     const p = layPage(partOf([[title]]), rowsOf([[1, 'Reflexion: Sprachagenten']]), rules, metrics)
     const laid = laidOf(p, 0)
     expect(laid.state).toBe('laid')
     expect(laid.lines.length).toBe(1)
     expect(laid.lines[0]![0]).toBeCloseTo(678.95, 2)
   })
-  it("keeps a section heading's first line on the original's first baseline too: every unit is anchored at its top", () => {
+  it('sets a two-line section heading set in one line on its last line, as today’s (X.lastLines)', () => {
+    const { title: _title, ...rest } = title
     const heading: Placed = {
-      ...title,
+      ...rest,
       ord: 3,
       text: idOf(2),
       align: 'l',
@@ -66,7 +69,7 @@ describe('a translation set in fewer lines than its original', () => {
     const p = layPage(partOf([[heading]]), rowsOf([[2, 'Einleitung kurz']]), rules, metrics)
     const laid = laidOf(p, 3)
     expect(laid.lines.length).toBe(1)
-    expect(laid.lines[0]![0]).toBeCloseTo(600, 2)
+    expect(laid.lines[0]![0]).toBeCloseTo(585.65, 2)
   })
 })
 

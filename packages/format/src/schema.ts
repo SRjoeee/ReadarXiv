@@ -205,6 +205,9 @@ export const Placed = z.object({
   fixed: int.optional(),
   plain: z.string().optional(),
   dir: z.tuple([num, num]).optional(),
+  // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
+  title: flag.optional(),
+  front: flag.optional(),
   // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),
