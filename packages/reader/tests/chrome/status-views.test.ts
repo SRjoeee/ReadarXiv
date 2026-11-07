@@ -1,4 +1,4 @@
-import { Check, Info, Loader } from 'lucide'
+import { Check, CircleAlert, Clock, Info, Loader } from 'lucide'
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { O, R, S, setLocale } from '@readarxiv/ui'
@@ -493,5 +493,70 @@ describe("the narrow window's words under the host's rule", () => {
     const b = await mountElement(capsuleOf(early.controller, { narrow: 'shown' }))
     await act(async () => early.set({ phase: 'ready', narrow: true, sides: pages }))
     expect(narrowCapsule(b.container)).toBeNull()
+  })
+})
+
+describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, gap 1)", () => {
+  const signOf = (node: typeof Check) => JSON.stringify(node.map(([, a]) => a))
+  const drawn = (el: Element) =>
+    JSON.stringify(
+      [...(el.querySelector(':scope > svg')?.children ?? [])].map((x) =>
+        Object.fromEntries([...x.attributes].filter((a) => a.name !== 'key').map((a) => [a.name, a.value])),
+      ),
+    )
+  const later = () => Date.now() + 3_600_000
+  it("the extension's (the default): the information sign for a refusal for now, with or without a time; the alert on every card, with no tone", async () => {
+    const fake = fakeController({ phase: 'ready', unavailable: { why: 'refused', retryAt: later() } })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    const capsule = container.querySelector('.capsule')!
+    expect([drawn(capsule), capsule.getAttribute('data-tone')]).toEqual([signOf(Info), null])
+    document.body.innerHTML = ''
+    const card = await mountElement(cardOf(fakeController({ phase: 'failed', failure: 'network' }).controller))
+    const el = card.container.querySelector('.card')!
+    expect([drawn(el), el.getAttribute('data-tone')]).toEqual([signOf(CircleAlert), null])
+  })
+  it("the website's: a clock while a refusal's time is to come, the information sign once it has come (drawn again at the time)", async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const { container } = await mountElement(capsuleOf(fake.controller, { signs: 'by-state' }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 60_000 } }))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Clock))
+      await act(async () => vi.advanceTimersByTime(59_999))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Clock))
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+      // (none named: nothing to wait for)
+      await act(async () => fake.set({ unavailable: { why: 'unreachable', retryAt: null } }))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the website's: a run stopped by a fault, the alert in the danger's tone; one stopped by a wait, the information sign", async () => {
+    const fault = fakeController({ phase: 'ready', failedUnits: 2, failure: 'bad-request' })
+    const a = await mountElement(capsuleOf(fault.controller, { signs: 'by-state' }))
+    const capsule = a.container.querySelector('.capsule')!
+    expect([drawn(capsule), capsule.getAttribute('data-tone')]).toEqual([signOf(CircleAlert), 'alert'])
+    document.body.innerHTML = ''
+    const wait = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
+    const b = await mountElement(capsuleOf(wait.controller, { signs: 'by-state' }))
+    expect(drawn(b.container.querySelector('.capsule')!)).toBe(signOf(Info))
+  })
+  it("the website's cards: a wait (out of reach, a limit) a clock in quiet ink; a fault the alert in the danger's", async () => {
+    const tones = []
+    for (const failure of ['network', 'rate-limit', 'unknown'] as const) {
+      const { container } = await mountElement(
+        cardOf(fakeController({ phase: 'failed', failure }).controller, 'pane', { signs: 'by-state' }),
+      )
+      const el = container.querySelector('.card')!
+      tones.push([drawn(el), el.getAttribute('data-tone')])
+      document.body.innerHTML = ''
+    }
+    expect(tones).toEqual([
+      [signOf(Clock), 'wait'],
+      [signOf(Clock), 'wait'],
+      [signOf(CircleAlert), 'alert'],
+    ])
   })
 })

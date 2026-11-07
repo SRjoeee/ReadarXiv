@@ -91,6 +91,12 @@ export interface Parts {
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
    *  the paper side by side was narrowed while reading */
   narrow?: 'told' | 'shown'
+  /** the signs the capsule and the cards are drawn with: `plain` (the extension's, the default) the information sign for every
+   *  state but a run's spinner and a toast's own, the alert for every card; `by-state` (the website's: the interface review of
+   *  2026-11-03) a clock while a retry's time is to come and the information sign once it has come, the alert in the danger's
+   *  red for a failure, in the capsule as on its card, and a card that waits (our server or the service out of reach for
+   *  now, a limit) a clock in quiet ink */
+  signs?: 'plain' | 'by-state'
   /** when the sync's switch can be pressed: `side-by-side` (the extension's, the default) wherever both sides are shown;
    *  `located` (the website's) there only once the sides can scroll together (both sides' pages laid out), greyed until then */
   sync?: 'side-by-side' | 'located'

@@ -4,9 +4,9 @@
 // language's own name drawn in that language. Every sentence is the catalogue's, or the host's for its state where it gives
 // one (parts.tsx StateWords: the website's own)
 import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
-import type { ReaderState } from './model.ts'
+import { LASTING, type ReaderState } from './model.ts'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
-import type { Languages, StateWords } from './parts.tsx'
+import type { Languages, Parts, StateWords } from './parts.tsx'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
@@ -175,6 +175,44 @@ export function lineOf(state: ReaderState): Line {
   if (state.phase === 'preparing')
     return { on: true, value: DOWNLOAD + (1 - DOWNLOAD) * PREPARE * (state.preparing?.progress ?? 0) }
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
+}
+
+/** a capsule's or a card's sign (parts.tsx `signs`): the information sign, a run's spinner, a toast's check; a clock for a wait
+ *  (a retry's time to come), the alert for a failure, the file for the original that could not be shown */
+export type Sign = 'info' | 'check' | 'spinner' | 'clock' | 'alert' | 'file'
+/** what a capsule or a card is drawn with: its sign, and its tone where the host's rule gives one (`alert`: the sign in the
+ *  danger's red; `wait`: a card's sign in quiet ink) */
+export interface Look {
+  sign: Sign
+  tone?: 'alert' | 'wait'
+}
+/** the failures that are a wait, not a fault: our server or the service out of reach for now, a limit */
+const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network', 'timeout', 'rate-limit'])
+
+/** the time a retry is due where one is still to come at `now`: a refusal's for now (its `retryAt`); null where none is named,
+ *  or it has come */
+export function dueAt(state: ReaderState, now: number): number | null {
+  const u = state.unavailable
+  const at = u && !LASTING.has(u.why) ? u.retryAt : null
+  return at !== null && at > now ? at : null
+}
+
+/** how a capsule is drawn: by the host's rule for the signs (parts.tsx `signs`) */
+export function capsuleLook(c: Capsule, state: ReaderState, signs: Parts['signs'], now: number): Look {
+  if (c.kind === 'progress') return { sign: 'spinner' }
+  if (c.kind === 'toast') return { sign: c.icon }
+  if (signs !== 'by-state') return { sign: 'info' }
+  // (a refusal for now: the clock while its time is to come; a run stopped by a fault, not a wait: the alert)
+  if (c.kind === 'notNow') return { sign: dueAt(state, now) !== null ? 'clock' : 'info' }
+  if (c.kind === 'notice' && c.action === 'retry' && state.failure && !WAITS.has(state.failure))
+    return { sign: 'alert', tone: 'alert' }
+  return { sign: 'info' }
+}
+
+/** how a card is drawn: by the host's rule for the signs; an address that names no paper keeps the alert */
+export function cardLook(card: Card, state: ReaderState, signs: Parts['signs']): Look {
+  if (signs !== 'by-state' || card.action === 'arxiv') return { sign: 'alert' }
+  return state.failure && WAITS.has(state.failure) ? { sign: 'clock', tone: 'wait' } : { sign: 'alert', tone: 'alert' }
 }
 
 /** `reason`: a failure's sentence, the host's (it knows whether the translator in use has a key); `words`, the host's for the

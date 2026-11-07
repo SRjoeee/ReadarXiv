@@ -241,6 +241,10 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .card { position: absolute; z-index: 6; inset-block-start: 42%; inset-inline-start: 50%; translate: -50% -50%; width: min(300px, calc(100% - 48px)); padding: 22px 20px 18px; border-radius: 14px;
     display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; background: var(--chrome); color: var(--ink); box-shadow: var(--pop-shadow); }
   .card svg { color: var(--danger); }
+  /* the signs by state, a host's rule (parts.tsx `signs`: the website's, its interface review of 2026-11-03): a card that
+     waits in quiet ink; a capsule's failure in the danger's red, its words in ink */
+  .card[data-tone="wait"] > svg { color: var(--ink-2); }
+  .capsule[data-tone="alert"] > svg { color: var(--danger); }
   .card p { margin: 0; font-size: 13px; font-weight: 500; text-wrap: balance; }
   .card button, .card a { display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; text-decoration: none; transition: scale 150ms ease-out; }
   .card button:active { scale: 0.96; }
