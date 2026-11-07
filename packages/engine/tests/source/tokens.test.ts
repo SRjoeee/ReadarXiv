@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { markSource } from '../../src/marks/mark.ts'
+import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
+import { readSource } from '../../src/source/read.ts'
 import {
   CAT,
   Catcodes,
@@ -211,5 +214,29 @@ describe('the tokenizer: \\endinput', () => {
       if (t.k === 'cs' && t.name === 'endinput') lx.endInput()
     }
     expect(out).toEqual(['a', '\\endinput', ' ', 'b', '\n'])
+  })
+})
+
+describe('a character written in ^^ notation is read at its full width (review of #608)', () => {
+  it('reads ^^20 as one space, and blanks after it, its four characters taken', () => {
+    const toks = tokenize('First^^20words here.')
+    const sp = toks.find((t) => t.k === 'space')
+    expect(sp).toMatchObject({ s: 5, e: 9 })
+    expect(toks.filter((t) => t.k === 'char')).toEqual([expect.objectContaining({ ch: '.' })])
+    expect(tokenize('a^^20^^20 ^^09b').filter((t) => t.k === 'space')).toEqual([
+      expect.objectContaining({ s: 1, e: 14 }),
+    ])
+  })
+  it('marks the paragraph whose space is ^^20', () => {
+    const files = new Map([
+      [
+        'main.tex',
+        new TextEncoder().encode('\\documentclass{article}\\begin{document}\nFirst^^20words here.\n\\end{document}\n'),
+      ],
+    ])
+    const tree = { main: 'main.tex', files }
+    const { plan } = markSource(tree, readSource(tree, NO_DEFINITIONS))
+    expect(plan.units).toEqual([expect.objectContaining({ marked: true })])
+    expect(plan.marks.map((m) => m.kind)).toEqual(expect.arrayContaining(['start', 'end']))
   })
 })

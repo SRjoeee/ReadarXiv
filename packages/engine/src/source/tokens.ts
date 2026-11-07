@@ -219,6 +219,21 @@ export class Lexer {
   private cat(i: number): number {
     return this.codes.cat(this.text.charCodeAt(i))
   }
+  /** the category of the character at `i` as TeX reads it, its ^^ form decoded (a ^^J or ^^M the text writes is a character,
+   *  no line end), and its width */
+  private catAt(i: number): [number, number] {
+    const [code, len] = this.charAt(i)
+    return [len >= 3 && (code === 10 || code === 13) ? CAT.other : this.codes.cat(code), len]
+  }
+  /** past the characters of category `a` or `b` from `k`, each at its full width (a blank written ^^20 or ^^09 four) */
+  private skipCats(k: number, a: number, b = a): number {
+    while (k < this.end) {
+      const [c, l] = this.catAt(k)
+      if (c !== a && c !== b) break
+      k += l
+    }
+    return k
+  }
   /** the character at `i` as TeX reads it: `^^` and two lower-case hex digits, or `^^` and a character of code < 128 (its
    *  code ± 64), stand for one character (The TeXbook p. 45); [code, length] */
   private charAt(i: number): [number, number] {
@@ -241,7 +256,7 @@ export class Lexer {
     if (this.pos >= end) return null
     const s = this.pos
     if (this.raw) {
-      const c = this.cat(s)
+      const c = this.catAt(s)[0]
       if (c === CAT.begin) {
         this.raw = false
         const r = this.rawGroup()
@@ -252,7 +267,7 @@ export class Lexer {
     const [code, len] = this.charAt(s)
     // (a line end the text writes in ^^ notation, ^^J or ^^M, is no line of the file: a character of the text; LaTeX's own
     // uses of them are \typeout's and \newlinechar's)
-    const cat = len >= 3 && (code === 10 || code === 13) ? CAT.other : this.codes.cat(code)
+    const cat = this.catAt(s)[0]
     switch (cat) {
       case CAT.eol: {
         // a line end: in mid-line a space, at a line's start (or after blanks there) \par, after a space nothing
@@ -267,8 +282,7 @@ export class Lexer {
           return { k: 'par', s, e: s + 1 }
         }
         // the blanks that begin the next line are TeX's skipped indent, taken with this line end
-        let k = s + 1
-        while (k < end && this.cat(k) === CAT.space) k++
+        const k = this.skipCats(s + 1, CAT.space)
         const skipped = this.state === 'S'
         this.pos = k
         this.state = 'N'
@@ -276,8 +290,7 @@ export class Lexer {
       }
       case CAT.space:
       case CAT.ignored: {
-        let k = s + 1
-        while (k < end && (this.cat(k) === CAT.space || this.cat(k) === CAT.ignored)) k++
+        let k = this.skipCats(s + len, CAT.space, CAT.ignored)
         const skipped = this.state !== 'M' || cat === CAT.ignored
         // at a line's start, TeX's skipped indent: a line end after it is the next token's (an empty line: \par)
         if (this.state === 'N') {
@@ -287,9 +300,8 @@ export class Lexer {
         // a line end after them: one space with the next line's indent; a blank line after them: they end here, and the
         // line end is \par's
         let state: State = 'S'
-        if (k < end && this.cat(k) === CAT.eol && this.blankLines(k) === k) {
-          k++
-          while (k < end && this.cat(k) === CAT.space) k++
+        if (k < end && this.catAt(k)[0] === CAT.eol && this.blankLines(k) === k) {
+          k = this.skipCats(k + 1, CAT.space)
           state = 'N'
         }
         this.pos = k
