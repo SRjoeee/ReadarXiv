@@ -5,15 +5,35 @@
 // (parts.tsx `signs`): the alert, or by state (a clock in quiet ink for a wait, `data-tone`). Where the host's rule offers a
 // retry at its time (`retry`: the website's), the retry is greyed until then and still a stop of the keyboard's, pressing it
 // doing nothing, and the card drawn again at the time; the host's lines under the reason (its time, a limit's note)
-import { CircleAlert, Clock, FileText, type IconNode } from 'lucide'
+import { ArrowUpRight, CircleAlert, Clock, FileText, type IconNode } from 'lucide'
 import { R, S, Icon } from '@readarxiv/ui'
 import { useClock } from './clock.ts'
 import type { ReaderController } from './model.ts'
 import { useParts } from './parts.tsx'
-import { cardDueAt, cardLook, cardOf, type Sign } from './status.ts'
+import { cardDueAt, cardLook, cardOf, originalCardOf, type Sign } from './status.ts'
 import { useReader } from './use-reader.ts'
 
 const SIGNS: Readonly<Partial<Record<Sign, IconNode>>> = { alert: CircleAlert, clock: Clock, file: FileText }
+
+/** the original's pane's card, where the original could not be read and the host draws its loss there (StateWords
+ *  `openOriginal`: the website's): the file sign in quiet ink, its words, and a link to arXiv's PDF of the version, opened where
+ *  the settings say */
+export function OriginalCard({ controller }: { controller: ReaderController }) {
+  const parts = useParts()
+  const card = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
+  const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
+  if (!card) return null
+  return (
+    <div className="chrome card" data-card data-tone="wait">
+      <Icon node={FileText} size={20} />
+      <p>{card.reason}</p>
+      <a className="act" href={card.href} target={sameTab ? '_top' : '_blank'} rel="noopener noreferrer">
+        {card.label}
+        <Icon node={ArrowUpRight} size={14} />
+      </a>
+    </div>
+  )
+}
 
 /** `of`: where this one is drawn, the pane's or the page's; a card is drawn in one of them only */
 export function FailureCard({ controller, of = 'pane' }: { controller: ReaderController; of?: 'pane' | 'page' }) {

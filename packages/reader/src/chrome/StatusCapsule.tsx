@@ -21,7 +21,7 @@ import { useClock } from './clock.ts'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
 import { textOf } from './capsule-words.ts'
-import { type Capsule, capsuleLook, capsuleOf, cardOf, dueAt, type Sign, spokenOf } from './status.ts'
+import { type Capsule, capsuleLook, capsuleOf, cardOf, dueAt, originalCardOf, type Sign, spokenOf } from './status.ts'
 import { useReader } from './use-reader.ts'
 
 /** a capsule's signs by name (status.ts Look); the spinner is the capsule's own */
@@ -65,6 +65,7 @@ export function StatusCapsule({
   )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
+  const originalCard = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
@@ -110,6 +111,7 @@ export function StatusCapsule({
   const look = useReader(controller, (s) => (capsule ? capsuleLook(capsule, s, parts.signs, clock) : null))
   return (
     <div role="status" className="capsule-slot">
+      {originalCard && <span className="sr-only">{originalCard.reason}</span>}
       {card && <span className="sr-only">{card.reason}</span>}
       {spoken && now?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
       {capsule && look && (

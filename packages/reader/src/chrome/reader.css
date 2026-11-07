@@ -255,6 +255,10 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .card .sub { color: var(--ink-2); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
   .card button[aria-disabled="true"] { background: var(--fill); color: var(--ink-3); }
   .card button[aria-disabled="true"]:active { scale: 1; }
+  /* a link out where the original's pane cannot show the original (a host's word, StateWords `openOriginal`): its arrow in the
+     link's ink */
+  .card a.act { gap: 4px; padding-inline-end: 13px; }
+  .card a.act svg { color: currentColor; }
 }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }

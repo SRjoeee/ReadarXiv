@@ -161,3 +161,62 @@ describe("the interface's language, the host's to choose", () => {
     await m.unmount()
   })
 })
+
+describe("the original lost, where the host draws it on the original's pane (StateWords openOriginal; L11's second round, gap 3)", () => {
+  const lost = {
+    phase: 'failed' as const,
+    failure: 'network' as const,
+    failures: { pdf: 'network' as const, service: null },
+  }
+  it("the website's: the original's pane's card, the file sign in quiet ink, arXiv's PDF of the version its link; the translation's pane left as it is", async () => {
+    const { controller } = fakeController({ ...lost, paper: { id: '2608.02163v2', title: '' } })
+    const words = { originalLost: 'The original cannot be shown here', openOriginal: 'Open the PDF on arXiv' }
+    const m = await mountElement(app(controller, { words }))
+    const left = m.container.querySelector('.pane[data-side="left"]')!
+    const right = m.container.querySelector('.pane[data-side="right"]')!
+    const card = left.querySelector('.card')!
+    const link = card.querySelector('a')!
+    expect([
+      left.hasAttribute('data-card'),
+      card.getAttribute('data-tone'),
+      card.querySelector('p')?.textContent,
+      link.getAttribute('href'),
+      link.getAttribute('target'),
+      link.textContent,
+      right.hasAttribute('data-card'),
+      right.querySelector('.card'),
+      // (said in the status region: the card takes no focus)
+      m.container.querySelector('[role="status"]')?.textContent,
+    ]).toEqual([
+      true,
+      'wait',
+      'The original cannot be shown here',
+      'https://arxiv.org/pdf/2608.02163v2',
+      '_blank',
+      'Open the PDF on arXiv',
+      false,
+      null,
+      'The original cannot be shown here',
+    ])
+    await m.unmount()
+  })
+  it("the extension's (no such word): the translation's pane's card with its retry, the original's pane none", async () => {
+    const { controller } = fakeController(lost)
+    const m = await mountElement(app(controller, { words: { originalLost: 'lost' } }))
+    expect([
+      m.container.querySelector('.pane[data-side="left"]')!.hasAttribute('data-card'),
+      m.container.querySelector('.pane[data-side="right"] .card p')?.textContent,
+      !!m.container.querySelector('.pane[data-side="right"] .card button'),
+    ]).toEqual([false, 'lost', true])
+    await m.unmount()
+  })
+  it("the website's, the service failed too with nothing laid: the translation's pane's card is the service's", async () => {
+    const { controller } = fakeController({ ...lost, failures: { pdf: 'network', service: 'bad-request' } })
+    const m = await mountElement(app(controller, { words: { openOriginal: 'Open the PDF on arXiv' } }))
+    expect([
+      !!m.container.querySelector('.pane[data-side="left"] .card'),
+      !!m.container.querySelector('.pane[data-side="right"] .card button'),
+    ]).toEqual([true, true])
+    await m.unmount()
+  })
+})

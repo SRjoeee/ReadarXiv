@@ -181,6 +181,26 @@ export function lineOf(state: ReaderState): Line {
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
+/** the original's pane's card, where the original could not be read and the host draws its loss there (StateWords
+ *  `openOriginal`: the website's): its words, and arXiv's PDF of the version as its link; null otherwise */
+export interface OriginalCard {
+  reason: string
+  href: string
+  label: string
+}
+export function originalCardOf(
+  state: ReaderState,
+  reason: (kind: ProviderErrorKind) => string,
+  words: StateWords = {},
+): OriginalCard | null {
+  if (state.noPaper || state.failures.pdf === null || !words.openOriginal || !state.paper.id) return null
+  return {
+    reason: words.originalLost ?? reason(state.failures.pdf),
+    href: `https://arxiv.org/pdf/${state.paper.id}`,
+    label: words.openOriginal,
+  }
+}
+
 /** a capsule's or a card's sign (parts.tsx `signs`): the information sign, a run's spinner, a toast's check; a clock for a wait
  *  (a retry's time to come), the alert for a failure, the file for the original that could not be shown */
 export type Sign = 'info' | 'check' | 'spinner' | 'clock' | 'alert' | 'file'
@@ -242,9 +262,12 @@ export function cardOf(
 ): Card | null {
   if (state.noPaper) return { reason: words.noPaper ?? R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
-  const kind = state.failure ?? 'unknown'
+  // (the original not read, where the host draws it on the original's pane: this pane's card is the service's alone)
+  if (state.failures.pdf !== null && words.openOriginal && state.failures.service === null) return null
+  const kind = (words.openOriginal ? state.failures.service : state.failure) ?? 'unknown'
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
-  if (state.failures.pdf !== null && words.originalLost) return { reason: words.originalLost, action: 'retry' }
+  if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
+    return { reason: words.originalLost, action: 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
   // is the key's only where the service chosen carries one (the host's reason)
   return {

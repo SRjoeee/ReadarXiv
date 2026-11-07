@@ -2,13 +2,13 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { localeInUse, onLocale } from '@readarxiv/ui'
 import type { ReaderController, Side } from './model.ts'
 import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from './appearance.ts'
-import { FailureCard } from './FailureCard.tsx'
+import { FailureCard, OriginalCard } from './FailureCard.tsx'
 import { Outline } from './Outline.tsx'
 import { PagePill } from './PagePill.tsx'
 import { ScrollIndicator } from './ScrollIndicator.tsx'
 import { useScrollShow } from './scroll-show.ts'
 import { usePinch } from './pinch.ts'
-import { cardOf } from './status.ts'
+import { cardOf, originalCardOf } from './status.ts'
 import { StatusCapsule } from './StatusCapsule.tsx'
 import { Toolbar } from './Toolbar.tsx'
 import { type Parts, PartsProvider, useParts } from './parts.tsx'
@@ -42,6 +42,8 @@ function Page({ controller }: { controller: ReaderController }) {
     swapped: s.prefs?.swapped ?? false,
     title: s.paper.title,
     card: cardOf(s, reason, words) !== null && !s.noPaper,
+    // (the original not read, where the host draws its loss on the original's pane: StateWords `openOriginal`)
+    leftCard: originalCardOf(s, reason, words) !== null,
     noPaper: s.noPaper,
   }))
   const doc = useRef<HTMLElement>(null)
@@ -100,7 +102,7 @@ function Page({ controller }: { controller: ReaderController }) {
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
           accessibility audit); its layout is the class's */}
       <main className="doc" ref={doc}>
-        <Pane controller={controller} side="left" scroller={left} empty={state.noPaper} />
+        <Pane controller={controller} side="left" scroller={left} card={state.leftCard} empty={state.noPaper} />
         <Pane controller={controller} side="right" scroller={right} card={state.card} empty={state.noPaper} />
         {/* an address with no paper: its card is the page's, not a pane's (the display may hide the pane) */}
         {state.noPaper && <FailureCard controller={controller} of="page" />}
@@ -162,7 +164,7 @@ function Pane({
       </div>
       <PagePill ref={pill} controller={controller} side={side} />
       <ScrollIndicator ref={indicator} controller={controller} side={side} />
-      {side === 'right' && <FailureCard controller={controller} />}
+      {side === 'right' ? <FailureCard controller={controller} /> : <OriginalCard controller={controller} />}
     </section>
   )
 }

@@ -79,6 +79,10 @@ export interface StateWords {
   cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null; note?: string | null }
   /** the card where the original could not be read (the host's `reason` of the network) */
   originalLost?: string
+  /** the way to arXiv's PDF of the paper where the original could not be read: given, the loss is the original's pane's card
+   *  (the file sign in quiet ink, `originalLost` its words, this its link, in a new tab or this one as the settings say), the
+   *  translation's pane left as it is (the website's); none, the translation's pane's card with a retry (the extension's) */
+  openOriginal?: string
   /** the card of an address that names no paper (R.status.noPaper) */
   noPaper?: string
 }
