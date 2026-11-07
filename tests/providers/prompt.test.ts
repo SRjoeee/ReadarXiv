@@ -23,20 +23,20 @@ describe('prompt', () => {
   it('when neither part of a custom prompt writes {{targetLanguage}}, a target-language line is prepended to the user message', () => {
     const prompts = { promptId: 'mine', patterns: [{ id: 'mine', name: 'mine', systemPrompt: 'Be terse.', prompt: '{{input}}' }] }
     const { prompt } = buildPrompts(request, prompts)
-    expect(prompt.startsWith('Target language: Simplified Mandarin Chinese')).toBe(true)
+    expect(prompt.startsWith('Target language: Simplified Chinese')).toBe(true)
     // Written already, it is not added again
     const withTarget = { promptId: 'mine', patterns: [{ id: 'mine', name: 'mine', systemPrompt: 'Translate into {{targetLanguage}}.', prompt: '{{input}}' }] }
     expect(buildPrompts(request, withTarget).prompt.startsWith('Target language:')).toBe(false)
   })
 
   it('carries a version: raised to 3 when the target language became its English name', () => {
-    expect(PROMPT_VERSION).toBe('4')
+    expect(PROMPT_VERSION).toBe('5')
   })
 
   it('system prompt = the prompt library\'s template + the protocol block; the protocol block spells out placeholders and the output shape', () => {
     const { system } = buildPrompts(request)
     // The language code is swapped for the English name (Read Frog's way)
-    expect(system).toContain('Simplified Mandarin Chinese')
+    expect(system).toContain('Simplified Chinese')
     expect(system).not.toContain('cmn')
     expect(system).toContain('<x id')
     expect(system).toContain('<t id')
@@ -77,7 +77,7 @@ describe('prompt', () => {
       patterns: [{ id: 'mine', name: 'mine', systemPrompt: 'Be terse. Target: {{targetLanguage}}', prompt: 'Translate now.' }],
     }
     const { system, prompt } = buildPrompts(request, prompts)
-    expect(system.startsWith('Be terse. Target: Simplified Mandarin Chinese')).toBe(true)
+    expect(system.startsWith('Be terse. Target: Simplified Chinese')).toBe(true)
     expect(system).toContain(PROTOCOL_BLOCK)
     expect(prompt).toContain('Translate now.')
     expect(prompt).toContain('S1.p1.1')

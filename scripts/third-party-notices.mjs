@@ -104,12 +104,23 @@ export const BUNDLED_DATA = [{
   source: 'https://github.com/notofonts/noto-cjk',
   text: read(join(KEPT_TEXTS, 'noto-sans-cjk-OFL-1.1.txt')),
 }, {
-  // the target languages' names in Traditional Chinese, Japanese and Korean (src/config/language-names.ts), read out of
-  // CLDR by scripts/language-names.ts; the licence asks for its notice with every copy of the data
-  name: 'Unicode CLDR — the names of languages in Traditional Chinese, Japanese and Korean',
+  // the target languages' names (src/config/language-table.ts and language-names.ts), read out of CLDR by
+  // scripts/languages.ts and scripts/language-names.ts; the licence asks for its notice with every copy of the data
+  name: 'Unicode CLDR — the names of the target languages',
   licence: 'Unicode-3.0',
   source: 'https://cldr.unicode.org',
   text: read(join(KEPT_TEXTS, 'unicode-3.0.txt')),
+}, {
+  // the target languages' codes (src/config/language-table.ts), from the rows of SIL's ISO 639-3 table that
+  // scripts/languages.ts reads; SIL's terms ask attribution as the source of the codes (scripts/data/iso-639-3.NOTICE.txt)
+  name: 'ISO 639-3 — the codes of the target languages',
+  licence: 'ISO 639-3 Code Tables Terms of Use (SIL International)',
+  source: 'https://iso639-3.sil.org/code_tables/download_tables',
+  text: [
+    'Source of the codes: iso639-3.sil.org. The extension uses the ISO 639-3 identifiers of the languages it translates',
+    'into and does not provide the code set; the menus\' order, the tags sent to translators and the names in every',
+    'language are not part of the standard.',
+  ].join('\n'),
 }]
 
 /** The file's text from the packages noted so far. Sorted, and with nothing of the machine it was built on, so two builds of one tree give one file */

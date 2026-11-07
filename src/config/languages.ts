@@ -1,1085 +1,119 @@
-// Ported from @read-frog/definitions@0.4.4 (the dependency package of reference/read-frog, GPL-3.0): the language
-// tables, 2026-09-05, modified: only LANG_CODE_ISO6393_OPTIONS and the four name / mapping tables are taken (the SRS
-// and e-book schemas are not); the helper functions are this project's.
-// Language codes are ISO 639-3 (as in Read Frog); config v4 stores targetLanguage as that code. LLM prompts get the
-// English name and Google's web translator takes BCP-47; both conversions go through the functions here.
+// The target languages (UI.md §6, DESIGN §8.2): the generated table (`language-table.ts`, scripts/languages.ts, under
+// UI.md §6's naming policy) and what the extension asks of it — a language's English name for the prompt, its label in
+// a menu, the tag a translator is sent and the way back from a browser's tag, the direction it is written in.
 import { z } from 'zod'
+import { DEFAULT_LANG_CODE, EN_NAMES, ISO_639_1, LANG_CODES, type LangCode, OWN_NAMES, RTL_CODES, TAGS, ZH_NAMES } from './language-table'
 
-/** 180 ISO 639-3 codes, in Read Frog's order (the common languages first), and Standard Malay (zsm) before its Malay in Jawi:
- *  Read Frog's table had Malay in the Arabic script alone, and Malay is read in Latin letters (the PDF reader's languages,
- *  2026-10-29) */
-export const LANG_CODES = [
-  "eng",
-  "cmn",
-  "cmn-Hant",
-  "yue",
-  "spa",
-  "rus",
-  "arb",
-  "ben",
-  "hin",
-  "por",
-  "ind",
-  "jpn",
-  "fra",
-  "deu",
-  "jav",
-  "kor",
-  "tel",
-  "vie",
-  "mar",
-  "ita",
-  "tam",
-  "tur",
-  "urd",
-  "guj",
-  "pol",
-  "ukr",
-  "kan",
-  "mai",
-  "mal",
-  "pes",
-  "mya",
-  "swh",
-  "sun",
-  "ron",
-  "pan",
-  "bho",
-  "amh",
-  "hau",
-  "fuv",
-  "bos",
-  "hrv",
-  "nld",
-  "srp",
-  "tha",
-  "ckb",
-  "yor",
-  "uzn",
-  "zsm",
-  "zlm",
-  "ibo",
-  "npi",
-  "ceb",
-  "skr",
-  "tgl",
-  "hun",
-  "azj",
-  "sin",
-  "koi",
-  "ell",
-  "ces",
-  "mag",
-  "run",
-  "bel",
-  "plt",
-  "qug",
-  "mad",
-  "nya",
-  "zyb",
-  "pbu",
-  "kin",
-  "zul",
-  "bul",
-  "swe",
-  "lin",
-  "som",
-  "hms",
-  "hnj",
-  "ilo",
-  "kaz",
-  "heb",
-  "nob",
-  "nno",
-  "afr",
-  "sqi",
-  "asm",
-  "eus",
-  "bre",
-  "cat",
-  "cos",
-  "cym",
-  "dan",
-  "div",
-  "epo",
-  "ekk",
-  "fao",
-  "fij",
-  "fin",
-  "fry",
-  "gla",
-  "gle",
-  "glg",
-  "grn",
-  "hat",
-  "haw",
-  "hye",
-  "ido",
-  "ina",
-  "isl",
-  "kat",
-  "khm",
-  "kir",
-  "lao",
-  "lat",
-  "lvs",
-  "lit",
-  "ltz",
-  "mkd",
-  "mlt",
-  "mon",
-  "mri",
-  "nso",
-  "oci",
-  "ori",
-  "orm",
-  "prs",
-  "san",
-  "slk",
-  "slv",
-  "smo",
-  "sna",
-  "snd",
-  "sot",
-  "tah",
-  "tat",
-  "tgk",
-  "tir",
-  "ton",
-  "tsn",
-  "tuk",
-  "uig",
-  "vol",
-  "wol",
-  "xho",
-  "ydd",
-  "aka",
-  "bam",
-  "bis",
-  "bod",
-  "che",
-  "chv",
-  "dzo",
-  "ewe",
-  "kab",
-  "lug",
-  "oss",
-  "ssw",
-  "ven",
-  "war",
-  "nde",
-  "nbl",
-  "pam",
-  "hil",
-  "bcl",
-  "min",
-  "ace",
-  "bug",
-  "ban",
-  "bjn",
-  "mak",
-  "sas",
-  "tet",
-  "cha",
-  "niu",
-  "tvl",
-  "gil",
-  "mah",
-  "pau",
-  "wls",
-  "rar",
-  "hif",
-] as const
-
-export type LangCode = (typeof LANG_CODES)[number]
+export { DEFAULT_LANG_CODE, LANG_CODES, type LangCode }
 
 export const langCodeSchema = z.enum(LANG_CODES)
 
-/** The English language names: what fills the LLM prompt's {{targetLanguage}} (Read Frog translate-text.ts's way) */
-export const LANG_CODE_TO_EN_NAME = {
-  "eng": "English",
-  "cmn": "Simplified Mandarin Chinese",
-  "cmn-Hant": "Traditional Mandarin Chinese",
-  "yue": "Cantonese",
-  "spa": "Spanish",
-  "rus": "Russian",
-  "arb": "Standard Arabic",
-  "ben": "Bengali",
-  "hin": "Hindi",
-  "por": "Portuguese",
-  "ind": "Indonesian",
-  "jpn": "Japanese",
-  "fra": "French",
-  "deu": "German",
-  "jav": "Javanese (Javanese)",
-  "kor": "Korean",
-  "tel": "Telugu",
-  "vie": "Vietnamese",
-  "mar": "Marathi",
-  "ita": "Italian",
-  "tam": "Tamil",
-  "tur": "Turkish",
-  "urd": "Urdu",
-  "guj": "Gujarati",
-  "pol": "Polish",
-  "ukr": "Ukrainian",
-  "kan": "Kannada",
-  "mai": "Maithili",
-  "mal": "Malayalam",
-  "pes": "Iranian Persian",
-  "mya": "Burmese",
-  "swh": "Swahili (individual language)",
-  "sun": "Sundanese",
-  "ron": "Romanian",
-  "pan": "Panjabi",
-  "bho": "Bhojpuri",
-  "amh": "Amharic",
-  "hau": "Hausa",
-  "fuv": "Nigerian Fulfulde",
-  "bos": "Bosnian (Cyrillic)",
-  "hrv": "Croatian",
-  "nld": "Dutch",
-  "srp": "Serbian (Cyrillic)",
-  "tha": "Thai",
-  "ckb": "Central Kurdish",
-  "yor": "Yoruba",
-  "uzn": "Northern Uzbek (Cyrillic)",
-  "zsm": "Standard Malay",
-  "zlm": "Malay (individual language) (Arabic)",
-  "ibo": "Igbo",
-  "npi": "Nepali (individual language)",
-  "ceb": "Cebuano",
-  "skr": "Saraiki",
-  "tgl": "Tagalog",
-  "hun": "Hungarian",
-  "azj": "North Azerbaijani (Cyrillic)",
-  "sin": "Sinhala",
-  "koi": "Komi-Permyak",
-  "ell": "Modern Greek (1453-)",
-  "ces": "Czech",
-  "mag": "Magahi",
-  "run": "Rundi",
-  "bel": "Belarusian",
-  "plt": "Plateau Malagasy",
-  "qug": "Chimborazo Highland Quichua",
-  "mad": "Madurese",
-  "nya": "Nyanja",
-  "zyb": "Yongbei Zhuang",
-  "pbu": "Northern Pashto",
-  "kin": "Kinyarwanda",
-  "zul": "Zulu",
-  "bul": "Bulgarian",
-  "swe": "Swedish",
-  "lin": "Lingala",
-  "som": "Somali",
-  "hms": "Southern Qiandong Miao",
-  "hnj": "Hmong Njua",
-  "ilo": "Iloko",
-  "kaz": "Kazakh",
-  "heb": "Hebrew",
-  "nob": "Norwegian Bokmål",
-  "nno": "Norwegian Nynorsk",
-  "afr": "Afrikaans",
-  "sqi": "Albanian",
-  "asm": "Assamese",
-  "eus": "Basque",
-  "bre": "Breton",
-  "cat": "Catalan",
-  "cos": "Corsican",
-  "cym": "Welsh",
-  "dan": "Danish",
-  "div": "Divehi",
-  "epo": "Esperanto",
-  "ekk": "Estonian",
-  "fao": "Faroese",
-  "fij": "Fijian",
-  "fin": "Finnish",
-  "fry": "Western Frisian",
-  "gla": "Scottish Gaelic",
-  "gle": "Irish",
-  "glg": "Galician",
-  "grn": "Guarani",
-  "hat": "Haitian Creole",
-  "haw": "Hawaiian",
-  "hye": "Armenian",
-  "ido": "Ido",
-  "ina": "Interlingua",
-  "isl": "Icelandic",
-  "kat": "Georgian",
-  "khm": "Khmer",
-  "kir": "Kyrgyz",
-  "lao": "Lao",
-  "lat": "Latin",
-  "lvs": "Latvian",
-  "lit": "Lithuanian",
-  "ltz": "Luxembourgish",
-  "mkd": "Macedonian",
-  "mlt": "Maltese",
-  "mon": "Mongolian",
-  "mri": "Maori",
-  "nso": "Northern Sotho",
-  "oci": "Occitan",
-  "ori": "Odia",
-  "orm": "Oromo",
-  "prs": "Dari",
-  "san": "Sanskrit",
-  "slk": "Slovak",
-  "slv": "Slovenian",
-  "smo": "Samoan",
-  "sna": "Shona",
-  "snd": "Sindhi",
-  "sot": "Southern Sotho",
-  "tah": "Tahitian",
-  "tat": "Tatar",
-  "tgk": "Tajik",
-  "tir": "Tigrinya",
-  "ton": "Tongan",
-  "tsn": "Tswana",
-  "tuk": "Turkmen",
-  "uig": "Uyghur",
-  "vol": "Volapük",
-  "wol": "Wolof",
-  "xho": "Xhosa",
-  "ydd": "Eastern Yiddish",
-  "aka": "Akan",
-  "bam": "Bambara",
-  "bis": "Bislama",
-  "bod": "Tibetan",
-  "che": "Chechen",
-  "chv": "Chuvash",
-  "dzo": "Dzongkha",
-  "ewe": "Ewe",
-  "kab": "Kabyle",
-  "lug": "Ganda",
-  "oss": "Ossetian",
-  "ssw": "Swati",
-  "ven": "Venda",
-  "war": "Waray",
-  "nde": "North Ndebele",
-  "nbl": "South Ndebele",
-  "pam": "Pampanga",
-  "hil": "Hiligaynon",
-  "bcl": "Central Bikol",
-  "min": "Minangkabau",
-  "ace": "Acehnese",
-  "bug": "Buginese",
-  "ban": "Balinese",
-  "bjn": "Banjar",
-  "mak": "Makasar",
-  "sas": "Sasak",
-  "tet": "Tetum",
-  "cha": "Chamorro",
-  "niu": "Niuean",
-  "tvl": "Tuvaluan",
-  "gil": "Gilbertese",
-  "mah": "Marshallese",
-  "pau": "Palauan",
-  "wls": "Wallisian",
-  "rar": "Rarotongan",
-  "hif": "Fiji Hindi",
-} as const satisfies Record<LangCode, string>
+/** The English names: the prompt's `{{targetLanguage}}` and the English menu's, one word (UI.md §6, rule 3) */
+export const LANG_CODE_TO_EN_NAME: Readonly<Record<LangCode, string>> = EN_NAMES
+/** The Simplified Chinese interface's names */
+export const LANG_CODE_TO_ZH_NAME: Readonly<Record<LangCode, string>> = ZH_NAMES
+/** Each language's name in itself: the menus' second name and the PDF reader's language button */
+export const LANG_CODE_TO_LOCALE_NAME: Readonly<Record<LangCode, string>> = OWN_NAMES
+/** The ISO 639-1 code a language is known by, where it has one */
+export const ISO6393_TO_6391: Readonly<Partial<Record<LangCode, string>>> = ISO_639_1
+/** The English interface's names: the prompt's own, no longer an overlay (UI.md §6, rule 3) */
+export const LANG_CODE_TO_EN_UI_NAME: Record<LangCode, string> = EN_NAMES
 
-/** The Chinese language names, for the settings page */
-export const LANG_CODE_TO_ZH_NAME = {
-  "eng": "英语",
-  "cmn": "简体中文",
-  "cmn-Hant": "繁体中文",
-  "yue": "粤语",
-  "spa": "西班牙语",
-  "rus": "俄语",
-  "arb": "阿拉伯语",
-  "ben": "孟加拉语",
-  "hin": "印地语",
-  "por": "葡萄牙语",
-  "ind": "印尼语",
-  "jpn": "日语",
-  "fra": "法语",
-  "deu": "德语",
-  "jav": "爪哇语",
-  "kor": "韩语",
-  "tel": "泰卢固语",
-  "vie": "越南语",
-  "mar": "马拉地语",
-  "ita": "意大利语",
-  "tam": "泰米尔语",
-  "tur": "土耳其语",
-  "urd": "乌尔都语",
-  "guj": "古吉拉特语",
-  "pol": "波兰语",
-  "ukr": "乌克兰语",
-  "kan": "坎纳达语",
-  "mai": "迈蒂利语",
-  "mal": "马拉雅拉姆语",
-  "pes": "波斯语",
-  "mya": "缅甸语",
-  "swh": "斯瓦希里语",
-  "sun": "巽他语",
-  "ron": "罗马尼亚语",
-  "pan": "旁遮普语",
-  "bho": "博杰普尔语",
-  "amh": "阿姆哈拉语",
-  "hau": "豪萨语",
-  "fuv": "富拉语",
-  "bos": "波斯尼亚语",
-  "hrv": "克罗地亚语",
-  "nld": "荷兰语",
-  "srp": "塞尔维亚语",
-  "tha": "泰语",
-  "ckb": "库尔德语（索拉尼）",
-  "yor": "约鲁巴语",
-  "uzn": "乌兹别克语",
-  "zsm": "马来语",
-  "zlm": "马来语（爪夷文）",
-  "ibo": "伊博语",
-  "npi": "尼泊尔语",
-  "ceb": "宿务语",
-  "skr": "西赖基语",
-  "tgl": "塔加路语",
-  "hun": "匈牙利语",
-  "azj": "阿塞拜疆语",
-  "sin": "僧伽罗语",
-  "koi": "科米-彼尔姆语",
-  "ell": "希腊语",
-  "ces": "捷克语",
-  "mag": "马加哈语",
-  "run": "鲁恩达语",
-  "bel": "白俄罗斯语",
-  "plt": "马达加斯加语",
-  "qug": "奇布查语",
-  "mad": "马都拉语",
-  "nya": "尼扬加语",
-  "zyb": "壮语",
-  "pbu": "普什图语",
-  "kin": "基尼亚卢旺达语",
-  "zul": "祖鲁语",
-  "bul": "保加利亚语",
-  "swe": "瑞典语",
-  "lin": "林加拉语",
-  "som": "索马里语",
-  "hms": "南部乾东苗语",
-  "hnj": "苗族北部语",
-  "ilo": "伊洛卡诺语",
-  "kaz": "哈萨克语",
-  "heb": "希伯来语",
-  "nob": "书面挪威语",
-  "nno": "新挪威语",
-  "afr": "南非荷兰语",
-  "sqi": "阿尔巴尼亚语",
-  "asm": "阿萨姆语",
-  "eus": "巴斯克语",
-  "bre": "布列塔尼语",
-  "cat": "加泰罗尼亚语",
-  "cos": "科西嘉语",
-  "cym": "威尔士语",
-  "dan": "丹麦语",
-  "div": "迪维希语",
-  "epo": "世界语",
-  "ekk": "爱沙尼亚语",
-  "fao": "法罗语",
-  "fij": "斐济语",
-  "fin": "芬兰语",
-  "fry": "西弗里西亚语",
-  "gla": "苏格兰盖尔语",
-  "gle": "爱尔兰语",
-  "glg": "加利西亚语",
-  "grn": "瓜拉尼语",
-  "hat": "海地克里奥尔语",
-  "haw": "夏威夷语",
-  "hye": "亚美尼亚语",
-  "ido": "伊多语",
-  "ina": "国际辅助语",
-  "isl": "冰岛语",
-  "kat": "格鲁吉亚语",
-  "khm": "高棉语",
-  "kir": "吉尔吉斯语",
-  "lao": "老挝语",
-  "lat": "拉丁语",
-  "lvs": "拉脱维亚语",
-  "lit": "立陶宛语",
-  "ltz": "卢森堡语",
-  "mkd": "马其顿语",
-  "mlt": "马耳他语",
-  "mon": "蒙古语",
-  "mri": "毛利语",
-  "nso": "北索托语",
-  "oci": "奥克语",
-  "ori": "奥里亚语",
-  "orm": "奥罗莫语",
-  "prs": "达里语",
-  "san": "梵语",
-  "slk": "斯洛伐克语",
-  "slv": "斯洛文尼亚语",
-  "smo": "萨摩亚语",
-  "sna": "绍纳语",
-  "snd": "信德语",
-  "sot": "南索托语",
-  "tah": "塔希提语",
-  "tat": "鞑靼语",
-  "tgk": "塔吉克语",
-  "tir": "提格雷尼亚语",
-  "ton": "汤加语",
-  "tsn": "茨瓦纳语",
-  "tuk": "土库曼语",
-  "uig": "维吾尔语",
-  "vol": "沃拉普克语",
-  "wol": "沃洛夫语",
-  "xho": "科萨语",
-  "ydd": "意第绪语",
-  "aka": "阿坎语",
-  "bam": "班巴拉语",
-  "bis": "比斯拉马语",
-  "bod": "藏语",
-  "che": "车臣语",
-  "chv": "楚瓦什语",
-  "dzo": "宗喀语",
-  "ewe": "埃维语",
-  "kab": "卡拜尔语",
-  "lug": "卢干达语",
-  "oss": "奥塞梯语",
-  "ssw": "斯瓦蒂语",
-  "ven": "文达语",
-  "war": "瓦瑞语",
-  "nde": "北恩德贝勒语",
-  "nbl": "南恩德贝勒语",
-  "pam": "邦板牙语",
-  "hil": "希利盖农语",
-  "bcl": "中比科尔语",
-  "min": "米南佳保语",
-  "ace": "亚齐语",
-  "bug": "布吉语",
-  "ban": "巴厘语",
-  "bjn": "班贾尔语",
-  "mak": "望加锡语",
-  "sas": "萨萨克语",
-  "tet": "德顿语",
-  "cha": "查莫罗语",
-  "niu": "纽埃语",
-  "tvl": "图瓦卢语",
-  "gil": "吉尔伯特语",
-  "mah": "马绍尔语",
-  "pau": "帕劳语",
-  "wls": "瓦利斯语",
-  "rar": "拉罗汤加语",
-  "hif": "斐济印地语",
-} as const satisfies Record<LangCode, string>
-
-/** The language's own name for itself */
-export const LANG_CODE_TO_LOCALE_NAME = {
-  "eng": "English",
-  "cmn": "简体中文",
-  "cmn-Hant": "繁體中文",
-  "yue": "粵語",
-  "spa": "Español",
-  "rus": "Русский",
-  "arb": "العربية",
-  "ben": "বাংলা",
-  "hin": "हिन्दी",
-  "por": "Português",
-  "ind": "Bahasa Indonesia",
-  "jpn": "日本語",
-  "fra": "Français",
-  "deu": "Deutsch",
-  "jav": "Basa Jawa",
-  "kor": "한국어",
-  "tel": "తెలుగు",
-  "vie": "Tiếng Việt",
-  "mar": "मराठी",
-  "ita": "Italiano",
-  "tam": "தமிழ்",
-  "tur": "Türkçe",
-  "urd": "اردو",
-  "guj": "ગુજરાતી",
-  "pol": "Polski",
-  "ukr": "Українська",
-  "kan": "ಕನ್ನಡ",
-  "mai": "मैथिली",
-  "mal": "മലയാളം",
-  "pes": "فارسی",
-  "mya": "မြန်မာစာ",
-  "swh": "Kiswahili",
-  "sun": "Basa Sunda",
-  "ron": "Română",
-  "pan": "ਪੰਜਾਬੀ",
-  "bho": "भोजपुरी",
-  "amh": "አማርኛ",
-  "hau": "Hausa",
-  "fuv": "Fulfulde",
-  "bos": "Босански",
-  "hrv": "Hrvatski",
-  "nld": "Nederlands",
-  "srp": "Српски",
-  "tha": "ไทย",
-  "ckb": "کوردیی ناوەندی",
-  "yor": "Yorùbá",
-  "uzn": "Ўзбекча",
-  "zsm": "Bahasa Melayu",
-  "zlm": "بهاس ملايو",
-  "ibo": "Asụsụ Igbo",
-  "npi": "नेपाली",
-  "ceb": "Cebuano",
-  "skr": "سرائیکی",
-  "tgl": "Tagalog",
-  "hun": "Magyar",
-  "azj": "Азәрбајҹан дили",
-  "sin": "සිංහල",
-  "koi": "Перем Коми кыв",
-  "ell": "Ελληνικά",
-  "ces": "Čeština",
-  "mag": "मगही",
-  "run": "Ikirundi",
-  "bel": "Беларуская",
-  "plt": "Fiteny Malagasy",
-  "qug": "Kichwa",
-  "mad": "Madhurâ",
-  "nya": "Chinyanja",
-  "zyb": "Yongbei Bouxcuengh",
-  "pbu": "پښتو",
-  "kin": "Kinyarwanda",
-  "zul": "isiZulu",
-  "bul": "Български",
-  "swe": "Svenska",
-  "lin": "Lingála",
-  "som": "Af Soomaali",
-  "hms": "Hmongb Shuad",
-  "hnj": "Hmong Njua",
-  "ilo": "Ilokano",
-  "kaz": "Қазақ тілі",
-  "heb": "עברית",
-  "nob": "Norsk bokmål",
-  "nno": "Norsk nynorsk",
-  "afr": "Afrikaans",
-  "sqi": "Shqip",
-  "asm": "অসমীয়া",
-  "eus": "Euskara",
-  "bre": "Brezhoneg",
-  "cat": "Català",
-  "cos": "Corsu",
-  "cym": "Cymraeg",
-  "dan": "Dansk",
-  "div": "ދިވެހި",
-  "epo": "Esperanto",
-  "ekk": "Eesti",
-  "fao": "Føroyskt",
-  "fij": "Vosa Vakaviti",
-  "fin": "Suomi",
-  "fry": "Frysk",
-  "gla": "Gàidhlig",
-  "gle": "Gaeilge",
-  "glg": "Galego",
-  "grn": "Avañeʼẽ",
-  "hat": "Kreyòl ayisyen",
-  "haw": "ʻŌlelo Hawaiʻi",
-  "hye": "Հایերен",
-  "ido": "Ido",
-  "ina": "Interlingua",
-  "isl": "Íslenska",
-  "kat": "ქართული",
-  "khm": "ភាសាខ្មែរ",
-  "kir": "Кыргызча",
-  "lao": "ພາສາລາວ",
-  "lat": "Latina",
-  "lvs": "Latviešu",
-  "lit": "Lietuvių",
-  "ltz": "Lëtzebuergesch",
-  "mkd": "Македонски",
-  "mlt": "Malti",
-  "mon": "Монгол",
-  "mri": "Te Reo Māori",
-  "nso": "Sesotho sa Leboa",
-  "oci": "Occitan",
-  "ori": "ଓଡ଼ିଆ",
-  "orm": "Oromoo",
-  "prs": "دری",
-  "san": "संस्कृतम्",
-  "slk": "Slovenčina",
-  "slv": "Slovenščina",
-  "smo": "Gagana Samoa",
-  "sna": "chiShona",
-  "snd": "سنڌي",
-  "sot": "Sesotho",
-  "tah": "Reo Tahiti",
-  "tat": "Татарча",
-  "tgk": "Тоҷикӣ",
-  "tir": "ትግርኛ",
-  "ton": "Lea fakatonga",
-  "tsn": "Setswana",
-  "tuk": "Türkmençe",
-  "uig": "ئۇيغۇرچە",
-  "vol": "Volapük",
-  "wol": "Wolof",
-  "xho": "isiXhosa",
-  "ydd": "ייִדיש",
-  "aka": "Akan",
-  "bam": "Bamanankan",
-  "bis": "Bislama",
-  "bod": "བོད་སྐད",
-  "che": "Нохчийн",
-  "chv": "Чӑвашла",
-  "dzo": "རྫོང་ཁ",
-  "ewe": "Eʋegbe",
-  "kab": "Taqbaylit",
-  "lug": "Luganda",
-  "oss": "Ирон",
-  "ssw": "SiSwati",
-  "ven": "Tshivenḓa",
-  "war": "Winaray",
-  "nde": "isiNdebele",
-  "nbl": "isiNdebele seSewula",
-  "pam": "Kapampangan",
-  "hil": "Ilonggo",
-  "bcl": "Bikol Sentral",
-  "min": "Baso Minangkabau",
-  "ace": "Bahsa Acèh",
-  "bug": "Basa Ugi",
-  "ban": "Basa Bali",
-  "bjn": "Bahasa Banjar",
-  "mak": "Basa Mangkasara",
-  "sas": "Sasak",
-  "tet": "Tetun",
-  "cha": "Chamoru",
-  "niu": "Vagahau Niuē",
-  "tvl": "Te Gana Tuvalu",
-  "gil": "Taetae ni Kiribati",
-  "mah": "Kajin Majel",
-  "pau": "A tekoi er a Belau",
-  "wls": "Fakaʻuvea",
-  "rar": "Māori Kūki ʻĀirani",
-  "hif": "फ़िजी हिंदी",
-} as const satisfies Record<LangCode, string>
-
-/** ISO 639-3 → BCP-47 (Google and others take the target language as BCP-47); 38 codes have no two-letter equivalent. `ms` is
- *  Standard Malay's, in Latin letters, and Malay in Jawi is `ms-Arab` (Read Frog's table gave zlm `ms`), so that a tag reads
- *  back to the language it names (languageOfTag: `ms-MY` is zsm, `ms-Arab` zlm) */
-export const ISO6393_TO_6391 = {
-  "eng": "en",
-  "cmn": "zh",
-  "cmn-Hant": "zh-TW",
-  "yue": "zh",
-  "spa": "es",
-  "rus": "ru",
-  "arb": "ar",
-  "ben": "bn",
-  "hin": "hi",
-  "por": "pt",
-  "ind": "id",
-  "jpn": "ja",
-  "fra": "fr",
-  "deu": "de",
-  "jav": "jv",
-  "kor": "ko",
-  "tel": "te",
-  "vie": "vi",
-  "mar": "mr",
-  "ita": "it",
-  "tam": "ta",
-  "tur": "tr",
-  "urd": "ur",
-  "guj": "gu",
-  "pol": "pl",
-  "ukr": "uk",
-  "kan": "kn",
-  "mal": "ml",
-  "pes": "fa",
-  "mya": "my",
-  "swh": "sw",
-  "sun": "su",
-  "ron": "ro",
-  "pan": "pa",
-  "amh": "am",
-  "hau": "ha",
-  "fuv": "ff",
-  "bos": "bs",
-  "hrv": "hr",
-  "nld": "nl",
-  "srp": "sr",
-  "tha": "th",
-  "ckb": "ku",
-  "yor": "yo",
-  "uzn": "uz",
-  "zsm": "ms",
-  "zlm": "ms-Arab",
-  "ibo": "ig",
-  "npi": "ne",
-  "tgl": "tl",
-  "hun": "hu",
-  "azj": "az",
-  "sin": "si",
-  "ell": "el",
-  "ces": "cs",
-  "bel": "be",
-  "nya": "ny",
-  "kin": "rw",
-  "zul": "zu",
-  "bul": "bg",
-  "swe": "sv",
-  "lin": "ln",
-  "som": "so",
-  "kaz": "kk",
-  "heb": "he",
-  "nob": "nb",
-  "nno": "nn",
-  "afr": "af",
-  "sqi": "sq",
-  "asm": "as",
-  "eus": "eu",
-  "bre": "br",
-  "cat": "ca",
-  "cos": "co",
-  "cym": "cy",
-  "dan": "da",
-  "div": "dv",
-  "epo": "eo",
-  "ekk": "et",
-  "fao": "fo",
-  "fij": "fj",
-  "fin": "fi",
-  "fry": "fy",
-  "gla": "gd",
-  "gle": "ga",
-  "glg": "gl",
-  "grn": "gn",
-  "hat": "ht",
-  "hye": "hy",
-  "ido": "io",
-  "ina": "ia",
-  "isl": "is",
-  "kat": "ka",
-  "khm": "km",
-  "kir": "ky",
-  "lao": "lo",
-  "lat": "la",
-  "lvs": "lv",
-  "lit": "lt",
-  "ltz": "lb",
-  "mkd": "mk",
-  "mlt": "mt",
-  "mon": "mn",
-  "mri": "mi",
-  "oci": "oc",
-  "ori": "or",
-  "orm": "om",
-  "san": "sa",
-  "slk": "sk",
-  "slv": "sl",
-  "smo": "sm",
-  "sna": "sn",
-  "snd": "sd",
-  "sot": "st",
-  "tah": "ty",
-  "tat": "tt",
-  "tgk": "tg",
-  "tir": "ti",
-  "ton": "to",
-  "tsn": "tn",
-  "tuk": "tk",
-  "uig": "ug",
-  "vol": "vo",
-  "wol": "wo",
-  "xho": "xh",
-  "ydd": "yi",
-  "aka": "ak",
-  "bam": "bm",
-  "bis": "bi",
-  "bod": "bo",
-  "che": "ce",
-  "chv": "cv",
-  "dzo": "dz",
-  "ewe": "ee",
-  "lug": "lg",
-  "oss": "os",
-  "ssw": "ss",
-  "ven": "ve",
-  "nde": "nd",
-  "nbl": "nr",
-  "cha": "ch",
-  "mah": "mh",
-} as const satisfies Partial<Record<LangCode, string>>
-
-export const DEFAULT_LANG_CODE: LangCode = 'cmn'
-
+const CODE_SET: ReadonlySet<string> = new Set(LANG_CODES)
 export function isLangCode(value: string): value is LangCode {
-  return (LANG_CODES as readonly string[]).includes(value)
+  return CODE_SET.has(value)
 }
 
-/** The language name that fills the prompt; an unknown code is returned as it is (a custom or an old configuration) */
+/** The name a prompt gives the target language; a code the table does not hold comes back as it is */
 export function englishName(code: string): string {
-  return isLangCode(code) ? LANG_CODE_TO_EN_NAME[code] : code
+  return isLangCode(code) ? EN_NAMES[code] : code
 }
 
-/**
- * The English language names shown in the interface. The table above holds the ISO 639-3 **scholarly** names (they
- * code “individual languages”) — exactly right for the model: `Simplified Mandarin Chinese` leaves no doubt — and far too
- * stiff for a reader; no product writes Simplified Chinese like that (the owner, 2026-09-11: “why make it this complicated”).
- *
- * **Covers the interface side only**; the prompt keeps the scholarly name: the two audiences want different things,
- * and changing the prompt would bump `PROMPT_VERSION` and void every LLM cache on the site, which no name is worth.
- * Only the names that do not read like product names are listed; direction words such as `Western Frisian` and
- * `Northern Sotho` are real distinctions and stay. Parentheses that name a script stay too (`Uzbek (Cyrillic)`,
- * `Malay (Jawi)`) — the reader really gets that script, and dropping it would be a surprise. Zero duplicates after the change (checked by script)
- */
-const EN_UI_OVERRIDES: Partial<Record<LangCode, string>> = {
-  cmn: 'Chinese (Simplified)',
-  'cmn-Hant': 'Chinese (Traditional)',
-  arb: 'Arabic',
-  ell: 'Greek',
-  swh: 'Swahili',
-  npi: 'Nepali',
-  zsm: 'Malay',
-  zlm: 'Malay (Jawi)',
-  pbu: 'Pashto',
-  ydd: 'Yiddish',
-  ckb: 'Kurdish (Sorani)',
-  jav: 'Javanese',
-  uzn: 'Uzbek (Cyrillic)',
-  azj: 'Azerbaijani (Cyrillic)',
-  plt: 'Malagasy',
+/** The tag a translator is sent; a code the table does not hold comes back as it is */
+export function toBcp47(code: string): string {
+  return isLangCode(code) ? TAGS[code] : code
 }
 
-export const LANG_CODE_TO_EN_UI_NAME: Record<LangCode, string> = { ...LANG_CODE_TO_EN_NAME, ...EN_UI_OVERRIDES }
+export const RTL_LANGUAGES: ReadonlySet<LangCode> = new Set(RTL_CODES)
+
+/** Han or kana: a name written in Chinese or Japanese takes full-width parentheses (UI.md §6) */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u
+const HANGUL = /\p{Script=Hangul}/u
+const FULL_OPEN = '\uFF08'
+const FULL_CLOSE = '\uFF09'
+const FULL_COMMA = '\u3001'
 
 /**
- * A language's label: its name in the interface language, then its own name for itself — “Japanese (日本語)”. After
- * Read Frog language-labels.ts's getLanguageLabel.
- *
- * `inLocale` is the interface language's name table. **The target language and the interface language are two
- * different things** (UI.md §6): on an English interface this line has to read "Japanese (日本語)", or the reader thinks the interface did not switch cleanly
+ * A menu's label (UI.md §6): the name in the interface's language (`inLocale`, the English one where that table has
+ * none), with the language's own name beside it unless the two are the same or there is no own name. The parentheses
+ * follow the outer name: full-width after Chinese and Japanese, half-width after the rest, Korean with no space before
+ * them. A name that ends on a parenthetical of its own takes the own name inside it, after its kind's enumeration comma —
+ * never a second pair after the first
  */
 export function label(code: LangCode, inLocale: Partial<Record<LangCode, string>>): string {
-  // The fallback is the table **the interface uses**, the same one `languageName` falls back to (Codex on #165): a name
-  // table may be partial (`Partial`; UI.md §6 “without a name table, read the English name”), and with two different
-  // fallbacks one language would read `Chinese (Simplified)` on the row and `Simplified Mandarin Chinese` in the menu
-  const named = inLocale[code] ?? LANG_CODE_TO_EN_UI_NAME[code]
-  const local = LANG_CODE_TO_LOCALE_NAME[code]
-  if (named === local) return named
-  // The parentheses follow the half outside them: full-width for Chinese and Japanese, ASCII otherwise. “Japanese（日本語）” with
-  // the two kinds mixed in one line is the ugliest. Korean sets its ASCII parentheses with no space before them
-  const wide = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(named)
-  // (full-width: the parentheses U+FF08 and U+FF09, and the enumeration comma U+3001 that Chinese and Japanese list with)
-  const [open, close, comma] = wide ? ['\uff08', '\uff09', '\u3001'] : ['(', ')', ', ']
-  const before = wide || /\p{Script=Hangul}/u.test(named) ? '' : ' '
-  // A name that ends on a parenthetical of its own (`Chinese (Simplified)`, and Korean's and Chinese's like it) takes the own
-  // name inside it, after the enumeration comma of its kind, rather than a second pair after the first: `Chinese
-  // (Simplified, X)` (UI.md §6; tests/ui/language-names.test.ts has each interface language's)
-  const own = /^(.*?)\s*[(\uff08]([^()\uff08\uff09]+)[)\uff09]$/u.exec(named)
-  if (own) return `${own[1]}${before}${open}${own[2]}${comma}${local}${close}`
-  return `${named}${before}${open}${local}${close}`
+  const name = inLocale[code] ?? EN_NAMES[code]
+  const own = OWN_NAMES[code]
+  if (!own || own === name) return name
+  if (name.endsWith(FULL_CLOSE)) return `${name.slice(0, -1)}${FULL_COMMA}${own}${FULL_CLOSE}`
+  if (name.endsWith(')')) return `${name.slice(0, -1)}, ${own})`
+  if (CJK.test(name)) return `${name}${FULL_OPEN}${own}${FULL_CLOSE}`
+  return HANGUL.test(name) ? `${name}(${own})` : `${name} (${own})`
 }
 
-/** For the engines that take the target as BCP-47 (google-web); a language without a two-letter code is passed as its ISO 639-3 code */
-const BCP47: Partial<Record<LangCode, string>> = ISO6393_TO_6391
-
-/**
- * Where a two-letter code loses the language's identity or its script and the endpoint can in fact tell them apart, a different tag is sent (Codex on #39, three rounds; each measured):
- * - yue and cmn are both zh, and zh means Mandarin (measured: yue returned “巴士站喺邊”, zh returned “公交车站在哪里”)
- * - ckb (Sorani) and kmr (Kurmanji) are both ku, and ku means Kurmanji (measured: ckb returned the Arabic-script “وێستگەی پاس”, ku the Latin “Rawestgeha”)
- * - zlm is listed as "Malay (individual language) (Arabic)", and ms yields Latin-script Malay (measured: ms-Arab returned Jawi “دمان ڤرهنتين بس؟”)
- *
- * Three other script-annotated entries **the endpoint cannot serve** and stay as they are (measured: bs / bs-Cyrl, uz / uz-Cyrl, az / az-Cyrl return identical Latin-script results):
- * bos "Bosnian (Cyrillic)", uzn "Northern Uzbek (Cyrillic)", azj "North Azerbaijani (Cyrillic)".
- * srp "Serbian (Cyrillic)" was right already (sr always returns Cyrillic). The LLM path is unaffected: it gets the English name, with the script in the name
- */
-const BCP47_OVERRIDES: Partial<Record<LangCode, string>> = { yue: 'yue', ckb: 'ckb', zlm: 'ms-Arab' }
-
-export function toBcp47(code: string): string {
-  if (!isLangCode(code)) return code
-  return BCP47_OVERRIDES[code] ?? BCP47[code] ?? code
+/** A tag in lower case without its extensions (from the first singleton on: `-u-…`, `-x-…`), which say nothing of the language */
+export function withoutExtensions(tag: string): string {
+  const subtags = tag.trim().toLowerCase().split('-')
+  const singleton = subtags.findIndex((part, i) => i > 0 && part.length === 1)
+  return (singleton < 0 ? subtags : subtags.slice(0, singleton)).join('-')
 }
 
-/**
- * The right-to-left target languages (ISO 639-3). A translation node has to carry `dir` for them — **`lang` alone is not
- * enough**: the browser's bidi algorithm takes a paragraph's base direction from `dir`, and arXiv's `<html>` is ltr, so a
- * translation node that inherits it puts final punctuation, digits, Latin words and formulas all on the wrong side
- * (measured on 2509.10652v3 translated into Arabic: “مساهمات متساوية.” rendered as “مساهمات .متساوية”, the full stop before the word), with the whole paragraph still left-aligned.
- * Of the 178 languages in our table these 13 (Read Frog does the same, see utils/content/language-direction.ts)
- */
-export const RTL_LANGUAGES: ReadonlySet<LangCode> = new Set<LangCode>([
-  'arb', // // Arabic
-  'urd', // // Urdu
-  'pes', // // Persian
-  'prs', // // Dari
-  'ckb', // // Central Kurdish (Sorani)
-  'skr', // // Saraiki
-  'pbu', // // Northern Pashto
-  'heb', // // Hebrew
-  'div', // // Dhivehi
-  'snd', // // Sindhi
-  'uig', // // Uyghur
-  'ydd', // // Eastern Yiddish
-  'zlm', // // Malay in Jawi, the Arabic script; its tag is ms-Arab, see BCP47_OVERRIDES
-])
+/** Every tag and code the table answers to, in lower case: the tags it sends first, then the codes, then the ISO 639-1 codes */
+const BY_TAG: ReadonlyMap<string, LangCode> = (() => {
+  const map = new Map<string, LangCode>()
+  const add = (key: string | undefined, code: LangCode) => { if (key && !map.has(key.toLowerCase())) map.set(key.toLowerCase(), code) }
+  for (const code of LANG_CODES) add(TAGS[code], code)
+  for (const code of LANG_CODES) add(code, code)
+  for (const code of LANG_CODES) add(ISO_639_1[code], code)
+  return map
+})()
 
-/** The right-to-left script subtags (BCP-47 script, four letters, a Unicode script code) */
-const RTL_SCRIPTS: ReadonlySet<string> = new Set(['adlm', 'arab', 'aran', 'hebr', 'mand', 'nkoo', 'rohg', 'samr', 'syrc', 'thaa', 'yezi'])
-
-/** The script subtag of a BCP-47 tag: the four-letter all-alphabetic segment (a variant subtag is 5–8 characters, or four starting with a digit) */
-const scriptOf = (parts: string[]): string | undefined => parts.slice(1).find(p => /^[a-z]{4}$/.test(p))
+/** Hong Kong, Macao and Taiwan write Traditional Chinese */
+const TRADITIONAL_REGIONS = new Set(['tw', 'hk', 'mo'])
 
 /**
- * The RTL languages whose primary subtag alone settles the direction, derived from the table above — **only the tags
- * without a script subtag**. zlm's tag is `ms-Arab`, while `ms` is also Latin-script Malay: putting `ms` into this set
- * would misjudge Latin Malay as rtl, and judging by the primary subtag alone would miss Jawi as ltr (Codex on #163 pointed
- * out the missed half). Tags with a script subtag are left to `RTL_SCRIPTS` — a script settles direction better than a language, and `ur-Latn` and its kind correctly come out ltr
+ * The table's language for a browser's or a page's tag, or null where it names none: Chinese by its script, a script
+ * written out winning over the region; any other tag by itself, then shorter, down to its primary language
  */
-const RTL_PRIMARY: ReadonlySet<string> = new Set(
-  [...RTL_LANGUAGES]
-    .map(code => toBcp47(code).toLowerCase().split('-'))
-    .filter(parts => !scriptOf(parts))
-    .map(parts => parts[0]!),
-)
-
-/** The same for a tag already converted to BCP-47 (what `<html>` records). A script subtag decides when present, otherwise the primary subtag */
-export function isRtlTag(tag: string): boolean {
-  const parts = tag.toLowerCase().split('-')
-  const script = scriptOf(parts)
-  if (script) return RTL_SCRIPTS.has(script)
-  return RTL_PRIMARY.has(parts[0] ?? '')
+export function languageOfTag(tag: string): LangCode | null {
+  const clean = withoutExtensions(tag)
+  if (!clean) return null
+  const subtags = clean.split('-')
+  if (subtags[0] === 'zh' || subtags[0] === 'cmn') {
+    const rest = subtags.slice(1)
+    if (rest.includes('hant')) return 'cmn-Hant'
+    if (rest.includes('hans')) return 'cmn'
+    return rest.some(part => TRADITIONAL_REGIONS.has(part)) ? 'cmn-Hant' : 'cmn'
+  }
+  for (let n = subtags.length; n > 0; n--) {
+    const found = BY_TAG.get(subtags.slice(0, n).join('-'))
+    if (found) return found
+  }
+  return null
 }
 
-/**
- * BCP-47 → ISO 639-3, for the configuration's v3 → v4 migration. BCP-47 is case-insensitive (Codex on #39).
- * In order: an exact reverse lookup (zh-TW → cmn-Hant); subtag intersection — among the table's entries with the same primary language, the one whose region / script subtags intersect
- * (zh-Hant-TW ∩ zh-TW → cmn-Hant); Chinese with a Traditional script tag or a Hong Kong / Macao / Taiwan region (zh-Hant, zh-HK, zh-MO) has no entry in the table and
- * goes to cmn-Hant (Codex on #39, second round: falling back on the primary language alone would quietly turn Traditional into Simplified); then the primary-language fallback
- * (zh-CN → zh → cmn, cmn being listed before yue); with nothing found, Simplified Chinese
- */
+/** The same, falling back to the default language: what a stored tag of an older configuration becomes */
 export function fromBcp47(tag: string): LangCode {
   return languageOfTag(tag) ?? DEFAULT_LANG_CODE
 }
 
-/**
- * The same lookup without the last step: null for a tag that names no language of the table. Choosing a reader's
- * first target language walks a list of preferences (first-target.ts), and a tag it cannot place has to be passed
- * over for the next one, not read as Simplified Chinese
- */
-export function languageOfTag(tag: string): LangCode | null {
-  if (isLangCode(tag)) return tag
-  const wanted = withoutExtensions(tag)
-  if (wanted === '') return null
-  const [primary = '', ...subtags] = wanted.split('-')
-  const entries = (Object.entries(ISO6393_TO_6391) as [LangCode, string][]).map(([code, bcp]) => [code, bcp.toLowerCase().split('-')] as const)
-  const exact = entries.find(([, parts]) => parts.join('-') === wanted)
-  if (exact) return exact[0]
-  // Traditional Chinese by script or region, under either name of the language: before the step below, which would
-  // read `cmn-Hant-TW` as `cmn` and lose the script (Devin on #272)
-  // A script written out is the reader's word, over what the region would suggest: `zh-Hans-TW` is Simplified (Codex on #272)
-  if ((primary === 'zh' || primary === 'cmn') && subtags.includes('hans')) return 'cmn'
-  if ((primary === 'zh' || primary === 'cmn') && subtags.some(part => TRADITIONAL_CHINESE_SUBTAGS.has(part))) return 'cmn-Hant'
-  // A language with no two-letter code is its own primary subtag, and the table above does not list it: `ceb-PH` (Codex on #272)
-  if (isLangCode(primary)) return primary
-  const sameLanguage = entries.filter(([, parts]) => parts[0] === primary)
-  const overlapping = sameLanguage.find(([, parts]) => parts.slice(1).some(part => subtags.includes(part)))
-  if (overlapping) return overlapping[0]
-  return sameLanguage[0]?.[0] ?? null
-}
+/** The scripts written right to left (ISO 15924), for a tag that names its script */
+const RTL_SCRIPTS = new Set(['arab', 'hebr', 'thaa', 'syrc', 'nkoo', 'adlm', 'rohg', 'mand', 'samr', 'mend'])
 
-/**
- * A tag's language, script and region, lower case: what follows the first singleton subtag is an extension or
- * private use (`ar-EG-u-nu-latn` is Arabic with Latin digits, not Arabic in Latin script — Codex on #272), and says
- * nothing of the language
- */
-export function withoutExtensions(tag: string): string {
-  return tag.trim().toLowerCase().replace(/-[a-z0-9](-.*)?$/, '')
+/** Whether a tag is written right to left: by its script where it names one (ms-Arab, not ms), else by its language */
+export function isRtlTag(tag: string): boolean {
+  const subtags = withoutExtensions(tag).split('-')
+  const script = subtags.slice(1).find(part => /^[a-z]{4}$/.test(part))
+  if (script) return RTL_SCRIPTS.has(script)
+  const code = languageOfTag(tag)
+  return code !== null && RTL_LANGUAGES.has(code)
 }
-
-/** The script / region subtags of Traditional Chinese (lower case) */
-const TRADITIONAL_CHINESE_SUBTAGS = new Set(['hant', 'tw', 'hk', 'mo'])

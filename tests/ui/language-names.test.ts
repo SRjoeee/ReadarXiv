@@ -12,8 +12,8 @@ import { languageLabel, languageName, setLocale } from '@/ui/strings'
 describe('language names in the interface', () => {
   it('the row writes one name only; the native name is left to the menu', () => {
     setLocale('en')
-    expect(languageName('cmn')).toBe('Chinese (Simplified)')
-    expect(languageLabel('cmn')).toBe('Chinese (Simplified, 简体中文)')
+    expect(languageName('cmn')).toBe('Simplified Chinese')
+    expect(languageLabel('cmn')).toBe('Simplified Chinese (简体中文)')
     expect(languageName('jpn')).toBe('Japanese')
     expect(languageLabel('jpn')).toBe('Japanese (日本語)')
     setLocale('zh-CN')
@@ -23,10 +23,10 @@ describe('language names in the interface', () => {
     expect(languageLabel('cmn')).toBe('简体中文')
   })
 
-  it('what goes to the model is still the ISO 639-3 scholarly name: changing it means bumping PROMPT_VERSION and voiding every LLM cache', () => {
-    expect(englishName('cmn')).toBe('Simplified Mandarin Chinese')
-    expect(englishName('arb')).toBe('Standard Arabic')
-    // The interface table is an overlay on top of it, not another copy: entries not overridden are identical character for character
+  it('what goes to the model is the English menu\'s own name, CLDR\'s common one (UI.md §6, rule 3): changing it means bumping PROMPT_VERSION', () => {
+    expect(englishName('cmn')).toBe('Simplified Chinese')
+    expect(englishName('arb')).toBe('Arabic')
+    // The English menu's names are the prompt's own (UI.md §6, rule 3), not another copy: identical character for character
     expect(LANG_CODE_TO_EN_UI_NAME.jpn).toBe(LANG_CODE_TO_EN_NAME.jpn)
   })
 
@@ -45,7 +45,7 @@ describe('language names in the interface', () => {
   // and with different fallbacks in the row and the menu one language would read Chinese (Simplified) in the row and its scholarly name in the menu
   it('with a partial name table the row and the menu fall back to the same name', () => {
     // An interface-language name table holding Japanese only: Chinese has to take the fallback
-    expect(label('cmn', { jpn: '日本語' })).toBe('Chinese (Simplified, 简体中文)')
+    expect(label('cmn', { jpn: '日本語' })).toBe('Simplified Chinese (简体中文)')
     expect(label('jpn', { jpn: '日本語' })).toBe('日本語')
   })
 
@@ -68,11 +68,11 @@ describe('language names in the interface', () => {
 
   it('a name with a parenthetical of its own takes the own name inside it, after its kind\'s enumeration comma, in every interface language: never two pairs in a row', () => {
     const want: Record<string, [string, string][]> = {
-      'zh-CN': [['ckb', '库尔德语（索拉尼、کوردیی ناوەندی）'], ['zlm', '马来语（爪夷文、بهاس ملايو）']],
+      'zh-CN': [['bos', '波斯尼亚语（西里尔文、Босански）'], ['zlm', '马来语（爪夷文、بهاس ملايو）']],
       'zh-TW': [['bos', '波士尼亞文（西里爾文字、Босански）'], ['prs', '波斯文（阿富汗、دری）']],
       ja: [['nob', 'ノルウェー語（ブークモール、Norsk bokmål）'], ['zlm', 'マレー語（アラビア文字、بهاس ملايو）']],
       ko: [['cmn', '중국어(간체, 简体中文)'], ['cmn-Hant', '중국어(번체, 繁體中文)'], ['nob', '노르웨이어(보크말, Norsk bokmål)']],
-      en: [['cmn', 'Chinese (Simplified, 简体中文)'], ['ckb', 'Kurdish (Sorani, کوردیی ناوەندی)'], ['uzn', 'Uzbek (Cyrillic, Ўзбекча)']],
+      en: [['bos', 'Bosnian (Cyrillic, Босански)'], ['zlm', 'Malay (Jawi, بهاس ملايو)'], ['uzn', 'Uzbek (Cyrillic, Ўзбекча)']],
     }
     try {
       for (const [locale, rows] of Object.entries(want)) {
