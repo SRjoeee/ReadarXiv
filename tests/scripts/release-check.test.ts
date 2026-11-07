@@ -175,6 +175,41 @@ describe('the speed check', () => {
   })
 })
 
+describe('the equivalence gates, in either shape of their tools', () => {
+  const gate = (id: string) => GATES.find(g => g.id === id)!
+  const run = (exit: number, text = ''): StepRun => ({ cmd: ['x'], exit, ms: 0, log: '', text })
+  const ctxAt = (root: string, work: string): Ctx => ({ root, labData: '/lab', refactor: '/lab/refactor-2026-11', work, online: false, minFree: 12 })
+
+  it("counts the translation equivalence's accepted class as compared, and passes on its exit with no other disagreement", () => {
+    const work = mkdtempSync(join(tmpdir(), 'release-check-eq-'))
+    dirs.push(work)
+    mkdirSync(join(work, 'equivalence'))
+    const rows = (outcomes: string[]) => writeFileSync(join(work, 'equivalence', 'equivalence.json'), JSON.stringify(outcomes.map(outcome => ({ outcome }))))
+    rows(['agree', 'agree, white space apart', 'accepted', 'accepted', 'wire'])
+    expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toEqual({ pass: true, numbers: { compared: 4, agree: 2, accepted: 2, disagree: 0, wireDiffers: 1 } })
+    // (the tool's own verdict: a class whose count moved fails it though no row disagrees)
+    expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(1)]).pass).toBe(false)
+    rows(['agree', 'disagree'])
+    expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toMatchObject({ pass: false, numbers: { compared: 2, disagree: 1 } })
+  })
+
+  it("judges the marks' replay by the census in the tree where it is (lab/marks/census.mjs), else by run 6's census r13", () => {
+    const withCensus = mkdtempSync(join(tmpdir(), 'release-check-root-'))
+    dirs.push(withCensus)
+    mkdirSync(join(withCensus, 'lab/marks'), { recursive: true })
+    writeFileSync(join(withCensus, 'lab/marks/census.mjs'), '')
+    const now = gate('marks-replay').steps!(ctxAt(withCensus, '/work'))
+    expect(now[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-replay'])
+    expect(gate('marks-replay').needs!(ctxAt(withCensus, '/work')).map(n => n.what)).not.toContain("run 6's census (r13)")
+    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(0, 'PASS')]).pass).toBe(true)
+    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(1, 'FAIL: a class moved')])).toMatchObject({ pass: false })
+    const before = gate('marks-replay').steps!(ctxAt('/no-census', '/work'))
+    expect(before[1]?.cmd).toEqual(['node', 'lab/marks/gate-sum.mjs', '/work/marks-replay'])
+    expect(gate('marks-replay').needs!(ctxAt('/no-census', '/work')).map(n => n.what)).toContain("run 6's census (r13)")
+    expect(gate('marks-gate').steps!(ctxAt(withCensus, '/work'))[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-gate'])
+  })
+})
+
 describe("the private repository's results", () => {
   it('counts a recorded result only for the release candidate: one of another commit is stale, naming both', () => {
     const entry = (commit?: string) => ({ command: 'pnpm ci:local', result: { status: 'pass', commit, date: '2026-11-07' } })

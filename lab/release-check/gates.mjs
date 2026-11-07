@@ -326,24 +326,19 @@ export const GATES = [
   },
   {
     id: 'marks-replay',
-    title: "the marks' equivalence again over run 6's kept inputs, no TeX (lab/marks/replay.mjs): every class as the owner's census of run 6 (r13)",
+    title: "the marks' equivalence again over run 6's kept inputs, no TeX (lab/marks/replay.mjs), judged by the marks' census",
     tier: 'full',
     stage: 'pipeline',
     holds: [],
-    // (gate.mjs --keep's inputs: today's owners and the new instrument's B pages, plan and source; the census the lane's owner
-    // read, r13, made over them at c26d4bf7a. Valid while markSource writes the same marks; after a change to the writer the
-    // gate is gate.sh again, the release tier's marks-gate)
-    needs: ctx => [exists("run 6's kept inputs", lab(ctx, 'lanes/L2/marks/gate6/keep')), exists("run 6's census (r13)", lab(ctx, 'lanes/L2/marks/r13-sum.txt'))],
+    // (gate.mjs --keep's inputs: today's owners and the new instrument's B pages, plan and source. Valid while markSource writes
+    // the same marks; after a change to the writer the gate is gate.sh again, the release tier's marks-gate. The census is
+    // the tree's where it is, lab/marks/census.json judged by census.mjs; before it, run 6's census r13 in lab data)
+    needs: ctx => [exists("run 6's kept inputs", lab(ctx, 'lanes/L2/marks/gate6/keep')), ...censusNeeds(ctx)],
     steps: ctx => [
       { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/replay.mjs', `--keep=${lab(ctx, 'lanes/L2/marks/gate6/keep')}`, `--out=${join(ctx.work, 'marks-replay')}`], slot: 'test', fresh: join(ctx.work, 'marks-replay') },
-      { cmd: ['node', 'lab/marks/gate-sum.mjs', join(ctx.work, 'marks-replay')] },
+      censusStep(ctx, join(ctx.work, 'marks-replay')),
     ],
-    judge: (ctx, steps) => {
-      if (!steps.every(s => s.exit === 0)) return { pass: false }
-      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
-      const head = JSON.parse(steps[1].text.trim().split('\n')[0])
-      return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
-    },
+    judge: (ctx, steps) => censusJudge(ctx, steps),
   },
   {
     id: 'translate-equivalence',
@@ -353,11 +348,14 @@ export const GATES = [
     holds: [],
     needs: ctx => [exists("today's readers' replies, captured", lab(ctx, 'lanes/L6/capture.jsonl'))],
     steps: ctx => [{ cmd: ['pnpm', 'exec', 'tsx', 'lab/translate/equivalence.ts', lab(ctx, 'lanes/L6/capture.jsonl'), join(ctx.work, 'equivalence')], fresh: join(ctx.work, 'equivalence') }],
+    // (its rows in either shape of the tool: before its accepted classes every difference is `disagree`; with them, a
+    // difference of a class the package's owners chose is `accepted`, compared and counted apart, and the tool exits 1 on any
+    // other disagreement or a class's count moved)
     judge: (ctx, steps) => {
       const rows = JSON.parse(readFileSync(join(ctx.work, 'equivalence', 'equivalence.json'), 'utf8'))
-      const disagree = rows.filter(r => String(r.outcome).startsWith('disagree')).length
-      const agree = rows.filter(r => String(r.outcome).startsWith('agree')).length
-      return { pass: steps[0].exit === 0 && disagree === 0, numbers: { compared: agree + disagree, agree, disagree, wireDiffers: rows.filter(r => r.outcome === 'wire').length } }
+      const n = k => rows.filter(r => String(r.outcome).startsWith(k)).length
+      const [agree, accepted, disagree] = [n('agree'), n('accepted'), n('disagree')]
+      return { pass: steps[0].exit === 0 && disagree === 0, numbers: { compared: agree + accepted + disagree, agree, accepted, disagree, wireDiffers: rows.filter(r => r.outcome === 'wire').length } }
     },
   },
   // ---------------------------------------------------------------- reader, with lab data
@@ -464,21 +462,14 @@ export const GATES = [
   },
   {
     id: 'marks-gate',
-    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh): every class as the owner's census of run 6 (r13)",
+    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh), judged by the marks' census",
     tier: 'release',
     stage: 'corpus',
     holds: [],
     disk: true,
-    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/marks/answers.json')), exists('Docker', which('docker'))],
-    steps: ctx => [
-      { cmd: ['bash', 'lab/marks/gate.sh', join(ctx.work, 'marks-gate')], fresh: join(ctx.work, 'marks-gate') },
-      { cmd: ['node', 'lab/marks/gate-sum.mjs', join(ctx.work, 'marks-gate')] },
-    ],
-    judge: (ctx, steps) => {
-      if (!steps.every(s => s.exit === 0)) return { pass: false }
-      const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
-      return { pass: same, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
-    },
+    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/marks/answers.json')), exists('Docker', which('docker')), ...censusNeeds(ctx)],
+    steps: ctx => [{ cmd: ['bash', 'lab/marks/gate.sh', join(ctx.work, 'marks-gate')], fresh: join(ctx.work, 'marks-gate') }, censusStep(ctx, join(ctx.work, 'marks-gate'))],
+    judge: (ctx, steps) => censusJudge(ctx, steps),
   },
   {
     id: 'front-count',
@@ -539,6 +530,20 @@ export const GATES = [
     ['e2e:placeholders', 'the live placeholder run: survival per sentence shape against a real engine'],
   ].map(([script, title]) => ({ ...e2e(script, title), tier: 'release', stage: 'corpus', network: 'live', after: ['build-staging'], steps: () => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_E2E_ONLINE: '1' } }] })),
 ]
+
+/** the marks' census: the tree's where it is (lab/marks/census.mjs over lab/marks/census.json), else run 6's r13 in lab data,
+ *  compared with lab/marks/gate-sum.mjs's sum but for its compiles */
+const treeCensus = ctx => existsSync(join(ctx.root, 'lab/marks/census.mjs'))
+const censusNeeds = ctx => (treeCensus(ctx) ? [] : [exists("run 6's census (r13)", lab(ctx, 'lanes/L2/marks/r13-sum.txt'))])
+const censusStep = (ctx, out) => ({ cmd: ['node', treeCensus(ctx) ? 'lab/marks/census.mjs' : 'lab/marks/gate-sum.mjs', out] })
+function censusJudge(ctx, steps) {
+  if (steps[0]?.exit !== 0 || !steps[1]) return { pass: false }
+  if (treeCensus(ctx)) return { pass: steps[1].exit === 0, note: steps[1].exit === 0 ? 'every class as the census' : lastLine(steps[1].text) }
+  if (steps[1].exit !== 0) return { pass: false }
+  const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
+  const head = JSON.parse(steps[1].text.trim().split('\n')[0])
+  return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
+}
 
 /** the canvas gate's papers: spike S1c's, as lane L1's canvas runs list them */
 const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)

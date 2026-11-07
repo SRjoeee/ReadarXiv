@@ -89,6 +89,12 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
 | `prepare-same` (the prepare again, object by object) | 188 s: pass, 2,692 of 2,692 objects, 87 of 87 dumps |
 | `marks-replay` (no TeX, against run 6's census) | 8 s: fail at `13216ac44`, 9 boxes and 1 glyph in other classes than the census |
 | `translate-equivalence` (recorded replies) | 1 s: fail at `13216ac44`, 3 disagreements of 6,228 |
+
+Both read either shape of their tools: the marks' gates are judged by the census in the tree where it is
+(`lab/marks/census.mjs` over `lab/marks/census.json`), else by run 6's census in lab data (`r13-sum.txt`); the translation
+equivalence counts a difference of a class the package's owners accepted as compared (its rows `accepted`), and passes on
+the tool's own exit with no other disagreement. With the census branch merged, the two failures above are the classes it
+names (the frame class's 9 boxes, the footnote call's glyph; the `#` of its own, 3 replies) and both gates pass.
 | `typeset-today` (today's members, the reader's differential) | 39 s: pass, 32,035 laid as the baseline, changed 12; I3 160, I4 0, I5 0 |
 | `typeset-parts` (this run's parts) | 40 s: fail at `13216ac44`, lost 1,416 ("not laid from L1's part", the converge lane's open work); I3 79, I4 0, I5 0; a page's lay p50 7.58, p90 20.66, p99 33.51 ms over 3,213 pages |
 | `typeset-replays` (six replays) | 134 s: fail at `13216ac44`, fit and display on one pair (2610.21026v1-zh, a crop box the tap does not record); fill, emit, names, figures equal |
