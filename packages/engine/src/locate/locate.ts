@@ -855,9 +855,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         ink.length > 1 ||
         !!bracketsOf(gl.map(gA))
       if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
-        el.text = textOf(gl.map(gA))
+        // (a URL's or a code mark's text TeX sets as written: a hyphen a line of it ends in is its own, facts.ts lineEnd)
+        const literal = !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code'
+        el.text = textOf(gl.map(gA), { literal })
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
-        const runs = fillRunsOf(gl.map(gA))
+        const runs = fillRunsOf(gl.map(gA), { literal })
         if (runs) el.fills = runs
       }
       // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
