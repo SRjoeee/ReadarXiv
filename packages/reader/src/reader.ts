@@ -95,6 +95,10 @@ export type Command =
   | { do: 'lead'; side: Side }
   | { do: 'narrow'; on: boolean }
   | { do: 'retry' }
+  /** the original held on screen for now, whatever display is chosen, or let go (a host's rule: the website's narrow window
+   *  while the paper is made, a refusal for now with nothing laid): never written, and not a choice, so the run the display
+   *  chosen engages goes on; the reader's own choice of a display ends it */
+  | { do: 'hold'; on: boolean }
   /** arXiv's own PDF opened by the browser in a tab of its own, for it to stream and save (`paper.pdf`): never read through
    *  the reader */
   | { do: 'original' }
@@ -995,6 +999,10 @@ export function openReader(
       }
       if (c.do === 'retry') {
         rt.input({ i: 'cmd.retry' })
+        return
+      }
+      if (c.do === 'hold') {
+        rt.input({ i: 'cmd.hold', on: c.on })
         return
       }
       if (c.do === 'original') {

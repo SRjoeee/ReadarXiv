@@ -118,6 +118,26 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     expect(sync(container)).toBeNull()
   })
 
+  it("a refusal for now with nothing laid, where the host's rule shows the original alone (the website's, L11's second round, gap 8): the translated displays greyed; the extension's keeps them", async () => {
+    const translated = (c: HTMLElement) =>
+      [R.display.bilingual, R.display.translation].map((n) =>
+        c.querySelector(`[role="radio"][aria-label="${n}"]`)!.getAttribute('aria-disabled'),
+      )
+    const refused = { display: 'original' as const, unavailable: { why: 'busy' as const, retryAt: null } }
+    const own = await mount(refused)
+    expect(translated(own.container)).toEqual([null, null])
+    document.body.innerHTML = ''
+    const fake = fakeController(refused)
+    const { container } = await mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        refusal: 'original',
+      }),
+    )
+    expect(translated(container)).toEqual(['true', 'true'])
+    await act(async () => fake.set({ unavailable: null }))
+    expect(translated(container)).toEqual([null, null])
+  })
+
   it('zooms by a tenth each way, and shows the scale', async () => {
     const { container, controller } = await mount({ scale: 1.25 })
     expect(named(container, '缩放比例').querySelector('[data-value]')!.textContent).toBe('125%')

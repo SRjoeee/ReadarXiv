@@ -14,6 +14,7 @@ import { PaperTitle } from './PaperTitle.tsx'
 import { useParts } from './parts.tsx'
 import { ProgressLine } from './ProgressLine.tsx'
 import { ReadingOptions } from './ReadingOptions.tsx'
+import { refusedNow } from './status.ts'
 import { useSettingsLock } from './settings-lock.ts'
 import { ToolbarButton } from './ToolbarButton.tsx'
 import { useReader } from './use-reader.ts'
@@ -32,7 +33,7 @@ export function Toolbar({
   contents: boolean
   onContents: () => void
 }) {
-  const { slots, narrow: narrowRule, sync: syncRule } = useParts()
+  const { slots, narrow: narrowRule, sync: syncRule, refusal } = useParts()
   const state = useReader(controller, (s) => ({
     swapped: s.prefs?.swapped ?? false,
     display: s.display,
@@ -43,6 +44,8 @@ export function Toolbar({
     sync: s.sync,
     // (the host's rule: greyed until the sides can scroll together, the website's; else wherever both are shown)
     syncLocated: syncRule !== 'located' || s.syncAvailable,
+    // (a refusal for now with nothing laid, where the host's rule shows the original alone: the translated displays greyed)
+    refused: refusal === 'original' && refusedNow(s),
   }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
   const shownAlone = narrowRule === 'shown' && state.narrow && state.display === 'bilingual'
@@ -65,7 +68,7 @@ export function Toolbar({
             (the extension's) */}
         <DisplaySwitch
           value={shownAlone ? 'translation' : state.display}
-          translatable={state.available && state.languageSupported}
+          translatable={state.available && state.languageSupported && !state.refused}
           {...(narrowRule === 'shown' && state.narrow ? { off: ['bilingual'] as const } : {})}
           onChange={controller.setDisplay}
         />

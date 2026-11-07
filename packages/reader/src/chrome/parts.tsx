@@ -106,7 +106,8 @@ export interface Parts {
    *  host-divergent behaviours): `told` (the extension's, the default) keeps side by side chosen on the display switch and
    *  says so in the capsule (S-R-14); `shown` (the website's: its owner's rule of 2026-11-03) shows the translation chosen
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
-   *  the paper side by side was narrowed while reading */
+   *  the paper side by side was narrowed while reading; and while the paper is made (prepared, translated after its prepare,
+   *  or refused for now with nothing laid) it holds the original on screen until the reader chooses a display */
   narrow?: 'told' | 'shown'
   /** the signs the capsule and the cards are drawn with: `plain` (the extension's, the default) the information sign for every
    *  state but a run's spinner and a toast's own, the alert for every card; `by-state` (the website's: the interface review of
@@ -118,6 +119,10 @@ export interface Parts {
    *  at once, a press before the time asking nothing; `when-due` (the website's) at its time: the capsule's chip absent until
    *  then, the card's greyed (still a stop of the keyboard's, pressing it doing nothing), the chrome drawn again at the time */
   retry?: 'at-once' | 'when-due'
+  /** a refusal for now with nothing laid (our server out of reach, busy, a limit): `kept` (the extension's, the default) keeps
+   *  the display chosen, arXiv's pages where the translation would be, the switch whole; `original` (the website's) shows the
+   *  original alone (held for now, never written) with the translated displays greyed, until the refusal passes */
+  refusal?: 'kept' | 'original'
   /** when the sync's switch can be pressed: `side-by-side` (the extension's, the default) wherever both sides are shown;
    *  `located` (the website's) there only once the sides can scroll together (both sides' pages laid out), greyed until then */
   sync?: 'side-by-side' | 'located'

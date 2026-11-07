@@ -8,7 +8,7 @@ import { PagePill } from './PagePill.tsx'
 import { ScrollIndicator } from './ScrollIndicator.tsx'
 import { useScrollShow } from './scroll-show.ts'
 import { usePinch } from './pinch.ts'
-import { cardOf, originalCardOf } from './status.ts'
+import { cardOf, heldOf, originalCardOf } from './status.ts'
 import { StatusCapsule } from './StatusCapsule.tsx'
 import { Toolbar } from './Toolbar.tsx'
 import { type Parts, PartsProvider, useParts } from './parts.tsx'
@@ -68,6 +68,7 @@ function Page({ controller }: { controller: ReaderController }) {
     )
   }, [controller, probe])
   useAppearance(state.appearance, state.dimPages)
+  useHold(controller)
   // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
@@ -167,6 +168,18 @@ function Pane({
       {side === 'right' ? <FailureCard controller={controller} /> : <OriginalCard controller={controller} />}
     </section>
   )
+}
+
+/** the original held on screen by the host's rules (status.ts heldOf), told to the session as it changes: none at first */
+function useHold(controller: ReaderController) {
+  const { narrow, refusal } = useParts()
+  const want = useReader(controller, (s) => heldOf(s, { narrow, refusal }))
+  const told = useRef(false)
+  useEffect(() => {
+    if (told.current === want) return
+    told.current = want
+    controller.hold(want)
+  }, [controller, want])
 }
 
 /** the appearance the settings ask for, on <html>; changes after the first crossfade, and the system's is followed */

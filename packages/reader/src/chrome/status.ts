@@ -196,6 +196,27 @@ export function lineOf(state: ReaderState): Line {
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
+/** a refusal for now with nothing of the translation laid: the bilingual version not to be had now, and none of it on screen */
+export const refusedNow = (state: ReaderState): boolean =>
+  state.available && state.unavailable !== null && !LASTING.has(state.unavailable.why) && state.layer.laid === 0
+/**
+ * The original held on screen by the host's rules (parts.tsx; ReaderController `hold`): a refusal for now with nothing laid,
+ * where `refusal` is `original`; in a narrow window where `narrow` is `shown`, until the reader chooses a display, while the
+ * paper is made (prepared, or translated after a prepare this visit) or refused for now with nothing laid (the website's
+ * displayFor). Neither rule given (the extension's): never
+ */
+export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusal'>): boolean {
+  if (state.noPaper) return false
+  if (rules.refusal === 'original' && refusedNow(state)) return true
+  if (rules.narrow !== 'shown' || !state.narrow || state.chose) return false
+  return (
+    state.preparing !== null ||
+    state.phase === 'preparing' ||
+    (state.made && state.phase === 'translating') ||
+    refusedNow(state)
+  )
+}
+
 /** the original's pane's card, where the original could not be read and the host draws its loss there (StateWords
  *  `openOriginal`: the website's): its words, and arXiv's PDF of the version as its link; null otherwise */
 export interface OriginalCard {

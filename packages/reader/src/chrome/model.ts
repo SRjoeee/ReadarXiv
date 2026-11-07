@@ -195,6 +195,11 @@ export interface ReaderState {
   syncAvailable: boolean
   /** a host's passing words shown now (ReaderController.toast); null while none stands */
   toast: { words: string; icon: 'check' | 'info' } | null
+  /** the reader chose a display this visit (the switch, a chip that shows the translation): a host's hold for the narrow
+   *  window is theirs to end (parts.tsx `narrow`) */
+  chose: boolean
+  /** the paper's layer was made during this visit (a prepare told): its run is the making's */
+  made: boolean
 }
 
 export const INITIAL: ReaderState = {
@@ -232,6 +237,8 @@ export const INITIAL: ReaderState = {
   currentHeading: null,
   zoom: 'page-width',
   toast: null,
+  chose: false,
+  made: false,
 }
 
 /** the session's commands the controller passes on */
@@ -253,6 +260,10 @@ export interface Session {
   retry(): void
   setNarrow(on: boolean): void
   pinch(which: Side, factor: number, origin: [number, number]): void
+  /** the original held on screen for now, whatever display is chosen, or let go (a host's rule, parts.tsx `narrow` and
+   *  `refusal`): never written; the reader's own choice of a display ends it. A session that has none holds nothing (the
+   *  extension's, whose rules ask for none) */
+  hold?(on: boolean): void
 }
 
 /** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
@@ -371,7 +382,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       const preparing = { position: event.position, progress: event.progress }
       // the phase only before the translation has begun, and over the original on screen (loading stays loading)
       const phase = !state.begun && (state.phase === 'ready' || state.phase === 'preparing') ? 'preparing' : state.phase
-      return { ...state, preparing, unavailable: null, phase }
+      return { ...state, preparing, unavailable: null, phase, made: true }
     }
     case 'prepared':
       return state.preparing === null && state.phase !== 'preparing'
@@ -539,6 +550,8 @@ export interface ReaderController {
    *  again, and a toast replaced before its time comes back after the one that replaced it for the time it has left (the
    *  website's "copied" over its word for a crash) */
   toast(t: Toast): void
+  /** the original held on screen for now, or let go (Session `hold`): the chrome's, by its host's rules (App.tsx) */
+  hold(on: boolean): void
 }
 
 /** what an address with no paper starts from: nothing is loading, and no translated display can be had */
@@ -623,7 +636,12 @@ export function createController({
       })
       return session
     },
-    setDisplay: (display) => later((s) => s.setDisplay(display)),
+    // (the reader's own choice: a host's hold for the narrow window is theirs to end)
+    setDisplay: (display) => {
+      set({ chose: true })
+      later((s) => s.setDisplay(display))
+    },
+    hold: (on) => later((s) => s.hold?.(on)),
     // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
     setSync: (on) => later((s) => s.setSyncMode(on ? 'same' : 'off')),
     zoomBy: (factor) => {

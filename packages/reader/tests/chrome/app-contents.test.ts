@@ -220,3 +220,22 @@ describe("the original lost, where the host draws it on the original's pane (Sta
     await m.unmount()
   })
 })
+
+describe("the original held by the host's rules, told to the session (L11's second round, gaps 7 and 8)", () => {
+  it("told as the rule's answer changes, none at first; the extension's (no rule) never", async () => {
+    const fake = fakeController({ phase: 'ready', display: 'bilingual' })
+    const m = await mountElement(app(fake.controller, { refusal: 'original', narrow: 'shown' }))
+    expect(fake.controller.hold).not.toHaveBeenCalled()
+    await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: null } }))
+    await act(async () => fake.set({ unavailable: null, narrow: true, phase: 'preparing', made: true }))
+    await act(async () => fake.set({ preparing: { position: 1, progress: null } }))
+    await act(async () => fake.set({ chose: true }))
+    expect(fake.controller.hold.mock.calls).toEqual([[true], [false]])
+    await m.unmount()
+    const own = fakeController({ phase: 'ready', display: 'bilingual' })
+    const n = await mountElement(app(own.controller))
+    await act(async () => own.set({ unavailable: { why: 'busy', retryAt: null }, narrow: true }))
+    expect(own.controller.hold).not.toHaveBeenCalled()
+    await n.unmount()
+  })
+})
