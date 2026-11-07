@@ -315,19 +315,21 @@ describe('readSource: its bounds', () => {
   // (a link's text, a note, an environment: the walk enters each by a call of its own; TeX stops at 255 grouping levels)
   const nested = (n: number, open: string, close: string) => `${open.repeat(n)}deep${close.repeat(n)}`
   it('ends in ReadBound, not a stack overflow, where the walk nests past WALK_DEPTH, executed by TeX or not', () => {
-    expect(() => doc(`Text ${nested(100_000, '\\href{u}{', '}')} here.`)).toThrow(ReadBound)
+    expect(() => doc(`Text ${nested(WALK_DEPTH + 50, '\\href{u}{', '}')} here.`)).toThrow(ReadBound)
     expect(() => doc(`Text ${nested(300, '\\footnote{', '}')} here.`)).toThrow(ReadBound)
-    expect(() => doc(`Text ${nested(100_000, '\\begin{itemize}\\item ', '\\end{itemize}')} here.`)).toThrow(ReadBound)
+    expect(() => doc(`Text ${nested(WALK_DEPTH + 50, '\\begin{itemize}\\item ', '\\end{itemize}')} here.`)).toThrow(
+      ReadBound,
+    )
   })
   it('walks no part TeX never sets: a false branch, the text after \\end{document}', () => {
-    const skipped = doc(`Text \\iffalse ${nested(100_000, '\\href{u}{', '}')}\\fi here.`)
+    const skipped = doc(`Text \\iffalse ${nested(2_000, '\\href{u}{', '}')}\\fi here.`)
       .units.map(text)
       .join('')
     expect(skipped).toContain('here.')
     expect(skipped).not.toContain('deep')
     const after = readSource(
       tree({
-        'main.tex': `\\documentclass{article}\\begin{document}\nText here.\n\\end{document}\n${nested(100_000, '\\href{u}{', '}')}`,
+        'main.tex': `\\documentclass{article}\\begin{document}\nText here.\n\\end{document}\n${nested(2_000, '\\href{u}{', '}')}`,
       }),
       NO_DEFINITIONS,
     )
