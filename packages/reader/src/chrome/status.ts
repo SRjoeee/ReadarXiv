@@ -195,7 +195,11 @@ export interface Line {
 /** the line's share for the download where a translation follows it, and the prepare's of the rest */
 const DOWNLOAD = 0.15,
   PREPARE = 0.5
-export function lineOf(state: ReaderState): Line {
+/** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
+ *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
+ *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3) */
+export function lineOf(state: ReaderState, held = false): Line {
+  if (held && running(state)) return { on: true, value: state.loaded }
   if (state.phase === 'loading')
     return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
   if (state.phase === 'preparing')

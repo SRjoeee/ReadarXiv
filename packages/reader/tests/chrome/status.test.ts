@@ -60,6 +60,15 @@ describe("the states (the reader's design, §8)", () => {
     expect(lineOf(at({ phase: 'ready', progress: 1 })).on).toBe(false)
     expect(lineOf(at({ phase: 'failed' })).on).toBe(false)
   })
+  it("the line while the original is held on screen as the paper is made (a host's rule): the original's load, whole once read, as the website's page draws it (L11 third round, gap 3)", () => {
+    const held = (over: Partial<ReaderState>) => lineOf(at({ display: 'original', loaded: 1, ...over }), true)
+    expect(held({ phase: 'preparing', preparing: { position: null, progress: 0.2 } })).toEqual({ on: true, value: 1 })
+    expect(held({ phase: 'translating', progress: 0.3, made: true })).toEqual({ on: true, value: 1 })
+    expect(held({ phase: 'preparing', loaded: 0.6 })).toEqual({ on: true, value: 0.6 })
+    // (nothing under way: no line, held or not; and not held, the prepare's share as before)
+    expect(held({ phase: 'ready' }).on).toBe(false)
+    expect(lineOf(at({ display: 'original', loaded: 1, phase: 'preparing' })).value).toBeCloseTo(0.15)
+  })
 
   it('counts the paragraphs that failed, with 重试, until closed — the retry where the run stopped for the service', () => {
     expect(capsuleOf(at({ phase: 'ready', failedUnits: 3, failure: 'network' }), none, LANGUAGES)).toEqual({
