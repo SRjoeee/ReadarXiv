@@ -14,10 +14,11 @@
 // The set of target languages is a product decision, kept; their names are read from Unicode CLDR
 // (scripts/languages.ts).
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, normalize } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped (as tests/pdf-reader/engine-contract.test.ts reads it)
-import { closureOf } from '../../scripts/check-boundary.mjs'
+import { namedModulesOf, stylesheetModulesOf } from '../../scripts/check-boundary.mjs'
 import { DEFAULT_LANG_CODE, LANG_CODES, RTL_LANGUAGES, toBcp47 } from '@/config/languages'
 import TAKEN from './languages.json'
 
@@ -80,6 +81,52 @@ function commentText(text: string) {
 /** whether a file states that it is ported from a GPL-3.0 project */
 const carriesGplPort = (text: string) => PORT.test(commentText(text))
 
+/** The aliases the build resolves (wxt's: `@/` and `~/` the source, `@@/` and `~~/` the root), and a stylesheet's root-relative URL, which is the package's (public/) */
+const ALIASES: [string, string][] = [['@/', 'src/'], ['~/', 'src/'], ['@@/', ''], ['~~/', '']]
+const RESOLVE = ['', '.ts', '.tsx', '.mts', '.mjs', '.js', '.css', '.json', '/index.ts', '/index.tsx', '/index.mjs', '/index.js']
+const isFile = (path: string) => existsSync(path) && statSync(path).isFile()
+/** A specifier's file in the repository; null for a package (bare name, `#imports`, a scheme) */
+function placeOf(from: string, spec: string, css: boolean): string | null | undefined {
+  const bare = spec.replace(/[?#].*$/s, '')
+  if (bare === '' || /^[a-z][a-z0-9+.-]*:/i.test(bare)) return null
+  const alias = ALIASES.find(([prefix]) => bare.startsWith(prefix))
+  const local = alias ? alias[1] + bare.slice(alias[0].length)
+    : bare.startsWith('./') || bare.startsWith('../') ? normalize(join(dirname(from), bare))
+    : css && bare.startsWith('/') ? `public${bare}` : null
+  if (local === null) return null
+  const twins = /\.m?js$/.test(local) ? [local.replace(/\.js$/, '.ts'), local.replace(/\.js$/, '.tsx'), local.replace(/\.mjs$/, '.mts')] : []
+  const found = [...RESOLVE.map(ext => local + ext), ...twins].find(isFile)
+  if (found !== undefined) return found
+  // a stylesheet's bare `@import "tailwindcss"` (read as ./tailwindcss) is the package of that name when no file is beside it
+  const name = css && bare.startsWith('./') ? /^\.\/((?:@[\w.-]+\/)?[\w.-]+)/.exec(bare)?.[1] : undefined
+  return name && existsSync(join('node_modules', name)) ? null : undefined
+}
+/**
+ * Every file the entries reach: a code file by every module it names (static, dynamic, type, `new URL`), a stylesheet by
+ * its `@import`s and `url()`s; packages are not followed (the workspace packages import nothing of src/, the boundary
+ * gate). What it cannot place — a computed specifier, a path to no file — is returned, for the test to fail on
+ */
+function reach(entries: string[]) {
+  const seen = new Set<string>()
+  const unplaced: string[] = []
+  const todo = [...entries]
+  while (todo.length > 0) {
+    const file = todo.pop()!
+    if (seen.has(file)) continue
+    seen.add(file)
+    const css = file.endsWith('.css')
+    if (!css && !/\.(?:[cm]?[jt]sx?)$/.test(file)) continue
+    const text = readFileSync(file, 'utf8')
+    for (const { spec, display } of (css ? stylesheetModulesOf(text) : namedModulesOf(text)) as { spec: string | null; display?: string }[]) {
+      if (spec === null) { unplaced.push(`${file}: ${display}`); continue }
+      const found = placeOf(file, spec, css)
+      if (found === undefined) unplaced.push(`${file}: ${spec}`)
+      else if (found !== null) todo.push(found)
+    }
+  }
+  return { files: [...seen], unplaced }
+}
+
 const tracked = execFileSync('git', ['ls-files', '-z', 'src', 'packages', 'tests'], { encoding: 'utf8' }).split('\0').filter(Boolean)
 
 describe('no code ported from a GPL-3.0 project', () => {
@@ -102,6 +149,16 @@ describe('no code ported from a GPL-3.0 project', () => {
     expect(ported.sort()).toEqual(KEPT_FOR_WEBSITE.filter(k => k.gpl && existsSync(k.file)).map(k => k.file).sort())
   })
 
+  it('the walk places a stylesheet\'s imports: a file beside it, a package, and nothing it cannot place (#614)', () => {
+    expect(placeOf('src/styles/ui.css', './modes.css', true)).toBe('src/styles/modes.css')
+    expect(placeOf('src/styles/ui.css', '/icon/16.png', true)).toBe(isFile('public/icon/16.png') ? 'public/icon/16.png' : undefined)
+    expect(placeOf('src/styles/ui.css', './tailwindcss', true)).toBeNull()
+    expect(placeOf('src/styles/ui.css', './no-such-sheet.css', true)).toBeUndefined()
+    expect(placeOf('src/core/a.ts', '@/core/scheduler/lazy', false)).toBe('src/core/scheduler/lazy.ts')
+    expect(placeOf('src/core/a.ts', './no-such-module', false)).toBeUndefined()
+    expect(reach(['src/styles/ui.css']).unplaced).toEqual([])
+  })
+
   it('the website\'s kept files say what they are kept for and until when, in their header', () => {
     for (const { file } of KEPT_FOR_WEBSITE.filter(k => existsSync(k.file))) expect([file, KEPT_HEADER.test(readFileSync(file, 'utf8'))]).toEqual([file, true])
   })
@@ -111,8 +168,12 @@ describe('no code ported from a GPL-3.0 project', () => {
     // and relative imports (scripts/check-boundary.mjs); the workspace packages it reaches by name import nothing of src/
     const entries = tracked.filter(file => file.startsWith('src/entrypoints/') && /\.(?:[cm]?[jt]sx?)$/.test(file) && !/\.d\.ts$/.test(file) && existsSync(file))
     expect(entries.length).toBeGreaterThan(20)
-    const closure = [...closureOf(entries)] as string[]
+    const { files: closure, unplaced } = reach(entries)
     expect(closure.length).toBeGreaterThan(200)
+    // a module the walk cannot place could be anything: none
+    expect(unplaced).toEqual([])
+    // stylesheets are read and followed too (#614): the walk reaches them
+    expect(closure.some(file => file.endsWith('.css'))).toBe(true)
     const kept = new Set(KEPT_FOR_WEBSITE.map(k => k.file))
     expect(closure.filter(file => kept.has(file))).toEqual([])
     expect(closure.filter(file => CODE.test(file) && carriesGplPort(readFileSync(file, 'utf8')))).toEqual([])
