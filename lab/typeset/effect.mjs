@@ -12,7 +12,10 @@ const [A, B] = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const name = process.argv.find((a) => a.startsWith('--name='))?.slice(7) ?? 'the correction'
 const read = (d, f) => JSON.parse(readFileSync(join(d, 'reader', f), 'utf8'))
 const classes = new Map(),
-  examples = new Map()
+  examples = new Map(),
+  sizes = new Map()
+/** a class's magnitude, each unit's (pt, or the lead's ratio): its median and largest, printed beside its count */
+const mag = (k, v) => (sizes.get(k) ?? sizes.set(k, []).get(k)).push(v)
 let units = 0,
   pairs = 0
 const add = (k, ex) => {
@@ -51,20 +54,28 @@ for (const f of readdirSync(join(A, 'reader')).sort()) {
       continue
     }
     if (x.lines.length !== y.lines.length) {
-      add('lines broken elsewhere: another count', ex(`${x.lines.length} lines against ${y.lines.length}`))
+      add('reflow: another line count', ex(`${x.lines.length} lines against ${y.lines.length}`))
+      mag('reflow: another line count', Math.abs(x.lines.length - y.lines.length))
       continue
     }
     const j = x.lines.findIndex((l, k) => l.text !== y.lines[k].text)
     if (j >= 0) {
-      add('lines broken elsewhere: the same count', ex(`line ${j}: ${JSON.stringify(x.lines[j].text.slice(-12))} against ${JSON.stringify(y.lines[j].text.slice(-12))}`))
+      add('reflow: the same count, broken elsewhere', ex(`line ${j}: ${JSON.stringify(x.lines[j].text.slice(-12))} against ${JSON.stringify(y.lines[j].text.slice(-12))}`))
       continue
     }
     if (Math.abs((x.size ?? 0) - (y.size ?? 0)) > 0.01) {
-      add('size', ex(`${x.size} against ${y.size}`))
+      const d = Math.abs(x.size - y.size)
+      const k = d >= 1 ? 'size: 1 pt or more' : 'size: under 1 pt'
+      add(k, ex(`${x.size} against ${y.size}`))
+      mag(k, d)
       continue
     }
     if (Math.abs((x.leading ?? 0) - (y.leading ?? 0)) > 0.001) {
-      add('lead', ex(`${x.leading} against ${y.leading}`))
+      // (the leading's change as the baselines move: its ratio's difference times the size, pt a line)
+      const d = Math.abs(x.leading - y.leading) * (x.size ?? 10)
+      const k = d >= 1 ? 'lead: 1 pt a line or more' : 'lead: under 1 pt a line'
+      add(k, ex(`${x.leading} against ${y.leading}`))
+      mag(k, d)
       continue
     }
     let far = 0,
@@ -80,13 +91,18 @@ for (const f of readdirSync(join(A, 'reader')).sort()) {
       }
     })
     const el = JSON.stringify(x.elements ?? []) !== JSON.stringify(y.elements ?? [])
-    if (far > 0.01) add(far <= 0.1 ? 'lines moved at most 0.1 pt' : far <= 1 ? 'lines moved at most 1 pt' : 'lines moved more than 1 pt', ex(at))
-    else if (el) add('elements moved', ex('an element’s place'))
+    if (far > 0.01) {
+      const k = far <= 0.1 ? 'moved: sub-point, at most 0.1 pt' : far < 1 ? 'moved: sub-point, under 1 pt' : 'moved: 1 pt or more'
+      add(k, ex(at))
+      mag(k, far)
+    } else if (el) add('elements moved only', ex('an element’s place'))
   }
 }
 const changed = [...classes.values()].reduce((s, n) => s + n, 0)
 console.log(`${name}: ${pairs} pairs, ${units} units; ${changed} laid otherwise with today’s value`)
+const r2 = (v) => Math.round(v * 100) / 100
 for (const [k, n] of [...classes].sort((p, q) => q[1] - p[1])) {
-  console.log(`  ${n} ${k}`)
+  const m = (sizes.get(k) ?? []).sort((a, b) => a - b)
+  console.log(`  ${n} ${k}${m.length ? ` (median ${r2(m[m.length >> 1])}, largest ${r2(m.at(-1))})` : ''}`)
   for (const e of examples.get(k)) console.log(`      ${e}`)
 }
