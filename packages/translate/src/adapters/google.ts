@@ -55,6 +55,14 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
   return out.src.length ? { content: r.content, sentences: out } : { content: r.content }
 }
 
+/** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Google's
+ *  and Chrome's codec, so its behaviour digest is theirs */
+export const tagsWire = {
+  write: (unit: UnitIn): string => planTags(unit).wire,
+  read: readTagged,
+  digest: GOOGLE_DIGEST,
+} as const
+
 export interface GoogleOptions {
   fetch: Fetch
   limits?: Partial<Limits>

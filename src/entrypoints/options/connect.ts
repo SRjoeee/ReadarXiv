@@ -8,6 +8,7 @@
 // permission (#299 F2c). The refused-key form's address is its stored service's own
 import type { LangCode } from '@/config/languages'
 import type { Service } from '@/config/services'
+import { unitOfWire } from '@/core/protector/units'
 import type { ProviderErrorKind } from '@/providers/types'
 import { wireFormatOfProvider } from '@/providers/wire-formats'
 import { sendMessage } from '@/shared/messages'
@@ -15,7 +16,7 @@ import { O } from '@readarxiv/ui'
 import { reasonText } from '@/ui/strings'
 import { PermissionError, ensureHostPermission } from './permissions'
 
-/** The sample says whether the endpoint keeps our placeholders, so it is written in this service's wire format */
+/** The sample says whether the endpoint keeps our placeholders: two elements and a styled word, as a unit of the chain */
 const SAMPLE_TAGS = 'Let <x id="1"/> be a <t id="2">connected</t> graph; see <x id="3"/>.'
 const SAMPLE_MARKERS = 'Let @a# be a connected graph; see @b#.'
 
@@ -33,13 +34,18 @@ export async function connectService(candidate: Service, target: LangCode): Prom
     return { ok: false, field: 'baseURL', reason: e instanceof PermissionError && e.kind === 'denied' ? O.services.permission.denied(e.origin ?? '') : O.services.permission.badURL }
   }
   const t0 = performance.now()
+  const format = wireFormatOfProvider(candidate.id)
   const res = await sendMessage({
     type: 'axt:translate',
     providerId: candidate.id,
     candidate,
-    request: { segments: [{ id: 'sample', text: wireFormatOfProvider(candidate.id) === 'markers' ? SAMPLE_MARKERS : SAMPLE_TAGS }], source: 'en', target, context: { sectionTitle: O.services.connect } },
-  }).catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e), isolatable: false } }))
-  if (res.ok) return { ok: true, ms: Math.round(performance.now() - t0) }
+    units: [unitOfWire('sample', format === 'markers' ? SAMPLE_MARKERS : SAMPLE_TAGS, format).unit],
+    target,
+    context: { sectionTitle: O.services.connect },
+  }).catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e) } }))
+  const first = res.ok ? res.results[0] : undefined
+  if (first?.ok) return { ok: true, ms: Math.round(performance.now() - t0) }
+  const error = !res.ok ? res.error : first && !first.ok ? first.error : { kind: 'unknown' as const, message: 'no answer for the sample' }
   // (the candidate is one of the reader's services: a key's reason is its key's)
-  return { ok: false, field: FIELD_OF[res.error.kind] ?? null, reason: O.services.failed(reasonText(res.error.kind, candidate.id) || res.error.message) }
+  return { ok: false, field: FIELD_OF[error.kind] ?? null, reason: O.services.failed(reasonText(error.kind, candidate.id) || error.message) }
 }

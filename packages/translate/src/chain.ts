@@ -104,8 +104,14 @@ async function within<T>(clock: Clock, p: Promise<T>, ms: number, fallback: T): 
 // ---------------------------------------------------------------- identities and keys
 
 /** a context's digest, for the key of a translator whose replies depend on it */
-const contextDigest = (context: PaperContext | undefined): string =>
-  context ? sha256Hex(JSON.stringify([context.title ?? null, context.abstract ?? null, context.terms ?? null])) : '-'
+const contextDigest = (context: PaperContext | undefined): string => {
+  if (!context) return '-'
+  const parts: unknown[] = [context.title ?? null, context.abstract ?? null, context.terms ?? null]
+  // (a section or a glossary only where given: a context without them keys as it did before they existed)
+  if (context.section !== undefined || context.glossary !== undefined)
+    parts.push(context.section ?? null, context.glossary?.map((g) => [g.term, g.translation]) ?? null)
+  return sha256Hex(JSON.stringify(parts))
+}
 /** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->` */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
   `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(context) : '-'}`
@@ -118,6 +124,9 @@ export async function identityOf(translators: readonly Translator[]): Promise<st
 }
 
 // ---------------------------------------------------------------- the lanes: one per translator identity
+// A lane's pacing (requests in flight, the cooldown, the breaker) is its identity's: one endpoint, one budget. Its entries
+// are a translator object's: two objects of one identity (a host's key replaced while a page still translates; an
+// identity never holds a key) share no request, no batch and no `off`, so each object's units go by its own `send`
 
 /** what a request brings back for one waiter */
 type Answer =
@@ -185,6 +194,17 @@ export function chainOf(ports: Ports = {}): Chain {
   const lanes = new Map<string, Lane>()
   /** translators off for their configuration, by object: a changed configuration makes new objects */
   const offs = new WeakMap<Translator, UnconfiguredCode>()
+  /** each translator object's number, in its lane's entry keys: equal wires of one object are asked once, of two never together */
+  const objects = new WeakMap<Translator, number>()
+  let made = 0
+  const objectOf = (t: Translator): number => {
+    let n = objects.get(t)
+    if (n === undefined) {
+      n = ++made
+      objects.set(t, n)
+    }
+    return n
+  }
   const supported = new WeakMap<Translator, Map<Lang, Promise<boolean>>>()
   let calls = 0
 
@@ -270,7 +290,7 @@ export function chainOf(ports: Ports = {}): Chain {
     new Promise<Answer>((resolve) => {
       if (signal.aborted) return resolve({ aborted: true })
       const lane = laneOf(t)
-      const k = alone ? `${key}|again` : key
+      const k = `${objectOf(t)}|${alone ? `${key}|again` : key}`
       let e = lane.byKey.get(k)
       if (!e) {
         e = {
@@ -342,7 +362,10 @@ export function chainOf(ports: Ports = {}): Chain {
       const request: Entry[] = [first]
       if (!first.alone && first.wire.length <= limits.chars) {
         let chars = first.wire.length
-        for (const e of lane.queue.filter((x) => x !== first && x.group === first.group && !x.alone).sort(urgent)) {
+        const peers = lane.queue.filter(
+          (x) => x !== first && x.translator === first.translator && x.group === first.group && !x.alone,
+        )
+        for (const e of peers.sort(urgent)) {
           if (request.length >= limits.units) break
           if (chars + e.wire.length > limits.chars) continue
           request.push(e)
@@ -356,7 +379,11 @@ export function chainOf(ports: Ports = {}): Chain {
       lane.inFlight++
       void run(lane, request).finally(() => {
         lane.inFlight--
-        pump(lane)
+        // a request cut because no one waits for it any more ends inside a host's withdrawal of its calls, which may run
+        // microtasks before its next call is withdrawn (a router awaiting between scopes; Chromium runs them inside the
+        // abort of a fetch): the slot goes on after the current task, so that it starts nothing of a call being withdrawn
+        if (request[0]?.request?.signal.aborted) platform.setTimeout(() => pump(lane), 0)
+        else pump(lane)
       })
     }
   }
@@ -582,11 +609,15 @@ export function chainOf(ports: Ports = {}): Chain {
       // the translators that serve the target, off ones out
       const served: Translator[] = []
       const offCodes: UnconfiguredCode[] = []
+      const skipped: { by: string; code: UnconfiguredCode }[] = []
       for (const t of o.translators) {
         const off = offs.get(t)
-        if (off) offCodes.push(off)
-        else if (await supports(t, target)) served.push(t)
-        else offCodes.push('no-language')
+        const code = off ?? ((await supports(t, target)) ? null : 'no-language')
+        if (code === null) served.push(t)
+        else {
+          offCodes.push(code)
+          skipped.push({ by: t.identity, code })
+        }
       }
       const work = units.map((u, i) =>
         settle(u, i, {
@@ -594,6 +625,7 @@ export function chainOf(ports: Ports = {}): Chain {
           context: o.context,
           served,
           offCodes,
+          skipped,
           seq,
           signal,
           note,
@@ -628,6 +660,8 @@ export function chainOf(ports: Ports = {}): Chain {
     context: PaperContext | undefined
     served: readonly Translator[]
     offCodes: readonly UnconfiguredCode[]
+    /** the call's translators that do not serve the target or are off, told to the host as passed for every unit */
+    skipped: readonly { by: string; code: UnconfiguredCode }[]
     seq: number
     signal: Signal
     note: (n: Note) => void
@@ -651,6 +685,8 @@ export function chainOf(ports: Ports = {}): Chain {
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
     if (!hasLetter(u)) return { id: u.id, ok: true, content: asOut(u.content), by: 'self' }
+    for (const s of c.skipped)
+      c.note({ kind: 'passed', by: s.by, id: u.id, why: { kind: 'unconfigured', code: s.code } })
     if (!c.served.length)
       return { id: u.id, ok: false, why: { kind: 'unconfigured', code: c.offCodes[0] ?? 'no-language' } }
     // every translator's wire and key, read from the store at once
@@ -678,14 +714,16 @@ export function chainOf(ports: Ports = {}): Chain {
       const t = c.served[k] as Translator
       const last = k === c.served.length - 1
       const wk = wires[k]
-      const passed = (why: Why) => c.note({ kind: 'passed', by: t.identity, why })
+      const passed = (why: Why) => c.note({ kind: 'passed', by: t.identity, id: u.id, why })
       if (!wk) {
         refused = true
+        passed({ kind: 'refused' })
         continue
       }
       const offNow = offs.get(t)
       if (offNow) {
         off ??= offNow
+        passed({ kind: 'unconfigured', code: offNow })
         continue
       }
       // a stored reply, judged again as a fresh one is

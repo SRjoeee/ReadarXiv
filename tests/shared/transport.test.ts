@@ -14,26 +14,18 @@ const recorder = (reply: (message: Sent) => unknown) => {
 
 describe('createMessageTransport', () => {
   it('translate sends the whole call (scope included) to the background as it is', async () => {
-    const { sent, send } = recorder(() => ({ ok: true, result: { segments: [{ id: 'a', text: '甲' }], provider: 'mock' }, cached: 0 }))
+    const { sent, send } = recorder(() => ({ ok: true, results: [{ id: 'a', ok: true, content: [{ t: 'text', s: '甲' }], by: 'mock:0' }], cached: 0 }))
     const transport = createMessageTransport(send)
-    const res = await transport.translate({
-      request: { segments: [{ id: 'a', text: 'A' }], source: 'en', target: 'cmn' },
-      cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const },
-      scope: 'session-1',
-    })
+    const units = [{ id: 'a', content: [{ t: 'text' as const, s: 'A' }] }]
+    const res = await transport.translate({ units, target: 'cmn', scope: 'session-1' })
     expect(res.ok).toBe(true)
-    expect(sent).toEqual([{
-      type: 'axt:translate',
-      request: { segments: [{ id: 'a', text: 'A' }], source: 'en', target: 'cmn' },
-      cache: { paper: '2410.00260', renderPath: 'tags', source: 'html' as const },
-      scope: 'session-1',
-    }])
+    expect(sent).toEqual([{ type: 'axt:translate', units, target: 'cmn', scope: 'session-1' }])
   })
 
   it('a structured error when the background is unreachable: an exception would be taken for a crash by run.ts and the whole batch marked failed', async () => {
     const { send } = recorder(() => { throw new Error('Extension context invalidated.') })
-    const res = await createMessageTransport(send).translate({ request: { segments: [], source: 'en', target: 'cmn' } })
-    expect(res).toEqual({ ok: false, error: { kind: 'network', message: 'cannot reach the extension background: Extension context invalidated.', isolatable: false } })
+    const res = await createMessageTransport(send).translate({ units: [], target: 'cmn' })
+    expect(res).toEqual({ ok: false, error: { kind: 'network', message: 'cannot reach the extension background: Extension context invalidated.' } })
   })
 
   it('cancel sends axt:cancel-scope and returns the count withdrawn; unsendable counts as 0', async () => {

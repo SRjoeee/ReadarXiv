@@ -1,5 +1,5 @@
 // The LLM prompt (DESIGN §8.2). A change to the protocol block or to a built-in prompt's wording bumps
-// PROMPT_VERSION — it enters the cache key.
+// PROMPT_VERSION — it enters the LLM translator's identity (llm.ts), so its store keys and its rows.
 //
 // Two layers: the prompt library (prompt-library.ts, ported from Read Frog, swappable, customisable) answers “how to
 // translate”; the protocol block here answers “how to send and receive” — JSON segments + placeholder rules, appended

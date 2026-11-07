@@ -9,6 +9,7 @@
 import {
   BOUNDS,
   chunkDigests,
+  type El,
   type Head,
   ORIGINAL_CHUNK,
   type Part,
@@ -18,7 +19,7 @@ import {
   type Unit,
   write,
 } from '@readarxiv/format'
-import type { Instrument } from '../instrument.ts'
+import type { Instrument, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
@@ -72,6 +73,18 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   return { drawn: mem.pages.length > 0, fixed }
 }
 
+/** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set */
+export function classed(el: El, c: PieceClass | undefined): El {
+  if (!c) return el
+  const out: El = { ...el, kind: c.cls }
+  if (c.unknown) out.unknown = 1
+  if (c.copy) out.copy = c.copy
+  if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
+  if (c.mark) out.mark = 1
+  if (c.literal) out.literal = 1
+  return out
+}
+
 /** a member as its parts hold it */
 function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
   const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
@@ -88,7 +101,12 @@ function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
   }
   if (st.why) p.why = st.why
   if (mem.join) p.join = mem.join
-  if (mem.elements.length) p.els = mem.elements
+  if (mem.elements.length) {
+    // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
+    // states them so that no rule of the typesetter reads a source)
+    const cls = new Map(unit?.classes ?? [])
+    p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
+  }
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir

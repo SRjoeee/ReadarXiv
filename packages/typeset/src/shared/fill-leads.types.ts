@@ -1,0 +1,30 @@
+// The types of fill-leads.mjs (S.fill.leads, today's fillLeadsOf, closerLead and guessCloser moved as they are:
+// lab/typeset/move-fit.mjs).
+// @ts-ignore: JavaScript moved as it is, typed by this file alone (a package holds no declaration file)
+import * as m from './fill-leads.mjs'
+import type { Token } from '../breaker/tokens.ts'
+import type { FitBlock, FitParams, Layout } from '../fit/types.ts'
+
+/** a unit (or a run of one) as its fill leadings are read: its tokens, blocks, size, parameters and layout; its fill leadings
+ *  set on it */
+export type FillUnit = {
+  tokens: readonly Token[]
+  blocks: readonly FitBlock[]
+  s: number
+  P: FitParams
+  layout: Layout
+  parent?: unknown
+  fillLead?: number | null
+  fillTop?: number
+  fitLines?: number
+}
+/** the target's rules the fill leadings read */
+export type FillRules = { fillLead: number | null; fillLeadRel: number | null; leadFloor?: number }
+/** a unit's fill leadings set on it (RUN:512 fillLeadsOf) */
+export const fillLeadsOf: (p: FillUnit, P: FillRules) => void = m.fillLeadsOf
+/** the loosest leading of a closer search's grid at which a unit sets (RUN:569 closerLead) */
+export const closerLead: (
+  K: number,
+  sets: (k: number) => Layout | null,
+  guess: number | null,
+) => { k: number; l: Layout } | null = m.closerLead

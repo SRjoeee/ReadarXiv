@@ -9,7 +9,7 @@ import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 // built from what is stored now, without the popup polling for it
 
 const chainOf = (provider: string): TranslationTransport => ({
-  translate: async () => ({ ok: true, result: { segments: [], provider, kind: 'mt' }, cached: 0 }),
+  translate: async () => ({ ok: true as const, results: [], cached: 0 }),
   cancel: async () => 0,
   status: async () => ({ providerId: provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], identity: '', engine: { id: provider } }),
 })

@@ -28,6 +28,7 @@ export {
   PrepWhy,
   Room,
   Row,
+  Rows,
   SpanAt,
   SpanKind,
   Style,

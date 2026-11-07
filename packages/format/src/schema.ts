@@ -107,15 +107,30 @@ export const Style = z.object({
 })
 
 /** a line on A: page, column, x0, x1 (its ink), baseline, top, bottom (its fonts' boxes), m0, m1 (TeX's measure for it),
- *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored) */
-export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int])
+ *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored), and
+ *  its size (the median of its main glyphs' sizes, the glyphs within 0.85 of its largest where they set a quarter of its
+ *  characters: today's line size, MAKE:382-401, by which the typesetter draws the line's band; absent: the member's size) */
+export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int, num.optional()])
 export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
 
+/** an element on A. `kind` the class it is drawn by (today's placeholder class, layer2.mjs placeholdersOf's phClassProven,
+ *  stated so that no rule of the typesetter reads a source: cite, num, display, other, symbol, macro, umacro, space, zero),
+ *  `unknown` a paper's own macro no table renders, `copy` its source's plain text (a crop's copy text, its drawing from the
+ *  source where no ink is found), `sym` a symbol's drawn text and whether it is drawn raised where the source reads as a symbol
+ *  (phClass2's: the tokens' class; a formula of symbols alone is `other` with a `sym`), `mark` a footnote's mark (drawn raised
+ *  whatever its rendering), `literal` a text piece (TeX sets its characters as written: a code or URL mark; no formula) */
 export const El = z.object({
   kind: ElKind,
+  unknown: flag.optional(),
+  copy: z.string().optional(),
+  sym: z.union([z.tuple([z.string()]), z.tuple([z.string(), flag])]).optional(),
+  mark: flag.optional(),
+  literal: flag.optional(),
   ink: z.array(Ink),
   keep: flag.optional(),
   text: z.string().optional(),
+  // its text in runs of one fill (0xRRGGBB, -1 none told), where its glyphs hold more than one: each space the fill before it
+  fills: z.array(z.tuple([z.string(), int])).optional(),
   style: Style.optional(),
   brackets: z.tuple([Ink, Ink]).optional(),
   leads: flag.optional(),
@@ -252,6 +267,12 @@ export const Row = z.discriminatedUnion('ok', [
   z.object({ id: Id, ok: z.literal(false), why: Why }),
 ])
 
+/** a paper's rows for one target, as the server stores and serves them (the Worker's rows file, the extension's store): each a
+ *  translate package's Result, by unit id, in the units' reading order (the head's Units, first occurrence), each id once */
+export const Rows = z
+  .object({ format, rows: z.array(Row) })
+  .refine((x) => new Set(x.rows.map((r) => r.id)).size === x.rows.length, { message: 'a unit id twice' })
+
 export type Id = z.infer<typeof Id>
 export type Box = z.infer<typeof Box>
 export type Ink = z.infer<typeof Ink>
@@ -274,3 +295,4 @@ export type Original = z.infer<typeof Original>
 export type Head = z.infer<typeof Head>
 export type Why = z.infer<typeof Why>
 export type Row = z.infer<typeof Row>
+export type Rows = z.infer<typeof Rows>

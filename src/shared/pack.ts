@@ -1,7 +1,10 @@
 // The offline service's language pack (DESIGN §8.4), shared by the popup and the options page.
 // Both are extension pages, where the Translator API is available directly.
 import { toBcp47 } from '@/config/languages'
-import { BUILTIN_SOURCE_LANGUAGE } from '@/providers/chrome-builtin'
+import { chromeTarget } from '@readarxiv/translate'
+
+/** what the built-in engine translates from: the papers' English (the chain's chrome adapter asks the same pair) */
+const BUILTIN_SOURCE_LANGUAGE = 'en'
 
 export type PackState = 'unsupported' | 'available' | 'downloadable' | 'downloading' | 'unavailable'
 
@@ -15,7 +18,7 @@ export async function packState(target: string): Promise<PackState> {
   const api = translatorApi()
   if (!api) return 'unsupported'
   try {
-    return (await api.availability({ sourceLanguage: BUILTIN_SOURCE_LANGUAGE, targetLanguage: toBcp47(target) })) as PackState
+    return (await api.availability({ sourceLanguage: BUILTIN_SOURCE_LANGUAGE, targetLanguage: chromeTarget(toBcp47(target)) })) as PackState
   } catch {
     return 'unavailable'
   }
@@ -30,7 +33,7 @@ export async function packState(target: string): Promise<PackState> {
 export async function downloadPack(target: string): Promise<boolean> {
   const api = translatorApi()
   if (!api) return false
-  await api.create({ sourceLanguage: BUILTIN_SOURCE_LANGUAGE, targetLanguage: toBcp47(target) })
+  await api.create({ sourceLanguage: BUILTIN_SOURCE_LANGUAGE, targetLanguage: chromeTarget(toBcp47(target)) })
   return true
 }
 
