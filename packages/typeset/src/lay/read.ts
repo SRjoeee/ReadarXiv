@@ -264,6 +264,11 @@ function readingsOf(
     // reader draws the rendering it finds by it among the unit's characters; with none, nothing, inklessOf)
     const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined
     if (MACRO_CLASSES.has(cls) && !el) fixed = { mode: 'none', text: '', proof: true }
+    // (a paper's own macro the part states no ink and no text of: TeX may have set nothing for it, or its glyphs as the unit's
+    // text, which the reading cannot tell; drawn as nothing, its glyphs were erased with the text group and never drawn again
+    // (2608.06007v1 p10's \sys, "TensorCast", the checkpoint's free-17). Unproven: the unit is left the original's whole, nothing
+    // erased without a replacement, until the instrument states the glyphs TeX set for it)
+    else if (MACRO_CLASSES.has(cls) && el?.unknown && !ink.length && !textOnly) fixed = { mode: 'none', text: '' }
     else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
       fixed = { mode: 'none', text: '', proof: true, empty: true }
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)

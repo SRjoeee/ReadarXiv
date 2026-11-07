@@ -59,7 +59,8 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
         const span = document.createElementNS(SVG, 'tspan')
         span.setAttribute('class', faces.classOf(it.face))
         span.setAttribute('x', it.dx?.length ? it.dx.map((d) => X(it.x + d)).join(' ') : String(X(it.x)))
-        span.setAttribute('y', String(Y(y)))
+        // (a superscript's raise over the line's baseline: the typesetter's Item.rise)
+        span.setAttribute('y', String(Y(y + (it.rise ?? 0))))
         span.setAttribute('font-size', String(n2(it.size)))
         if (it.fill !== undefined) span.setAttribute('fill', `#${it.fill.toString(16).padStart(6, '0')}`)
         span.textContent = it.s

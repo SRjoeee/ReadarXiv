@@ -34,16 +34,53 @@ export type PreparedPage = {
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 
+/** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
+ *  of TeX's the front end cut at a float, a figure's set) */
+export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'size'; ords: readonly number[] }
+
 /**
- * Page `page` laid from its part's flows (each member prepared), its ties (`cells`: a table group's members' ords), the rules:
- * design-b's L8-L11 and E1
+ * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
+ * size tie laid on the page at one size, the smallest any of them is laid at: each laid larger is capped there (its fit's states
+ * from that scale down, P.capScale) and the page laid once more (the checkpoint's free-9: a paragraph's first part at its size,
+ * its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even)
  */
 export function layPagePrepared(
   page: number,
   flows: readonly (readonly FlowMember[])[],
-  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  ties: readonly PageTie[],
   R: RuleParams,
   trace = false,
+): PreparedPage {
+  const cells = ties.filter((t): t is Extract<PageTie, { rule: 'cells' }> => t.rule === 'cells')
+  const first = layPageTied(page, flows, cells, R, trace)
+  const sizes = ties.filter((t): t is Extract<PageTie, { rule: 'size' }> => t.rule === 'size')
+  if (!sizes.length) return first
+  const fitOf = new Map(
+    first.members.flatMap((x) => (x.state === 'laid' && x.fit ? [[x.ord, x.fit.size] as const] : [])),
+  )
+  const cap = new Map<number, number>()
+  for (const t of sizes) {
+    const laid = t.ords.filter((o) => fitOf.has(o))
+    if (laid.length < 2) continue
+    const least = Math.min(...laid.map((o) => fitOf.get(o) as number))
+    for (const o of laid) if ((fitOf.get(o) as number) > least + 0.005) cap.set(o, Math.min(cap.get(o) ?? least, least))
+  }
+  if (!cap.size) return first
+  const capped = flows.map((f) =>
+    f.map((m) => {
+      const c = cap.get(m.ord)
+      return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, c / m.s) } }
+    }),
+  )
+  return layPageTied(page, capped, cells, R, trace)
+}
+
+function layPageTied(
+  page: number,
+  flows: readonly (readonly FlowMember[])[],
+  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  R: RuleParams,
+  trace: boolean,
 ): PreparedPage {
   try {
     return layPageOnce(page, flows, ties, R, trace)

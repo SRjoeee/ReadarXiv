@@ -193,8 +193,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     }
     if (cur.length) flows.push(cur)
   }
-  const ties = (part.ties ?? []).flatMap((t) =>
-    t.rule === 'cells' ? [{ rule: 'cells' as const, cells: t.cells.flat() }] : [],
+  const ties = (part.ties ?? []).map((t) =>
+    t.rule === 'cells' ? { rule: 'cells' as const, cells: t.cells.flat() } : { rule: 'size' as const, ords: t.ords },
   )
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))

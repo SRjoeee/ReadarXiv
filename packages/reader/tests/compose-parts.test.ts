@@ -9,6 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
+import { svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -390,5 +391,41 @@ describe('the skeleton (§11.7)', () => {
     expect(skeleton(3).querySelector('.axt-sk-figure')).not.toBeNull()
     expect(skeleton(4).querySelector('.axt-sk-figure')).toBeNull()
     expect(skeleton(5).outerHTML).toBe(skeleton(5).outerHTML)
+  })
+})
+
+describe('the page drawn (svgOf)', () => {
+  it("sets a superscript run its raise higher than its line (the typesetter's Item.rise: the checkpoint's (10))", () => {
+    const page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 0,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [
+            [
+              700,
+              72,
+              200,
+              [
+                { s: 'Satz', x: 72, face: 'f', size: 10 },
+                { s: '3', x: 92, face: 'f', size: 6.2, rise: 3.6 },
+              ],
+            ],
+          ],
+          lit: { left: [], right: [], own: [] },
+        },
+      ],
+    } as unknown as Page
+    const svg = svgOf(
+      page,
+      { viewBox: [0, 0, 612, 792], rotation: 0 } as never,
+      { classOf: () => 'f' } as unknown as Faces,
+    )
+    expect([...svg.querySelectorAll('tspan')].map((t) => t.getAttribute('y'))).toEqual(['92', '88.4'])
   })
 })

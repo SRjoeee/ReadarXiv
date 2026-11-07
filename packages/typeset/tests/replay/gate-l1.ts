@@ -712,9 +712,12 @@ export function gateL1Pair(
       }
       if (cur.length) flows.push(cur)
     }
-    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][] }[])
-      .filter((t) => t.rule === 'cells')
-      .map((t) => ({ rule: 'cells' as const, cells: (t.cells ?? []).flat().map((o) => unitOf.get(o)?.ord ?? o) }))
+    // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set)
+    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) =>
+      t.rule === 'cells'
+        ? { rule: 'cells' as const, cells: (t.cells ?? []).flat().map((o) => unitOf.get(o)?.ord ?? o) }
+        : { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) },
+    )
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
     // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null

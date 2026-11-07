@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
-import type { Metrics, Rows } from '../../src/types.ts'
+import type { Item, Metrics, Rows } from '../../src/types.ts'
 
 const metrics = (ready: Metrics['ready'] = () => true): Metrics => ({
   ready,
@@ -99,6 +99,52 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.state).toBe('laid')
     expect(laid!.lines.flatMap((l) => l[3]).some((it) => 'src' in it && it.piece === '1')).toBe(false)
     expect(laid!.off & 2).toBe(2)
+  })
+  it("lays the units of a size tie at one size, the smallest any of them is laid at (one paragraph of TeX's cut by a float)", () => {
+    // (2608.16117v1 p19, the checkpoint's free-9: the paragraph's first part laid at its size, the part after the float shrunk to
+    // fit; one size for both, the smaller)
+    const idB = 'b'.repeat(64)
+    const a = member({ ord: 0, lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]], room: { below: 0, next: 300 } })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [[1, 0, 72, 120, 600, 607, 598, 72, 120, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const pt: Part = { ...part(a), flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+    const rows = rowsOf([row([{ t: 'text', s: 'kurz' }]), { ...row([{ t: 'text', s: 'abcdefghijk' }]), id: idB }])
+    const sizes = (p: Part) =>
+      layPage(p, rows, rules, metrics()).members.map((m) => [m.state, m.lines[0]?.[3].find((it) => 'size' in it)?.size])
+    const apart = sizes({ ...pt, ties: [] })
+    expect(apart[0]).toEqual(['laid', 10])
+    expect(apart[1]![1]).toBeLessThan(10)
+    expect(sizes(pt)).toEqual([
+      ['laid', apart[1]![1]],
+      ['laid', apart[1]![1]],
+    ])
+  })
+  it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
+    // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
+    // drawing set it on the baseline)
+    const m = member({
+      els: [
+        [
+          '1',
+          { kind: 'num', mark: 1, ink: [[1, 150, 703, 154, 709, 703]], text: '3', style: { role: 'serif', size: 7 } },
+        ],
+      ],
+    })
+    const r = row([
+      { t: 'text', s: 'Ein Satz' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' darin, der weiter läuft.' },
+    ])
+    const [laid] = layPage(part(m), rowsOf([r]), rules, metrics()).members
+    const raised = laid!.lines
+      .flatMap((l) => l[3])
+      .filter((it): it is Extract<Item, { face: unknown }> => 'face' in it && !!it.rise)
+    expect(raised.map((it) => it.s.trim())).toEqual(['3'])
+    expect(raised[0]!.rise).toBeGreaterThan(0)
   })
 })
 

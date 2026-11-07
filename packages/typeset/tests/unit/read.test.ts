@@ -61,7 +61,7 @@ describe('the reading from the part', () => {
     expect(got.resolutions.get(1)).toMatchObject({ mode: 'kept', inPlace: true })
     expect((got.tokens as unknown as { blockTo?: number }[]).some((t) => t.blockTo !== undefined)).toBe(false)
   })
-  it('draws a text macro whose glyphs are the unit’s text as its stated text, and one with none as nothing', () => {
+  it('draws a text macro whose glyphs are the unit’s text as its stated text; one with none unread, its unit unproven', () => {
     // (1810.04805v2's \\bert{}: "BERT" set as the unit's own text, no ink of the element's; the marking probe's text stated)
     const pieces = [{ t: 'ph', src: '\\bert', k: 0 } as V0Piece, { t: 'text', tr: true, s: ' ist' } as V0Piece]
     const got = read(
@@ -70,8 +70,15 @@ describe('the reading from the part', () => {
     )
     expect(got.resolutions.get(0)).toMatchObject({ mode: 'orig-text', text: 'BERT' })
     expect((got.tokens as unknown as { s?: string }[])[0]!.s).toBe('BERT')
+    // (a paper's own macro the part states no ink and no text of: whether TeX set nothing for it or set its glyphs as the unit's
+    // text, the reading cannot tell, and drawn as nothing its glyphs were erased with the text group and never drawn again
+    // (2608.06007v1 p10's \\sys, "TensorCast", the checkpoint's free-17): the unit is unproven, left the original's whole)
     const none = read(member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [] }]] }), pieces)
-    expect(none.resolutions.get(0)!.mode).toBe('none')
+    expect(none.unproven).toBe(0)
+    // (a macro a table renders, no ink stated: TeX set none for it, drawn as nothing, the unit read)
+    const known = read(member({ els: [['0', { kind: 'macro', ink: [] }]] }), pieces)
+    expect(known.resolutions.get(0)!.mode).toBe('none')
+    expect(known.unproven).toBe(-1)
   })
   it('reads a unit’s tree of pieces back as today’s flat ones, a group an open and a close', () => {
     const got = sourcePieces([
