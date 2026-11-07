@@ -285,8 +285,9 @@ function piecesByPoints(points, count, groupAt, by) {
  * `p<u>.<k>a` and `p<u>.<k>b` (u today's unit index, k its piece's); a paper's macro at a unit's head, its point \\axthpk's before
  * the unit's start point, its span ending at the start point or at the next such point of the unit, whichever stands first on
  * the page; one after the unit's end, its point \\axttg's `p<u>.<k>g` after the group it stands in, its span beginning at the
- * unit's end point before it and holding whatever TeX set between, so that no glyph there states it set none. `pages` each
- * with its `points` ({ name, glyph }), `count` the units'
+ * unit's end point before it and holding whatever TeX set between, so that no glyph there states it set none. A span of these
+ * two with no glyph but a painted box between (an icon the macro set) is not stated. `pages` each with its `points` ({ name,
+ * glyph, box }), `count` the units'
  */
 export function placesOf(pages, count) {
   const places = []
@@ -305,7 +306,8 @@ export function placesOf(pages, count) {
       if (!m || u >= count) return
       if (m[3] === 'g') {
         const e = endAt.get(u) ?? -1
-        if (e >= 0 && e < q) places.push({ unit: u, piece: m[2], page: i + 1, glyph: pts[e].glyph, end: false }, { unit: u, piece: m[2], page: i + 1, glyph: pt.glyph, end: true })
+        // (no glyph between but a painted box, an image the macro set: not stated, TeX set something)
+        if (e >= 0 && e < q && !(pt.glyph === pts[e].glyph && (pt.box ?? 0) !== (pts[e].box ?? 0))) places.push({ unit: u, piece: m[2], page: i + 1, glyph: pts[e].glyph, end: false }, { unit: u, piece: m[2], page: i + 1, glyph: pt.glyph, end: true })
         return
       }
       places.push({ unit: u, piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' })
@@ -315,6 +317,7 @@ export function placesOf(pages, count) {
       const own = `p${u}.`
       let n = q + 1
       while (n < r && !(pts[n].name.startsWith(own) && pts[n].name.endsWith('a'))) n++
+      if (pts[n].glyph === pt.glyph && (pts[n].box ?? 0) !== (pt.box ?? 0)) return
       places.push({ unit: u, piece: m[2], page: i + 1, glyph: pts[n].glyph, end: true })
     })
   })

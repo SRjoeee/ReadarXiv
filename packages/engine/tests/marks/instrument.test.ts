@@ -100,6 +100,16 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
         { unit: 1, piece: 'e1', page: 1, glyph: 29, end: true },
       ]),
     )
+    // (no glyph but a painted box between the end point and the point after the group: an image the macro set, no span stated)
+    const icon = { ...pg, points: pg.points.map((x) => (x.name === 'p1.2g' ? { ...x, box: 1 } : x)) }
+    const withIcon = instrumentFromPlan({
+      ink: { pages: [] },
+      pages: [icon],
+      plan,
+      doc,
+      made: { compiler: 'pdflatex', tree: '2025' },
+    })
+    expect(withIcon.places?.filter((x) => x.unit === 1 && x.piece === 'e1')).toEqual([])
   })
   it('reads each unit’s alignment as its end mark states it, none for one set in two', () => {
     const log = [

@@ -779,17 +779,21 @@ export function instrumentFromPlan({
           )
         )
           n++
+        const N = pg.points[n] as PagePoint
+        // (no glyph between but a painted box, an image the macro set: not stated, TeX set something)
+        if (N.glyph === x.glyph && N.box !== x.box) return
         places.push(
           { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: false },
-          { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: (pg.points[n] as PagePoint).glyph, end: true },
+          { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: N.glyph, end: true },
         )
       } else if (m.kind === 'after') {
         const end = w.end(m.unit)
         let e = q - 1
         while (e >= 0 && (pg.points[e] as PagePoint).name !== end) e--
-        if (e >= 0)
+        const E = pg.points[e] as PagePoint | undefined
+        if (E && !(E.glyph === x.glyph && E.box !== x.box))
           places.push(
-            { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: (pg.points[e] as PagePoint).glyph, end: false },
+            { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: E.glyph, end: false },
             { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: true },
           )
       }

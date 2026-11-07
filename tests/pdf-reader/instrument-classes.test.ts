@@ -108,5 +108,9 @@ describe('the instrument adapter’s places', () => {
     expect(by(4, '1')).toEqual([[1, 16, false], [1, 20, true]])
     expect(by(5, '1')).toEqual([[2, 3, false], [2, 4, true]])
     expect(by(5, '2')).toEqual([[2, 9, false], [2, 9, true]])
+    // (no glyph but a painted box between: an icon the macro set, so no span is stated; 2610.19159v1's github logo)
+    const icon = [{ points: [{ name: 'p6.0a', glyph: 4, box: 2 }, { name: '6s', glyph: 4, box: 3 }, { name: '6e', glyph: 9, box: 3 }, { name: 'p6.3g', glyph: 9, box: 4 }] }]
+    const got = (placesOf as (p: unknown, n: number) => { piece: string; end: boolean }[])(icon, 7)
+    expect(got.map(x => [x.piece, x.end])).toEqual([['0', false]])
   })
 })
