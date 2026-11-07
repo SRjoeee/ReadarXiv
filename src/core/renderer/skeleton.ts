@@ -44,6 +44,8 @@ export function cancelSkeletonAnimation(skeleton: HTMLElement): void {
   if (!pulse) return
   pulses.delete(skeleton)
   pulsing--
+  // a cancelled animation's `finished` rejects (AbortError) by design: nothing waits on it, so it is marked handled
+  pulse.finished?.catch(() => undefined)
   pulse.cancel()
 }
 
