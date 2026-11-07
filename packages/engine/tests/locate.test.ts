@@ -318,6 +318,45 @@ describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', (
     expect(flow[1]!.lines[0]![9] & 2).toBe(0)
     expect(flow[1]!.room.side?.[0] ?? 0).toBeLessThan(72.01)
   })
+  it('binds a name that shares its line with another name, the other kept in its own flow (Devin on #624)', () => {
+    // (two names on one line, "Appendix" and "Proof", the second leading its theorem: binding it spliced out the whole flow
+    // it was in, and the first was in no flow of the part. Every member stands in one flow, once)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Appendix', y: 700 },
+          { text: 'Proof', x: 126, y: 700 },
+          { text: '.', x: 156, y: 700 },
+          { text: 'The claim holds', x: 166, y: 700 },
+          { text: 'on the next line', y: 688 },
+        ],
+      },
+    ])
+    const units = [
+      { ...unitOf('name', 'Appendix'), name: 'appendix' },
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+      unitOf('theorem', '. The claim holds on the next line'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 2, 2]], [[ROLE.name, ROLE.name, ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const proof = L.members.find((m) => m.kind === 'name' && m.name === 'proof')!
+    const appendix = L.members.find((m) => m.kind === 'name' && m.name === 'appendix')!
+    const para = L.members.find((m) => m.kind === 'theorem')!
+    const all = L.flows.flat()
+    expect(all.filter((o) => o === appendix.ord).length).toBe(1)
+    expect(all.filter((o) => o === proof.ord).length).toBe(1)
+    expect(all.length).toBe(new Set(all).size)
+    const flow = L.flows.find((f) => f.includes(para.ord))!
+    expect(flow.slice(flow.indexOf(proof.ord))).toEqual([proof.ord, para.ord])
+    // (no size tie names a member twice, nor the bound name with the members it left)
+    for (const t of L.ties) if (t.rule === 'size') expect(t.ords.length).toBe(new Set(t.ords).size)
+    expect(
+      partOf(ins, L)
+        .flows.flat()
+        .map((m) => m.ord)
+        .sort(),
+    ).toEqual(L.members.map((m) => m.ord).sort())
+  })
   it('leads no unit across the columns: a name whose next glyph in the stream is its column’s next line', () => {
     // (Devin on #623: a left column's "Abstract" at 72-120 and the right column's paragraph on its baseline, 700: the entry took
     // the right column for the name's run-in follower and left the name the original's)

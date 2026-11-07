@@ -1118,8 +1118,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const f = led.lines[0]
     if (!flow || !l || !f || n.lines.length !== 1) continue
     if (f[0] !== l[0] || Math.abs(f[4] - l[4]) > 0.5 || f[2] < l[3] - 0.05) continue
+    // (the name alone taken out of the flow it stood in, the members beside it left in theirs (two names on one line: Devin on
+    // #624), the flow dropped where it is left empty; and out of the size ties, which name it with that flow's members)
     const own = flowOf.get(n.ord)
-    if (own) flows.splice(flows.indexOf(own), 1)
+    if (own) {
+      own.splice(own.indexOf(n.ord), 1)
+      if (!own.length) flows.splice(flows.indexOf(own), 1)
+    }
+    for (let t = ties.length - 1; t >= 0; t--) {
+      const tie = ties[t]!
+      if (tie.rule !== 'size' || !tie.ords.includes(n.ord)) continue
+      tie.ords = tie.ords.filter((o) => o !== n.ord)
+      if (tie.ords.length < 2) ties.splice(t, 1)
+    }
     const k = flow.indexOf(led.ord)
     const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
     if (prev && led.join) n.join = [r2(l[2] - prev[3])]
