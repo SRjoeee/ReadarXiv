@@ -107,6 +107,39 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
+    // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two
+    // columns, the head's line in the left half, its paragraph's first line over both; the columns as the names' binding
+    // reads them, a line over both of either)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Acknowledgements', x: 108, y: 700 },
+          { text: 'We are grateful to Nal Kalchbrenner and Stephan', x: 214, y: 700 },
+          { text: 'Gouws for their fruitful comments and corrections and', x: 108, y: 688 },
+          { text: 'inspiration.', x: 108, y: 676 },
+          ...cells,
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('heading', 'Acknowledgements'),
+      unitOf(
+        'para',
+        'We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments and corrections and inspiration.',
+      ),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const own = [0, 1, 1, 1, ...cells.map((_, k) => 2 + k)]
+    const L = locate(instrumentOf(B2, units2, [own]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows[0]).toEqual([0, 1])
+    expect(L.members[1]!.join?.[0]).toBeCloseTo(214 - (108 + 16 * 6), 5)
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
