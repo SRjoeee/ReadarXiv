@@ -766,7 +766,9 @@ describe('review of #605', () => {
     const units = [unitOf('para', 'see'), unitOf('para', 'Figure 12')]
     const link = { annotationType: 2, rect: [89, 695, 151, 708], dest: 'figure.12' }
     const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
-    expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
+    expect(L.links.get(1)).toEqual([
+      { box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''], text: 'Figure12' },
+    ])
   })
   it('states the characters of the glyphs under a link, in their order (today’s annotation’s own, its g2)', () => {
     // (1810.04805v2 p1: "(Peters et al., 2018a; Radford et al., 2018)" holds five annotations of two targets, "Peters et al.",
