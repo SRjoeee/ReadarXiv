@@ -154,6 +154,32 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   return best
 }
 
+/** Each index of lo..hi with no partner that stands between two with one, with `pv` the last paired index before it and `nx` the
+ * first after it. One walk: `pv` is the last paired index passed, `nx` found once for the whole run of unpaired indices it ends,
+ * so each index is read at most twice (linear in the span; a walk back and forth from each unpaired index is quadratic in its run:
+ * PR #620's finding 1, and the same walk in the units made on A) */
+export function eachBetweenPaired(
+  lo: number,
+  hi: number,
+  paired: (i: number) => boolean,
+  visit: (i: number, pv: number, nx: number) => void,
+): void {
+  let pv = lo - 1
+  let nx = lo - 1
+  for (let i = lo; i <= hi; i++) {
+    // (`nx`, once found, is paired: not read again)
+    if (i === nx || paired(i)) {
+      pv = i
+      continue
+    }
+    if (i > nx) {
+      nx = i + 1
+      while (nx <= hi && !paired(nx)) nx++
+    }
+    if (pv >= lo && nx <= hi) visit(i, pv, nx)
+  }
+}
+
 export interface LocateOptions {
   /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
   annotations?: (unknown[] | null)[]
@@ -381,44 +407,41 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const sorted = [...aIdx].sort((x, y) => x - y)
       const lo = sorted[0] as number
       const hi = sorted.at(-1) as number
-      // (one walk: the paired glyph before an unpaired one is the last paired passed, the one after it found once for its
-      // whole run of unpaired glyphs, and the B range between the two read once for the run: linear in the span)
-      let pv = lo - 1
-      let nx = lo - 1
+      // (one walk, eachBetweenPaired's; the B range between the two partners read once for a run of unpaired glyphs)
+      let run = -1
       let between: boolean | undefined
-      for (let a = lo; a <= hi; a++) {
-        if ((m.aToB[a] as number) >= 0) {
-          pv = a
-          continue
-        }
-        if (a > nx) {
-          nx = a + 1
-          while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
-          between = undefined
-        }
-        if (m.offpageA[a] || (claimedA[a] as number) !== FREE) continue
-        if (pv < lo || nx > hi) continue
-        const bp = m.aToB[pv] as number
-        const bn = m.aToB[nx] as number
-        if (unitB[bp] !== u || unitB[bn] !== u) continue
-        // (B's glyphs between the two partners: none with no partner of another unit's)
-        if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
-          between = true
-          for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
-            if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
-        }
-        const own = m.hunkA[a] === HUNK.hyphen && between === true
-        if (own) {
-          const rp = roleOfB(bp)
-          const rn = roleOfB(bn)
-          claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
-          continue
-        }
-        if (gA(a).form && !gA(pv).form && !gA(nx).form) continue
-        claims.push([a, [ROLE.none, -1]])
-        const h = hunkName(m.hunkA[a] as number)
-        bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
-      }
+      eachBetweenPaired(
+        lo,
+        hi,
+        (a) => (m.aToB[a] as number) >= 0,
+        (a, pv, nx) => {
+          if (nx !== run) {
+            run = nx
+            between = undefined
+          }
+          if (m.offpageA[a] || (claimedA[a] as number) !== FREE) return
+          const bp = m.aToB[pv] as number
+          const bn = m.aToB[nx] as number
+          if (unitB[bp] !== u || unitB[bn] !== u) return
+          // (B's glyphs between the two partners: none with no partner of another unit's)
+          if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
+            between = true
+            for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
+              if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
+          }
+          const own = m.hunkA[a] === HUNK.hyphen && between === true
+          if (own) {
+            const rp = roleOfB(bp)
+            const rn = roleOfB(bn)
+            claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
+            return
+          }
+          if (gA(a).form && !gA(pv).form && !gA(nx).form) return
+          claims.push([a, [ROLE.none, -1]])
+          const h = hunkName(m.hunkA[a] as number)
+          bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
+        },
+      )
     }
     if (bad || (!aIdx.length && !turnedA.length)) {
       for (const [a] of claims) claimedA[a] = HELD
@@ -551,25 +574,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // fuzzy rescue), those glyphs A's ink (HELD), no unit born of them; a line-end hyphen A breaks at is none, nor an included
       // figure's glyph inside it)
       const mine = [...x.text, ...x.ph].sort((p, q) => p - q)
-      const paired = mine.map((a) => (m.aToB[a] as number) >= 0)
-      const firstPaired = paired.indexOf(true)
-      const lastPaired = paired.lastIndexOf(true)
       const aOnly: number[] = []
-      let bad: string | null = null
-      for (let i = firstPaired + 1; firstPaired >= 0 && i < lastPaired; i++) {
-        const a = mine[i] as number
-        if (paired[i] || m.offpageA[a] || m.hunkA[a] === HUNK.hyphen) continue
-        let pv = i - 1
-        while (!paired[pv]) pv--
-        let nx = i + 1
-        while (!paired[nx]) nx++
-        if (gA(a).form && !gA(mine[pv] as number).form && !gA(mine[nx] as number).form) continue
-        aOnly.push(a)
-        const h = hunkName(m.hunkA[a] as number)
-        bad ??= `content difference: ${h === 'none' ? 'aonly' : h}`
-      }
-      if (bad) {
-        mem.cause = bad
+      eachBetweenPaired(
+        0,
+        mine.length - 1,
+        (i) => (m.aToB[mine[i] as number] as number) >= 0,
+        (i, pv, nx) => {
+          const a = mine[i] as number
+          if (m.offpageA[a] || m.hunkA[a] === HUNK.hyphen) return
+          if (gA(a).form && !gA(mine[pv] as number).form && !gA(mine[nx] as number).form) return
+          aOnly.push(a)
+        },
+      )
+      if (aOnly.length) {
+        const h = hunkName(m.hunkA[aOnly[0] as number] as number)
+        mem.cause = `content difference: ${h === 'none' ? 'aonly' : h}`
         for (const a of aOnly) claimedA[a] = HELD
         continue
       }

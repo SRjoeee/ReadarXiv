@@ -4,7 +4,7 @@ import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { locate } from '../src/locate/locate.ts'
+import { eachBetweenPaired, locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -201,6 +201,61 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     expect(L.members[0]).toMatchObject({ located: false, cause: expect.stringMatching(/^content difference: /) })
     const glyphs = A.pages[0]!.glyphs.length + B.pages[0]!.glyphs.length
     expect(reads).toBeLessThan(20 * glyphs)
+  })
+})
+
+describe('eachBetweenPaired', () => {
+  // (the walk of a unit made on A's glyphs for those B never printed between two it did: each looked for its paired neighbours by
+  // walking its run back and forth, k² reads in a run of k; the sixth owner's finding after PR #620's, the class of its finding 1)
+  const naive = (paired: boolean[]) => {
+    const out: [number, number, number][] = []
+    for (let i = 0; i < paired.length; i++) {
+      if (paired[i]) continue
+      const pv = paired.lastIndexOf(true, i)
+      const nx = paired.indexOf(true, i)
+      if (pv >= 0 && nx >= 0) out.push([i, pv, nx])
+    }
+    return out
+  }
+  const walk = (paired: boolean[], lo = 0, hi = paired.length - 1) => {
+    let reads = 0
+    const out: [number, number, number][] = []
+    eachBetweenPaired(
+      lo,
+      hi,
+      (i) => {
+        reads++
+        return paired[i] === true
+      },
+      (i, pv, nx) => out.push([i, pv, nx]),
+    )
+    return { out, reads }
+  }
+  it('gives each unpaired index between two paired ones with the two, none before the first or after the last', () => {
+    const p = [false, true, false, false, true, true, false, true, false]
+    expect(walk(p).out).toEqual([
+      [2, 1, 4],
+      [3, 1, 4],
+      [6, 5, 7],
+    ])
+    expect(walk([false, false]).out).toEqual([])
+    expect(walk([]).out).toEqual([])
+    let seed = 7
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31
+      return seed / 2 ** 31
+    }
+    for (let t = 0; t < 200; t++) {
+      const q = Array.from({ length: 1 + Math.floor(rnd() * 40) }, () => rnd() < 0.4)
+      expect(walk(q).out).toEqual(naive(q))
+    }
+  })
+  it('reads each index a bounded number of times: linear in a run of unpaired ones', () => {
+    const k = 5000
+    const p = [true, ...Array.from({ length: k }, () => false), true]
+    const { out, reads } = walk(p)
+    expect(out.length).toBe(k)
+    expect(reads).toBeLessThan(3 * p.length)
   })
 })
 
