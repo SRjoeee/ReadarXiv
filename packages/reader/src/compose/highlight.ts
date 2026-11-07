@@ -195,11 +195,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     for (let n = 1; n <= panes.right.pages; n++) if (composer.page(n)?.members.some((m) => m.ord === ord)) out.push(n)
     return out
   }
-  /** the rows of a shape in the page's CSS px at its scale now: padded beside and by half the leading above and below */
+  /** the rows of a shape in the page's CSS px at its scale now, in its own frame (a turned page's layer is turned with it):
+   *  padded beside and by half the leading above and below */
   function rowsOf(side: Side, n: number, boxes: Box[], lead: number) {
     const out: { x0: number; x1: number; y0: number; y1: number }[] = []
     for (const b of [...boxes].sort((p, q) => q[3] - p[3])) {
-      const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead])
+      const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
       if (!r) continue
       out.push({ x0: r.left - PAD, x1: r.left + r.width + PAD, y0: r.top, y1: r.top + r.height })
     }
@@ -227,8 +228,14 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         const per = boxesOf(page, lit.id, side, committed)
         const shapes = lit.s >= 0 && lit.s < per.length ? [per[lit.s] as Box[]] : per
         const layer = layerOf(side, n)
-        const vp = panes.boxOf(side, n, [0, 0, 1, 1])
-        if (!layer || !vp) continue
+        const frame = panes.frameOf(side, n)
+        if (!layer || !frame) continue
+        // (a turned page's layer: the page's own frame, turned with the page as its drawing is, the maintainer's B-408)
+        if (frame.turn && layer.dataset.axtTurn !== String(frame.turn)) {
+          layer.dataset.axtTurn = String(frame.turn)
+          layer.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${frame.w}px)`)
+          layer.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${frame.h}px)`)
+        }
         const s0 = panes.scale
         const lead = halfLeading(page, side, committed)
         for (const boxes of shapes) {
@@ -276,8 +283,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     const box1 = panes.boxOf(side, n, [0, 0, 1, 1])
     if (!page || !box1) return null
     const k = r.width / Math.max(1, el.offsetWidth)
-    const px = (x - r.left - el.clientLeft * k) / k,
+    let px = (x - r.left - el.clientLeft * k) / k,
       py = (y - r.top - el.clientTop * k) / k
+    // (on a turned page, the point turned back into the page's own frame, where the rows are)
+    const f = panes.frameOf(side, n)
+    if (f?.turn === 90) [px, py] = [py, f.height - px]
+    else if (f?.turn === 180) [px, py] = [f.width - px, f.height - py]
+    else if (f?.turn === 270) [px, py] = [f.width - py, px]
     const committed = !!composer.laid(n)
     const lead = halfLeading(page, side, committed)
     // (what is painted is what is hit: the same rows; the smaller unit winning where two overlap, a heading run into its paragraph)

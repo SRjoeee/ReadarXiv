@@ -729,6 +729,71 @@ await check(
   },
 )
 
+await check(
+  "compose: a turned page's highlight and links turned with it on both panes, its lines lit end to end, what is painted is what is hit (s3-turned)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s3-turned'].original)
+    await page.evaluate(() => window.__h.layer('s3-turned'))
+    await laidShown(page, 1)
+    // (page 1, turned a quarter: its laid member of the most lines)
+    const ord = await page.evaluate(() => {
+      const ms = window.__h.composer.laid(1).members.filter((m) => m.state === 'laid')
+      ms.sort((a, b) => b.lit.right.flat().length - a.lit.right.flat().length)
+      for (const s of ['left', 'right']) window.__h.panes.pageElement(s, 1).id = `axt-shot-${s}`
+      return ms[0].ord
+    })
+    const shoot = async () => ({
+      left: (await page.locator('#axt-shot-left').screenshot({ animations: 'disabled' })).toString('base64'),
+      right: (await page.locator('#axt-shot-right').screenshot({ animations: 'disabled' })).toString('base64'),
+    })
+    const unlit = await shoot()
+    const pt = await page.evaluate((o) => window.__h.pointOf(1, o, 'right'), ord)
+    await page.mouse.move(pt.x, pt.y)
+    await page.waitForTimeout(150)
+    const lit = await page.evaluate(() => window.__h.highlight.lit)
+    const shot = await shoot()
+    const sides = {}
+    for (const side of ['left', 'right']) {
+      const points = await page.evaluate(([o, s]) => window.__h.linePoints(1, o, s), [ord, side])
+      const differ = await page.evaluate(
+        ([a, b, at]) => window.__h.differAt(a, b, at),
+        [unlit[side], shot[side], points.map((p) => p.at)],
+      )
+      // (each point hovered lights the same member: the point turned back into the page's frame finds its row)
+      const hits = []
+      for (const p of points) {
+        await page.mouse.move(p.x, p.y)
+        await page.waitForTimeout(40)
+        hits.push(await page.evaluate(() => window.__h.highlight.lit?.id ?? null))
+      }
+      sides[side] = { points: points.length, unlitAt: differ.filter((d) => d === 0).length, hits }
+    }
+    // (its link turned with it: the anchor where the page's link box shows, a click on it out through the host)
+    const links = await page.evaluate(() => window.__h.linksOf(1))
+    const boxes = await page.evaluate(() => window.__h.linkBoxesOf(1))
+    const a = links.find((l) => l.href?.startsWith('https:'))
+    if (a) await page.mouse.click(a.rect.x + a.rect.width / 2, a.rect.y + a.rect.height / 2)
+    const external = await page.evaluate(() => window.__h.external)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      a && boxes.length === 1 && ['x', 'y', 'width', 'height'].every((k) => Math.abs(a.rect[k] - boxes[0][k]) <= 1),
+      `the turned page's link ${JSON.stringify(a?.rect)} against its box ${JSON.stringify(boxes)}`,
+    )
+    assert(external.includes('https://example.invalid/turned'), `a click on it opened ${JSON.stringify(external)}`)
+    assert(lit?.id === ord, `hovering ${ord} lit ${JSON.stringify(lit)}`)
+    for (const [side, s] of Object.entries(sides)) {
+      assert(s.points >= 6 && s.unlitAt === 0, `${side}: ${s.unlitAt} of ${s.points} points along the lines not lit`)
+      assert(
+        s.hits.every((h) => h === ord),
+        `${side}: the points along the lines light ${JSON.stringify(s.hits)}, not ${ord}`,
+      )
+    }
+    return { ord, points: { left: sides.left.points, right: sides.right.points } }
+  },
+)
+
 // ---------------------------------------------------------------- deliverables 5 and 6: openReader with a fake host
 const probe = (page) => page.evaluate((i) => window.__h.readers[i ?? 0].reader.probe(), 0)
 const readerLaid = (page, i = 0) =>

@@ -18,9 +18,22 @@ export const CLIP_PAD = 0.6
 /** an oblique run's slant, degrees (a face's own where the table names none) */
 const OBLIQUE_DEG = 12
 
-/** the page's frame: its view box [x0, y0, x1, y1] in PDF units, from its viewport (unrotated pages) */
+/** the page's frame: its view box [x0, y0, x1, y1] in PDF units, from its viewport (the page's own, whatever its turn) */
 export function frameOf(vp: PageViewport): [number, number, number, number] {
   return vp.viewBox as [number, number, number, number]
+}
+
+/** how far the page is turned (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
+export const turnOf = (vp: PageViewport): number => (((vp.rotation ?? 0) % 360) + 360) % 360
+/** the page's viewport as it would be unturned, at the same scale: what the overlay's drawing (its SVG, its crops, its links) is
+ *  made in, turned then with the page as PDF.js turns its layers (the sheet's `[data-axt-turn]`; the maintainer's B-408: a
+ *  page turned a quarter has its translation drawn turned with it, as the original's content is) */
+export const uprightOf = (vp: PageViewport): PageViewport => (turnOf(vp) ? vp.clone({ rotation: 0 }) : vp)
+/** an element of the overlay drawn in the page's own frame, marked to be turned with the page (none where it is not turned) */
+export function turned<E extends Element>(el: E, vp: PageViewport): E {
+  const t = turnOf(vp)
+  if (t) el.setAttribute('data-axt-turn', String(t))
+  return el
 }
 
 const isCrop = (i: Item): i is Extract<Item, { src: Ink }> => 'src' in i
@@ -99,7 +112,8 @@ export function cropsOf(
 /**
  * The page's crops drawn on a canvas over its frame: the page rendered once in the crop configuration (`crops`: every unit's text
  * group off) at the page view's own resolution, each crop's source cut from it and drawn at its place. Null where the page has
- * none. `scale`: device pixels per CSS px (the page view's output scale)
+ * none. `scale`: device pixels per CSS px (the page view's output scale). `vp`: the frame drawn in (a turned page's upright
+ * viewport, `uprightOf`: the canvas is turned with the page)
  */
 export async function cropsFor(
   page: Page,

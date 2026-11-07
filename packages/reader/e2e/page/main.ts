@@ -579,6 +579,63 @@ const h = {
       rect: a.getBoundingClientRect().toJSON(),
     }))
   },
+  /** the laid page n's own link boxes (Page.links) on the screen, through the right's viewport of the page as it shows */
+  linkBoxesOf(n: number) {
+    const el = (h.panes as Panes).pageElement('right', n) as HTMLElement
+    const r = el.getBoundingClientRect()
+    return (h.composer?.laid(n)?.links ?? []).map(([b]) => {
+      const q = (h.panes as Panes).boxOf('right', n, b) as { left: number; top: number; width: number; height: number }
+      return { x: r.left + el.clientLeft + q.left, y: r.top + el.clientTop + q.top, width: q.width, height: q.height }
+    })
+  },
+  /** the points a quarter and three quarters along each line box of member `ord` on page n's `side` (the boxes it is lit by),
+   *  half way up it: relative to the page element's box (`at`) and on the screen (`x`, `y`) */
+  linePoints(n: number, ord: number, side: 'left' | 'right') {
+    const p = h.composer?.page(n),
+      m = p?.members.find((x) => x.ord === ord)
+    const committed = !!h.composer?.laid(n)
+    const boxes = ((side === 'right' && committed ? m?.lit.right : m?.lit.left) ?? []).flat()
+    const el = (h.panes as Panes).pageElement(side, n)
+    if (!el || !boxes.length) return []
+    const r = el.getBoundingClientRect()
+    return boxes.flatMap((b) =>
+      [0.25, 0.75].map((f) => {
+        const x = b[0] + f * (b[2] - b[0]),
+          y = (b[1] + b[3]) / 2
+        const q = (h.panes as Panes).boxOf(side, n, [x, y, x, y]) as { left: number; top: number }
+        return {
+          at: [el.clientLeft + q.left, el.clientTop + q.top],
+          x: r.left + el.clientLeft + q.left,
+          y: r.top + el.clientTop + q.top,
+        }
+      }),
+    )
+  },
+  /** at each point (`at`, CSS px in two shots of one element at dpr 1), how many pixels of the 9 × 9 around it differ */
+  async differAt(a: string, b: string, points: number[][]) {
+    const data = async (png: string) => {
+      const img = await createImageBitmap(await (await fetch(`data:image/png;base64,${png}`)).blob())
+      const c = new OffscreenCanvas(img.width, img.height).getContext('2d') as OffscreenCanvasRenderingContext2D
+      c.drawImage(img, 0, 0)
+      return c.getImageData(0, 0, img.width, img.height)
+    }
+    const A = await data(a),
+      B = await data(b)
+    return points.map(([x, y]) => {
+      let n = 0
+      for (let dy = -4; dy <= 4; dy++)
+        for (let dx = -4; dx <= 4; dx++) {
+          const px = Math.round((x as number) + dx),
+            py = Math.round((y as number) + dy)
+          if (px < 0 || py < 0 || px >= A.width || py >= A.height) continue
+          const i = 4 * (py * A.width + px)
+          let d = 0
+          for (let c = 0; c < 3; c++) d += Math.abs((A.data[i + c] as number) - (B.data[i + c] as number))
+          if (d > 12) n++
+        }
+      return n
+    })
+  },
   /** the screen point over the middle of member `ord`'s first right-pane box on page n, and its boxes on each pane */
   pointOf(n: number, ord: number, side: 'left' | 'right' = 'right') {
     const p = h.composer?.page(n),

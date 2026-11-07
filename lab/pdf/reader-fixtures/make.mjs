@@ -13,7 +13,7 @@
 // reader dump (readarxiv-lab-data/refactor-2026-11/baseline/FORMAT.md §4) is laid by a greedy breaker over Helvetica's widths on
 // the member's own lines, then the room below, the size stepped down to fit: the stand-in of lane L3's typesetter, which the
 // reader's converter turns into `Page`s exactly as it turns the baseline's own dumps.
-//   node --import tsx lab/pdf/reader-fixtures/make.mjs [--check]
+//   node --import tsx lab/pdf/reader-fixtures/make.mjs [--check] [--only=<paper>]
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -70,7 +70,45 @@ const PAPERS = {
       ] },
     ],
   },
+  // pages turned a quarter by /Rotate, their content set upright in their own space (the viewer shows it turned): the
+  // maintainer's B-408, a laid page drawn turned with its page
+  's3-turned': {
+    id: '2600.00004', version: 1,
+    note: 'Its pages are turned a quarter by /Rotate (90, then 270), their content set upright in their own space. Lane L1\'s\nreading lays over no turned page, so the maker states its reading: A read with the turn not seen (`upright` in make.mjs),\nits bytes keeping their /Rotate; the bundle is `prepareBack` over that reading.\n',
+    pages: [
+      { size: [612, 792], rotate: 90, blocks: [
+        { u: 'title', kind: 'heading', font: 'HB', size: 14, x: 72, y: 720, w: 468, text: 'A Page Turned a Quarter' },
+        { u: 'h1', kind: 'heading', font: 'HB', size: 12, x: 72, y: 690, w: 468, label: '1', text: 'Turned' },
+        { u: 'p1', kind: 'para', size: 10, x: 72, y: 672, w: 468, lead: 12, text: words(80, 4), el: { at: 30, s: 'k(t)=3t', src: '$k(t)=3t$' }, link: { word: 12, url: 'https://example.invalid/turned' } },
+        { u: 'p2', kind: 'para', size: 10, x: 72, y: 560, w: 468, lead: 12, runIn: { u: 'r2', text: 'Quarter.' }, text: words(60, 17) },
+        { u: 'cap1', kind: 'caption', size: 9, x: 120, y: 200, w: 372, lead: 10.8, label: 'Table 1:', text: words(22, 8) },
+      ] },
+      { size: [612, 792], rotate: 270, blocks: [
+        { u: 'h2', kind: 'heading', font: 'HB', size: 12, x: 72, y: 720, w: 468, label: '2', text: 'Turned the Other Way' },
+        { u: 'p3', kind: 'para', size: 10, x: 72, y: 700, w: 468, lead: 12, text: words(70, 13), el: { at: 21, s: 'm(u)=u+2', src: '$m(u)=u+2$' } },
+      ] },
+    ],
+  },
 }
+
+/** PDF.js as the maker reads a paper whose pages are turned: each page in its own space, its /Rotate not seen. Lane L1's
+ *  reading lays over no turned page (packages/engine ink.mjs `rotated`), so that such a page has no part; read upright, its
+ *  content set upright in its own space is laid in that space, and the reader turns the laid page with its page. The paper's
+ *  bytes keep their /Rotate: only the reading is told 0 (read.ts takes nothing else of the turn from PDF.js) */
+const upright = {
+  OPS,
+  getDocument(src) {
+    const bound = (o, k) => {
+      const v = Reflect.get(o, k, o)
+      return typeof v === 'function' ? v.bind(o) : v
+    }
+    const pageOf = page => new Proxy(page, { get: (p, k) => (k === 'rotate' ? 0 : bound(p, k)) })
+    const docOf = doc => new Proxy(doc, { get: (d, k) => (k === 'getPage' ? async n => pageOf(await d.getPage(n)) : bound(d, k)) })
+    const task = getDocument(src)
+    return new Proxy(task, { get: (t, k) => (k === 'promise' ? t.promise.then(docOf) : bound(t, k)) })
+  },
+}
+const readingOf = paper => (paper.pages.some(p => p.rotate) ? upright : pdfjs)
 
 // ---------------------------------------------------------------- writing a paper: shows, ownership, lines
 const FONTS = { H: PL.StandardFonts.Helvetica, HB: PL.StandardFonts.HelveticaBold, TI: PL.StandardFonts.TimesRomanItalic }
@@ -93,6 +131,7 @@ async function write(paper) {
   const annots = [] // [page, rect, action]
   for (const pg of paper.pages) {
     const page = doc.addPage(pg.size)
+    if (pg.rotate) page.setRotation(PL.degrees(pg.rotate))
     pageRefs.push(page.ref)
     for (const [k, f] of Object.entries(fonts)) page.node.setFontDictionary(PL.PDFName.of(k), f.ref)
     shows.push([])
@@ -190,9 +229,9 @@ async function write(paper) {
   return { bytes, units: [...units.values()], shows }
 }
 
-/** the instrument of A itself: each show's glyphs owned by its segments, in order */
-async function instrumentOf(bytes, written) {
-  const r = await readPdf(pdfjs, bytes, { options: pdfOptions, turned: true })
+/** the instrument of A itself: each show's glyphs owned by its segments, in order (A read as `reading` reads it) */
+async function instrumentOf(bytes, written, reading = pdfjs) {
+  const r = await readPdf(reading, bytes, { options: pdfOptions, turned: true })
   const index = new Map(written.units.map((u, i) => [u, i]))
   const units = written.units.map(u => {
     const content = u.pieces.length ? u.pieces : [{ t: 'text', s: u.labels }]
@@ -278,13 +317,14 @@ function layMember(m, row, els, widthOf) {
 
 async function make(name, paper) {
   const written = await write(paper)
-  const ins = await instrumentOf(written.bytes, written)
+  const reading = readingOf(paper)
+  const ins = await instrumentOf(written.bytes, written, reading)
   const dir = join(OUT, name)
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(join(dir, 'bundle'), { recursive: true })
   writeFileSync(join(dir, 'arxiv.pdf'), written.bytes)
   let head = null, tally = null
-  for await (const x of prepareBack(ins, written.bytes, { pdfjs, pdfOptions, PL, deflate, inflate, paper: { id: paper.id, version: paper.version }, made: `reader-fixtures ${name}` })) {
+  for await (const x of prepareBack(ins, written.bytes, { pdfjs: reading, pdfOptions, PL, deflate, inflate, paper: { id: paper.id, version: paper.version }, made: `reader-fixtures ${name}` })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(dir, 'bundle', `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'head') { head = x.head; writeFileSync(join(dir, 'bundle', 'head.json'), `${JSON.stringify(head)}\n`) }
@@ -315,14 +355,17 @@ async function make(name, paper) {
   })
   const dump = { format: 'readarxiv-baseline/reader 1', paper: { id: paper.id, version: paper.version, pages: paper.pages.length }, target: 'de', translation: { from: 'reader-fixtures', count: rows.length }, config: { lay: 'reader-fixtures greedy breaker over Helvetica' }, units: dumpUnits, left: [], notLaid, figures: [], names: [] }
   writeFileSync(join(dir, 'de.reader.json'), `${JSON.stringify(dump)}\n`)
-  writeFileSync(join(dir, 'README.md'), `# ${name}\n\nA paper of our own (CC0 1.0), made by \`lab/pdf/reader-fixtures/make.mjs\`: \`arxiv.pdf\` the stand-in of arXiv's PDF,\n\`bundle/\` lane L1's back half over it (head, units, parts, add-on), \`de.rows.json\` its translation (its words written\nbackwards), \`de.reader.json\` that translation laid, in the baseline's reader-dump format. Remake: \`node --import tsx\nlab/pdf/reader-fixtures/make.mjs\`.\n`)
+  writeFileSync(join(dir, 'README.md'), `# ${name}\n\nA paper of our own (CC0 1.0), made by \`lab/pdf/reader-fixtures/make.mjs\`: \`arxiv.pdf\` the stand-in of arXiv's PDF,\n\`bundle/\` lane L1's back half over it (head, units, parts, add-on), \`de.rows.json\` its translation (its words written\nbackwards), \`de.reader.json\` that translation laid, in the baseline's reader-dump format. Remake: \`node --import tsx\nlab/pdf/reader-fixtures/make.mjs\`.\n${paper.note ? `\n${paper.note}` : ''}`)
   return { name, pages: paper.pages.length, units: ins.units.length, located: tally.located, wrap: tally.wrap, laid: dumpUnits.length, notLaid: notLaid.length, bytes: written.bytes.length, sha: sha(written.bytes).slice(0, 12) }
 }
 
 const check = process.argv.includes('--check')
 const before = check ? new Map(readdirSync(OUT).flatMap(d => (existsSync(join(OUT, d, 'arxiv.pdf')) ? [[d, sha(readFileSync(join(OUT, d, 'arxiv.pdf')))]] : []))) : null
 mkdirSync(OUT, { recursive: true })
+// (`--only=<paper>`: that paper alone made, the others left as they are)
+const only = process.argv.find(a => a.startsWith('--only='))?.slice('--only='.length) ?? null
 for (const [name, paper] of Object.entries(PAPERS)) {
+  if (only && name !== only) continue
   const r = await make(name, paper)
   console.log(JSON.stringify(r))
   if (before?.get(name) && before.get(name).slice(0, 12) !== r.sha) { console.log(`${name}: other bytes than the committed ones`); process.exitCode = 1 }

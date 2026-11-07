@@ -23,6 +23,9 @@ import {
 import { createFollower, type Follower, type FollowPane } from '../stack/sync.types.ts'
 import { type AheadHold, aheadHeld, eagerPages, letAheadGo, quietRoot } from './left.ts'
 
+/** how far a page is turned on screen (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
+const turnOf = (vp: { rotation?: number }): number => (((vp.rotation ?? 0) % 360) + 360) % 360
+
 export type Side = 'left' | 'right'
 export type Display = 'original' | 'bilingual' | 'translation'
 export type Zoom = 'page-width' | 'page-fit' | 'page-actual' | number
@@ -140,12 +143,17 @@ export interface Panes {
   /** the reader put back at a place read before (a language switch keeps it) */
   putAt(place: { page: number; at: number }): void
   pageOf(side: Side): number
-  /** a page's box on a pane in CSS px inside its page, for a rectangle of PDF units */
+  /** a page's box on a pane in CSS px inside its page, for a rectangle of PDF units; `upright`: in the page's own frame, as if
+   *  unturned (a turned page's drawing is made there and turned with the page, the sheet's `[data-axt-turn]`) */
   boxOf(
     side: Side,
     page: number,
     r: [number, number, number, number],
+    o?: { upright?: boolean },
   ): { left: number; top: number; width: number; height: number } | null
+  /** a page's own frame on a pane: how far it is turned (its /Rotate: 0, 90, 180 or 270), its size in PDF units (`w`, `h`) and
+   *  in CSS px at its scale now (`width`, `height`), both unturned */
+  frameOf(side: Side, page: number): { turn: number; w: number; h: number; width: number; height: number } | null
   pageElement(side: Side, n: number): HTMLElement | null
   /** a pane's scroller */
   containerOf(side: Side): HTMLElement
@@ -1378,12 +1386,26 @@ export function createPanes(o: PanesOptions): Panes {
       for (const s of sides) if (shown(s)) putAtPlace(s, { doc: 0, ...place })
     },
     pageOf: (side) => (side === 'left' ? viewer.currentPageNumber : rightPage),
-    boxOf(side, page, r) {
-      const vp = viewportOf(side === 'left' ? L : R, page)
-      if (!vp) return null
+    boxOf(side, page, r, o) {
+      const v = viewportOf(side === 'left' ? L : R, page)
+      if (!v) return null
+      const vp = o?.upright && turnOf(v) ? v.clone({ rotation: 0 }) : v
       const [ax, ay] = vp.convertToViewportPoint(r[0], r[3]) as [number, number],
         [bx, by] = vp.convertToViewportPoint(r[2], r[1]) as [number, number]
       return { left: Math.min(ax, bx), top: Math.min(ay, by), width: Math.abs(bx - ax), height: Math.abs(by - ay) }
+    },
+    frameOf(side, page) {
+      const vp = viewportOf(side === 'left' ? L : R, page)
+      if (!vp) return null
+      const turn = turnOf(vp)
+      const raw = (vp as unknown as { rawDims: { pageWidth: number; pageHeight: number } }).rawDims
+      return {
+        turn,
+        w: raw.pageWidth,
+        h: raw.pageHeight,
+        width: turn % 180 ? vp.height : vp.width,
+        height: turn % 180 ? vp.width : vp.height,
+      }
     },
     pageElement: (side, n) => pageDiv(side === 'left' ? L : R, n),
     containerOf: (side) => (side === 'left' ? L : R).container,

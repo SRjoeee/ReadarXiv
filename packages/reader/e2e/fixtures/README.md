@@ -12,6 +12,7 @@ a translation (`de.rows.json`, the translate package's Result shape, by unit id)
 |---|---|
 | `s1-columns` | two pages, a letter page in two columns and a landscape page; headings with labels, a footnote, a caption, elements that move (a formula in Times-Italic), run-in heads sharing a line with their paragraph, a URI link and a link inside the paper |
 | `s2-splits` | one page whose every paragraph shares its first show with a run-in head (a TJ cut by a unit's edge), with kerns of many decimals: the split residue's case (lane L1's finding 2) |
+| `s3-turned` | two pages turned by `/Rotate` (90, then 270), their content set upright in their own space: a heading with a label, paragraphs with an element and a run-in head, a caption, a URI link; the bundle made over A read with the turn not seen (lane L1's reading lays over no turned page; the maker states it): the maintainer's B-408, a laid page drawn turned with its page |
 
 Licensed corpus papers are never copied here: the harness reads lane L1's bundles and the baseline's dumps of them in place
 from lab-data (`AXT_LAB_FIXTURES=<id>,…`).

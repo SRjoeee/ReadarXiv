@@ -99,6 +99,14 @@ export const READER_CSS = `
 .axt-reader[data-axt-layer-text="auto"] .axt-over > svg { text-rendering: auto; }
 .axt-reader .axt-over > svg text { white-space: pre; }
 /* the elements' and labels' crops, cut from the page's crop render: darkened into the page, so that paint order cannot change a pixel */
+/* a turned page (/Rotate, the maintainer's B-408): the overlay's drawing (its SVG, its crops, its links) and the highlight's
+   layer made in the page's own frame and turned with the page about the frame's corner, as PDF.js turns its own layers
+   (pdf_viewer.css [data-main-rotation]) */
+.axt-reader [data-axt-turn] { transform-origin: 0 0; }
+.axt-reader [data-axt-turn="90"] { transform: rotate(90deg) translateY(-100%); }
+.axt-reader [data-axt-turn="180"] { transform: rotate(180deg) translate(-100%, -100%); }
+.axt-reader [data-axt-turn="270"] { transform: rotate(270deg) translateX(-100%); }
+.axt-reader .axt-hl-layer[data-axt-turn] { inset: auto; left: 0; top: 0; width: var(--axt-frame-w); height: var(--axt-frame-h); }
 .axt-reader .axt-over > canvas.axt-crops { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); mix-blend-mode: darken; pointer-events: none; }
 .axt-reader .axt-over > .textLayer { contain: strict; }
 .axt-reader .axt-over > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }

@@ -38,7 +38,7 @@ import type { Groups } from './groups.ts'
 import { bordersOf, type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
-import { cropsFor, svgOf } from './paint.ts'
+import { cropsFor, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
@@ -273,22 +273,25 @@ export function createComposer(o: ComposerOptions): Composer {
     await faces.ready(faceIds)
     const el = document.createElement('div')
     el.className = 'axt-over'
+    // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
+    // layer by PDF.js as it turns its own)
     const raw = (at.viewport as unknown as { rawDims: { pageWidth: number; pageHeight: number } }).rawDims
     el.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${raw.pageWidth}px)`)
     el.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${raw.pageHeight}px)`)
-    el.append(svgOf(page, at.viewport, faces))
+    const up = uprightOf(at.viewport)
+    el.append(turned(svgOf(page, at.viewport, faces), at.viewport))
     const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
-    const crops = await cropsFor(page, pdfPage, at.viewport, g.crops, out, at.signal)
-    if (crops) el.append(crops)
+    const crops = await cropsFor(page, pdfPage, up, g.crops, out, at.signal)
+    if (crops) el.append(turned(crops, at.viewport))
     const tCrops = performance.now()
     const text = texts.get(n) ?? textContentOf(pdfPage)
     texts.set(n, text)
     const laid = laidText(await text, page, members, faces, measure)
     el.append(await textLayerOf(o.kit, laid.content, at.viewport, o.lang(), laid.translated))
-    const links = linkLayer(page, at.viewport, o.links, laid.content, page.links.length ? await bordersOf(pdfPage) : [])
-    if (links) el.append(links)
+    const links = linkLayer(page, up, o.links, laid.content, page.links.length ? await bordersOf(pdfPage) : [])
+    if (links) el.append(turned(links, at.viewport))
     const tEnd = performance.now()
     timings.push({ n, svgMs: tSvg - t0, cropsMs: tCrops - tSvg, textMs: tEnd - tCrops, overlayMs: tEnd - t0 })
     if (timings.length > 64) timings.shift()
@@ -300,11 +303,12 @@ export function createComposer(o: ComposerOptions): Composer {
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
     if (!was) return
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
-    const w = Math.max(1, Math.floor(at.viewport.width * out.sx))
+    const up = uprightOf(at.viewport)
+    const w = Math.max(1, Math.floor(up.width * out.sx))
     if (was.width === w) return
-    const next = await cropsFor(page, await doc.getPage(at.n), at.viewport, g.crops, out, at.signal)
+    const next = await cropsFor(page, await doc.getPage(at.n), up, g.crops, out, at.signal)
     if (!next || at.signal.aborted || was.parentNode !== el) return
-    was.replaceWith(next)
+    was.replaceWith(turned(next, at.viewport))
     was.width = 0
     was.height = 0
   }
