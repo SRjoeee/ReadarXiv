@@ -410,7 +410,9 @@ export function rangeSource(o: SourceOptions): OriginalSource {
         first = { begin, bytes }
         try {
           const got = await bytes
-          if (store && bound) store.keep(nameOf(bound), bound.total, begin, got)
+          // (the length the answer told, which TypeScript's reading of `bound` before the ask cannot see)
+          const now = bound as Bound | null
+          if (store && now) store.keep(nameOf(now), now.total, begin, got)
           return got
         } finally {
           first = null
