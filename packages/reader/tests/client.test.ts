@@ -81,6 +81,51 @@ describe('the client: every ask bounded and asked once more', () => {
     timers.advance(RETRY_MS)
     expect(await p).toBe('ok')
   })
+  it('an answer under 500 the caller names is asked once more after the wait it gives, never more than once more in all', async () => {
+    const timers = manualTimers()
+    const run = (statuses: number[]) => {
+      const asked = { n: 0 }
+      const p = request(
+        {
+          fetch: async () => {
+            asked.n++
+            return new Response('', { status: statuses.shift() ?? 200 })
+          },
+          timers,
+        },
+        '/x',
+        {},
+        async (r) => r.status,
+        (r) => (r.status === 429 ? 5000 : null),
+      )
+      p.catch(() => {})
+      return { p, asked }
+    }
+    // (named: asked again at its wait, the last answer read as it is)
+    const busy = run([429, 429])
+    await settle()
+    timers.advance(4999)
+    await settle()
+    expect(busy.asked.n).toBe(1)
+    timers.advance(1)
+    expect(await busy.p).toBe(429)
+    expect(busy.asked.n).toBe(2)
+    // (not named: read at once)
+    const gone = run([404])
+    expect(await gone.p).toBe(404)
+    expect(gone.asked.n).toBe(1)
+    // (a 429, then a 5xx: the 5xx was the one more ask, so out of reach; a 5xx, then a 429: the 429 read)
+    const both = run([429, 503])
+    await settle()
+    timers.advance(5000)
+    await expect(both.p).rejects.toMatchObject({ why: 'network' })
+    expect(both.asked.n).toBe(2)
+    const after = run([503, 429])
+    await settle()
+    timers.advance(RETRY_MS)
+    expect(await after.p).toBe(429)
+    expect(after.asked.n).toBe(2)
+  })
   it('nothing within 30 s is let go and asked once more; nothing again is out of reach', async () => {
     const timers = manualTimers()
     let asks = 0

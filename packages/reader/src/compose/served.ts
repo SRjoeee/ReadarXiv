@@ -7,12 +7,15 @@
 //   GET /hyph/<lang>.json                         a language's hyphenation patterns ({ patterns, exceptions })
 //
 // every one through the host's fetch, a path its fetch resolves against our server (the website's origin; the extension's our
-// server's). A table (the index, a group's, a language's patterns) is asked as every ask of our server is (session/client.ts
-// `request`): its answer and its body within REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS;
-// one that cannot be had then, or whose answer is not it (a 4xx, past its cap, of another shape), is none for the visit: the
-// faces it would give are lost (told once each), the language hyphenates nothing. A slice is fetched as data and made a FontFace
-// of its face's family, weight and style, its code points as its unicode-range (never imported: compose/faces.ts says why),
-// added to the document while the reader lives and taken out with it.
+// server's). Each is asked as every ask of our server is (session/client.ts `request`): its answer and its body within
+// REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS; and any other answer but the file, a 404
+// or a 410 (a 408 or 429 above all: our site's visitor limit) asked once more after its Retry-After, BUSY_MAX_MS at most
+// (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there; anything else that fails is a failure
+// for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is
+// none for the visit (the faces it would give lost, told once each; the language hyphenates nothing). A slice is fetched as
+// data and made a FontFace of its face's family, weight and style, its code points as its unicode-range (never imported:
+// compose/faces.ts says why), added to the document while the reader lives and taken out with it; one not there is lost at
+// once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
@@ -27,7 +30,7 @@
 // it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait asked again at once.
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
-import { bodyWithin, request } from '../session/client.ts'
+import { bodyWithin, RETRY_MS, request } from '../session/client.ts'
 import { type Faces, WAVE_SLOTS } from './faces.ts'
 import type { FaceId } from './page.ts'
 
@@ -38,6 +41,10 @@ const GROUP = /^[a-z0-9-]{1,40}$/
 const FONTS = /^[A-Za-z0-9._-]{1,32}$/
 const FILE = /^static-fonts\/[0-9a-f]{16}\.woff2$/
 const LANG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
+
+/** the longest Retry-After waited for before the one more ask: our site's visitor limit's own (readarxiv-web
+ *  worker/src/rate-limit.ts LIMIT_PERIOD_S, the longest its count takes to fall below the limit again) */
+export const BUSY_MAX_MS = 60_000
 
 /** a pseudo-face the default engine's lay waits on while a language's patterns come (compose/typeset.ts): `ready` loads them */
 export const HYPH_WAIT = 'axt-hyph'
@@ -201,9 +208,16 @@ class Answer extends Error {
     this.status = status
   }
 }
-/** a 4xx other than 408 and 429: not there, and will not be */
-const lasting = (e: unknown) =>
-  e instanceof Answer && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429
+/** a 404 or a 410: not there, and will not be (anything else may pass) */
+const lasting = (e: unknown) => e instanceof Answer && (e.status === 404 || e.status === 410)
+/** an answer under 500 that is not the file and may pass (a 408 or 429 above all): the wait before its one more ask, its
+ *  Retry-After (seconds or a date) at most BUSY_MAX_MS, RETRY_MS where it names none */
+function againAfter(r: Response): number | null {
+  if (r.ok || r.status === 404 || r.status === 410) return null
+  const v = r.headers.get('retry-after')?.trim() ?? ''
+  const ms = /^\d+$/.test(v) ? Number(v) * 1000 : v ? Date.parse(v) - Date.now() : Number.NaN
+  return Number.isFinite(ms) ? Math.min(BUSY_MAX_MS, Math.max(0, ms)) : RETRY_MS
+}
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 function rangesOf(v: unknown): number[] | null {
   if (!Array.isArray(v) || !v.length || v.length % 2) return null
@@ -230,18 +244,27 @@ export function createServed(o: {
   const closed = new AbortController()
   const ask = { fetch: o.fetch, signal: closed.signal, timers: o.timers ?? realTimers }
   let gone = false
-  /** a table of our site's read by `shape`, or null where it cannot be had (warned): its ask and its body within REQUEST_MS,
-   *  asked once more after RETRY_MS where the network fails, a 5xx comes or nothing in time (session/client.ts `request`); an
-   *  answer that is not it (a 4xx, a body past `cap`, not JSON, of another shape) at once */
-  const tableOf = async <T>(what: string, url: string, cap: number, shape: (v: unknown) => T): Promise<T | null> => {
-    try {
-      const got = await request(ask, url, {}, async (r) => {
+  /** a file of our site's within `cap` bytes, as the header says it is asked; an Answer thrown where the last answer is not it */
+  const fileOf = async (url: string, cap: number): Promise<Uint8Array<ArrayBuffer>> => {
+    const got = await request(
+      ask,
+      url,
+      {},
+      async (r) => {
         if (r.ok) return bodyWithin(r, cap)
         void r.body?.cancel().catch(() => {})
         return r.status
-      })
-      if (typeof got === 'number') throw new Answer(got)
-      return shape(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(got)))
+      },
+      againAfter,
+    )
+    if (typeof got === 'number') throw new Answer(got)
+    return got
+  }
+  /** a table of our site's read by `shape`, or null where it cannot be had (warned): not there (a 404, a 410, a body past
+   *  `cap`, not JSON, of another shape) at once, else once it fails again */
+  const tableOf = async <T>(what: string, url: string, cap: number, shape: (v: unknown) => T): Promise<T | null> => {
+    try {
+      return shape(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await fileOf(url, cap))))
     } catch (e) {
       if (!gone) o.warn?.(what, e)
       return null
@@ -385,12 +408,8 @@ export function createServed(o: {
         // (a reader closed while this waited asks nothing)
         if (gone) return
         asked++
-        const r = await o.fetch(`/${slice.path}`)
-        if (!r.ok) {
-          void r.body?.cancel().catch(() => {})
-          throw new Answer(r.status)
-        }
-        const bytes = await bodyWithin(r, CAPS.slice, () => new Error(`a slice past ${CAPS.slice} bytes`))
+        const bytes = await fileOf(`/${slice.path}`, CAPS.slice)
+        if (gone) return
         const f = await P.face(face.family, bytes, {
           weight: String(face.weight),
           style: face.style,
@@ -404,8 +423,10 @@ export function createServed(o: {
         free()
       }
     })().catch((e) => {
+      // (the reader closed: its asks let go, nothing told)
+      if (gone) return
       o.warn?.(`the face ${face.id}'s slice ${slice.path}`, e)
-      // (an answer no ask would mend, or a failure met twice: lost, its texts left the original's; else asked again next time)
+      // (not there, or a failure for now met twice: lost, its texts left the original's; else asked again next time)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
         tellLost(face.id)

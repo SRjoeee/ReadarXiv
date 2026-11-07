@@ -73,14 +73,17 @@ const sleep = (ms: number, a: Ask) =>
 
 /**
  * `url` asked and its answer read by `read`, the two within REQUEST_MS; the network, a 5xx or nothing in time asked once more
- * after RETRY_MS, a second failure `Refused('network')`. A body that breaks or stops is the server out of reach at once (today's
- * rule: the answer came, so asking again is no better). An abort of the caller's is thrown as it is
+ * after RETRY_MS, a second failure `Refused('network')`; an answer under 500 the caller names (`askAgain`: the wait it gives)
+ * asked once more after that wait, the one more ask's answer read as it is. A body that breaks or stops is the server out of
+ * reach at once (today's rule: the answer came, so asking again is no better). An abort of the caller's is thrown as it is
  */
 export async function request<T>(
   a: Ask,
   url: string,
   init: RequestInit,
   read: (r: Response) => Promise<T>,
+  /** an answer under 500 the caller would ask once more: the wait before that ask, else null (read as it is) */
+  askAgain?: (r: Response) => number | null,
 ): Promise<T> {
   const timers = a.timers ?? realTimers
   for (let again = true; ; again = false) {
@@ -108,6 +111,13 @@ export async function request<T>(
       void r.body?.cancel().catch(() => {})
       if (!again) throw new Refused('network')
       await sleep(RETRY_MS, a)
+      continue
+    }
+    const wait = again ? (askAgain?.(r) ?? null) : null
+    if (wait !== null) {
+      done()
+      void r.body?.cancel().catch(() => {})
+      await sleep(wait, a)
       continue
     }
     try {
