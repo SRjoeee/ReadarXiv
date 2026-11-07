@@ -1,6 +1,6 @@
 // The harness page: the reader's parts, driven by the checks (run.mjs) through `window.__h`. Nothing here reaches the network
 // but the page's own origin and the stand-in of arXiv's server, which the route table answers.
-import { type Head, type Part, read, type Row } from '@readarxiv/format'
+import { groupName, type Head, type Part, read, type Row } from '@readarxiv/format'
 import { composedSource } from '../../src/bytes/composed.ts'
 import { openRanged } from '../../src/bytes/ranged.ts'
 import { type OriginalSource, rangeSource } from '../../src/bytes/source.ts'
@@ -485,15 +485,21 @@ const h = {
     for (const p of h.pages.keys()) g.clear(p)
     return { scale: o.scale ?? 1.5, dpr, pages: out }
   },
-  /** a language switch: the same layer, other rows (`target`): what it reuses (the composed document, the parts, the store),
-   *  where the reader stays, and the pages laid again */
-  async retarget(target: string, name: string) {
+  /** a language switch: the same layer, other rows (`target`'s, or `o.rowsOf`'s fixture rows, the units `o.refuse` names refused
+   *  in them): what it reuses (the composed document, the parts, the store), where the reader stays, and the pages laid again */
+  async retarget(target: string, name: string, o: { rowsOf?: string; refuse?: string[] } = {}) {
     const before = { composed: h.composed, place: (h.panes as Panes).reading(), laid: (h.composer as Composer).probe() }
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const of = o.rowsOf ?? target
     const all = (
-      (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
+      (await (await fetch(`/fixtures/${name}/${fx.rows[of] ?? `${of}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const given = new Map(all.map((r) => [r.id, r]))
+    const given = new Map(
+      all.map((r): [string, Row] => [
+        r.id,
+        o.refuse?.includes(r.id) ? { id: r.id, ok: false, why: { kind: 'refused' } } : r,
+      ]),
+    )
     const rows = {
       target,
       done: true,
@@ -511,6 +517,21 @@ const h = {
       before: { place: before.place, laidPages: before.laid.laidPages },
       sameComposed: before.composed === h.composed,
     }
+  },
+  /** page n's members as last committed (ord, state, off, unit id) and each one's three groups as `laid` shows them (null: a group
+   *  the document lacks) */
+  async groupsOf(n: number) {
+    const c = await (h.groups as Groups).laid
+    const visible = new Map<string, boolean>()
+    for (const [, g] of c as unknown as Iterable<[string, { name?: unknown; visible: boolean }]>)
+      if (typeof g.name === 'string') visible.set(g.name, g.visible)
+    return ((h.composer as Composer).laid(n)?.members ?? []).map((m) => ({
+      ord: m.ord,
+      state: m.state,
+      off: m.off,
+      id: (h.composer as Composer).member(m.ord)?.text,
+      on: ([1, 2, 4] as const).map((bit) => visible.get(groupName(m.ord, n, bit)) ?? null),
+    }))
   },
   /** another target whose rows are not in yet (`give` and `end` them later): the pages laid before kept until its commits */
   async retargetLater(target: string, name: string) {
