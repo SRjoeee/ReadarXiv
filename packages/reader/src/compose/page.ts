@@ -58,10 +58,12 @@ export interface Page {
   links: [box: Box, to: { url: string } | { dest: string }][]
 }
 
-/** the rows a lay reads: a row by unit id, and whether no other row will come */
+/** the rows a lay reads: a row by unit id, and whether no other row will come; `kept`, a unit the paper keeps as it is, whose
+ *  row never comes (none waited for) */
 export interface Rows {
   get(id: string): Row | undefined
   readonly done: boolean
+  kept?(id: string): boolean
 }
 
 /** the call that lays a page (the typesetter's layPage with its rules and metrics bound) */

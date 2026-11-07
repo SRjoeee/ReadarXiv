@@ -218,6 +218,7 @@ export function createComposer(o: ComposerOptions): Composer {
     get done() {
       return rows?.done ?? false
     },
+    kept: (id) => rows?.kept?.(id) ?? false,
   }
 
   // ---------------------------------------------------------------- what a slot shows
@@ -586,8 +587,8 @@ export function createComposer(o: ComposerOptions): Composer {
     })
   }
   /** page n's marks: over each paragraph the parts read so far locate on it, while the page is not laid and can still be (the
-   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one whose rows
-   *  ended with no row of it (it stays the original's) */
+   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one the paper
+   *  keeps as it is (never translated), nor for one whose rows ended with no row of it (it stays the original's) */
   function markPage(n: number) {
     const slot = stack.page(n)
     if (disposed || !layer || !rows || !composed || !shown || !slot || settledOriginal(n)) return marks.unmark(n)
@@ -595,6 +596,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const boxes: MarkBox[] = []
     for (const m of members.values()) {
       if (m.why === 'unlocated' || m.why === 'page' || !kindShown(m.kind, classes)) continue
+      if (typeof m.text === 'string' && rowsView.kept?.(m.text)) continue
       if (rows.done && (typeof m.text !== 'string' || !rowsView.get(m.text)?.ok)) continue
       let x0 = Number.POSITIVE_INFINITY,
         y0 = Number.POSITIVE_INFINITY,

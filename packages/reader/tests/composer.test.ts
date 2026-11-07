@@ -286,6 +286,8 @@ function world(
     ahead?: number
     holds?: (ord: number) => boolean
     ready?: Set<string>
+    lay?: ReturnType<typeof standInLay>
+    faces?: ReturnType<typeof facesStub>
   } = {},
 ): World {
   const parts =
@@ -293,8 +295,8 @@ function world(
     new Map([1, 2, 3, 4, 5].map((n) => [n, partOf(n, [member(n * 10, n, 0), member(n * 10 + 1, n, 1)])] as const))
   const stack = fakeStack(Math.max(...parts.keys()))
   const clock = handClock()
-  const lay = standInLay(o.ready)
-  const faces = facesStub(o.ready)
+  const lay = o.lay ?? standInLay(o.ready)
+  const faces = o.faces ?? facesStub(o.ready)
   const warns: string[] = []
   const aheadGo = vi.fn()
   let settledFn: (n: number) => boolean = () => false
@@ -632,6 +634,65 @@ describe('the pages ahead', () => {
     }
     const asked = w.stack.ahead.mock.calls.map((c) => c[0])
     expect(asked.filter((n) => n === 2).length).toBe(1)
+  })
+})
+
+/** layPage's waits as the typesetter has them (lay/wait.ts, entry.ts): the rows not in while more may come (a unit the paper
+ *  keeps never waited for), and only once none is missing, the face of each member whose row is in (`face:<name>` its kind)
+ *  not loaded; laid once neither */
+function waitingLay(loaded: Set<string>): ReturnType<typeof standInLay> & { early: number } {
+  const plain = standInLay(new Set(['cjk']))
+  const lay = ((part: Part, rows: Rows) => {
+    lay.calls++
+    const ms = part.flows.flat()
+    const ids = ms.map((m) => m.text as string)
+    const missing = rows.done ? [] : ids.filter((id) => !rows.get(id) && !rows.kept?.(id))
+    const waiting = (wait: Page['wait']): Page => ({
+      page: part.page,
+      wait,
+      members: ms.map(
+        (m) =>
+          ({
+            ord: m.ord,
+            page: part.page,
+            state: 'waiting',
+            off: 0,
+            lines: [],
+            lit: { left: [], right: [], own: [] },
+          }) as Laid,
+      ),
+      links: [],
+    })
+    if (missing.length) return waiting({ rows: missing, faces: [] })
+    if (rows.done && ids.some((id) => !rows.get(id))) lay.early++
+    const faces = ms
+      .filter((m) => rows.get(m.text as string)?.ok && m.kind.startsWith('face:') && !loaded.has(m.kind.slice(5)))
+      .map((m) => [m.kind.slice(5), m.text as string] as [string, string])
+    if (faces.length) return waiting({ rows: [], faces })
+    // (nothing waited for: laid as the rows are, a row not in the original's)
+    return plain(part, { get: (id) => rows.get(id), done: true })
+  }) as unknown as ReturnType<typeof standInLay> & { early: number }
+  lay.calls = 0
+  lay.early = 0
+  return lay
+}
+describe('the units the paper keeps', () => {
+  it('a unit the paper keeps as it is holds no page, and is never marked as translating', async () => {
+    const pages = new Map([[1, partOf(1, [member(10, 1, 0), member(11, 1, 1, 'inkheads')])]])
+    const lay = waitingLay(new Set())
+    const w = world({ pages, lay })
+    w.stack.setNear([1])
+    const rows = rowsOf('de', [])
+    const kept = Object.assign(rows, { kept: (id: string) => id === 'u11' })
+    open(w, kept)
+    await settle()
+    const marks = () =>
+      [...(w.stack.page(1)?.querySelectorAll<HTMLElement>('.axt-translating-mark') ?? [])].map((m) => m.dataset.axtU)
+    expect(marks()).toEqual(['10'])
+    // (u10's row in, the rows going on: page 1 laid, u11 the original's)
+    rows.give(['u10'])
+    await settle()
+    expect(w.composer.laid(1)).not.toBeNull()
   })
 })
 

@@ -279,6 +279,9 @@ export function openReader(
   let rows = new Map<string, Row>()
   let rowsTarget = ''
   let rowsDone = false
+  /** the units the paper keeps as they are (format's Unit.kept), once the head's units are read: never translated, so no page
+   *  waits for a row of theirs */
+  let keptIds: ReadonlySet<string> = new Set()
   const rowsListeners = new Set<() => void>()
   const rowsSource = (): RowsSource => ({
     target: rowsTarget,
@@ -286,6 +289,7 @@ export function openReader(
     get done() {
       return rowsDone
     },
+    kept: (id) => keptIds.has(id),
     on(f) {
       rowsListeners.add(f)
       return () => rowsListeners.delete(f)
@@ -323,6 +327,15 @@ export function openReader(
         (l) => l.flat(),
       )
       unitsHeld = { key, units: p }
+      // (the kept units known: a page that waited for theirs alone is laid now)
+      p.then(
+        (units) => {
+          if (closed || unitsHeld?.units !== p) return
+          keptIds = new Set(units.filter((u) => u.kept).map((u) => u.id))
+          if (keptIds.size) for (const f of [...rowsListeners]) f()
+        },
+        () => {},
+      )
       p.catch(() => {
         if (unitsHeld?.units === p) unitsHeld = null
       })
