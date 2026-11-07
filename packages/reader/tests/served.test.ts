@@ -54,7 +54,7 @@ function site(o: { missing?: string[]; failing?: string[] } = {}) {
     // (each character 50 units wide at 100 px, a CJK one 100; its ink 70 over, 20 under, ending at its advance)
     measure(font, text, unkerned) {
       measured.push([font, text, unkerned])
-      const width = [...text].reduce((w, ch) => w + (/[　-鿿＀-￯]/.test(ch) ? 100 : 50), 0)
+      const width = [...text].reduce((w, ch) => w + (/[\u3000-\u9fff\uff00-\uffef]/.test(ch) ? 100 : 50), 0)
       return { width, ascent: 70, descent: 20, right: width }
     },
     async face(family, _bytes, d) {
@@ -90,8 +90,8 @@ describe('the served faces and the Metrics over them', () => {
     expect(faces).toEqual([{ family: 'axt-nimbus-roman', range: unicodeRangeOf(LATIN), added: true }])
     // (a character of the second slice: not ready until that slice is in; one of the CJK face's, in its own)
     expect(s.metrics.ready(FONT, 'Größe')).toBe(false)
-    await s.faces.ready([[FONT, 'Größe 中文']])
-    expect([s.metrics.ready(FONT, 'Größe'), s.metrics.ready(FONT, '中文')]).toEqual([true, true])
+    await s.faces.ready([[FONT, 'Größe \u4e2d\u6587']])
+    expect([s.metrics.ready(FONT, 'Größe'), s.metrics.ready(FONT, '\u4e2d\u6587')]).toEqual([true, true])
     expect(faces.map((f) => f.family)).toEqual(['axt-nimbus-roman', 'axt-nimbus-roman', 'axt-shs-sc'])
     // (an emoji no served face holds; a face the font string names that is no catalogue's)
     expect(s.metrics.ready(FONT, 'a \u{1F600}')).toBe('never')
@@ -101,13 +101,13 @@ describe('the served faces and the Metrics over them', () => {
   })
   it('measures a text in runs cut where its slice changes, a CJK run unkerned and cut between two punctuation marks, never in small capitals', async () => {
     const { s, measured } = site()
-    await s.faces.ready([[FONT, 'aé中。」b']])
-    expect(s.metrics.advance(FONT, 10, 'aé中。」b')).toBeCloseTo((50 + 50 + 100 + 100 + 100 + 50) / 10)
+    await s.faces.ready([[FONT, 'aé\u4e2d\u3002\u300db']])
+    expect(s.metrics.advance(FONT, 10, 'aé\u4e2d\u3002\u300db')).toBeCloseTo((50 + 50 + 100 + 100 + 100 + 50) / 10)
     expect(measured).toEqual([
       [FONT, 'a', false],
       [FONT, 'é', false],
-      [FONT, '中。', true],
-      [FONT, '」', true],
+      [FONT, '\u4e2d\u3002', true],
+      [FONT, '\u300d', true],
       [FONT, 'b', false],
     ])
     expect(s.metrics.ink(FONT, 10, 'aé')).toEqual([7, 2, 10])

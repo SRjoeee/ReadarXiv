@@ -58,9 +58,9 @@ interface Run {
 }
 
 /** a character of the CJK scripts, set unkerned in a run of its own */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 /** the CJK punctuation Chrome's text-spacing-trim narrows where two stand together: a CJK run is cut between two of them */
-const PUNCT = /[、-〃〈-】〔-〟・！-／：-＠［-｀｛-･]/u
+const PUNCT = /[\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u
 const inRanges = (r: readonly number[], cp: number) => {
   for (let i = 0; i + 1 < r.length; i += 2) if (cp >= (r[i] as number) && cp <= (r[i + 1] as number)) return true
   return false
