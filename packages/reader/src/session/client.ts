@@ -123,7 +123,7 @@ export async function bodyWithin(
   r: Response,
   cap: number,
   past: () => Error = () => new Refused('bad'),
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   if (!r.body) {
     const b = new Uint8Array(await r.arrayBuffer())
     if (b.length > cap) throw past()

@@ -3,7 +3,8 @@
 // holds is never ready; a text is measured in runs cut where its slice changes, a CJK run unkerned and cut between two
 // punctuation marks, never in small capitals; a slice not there is lost (its face told once); the patterns read as the
 // typesetter reads them.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { WAVE_SLOTS } from '../src/compose/faces.ts'
 import { createServed, HYPH_WAIT, partsOf, type Platform, unicodeRangeOf } from '../src/compose/served.ts'
 
 const LATIN = [0x20, 0x7e],
@@ -152,5 +153,110 @@ describe('the served faces and the Metrics over them', () => {
     expect(rule).toMatch(/font-weight: 700/)
     expect(rule).toMatch(/font-style: italic/)
     expect(s.faces.classOf(`italic small-caps 700 100px "axt-nimbus-roman", "axt-shs-sc"`)).toBe(c)
+  })
+})
+
+/** a body of `size`-byte chunks that never ends, pulled one chunk at a read (a counter on the pulls, a flag on the cancel) */
+function endless(size: number) {
+  const seen = { pulled: 0, cancelled: false }
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull(c) {
+        seen.pulled++
+        c.enqueue(new Uint8Array(size))
+      },
+      cancel() {
+        seen.cancelled = true
+      },
+    },
+    { highWaterMark: 0 },
+  )
+  return { seen, response: new Response(body, { status: 200 }) }
+}
+const platformOf = (): Platform => ({
+  measure: (_f, text) => ({ width: text.length * 50, ascent: 70, descent: 20, right: text.length * 50 }),
+  face: async () => ({ add() {}, remove() {} }),
+})
+
+describe('the reader closed, and the bounds of what is read', () => {
+  it('a slice queued behind the wave asks nothing once the reader is closed', async () => {
+    const SLICES = Array.from({ length: 7 }, (_, k) => [0x41 + k, 0x41 + k])
+    const tables: Record<string, unknown> = {
+      '/static-fonts/index.json': {
+        schema: 1,
+        fonts: '6',
+        faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' } },
+      },
+      '/static-fonts/nimbus-roman.json?fonts=6': {
+        schema: 1,
+        group: 'nimbus-roman',
+        slices: SLICES,
+        faces: {
+          'nimbus-roman-regular': SLICES.map((_, k) => ({ path: `static-fonts/${String(k).padStart(16, '0')}.woff2` })),
+        },
+      },
+    }
+    const asked: string[] = []
+    const open: (() => void)[] = []
+    const fetch = async (url: string) => {
+      asked.push(url)
+      if (url in tables) return new Response(JSON.stringify(tables[url]), { status: 200 })
+      await new Promise<void>((go) => open.push(go))
+      return new Response(new Uint8Array([1]), { status: 200 })
+    }
+    const s = createServed({ fetch, root: document.body, platform: platformOf() })
+    const ready = s.faces.ready([[FONT, 'ABCDEFG']])
+    await vi.waitFor(() => expect(open).toHaveLength(WAVE_SLOTS))
+    const before = asked.length
+    expect(s.faces.most).toBe(WAVE_SLOTS)
+    s.faces.dispose()
+    for (const go of open) go()
+    await ready
+    await new Promise((go) => setTimeout(go, 0))
+    expect(asked).toHaveLength(before)
+  })
+  it('a slice past its cap is let go at the chunk that passes it, and is lost as one too large is today', async () => {
+    const bad = endless(1024 * 1024)
+    const warned: string[] = []
+    const tables: Record<string, unknown> = {
+      '/static-fonts/index.json': {
+        schema: 1,
+        fonts: '6',
+        faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' } },
+      },
+      '/static-fonts/nimbus-roman.json?fonts=6': {
+        schema: 1,
+        group: 'nimbus-roman',
+        slices: [LATIN],
+        faces: { 'nimbus-roman-regular': [{ path: 'static-fonts/0000000000000001.woff2' }] },
+      },
+    }
+    const fetch = async (url: string) =>
+      url in tables ? new Response(JSON.stringify(tables[url]), { status: 200 }) : bad.response
+    const s = createServed({
+      fetch,
+      root: document.body,
+      platform: platformOf(),
+      warn: (_w, e) => warned.push(String(e)),
+    })
+    await s.faces.ready([[FONT, 'a']])
+    expect(bad.seen).toEqual({ pulled: 5, cancelled: true })
+    expect(s.metrics.ready(FONT, 'a')).toBe(false)
+    expect(warned).toHaveLength(1)
+    expect(warned[0]).toMatch(/slice/)
+  })
+  it('a table past its cap is let go at the chunk that passes it, and is not read', async () => {
+    const bad = endless(100 * 1024)
+    const warned: string[] = []
+    const s = createServed({
+      fetch: async () => bad.response,
+      root: document.body,
+      platform: platformOf(),
+      warn: (_w, e) => warned.push(String(e)),
+    })
+    await s.faces.ready([[FONT, 'a']])
+    expect(bad.seen).toEqual({ pulled: 3, cancelled: true })
+    expect(warned.some((w) => /answer/.test(w))).toBe(true)
+    expect(s.metrics.ready(FONT, 'a')).toBe(false)
   })
 })

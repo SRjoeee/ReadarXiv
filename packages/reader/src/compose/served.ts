@@ -22,6 +22,7 @@
 // typesetter waits for the face (the page's `wait.faces`), and the composer asks it here (`faces.ready`).
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import type { Fetch } from '../bytes/source.ts'
+import { bodyWithin } from '../session/client.ts'
 import { type Faces, WAVE_SLOTS } from './faces.ts'
 import type { FaceId } from './page.ts'
 
@@ -143,7 +144,7 @@ export interface Platform {
   ): { width: number; ascent: number; descent: number; right: number }
   face(
     family: string,
-    bytes: ArrayBuffer,
+    bytes: BufferSource,
     d: { weight: string; style: string; unicodeRange: string },
   ): Promise<FontFaceLike>
 }
@@ -188,14 +189,13 @@ export interface Served {
   hyphNow(lang: string): Patterns | null | undefined
 }
 
-/** an answer's JSON, within its cap */
+/** an answer's JSON, within its cap (the body read as it comes, and let go at the cap) */
 async function jsonOf(r: Response, cap: number): Promise<unknown> {
   if (!r.ok) {
     void r.body?.cancel().catch(() => {})
     throw new Answer(r.status)
   }
-  const bytes = new Uint8Array(await r.arrayBuffer())
-  if (bytes.byteLength > cap) throw new Error(`an answer of ${bytes.byteLength} bytes, past ${cap}`)
+  const bytes = await bodyWithin(r, cap, () => new Error(`an answer past ${cap} bytes`))
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
 }
 class Answer extends Error {
@@ -343,18 +343,19 @@ export function createServed(o: {
     busy = 0,
     asked = 0,
     most = 0
-  const waiting: (() => void)[] = []
+  const waiting: ((held: boolean) => void)[] = []
+  /** a slot of the wave: true where one is held (to be freed), false where the reader closed while this waited */
   const slot = () =>
-    new Promise<void>((go) => {
+    new Promise<boolean>((go) => {
       if (busy < WAVE_SLOTS) {
         busy++
         most = Math.max(most, busy)
-        go()
+        go(true)
       } else waiting.push(go)
     })
   const free = () => {
     const next = waiting.shift()
-    if (next) next()
+    if (next) next(true)
     else busy--
   }
   const loadSlice = (face: ServedFace, slice: Slice): Promise<void> => {
@@ -362,16 +363,17 @@ export function createServed(o: {
     let p = loading.get(slice.key)
     if (p) return p
     p = (async () => {
-      await slot()
+      if (!(await slot())) return
       try {
+        // (a reader closed while this waited asks nothing)
+        if (gone) return
         asked++
         const r = await o.fetch(`/${slice.path}`)
         if (!r.ok) {
           void r.body?.cancel().catch(() => {})
           throw new Answer(r.status)
         }
-        const bytes = await r.arrayBuffer()
-        if (bytes.byteLength > CAPS.slice) throw new Error(`a slice of ${bytes.byteLength} bytes`)
+        const bytes = await bodyWithin(r, CAPS.slice, () => new Error(`a slice past ${CAPS.slice} bytes`))
         const f = await P.face(face.family, bytes, {
           weight: String(face.weight),
           style: face.style,
@@ -539,6 +541,7 @@ export function createServed(o: {
     },
     dispose() {
       gone = true
+      for (const go of waiting.splice(0)) go(false)
       for (const f of added) f.remove()
       added.length = 0
       sheet.remove()
