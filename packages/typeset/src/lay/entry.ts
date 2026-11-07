@@ -11,7 +11,8 @@
 // member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: lit
 // whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
-// fits, a turned one's along its run, its items' `dir`). A CJK cell's bands are read over the rules its Room.band states.
+// fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
+// made before) read as before. A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -222,7 +223,9 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const boundTo = new Map<number, number>()
   // (each member as it is set: one led by a name with the name and the joint its label, one after a name kept pinned by it)
   const setAs = new Map<number, Placed>()
-  // (the figure texts: set by S.figures, never read as paragraphs)
+  // (the figure texts: set by S.figures, never read as paragraphs. One of a part made before the prepare stated its own text
+  // (Placed.plain) is read as before (converge-4's entry, ec6715946: a paragraph's reading): S.figures, its source unknown,
+  // would redraw a label its translation leaves as it was, #631's review)
   const figs: Placed[] = []
   for (const flow of part.flows)
     for (let k = 0; k < flow.length; k++) {
@@ -232,7 +235,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         unmeant.add(m.ord)
         continue
       }
-      if (m.kind === 'figure') {
+      if (m.kind === 'figure' && typeof m.plain === 'string') {
         figs.push(m)
         continue
       }

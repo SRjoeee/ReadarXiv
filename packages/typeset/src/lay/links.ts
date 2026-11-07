@@ -153,8 +153,10 @@ export function linksOf(
         groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })) })
       else if (k !== undefined) {
         // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
-        // (Link.text, PDF.js's overlaidText: today's placeText); where it does not (a part made before), the annotations of one
-        // target over their whole, those of two or more targets none, not told apart)
+        // (Link.text, PDF.js's overlaidText: today's placeText), the piece's annotations in one group, so that one search, moving
+        // forward only, takes them in their order on A whatever their targets (the same text twice, two works: each its own
+        // occurrence, #631's review); where it does not (a part made before), the annotations of one target over their whole,
+        // those of two or more targets none, not told apart)
         if (is.every((i) => !!list[i]!.text))
           groups.push({
             to: { k, draw: 'text', single: is.length === 1 },
