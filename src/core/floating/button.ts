@@ -276,8 +276,10 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   /** the last input was the keyboard's (a key since the last press of a pointer): focus then is the reader's place */
   let viaKeyboard = false
   const keyboardInside = () => {
+    // a button no longer on the page holds no focus (and its document may be gone: nothing of it is asked)
+    if (!viaKeyboard || !host.isConnected) return false
     const focused = root.activeElement
-    return viaKeyboard && focused !== null && dock.contains(focused)
+    return focused !== null && dock.contains(focused)
   }
   const expand = () => {
     clearDwell()
