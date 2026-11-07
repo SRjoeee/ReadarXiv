@@ -4,6 +4,7 @@ import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
+import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
 
 const at = (over: Partial<ReaderState>): ReaderState => ({ ...INITIAL, prefs: PREFS, display: 'bilingual', ...over })
@@ -314,5 +315,107 @@ describe("the states (the reader's design, §8)", () => {
       action: 'retry',
     })
     expect(R.status.rateLimited).not.toMatch(/自动|shortly/)
+  })
+})
+
+describe("a host's words for the states (parts.tsx StateWords: the website's own sentences), the catalogue's where it gives none", () => {
+  /** words that name their state and what it holds, as a host's table would say them */
+  const WORDS: StateWords = {
+    queued: (n) => `queued #${n}`,
+    preparing: 'preparing',
+    translating: (got, total) => `translating ${got} / ${total}`,
+    reconnecting: 'reconnecting',
+    noPdf: 'no pdf',
+    tooLarge: 'too large',
+    notNow: (t) => `unavailable until ${t}`,
+    busy: (t) => `busy until ${t}`,
+    limited: (t) => `quota until ${t}`,
+    unsupported: (name) => `no ${name}`,
+    failedPassages: (n) => `${n} failed`,
+    narrow: 'narrow',
+    unreadable: 'unreadable',
+    saveFailed: 'not saved',
+    failed: (kind) => `failed: ${kind}`,
+    originalLost: 'no original',
+    noPaper: 'no paper',
+  }
+  const said = (s: ReaderState, words: StateWords = WORDS) => {
+    const c = capsuleOf(s, none, LANGUAGES, words)
+    return c && { kind: c.kind, text: textOf(c.words) }
+  }
+  it("a run under way in the host's words, with its place, its count (a part of its own) and its reconnecting; the progress line alone where it gives none", () => {
+    const queued = at({ phase: 'preparing', preparing: { position: 3, progress: null } })
+    const preparing = at({ phase: 'preparing', preparing: { position: null, progress: 0.4 } })
+    const translating = at({ phase: 'translating', progress: 0.25, translated: { got: 12, total: 48 } })
+    expect([queued, preparing, translating].map((s) => said(s))).toEqual([
+      { kind: 'progress', text: 'queued #3' },
+      { kind: 'progress', text: 'preparing' },
+      { kind: 'progress', text: 'translating 12 / 48' },
+    ])
+    expect(capsuleOf(translating, none, LANGUAGES, WORDS)?.words).toMatchObject({ prefix: 'translating ', count: 12 })
+    for (const s of [queued, preparing, translating])
+      expect(said({ ...s, reconnecting: true })).toEqual({ kind: 'progress', text: 'reconnecting' })
+    // (none given: no capsule, as the extension's; a stage worded and another not: that one alone)
+    for (const s of [queued, preparing, translating, { ...translating, reconnecting: true }])
+      expect(capsuleOf(s, none, LANGUAGES)).toBeNull()
+    expect(said(translating, { preparing: 'preparing' })).toBeNull()
+    // (rows its units start while the prepare lasts: the paper still being prepared, as the website says it)
+    expect(said({ ...translating, preparing: { position: null, progress: 0.4 } })).toEqual({
+      kind: 'progress',
+      text: 'preparing',
+    })
+    // (a run over: nothing of it)
+    expect(said(at({ phase: 'ready', reconnecting: true }))).toBeNull()
+  })
+  it("why the translation is not there, in the host's words: no PDF, too large, unavailable, busy or the limit with the time a retry is due", () => {
+    const lasting = (why: 'no-source' | 'too-large') =>
+      at({ phase: 'ready', available: false, unavailable: { why, retryAt: null } })
+    expect([said(lasting('no-source')), said(lasting('too-large'))]).toEqual([
+      { kind: 'unavailable', text: 'no pdf' },
+      { kind: 'unavailable', text: 'too large' },
+    ])
+    const passing = (why: 'unreachable' | 'busy' | 'refused') =>
+      at({ phase: 'ready', unavailable: { why, retryAt: 5 } })
+    expect(['unreachable', 'busy', 'refused'].map((w) => said(passing(w as 'busy'))?.text)).toEqual([
+      'unavailable until 5',
+      'busy until 5',
+      'quota until 5',
+    ])
+    // (the catalogue's otherwise: a paper too large said as one that cannot be had, busy as the limit)
+    expect(said(lasting('too-large'), {})?.text).toBe(R.status.noPdf)
+    expect(said(passing('busy'), {})?.text).toBe(R.status.limited)
+    expect(said(passing('busy'), { limited: () => 'quota' })?.text).toBe('quota')
+  })
+  it("the rest of the capsule's states, each in the host's words or the catalogue's", () => {
+    const states: [ReaderState, string, string][] = [
+      [
+        at({ phase: 'ready', languageSupported: false, ...target('de') }),
+        'no Deutsch',
+        R.status.unsupported(NAMES.de as string),
+      ],
+      [at({ phase: 'ready', failedUnits: 2 }), '2 failed', S.failed.text(2)],
+      [at({ phase: 'ready', narrow: true }), 'narrow', R.status.narrow],
+      [at({ phase: 'ready', settingsUnreadable: true }), 'unreadable', R.status.unreadable],
+      [at({ phase: 'ready', refusals: 1 }), 'not saved', O.saveFailed],
+    ]
+    for (const [s, host, catalogue] of states) {
+      expect(said(s)?.text).toBe(host)
+      expect(said(s, {})?.text).toBe(catalogue)
+    }
+  })
+  it("the cards in the host's words: a run that translated nothing by its kind, the original not read, no paper", () => {
+    const failed = at({ phase: 'failed', failure: 'rate-limit', failures: { pdf: null, service: 'rate-limit' } })
+    const lost = at({ phase: 'failed', failure: 'network', failures: { pdf: 'network', service: null } })
+    const noPaper = at({ noPaper: true })
+    expect([cardOf(failed, reason, WORDS), cardOf(lost, reason, WORDS), cardOf(noPaper, reason, WORDS)]).toEqual([
+      { reason: 'failed: rate-limit', action: 'retry' },
+      { reason: 'no original', action: 'retry' },
+      { reason: 'no paper', action: 'arxiv' },
+    ])
+    expect([cardOf(failed, reason), cardOf(lost, reason), cardOf(noPaper, reason)].map((c) => c?.reason)).toEqual([
+      R.status.rateLimited,
+      reason('network'),
+      R.status.noPaper,
+    ])
   })
 })

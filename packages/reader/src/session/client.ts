@@ -249,6 +249,8 @@ export async function follow(
     paper: PaperRef
     target: string | null
     onDoc(d: Doc): void
+    /** the stream ended or broke, and is asked again: told before the ask (the next document heard ends it) */
+    onQuiet?(): void
     pollMs?: number
   },
 ): Promise<never> {
@@ -335,6 +337,7 @@ export async function follow(
     if (a.signal?.aborted) throw a.signal.reason
     quiet = told ? 0 : quiet + 1
     if (quiet >= 2) throw new Refused('network')
+    a.onQuiet?.()
     if (!told) await sleep(RETRY_MS, a)
   }
 }

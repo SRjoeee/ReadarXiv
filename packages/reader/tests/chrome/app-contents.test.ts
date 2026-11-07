@@ -3,7 +3,7 @@
 // spent a first-run guard and slid the area 236 px in on every development build (Part 7's final review)
 import { StrictMode, act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setLocale } from '@readarxiv/ui'
+import { LOCALES, setLocale } from '@readarxiv/ui'
 import { App } from '../../src/chrome/App.tsx'
 import type { Parts } from '../../src/chrome/parts.tsx'
 import { stubPopovers } from '../popover-stub.ts'
@@ -137,6 +137,27 @@ describe("the tab's title", () => {
       set({ paper: { id: '2608.02163', title: '' } })
     })
     expect(document.title).toBe('From Simple QA to Deep Research')
+    await m.unmount()
+  })
+})
+
+describe("the interface's language, the host's to choose", () => {
+  it("draws the whole chrome again in the language the host sets, in place, its parts kept (the website's interface language row)", async () => {
+    const { controller } = fakeController()
+    const m = await mountElement(app(controller))
+    const contents = () => m.container.querySelector('[data-zone="lead"] button')?.getAttribute('aria-label')
+    const before = [contents(), m.container.querySelector('header')]
+    await act(async () => setLocale('en'))
+    const after = [contents(), m.container.querySelector('header')]
+    await act(async () => setLocale('zh-CN'))
+    expect([before[0], after[0], contents()]).toEqual([
+      LOCALES['zh-CN'].R.contents,
+      LOCALES.en.R.contents,
+      LOCALES['zh-CN'].R.contents,
+    ])
+    // (drawn again, never mounted anew: the same bar)
+    expect(after[1]).toBe(before[1])
+    expect(controller.attach).toHaveBeenCalledTimes(1)
     await m.unmount()
   })
 })

@@ -2,9 +2,9 @@
 // for the members whose adapters are the extension's (fetch, prefs; translate in host-translate.test.ts), and the reader's
 // state told to the chrome as its events
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULTS, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
+import { DEFAULTS, eventsOf, INITIAL, type ReaderState, reduce } from '@readarxiv/reader'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { eventsOf, hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
+import { hostFetch, hostPrefs, surfaceStore } from '@/pdf-reader/host/v2'
 
 const API = 'https://readarxiv.com'
 
@@ -80,6 +80,7 @@ describe('the reader state told to the chrome', () => {
     layer: { s: 'none' },
     rows: { target: 'de', from: 'here', s: 'none' },
     view: { display: 'bilingual', sync: { on: true, available: false }, scale: 1, zoom: 'page-width', narrow: false, sides: { left: { page: 1, pages: 0 }, right: { page: 1, pages: 0 } }, outline: [], heading: null },
+    reconnecting: false,
     crashed: false,
     ...o,
   }) as ReaderState
@@ -108,7 +109,7 @@ describe('the reader state told to the chrome', () => {
   it('a layer refused for good greys the translated displays; one refused for a while says so and keeps them', () => {
     const open = state({ original: { s: 'open', pages: 4, ours: false } })
     expect(fold([open, { ...open, layer: { s: 'refused', why: 'no-source', retryAt: null } } as ReaderState]).available).toBe(false)
-    expect(fold([open, { ...open, layer: { s: 'refused', why: 'busy', retryAt: 5 } } as ReaderState])).toMatchObject({ available: true, unavailable: { why: 'refused', retryAt: 5 } })
+    expect(fold([open, { ...open, layer: { s: 'refused', why: 'busy', retryAt: 5 } } as ReaderState])).toMatchObject({ available: true, unavailable: { why: 'busy', retryAt: 5 } })
   })
   it('tells nothing twice: a state that did not change yields no event', () => {
     const s = state()

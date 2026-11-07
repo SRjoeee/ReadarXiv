@@ -172,8 +172,13 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
   暂按上下显示). The words stay 5 s of being read: the time stands while the pointer is over the capsule or it holds the
   focus, and the rest of it runs once neither does (the maintainer, 2026-10-01); holding no action, the capsule is a
-  stop of its own for the keyboard while it is shown (Codex and Devin on #307). The widths are to be checked by
-  reading at them while building.
+  stop of its own for the keyboard while it is shown (Codex and Devin on #307). That is the extension's rule; the rule is
+  the host's (`Parts.narrow` of the reader package's chrome), so that each host keeps the behaviour its readers have today
+  (the coordinator's ruling for the website's cut-over: nothing a reader sees changes): `told`, the default and the
+  extension's, as above; `shown`, the website's (its owner's rule of 2026-11-03), where the display switch shows the
+  translation chosen and side by side greyed, the stored choice kept for a wider window, and the capsule says so only
+  where a window that showed the paper side by side was narrowed while reading (a page opened narrow, or widened again,
+  says nothing). The widths are to be checked by reading at them while building.
 
 ## 6. Components
 

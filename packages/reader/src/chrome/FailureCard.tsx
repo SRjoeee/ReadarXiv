@@ -12,7 +12,7 @@ import { useReader } from './use-reader.ts'
 /** `of`: where this one is drawn, the pane's or the page's; a card is drawn in one of them only */
 export function FailureCard({ controller, of = 'pane' }: { controller: ReaderController; of?: 'pane' | 'page' }) {
   const parts = useParts()
-  const card = useReader(controller, (s) => cardOf(s, parts.reason))
+  const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   if (!card || (card.action === 'arxiv') !== (of === 'page')) return null
   if (card.action === 'arxiv') {

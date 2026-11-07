@@ -311,7 +311,7 @@ async function newPage(o = {}) {
     )
       errors.push(m.text())
   })
-  await page.goto(`${server.origin}/`)
+  await page.goto(`${server.origin}/${o.path ?? ''}`)
   return { page, context, errors }
 }
 
@@ -880,6 +880,313 @@ await check(
     )
     assert(st.rows.from === 'here' && st.rows.s === 'complete', JSON.stringify(st.rows))
     return { follows: mine.length, rows: st.rows }
+  },
+)
+await check(
+  "reader: a laid page's links reached by the pointer in a host's panes; no slot keeps the left's loading mark (L11 gap 5)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    // (the host's scrollers as both hosts' chrome gives them: a .viewerContainer a pane, its own .pdfViewer, under which
+    // pdf_viewer.css draws a page's loading dots over it while it is marked loading)
+    await page.evaluate(() => {
+      const root = document.createElement('div')
+      root.style.cssText = 'position:absolute;inset:0'
+      const panes = { root }
+      for (const side of ['left', 'right']) {
+        const el = document.createElement('div')
+        el.className = `viewerContainer axt-pane ${side}`
+        el.id = side
+        el.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+        root.append(el)
+        panes[side] = el
+      }
+      document.body.append(root)
+      window.__opened = []
+      window.open = (u) => {
+        window.__opened.push(String(u))
+        return null
+      }
+      window.__h.given = panes
+    })
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', panes: window.__h.given }))
+    await readerLaid(page)
+    // (the laid page put in place, the left's copy before it and its frame gone by)
+    await page.waitForTimeout(400)
+    const seen = await page.evaluate(() => {
+      const right = window.__h.given.right
+      const loading = [...right.querySelectorAll('.axt-slot')]
+        .filter((s) => s.classList.contains('loading') || s.classList.contains('loadingIcon'))
+        .map((s) => s.dataset.pageNumber)
+      const slot = right.querySelector('.axt-slot[data-page-number="1"]')
+      const a = [...(slot?.querySelectorAll('.axt-over a.axt-link') ?? [])].find((x) =>
+        x.getAttribute('href')?.startsWith('https:'),
+      )
+      const r = a?.getBoundingClientRect()
+      const x = r ? r.left + r.width / 2 : 0,
+        y = r ? r.top + r.height / 2 : 0
+      const hit = r ? document.elementFromPoint(x, y) : null
+      return {
+        loading,
+        href: a?.getAttribute('href') ?? null,
+        at: [x, y],
+        hit: hit ? `${hit.tagName}.${hit.className}` : null,
+        onLink: !!a && !!hit && hit.closest('a') === a,
+      }
+    })
+    if (seen.href) await page.mouse.click(seen.at[0], seen.at[1])
+    await page.waitForTimeout(200)
+    const opened = await page.evaluate(() => window.__opened)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!seen.loading.length, `slots still marked loading: ${seen.loading}`)
+    assert(seen.href && seen.onLink, `the pointer over the link meets ${seen.hit}`)
+    assert(opened.length === 1 && opened[0] === seen.href, `opened ${JSON.stringify(opened)}`)
+    return { href: seen.href, opened }
+  },
+)
+/** the host page (chrome.html): the chrome over a reader of fixture `name`, with the host's parts `o`, laid */
+async function chromeLaid(name, o = {}, page0 = {}) {
+  const opened = await newPage({ ...page0, path: 'chrome.html' })
+  await opened.page.evaluate(([n, x]) => window.__c.open(n, x), [name, o])
+  await waitFor(opened.page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+  return opened
+}
+await check(
+  "chrome: a host's own controls in their places, each working: its way home first in the lead, its short link right after the title, its interface language the reading options' last row (L11 gap 2)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns', { slots: true })
+    const en = await page.evaluate(() => window.__c.words('en'))
+    const zh = await page.evaluate(() => window.__c.words('zh-CN'))
+    const lead = await page.evaluate(() => {
+      const el = document.querySelector('[data-zone="lead"]')
+      const home = el.querySelector('[data-host="home"]').getBoundingClientRect()
+      return {
+        // (a control's tooltip, its next sibling, left out)
+        children: [...el.children]
+          .map((x) => x.dataset.host ?? (x.matches('.paper-title') ? 'title' : x.getAttribute('aria-label')))
+          .filter((x) => x !== null),
+        short: !!el.querySelector(':scope > .paper-title + [data-host="short"]'),
+        home: [home.left + home.width / 2, home.top + home.height / 2],
+      }
+    })
+    await page.mouse.click(lead.home[0], lead.home[1])
+    await page.locator(`button[aria-label="${en.options}"]`).click()
+    const last = await page.evaluate(
+      () =>
+        document.getElementById('pop-options')?.lastElementChild?.querySelector('[data-host]')?.dataset.host ?? null,
+    )
+    await page.locator('[data-host="ui"]').click()
+    await waitFor(page, (w) => !!document.querySelector(`button[aria-label="${w}"]`), zh.options).catch(() => {})
+    const after = await page.evaluate((w) => {
+      const pop = document.getElementById('pop-options')
+      return {
+        bar: !!document.querySelector(`button[aria-label="${w.options}"]`),
+        dim: [...(pop?.querySelectorAll('[role="switch"]') ?? [])]
+          .map((x) => x.getAttribute('aria-label'))
+          .includes(w.dim),
+        clicked: window.__c.clicked,
+        writes: window.__c.writes,
+      }
+    }, zh)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      JSON.stringify(lead.children) === JSON.stringify(['home', en.contents, 'title', 'short']) && lead.short,
+      `the lead ${JSON.stringify(lead)}`,
+    )
+    assert(last === 'ui', `the reading options' last row ${last}`)
+    assert(after.bar && after.dim, `the chrome after the pick: ${JSON.stringify(after)}`)
+    assert(JSON.stringify(after.clicked) === JSON.stringify(['home', 'ui:zh-CN']), `clicked ${after.clicked}`)
+    assert(
+      after.writes.some((w) => w.ui === 'zh-CN'),
+      `the reader wrote ${JSON.stringify(after.writes)}`,
+    )
+    return { lead: lead.children, last, clicked: after.clicked }
+  },
+)
+await check(
+  "chrome: a host's toast in the capsule's place, in its words and sign, for its time; the word it replaced back after it (L11 gap 6, difference 8)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns', { slots: true })
+    const capsule = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('.capsule:not([data-out])')
+        return el
+          ? {
+              kind: el.getAttribute('data-kind'),
+              said: el.querySelector('.sr-only')?.textContent ?? '',
+              sign: el.querySelector('svg path')?.getAttribute('d') ?? null,
+            }
+          : null
+      })
+    // (the host's word for a crash with something on screen, as the website's page says it: 8 s)
+    await page.evaluate(() => window.__c.controller.toast({ words: 'The translation did not load', ms: 8000 }))
+    const lost = await capsule()
+    await page.locator('[data-host="share"]').click()
+    const copied = await capsule()
+    await page.waitForTimeout(3300)
+    const back = await capsule()
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      lost?.kind === 'toast' && lost.said === 'The translation did not load',
+      `the crash's word ${JSON.stringify(lost)}`,
+    )
+    assert(
+      copied?.kind === 'toast' && copied.said === 'Link copied' && copied.sign === 'M20 6 9 17l-5-5',
+      `the share's word ${JSON.stringify(copied)}`,
+    )
+    assert(back?.said === 'The translation did not load', `after the share's word ${JSON.stringify(back)}`)
+    return { lost: lost.said, copied: copied.said, back: back.said }
+  },
+)
+await check(
+  "chrome: a host's words for the capsule's states: a paper being prepared said in them, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    const seen = async (words) => {
+      modes[seg] = { kind: 'not-opened', prepareMs: 2500 }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html' })
+        await page.evaluate((w) => window.__c.open('s2-splits', { words: w }), words)
+        await waitFor(page, () => window.__c.reader?.state().layer.s === 'preparing', null, 20_000)
+        await page.waitForTimeout(300)
+        const during = await page.evaluate(() => {
+          const el = document.querySelector('.capsule:not([data-out])')
+          return el
+            ? {
+                kind: el.getAttribute('data-kind'),
+                said: el.querySelector('.sr-only')?.textContent,
+                spinner: !!el.querySelector('svg.spin'),
+              }
+            : null
+        })
+        const line = await page.evaluate(
+          () => document.querySelector('.progress-line')?.hasAttribute('data-on') ?? null,
+        )
+        await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+        await page.waitForTimeout(400)
+        const after = await page.evaluate(
+          () => document.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null,
+        )
+        await context.close()
+        return { during, line, after, errors: errors.filter((e) => !/status of 404/.test(e)) }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    const host = await seen(true)
+    const none = await seen(false)
+    assert(!host.errors.length && !none.errors.length, [...host.errors, ...none.errors].join('; '))
+    assert(
+      host.during?.kind === 'progress' && host.during.said === 'Preparing the paper' && host.during.spinner,
+      `the host's words while preparing: ${JSON.stringify(host.during)}`,
+    )
+    assert(host.after !== 'progress', `a capsule of the run after it: ${host.after}`)
+    assert(none.during === null && none.line === true, `no words given: ${JSON.stringify(none)}`)
+    return { host: host.during.said, none: { capsule: none.during, line: none.line } }
+  },
+)
+await check(
+  "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
+  async () => {
+    const look = (page) =>
+      page.evaluate(() => {
+        const w = window.__c.words('en')
+        const radio = (name) => document.querySelector(`.seg.display [role="radio"][aria-label="${name}"]`)
+        return {
+          bilingual: [
+            radio(w.bilingual)?.getAttribute('aria-checked'),
+            radio(w.bilingual)?.getAttribute('aria-disabled'),
+          ],
+          translation: radio(w.translation)?.getAttribute('aria-checked'),
+          narrow: !!document.querySelector('.capsule[data-kind="narrow"]:not([data-out])'),
+          right: !!window.__c.reader?.state().view.narrow,
+        }
+      })
+    const out = {}
+    for (const rule of ['told', 'shown']) {
+      const { page, context, errors } = await chromeLaid('s1-columns', rule === 'told' ? {} : { narrow: rule }, {
+        viewport: { width: 700, height: 900 },
+      })
+      await page.waitForTimeout(300)
+      const opened = await look(page)
+      await page.setViewportSize({ width: 1400, height: 900 })
+      await page.waitForTimeout(600)
+      await page.setViewportSize({ width: 700, height: 900 })
+      await page.waitForTimeout(600)
+      const narrowed = await look(page)
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      out[rule] = { opened, narrowed }
+    }
+    const { told, shown } = out
+    assert(
+      told.opened.right && told.opened.bilingual[0] === 'true' && told.opened.narrow,
+      `the extension's, opened narrow: ${JSON.stringify(told.opened)}`,
+    )
+    assert(
+      shown.opened.right &&
+        shown.opened.translation === 'true' &&
+        shown.opened.bilingual[1] === 'true' &&
+        !shown.opened.narrow,
+      `the website's, opened narrow: ${JSON.stringify(shown.opened)}`,
+    )
+    assert(
+      shown.narrowed.translation === 'true' && shown.narrowed.narrow,
+      `the website's, narrowed while reading: ${JSON.stringify(shown.narrowed)}`,
+    )
+    return out
+  },
+)
+await check(
+  "reader: a paper arXiv does not have: the state says why (the original not found, the layer refused as not found), for the host's own page (L11 difference 3)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', paper: '2600.09999v1' }))
+    await waitFor(page, () => {
+      const s = window.__h.readers[0].reader.state()
+      return s.original.s === 'failed' && s.layer.s === 'refused'
+    })
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    await context.close()
+    // (our server's 404s, of the original and of the follow, are the browser's console lines, and expected)
+    assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+    assert(
+      st.original.why === 'not-found' && st.layer.why === 'not-found' && !st.crashed,
+      `state ${JSON.stringify([st.original, st.layer, st.crashed])}`,
+    )
+    return { original: st.original, layer: st.layer }
+  },
+)
+await check(
+  "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
+  async () => {
+    const from = server.log.length
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', legacy: true }))
+    await readerLaid(page)
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    const p = await probe(page)
+    const scripts = await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((e) => new URL(e.name).pathname)
+        .filter((x) => x.endsWith('.js') || x.endsWith('.mjs')),
+    )
+    await context.close()
+    const asked = server.log.slice(from).map((x) => x.path)
+    assert(!errors.length, errors.join('; '))
+    const workers = asked.filter((x) => x.endsWith('pdf.worker.min.mjs'))
+    assert(
+      workers.length > 0 && workers.every((x) => /\/pdfjs\/[\d.]+\/legacy\/pdf\.worker\.min\.mjs$/.test(x)),
+      `the workers asked: ${JSON.stringify(workers)}`,
+    )
+    assert(
+      st.original.s === 'open' && st.layer.s === 'ready' && p.laidPages > 0,
+      `state ${JSON.stringify([st.original, st.layer])}`,
+    )
+    return { workers: [...new Set(workers)], laidPages: p.laidPages, chunks: scripts.length }
   },
 )
 await check(

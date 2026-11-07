@@ -126,7 +126,8 @@ export type OriginalRegion =
 export type StopWhy = 'busy' | 'limit' | 'unreachable'
 export type LinkRegion =
   | { s: 'off' }
-  | { s: 'on'; t: Ticket; target: string | null; heard: boolean }
+  /** `lost`: its stream ended or broke and is asked again, nothing heard since (the website's "reconnecting") */
+  | { s: 'on'; t: Ticket; target: string | null; heard: boolean; lost?: boolean }
   /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
 export type LayerRegion =
@@ -214,6 +215,8 @@ export type Input =
    *  panes */
   | { i: 'original.mismatch'; t: Ticket }
   | { i: 'paper'; t: Ticket; doc: Doc }
+  /** the follow's stream lost, asked again (client.ts onQuiet) */
+  | { i: 'link.quiet'; t: Ticket }
   /** the follow's end (client.ts Refused): its why, a 429's wait and the document it carried */
   | { i: 'follow.lost'; t: Ticket; why: string; afterMs?: number | null; doc?: Doc | null }
   | {
@@ -486,9 +489,12 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         }
       }
       break
+    case 'link.quiet':
+      if (s.link.s === 'on' && x.t === s.link.t && !s.link.lost) s.link = { ...s.link, lost: true }
+      break
     case 'paper':
       if (s.link.s === 'on' && x.t === s.link.t) {
-        s.link = { ...s.link, heard: true }
+        s.link = { ...s.link, heard: true, lost: false }
         // (an answer that moves the paper on ends a run of 429s)
         s.refusals = 0
         heard(s, x.doc)

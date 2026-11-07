@@ -228,6 +228,34 @@ describe('the client: the follow and the open', () => {
     ac.abort()
     await expect(p).rejects.toBeDefined()
   })
+  it('tells the stream lost before it asks again, never for a poll', async () => {
+    const timers = manualTimers()
+    const ac = new AbortController()
+    const log: string[] = []
+    const answers = [
+      () => sse([`data: ${JSON.stringify({ ...DOC, rev: 1 })}\n\n`]),
+      () => new Response(JSON.stringify({ ...DOC, rev: 2 }), { headers: { 'content-type': 'application/json' } }),
+    ]
+    const p = follow({
+      fetch: async () => {
+        log.push('ask')
+        return (answers.shift() ?? (() => new Response(JSON.stringify({ ...DOC, rev: 3 }))))()
+      },
+      timers,
+      signal: ac.signal,
+      paper: { id: '2401.01234', version: 2 },
+      target: null,
+      onDoc: (d: Doc) => log.push(`doc ${d.rev}`),
+      onQuiet: () => log.push('quiet'),
+      pollMs: 2000,
+    })
+    p.catch(() => {})
+    await settle(12)
+    timers.advance(2000)
+    await settle(12)
+    ac.abort()
+    expect(log).toEqual(['ask', 'doc 1', 'quiet', 'ask', 'doc 2', 'ask', 'doc 3'])
+  })
   it('a stream silent for 30 s is followed again; two in a row that tell nothing are our server out of reach', async () => {
     const timers = manualTimers()
     let asks = 0

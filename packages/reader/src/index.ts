@@ -17,6 +17,9 @@ export {
   type Result,
 } from './reader.ts'
 export type { Side, Zoom } from './panes/panes.ts'
+// PDF.js's builds: which one a browser runs; the legacy one itself is `@readarxiv/reader/pdfjs-legacy`'s
+export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
+export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'
 export {
   CLASSES,
   type ClassName,
@@ -41,10 +44,14 @@ export {
   type Session,
   type SessionEvent,
   type SessionHost,
+  TOAST_MS,
+  type Toast,
+  type Unavailable,
 } from './chrome/model.ts'
+export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'
 export { mountChrome } from './chrome/mount.tsx'
 export { CATALOGUE_WORDS, linkNameOf, type Words } from './compose/words.ts'
-export { type LanguageItem, type Languages, PARTS, type Parts, type Slots } from './chrome/parts.tsx'
+export { type LanguageItem, type Languages, PARTS, type Parts, type Slots, type StateWords } from './chrome/parts.tsx'
 export { useSettingsLock } from './chrome/settings-lock.ts'
 export { ToolbarButton } from './chrome/ToolbarButton.tsx'
 export { useReader } from './chrome/use-reader.ts'

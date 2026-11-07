@@ -21,7 +21,7 @@ import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
-import { type Kit, loadKit } from './pdfjs/kit.ts'
+import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
@@ -133,6 +133,8 @@ export interface ReaderState {
     /** the contents entry being read: the last heading at or above the reading line of the pane read; null before the first */
     heading: number | null
   }
+  /** our server's document followed, its stream lost and asked again, nothing heard since (the website says "reconnecting") */
+  reconnecting: boolean
   crashed: boolean
 }
 export interface Reader {
@@ -172,6 +174,9 @@ export function openReader(
     /** the two panes' elements, where the host's chrome renders them (its scrollers): drawn into, never removed; none: the
      *  reader makes `div.axt-pane.left` and `.right` under `root` */
     panes?: { left: HTMLElement; right: HTMLElement }
+    /** the PDF.js build the host serves this browser (its modules and its worker: `LEGACY` of `@readarxiv/reader/pdfjs-legacy`
+     *  below the modern build's floor, builds.ts `buildFor`); none: the modern build. The choice is the host's */
+    pdfjs?: PdfBuild
   },
 ): Reader {
   const words = (): Words => o.words ?? CATALOGUE_WORDS
@@ -206,7 +211,7 @@ export function openReader(
     root.append(left, right)
   }
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
-  const kitReady = loadKit()
+  const kitReady = loadKit(o.pdfjs ?? {})
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
@@ -472,7 +477,12 @@ export function openReader(
           emit(
             e.kind === 'digest'
               ? { i: 'original.mismatch', t }
-              : { i: 'original.failed', t, why: e.kind === 'bytes' ? 'unreadable' : 'network' },
+              : {
+                  i: 'original.failed',
+                  t,
+                  // (no such file at its address: the paper is not there, a host's own page to show; ReaderState says it)
+                  why: e.kind === 'missing' ? 'not-found' : e.kind === 'bytes' ? 'unreadable' : 'network',
+                },
           ),
       })
       original = { source, doc: null }
@@ -518,6 +528,7 @@ export function openReader(
         target: spec.target,
         signal,
         onDoc: (doc) => emit({ i: 'paper', t, doc }),
+        onQuiet: () => emit({ i: 'link.quiet', t }),
       }).catch((e) => {
         if (signal.aborted) return
         emit({
@@ -935,6 +946,7 @@ export function openReader(
         outline,
         heading,
       },
+      reconnecting: l.s === 'on' && !!l.lost,
       crashed,
     }
     return told

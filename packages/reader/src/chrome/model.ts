@@ -13,8 +13,13 @@ export type Unavailable =
   | 'no-source'
   | 'no-pdf'
   | 'cannot-prepare'
+  /** the paper too large for our server to prepare (a host may say it in words of its own; else as `cannot-prepare`) */
+  | 'too-large'
   | 'unknown-versions'
+  /** at a limit: the visitor's share of new papers (a 429's quota) */
   | 'refused'
+  /** our server busy (a 429 of capacity: a host may say it in words of its own; else as `refused`) */
+  | 'busy'
   | 'unreachable'
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's */
@@ -22,6 +27,7 @@ export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([
   'no-source',
   'no-pdf',
   'cannot-prepare',
+  'too-large',
   'unknown-versions',
   'target',
 ])
@@ -35,6 +41,16 @@ export interface OutlineEntry {
   level: 1 | 2 | 3
   page: number | null
 }
+/** a host's passing words in the capsule's place (the website's share menu's "copied", its word for a crash with something on
+ *  screen): its own words and sign, shown for `ms` (TOAST_MS by default) */
+export interface Toast {
+  words: string
+  /** the check for something done (a link copied), else the information sign */
+  icon?: 'check' | 'info'
+  ms?: number
+}
+/** how long a toast stands when its host names no time (the website's TOAST_MS) */
+export const TOAST_MS = 3000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
   | { type: 'saved' }
@@ -79,6 +95,8 @@ export type SessionEvent =
   | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }
   /** no bilingual version for now, or for this paper or language */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
+  /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
+  | { type: 'link'; reconnecting: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -116,6 +134,10 @@ export interface ReaderState {
   unavailable: { why: Unavailable; retryAt: number | null } | null
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
+  /** the paragraphs translated of the paper's, as the run last told them (a host's words count them) */
+  translated: { got: number; total: number }
+  /** our server's document followed, its stream lost and asked again: the run under way not heard for now */
+  reconnecting: boolean
   /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
   loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
@@ -158,6 +180,8 @@ export interface ReaderState {
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
+  /** a host's passing words shown now (ReaderController.toast); null while none stands */
+  toast: { words: string; icon: 'check' | 'info' } | null
 }
 
 export const INITIAL: ReaderState = {
@@ -171,6 +195,8 @@ export const INITIAL: ReaderState = {
   layer: { laid: 0, total: 0 },
   unavailable: null,
   progress: 0,
+  translated: { got: 0, total: 0 },
+  reconnecting: false,
   loaded: 0,
   failedUnits: 0,
   failure: null,
@@ -190,6 +216,7 @@ export const INITIAL: ReaderState = {
   outline: [],
   currentHeading: null,
   zoom: 'page-width',
+  toast: null,
 }
 
 /** the session's commands the controller passes on */
@@ -361,6 +388,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
         return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
+    case 'link':
+      return event.reconnecting === state.reconnecting ? state : { ...state, reconnecting: event.reconnecting }
     case 'translating':
     case 'translated':
     case 'unavailable':
@@ -395,15 +424,17 @@ function reduceRunFree(
         begun: true,
         laying: false,
         progress,
+        translated: countOf(state, event),
         failedUnits: event.lost,
       }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
+      const counted = { ...state, translated: countOf(state, event) }
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state))
         return {
-          ...withFailures(state, { ...state.failures, service: event.stopped }),
+          ...withFailures(counted, { ...state.failures, service: event.stopped }),
           phase: 'failed',
           begun: true,
           progress,
@@ -413,7 +444,7 @@ function reduceRunFree(
       // (laying)
       if (!event.stopped && !settled(state.layer) && state.display !== 'original')
         return {
-          ...withFailures(state, { ...state.failures, service: null }),
+          ...withFailures(counted, { ...state.failures, service: null }),
           phase: 'translating',
           begun: true,
           laying: true,
@@ -421,7 +452,7 @@ function reduceRunFree(
           failedUnits: event.lost,
         }
       return {
-        ...withFailures(state, { ...state.failures, service: event.stopped }),
+        ...withFailures(counted, { ...state.failures, service: event.stopped }),
         phase: 'ready',
         begun: true,
         laying: false,
@@ -443,6 +474,12 @@ function reduceRunFree(
     }
   }
 }
+
+/** the run's count, the same object while it is the same */
+const countOf = (state: ReaderState, e: { got: number; total: number }): ReaderState['translated'] =>
+  state.translated.got === e.got && state.translated.total === e.total
+    ? state.translated
+    : { got: e.got, total: e.total }
 
 /** a download's file name (the reader's design, §6.1): the paper's id, the translation's with its language; the slash of
  *  an old-style id (hep-th/9711200) made safe */
@@ -474,6 +511,10 @@ export interface ReaderController {
   goToHeading(id: number): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
   download(which: 'translation' | 'original'): Promise<void>
+  /** a host's passing words in the capsule's place, over whatever it shows, for their time; words said again start their time
+   *  again, and a toast replaced before its time comes back after the one that replaced it for the time it has left (the
+   *  website's "copied" over its word for a crash) */
+  toast(t: Toast): void
 }
 
 /** what an address with no paper starts from: nothing is loading, and no translated display can be had */
@@ -526,6 +567,22 @@ export function createController({
     state = { ...state, ...patch }
     for (const listener of listeners) listener()
   }
+  /** the host's toasts standing, each until its end, the last shown; the timer to the shown one's end */
+  let toasts: { t: Toast; until: number }[] = []
+  let toastTimer: ReturnType<typeof setTimeout> | undefined
+  const showToast = () => {
+    clearTimeout(toastTimer)
+    const now = Date.now()
+    toasts = toasts.filter((x) => x.until > now)
+    const top = toasts.at(-1)
+    if (!top) {
+      set({ toast: null })
+      return
+    }
+    const icon = top.t.icon ?? 'info'
+    if (state.toast?.words !== top.t.words || state.toast.icon !== icon) set({ toast: { words: top.t.words, icon } })
+    toastTimer = setTimeout(showToast, top.until - now)
+  }
   return {
     getState: () => state,
     subscribe(listener) {
@@ -571,6 +628,12 @@ export function createController({
       if (state.narrow === on) return
       set({ narrow: on })
       later((s) => s.setNarrow(on))
+    },
+    toast(t) {
+      if (!t.words) return
+      toasts = toasts.filter((x) => x.t.words !== t.words)
+      toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
+      showToast()
     },
     async download(which) {
       const s = await session

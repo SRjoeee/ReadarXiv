@@ -632,22 +632,32 @@ export function createStack(o: StackOptions): Stack {
     return true
   }
   const LOADING = ['loadingIcon', 'loading']
+  /**
+   * The slot's loading mark, from what it shows: the left's page box's, mirrored, while it shows the left's drawing still to
+   * come (its mirror live); none for anything else. PDF.js's sheet draws its loading image over a `.page.loading` under a
+   * `.pdfViewer` (z-index 5), so a mark left on a slot that shows a drawing covers it and takes its pointer (its links): the
+   * left's page is told drawn (`pagerendered`) in the task its classes are cleared, and a mirror disconnected there never hears
+   * that change (L11's gap 5)
+   */
+  function markOf(s: Slot) {
+    const box = s.shown?.mirror ? o.left?.box(s.n) : null
+    for (const c of LOADING) s.div.classList.toggle(c, !!box?.classList.contains(c))
+  }
   function mirrorLoading(s: Slot, d: Drawing) {
     const box = o.left?.box(s.n)
     if (!box || d.mirror) return
     const sync = () => {
-      if (s.shown !== d) return
-      for (const c of LOADING) s.div.classList.toggle(c, box.classList.contains(c))
+      if (s.shown === d) markOf(s)
     }
     d.mirror = new MutationObserver(sync)
     d.mirror.observe(box, { attributes: true, attributeFilter: ['class'] })
     queueMicrotask(sync)
   }
+  /** the mirror let go where the left's drawing has come (or cannot): the mark goes with it where this drawing is shown */
   function stopMirror(s: Slot, d: Drawing) {
-    if (!d.mirror) return
-    d.mirror.disconnect()
+    d.mirror?.disconnect()
     d.mirror = null
-    if (s.shown === d || s.shown === null) for (const c of LOADING) s.div.classList.remove(c)
+    if (s.shown === d || s.shown === null) markOf(s)
   }
   /** a drawing's end: its canvas released, its holder out, its overlay's work aborted */
   function release(d: Drawing | null, s?: Slot) {
@@ -665,7 +675,7 @@ export function createStack(o: StackOptions): Stack {
       d.mirror.disconnect()
       d.mirror = null
       if (s) for (const c of LOADING) s.div.classList.remove(c)
-    }
+    } else if (s && s.shown === d) for (const c of LOADING) s.div.classList.remove(c)
     if (d.copy) {
       d.copy.width = 0
       d.copy.height = 0
@@ -764,7 +774,9 @@ export function createStack(o: StackOptions): Stack {
         was.holder.replaceWith(d.holder)
         release(was, s)
       } else s.div.append(d.holder)
-      if (d.mirror) for (const c of LOADING) s.div.classList.toggle(c, !!o.left?.box(s.n)?.classList.contains(c))
+      // (the left's mark mirrored where this is the left's drawing still to come, and gone for any other: a laid page put in
+      // place in the task the left's page is told drawn in leaves none behind)
+      markOf(s)
       counts.swaps++
       name(s)
       keepFocus(s, focus)

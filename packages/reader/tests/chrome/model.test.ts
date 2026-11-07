@@ -753,3 +753,88 @@ describe('reduce: the scale and the zoom chosen', () => {
     expect(reduce(chose, { type: 'scale', scale: 2, zoom: null }).zoom).toBeNull()
   })
 })
+
+describe("a host's toast (ReaderController.toast: the website's share menu's word, its word for a crash with something on screen)", () => {
+  const SEEN = { noticeClosed: false, narrowShown: false, refusalsSeen: 0 }
+  const fakeSession = () => ({}) as Session
+  it('stands for its time (TOAST_MS by default, or its own), in its words and sign; the same words said again start their time again', () => {
+    vi.useFakeTimers()
+    try {
+      const controller = createController({
+        open: async () => fakeSession(),
+        paper: '2600.00001v1',
+        defaults: DEFAULTS,
+      })
+      controller.toast({ words: 'Link copied', icon: 'check' })
+      expect(controller.getState().toast).toEqual({ words: 'Link copied', icon: 'check' })
+      vi.advanceTimersByTime(2000)
+      controller.toast({ words: 'Link copied', icon: 'check' })
+      vi.advanceTimersByTime(2500)
+      expect(controller.getState().toast?.words).toBe('Link copied')
+      vi.advanceTimersByTime(600)
+      expect(controller.getState().toast).toBeNull()
+      controller.toast({ words: 'Something went wrong', ms: 8000 })
+      expect(controller.getState().toast).toEqual({ words: 'Something went wrong', icon: 'info' })
+      vi.advanceTimersByTime(7999)
+      expect(controller.getState().toast).not.toBeNull()
+      vi.advanceTimersByTime(1)
+      expect(controller.getState().toast).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('one replaced before its time comes back after the one that replaced it, for the time it has left (the website\'s word for a crash, under a "copied")', () => {
+    vi.useFakeTimers()
+    try {
+      const controller = createController({
+        open: async () => fakeSession(),
+        paper: '2600.00001v1',
+        defaults: DEFAULTS,
+      })
+      controller.toast({ words: 'The translation could not load', ms: 8000 })
+      vi.advanceTimersByTime(1000)
+      controller.toast({ words: 'Link copied', icon: 'check' })
+      expect(controller.getState().toast?.words).toBe('Link copied')
+      vi.advanceTimersByTime(3000)
+      expect(controller.getState().toast?.words).toBe('The translation could not load')
+      vi.advanceTimersByTime(4000)
+      expect(controller.getState().toast).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("is the capsule's first word, over whatever else stands: a notice of passages, settings that cannot be read, a failure's card", () => {
+    const toast = { words: 'Link copied', icon: 'check' as const }
+    const states = [
+      fold([opened, { type: 'translated', got: 8, total: 10, lost: 2, stopped: null }, laid(1)]),
+      { ...INITIAL, phase: 'ready' as const, settingsUnreadable: true },
+      { ...INITIAL, phase: 'failed' as const, failure: 'network' as const },
+    ]
+    for (const s of states) {
+      expect(capsuleOf({ ...s, toast }, SEEN, PARTS.languages)).toMatchObject({ kind: 'toast', icon: 'check' })
+      expect(capsuleOf(s, SEEN, PARTS.languages)?.kind).not.toBe('toast')
+    }
+    expect(capsuleOf({ ...INITIAL, phase: 'ready', toast }, SEEN, PARTS.languages)?.words.prefix).toBe('Link copied')
+  })
+})
+
+describe("the run's count and our server's document not heard, as a host's words say them", () => {
+  it('keeps the count the run last told, the same object while it is the same; reconnecting as the reader tells it', () => {
+    const a = fold([opened, { type: 'translating', got: 3, total: 10, lost: 0 }])
+    expect(a.translated).toEqual({ got: 3, total: 10 })
+    expect(reduce(a, { type: 'translating', got: 3, total: 10, lost: 0 }).translated).toBe(a.translated)
+    expect(reduce(a, { type: 'translated', got: 10, total: 10, lost: 0, stopped: null }).translated).toEqual({
+      got: 10,
+      total: 10,
+    })
+    const lost = reduce(a, { type: 'link', reconnecting: true })
+    expect([lost.reconnecting, reduce(lost, { type: 'link', reconnecting: true })]).toEqual([true, lost])
+    expect(reduce(lost, { type: 'link', reconnecting: false }).reconnecting).toBe(false)
+  })
+  it('a paper too large is lasting, our server busy passing: each its own for a host to word', () => {
+    const tooLarge = fold([opened, { type: 'unavailable', why: 'too-large', retryAt: null }])
+    const busy = fold([opened, { type: 'unavailable', why: 'busy', retryAt: 9 }])
+    expect([tooLarge.available, tooLarge.unavailable?.why]).toEqual([false, 'too-large'])
+    expect([busy.available, busy.unavailable]).toEqual([true, { why: 'busy', retryAt: 9 }])
+  })
+})

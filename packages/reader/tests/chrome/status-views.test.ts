@@ -1,3 +1,4 @@
+import { Check, Info, Loader } from 'lucide'
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { O, R, S, setLocale } from '@readarxiv/ui'
@@ -395,5 +396,102 @@ describe("the capsule and the card (the reader's design, §6.6)", () => {
       true,
       null,
     ])
+  })
+})
+
+describe("a host's toast in the capsule's place", () => {
+  /** an icon as drawn, by its shapes' attributes */
+  const signOf = (node: typeof Check) => JSON.stringify(node.map(([, a]) => a))
+  const drawn = (el: Element) =>
+    JSON.stringify(
+      [...(el.querySelector('svg')?.children ?? [])].map((x) =>
+        Object.fromEntries([...x.attributes].filter((a) => a.name !== 'key').map((a) => [a.name, a.value])),
+      ),
+    )
+  it('its words alone, the check for something done, the information sign else; said in the status region; gone with it', async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    await act(async () => fake.set({ toast: { words: 'Link copied', icon: 'check' } }))
+    const capsule = container.querySelector('.capsule')!
+    expect([
+      capsule.getAttribute('data-kind'),
+      capsule.hasAttribute('data-alone'),
+      capsule.querySelector('.after'),
+      drawn(capsule),
+      // (said in the status region, in the capsule's line for screen readers; its drawn words hidden from them)
+      capsule.querySelector('.sr-only')?.textContent,
+    ]).toEqual(['toast', true, null, signOf(Check), 'Link copied'])
+    await act(async () => fake.set({ toast: { words: 'Something went wrong', icon: 'info' } }))
+    expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+    await act(async () => fake.set({ toast: null }))
+    await act(async () => new Promise((r) => setTimeout(r, 200)))
+    expect(container.querySelector('.capsule')).toBeNull()
+  })
+})
+
+describe("a run under way in a host's words (the website's stage and count)", () => {
+  it('the capsule with the spinner, alone; its stage said once with the count it starts at, the count that moves not said again; none without them', async () => {
+    const translating = (got: number) => ({
+      phase: 'translating' as const,
+      progress: got / 10,
+      translated: { got, total: 10 },
+    })
+    const fake = fakeController({ phase: 'ready' })
+    const words = { translating: (got: number, total: number) => `${got} / ${total}`, reconnecting: 'reconnecting' }
+    const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    await act(async () => fake.set(translating(3)))
+    const capsule = () => container.querySelector('.capsule:not([data-out])')
+    const line = () => capsule()?.querySelector('.sr-only')?.textContent
+    const sign = JSON.stringify(Loader.map(([, a]) => a))
+    const drawnSign = () =>
+      JSON.stringify(
+        [...(capsule()?.querySelector('svg')?.children ?? [])].map((x) =>
+          Object.fromEntries([...x.attributes].map((a) => [a.name, a.value])),
+        ),
+      )
+    expect([capsule()?.getAttribute('data-kind'), capsule()?.hasAttribute('data-alone'), drawnSign(), line()]).toEqual([
+      'progress',
+      true,
+      sign,
+      '3 / 10',
+    ])
+    // (the status region says the run in the capsule's own line alone: no second line of it)
+    expect([...container.querySelectorAll('[role="status"] > .sr-only')].length).toBe(0)
+    await act(async () => fake.set(translating(4)))
+    expect(line()).toBe('3 / 10')
+    await act(async () => fake.set({ reconnecting: true }))
+    expect(line()).toBe('reconnecting')
+    // (none: the progress line alone, its words said in the region)
+    const bare = fakeController({ phase: 'ready' })
+    const none = await mountElement(capsuleOf(bare.controller))
+    await act(async () => bare.set(translating(3)))
+    expect([
+      none.container.querySelector('.capsule'),
+      none.container.querySelector('[role="status"]')!.textContent,
+    ]).toEqual([null, R.status.translating])
+  })
+})
+
+describe("the narrow window's words under the host's rule", () => {
+  const pages = { left: { page: 1, pages: 4 }, right: { page: 1, pages: 4 } }
+  const narrowCapsule = (c: HTMLElement) => c.querySelector('.capsule[data-kind="narrow"]:not([data-out])')
+  it("the extension's (the default): said as the window is narrow, a page opened narrow too", async () => {
+    const fake = fakeController({ phase: 'ready', display: 'bilingual', narrow: true, sides: pages })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    expect(narrowCapsule(container)).not.toBeNull()
+  })
+  it("the website's: nothing for a page opened narrow, nor widened; said once a window that showed both sides is narrowed while reading", async () => {
+    const opened = fakeController({ phase: 'ready', display: 'bilingual', narrow: true, sides: pages })
+    const a = await mountElement(capsuleOf(opened.controller, { narrow: 'shown' }))
+    expect(narrowCapsule(a.container)).toBeNull()
+    await act(async () => opened.set({ narrow: false }))
+    expect(narrowCapsule(a.container)).toBeNull()
+    await act(async () => opened.set({ narrow: true }))
+    expect(narrowCapsule(a.container)).not.toBeNull()
+    // (wide before any page was drawn: not read side by side, so nothing owed)
+    const early = fakeController({ phase: 'loading', display: 'bilingual', narrow: false })
+    const b = await mountElement(capsuleOf(early.controller, { narrow: 'shown' }))
+    await act(async () => early.set({ phase: 'ready', narrow: true, sides: pages }))
+    expect(narrowCapsule(b.container)).toBeNull()
   })
 })

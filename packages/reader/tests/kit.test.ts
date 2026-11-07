@@ -1,5 +1,9 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { buildFor, legacyRuns, modernRuns } from '../src/pdfjs/builds.ts'
 import { forgetCancelledText, loadKit, type PdfModules } from '../src/pdfjs/kit.ts'
+import { LEGACY } from '../src/pdfjs/legacy.ts'
 
 /** PDF.js's modules as the kit reads them: a PDFWorker that records its port and its end */
 function fakeModules() {
@@ -113,5 +117,71 @@ describe("the reader's PDF.js", () => {
     expect(t.cancelled).toBe(1)
     expect(t.highlighter.mapped).toBe(false)
     expect(t.accessibilityManager.mapped).toBe(false)
+  })
+  it("runs the build the host hands it: its modules, and its worker under the data files' base or at its own URL", async () => {
+    const f = fakeModules(),
+      w = fakeWorker()
+    let loaded = 0
+    const kit = await loadKit({
+      load: async () => {
+        loaded++
+        return f.modules
+      },
+      worker: LEGACY.worker,
+      makeWorker: w.make,
+    })
+    kit.options('original')
+    const own = await loadKit({
+      load: async () => f.modules,
+      worker: '/assets/pdf.worker-1a2b.mjs',
+      makeWorker: w.make,
+    })
+    own.options('composed')
+    expect(loaded).toBe(1)
+    expect(w.ports.map((p) => p.url)).toEqual([
+      '/pdfjs/6.3.289/legacy/pdf.worker.min.mjs',
+      '/assets/pdf.worker-1a2b.mjs',
+    ])
+    // (the data files are the build's base whatever the worker: the legacy build's are the modern's bytes)
+    expect(kit.options('original').cMapUrl).toBe('/pdfjs/6.3.289/cmaps/')
+    expect(typeof LEGACY.load).toBe('function')
+  })
+})
+
+/** a browser's globals with or without the built-ins each build calls unguarded */
+function browser(o: { modern: boolean; floor: boolean }): typeof globalThis {
+  const fn = () => {}
+  const u8 = Object.assign(function U8() {}, { prototype: o.modern ? { toBase64: fn, toHex: fn } : {} })
+  return {
+    Map: { prototype: o.modern ? { getOrInsertComputed: fn } : {} },
+    Math: o.modern ? { sumPrecise: fn } : {},
+    Uint8Array: o.modern ? Object.assign(u8, { fromBase64: fn }) : u8,
+    RegExp: o.modern ? { escape: fn } : {},
+    ...(o.modern ? { Float16Array: fn } : {}),
+    Promise: o.floor ? { withResolvers: fn } : {},
+    AbortSignal: o.floor ? { any: fn } : {},
+    Intl: o.floor ? { Segmenter: fn } : {},
+  } as unknown as typeof globalThis
+}
+
+describe("PDF.js's builds, by the browser", () => {
+  it('the modern where its built-ins are there, else the legacy down to its floor, else none', () => {
+    expect(buildFor(browser({ modern: true, floor: true }))).toBe('modern')
+    expect(buildFor(browser({ modern: false, floor: true }))).toBe('legacy')
+    expect(buildFor(browser({ modern: false, floor: false }))).toBe(null)
+    // (the floor first: a browser with the modern list and without the floor's runs neither)
+    expect(buildFor(browser({ modern: true, floor: false }))).toBe(null)
+    expect(modernRuns(browser({ modern: true, floor: false }))).toBe(true)
+    expect(legacyRuns(browser({ modern: true, floor: false }))).toBe(false)
+  })
+  it("the package's entry and the rest of its sources name no module of the legacy build: a host that never runs it bundles none of it", () => {
+    const src = join(__dirname, '../src')
+    const files = (readdirSync(src, { recursive: true }) as string[]).filter((f) => /\.(ts|tsx|mjs)$/.test(f))
+    const naming = files.filter((f) => /pdfjs-dist\/legacy|pdfjs\/legacy/.test(readFileSync(join(src, f), 'utf8')))
+    expect(naming).toEqual([join('pdfjs', 'legacy.ts')])
+    const manifest = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')) as {
+      exports: Record<string, string>
+    }
+    expect(manifest.exports['./pdfjs-legacy']).toBe('./src/pdfjs/legacy.ts')
   })
 })

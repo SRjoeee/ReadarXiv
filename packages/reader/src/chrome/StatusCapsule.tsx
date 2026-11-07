@@ -2,7 +2,9 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
+// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner.
+// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time.
+// A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
 // is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
@@ -10,13 +12,14 @@
 // for as long as it is so, with the way to the settings page and no close (S-R-21). A paper that cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where
 // the settings say — a new tab, or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame
 // navigate its page). A failure never takes the focus; the card's reason is said in this region
-import { Info, X } from 'lucide'
+import { Check, Info, X } from 'lucide'
 import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
 import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from './model.ts'
 import { Capsule as Drawn } from './Capsule.tsx'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
+import { textOf } from './capsule-words.ts'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status.ts'
 import { useReader } from './use-reader.ts'
 
@@ -33,9 +36,21 @@ export function StatusCapsule({
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
   const parts = useParts()
-  const now = useReader(controller, (s) => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages))
+  // the host's rule for the narrow window (parts.tsx `narrow`): where the switch shows it (the website's), its words are owed
+  // only where a window that showed the paper side by side was narrowed while reading (narrowWatch)
+  const pane = useReader(controller, (s) => ({
+    narrow: s.narrow,
+    display: s.display,
+    pages: Math.max(s.sides.left.pages, s.sides.right.pages),
+  }))
+  const watch = useRef<NarrowWatch>({ readWide: false, narrowed: false })
+  watch.current = narrowWatch(watch.current, pane)
+  const owed = parts.narrow !== 'shown' || watch.current.narrowed
+  const now = useReader(controller, (s) =>
+    capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words),
+  )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
-  const card = useReader(controller, (s) => cardOf(s, parts.reason))
+  const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
@@ -55,8 +70,18 @@ export function StatusCapsule({
   }, [now?.kind, now?.words])
   const linger = useTimedLeave(now?.kind === 'narrow', NARROW_MS, () => setNarrowShown(true))
   const capsule = now ?? leaving
+  // a run's capsule (a host's words) says its stage once, with the count it starts at: the count that moves is not said again
+  // (the website's), and the status line of the run is its own then, so that nothing is read twice
+  const stageSaid = useRef<{ stage: string; words: string } | null>(null)
+  if (now?.kind === 'progress' && stageSaid.current?.stage !== now.stage)
+    stageSaid.current = { stage: now.stage, words: textOf(now.words) }
+  if (now?.kind !== 'progress') stageSaid.current = null
   // words alone, no chip at the end: padded there as at the start (reader.css)
-  const alone = capsule?.kind === 'narrow' || (capsule?.kind === 'unavailable' && !capsule.href)
+  const alone =
+    capsule?.kind === 'narrow' ||
+    capsule?.kind === 'toast' ||
+    capsule?.kind === 'progress' ||
+    (capsule?.kind === 'unavailable' && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
   // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
@@ -67,13 +92,20 @@ export function StatusCapsule({
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
-      {spoken && <span className="sr-only">{spoken}</span>}
+      {spoken && now?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
       {capsule && (
         <Drawn
           key={capsule.kind}
           kind={capsule.kind}
-          icon={Info}
+          icon={
+            capsule.kind === 'progress'
+              ? 'spinner'
+              : capsule.kind === 'toast' && capsule.icon === 'check'
+                ? Check
+                : Info
+          }
           words={capsule.words}
+          {...(capsule.kind === 'progress' ? { spoken: now === null ? '' : (stageSaid.current?.words ?? '') } : {})}
           wordsId={words}
           alone={alone}
           out={now === null}
@@ -82,7 +114,10 @@ export function StatusCapsule({
           // what follows the words, named by what it holds: another brings it in with the motion
           afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : capsule.kind === 'notNow' ? 'retry' : ''}`}
           after={
-            capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
+            capsule.kind === 'narrow' ||
+            capsule.kind === 'toast' ||
+            capsule.kind === 'progress' ||
+            (capsule.kind === 'unavailable' && !link) ? null : (
               <>
                 {capsule.kind === 'unreadable' && parts.settingsHref && (
                   <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">
@@ -129,6 +164,23 @@ export function StatusCapsule({
 
 /** how long the narrow window's words are read before they leave (S-R-14; the maintainer, 2026-10-01) */
 export const NARROW_MS = 5000
+
+/** what the narrow window's words are owed by, where the switch shows the translation alone (the website's rule, its owner's of
+ *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
+ *  and was then narrowed while reading (`narrowed`) says that it shows the translation alone; a page opened in a narrow window
+ *  says nothing (its switch shows the translation chosen), and widened again it says nothing either. What it has seen only grows */
+export interface NarrowWatch {
+  readWide: boolean
+  narrowed: boolean
+}
+export function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: string; pages: number }): NarrowWatch {
+  if (!now.narrow) {
+    const readWide = was.readWide || (now.display === 'bilingual' && now.pages > 0)
+    return readWide === was.readWide ? was : { readWide, narrowed: was.narrowed }
+  }
+  const narrowed = was.narrowed || was.readWide
+  return narrowed === was.narrowed ? was : { readWide: was.readWide, narrowed }
+}
 
 /**
  * A capsule that leaves by itself after `ms` of being read: the time stands while the pointer is over it or it holds the

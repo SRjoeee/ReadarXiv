@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
+    "./pdfjs-legacy": "./src/pdfjs/legacy.ts",
     "./reader.css": "./src/chrome/reader.css"
   },
   "scripts": {

@@ -21,6 +21,7 @@ import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
 import { CATALOGUE_WORDS } from '../../src/compose/words.ts'
 import { openReader, type Reader } from '../../src/reader.ts'
+import { LEGACY } from '../../src/pdfjs/legacy.ts'
 
 const root = document.getElementById('root') as HTMLElement
 const bytesOf = async (url: string) => {
@@ -678,6 +679,10 @@ const h = {
       closeAtOnce?: boolean
       /** the first layout made (the first composed document's) held until `h.releaseLay()` */
       holdFirstLay?: boolean
+      /** PDF.js's legacy build handed to the reader, as a host does below the modern build's floor */
+      legacy?: boolean
+      /** another paper than the fixture's (one our server does not have) */
+      paper?: string
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -740,7 +745,8 @@ const h = {
     const reader = openReader(root, {
       host,
       ...(o.panes ? { panes: { left: o.panes.left, right: o.panes.right } } : {}),
-      paper: index.paper,
+      ...(o.legacy ? { pdfjs: LEGACY } : {}),
+      paper: o.paper ?? index.paper,
       visit: { target },
       engine: {
         faces: faceTable(h.kit?.base ?? '/pdfjs/6.3.289/'),

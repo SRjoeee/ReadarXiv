@@ -59,6 +59,11 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
   })
 
+  it('places a pane\'s scroller in the reader\'s own sheet, as PDF.js\'s viewer requires: a host\'s page sheet adds none (L11\'s gap 4)', () => {
+    const own = rules(sheet(READER))
+    expect(ruleOf(own, '.pane .viewerContainer', [])).toMatchObject({ position: 'absolute', inset: '0', overflow: 'auto', 'overflow-anchor': 'none' })
+  })
+
   it('sets the capsule\'s words on a whole 17 px line, so that they sit on its middle (the maintainer, 2026-10-04)', () => {
     expect(all.find(r => r.selector === '.capsule .words')?.body).toMatch(/line-height: 17px;/)
   })

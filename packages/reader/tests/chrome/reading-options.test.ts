@@ -126,6 +126,18 @@ describe("the reading options (the reader's design, §6.1)", () => {
     ]).toEqual([0, true])
   })
 
+  it("holds the host's own last rows after the dim switch (the website's interface language), and none where it gives none", async () => {
+    const options = createElement('div', { className: 'row', 'data-slot': 'options' }, 'options')
+    const { container } = await open({ ...SLOTS, options })
+    const pop = container.querySelector('[popover="auto"]')!
+    expect(pop.lastElementChild?.getAttribute('data-slot')).toBe('options')
+    expect(
+      pop.lastElementChild?.previousElementSibling?.querySelector('[role="switch"]')?.getAttribute('aria-label'),
+    ).toBe(R.options.dim)
+    const { container: none } = await open()
+    expect(none.querySelector('[data-slot="options"]')).toBeNull()
+  })
+
   it('writes each change at once', async () => {
     const { container, written } = await open()
     container.querySelector<HTMLElement>('[role="switch"][aria-label="对照高亮"]')!.click()

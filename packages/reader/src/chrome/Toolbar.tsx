@@ -1,4 +1,5 @@
-// The toolbar (the reader's design, §5, §6.1): 44 px, three zones — the lead (the contents, the title, the id), the
+// The toolbar (the reader's design, §5, §6.1): 44 px, three zones — the lead (a host's own first, the contents, the title, the
+// id, a host's own after it), the
 // centre (the display switch), the trail (the side-by-side pair, zoom, the translation's menus and the reading options,
 // the download, the settings, the way back), a hairline divider between the trail's groups. The page's banner, not an
 // ARIA toolbar: each control is a stop of its own, which a toolbar's arrow keys would not be (the interface review).
@@ -31,7 +32,7 @@ export function Toolbar({
   contents: boolean
   onContents: () => void
 }) {
-  const { slots } = useParts()
+  const { slots, narrow: narrowRule } = useParts()
   const state = useReader(controller, (s) => ({
     swapped: s.prefs?.swapped ?? false,
     display: s.display,
@@ -42,19 +43,28 @@ export function Toolbar({
     sync: s.sync,
   }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
+  const shownAlone = narrowRule === 'shown' && state.narrow && state.display === 'bilingual'
   const lock = useSettingsLock(controller)
   return (
     <header className="chrome bar">
       <div data-zone="lead" className="flex min-w-0 items-center gap-1">
+        {/* the host's own first (the website's way home), and after the title (its short link to arXiv, where the lead cannot
+            hold the id): each a child of the lead itself, so that a host's sheet places it by its siblings */}
+        {slots.lead}
         <ToolbarButton label={R.contents} aria-expanded={contents} aria-controls="axt-contents" onClick={onContents}>
           <Icon node={PanelLeft} />
         </ToolbarButton>
         <PaperTitle id={state.paper.id} title={state.paper.title} />
+        {slots.afterTitle}
       </div>
       <div data-zone="centre" className="flex items-center">
+        {/* a narrow window shows the translation alone in side by side: the host's rule says whether the switch shows it so,
+            the translation chosen and side by side greyed (the website's), or keeps side by side chosen and the capsule says it
+            (the extension's) */}
         <DisplaySwitch
-          value={state.display}
+          value={shownAlone ? 'translation' : state.display}
           translatable={state.available && state.languageSupported}
+          {...(narrowRule === 'shown' && state.narrow ? { off: ['bilingual'] as const } : {})}
           onChange={controller.setDisplay}
         />
       </div>

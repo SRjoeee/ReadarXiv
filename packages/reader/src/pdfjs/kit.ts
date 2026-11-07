@@ -26,11 +26,18 @@ export interface PdfModules {
 export interface KitOptions {
   /** where the data files and the worker are served (a path or a URL ending in `/`); default `/pdfjs/<version>/` */
   base?: string
-  /** the modules (the host's build may give its own: the website's legacy build); default the modern build */
+  /** the modules (the host's build may give its own: the website's legacy build, `@readarxiv/reader/pdfjs-legacy`); default
+   *  the modern build */
   load?: () => Promise<PdfModules>
+  /** the build's worker script: a URL, or a path under `base`; default `pdf.worker.min.mjs`, the modern build's (the reader's
+   *  build plugin serves the legacy one at `legacy/pdf.worker.min.mjs`, with `legacy: true`) */
+  worker?: string
   /** a module worker of the build's worker script (a test's stand-in); default the browser's `Worker` */
   makeWorker?: (url: string, name: string) => Worker
 }
+
+/** the PDF.js build a host hands its reader (openReader's `pdfjs`): its modules and its worker; none, the modern build */
+export type PdfBuild = Pick<KitOptions, 'load' | 'worker' | 'base'>
 
 export interface Kit {
   readonly lib: typeof Lib
@@ -98,11 +105,13 @@ export async function loadKit(o: KitOptions = {}): Promise<Kit> {
   const version = lib.version
   const base = o.base ?? `/pdfjs/${version}/`
   const make = o.makeWorker ?? ((url: string, name: string) => new Worker(url, { type: 'module', name }))
+  const script = o.worker ?? 'pdf.worker.min.mjs'
+  const workerUrl = /^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(script) ? script : `${base}${script}`
   const workers = new Map<Role, { port: Worker; pdf: Lib.PDFWorker }>()
   const workerOf = (role: Role) => {
     let w = workers.get(role)
     if (!w || w.pdf.destroyed) {
-      const port = make(`${base}pdf.worker.min.mjs`, `axt-${role}`)
+      const port = make(workerUrl, `axt-${role}`)
       w = {
         port,
         pdf: new lib.PDFWorker({ name: `axt-${role}`, port } as unknown as ConstructorParameters<

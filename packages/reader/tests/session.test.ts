@@ -219,6 +219,21 @@ describe('the session: engaged, the link, the layer', () => {
     expect(m.s.layer).toMatchObject({ s: 'ready', open: true })
     expect(m.s.bound).toBe(HEAD.original.sha256)
   })
+  it("the follow's stream lost and asked again: reconnecting until a document is heard on it, the link kept (the website's word)", () => {
+    const m = machine()
+    const link = m.live('link')
+    m.feed({ i: 'paper', t: link, doc: preparing(1) })
+    expect(m.s.link).toMatchObject({ s: 'on', heard: true, lost: false })
+    m.feed({ i: 'link.quiet', t: link })
+    expect(m.s.link).toMatchObject({ s: 'on', lost: true })
+    expect(m.live('link')).toBe(link)
+    m.feed({ i: 'paper', t: link, doc: preparing(2) })
+    expect(m.s.link).toMatchObject({ s: 'on', lost: false })
+    // (a stale ticket's word dropped)
+    const dropped = m.dropped
+    m.feed({ i: 'link.quiet', t: 'gone' as Ticket })
+    expect([m.dropped, m.s.link]).toMatchObject([dropped + 1, { lost: false }])
+  })
   it('a paper the server has not opened is opened (the POST, the follow waiting for it), then followed again', () => {
     const m = machine()
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'not-opened' })

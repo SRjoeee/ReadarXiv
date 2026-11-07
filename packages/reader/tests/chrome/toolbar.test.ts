@@ -162,6 +162,27 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
   })
 
+  it("draws the host's own in the lead: first (the website's way home), and right after the title (its short link to arXiv)", async () => {
+    const slot = (at: string) => createElement('a', { 'data-slot': at, href: '#' }, at)
+    const { container } = await mount(
+      { paper: { id: '2401.00001v2', title: 'A paper' } },
+      { lead: slot('lead'), afterTitle: slot('after-title') },
+    )
+    const lead = container.querySelector('[data-zone="lead"]')!
+    const order = [...lead.children].map(
+      (el) => el.getAttribute('data-slot') ?? (el.matches('.paper-title') ? 'title' : nameOf(el)),
+    )
+    expect(order.filter((w) => w !== null && w !== R.contents)).toEqual(['lead', 'title', 'after-title'])
+    expect(order.indexOf('lead')).toBe(0)
+    expect(nameOf(lead.children[1]!)).toBe(R.contents)
+    // (the title's next sibling: a host's sheet shows its short link by `.paper-title + …`)
+    expect(lead.querySelector('.paper-title + [data-slot="after-title"]')).not.toBeNull()
+    // none: the lead is the chrome's alone, the contents' button first
+    const { container: bare } = await mount()
+    expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
+    expect(nameOf(bare.querySelector('[data-zone="lead"]')!.firstElementChild!)).toBe(R.contents)
+  })
+
   it('says whether the contents are open, and which region they are, as a disclosure does (the interface review)', async () => {
     const { container } = await mount()
     const toggle = button(container, '目录')
@@ -225,5 +246,46 @@ describe("the toolbar (the reader's design, §6.1)", () => {
       const { container } = await mount({ settingsUnreadable: true, display: 'translation' })
       expect(tipOf(button(container, R.swap))).toBe(R.swap)
     })
+  })
+})
+
+describe("the narrow window's rule, the host's (parts.tsx narrow; interfaces/host design-a §6)", () => {
+  const radios = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[role="radiogroup"].display [role="radio"]')].map((r) => [
+      r.getAttribute('aria-label'),
+      r.getAttribute('aria-checked'),
+      r.getAttribute('aria-disabled'),
+    ])
+  const narrowAt = (narrowRule?: 'told' | 'shown') => {
+    const fake = fakeController({ narrow: true, display: 'bilingual' })
+    return mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        ...(narrowRule ? { narrow: narrowRule } : {}),
+      }),
+    ).then((m) => ({ ...m, ...fake }))
+  }
+  it("the extension's, the default: side by side stays chosen in a narrow window (the capsule says it shows the translation alone)", async () => {
+    for (const rule of [undefined, 'told'] as const) {
+      const { container } = await narrowAt(rule)
+      expect(radios(container)).toEqual([
+        [R.display.original, 'false', null],
+        [R.display.bilingual, 'true', null],
+        [R.display.translation, 'false', null],
+      ])
+    }
+  })
+  it("the website's: the translation shown chosen and side by side greyed in a narrow window, the stored side by side kept for a wider one", async () => {
+    const { container, set, controller } = await narrowAt('shown')
+    expect(radios(container)).toEqual([
+      [R.display.original, 'false', null],
+      [R.display.bilingual, 'false', 'true'],
+      [R.display.translation, 'true', null],
+    ])
+    // (the translation chosen already: nothing written; side by side greyed: nothing either)
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.bilingual}"]`)!.click()
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.translation}"]`)!.click()
+    expect(controller.setDisplay).not.toHaveBeenCalled()
+    await act(async () => set({ narrow: false }))
+    expect(radios(container)[1]).toEqual([R.display.bilingual, 'true', null])
   })
 })
