@@ -64,8 +64,9 @@ export type SessionEvent =
   | { type: 'heading'; id: number | null }
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
-  /** the panes scroll together, as the reader applies it */
-  | { type: 'sync'; on: boolean }
+  /** the panes scroll together, as the reader applies it; `available`: whether they can (both sides' pages laid out), none
+   *  where the session does not say (the extension's today session: as if they could) */
+  | { type: 'sync'; on: boolean; available?: boolean }
   /** the visitor's preferences, each time they land (the one model, prefs.ts) */
   | { type: 'prefs'; prefs: Prefs }
   | { type: 'display'; mode: EngineDisplay }
@@ -92,7 +93,15 @@ export type SessionEvent =
   | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number; original?: number }
   /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */
   | { type: 'translating'; got: number; total: number; lost: number }
-  | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }
+  /** `retryAt`: when a retry of a run stopped short is due, where the service named a time (none: at once) */
+  | {
+      type: 'translated'
+      got: number
+      total: number
+      lost: number
+      stopped: ProviderErrorKind | null
+      retryAt?: number | null
+    }
   /** no bilingual version for now, or for this paper or language */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
@@ -149,6 +158,8 @@ export interface ReaderState {
    *  may fail during the start, so one slot cannot hold them. `failure` is the one shown: the PDF's first (nothing reads
    *  without the original), then the service's */
   failures: { pdf: ProviderErrorKind | null; service: ProviderErrorKind | null }
+  /** when a retry of the run's failure is due, where the service named a time (a rows' wait); null: none named */
+  failureAt: number | null
   languageSupported: boolean
   /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
   download: 'none' | 'original' | 'translation'
@@ -180,8 +191,15 @@ export interface ReaderState {
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
+  /** the sides can scroll together (both sides' pages laid out), as the session says; true where it says nothing */
+  syncAvailable: boolean
   /** a host's passing words shown now (ReaderController.toast); null while none stands */
   toast: { words: string; icon: 'check' | 'info' } | null
+  /** the reader chose a display this visit (the switch, a chip that shows the translation): a host's hold for the narrow
+   *  window is theirs to end (parts.tsx `narrow`) */
+  chose: boolean
+  /** the paper's layer was made during this visit (a prepare told): its run is the making's */
+  made: boolean
 }
 
 export const INITIAL: ReaderState = {
@@ -201,6 +219,7 @@ export const INITIAL: ReaderState = {
   failedUnits: 0,
   failure: null,
   failures: { pdf: null, service: null },
+  failureAt: null,
   languageSupported: true,
   download: 'none',
   scale: 1,
@@ -213,10 +232,13 @@ export const INITIAL: ReaderState = {
   noPaper: false,
   narrow: false,
   sync: true,
+  syncAvailable: true,
   outline: [],
   currentHeading: null,
   zoom: 'page-width',
   toast: null,
+  chose: false,
+  made: false,
 }
 
 /** the session's commands the controller passes on */
@@ -238,6 +260,10 @@ export interface Session {
   retry(): void
   setNarrow(on: boolean): void
   pinch(which: Side, factor: number, origin: [number, number]): void
+  /** the original held on screen for now, whatever display is chosen, or let go (a host's rule, parts.tsx `narrow` and
+   *  `refusal`): never written; the reader's own choice of a display ends it. A session that has none holds nothing (the
+   *  extension's, whose rules ask for none) */
+  hold?(on: boolean): void
 }
 
 /** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
@@ -319,8 +345,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, outline: event.entries }
     case 'paper':
       return { ...state, paper: { id: event.id, title: event.title } }
-    case 'sync':
-      return event.on === state.sync ? state : { ...state, sync: event.on }
+    case 'sync': {
+      const available = event.available ?? true
+      return event.on === state.sync && available === state.syncAvailable
+        ? state
+        : { ...state, sync: event.on, syncAvailable: available }
+    }
     case 'html':
       return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
     case 'prefs':
@@ -352,7 +382,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       const preparing = { position: event.position, progress: event.progress }
       // the phase only before the translation has begun, and over the original on screen (loading stays loading)
       const phase = !state.begun && (state.phase === 'ready' || state.phase === 'preparing') ? 'preparing' : state.phase
-      return { ...state, preparing, unavailable: null, phase }
+      return { ...state, preparing, unavailable: null, phase, made: true }
     }
     case 'prepared':
       return state.preparing === null && state.phase !== 'preparing'
@@ -426,11 +456,16 @@ function reduceRunFree(
         progress,
         translated: countOf(state, event),
         failedUnits: event.lost,
+        failureAt: null,
       }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
-      const counted = { ...state, translated: countOf(state, event) }
+      const counted = {
+        ...state,
+        translated: countOf(state, event),
+        failureAt: event.stopped ? (event.retryAt ?? null) : null,
+      }
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state))
         return {
@@ -515,6 +550,8 @@ export interface ReaderController {
    *  again, and a toast replaced before its time comes back after the one that replaced it for the time it has left (the
    *  website's "copied" over its word for a crash) */
   toast(t: Toast): void
+  /** the original held on screen for now, or let go (Session `hold`): the chrome's, by its host's rules (App.tsx) */
+  hold(on: boolean): void
 }
 
 /** what an address with no paper starts from: nothing is loading, and no translated display can be had */
@@ -599,7 +636,12 @@ export function createController({
       })
       return session
     },
-    setDisplay: (display) => later((s) => s.setDisplay(display)),
+    // (the reader's own choice: a host's hold for the narrow window is theirs to end)
+    setDisplay: (display) => {
+      set({ chose: true })
+      later((s) => s.setDisplay(display))
+    },
+    hold: (on) => later((s) => s.hold?.(on)),
     // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
     setSync: (on) => later((s) => s.setSyncMode(on ? 'same' : 'off')),
     zoomBy: (factor) => {

@@ -100,6 +100,9 @@ export interface Doc {
     retryAt: number | null
     stage: string | null
     units: Ref[]
+    /** after a prepare that cannot be made (`cannot`, `too-large`): whether arXiv has an HTML version of the paper, as our
+     *  server knows it (null, or none: it does not say) */
+    html?: boolean | null
   }
   layer: { catalog: Ref; units: Ref[]; format: number } | null
   targets: Record<
@@ -182,6 +185,10 @@ export interface State {
     timer: Ticket | null
   }
   visit: Partial<Pick<Prefs, 'display' | 'target' | 'sync'>>
+  /** the original held on screen by the host for now (its rule: the website's narrow window while the paper is made, a
+   *  refusal for now with nothing laid), whatever display is chosen, until the reader chooses one; not a choice, so the run
+   *  the display chosen engages goes on */
+  held: boolean
   original: OriginalRegion
   doc: Doc | null
   link: LinkRegion
@@ -242,6 +249,8 @@ export type Input =
   | { i: 'panes.laid'; laid: number; total: number }
   | { i: 'cmd.set'; prefs: Partial<Prefs> }
   | { i: 'cmd.retry' }
+  /** the host's hold of the original on screen, on or off (Command hold) */
+  | { i: 'cmd.hold'; on: boolean }
   | { i: 'cmd.translator' }
   | { i: 'close' }
 
@@ -283,8 +292,8 @@ export function holdOf(s: State): 'paper' | 'target' | null {
   if (s.layer.s === 'refused' && LASTING.has(s.layer.why)) return 'paper'
   return s.engaged && !supported(s, targetOf(s)) ? 'target' : null
 }
-/** the display shown: the one chosen, the original where it is held */
-export const displayOf = (s: State): Display => (holdOf(s) ? 'original' : chosenOf(s))
+/** the display shown: the one chosen, the original where it is held (the paper's, the language's, or the host's for now) */
+export const displayOf = (s: State): Display => (holdOf(s) || s.held ? 'original' : chosenOf(s))
 /** a 429's wait as the reader waits it: our server's, at least a second, at most ten minutes */
 export const waitOf = (ms: number | null | undefined): number =>
   Math.min(WAIT_MAX_MS, Math.max(WAIT_MIN_MS, typeof ms === 'number' && Number.isFinite(ms) ? ms : WAIT_MIN_MS))
@@ -304,6 +313,7 @@ export function init(o: Init): State {
     gate: { open: false, timer: null },
     prefs: { s: 'reading', value: o.defaults, chosen: [], refused: 0, timer: null },
     visit: o.visit ?? {},
+    held: false,
     original: { s: 'opening', t: '', pin: false, loaded: 0, total: 0 },
     doc: null,
     link: { s: 'off' },
@@ -628,6 +638,8 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       const visit = { ...s.visit }
       for (const k of Object.keys(patch)) delete visit[k as keyof typeof visit]
       s.visit = visit
+      // (the reader's own choice of a display ends the host's hold)
+      if (patch.display !== undefined) s.held = false
       effects.push({ e: 'prefs.write', patch })
       // a target changed: the rows of the old one let go (the layer, the composed document and the place kept)
       if (patch.target !== undefined && patch.target !== s.rows.target) s.rows = { s: 'none', target: patch.target }
@@ -652,6 +664,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         s.refusals = 0
         s.prepare = { spent: 0, since: null, timer: null }
       }
+      break
+    case 'cmd.hold':
+      s.held = x.on
       break
     case 'cmd.translator':
       if (s.rows.s === 'failed') s.rows = { s: 'none', target: s.rows.target }

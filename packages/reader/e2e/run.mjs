@@ -185,12 +185,24 @@ const v2Route = {
       res.writeHead(status, { 'content-type': 'application/json', ...headers })
       res.end(JSON.stringify(body))
     }
+    // (an original our server cannot give now: the original lost)
+    if (url.pathname.startsWith('/api/v2/o/broken/')) return json(503, { error: 'unavailable' })
     if (url.pathname.startsWith('/api/v2/papers/')) {
       const seg = url.pathname.slice('/api/v2/papers/'.length)
       v2log.push({ what: 'follow', seg, query: url.search, at: performance.now() })
       const d = docs[seg] ?? Object.values(docs).find((x) => x.pv.replace(/v\d+$/, '') === seg)
       if (!d) return json(404, { error: 'not-found' })
       const m = modes[d.pv]
+      // (busy for now, an hour on; a prepare that cannot be made, with our server's word on arXiv's HTML version)
+      if (m?.kind === 'refused') return json(429, { error: 'busy' }, { 'retry-after': '3600' })
+      if (m?.kind === 'cannot')
+        return json(200, {
+          ...d,
+          rev: 2,
+          layer: null,
+          prepare: { ...d.prepare, state: 'failed', why: 'cannot', html: m.html },
+          targets: {},
+        })
       if (m?.kind === 'not-opened' && !m.opened) return json(404, { error: 'not-opened' })
       if (m?.kind === 'not-opened' && performance.now() - m.opened < (m.prepareMs ?? 800))
         return json(200, {
@@ -199,6 +211,13 @@ const v2Route = {
           layer: null,
           prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
           targets: {},
+        })
+      // (the target still running for `runningMs` after the prepare, its rows in: the run under way, some of it there)
+      if (m?.kind === 'not-opened' && m.runningMs && performance.now() - m.opened < (m.prepareMs ?? 800) + m.runningMs)
+        return json(200, {
+          ...d,
+          rev: 2,
+          targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
       // (a newer catalog once the check says so: the same layer under the twin head)
       if (m?.kind === 'recatalog' && m.switched)
@@ -1137,6 +1156,300 @@ await check(
       `the website's, narrowed while reading: ${JSON.stringify(shown.narrowed)}`,
     )
     return out
+  },
+)
+await check(
+  "chrome: a refusal for now by the website's rules: the original alone, the translated displays greyed with swap and sync, the capsule's clock and no retry until its time, its words with the time; the extension's keeps side by side, the switch whole, its retry at once (L11 second round, gaps 1, 2, 8)",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'refused' }
+    const look = async (site) => {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate((x) => window.__c.open('s1-columns', x), site ? { site: true } : { words: true })
+      await waitFor(page, () => window.__c.reader?.state().layer.s === 'refused', null, 20_000)
+      await waitFor(page, () => !!document.querySelector('.capsule[data-kind="notNow"]:not([data-out])'), null, 10_000)
+      await page.waitForTimeout(400)
+      const seen = await page.evaluate(() => {
+        const w = window.__c.words('en')
+        const radio = (n) => document.querySelector(`.seg.display [role="radio"][aria-label="${n}"]`)
+        const button = (n) => document.querySelector(`button[aria-label="${n}"]`)
+        const capsule = document.querySelector('.capsule[data-kind="notNow"]:not([data-out])')
+        const st = window.__c.reader.state()
+        return {
+          shown: st.view.display,
+          stored: st.prefs.display,
+          translated: [radio(w.bilingual), radio(w.translation)].map((r) => r?.getAttribute('aria-disabled') ?? null),
+          sideBySide: [button(w.swap), button(w.sync)].map((b) => b?.getAttribute('aria-disabled') ?? null),
+          sign: window.__c.signOf(capsule),
+          retry: !!capsule?.querySelector('button[data-action]'),
+          said: capsule?.querySelector('.sr-only')?.textContent ?? null,
+          due: st.layer.retryAt !== null && st.layer.retryAt > Date.now(),
+        }
+      })
+      await context.close()
+      return { seen, errors: errors.filter((e) => !/status of 429/.test(e)) }
+    }
+    try {
+      const site = await look(true)
+      const own = await look(false)
+      assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+      assert(
+        site.seen.due &&
+          site.seen.shown === 'original' &&
+          site.seen.stored === 'bilingual' &&
+          JSON.stringify(site.seen.translated) === '["true","true"]' &&
+          JSON.stringify(site.seen.sideBySide) === '["true","true"]' &&
+          site.seen.sign === 'clock' &&
+          !site.seen.retry &&
+          site.seen.said === 'Busy until later',
+        `the website's: ${JSON.stringify(site.seen)}`,
+      )
+      assert(
+        own.seen.shown === 'bilingual' &&
+          JSON.stringify(own.seen.translated) === '[null,null]' &&
+          JSON.stringify(own.seen.sideBySide) === '[null,null]' &&
+          own.seen.sign === 'info' &&
+          own.seen.retry,
+        `the extension's: ${JSON.stringify(own.seen)}`,
+      )
+      return { site: site.seen, own: own.seen }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+await check(
+  "chrome: the sync greyed until the sides can scroll together by the website's rule, whole once they can; the extension's not greyed by it (L11 second round, gap 9)",
+  async () => {
+    const out = {}
+    for (const site of [true, false]) {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate(
+        ([n, x]) => {
+          window.__seen = []
+          const look = () => {
+            const b = document.querySelector(`button[aria-label="${window.__c.words('en').sync}"]`)
+            if (!b) return
+            // (side by side shown: the switch's own greying, not the display's)
+            const shown = document.querySelector('.seg.display [role="radio"][aria-checked="true"]')
+            if (shown?.getAttribute('aria-label') !== window.__c.words('en').bilingual) return
+            const v = b.getAttribute('aria-disabled')
+            if (window.__seen.at(-1) !== v) window.__seen.push(v)
+          }
+          new MutationObserver(look).observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['aria-disabled'],
+          })
+          return window.__c.open(n, x)
+        },
+        ['s1-columns', site ? { site: true } : {}],
+      )
+      await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+      await page.waitForTimeout(300)
+      const seen = await page.evaluate(() => ({
+        greyed: window.__seen,
+        available: [...new Set(window.__c.trail.map((r) => r.syncAvailable))],
+        state: window.__c.reader.state().view.sync,
+      }))
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      out[site ? 'site' : 'own'] = seen
+    }
+    assert(
+      out.site.greyed[0] === 'true' && out.site.greyed.at(-1) === null && out.site.state.available,
+      `the website's: ${JSON.stringify(out.site)}`,
+    )
+    assert(
+      out.own.greyed.every((v) => v === null),
+      `the extension's: ${JSON.stringify(out.own)}`,
+    )
+    return out
+  },
+)
+await check(
+  "chrome: the original lost, where the host words its way to arXiv's PDF: the original's pane's card, the file sign, arXiv's PDF of the version its link, the translation's pane uncovered; the extension's the translation's pane's card with its retry (L11 second round, gap 3)",
+  async () => {
+    const paper = indexOf['s1-columns'].paper
+    const look = async (x) => {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate((o) => window.__c.open('s1-columns', o), x)
+      await waitFor(page, () => window.__c.reader?.state().original.s === 'failed', null, 20_000)
+      await waitFor(page, () => !!document.querySelector('.pane .card'), null, 10_000)
+      const seen = await page.evaluate(() => {
+        const pane = (side) => document.querySelector(`.pane[data-side="${side}"]`)
+        const card = (side) => pane(side).querySelector('.card')
+        const left = card('left')
+        return {
+          left: left && {
+            sign: window.__c.signOf(left),
+            tone: left.getAttribute('data-tone'),
+            words: left.querySelector('p')?.textContent,
+            href: left.querySelector('a')?.getAttribute('href'),
+            label: left.querySelector('a')?.textContent,
+            covers: pane('left').hasAttribute('data-card'),
+          },
+          right: card('right') && {
+            words: card('right').querySelector('p')?.textContent,
+            retry: !!card('right').querySelector('button'),
+          },
+          rightCovered: pane('right').hasAttribute('data-card'),
+        }
+      })
+      await context.close()
+      return { seen, errors: errors.filter((e) => !/status of 503/.test(e)) }
+    }
+    const site = await look({ site: true, original: 'broken' })
+    const own = await look({ words: true, original: 'broken' })
+    assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+    assert(
+      site.seen.left?.sign === 'file' &&
+        site.seen.left.tone === 'wait' &&
+        site.seen.left.words === 'The original cannot be shown here' &&
+        site.seen.left.href === `https://arxiv.org/pdf/${paper}` &&
+        site.seen.left.label === 'Open the PDF on arXiv' &&
+        site.seen.left.covers &&
+        site.seen.right === null &&
+        !site.seen.rightCovered,
+      `the website's: ${JSON.stringify(site.seen)}`,
+    )
+    assert(
+      own.seen.left === null && own.seen.right?.words === 'The original could not be read' && own.seen.right.retry,
+      `the extension's: ${JSON.stringify(own.seen)}`,
+    )
+    return { site: site.seen, own: own.seen }
+  },
+)
+await check(
+  "chrome: a narrow window while the paper is made, by the website's rule: the original held, the switch at the original, the chip that shows the translation once some is there, pressed the translation shown; the extension's shows the translation alone from the first (L11 second round, gaps 7 and 4)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    const look = async (x) => {
+      modes[seg] = { kind: 'not-opened', prepareMs: 1500, runningMs: 8000 }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html', viewport: { width: 700, height: 900 } })
+        await page.evaluate((o) => window.__c.open('s2-splits', o), x)
+        await waitFor(page, () => window.__c.reader?.state().layer.s === 'preparing', null, 20_000)
+        await page.waitForTimeout(300)
+        const radios = () =>
+          page.evaluate(() => {
+            const w = window.__c.words('en')
+            return [w.original, w.bilingual, w.translation].map(
+              (n) =>
+                document
+                  .querySelector(`.seg.display [role="radio"][aria-label="${n}"]`)
+                  ?.getAttribute('aria-checked') ?? null,
+            )
+          })
+        const preparing = {
+          shown: await page.evaluate(() => window.__c.reader.state().view.display),
+          radios: await radios(),
+        }
+        const chip = '.capsule[data-kind="progress"] button[data-action]'
+        let pressed = null
+        if (x.site) {
+          await waitFor(page, (sel) => !!document.querySelector(sel), chip, 20_000)
+          const before = await page.evaluate(() => window.__c.reader.state().view.display)
+          await page.locator(chip).click()
+          await waitFor(page, () => window.__c.controller.getState().display === 'translation', null, 10_000)
+          await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 20_000)
+          pressed = {
+            before,
+            after: await page.evaluate(() => window.__c.reader.state().view.display),
+            writes: await page.evaluate(() => window.__c.writes.map((w) => w.display).filter(Boolean)),
+            radios: await radios(),
+          }
+        } else await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+        const trail = await page.evaluate(() => window.__c.trail.map((r) => `${r.phase}:${r.display}`))
+        await context.close()
+        return { preparing, pressed, trail, errors: errors.filter((e) => !/status of 404/.test(e)) }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    const site = await look({ site: true, narrow: 'shown' })
+    const own = await look({})
+    assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+    assert(
+      site.preparing.shown === 'original' &&
+        JSON.stringify(site.preparing.radios) === '["true","false","false"]' &&
+        site.pressed?.before === 'original' &&
+        site.pressed.after === 'translation' &&
+        JSON.stringify(site.pressed.writes) === '["translation"]' &&
+        JSON.stringify(site.pressed.radios) === '["false","false","true"]',
+      `the website's: ${JSON.stringify(site)}`,
+    )
+    assert(
+      own.preparing.shown === 'bilingual' && !own.trail.slice(1).some((t) => t.endsWith(':original')),
+      `the extension's: ${JSON.stringify(own)}`,
+    )
+    return { site: { preparing: site.preparing, pressed: site.pressed }, own: own.preparing }
+  },
+)
+await check(
+  "reader: our server's word on arXiv's HTML version taken before any ask of arXiv's; the website's link in its own words (L11 second round, gap 5)",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    const paper = indexOf['s1-columns'].paper
+    const out = {}
+    for (const html of [true, false]) {
+      modes[seg] = { kind: 'cannot', html }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html' })
+        const asked = []
+        page.on('request', (r) => {
+          if (/^https:\/\/arxiv\.org\/html\//.test(r.url())) asked.push(r.url())
+        })
+        await page.evaluate(() => window.__c.open('s1-columns', { site: true }))
+        await waitFor(page, () => window.__c.reader?.state().layer.s === 'refused', null, 20_000)
+        await page.waitForTimeout(600)
+        const seen = await page.evaluate(() => {
+          const a = document.querySelector('.capsule[data-kind="unavailable"] a[data-action]')
+          return {
+            html: window.__c.reader.state().paper.html,
+            link: a && [a.getAttribute('href'), a.textContent],
+          }
+        })
+        await context.close()
+        assert(!errors.length, errors.join('; '))
+        out[html] = { ...seen, asked }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    assert(
+      out.true.html === `https://arxiv.org/html/${paper}#readarxiv` &&
+        JSON.stringify(out.true.link) === '["https://example.org/store","Install the extension"]' &&
+        !out.true.asked.length,
+      `arXiv has one: ${JSON.stringify(out.true)}`,
+    )
+    assert(
+      out.false.html === null && out.false.link === null && !out.false.asked.length,
+      `none: ${JSON.stringify(out.false)}`,
+    )
+    return out
+  },
+)
+await check(
+  "reader: a face that cannot be had is the reader's state, the pages laid in its fallback (L11 second round, gap 6)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns', { faces: 'missing' })
+    await waitFor(page, () => window.__c.reader.state().faces === 'lost', null, 10_000)
+    const st = await page.evaluate(() => ({
+      faces: window.__c.reader.state().faces,
+      laid: window.__c.reader.probe().laidPages,
+    }))
+    const fine = await chromeLaid('s1-columns', {})
+    const other = await fine.page.evaluate(() => window.__c.reader.state().faces)
+    await context.close()
+    await fine.context.close()
+    assert(
+      !errors.filter((e) => !/status of 404/.test(e)).length && !fine.errors.length,
+      [...errors, ...fine.errors].join('; '),
+    )
+    assert(st.faces === 'lost' && st.laid > 0 && other === null, `faces ${JSON.stringify({ st, other })}`)
+    return { ...st, other }
   },
 )
 await check(

@@ -591,6 +591,26 @@ describe("the session: the original held for the visit (today's holds)", () => {
     expect(holdOf(m.s)).toBe('paper')
     expect(displayOf(m.s)).toBe('original')
   })
+  it("the host's hold for now (L11's second round, gaps 7 and 8): the original shown, nothing written, the run it engages going on; let go, or ended by the reader's own choice", () => {
+    const m = machine()
+    m.feed({ i: 'paper', t: m.live('link'), doc: preparing(1, UNITS) })
+    m.feed({ i: 'cmd.hold', on: true })
+    expect([displayOf(m.s), m.s.engaged, m.has('link'), m.has('rows'), m.effects]).toEqual([
+      'original',
+      true,
+      true,
+      true,
+      [],
+    ])
+    expect(m.s.prefs.value.display).toBe('bilingual')
+    m.feed({ i: 'cmd.hold', on: false })
+    expect(displayOf(m.s)).toBe('bilingual')
+    m.feed({ i: 'cmd.hold', on: true }, { i: 'cmd.set', prefs: { display: 'translation' } })
+    expect([displayOf(m.s), m.s.held]).toEqual(['translation', false])
+    // (a choice of something else keeps it)
+    m.feed({ i: 'cmd.hold', on: true }, { i: 'cmd.set', prefs: { sync: false } })
+    expect(displayOf(m.s)).toBe('original')
+  })
 })
 
 describe('the session: the paper', () => {

@@ -40,7 +40,7 @@ import {
   targetOf,
   wanted,
 } from './session/machine.ts'
-import { abstractPage, htmlVersionOf, originalPdfOf, titleOf, VIEWER_HASH } from './session/paper.ts'
+import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VIEWER_HASH } from './session/paper.ts'
 import {
   anchorOf,
   contextOf,
@@ -95,6 +95,10 @@ export type Command =
   | { do: 'lead'; side: Side }
   | { do: 'narrow'; on: boolean }
   | { do: 'retry' }
+  /** the original held on screen for now, whatever display is chosen, or let go (a host's rule: the website's narrow window
+   *  while the paper is made, a refusal for now with nothing laid): never written, and not a choice, so the run the display
+   *  chosen engages goes on; the reader's own choice of a display ends it */
+  | { do: 'hold'; on: boolean }
   /** arXiv's own PDF opened by the browser in a tab of its own, for it to stream and save (`paper.pdf`): never read through
    *  the reader */
   | { do: 'original' }
@@ -119,7 +123,8 @@ export interface ReaderState {
     | { s: 'arriving'; got: number; total: number; lost: number }
     /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
     | { s: 'complete'; got: number; total: number; lost: number; stopped: RowsStop | null }
-    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number }
+    /** `retryAt`: when a retry is due, where the translator named a wait (a retry before it asks nothing) */
+    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number; retryAt?: number | null }
   )
   view: {
     display: Display
@@ -135,6 +140,10 @@ export interface ReaderState {
   }
   /** our server's document followed, its stream lost and asked again, nothing heard since (the website says "reconnecting") */
   reconnecting: boolean
+  /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
+   *  passages drawn in their fallback until the page is loaded again (a host may say so: the website's faces-lost); null
+   *  while none is */
+  faces: 'lost' | null
   crashed: boolean
 }
 export interface Reader {
@@ -212,6 +221,9 @@ export function openReader(
   }
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
+  let syncAvailable = false
+  /** a face lost this visit (faces.ts `lost`): kept, as its passages stay in their fallback */
+  let facesLost = false
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
@@ -243,6 +255,10 @@ export function openReader(
       if (e.side === 'right' && e.page === 1) mark('rightDrawn')
     })
     for (const k2 of ['page', 'scale', 'sync', 'display'] as const) panes.on(k2, () => tellSoon())
+    // (whether the sides can scroll together: the original open and its pages laid out on both, as the panes tell it)
+    panes.on('sync', (e) => {
+      syncAvailable = e.available
+    })
     // (the heading being read follows the scroll of either pane; the rows made here, the reading place)
     panes.on('scrolled', () => headingSoon())
     panes.on('page', () => {
@@ -551,7 +567,14 @@ export function openReader(
       return undefined
     },
     html(_spec, t, emit) {
-      void htmlVersionOf(host.fetch, ref).then((url) => emit({ i: 'html.answered', t, url }))
+      // our server's word first, where it gives one (L5's PaperDoc: after a prepare that cannot be made), before any ask of
+      // arXiv's (one a host's network may not make, and a failed ask offers the version)
+      const said = rt.state.doc?.prepare.html
+      const asked =
+        typeof said === 'boolean'
+          ? Promise.resolve(said ? `https://arxiv.org/html/${ref}${TRANSLATE_HASH}` : null)
+          : htmlVersionOf(host.fetch, ref)
+      void asked.then((url) => emit({ i: 'html.answered', t, url }))
       return undefined
     },
     code(_spec, t, emit, signal) {
@@ -565,7 +588,16 @@ export function openReader(
       ]).then(
         async ([C, F, H, k]) => {
           if (signal.aborted || !panes) return
-          faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root })
+          faces = F.createFaces({
+            table: o.engine?.faces ?? {},
+            fetch: host.fetch,
+            root,
+            lost: () => {
+              if (facesLost) return
+              facesLost = true
+              tellSoon()
+            },
+          })
           // (the lay itself is made once the head is read: the composed document's open, whose own it is)
           const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)
           composer = C.createComposer({
@@ -929,13 +961,13 @@ export function openReader(
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
           : r.s === 'failed'
-            ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost }
+            ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost, retryAt: r.retryAt }
             : r.s === 'complete'
               ? { ...rowsView, s: 'complete', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped }
               : { ...rowsView, s: 'arriving', got: r.got, total: r.total, lost: r.lost },
       view: {
         display: displayOf(s),
-        sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc },
+        sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc && syncAvailable },
         scale: p?.scale ?? 1,
         zoom: p?.zoom ?? null,
         narrow: root.hasAttribute('data-axt-narrow'),
@@ -947,6 +979,7 @@ export function openReader(
         heading,
       },
       reconnecting: l.s === 'on' && !!l.lost,
+      faces: facesLost ? 'lost' : null,
       crashed,
     }
     return told
@@ -966,6 +999,10 @@ export function openReader(
       }
       if (c.do === 'retry') {
         rt.input({ i: 'cmd.retry' })
+        return
+      }
+      if (c.do === 'hold') {
+        rt.input({ i: 'cmd.hold', on: c.on })
         return
       }
       if (c.do === 'original') {

@@ -22,6 +22,7 @@ const base: ReaderState = {
     heading: null,
   },
   reconnecting: false,
+  faces: null,
   crashed: false,
 }
 /** the chrome's state after the reader went through `states`, each told as its events */
@@ -113,7 +114,15 @@ describe("the reader's state as the chrome's", () => {
         lost: 0,
       },
     }
-    expect(fold([base, ready, noKey])).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    expect(fold([base, ready, noKey])).toMatchObject({ phase: 'failed', failure: 'no-key', failureAt: null })
+    // (a wait the translator named: when a retry is due, for a host that offers it at its time; a new run clears it)
+    const waiting = { ...noKey, rows: { ...noKey.rows, why: { kind: 'unavailable' as const }, retryAt: 9_000 } }
+    expect(fold([base, ready, waiting])).toMatchObject({ phase: 'failed', failure: 'network', failureAt: 9_000 })
+    const again = {
+      ...ready,
+      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0 },
+    }
+    expect(fold([base, ready, waiting, again]).failureAt).toBeNull()
     const target = {
       ...ready,
       rows: {
@@ -127,5 +136,13 @@ describe("the reader's state as the chrome's", () => {
       },
     }
     expect(fold([base, ready, target])).toMatchObject({ languageSupported: false, unavailable: { why: 'target' } })
+  })
+  it("whether the sides can scroll together, as the reader knows it (L11's second round, gap 9); a session that does not say leaves them able", () => {
+    const apart = { ...open, view: { ...open.view, sync: { on: true, available: false } } }
+    expect(fold([base, apart])).toMatchObject({ sync: true, syncAvailable: false })
+    expect(fold([base, apart, open])).toMatchObject({ sync: true, syncAvailable: true })
+    expect(eventsOf(open, apart)).toEqual([{ type: 'sync', on: true, available: false }])
+    // (the extension's today session tells the sync with no word of it)
+    expect(reduce({ ...INITIAL, syncAvailable: false }, { type: 'sync', on: false }).syncAvailable).toBe(true)
   })
 })

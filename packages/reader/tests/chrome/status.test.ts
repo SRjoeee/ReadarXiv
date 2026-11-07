@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { LOCALE_CODES, LOCALES, O, R, S, setLocale } from '@readarxiv/ui'
 import { INITIAL, type ReaderState } from '../../src/chrome/model.ts'
 import { plain, textOf, withCount } from '../../src/chrome/capsule-words.ts'
-import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
+import { capsuleOf, cardOf, heldOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
 import { PREFS } from './fake-controller.ts'
 import type { StateWords } from '../../src/chrome/parts.tsx'
 import { LANGUAGES, NAMES, TEST_PARTS } from './parts.ts'
@@ -417,5 +417,40 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
       reason('network'),
       R.status.noPaper,
     ])
+  })
+})
+
+describe("the original held by the host's rules (status.ts heldOf; L11's second round, gaps 7 and 8)", () => {
+  const busy = { unavailable: { why: 'busy' as const, retryAt: null } }
+  it("neither rule given (the extension's): never", () => {
+    for (const over of [
+      busy,
+      { narrow: true, phase: 'preparing' as const, preparing: { position: null, progress: null } },
+    ])
+      expect(heldOf(at({ phase: 'ready', ...over }), {})).toBe(false)
+  })
+  it("`refusal: 'original'`: a refusal for now with nothing laid, at any width; not one with pages laid, nor the paper's own", () => {
+    const rules = { refusal: 'original' as const }
+    expect(heldOf(at({ phase: 'ready', ...busy }), rules)).toBe(true)
+    expect(heldOf(at({ phase: 'ready', unavailable: { why: 'unreachable', retryAt: null } }), rules)).toBe(true)
+    expect(heldOf(at({ phase: 'ready', ...busy, layer: { laid: 2, total: 4 } }), rules)).toBe(false)
+    expect(
+      heldOf(at({ phase: 'ready', available: false, unavailable: { why: 'no-source', retryAt: null } }), rules),
+    ).toBe(false)
+    expect(heldOf(at({ phase: 'ready' }), rules)).toBe(false)
+  })
+  it("`narrow: 'shown'`: in a narrow window while the paper is made or refused for now, until the reader chooses; a paper served, never", () => {
+    const rules = { narrow: 'shown' as const }
+    const narrow = { narrow: true }
+    expect(heldOf(at({ ...narrow, phase: 'preparing', preparing: { position: 2, progress: null } }), rules)).toBe(true)
+    // (the original still loading: a prepare told meanwhile)
+    expect(heldOf(at({ ...narrow, phase: 'loading', preparing: { position: null, progress: 0.2 } }), rules)).toBe(true)
+    expect(heldOf(at({ ...narrow, phase: 'translating', made: true }), rules)).toBe(true)
+    expect(heldOf(at({ ...narrow, phase: 'ready', ...busy }), rules)).toBe(true)
+    // (a paper served, its rows read: not made this visit; the run ended; a wide window; the reader's own choice)
+    expect(heldOf(at({ ...narrow, phase: 'translating' }), rules)).toBe(false)
+    expect(heldOf(at({ ...narrow, phase: 'ready', made: true }), rules)).toBe(false)
+    expect(heldOf(at({ phase: 'preparing', preparing: { position: 2, progress: null } }), rules)).toBe(false)
+    expect(heldOf(at({ ...narrow, phase: 'translating', made: true, chose: true }), rules)).toBe(false)
   })
 })
