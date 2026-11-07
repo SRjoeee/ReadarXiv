@@ -1146,7 +1146,7 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
     },
   )
   await check(
-    `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid; when, against the rows' end`,
+    `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
     async () => {
       if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
       const seg = indexOf[name].seg
@@ -1171,10 +1171,18 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
         const p = await probe(page)
         assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
         assert(p.laidPages > 0, JSON.stringify(p))
+        // (the rows ended and the first page laid before: a page laid only once the run is over is what this holds against.
+        // Not on a shaped link (AXT_LINK), a measurement: there the composed document itself opens about as the rows end,
+        // the harness's PDF.js worker read twice, no-store, at the shaped rate)
+        assert(rowsAt !== null, `the rows never ended: ${JSON.stringify(p)}`)
         const open = p['at.open']
+        assert(
+          LINK || p['at.firstLaid'] < rowsAt - open,
+          `the first page laid at ${p['at.firstLaid']} ms, once the rows had ended (${rowsAt - open} ms)`,
+        )
         return {
           firstLaidMs: p['at.firstLaid'],
-          rowsCompleteMs: rowsAt === null ? null : rowsAt - open,
+          rowsCompleteMs: rowsAt - open,
           composedOpenMs: p['at.composedOpen'],
           slicesAtLaid,
           deltasTold: modes[seg].told,
