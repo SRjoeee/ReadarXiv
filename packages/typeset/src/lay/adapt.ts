@@ -8,7 +8,6 @@
 // the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
-import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
@@ -275,12 +274,15 @@ export function adapt(i: AdaptInput): Adapted {
     rulesOf: i.rulesOf,
     cjkSize: i.reading.cjkSize,
     lineskip: i.lineskip,
-    heading: decor.heading,
-    numbered: decor.numbered,
+    // (every member anchored at its top, as the original's block is: a translation set in fewer lines than its original keeps
+    // its first line on the original's first baseline and frees the room under its last (the maintainer, 2026-11-08:
+    // 2303.11366v4's title, one line for two, stood on the original's second). Today's X.lastLines and X.numbered moved a
+    // section heading, with its number, onto its original's last lines (the ruling of 2026-10-19, RUN:2136, the title and
+    // front matter aside); the composition sets neither, for any member)
+    heading: false,
+    numbered: false,
   })
   const P = { ...(R as object), ...up.P, measure: i.measure, patterns: i.patterns } as FitParams
-  const numberCropOf: NumberCrop | null =
-    decor.numbered && label ? numberCrop(label.chars, label.text, blocks[0]!) : null
   // (the row it starts on, shared with the member before: that member's last line, TeX's separation before its text)
   const b = i.before
   const bl = b?.lines.at(-1)
@@ -340,8 +342,8 @@ export function adapt(i: AdaptInput): Adapted {
     P,
     clear: up.clear,
     rulesOf: i.rulesOf,
-    numbered: decor.numbered,
-    numberCrop: numberCropOf,
+    numbered: false,
+    numberCrop: null,
     onLeadOf: null,
     kept,
     follower:
