@@ -129,7 +129,8 @@ export type OriginalRegion =
 export type StopWhy = 'busy' | 'limit' | 'unreachable'
 export type LinkRegion =
   | { s: 'off' }
-  /** `lost`: its stream ended or broke and is asked again, nothing heard since (the website's "reconnecting") */
+  /** `lost`: its stream broke, fell silent or ended while work runs, and is asked again, nothing heard since (the website's
+   *  "reconnecting"); a stream our server ended after a document in which nothing runs is not lost (client.ts follow) */
   | { s: 'on'; t: Ticket; target: string | null; heard: boolean; lost?: boolean }
   /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }

@@ -219,9 +219,13 @@ const v2Route = {
           rev: 2,
           targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
-      // (a newer catalog once the check says so: the same layer under the twin head)
-      if (m?.kind === 'recatalog' && m.switched)
-        return json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+      // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
+      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
+      // which nothing runs is followed again a minute on, client.ts IDLE_MS)
+      if (m?.kind === 'recatalog')
+        return m.switched
+          ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+          : json(200, { ...d, rev: 2, prepare: { ...d.prepare, state: 'running', stage: 'compiling' } })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
