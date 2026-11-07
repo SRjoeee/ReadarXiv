@@ -179,6 +179,20 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b[0]).toBeGreaterThan(x0)
     expect(b[2] - b[0]).toBeGreaterThan(0)
   })
+  it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
+    // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
+    // crop path and by the text path)
+    const link = at([150, 697, 170, 708], [0, '5'])
+    const crop = layPage(part(cite({}), [link]), rowsOf([r]), rules, metrics())
+    expect(cropOf(crop.members[0]!)).toBeDefined()
+    const fixedCrop = layPage(part({ ...cite({}), fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
+    expect(fixedCrop.members[0]!.off & 2).toBe(0)
+    expect(fixedCrop.links).toEqual([[link.box, link.to]])
+    const asText = cite({ text: '[3]', style: { role: 'serif', size: 10 } })
+    const fixedText = layPage(part({ ...asText, fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
+    expect(cropOf(fixedText.members[0]!)).toBeUndefined()
+    expect(fixedText.links).toEqual([[link.box, link.to]])
+  })
   it('keeps at A’s box a link no member owns, and one whose owner is not laid', () => {
     const free = at([400, 600, 420, 610])
     expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([[free.box, free.to]])
@@ -250,6 +264,33 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const f = laid.fit!.size
     expect(b[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
     expect(b[2]).toBeGreaterThan(b[0] + 8 * 0.5 * f)
+  })
+  it('lays two \\href groups of one target each over its own translation, one annotation each (#626 review)', () => {
+    // (two links to one address, one after the other: one run of one target, two groups drawn; each occurrence its group)
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href' }],
+        ['3', { cmd: 'href' }],
+      ],
+    })
+    const to = { url: 'https://example.org/' }
+    const a: Link = { box: [100, 697, 130, 708], to, owner: [0, ''] }
+    const b: Link = { box: [160, 697, 190, 708], to, owner: [0, ''] }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    const p = layPage(part(m, [a, b]), rowsOf([rr]), rules, metrics())
+    expect(p.links).toHaveLength(2)
+    const [x, y] = p.links.map(([box]) => box) as unknown as [number[], number[]]
+    // ("hier" six characters from the line's start, "dort" fifteen: half a size each)
+    const [, x0] = p.members[0]!.lines[0]!
+    const f = p.members[0]!.fit!.size
+    expect(x[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
+    expect(y[0]).toBeCloseTo(x0 + 15 * 0.5 * f, 1)
   })
   it('lays a link that holds the member’s every line over its whole drawing (a contents entry), drops one over part of it', () => {
     const entry = member({ kind: 'inkcontents', lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]] })

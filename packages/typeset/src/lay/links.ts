@@ -3,13 +3,14 @@
 // (locate's ownership: the member that owns more than half of the glyphs under it, within it the element that does, else its
 // text), placed as today's linkUnit and freezeLinks place them (RUN:1044-1128, links.mjs placeUnit, freezeLinks):
 // - one whose ink stays, at A's box: no owner, its owner not laid on the page (the original's, waiting, a table held), or its
-//   piece kept where it stands (a display, an element the part keeps, one the reading keeps in place, the member's elements'
-//   group on);
+//   piece's ink kept where it stands, whether or not the translation draws it too (a display, an element the part keeps, one
+//   the reading keeps in place, the member's elements' group on: none moved, or one the add-on could not part, Placed.fixed);
 // - one over a piece of a laid member, moved with what is drawn of it on the page (placeUnit): over a crop of it by the crop's
 //   own map (placeCrop), over the characters it is drawn as (placeText: the whole of them, the part stating no annotation's
 //   characters under it; the annotations of one target over it one link); one over the member's text, over the translation of
-//   its \href's group (placePair: the k-th run of one target's annotations the k-th group of the member's drawn on the page,
-//   as matchUnit's order tier pairs them; one group takes them all where they are of one target), else, where the member has
+//   its \href's group (placePair, as matchUnit's order tier pairs them: the k-th annotation the k-th group of the member's drawn
+//   on the page where they are as many, else the k-th run of one target's annotations; one group takes them all where they are
+//   of one target), else, where the member has
 //   no such group drawn, over its whole drawing where one target's annotations hold every line of it on the page (matchUnit's
 //   whole tier, its every own character under them: each line's ink inside one of their boxes, its baseline between their
 //   edges);
@@ -132,7 +133,17 @@ export function linksOf(
     for (const [id, is] of byEl) {
       const crop = crops.get(id),
         k = texts.get(id)
-      if (crop !== undefined)
+      const e = els.get(id)
+      // (its ink stays where it stands, however it is drawn: a display, kept by the part or in place by the reading, or the
+      // member's elements' group on (none moved, or a group the add-on could not part, Placed.fixed): the original's anchor
+      // stays with it, #626's review)
+      const stays = !e || e.keep || e.kind === 'display' || kept.has(id) || !(off & 2)
+      if (stays)
+        for (const i of is) {
+          out.push([list[i]!.box, list[i]!.to])
+          fate(i, 'kept')
+        }
+      else if (crop !== undefined)
         groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })) })
       else if (k !== undefined) {
         // (over the characters it is drawn as, their whole: the annotations of one target one link; of two or more, none of
@@ -141,15 +152,7 @@ export function linksOf(
           groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: 'geometry' }] })
           for (const i of is.slice(1)) fate(i, 'text')
         } else for (const i of is) fate(i, 'targets')
-      } else {
-        const e = els.get(id)
-        // (its ink stays: a display, kept by the part or in place by the reading, or the member's elements' group on)
-        const stays = !e || e.keep || e.kind === 'display' || kept.has(id) || !(off & 2)
-        for (const i of is) {
-          if (stays) out.push([list[i]!.box, list[i]!.to])
-          fate(i, stays ? 'kept' : 'off')
-        }
-      }
+      } else for (const i of is) fate(i, 'off')
     }
     if (text.length) {
       for (const i of text) fate(i, 'unmatched')
@@ -161,7 +164,10 @@ export function linksOf(
         .sort((a, b) => a - b)
       const pair = (id: number, run: number[]) =>
         groups.push({ to: { pair: id, draw: 'pair' }, annots: run.map((i) => ({ ...annot(i), tier: 'order' })) })
-      if (drawn.length && drawn.length === runs.length) runs.forEach((run, j) => void pair(drawn[j]!, run))
+      // (each annotation an occurrence where they are as many as the groups drawn: two links to one address one after the other
+      // are one run of one target, #626's review; else each run of one target a group, a link TeX broke over lines one run)
+      if (drawn.length && drawn.length === text.length) text.forEach((i, j) => void pair(drawn[j]!, [i]))
+      else if (drawn.length && drawn.length === runs.length) runs.forEach((run, j) => void pair(drawn[j]!, run))
       else if (
         drawn.length === 1 &&
         runs.length &&

@@ -17,7 +17,8 @@ import { startServer } from '../../../packages/reader/e2e/server.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
+// (the lab's data, the paper catalogue and the bundles: AXT_LAB, AXT_PAPERS, AXT_L1_BUNDLES, each defaulting to this machine's)
+const LAB = process.env.AXT_LAB ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
 const PAIR = arg('pair')
 const LAID = JSON.parse(readFileSync(arg('laid'), 'utf8'))[PAIR]
 if (!LAID?.links) throw new Error(`${PAIR}: no entry pages with links in ${arg('laid')} (laid.mjs --entry)`)
@@ -25,7 +26,9 @@ const OUT = arg('out', join(ROOT, 'packages/reader/e2e/.entry-out'))
 const id = PAIR.split('-')[0]
 const target = PAIR.split('-')[1].split('.')[0]
 const bundle = join(process.env.AXT_L1_BUNDLES ?? join(LAB, 'lanes/L7/prepare/bundles'), id)
-const paper = JSON.parse(readFileSync(join(LAB, 'baseline/corpora/papers.json'), 'utf8')).papers.find((p) => p.id === id)
+const catalogue = process.env.AXT_PAPERS ?? join(LAB, 'baseline/corpora/papers.json')
+const paper = JSON.parse(readFileSync(catalogue, 'utf8')).papers.find((p) => p.id === id)
+if (!paper) throw new Error(`${id}: not in the paper catalogue ${catalogue} (AXT_PAPERS)`)
 const pdf = join(paper.dir, 'arxiv.pdf')
 
 // ---------------------------------------------------------------- what the server answers
