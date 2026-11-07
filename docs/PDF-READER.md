@@ -178,7 +178,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   extension's, as above; `shown`, the website's (its owner's rule of 2026-11-03), where the display switch shows the
   translation chosen and side by side greyed, the stored choice kept for a wider window, and the capsule says so only
   where a window that showed the paper side by side was narrowed while reading (a page opened narrow, or widened again,
-  says nothing). The widths are to be checked by reading at them while building.
+  says nothing); while the paper is made there (prepared, translated after its prepare this visit, or refused for now
+  with nothing laid), `shown` holds the original on screen, the switch at the original, until the reader chooses a
+  display (the website's `displayFor`), a hold never written. The widths are to be checked by reading at them while
+  building.
 
 ## 6. Components
 
@@ -381,6 +384,42 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
+- **The host's look of the states.** The reader package's chrome draws both hosts' readers, and the coordinator's ruling
+  for the website's cut-over is that nothing its readers see changes: where the website's page drew a state otherwise,
+  the difference is a host's rule or word (`Parts`, `StateWords` of `packages/reader`), which the extension gives none
+  of, so that its reader is as above. The website's, each as its page drew it before the package:
+  - `signs: 'by-state'` (its interface review of 2026-11-03): a refusal for now's capsule a clock while its time is to
+    come, the information sign once it has come (the chrome drawn again at the time); a run stopped by a fault the alert
+    in the danger's red (`data-tone="alert"`); a card that waits (our server or the service out of reach, a limit) a
+    clock in quiet ink (`data-tone="wait"`), a fault's card the alert. The extension's: the information sign, the alert
+    on every card.
+  - `retry: 'when-due'`: a retry whose time is named is offered at that time: the capsule's chip absent until then (its
+    words alone, asked again at the time so that they drop it), the card's retry greyed and still a stop of the
+    keyboard's, pressing it doing nothing, its lines under the reason the host's (`cardLines`: the time, the limit's
+    note). The extension's offers it at once, a press before the time asking nothing.
+  - `refusal: 'original'`: a refusal for now with nothing laid holds the original on screen, the two translated displays
+    greyed (swap and sync with them), until it passes. The extension's keeps the display chosen, arXiv's pages where the
+    translation would be.
+  - `sync: 'located'`: the sync greyed until the sides can scroll together (both sides' pages laid out).
+  - `openOriginal`: the original that could not be read is the original's pane's card (the file sign in quiet ink, a
+    link to arXiv's PDF of the version), the translation's pane left as it is. Where the original's pane is not shown
+    (the translation alone, side by side in a narrow window) the translation's pane carries it: the package composes the
+    translation over the original's bytes, so that pane has nothing else to show (today's page drew the translation from
+    its own files and left the card to the original's pane). The translation's card, the service's, is due at the
+    service's time. Without the word, the translation's pane's card with its retry.
+  - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
+    it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
+    choice.
+  - `htmlLink`: the link beside a bilingual version not to be had in the host's address and words (the extension's store
+    page, where the extension is not on the page), or none (a phone). The HTML version itself is our server's word first
+    (its prepare's `html`, after a prepare that cannot be made), arXiv asked only where it says nothing. Every link the
+    chrome draws from a host or a document (this one, the settings page's, the lost original's, the title's) is parsed
+    and drawn only to the page's own origin, or by https to arXiv's or an origin the host names (`linkOrigins`: the
+    website's store page); a `javascript:` or `data:` address, a foreign origin, draws none (`chrome/links.ts`).
+  - A face the translation is set in that cannot be had is the reader's state (`ReaderState.faces`), for the host to
+    say.
+  The hold of the original (`refusal`, `narrow: 'shown'`) is the reader's `hold` command: never written and not a
+  choice, so the run the chosen display engages goes on, and the reader's own choice of a display ends it.
 
 The states are §8's.
 
@@ -2573,6 +2612,17 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
 
 ## 19. The engine's contract
 
+**Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
+and the shipped extension's reader (`AXT_READER=today`, DESIGN §16) run until the rebuild's cut-over. Its successor is the
+workspace packages (`packages/README.md`): the prepare in `@readarxiv/engine`, where our marked compile is an instrument
+no reader sees, its ownership of each glyph is carried onto arXiv's own glyphs by aligning the two, and arXiv's PDF itself
+is wrapped in optional content groups by unit, so that both panes show arXiv's page (DESIGN §16, the prepare's two halves);
+the typesetter in `@readarxiv/typeset`, two pure functions of a page's part and the translated text; and the reader in
+`@readarxiv/reader`, `openReader` with a host, whose interface is this document's §1 to §17, unchanged. What this chapter
+calls the maker — the page pass (§19.6), our compile as the base page with its final pass (§19.7), the delta over arXiv's
+PDF (§19.8) and the layout file's geometric ownership — has no counterpart in the packages. The chapter goes with today's
+engine when the cut-over deletes it.
+
 `src/pdf-reader/engine/` is what the web imports, and nothing else of the reader is. The directory is the boundary: a gate
 holds what may be imported into it (`scripts/check-boundary.mjs`, run by `pnpm lint`), a snapshot holds what it exports
 (`tests/pdf-reader/engine-contract.json`), and a test holds that it loads where it is meant to
@@ -3231,6 +3281,9 @@ own), each part carrying its pages' cell rules (`rules`).
   a paper may take each page's parse its own time (no engine bound), and its matching its pages times `MATCH_PAGE_WORK`.
 
 ### 19.7 Our compile as the base page (BUNDLE 8)
+
+(Today's engine. In the rebuild's prepare our compile is only an instrument and the right pane is arXiv's own page with
+the laid units' groups off: this chapter's opening.)
 
 The layer is drawn over a page of our own compile: the **final pass** of the marked original, the paper set as its authors set
 it, with the marks the layout was read from. arXiv's PDF stays the left's (its anchoring and the highlight), the download and

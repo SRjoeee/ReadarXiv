@@ -16,9 +16,17 @@
 //
 // Which group an item is under: PDF.js's text content reports our `/OC /<prop> BDC` as a marked content of tag OC with no name
 // (pdf.worker.mjs 6.3.289: its id is an MCID only), and splits its items at every BDC and EMC, so that every item lies in one run
-// of one group, and a run is one group's. A run is that group's whose ink it stands on: a member's lines on this page (text), an
-// element's ink (elements), its label's (label), with half a point to spare; exact ownership makes them disjoint. (The add-on
-// naming each run, a `/axt:<ord>.<page>.<g> BMC` inside it, would put the name in the text content itself: asked of the prepare.)
+// of one group, and a run is one group's ink, drawn or hidden whole (docs/PDF-READER.md §19.9 "The wrap": a run of ours closes at
+// any marked content, so it holds none). So an OC run that holds marked content is the page's own optional content, never ours:
+// its items are kept and each run inside it is read on its own (1706.03762v7 pp. 13-15, a figure's own `/OC` around 60 of ours).
+// A run of ours is the group its items stand on: each item's middle along its own direction, on its baseline, against a unit's
+// elements' and label's ink before its lines (an element lies inside its line), with half a point to spare; exact ownership makes
+// them disjoint. Each item, not the run's middle, since a run may span several of its member's lines and its middle stand on none.
+// Its items on two units' boxes: no one unit's run, kept whole; between one unit's groups, the one under most of its characters.
+// Measured over the 87 corpus papers' 2,328 pages against the name the operator list gives each BDC (2026-11-07): of our 206,794
+// runs with text, 205,968 given their group, 793 their unit with another of its groups (a raised mark beside its element's ink),
+// 1 another unit, 32 none, none on two units; the 5 runs holding marked content all the page's own. (The add-on naming each run,
+// a `/axt:<ord>.<page>.<g> BMC` inside it, would put the name in the text content itself: asked of the prepare.)
 import type { Placed } from '@readarxiv/format'
 import type { PageViewport, PDFPageProxy } from 'pdfjs-dist'
 import type { Kit } from '../pdfjs/kit.ts'
@@ -58,37 +66,61 @@ const upright = (it: TextItem, c: TextContent) => {
   return b === 0 && cc === 0 && (a as number) > 0 && (d as number) > 0 && !style?.vertical
 }
 const sizeOf = (it: TextItem) => Math.abs((it.transform[3] as number) || (it.transform[0] as number)) || 1
-/** a run's place: the middle of its items (PDF units; their transforms, unrotated text) */
-function centreOf(items: TextItem[]): [number, number] | null {
-  let x0 = Number.POSITIVE_INFINITY,
-    x1 = Number.NEGATIVE_INFINITY,
-    y = 0,
-    n = 0
-  for (const it of items) {
-    if (!it.str.trim()) continue
-    const [, , , , e, f] = it.transform as number[]
-    x0 = Math.min(x0, e as number)
-    x1 = Math.max(x1, (e as number) + it.width)
-    y += f as number
-    n++
-  }
-  return n ? [(x0 + x1) / 2, y / n] : null
+/** the band of the page's height an index of its boxes is cut in, PDF units */
+const BAND = 16
+/** where an item stands: the middle of its advance along its own direction, on its baseline (a turned figure word's too) */
+function placeOf(it: TextItem): [number, number] {
+  const [a, b, , , e, f] = it.transform as number[]
+  const s = Math.hypot(a as number, b as number) || 1
+  return [(e as number) + ((a as number) / s) * (it.width / 2), (f as number) + ((b as number) / s) * (it.width / 2)]
 }
-
-/** the group (member's ord and bit) a run at `at` (its middle, the baseline its items share) is under, of the members given */
-function groupAt(at: [number, number], page: number, members: Map<number, Placed>): [number, number] | null {
-  const [x, y] = at
-  for (const m of members.values()) {
-    for (const l of m.lines)
-      if (l[0] === page && x >= l[2] - EPS && x <= l[3] + EPS && y >= l[6] - EPS && y <= l[5] + EPS) return [m.ord, 1]
+/** the boxes a page's runs stand on, of the members given, indexed once a page by bands of its height: a point asks only the
+ *  boxes across its band, in their order (every unit's elements' ink, then its label's, then its lines), so that placing a page's
+ *  items is linear in them. The group (member's ord and bit) under a point, or null */
+function placesOf(page: number, members: Map<number, Placed>): (x: number, y: number) => [number, number] | null {
+  type Box = { x0: number; y0: number; x1: number; y1: number; g: [number, number] }
+  const boxes: Box[] = []
+  for (const m of members.values())
     for (const [, el] of m.els ?? [])
-      for (const i of el.ink)
-        if (i[0] === page && x >= i[1] - EPS && x <= i[3] + EPS && y >= i[2] - EPS && y <= i[4] + EPS) return [m.ord, 2]
+      for (const i of el.ink) if (i[0] === page) boxes.push({ x0: i[1], y0: i[2], x1: i[3], y1: i[4], g: [m.ord, 2] })
+  for (const m of members.values()) {
     const li = m.label?.ink
-    if (li && li[0] === page && x >= li[1] - EPS && x <= li[3] + EPS && y >= li[2] - EPS && y <= li[4] + EPS)
-      return [m.ord, 4]
+    if (li && li[0] === page) boxes.push({ x0: li[1], y0: li[2], x1: li[3], y1: li[4], g: [m.ord, 4] })
   }
-  return null
+  for (const m of members.values())
+    for (const l of m.lines) if (l[0] === page) boxes.push({ x0: l[2], y0: l[6], x1: l[3], y1: l[5], g: [m.ord, 1] })
+  const bands = new Map<number, Box[]>()
+  for (const b of boxes)
+    for (let k = Math.floor((b.y0 - EPS) / BAND); k <= Math.floor((b.y1 + EPS) / BAND); k++) {
+      const at = bands.get(k)
+      if (at) at.push(b)
+      else bands.set(k, [b])
+    }
+  return (x, y) => {
+    for (const b of bands.get(Math.floor(y / BAND)) ?? [])
+      if (x >= b.x0 - EPS && x <= b.x1 + EPS && y >= b.y0 - EPS && y <= b.y1 + EPS) return b.g
+    return null
+  }
+}
+/** the group a run of ours is under: of the one unit its items stand on, the group under most of its characters, an element's
+ *  or label's before its lines at a tie; null where they stand on none, or on two units' boxes (no one unit's run to drop: kept) */
+function groupOf(run: TextItem[], at: (x: number, y: number) => [number, number] | null): [number, number] | null {
+  const chars = new Map<number, { g: [number, number]; n: number }>()
+  let ord: number | null = null
+  for (const it of run) {
+    const n = it.str.trim().length
+    if (!n) continue
+    const g = at(...placeOf(it))
+    if (!g) continue
+    if (ord === null) ord = g[0]
+    else if (g[0] !== ord) return null
+    const c = chars.get(g[1]) ?? { g, n: 0 }
+    c.n += n
+    chars.set(g[1], c)
+  }
+  let best: { g: [number, number]; n: number } | null = null
+  for (const c of chars.values()) if (!best || c.n > best.n || (c.n === best.n && best.g[1] === 1)) best = c
+  return best?.g ?? null
 }
 
 /** the items of a crop's source among the dropped items of its member (each item's middle inside the source's ink), moved by
@@ -132,6 +164,7 @@ export function laidText(
   const laid = new Map<number, Laid>()
   for (const m of page.members) if (m.state === 'laid' && m.off) laid.set(m.ord, m)
   const here = new Map([...members].filter(([ord]) => laid.has(ord)))
+  const at = placesOf(page.page, here)
   const styles: Record<string, { fontFamily: string; ascent: number; descent: number; vertical: boolean }> = {
     ...(content.styles as Record<string, { fontFamily: string; ascent: number; descent: number; vertical: boolean }>),
   }
@@ -149,24 +182,13 @@ export function laidText(
       stream.push({ kind: 'kept', e })
       continue
     }
-    // (the run's own items, to its EMC at its depth)
-    let depth = 0,
-      j = i + 1
+    // (the run's items, to the next marked content: its EMC for a run of ours; any other, the page's own, kept, the items and runs
+    // inside it read in turn)
+    let j = i + 1
     const run: TextItem[] = []
-    for (; j < entries.length; j++) {
-      const x = entries[j] as Entry
-      if (!isText(x)) {
-        if (x.type === 'beginMarkedContent' || x.type === 'beginMarkedContentProps') depth++
-        else if (x.type === 'endMarkedContent') {
-          if (depth === 0) break
-          depth--
-        }
-        continue
-      }
-      run.push(x)
-    }
-    const at = centreOf(run)
-    const g = at ? groupAt(at, page.page, here) : null
+    for (; j < entries.length && isText(entries[j] as Entry); j++) run.push(entries[j] as TextItem)
+    const ours = (entries[j] as Marked | undefined)?.type === 'endMarkedContent'
+    const g = ours ? groupOf(run, at) : null
     const m = g ? laid.get(g[0]) : undefined
     if (m && g && m.off & g[1]) {
       dropped += run.length

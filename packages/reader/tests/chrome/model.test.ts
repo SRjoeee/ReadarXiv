@@ -450,6 +450,25 @@ const fakeSession = (): Session => ({
 const panes = () => ({ left: document.createElement('div'), right: document.createElement('div') })
 
 describe('createController', () => {
+  it("the reader's own choice of a display is the chrome's to know (a host's hold for the narrow window ends with it); a hold told to a session that has one, none to one that has none (L11's second round, gap 7)", async () => {
+    const session = { ...fakeSession(), hold: vi.fn() }
+    const controller = createController({ open: async () => session, paper: '2600.00001v1', defaults: DEFAULTS })
+    await controller.attach(panes())
+    expect(controller.getState().chose).toBe(false)
+    controller.hold(true)
+    controller.setDisplay('translation')
+    await Promise.resolve()
+    expect([controller.getState().chose, session.hold.mock.calls]).toEqual([true, [[true]]])
+    // (a session with no hold: the extension's)
+    const bare = createController({ open: async () => fakeSession(), paper: '2600.00001v1', defaults: DEFAULTS })
+    await bare.attach(panes())
+    expect(() => bare.hold(true)).not.toThrow()
+    await Promise.resolve()
+  })
+  it("a prepare told this visit marks the paper made (its run the making's)", () => {
+    expect(INITIAL.made).toBe(false)
+    expect(reduce(INITIAL, { type: 'preparing', position: null, progress: null }).made).toBe(true)
+  })
   it("the original's download is arXiv's own PDF opened by the browser: no byte of it read through the reader", async () => {
     const session = fakeSession()
     const controller = createController({ open: async () => session, paper: '2600.00001v1', defaults: DEFAULTS })

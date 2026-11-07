@@ -6,6 +6,10 @@
 //   - `stage 1c: …`: one side's owner is a unit the other side's reader does not make (its id is not among the other's units:
 //     a unit stage 1c reads otherwise, lanes/L2-source.md classes 1-10);
 //   - `guard: …`: today's owner is none and the new one's is a unit today's guard left unmarked (made.guard.unmarked);
+//   - `frame: …`: today's owner is a unit's element, the new one's none, and the glyph or box stands inside a frame on the
+//     new side's B (its g<n>a/g<n>b points): an image included inside a unit, which the instrument owns nothing of since
+//     stage 1b (deliverable 1: B is the draft, where the image is a frame; the 9 boxes of run d2's "draft: a figure's box
+//     today gave a source unit");
 //   - otherwise its two owners' roles, and whether they are units apart.
 /** the differences left, by their two owners' roles, each with the cause its papers' examples show (lanes/L2-source.md, stage
  *  1c-2 item 4, run 5): what today read with a rule this port leaves out, by name */
@@ -23,7 +27,8 @@ const CAUSES = new Map([
   ['role 4 | role 2', 'choice: the ink of a head piece the marking passed over is the piece\'s (today: a label by its form)'],
   ['role 4 | role 1', 'choice: a unit\'s lead text symbol the paper wrote is its text (today: a label where its form is one: \\textbullet)'],
   ['role 2 | role 4', 'choice: a head piece\'s run with a word space in it is a label up to the space (today: by its form)'],
-  // (own.mjs's readings with thresholds of their own, not ported)
+  // (own.mjs's readings with thresholds of their own, not ported. 'role 2 | none' holds MR 4b's drop too, 8d3bba70a: a
+  // footnote call TeX set no point for, today the piece before it, now no unit's: 2610.35877v1's 1 glyph, lab/marks/census.json)
   ['role 2 | none', 'choice: footEnd not ported (a display ending a footnote, to the folio: thresholds of today\'s)'],
   ['role 1 | none', 'choice: MR 5b not ported (a cell\'s lead macro with no mark, by the text the probe showed: CELL_ABUT)'],
   ['role 8 | none', 'choice: MR 6b not ported (the counter after a babel name on its line: COUNTER_GAP, a threshold)'],
@@ -84,9 +89,10 @@ export function draftPage(fin, dra) {
 
 /**
  * `today`/`mine`: { units: [{ id, kind }], glyphs: Owners[], boxes: Owners[] }; `same`: per page, whether the two B hold the
- * same glyphs; `chars`: per page the glyphs' Unicode (today's B); `guarded`: today's unit indices its guard left unmarked
+ * same glyphs; `chars`: per page the glyphs' Unicode (today's B); `guarded`: today's unit indices its guard left unmarked;
+ * `frames`: per page framedOf the new side's B page, where B is compared whole (not the draft's `maps`)
  */
-export function compare({ today, mine, same, chars, guarded = [], maps = null }) {
+export function compare({ today, mine, same, chars, guarded = [], maps = null, frames = null }) {
   const ids = { today: new Set(today.units.map(u => u.id)), mine: new Set(mine.units.map(u => u.id)) }
   const guardIds = new Set(guarded.map(i => today.units[i]?.id).filter(Boolean))
   const ownerOf = (ins, P, j) => {
@@ -99,12 +105,13 @@ export function compare({ today, mine, same, chars, guarded = [], maps = null })
   const classes = new Map()
   const add = (cls, ex) => { const c = classes.get(cls) ?? classes.set(cls, { n: 0, ex: [] }).get(cls); c.n++; if (c.ex.length < 3) c.ex.push(ex) }
   const roleOf = o => (o.s === 'none' ? 'none' : o.none ? o.s : `role ${o.role}`)
-  const classOf = (a, b) => {
+  const classOf = (a, b, framed = false) => {
     const aT = a.none ? { s: 'none' } : a
     if (aT.s === b.s) return null
     if (aT.s.endsWith(':2:-1') && b.s.startsWith(aT.s.slice(0, -2))) return 'agree: element, its piece stated by the plan (today none)'
     if ((a.id && !ids.mine.has(a.id)) || (b.id && !ids.today.has(b.id))) return `stage 1c: ${roleOf(a)} | ${roleOf(b)} (a unit read otherwise)`
     if ((a.s === 'none' || a.none) && b.id && guardIds.has(b.id)) return `guard: ${roleOf(a)} | ${roleOf(b)} (a unit today's guard left unmarked)`
+    if (framed && a.role === 2 && b.s === 'none') return "frame: an image inside a unit is a frame on B, no element's (stage 1b: the instrument owns nothing inside a frame; today the unit's element)"
     const raw = `${roleOf(a)} | ${roleOf(b)}${a.id && b.id && a.id !== b.id ? ' (another unit)' : ''}`
     return CAUSES.get(raw) ?? raw
   }
@@ -121,7 +128,7 @@ export function compare({ today, mine, same, chars, guarded = [], maps = null })
       const j = gt ? gt[i] : i, jm = gm ? gm[i] : i
       glyphsCompared++
       const a = ownerOf(today, T, j), b = ownerOf(mine, M, jm)
-      const c = classOf(a, b)
+      const c = classOf(a, b, !!frames?.[p]?.glyph[jm])
       if (c === null || c.startsWith('agree:')) glyphsSame++
       if (c !== null) add(`glyph: ${c}`, { page: p + 1, glyph: j, ...(gm ? { draft: jm } : {}), u: chars?.[p]?.[j], today: a.s, mine: b.s })
     }
@@ -140,7 +147,7 @@ export function compare({ today, mine, same, chars, guarded = [], maps = null })
         const j = bt ? bt[i] : i, jm = bm ? bm[i] : i
         boxesCompared++
         const a = ownerOf(today, TB, j), b = ownerOf(mine, MB, jm)
-        const c = classOf(a, b)
+        const c = classOf(a, b, !!frames?.[p]?.box[jm])
         if (c === null || c.startsWith('agree:')) boxesSame++
         if (c !== null) add(`box: ${c}`, { page: p + 1, box: j, today: a.s, mine: b.s })
       }

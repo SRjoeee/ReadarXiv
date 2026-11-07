@@ -1,4 +1,4 @@
-import { Check, Info, Loader } from 'lucide'
+import { Check, CircleAlert, Clock, Info, Loader } from 'lucide'
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { O, R, S, setLocale } from '@readarxiv/ui'
@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 /** where the host's settings are, which the capsule's note of unreadable ones links to (parts.tsx settingsHref) */
-const SETTINGS = 'chrome-extension://reader/options.html#reading/pdf'
+const SETTINGS = `${location.origin}/options.html#reading/pdf`
 const capsuleOf = (controller: ReaderController, over: Partial<Parts> = {}) =>
   withParts(createElement(StatusCapsule, { controller, onChooseLanguage: () => {} }), {
     settingsHref: SETTINGS,
@@ -493,5 +493,267 @@ describe("the narrow window's words under the host's rule", () => {
     const b = await mountElement(capsuleOf(early.controller, { narrow: 'shown' }))
     await act(async () => early.set({ phase: 'ready', narrow: true, sides: pages }))
     expect(narrowCapsule(b.container)).toBeNull()
+  })
+})
+
+describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, gap 1)", () => {
+  const signOf = (node: typeof Check) => JSON.stringify(node.map(([, a]) => a))
+  const drawn = (el: Element) =>
+    JSON.stringify(
+      [...(el.querySelector(':scope > svg')?.children ?? [])].map((x) =>
+        Object.fromEntries([...x.attributes].filter((a) => a.name !== 'key').map((a) => [a.name, a.value])),
+      ),
+    )
+  const later = () => Date.now() + 3_600_000
+  it("the extension's (the default): the information sign for a refusal for now, with or without a time; the alert on every card, with no tone", async () => {
+    const fake = fakeController({ phase: 'ready', unavailable: { why: 'refused', retryAt: later() } })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    const capsule = container.querySelector('.capsule')!
+    expect([drawn(capsule), capsule.getAttribute('data-tone')]).toEqual([signOf(Info), null])
+    document.body.innerHTML = ''
+    const card = await mountElement(cardOf(fakeController({ phase: 'failed', failure: 'network' }).controller))
+    const el = card.container.querySelector('.card')!
+    expect([drawn(el), el.getAttribute('data-tone')]).toEqual([signOf(CircleAlert), null])
+  })
+  it("the website's: a clock while a refusal's time is to come, the information sign once it has come (drawn again at the time)", async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const { container } = await mountElement(capsuleOf(fake.controller, { signs: 'by-state' }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 60_000 } }))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Clock))
+      await act(async () => vi.advanceTimersByTime(59_999))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Clock))
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+      // (none named: nothing to wait for)
+      await act(async () => fake.set({ unavailable: { why: 'unreachable', retryAt: null } }))
+      expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the website's: a run stopped by a fault, the alert in the danger's tone; one stopped by a wait, the information sign", async () => {
+    const fault = fakeController({ phase: 'ready', failedUnits: 2, failure: 'bad-request' })
+    const a = await mountElement(capsuleOf(fault.controller, { signs: 'by-state' }))
+    const capsule = a.container.querySelector('.capsule')!
+    expect([drawn(capsule), capsule.getAttribute('data-tone')]).toEqual([signOf(CircleAlert), 'alert'])
+    document.body.innerHTML = ''
+    const wait = fakeController({ phase: 'ready', failedUnits: 2, failure: 'network' })
+    const b = await mountElement(capsuleOf(wait.controller, { signs: 'by-state' }))
+    expect(drawn(b.container.querySelector('.capsule')!)).toBe(signOf(Info))
+  })
+  it("the website's cards: a wait (out of reach, a limit) a clock in quiet ink; a fault the alert in the danger's", async () => {
+    const tones = []
+    for (const failure of ['network', 'rate-limit', 'unknown'] as const) {
+      const { container } = await mountElement(
+        cardOf(fakeController({ phase: 'failed', failure }).controller, 'pane', { signs: 'by-state' }),
+      )
+      const el = container.querySelector('.card')!
+      tones.push([drawn(el), el.getAttribute('data-tone')])
+      document.body.innerHTML = ''
+    }
+    expect(tones).toEqual([
+      [signOf(Clock), 'wait'],
+      [signOf(Clock), 'wait'],
+      [signOf(CircleAlert), 'alert'],
+    ])
+  })
+})
+
+describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11's second round, gap 2)", () => {
+  const chip = (c: HTMLElement) => c.querySelector<HTMLElement>('.capsule button[data-action]')
+  it("the extension's (the default): a refusal for now's retry at once, its time to come or not", async () => {
+    const fake = fakeController({ phase: 'ready', unavailable: { why: 'refused', retryAt: Date.now() + 3_600_000 } })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    expect(chip(container)?.textContent).toBe(S.failed.retry)
+  })
+  it("the website's: no chip until the time has come, the words alone; then the chip, the host's words asked again without the time", async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const words = { busy: (at: number | null) => (at !== null && Date.now() < at ? 'busy until later' : 'busy') }
+    const { container } = await mountElement(capsuleOf(fake.controller, { retry: 'when-due', words }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 90_000 } }))
+      const capsule = container.querySelector('.capsule')!
+      expect([
+        chip(container),
+        capsule.hasAttribute('data-alone'),
+        capsule.querySelector('.sr-only')?.textContent,
+      ]).toEqual([null, true, 'busy until later'])
+      await act(async () => vi.advanceTimersByTime(90_000))
+      expect(chip(container)?.textContent).toBe(S.failed.retry)
+      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('busy')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the website's card: its retry greyed until the time, still a stop, pressing it doing nothing; the host's lines under the reason; then offered", async () => {
+    const fake = fakeController({ phase: 'loading' })
+    const cardLines = (kind: string, at: number | null) => ({
+      sub: at !== null && Date.now() < at ? 'retry later' : null,
+      note: kind === 'rate-limit' ? 'papers translated before still open' : null,
+    })
+    const { container } = await mountElement(
+      cardOf(fake.controller, 'pane', { retry: 'when-due', words: { cardLines } }),
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ phase: 'failed', failure: 'rate-limit', failureAt: Date.now() + 30_000 }))
+      const button = () => container.querySelector<HTMLButtonElement>('.card button')!
+      const lines = () => [...container.querySelectorAll('.card .lines p')].map((p) => [p.className, p.textContent])
+      expect([button().getAttribute('aria-disabled'), button().disabled, lines()]).toEqual([
+        'true',
+        false,
+        [
+          ['', R.status.rateLimited],
+          ['sub', 'retry later'],
+          ['sub', 'papers translated before still open'],
+        ],
+      ])
+      button().click()
+      expect(fake.controller.retry).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(30_000))
+      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 2])
+      button().click()
+      expect(fake.controller.retry).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the extension's card: offered at once, one line, whatever the time", async () => {
+    const fake = fakeController({ phase: 'failed', failure: 'network', failureAt: Date.now() + 30_000 })
+    const { container } = await mountElement(cardOf(fake.controller))
+    const button = container.querySelector<HTMLButtonElement>('.card button')!
+    expect([button.getAttribute('aria-disabled'), container.querySelector('.card .lines')]).toEqual([null, null])
+    button.click()
+    expect(fake.controller.retry).toHaveBeenCalledOnce()
+  })
+})
+
+describe("the run's chip that shows the translation, where the host words it (StateWords showTranslation; L11's second round, gap 4)", () => {
+  const chip = (c: HTMLElement) => c.querySelector<HTMLElement>('.capsule[data-kind="progress"] button[data-action]')
+  const asked: boolean[] = []
+  const words = {
+    translating: (got: number, total: number, beside?: boolean) => {
+      asked.push(!!beside)
+      return beside ? 'Translating' : `Translating ${got} / ${total}`
+    },
+    showTranslation: 'Show translation',
+  }
+  const run = { phase: 'translating' as const, translated: { got: 4, total: 15 }, layer: { laid: 0, total: 0 } }
+  it('none while nothing of the translation is there, nor where it is on screen; offered on the original once some is', async () => {
+    const fake = fakeController({ ...run, display: 'original' })
+    const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    expect(chip(container)).toBeNull()
+    // (the layer's pages known and rows of them in, or a page laid)
+    await act(async () => fake.set({ layer: { laid: 0, total: 6 } }))
+    expect(chip(container)?.textContent).toBe('Show translation')
+    // (the host asked for its words beside the chip; the stage was said once already, with the count it started at)
+    expect(asked.at(-1)).toBe(true)
+    chip(container)!.click()
+    expect(fake.controller.setDisplay).toHaveBeenCalledWith('translation')
+    await act(async () => fake.set({ display: 'bilingual', layer: { laid: 2, total: 6 } }))
+    expect(chip(container)).toBeNull()
+    expect(container.querySelector('.capsule')!.hasAttribute('data-alone')).toBe(true)
+  })
+  it('none where the host words no chip (the extension gives no words of a run at all)', async () => {
+    const fake = fakeController({ ...run, display: 'original', layer: { laid: 2, total: 6 } })
+    const { container } = await mountElement(capsuleOf(fake.controller, { words: { translating: words.translating } }))
+    expect([!!container.querySelector('.capsule[data-kind="progress"]'), chip(container)]).toEqual([true, null])
+  })
+})
+
+describe("arXiv's HTML version as the host offers it (StateWords htmlLink; L11's second round, gap 5)", () => {
+  const html = 'https://arxiv.org/html/2608.02163v2#readarxiv'
+  const link = (c: HTMLElement) => c.querySelector<HTMLAnchorElement>('.capsule a[data-action]')
+  it("the host's address and words for the link; none where it offers none; the catalogue's where it gives no rule", async () => {
+    const store = 'https://chromewebstore.google.com/detail/read-arxiv'
+    const htmlLink = (href: string) => (href.includes('2608') ? { href: store, label: 'Install the extension' } : null)
+    const lasting = fakeController({ phase: 'ready', available: false, htmlVersion: html })
+    // (the store's origin named by the host, as every origin its links lead to besides arXiv's and its own)
+    const a = await mountElement(
+      capsuleOf(lasting.controller, { words: { htmlLink }, linkOrigins: ['https://chromewebstore.google.com'] }),
+    )
+    expect([link(a.container)?.getAttribute('href'), link(a.container)?.textContent]).toEqual([
+      store,
+      'Install the extension',
+    ])
+    document.body.innerHTML = ''
+    const passing = fakeController({
+      phase: 'ready',
+      unavailable: { why: 'unreachable', retryAt: null },
+      htmlVersion: 'https://arxiv.org/html/2601.00001v1#readarxiv',
+    })
+    const b = await mountElement(capsuleOf(passing.controller, { words: { htmlLink } }))
+    expect([link(b.container), !!b.container.querySelector('.capsule button[data-action]')]).toEqual([null, true])
+    document.body.innerHTML = ''
+    const c = await mountElement(
+      capsuleOf(fakeController({ phase: 'ready', available: false, htmlVersion: html }).controller),
+    )
+    expect([link(c.container)?.getAttribute('href'), link(c.container)?.textContent]).toEqual([html, R.status.useHtml])
+  })
+})
+
+describe('the links the chrome draws from a host or a document, checked (chrome/links.ts; the review of #616)', () => {
+  const link = (c: HTMLElement) => c.querySelector<HTMLAnchorElement>('.capsule a[data-action]')
+  it("the host's HTML link drawn only to arXiv's, the page's own or an origin it names; a script's or a foreign one draws none", async () => {
+    const html = 'https://arxiv.org/html/2608.02163v2#readarxiv'
+    const hrefs = []
+    for (const [to, origins] of [
+      ['javascript:alert(1)', []],
+      ['data:text/html,x', []],
+      ['https://evil.example/x', []],
+      ['https://store.example/detail/x', ['https://store.example']],
+    ] as const) {
+      const fake = fakeController({ phase: 'ready', available: false, htmlVersion: html })
+      const { container } = await mountElement(
+        capsuleOf(fake.controller, { words: { htmlLink: () => ({ href: to, label: 'Go' }) }, linkOrigins: origins }),
+      )
+      hrefs.push(link(container)?.getAttribute('href') ?? null)
+      document.body.innerHTML = ''
+    }
+    expect(hrefs).toEqual([null, null, null, 'https://store.example/detail/x'])
+  })
+  it("a document's HTML version and a host's settings page the same: a script's draws no link", async () => {
+    const a = await mountElement(
+      capsuleOf(fakeController({ phase: 'ready', available: false, htmlVersion: 'javascript:alert(1)' }).controller),
+    )
+    expect(link(a.container)).toBeNull()
+    document.body.innerHTML = ''
+    const b = await mountElement(
+      capsuleOf(fakeController({ phase: 'ready', settingsUnreadable: true }).controller, {
+        settingsHref: 'javascript:alert(1)',
+      }),
+    )
+    expect([!!b.container.querySelector('.capsule'), link(b.container)]).toEqual([true, null])
+  })
+})
+
+describe("the card's retry due at the time of the failure it shows (the cloud review of #616)", () => {
+  it("the original lost on its own pane and the service waiting: the translation's card, the service's, greyed until the service's time", async () => {
+    const fake = fakeController({
+      phase: 'failed',
+      failure: 'network',
+      failures: { pdf: 'network', service: 'network' },
+      failureAt: Date.now() + 60_000,
+    })
+    const { container } = await mountElement(
+      cardOf(fake.controller, 'pane', { retry: 'when-due', words: { openOriginal: 'Open the PDF on arXiv' } }),
+    )
+    const button = container.querySelector<HTMLButtonElement>('.card button')!
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    button.click()
+    expect(fake.controller.retry).not.toHaveBeenCalled()
+  })
+  it("the card that shows the original's failure (no way to arXiv's PDF given): its retry at once, the original asked again", async () => {
+    const fake = fakeController({
+      phase: 'failed',
+      failure: 'network',
+      failures: { pdf: 'network', service: 'network' },
+      failureAt: Date.now() + 60_000,
+    })
+    const { container } = await mountElement(cardOf(fake.controller, 'pane', { retry: 'when-due' }))
+    expect(container.querySelector('.card button')!.getAttribute('aria-disabled')).toBeNull()
   })
 })
