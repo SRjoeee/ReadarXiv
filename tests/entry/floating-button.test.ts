@@ -193,6 +193,12 @@ describe('the floating button: what it is made of', () => {
     expect(q('.axt-fb-dock').style.getPropertyValue('--axt-unzoom')).toBe('0.8')
   })
 
+  it('is not printed: a printed page shows the paper, not the button (#614)', () => {
+    const { root } = mount()
+    const all = rules(root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, ''))
+    expect(ruleOf(all, '.axt-fb-dock', ['@media print'])).toEqual({ display: 'none !important' })
+  })
+
   it('its sheet carries no :has() (hard rule 9): what a selector would ask of the structure, a data-axt-* mark says', () => {
     // The rule was measured on author sheets in the document (DESIGN §7.2); this one lives in a shadow root, where the
     // cost was not measured. It is held to the same rule all the same: the gate in tests/styles reads `src/styles/*.css`

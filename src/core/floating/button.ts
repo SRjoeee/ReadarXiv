@@ -176,6 +176,9 @@ ${tokenSheet('host')}
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-main { width: 40px; border-width: 1px; border-radius: 9999px; justify-content: center; opacity: 1; cursor: grabbing; }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-disc { margin: 0; }
 .axt-fb-dock[data-axt-dragging="yes"] .axt-fb-shield { cursor: grabbing; }
+@media print {
+  .axt-fb-dock { display: none !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   .axt-fb-dock *, .axt-fb-dock *::before { transition-duration: 0s !important; }
 }
