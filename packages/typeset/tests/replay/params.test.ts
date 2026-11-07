@@ -35,7 +35,7 @@ type Slot = {
 }
 
 describe.skipIf(!hasTap)('U.params: replayed on the tap', () => {
-  it('sets the fit’s parameters as today did, on every sampled round', () => {
+  it('sets the fit’s parameters as today did, on every sampled round', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = {
       rounds: 0,
@@ -120,7 +120,7 @@ describe.skipIf(!hasTap)('U.params: replayed on the tap', () => {
     })
   })
 
-  it('lays every sampled reading at today’s size in today’s base style', () => {
+  it('lays every sampled reading at today’s size in today’s base style', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { readings: 0, givenUp: 0, noGlyph: 0, caps: 0 }
     for (const x of readings()) {

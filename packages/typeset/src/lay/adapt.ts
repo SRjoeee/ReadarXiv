@@ -210,8 +210,10 @@ export function adapt(i: AdaptInput): Adapted {
   // (the row kept after it: the next member's join says ink stays between the two on their shared line)
   const last = lines.at(-1)!
   const after = i.after
+  // (a shared row's size, here and below: its line's, today's rowLeadOf row (need.mjs:37, the file line's size field), which
+  // keptAfter and S.share read as the row's band)
   const kept: KeptRow | null = after?.join?.[1]
-    ? { page: last[0], baseline: last[4], x1: last[3], size: m.style.size, byLabel: !!after.label }
+    ? { page: last[0], baseline: last[4], x1: last[3], size: sizeOf(last, m), byLabel: !!after.label }
     : null
   // (the displays set with the short skip: under each SHORTSKIP line, the member's display element there)
   const displays = (m.els ?? []).filter(([, e]) => e.kind === 'display').flatMap(([, e]) => e.ink)
@@ -224,8 +226,10 @@ export function adapt(i: AdaptInput): Adapted {
   // (a single line's room to widen into: its column, TeX's measure m0..m1; the ink beside it where Room.side stops short of
   // the column, half its size off, today's margin: widen RUN:1576-1584)
   const sideOf = (b: FitBlock): Side | undefined => {
+    // (its line by its rectangle, or, where a label drawn anew moved the rectangle's start, by the rest of it: as U.blocks reads it)
+    const r0 = b.rects[0] as Rect
     const side = m.room.side,
-      j = lineInfo.get(rectKey(b.rects[0] as number[]))?.j
+      j = (lineInfo.get(rectKey(r0)) ?? lineInfo.get(rectKeyNoX0(r0)))?.j
     const l = j === undefined ? undefined : lines[j]
     if (!l) return undefined
     // (no side stated: a member across columns, whose lines' sides the one interval cannot hold; its line runs to its column)
@@ -289,7 +293,7 @@ export function adapt(i: AdaptInput): Adapted {
             baseline: bl[4],
             x0: bl[2],
             x1: lines[0]![2] - m.join[0],
-            size: b.style.size,
+            size: sizeOf(bl, b),
           } as Row,
           carried: decor.carried,
           ownLabel:
@@ -349,7 +353,7 @@ export function adapt(i: AdaptInput): Adapted {
             first: { page: fl[0], x1: fl[3] },
           }
         : null,
-    shareRow: after?.join ? { page: last[0], baseline: last[4], size: m.style.size } : null,
+    shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
     wide: null,
     ...(rowStart ? { rowStart } : {}),
   }

@@ -6,7 +6,7 @@ import type { El, Line, Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
-import { type Instrument, ROLE } from '../instrument.ts'
+import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
 import {
   alignOf,
   bandOf,
@@ -41,6 +41,8 @@ export interface FactsInput {
   unitB: Int32Array
   roleB: Uint8Array
   pieceB: Int32Array
+  /** the units the members are of: the instrument's, then those locate made on A (its ink units, kept blocks and figure texts) */
+  units?: readonly InstrumentUnit[]
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -66,7 +68,18 @@ function elsOf(content: readonly Piece[], out = new Map<string, Extract<Piece, {
   return out
 }
 
-export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB }: FactsInput): void {
+export function factsOf({
+  ins,
+  inkA,
+  m,
+  members,
+  claimedA,
+  pageA,
+  unitB,
+  roleB,
+  pieceB,
+  units = ins.units,
+}: FactsInput): void {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
@@ -138,7 +151,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
   // (a table column's cells, for a single-line cell's centring)
   const column = new Map<string, Member[]>()
   for (const mem of members) {
-    const c = mem.unit >= 0 ? ins.units[mem.unit]?.cell : undefined
+    const c = mem.unit >= 0 ? units[mem.unit]?.cell : undefined
     if (!c || !mem.located) continue
     // (today's column of a cell: the cells of its table, column and span, RUN:1508 columnKey)
     const k = `${c.table}|${c.col}|${c.span ?? 1}`
@@ -147,7 +160,7 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
 
   for (const mem of members) {
     if (!mem.located || !mem.lines.length) continue
-    const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
+    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
     const lineOf = new Map<number, number>()
     mem.lineGlyphs.forEach((gs, j) => {
       for (const a of gs) lineOf.set(a, j)
@@ -188,9 +201,15 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
       }
       if (el.ink.length && !el.keep) {
         // (its ink on a held line (KEPT, D11): kept with it, and the line's own next mark after it; one outside the unit's
-        // lines is kept by locate (B11 OUTSIDE))
+        // lines is kept by locate (B11 OUTSIDE). Its line the one its ink stands on, across and along: a line of the other
+        // column at its height is none of its, 2610.20595v1 p9 ord 55's formulas beside a display row KEPT in the left column)
         const on = el.ink.map((k) =>
-          mem.lines.findIndex((l) => l[0] === k[0] && Math.min(k[4], l[5]) > Math.max(k[2], l[6])),
+          mem.lines.findIndex(
+            (l) =>
+              l[0] === k[0] &&
+              Math.min(k[4], l[5]) > Math.max(k[2], l[6]) &&
+              Math.min(k[3], l[3]) > Math.max(k[1], l[2]),
+          ),
         )
         {
           const j = on.find((x) => x >= 0) ?? -1
@@ -342,8 +361,10 @@ export function factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, 
       if (f) return f
       f = []
       const o = m.offA[p - 1] as number
+      // (a glyph nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink beside it: 1706.03762v7 p13's
+      // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-        if (/\S/.test(g.u) && (claimedA[o + j] as number) !== mem.ord)
+        if (/\S/.test(g.u) && !g.unseen && (claimedA[o + j] as number) !== mem.ord)
           f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)

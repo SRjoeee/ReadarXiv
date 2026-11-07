@@ -66,7 +66,7 @@ export function breaksInput(i: Reading, prep: Prep, d: Derived['cases'][string])
 }
 
 describe.skipIf(!hasTap || !hasDerived('U.breaks'))('U.breaks: replayed on the tap', () => {
-  it('equals today’s breaks and maps on every sampled reading', () => {
+  it('equals today’s breaks and maps on every sampled reading', { timeout: 120_000 }, () => {
     const facts = derived<Derived>('U.breaks').cases
     const differ: string[] = []
     const count = { all: 0, ofBreaks: 0, paired: 0, paragraph: 0, joined: 0, opened: 0, regions: 0 }

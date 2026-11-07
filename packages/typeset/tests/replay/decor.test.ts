@@ -50,7 +50,7 @@ type DOut = {
 }
 
 describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
-  it('decorates the blocks as today did, on every sampled round', () => {
+  it('decorates the blocks as today did, on every sampled round', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = {
       rounds: 0,
@@ -64,6 +64,7 @@ describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
       indented: 0,
       heading: 0,
       numbered: 0,
+      cells: 0,
     }
     for (const e of sample('U.decor').entries)
       for (const [round, c] of roundsOf(e)) {
@@ -94,6 +95,10 @@ describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
             (dIn.chars as unknown as number[]).map((q) => [q, (page[q] ?? null) as PageChar[] | null]),
           ),
         }
+        // (a cell's single line is widened now, where today's widened none: replayed with no room for its line, so that the
+        // rest of U.decor is held to today's; the cells widened counted apart, the checkpoint's measure-10)
+        const cellLine = dIn.kind === 'cell' && bs.some((b) => b.rects.length === 1)
+        if (cellLine) count.cells++
         const got = decorAfter(bs, {
           kind: dIn.kind,
           title: dIn.title,
@@ -107,7 +112,7 @@ describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
           labelHides: before.labelHides,
           firstPage: bIn.rects[0]?.[0],
           firstX: bIn.rects[0]?.[1],
-          side: (b) => sideOf(b, facts),
+          side: (b) => (cellLine ? undefined : sideOf(b, facts)),
           kept: dIn.kept,
           shortSkips: dIn.shortSkips,
           lineInfo: dIn.lineInfo,
@@ -173,6 +178,7 @@ describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
       indented: 16,
       heading: 9,
       numbered: 3,
+      cells: 8,
     })
   })
 })

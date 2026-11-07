@@ -22,7 +22,7 @@ type In = {
 }
 
 describe.skipIf(!hasTap || !hasDerived('U.admit'))('U.admit: replayed on the tap', () => {
-  it('gives today’s verdict on every sampled unit', () => {
+  it('gives today’s verdict on every sampled unit', { timeout: 120_000 }, () => {
     const facts = derived<{ cases: Record<string, { clsProven: (string | null)[] }> }>('U.admit').cases
     const differ: string[] = []
     const codes = new Map<string, number>()

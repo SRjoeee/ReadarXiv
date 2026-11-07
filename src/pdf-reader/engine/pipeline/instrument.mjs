@@ -2,21 +2,19 @@
 // marks and compile outputs to the prepare's seam, the Instrument (packages/engine/src/instrument.ts). The only code that knows
 // today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
-// reads), each glyph's and rule's owner by today's ownership (own.mjs by the marks' points, figure-text.mjs's figure units,
-// the ledger's ink units and kept blocks, ink-units.mjs), and TeX's statements in the marked compile's log (the units'
-// alignments, \lineskip). It writes nothing and wraps nothing: the back half carries the ownership onto arXiv's page.
+// reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
+// statements in the marked compile's log (the units' alignments, \lineskip). It writes nothing and wraps nothing: the back half
+// carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (today's
+// ledger, ink-units.mjs, figure-text.mjs) are made by the back half's locate on arXiv's page, of the glyphs no source unit owns
+// there (packages/engine/src/locate/ink.ts), from B's marks the Doc carries (its points and DocPage.marks).
 //
 // The units, in today's bundle's order, so that a unit's index is today's id: the paper's source units, its names (cleveref's
-// and the counters' words, kind `name`), the ink units and the kept blocks (their ids from the bundle's length on), the
-// figure units; then one unit for each babel name's key that occurs (kind `name`, `name` its key: drawn in the target's word,
-// never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
+// and the counters' words, kind `name`); then one unit for each babel name's key that occurs (kind `name`, `name` its key:
+// drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { figureUnitsOf } from '../layout/figure-text.mjs'
-import { claimInk, inkUnitsOf, keptUnitsOf } from '../layout/ink-units.mjs'
-import { ledgerOf } from '../layout/ledger.mjs'
-import { classOf, followsOf, readAlign, readSkipProbe } from '../layout/marks.mjs'
+import { classOf, followsOf, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -150,13 +148,83 @@ function phClassProven(src) {
   return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
 }
 
-/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
- *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id */
-export function classesOf(pieces) {
+// ---- what the typesetter's rules read of a piece's source besides its class (the rest of today's reads of `src`: tokensOf2's
+// glue, style commands and links L2:2406-2620, U.breaks' forced breaks TEX:84, U.rename's citation notes L2:1279, U.elements'
+// macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf,
+// FORCED_BREAK and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts
+const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
+const BP = { pt: 72 / 72.27, bp: 1, mm: 72 / 25.4, cm: 72 / 2.54, in: 72, pc: (12 * 72) / 72.27, dd: ((1238 / 1157) * 72) / 72.27, cc: ((12 * 1238) / 1157 * 72) / 72.27, sp: 72 / 72.27 / 65536 }
+const KERNS = { '\\enspace': 0.5, '\\thinspace': 1 / 6, '\\,': 1 / 6, '\\:': 2 / 9, '\\;': 5 / 18 }
+const SKIPS = { '\\quad': 1, '\\qquad': 2 }
+/** explicit glue, as TeX sets it (layer2.mjs glueOf L2:2406): { em } or { bp }, and whether a line may break at it */
+export function glueOf(src) {
+  if (Object.hasOwn(KERNS, src)) return { em: KERNS[src], brk: false }
+  if (Object.hasOwn(SKIPS, src)) return { em: SKIPS[src], brk: true }
+  const m = /^\\(hspace\*?|hskip|kern)\s*(?:\{\s*([^{}]*?)\s*\}|([^{}\\]*?))\s*$/.exec(src)
+  if (!m) return null
+  const len = (m[2] ?? m[3] ?? '').replace(/\s+(?:plus|minus)\s.*$/, '').trim()
+  const d = DIMEN.exec(len)
+  if (!d || !(Number(d[1]) > 0)) return null
+  const brk = m[1] !== 'kern'
+  return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]], brk }
+}
+/** a forced break's source (tex.mjs:84 FORCED_BREAK) */
+export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a citation's note: its last optional argument, its ties and control spaces a space, where it holds a letter (layer2.mjs
+ *  renameRefs' CITE_NOTE L2:1279-1305) */
+const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
+export function noteOf(src) {
+  const m = CITE_NOTE.exec(src)
+  if (!m) return null
+  const last = [...m[1].matchAll(/\[([^\]]*)\]/g)].at(-1)
+  const note = last?.[1]?.replace(/~|\\[ ,]/g, ' ').replace(/\s+/g, ' ').trim()
+  return note && /\p{L}/u.test(note) ? note : null
+}
+/** the command a source begins with (its name and its star), and whether the source is that command alone (a declaration:
+ *  tokensOf2's switch, /^\\[A-Za-z]+$/) */
+export function commandOf(src) {
+  const m = /^\\([A-Za-z]+\*?)/.exec(src)
+  return m ? { cmd: m[1], ...(/^\\[A-Za-z]+$/.test(src) ? { bare: true } : {}) } : null
+}
+/** what a piece's source tells the rules besides its class: its glue, its command, a forced break, a citation's note, an
+ *  earlier piece of the unit with the same source (`same`: the source's identity, which U.elements' macros are learnt by),
+ *  and the fill TeX set its run in (a colour piece's, readColours: `colours` by piece index) */
+function sourceFactsOf(src, k, first, colours) {
+  const x = {}
+  const g = glueOf(src)
+  if (g) x.glue = g.em !== undefined ? [g.em, 'em', ...(g.brk ? [1] : [])] : [g.bp, 'bp', ...(g.brk ? [1] : [])]
+  const c = commandOf(src)
+  if (c) Object.assign(x, c)
+  if (FORCED_BREAK.test(src)) x.brk = true
+  const note = noteOf(src)
+  if (note !== null) x.note = note
+  const f = first.get(src)
+  if (f === undefined) first.set(src, String(k))
+  else x.same = f
+  if (colours?.has(k)) x.colour = colours.get(k)
+  return x
+}
+/** each group's facts by its open piece's id: the command its open begins with, and the fill TeX set its run in */
+export function spansOf(pieces, colours = null) {
   const out = []
   pieces.forEach((p, k) => {
+    if (p.t !== 'open') return
+    const c = commandOf(unicodeOf(p.src))
+    const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}) }
+    if (Object.keys(x).length) out.push([String(k), x])
+  })
+  return out
+}
+
+/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
+ *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id;
+ *  and what the rest of the rules read of its source (sourceFactsOf), `colours` the unit's colour pieces' fills by index */
+export function classesOf(pieces, colours = null, texts = null) {
+  const out = []
+  const first = new Map()
+  pieces.forEach((p, k) => {
     // (a nested unit: its mark a footnote mark's, placeholdersOf L2:1066)
-    if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true }]); return }
+    if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true, nested: true }]); return }
     if (p.t !== 'ph') return
     const src = unicodeOf(p.src)
     // (the placeholder's class, placeholdersOf L2:1065: phClassProven, a symbol that is no text symbol a formula; its
@@ -171,6 +239,11 @@ export function classesOf(pieces) {
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
     if (textPieceOf(src)) x.literal = true
+    // (a text macro's text, the marking's probe's: what TeX sets for it (the marks file's `texts`), which today's reader finds
+    // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
+    const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
+    if (typeof t === 'string' && /\S/.test(t)) x.text = t
+    Object.assign(x, sourceFactsOf(src, k, first, colours))
     out.push([String(k), x])
   })
   return out
@@ -224,16 +297,12 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
-  const fig = figureUnitsOf(pages, own)
-  const withFigures = all => own.glyphs.map((row, i) => { const m = fig.glyphs[i]; if (!m?.size) return row; const out = Array.from(row); for (const [g, k] of m) if (all || !fig.units[k].why) out[g] = fig.units[k].group; return out })
-  const withLeads = rows => rows.map((row, i) => { const m = own.leads?.[i]; if (!m?.size) return row; const out = Array.from(row); for (const [g, group] of m) out[g] ??= group; return out })
-  const classed = ledgerOf(pages, { ...own, glyphs: withLeads(withFigures(true)) }, { units })
-  const ink = inkUnitsOf(pages, classed, { units, from: inkBase })
-  claimInk(own, ink, pages)
-  const kept = keptUnitsOf(pages, classed, (p, g) => own.glyphs[p - 1]?.[g] ?? (fig.glyphs[p - 1]?.has(g) ? 'f' : null) ?? own.leads?.[p - 1]?.get(g) ?? null, { from: inkBase + ink.length })
 
   // ---- the units
   const align = new Map(readAlign(log))
+  // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
+  const colours = new Map()
+  for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
   const ids = []
   const out = []
   const kindOf = p => classOf(p) ?? 'other'
@@ -242,28 +311,13 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
     out.push({ id: unitId(bundle[i][0], content), kind: bundle[i][0], content })
   }
-  for (const u of [...ink, ...kept]) {
-    const content = contentOf(u.pieces ?? [], { kindOf })
-    const classes = classesOf(u.pieces ?? [])
-    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
-  }
-  const figBase = out.length
-  // (the figure units in today's bundle's order: those it draws first, in their order, then those whose ink stays, crowded or
-  // without a Unicode a reader can trust, as the bundle lists the units it does not hold after the ones it does)
-  const figOrder = [...fig.units.keys()].sort((a, b) => (fig.units[a].why ? 1 : 0) - (fig.units[b].why ? 1 : 0) || a - b)
-  const figAt = new Map(figOrder.map((k, q) => [k, figBase + q]))
-  figOrder.map(k => fig.units[k]).forEach(f => {
-    const content = [{ t: 'text', s: f.text ?? '' }]
-    const dir = Math.abs((f.ux ?? 1) - 1) > 1e-6 || Math.abs(f.uy ?? 0) > 1e-6 ? [Math.round((f.ux ?? 1) * 1e4) / 1e4, Math.round((f.uy ?? 0) * 1e4) / 1e4] : undefined
-    out.push({ id: unitId('inkfigures', content), kind: 'inkfigures', content, figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}) }, ...(f.why ? { why: `figure: ${f.why}`, fixed: true } : {}) })
-  })
   // a babel name's every key that occurs: a unit whose occurrences are its own (drawn in the target's word)
   const keyUnit = new Map()
   const keyOf = new Map()
@@ -272,7 +326,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
 
   // ---- the owners of B's glyphs and boxes
   const glyphs = [], boxes = [], turnedOwners = []
-  const kept0 = inkBase + ink.length
   pages.forEach((pg, i) => {
     const G = ownersOf(pg.glyphs.length), X = ownersOf(pg.boxes.length / 4)
     const row = own.glyphs[i] ?? [], brow = own.boxes[i] ?? []
@@ -286,22 +339,10 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     }
     for (let j = 0; j < pg.glyphs.length; j++) set(G, j, row[j], pieceG)
     for (let j = 0; j < pg.boxes.length / 4; j++) set(X, j, brow[j], pieceX)
-    // an ink unit's `.p` glyphs: its pieces' elements in their order (no points of its own)
-    for (const [g, k] of fig.glyphs[i] ?? []) { if (G.unit[g] < 0) { G.unit[g] = figAt.get(k); G.role[g] = ROLE.text } }
     glyphs.push(G)
     boxes.push(X)
-    // (a figure unit's turned glyphs: a y-axis title)
-    const T = ownersOf(pg.turned?.length ?? 0)
-    for (const [j, k] of fig.turned[i] ?? []) { T.unit[j] = figAt.get(k); T.role[j] = ROLE.text }
-    turnedOwners.push(T)
-  })
-  // (the kept blocks' glyphs, which no group holds: their units' own, fixed)
-  kept.forEach((u, q) => { for (const [p, g] of u.glyphs?.text ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] < 0) { G.unit[g] = kept0 + q; G.role[g] = ROLE.text } } })
-  // (an ink unit's placeholder glyphs: its first element's, there being no points to tell them apart)
-  ink.forEach(u => {
-    const el = (u.pieces ?? []).findIndex(p => p.t === 'ph')
-    if (el < 0) return
-    for (const [p, g] of u.glyphs?.ph ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] === u.id && G.role[g] === ROLE.element && G.piece[g] < 0) G.piece[g] = el }
+    // (no source unit owns a turned glyph: own.mjs reads none; a figure's turned text is locate's, on arXiv's page)
+    turnedOwners.push(ownersOf(pg.turned?.length ?? 0))
   })
   // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
   // what today's file states); the marked compile's log where the options have none)
@@ -314,6 +355,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   pages.forEach((pg, i) => { for (const pt of pg.points) { const m = /^p(\d+)\.(\d+)([ab])$/.exec(pt.name); if (m && Number(m[1]) < units.length) places.push({ unit: Number(m[1]), piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' }) } })
   return {
     instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
-    today: { own, fig, ink, kept, inkBase, figBase },
+    today: { own, inkBase },
   }
 }

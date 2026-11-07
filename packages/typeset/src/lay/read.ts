@@ -16,7 +16,7 @@
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
 // What the part does not state yet is passed as today does without it, each named where it is read: a name leading the unit
 // (U.lead), U.rename's names, a rendering's runs of one fill and its faked small capitals, a colour piece's run.
-import type { El, Placed, Piece } from '@readarxiv/format'
+import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
 import { measure } from '../breaker/measure.ts'
@@ -55,6 +55,47 @@ export function sourcePieces(content: readonly Piece[]): V0Piece[] {
         if (p.open !== undefined) out.push({ t: 'open', src: p.open, id, k: out.length })
         walk(p.content)
         if (p.close !== undefined) out.push({ t: 'close', src: p.close, id, k: out.length })
+      }
+    }
+  }
+  walk(content)
+  return out
+}
+
+/** the source a rule reads of an element, made of what the part states of it (El: its glue, its command and whether its
+ *  source is that command alone, a forced break, a citation's note, its identity): every test today's rules make of a source
+ *  (glueOf, FORCED_BREAK, the style commands' and GENERATED_REF's names, CITE_NOTE, a declaration's /^\\[A-Za-z]+$/, the
+ *  macros learnt by their source) answers on it as on the source itself */
+export function srcOfEl(id: string, el: El | undefined): string {
+  if (!el) return `{=${id}}`
+  if (el.brk) return '\\\\'
+  if (el.glue) return `\\${el.glue[2] ? 'hskip' : 'kern'} ${el.glue[0]}${el.glue[1]}`
+  if (el.cmd !== undefined && el.bare) return `\\${el.cmd}`
+  const key = `{=${el.same ?? id}}`
+  return el.cmd !== undefined ? `\\${el.cmd}${el.note !== undefined ? `[${el.note}]` : ''}${key}` : key
+}
+/** a group's open as the rules read it: the command it begins with (SpanAt.cmd) */
+export const srcOfSpan = (sp: SpanAt | undefined): string => (sp?.cmd !== undefined ? `\\${sp.cmd}{` : '{')
+
+/** a row's content (the translation package's Result: its text, the source's elements and groups by id) as the flat pieces
+ *  today's rules read (rows.mjs unitOf: a translated text, `ph` an element, `open` / `close` a group, `nested` a unit), each
+ *  source piece with its id as its index `k` and its source as the part states it (srcOfEl, srcOfSpan): the reading needs
+ *  nothing of the unit's own pieces but what its member states */
+export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
+  const els = new Map(m.els ?? [])
+  const spans = new Map(m.spans ?? [])
+  const out: V0Piece[] = []
+  const walk = (ps: readonly OutPiece[]) => {
+    for (const p of ps) {
+      if (p.t === 'text') out.push({ t: 'text', tr: true, s: p.s } as V0Piece)
+      else if (p.t === 'el') {
+        const e = els.get(p.id)
+        out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
+      } else {
+        const id = Number(p.id)
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id })
+        walk(p.content)
+        out.push({ t: 'close', src: '}', id })
       }
     }
   }
@@ -184,7 +225,7 @@ function readingsOf(
     return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
   })
   pieces.forEach((p, k) => {
-    if (p.t === 'nested' && !els.has(String(p.k))) {
+    if (p.t === 'nested' && !els.get(String(p.k))?.ink.length) {
       const source: Res = { mode: 'source', text: '*', math: false, sup: true }
       readings.set(k, {
         src: '\\footnotemark',
@@ -219,14 +260,30 @@ function readingsOf(
     // (texParts' fixed, TEX:487-495: a text macro of no ink drawn as nothing (inklessOf), one of the classes that draw ink
     // TeX set none for (emptyOf, EMPTY), ink outside the unit's lines left where it stands (OUTSIDE))
     let fixed: Res | null = null
+    // (a text macro whose glyphs are the unit's text, its text stated (El.text, the probe's): drawn as that text, as today's
+    // reader draws the rendering it finds by it among the unit's characters; with none, nothing, inklessOf)
+    const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined
     if (MACRO_CLASSES.has(cls) && !el) fixed = { mode: 'none', text: '', proof: true }
-    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length)
+    // (a paper's own macro the part states no ink and no text of: TeX may have set nothing for it, or its glyphs as the unit's
+    // text, which the reading cannot tell; drawn as nothing, its glyphs were erased with the text group and never drawn again
+    // (2608.06007v1 p10's \sys, "TensorCast", the checkpoint's free-17). Unproven: the unit is left the original's whole, nothing
+    // erased without a replacement, until the instrument states the glyphs TeX set for it)
+    else if (MACRO_CLASSES.has(cls) && el?.unknown && !ink.length && !textOnly) fixed = { mode: 'none', text: '' }
+    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
       fixed = { mode: 'none', text: '', proof: true, empty: true }
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null
-    if (cls !== 'zero' && cls !== 'symbol' && ink.length && !(cls === 'space' && !ink.length)) {
-      const lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
+    if (cls !== 'zero' && cls !== 'symbol' && (ink.length || textOnly) && !(cls === 'space' && !ink.length)) {
+      let lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
+      // (a display the unit begins or ends with, its rows before its first text line or after its last, stays in place: today's
+      // layout file holds no line of it (the maker's inPlace, a unit's first or last piece), so no region of it is referenced)
+      if (cls === 'display' && lines.length) {
+        const at = (k: string) => L.findIndex((l) => l.key === k)
+        const text = L.map((l, j) => (l.kept ? -1 : j)).filter((j) => j >= 0)
+        const idx = lines.map(at)
+        if (text.length && (idx.every((j) => j > text.at(-1)!) || idx.every((j) => j < text[0]!))) lines = []
+      }
       const text = el?.text ?? ''
       gap = { text, lines, nu: el?.text === undefined, proof: true, box: boxOf(S), n: [...text].length }
     }
@@ -357,6 +414,7 @@ export function readMember(i: ReadInput): ReadOut {
   const { m, unit, paper } = i
   const pieces = unit.pieces
   const els = new Map(m.els ?? [])
+  const spans = new Map(m.spans ?? [])
   const L = linesOf(m, i.rects)
   const { readings, cls2 } = readingsOf(pieces, els, L)
   // (the lines its source does not write, held: KEPT lines no display's rows are; a display's rows, touched)
@@ -432,7 +490,17 @@ export function readMember(i: ReadInput): ReadOut {
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
-    colourOf: () => null,
+    // (a colour piece's run in the fill TeX set it in, El.colour or SpanAt.colour: today's tex.mjs colourOf over the log's)
+    colourOf: (k) => {
+      const p = pieces[k]
+      const c =
+        p?.t === 'ph' || p?.t === 'nested'
+          ? els.get(String(p.k))?.colour
+          : p?.t === 'open'
+            ? spans.get(String(p.k))?.colour
+            : undefined
+      return c ?? null
+    },
     fillOf: (k) => {
       const p = pieces[k]
       const f = p?.t === 'ph' ? els.get(String(p.k))?.style?.fill : undefined

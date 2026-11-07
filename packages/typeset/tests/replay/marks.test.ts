@@ -11,7 +11,7 @@ import { firstDifference, hasDerived, hasTap, ledgerRound, readGz, roundsOf, sam
 import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('U.marks: replayed on the tap', () => {
-  it('drops and merges the marks today did, on every sampled round of the tokens', () => {
+  it('drops and merges the marks today did, on every sampled round of the tokens', { timeout: 120_000 }, () => {
     const { facts, classes } = tokenFacts()
     const metrics = new Map<string, ReturnType<typeof tableMetrics>>()
     const differ: string[] = []

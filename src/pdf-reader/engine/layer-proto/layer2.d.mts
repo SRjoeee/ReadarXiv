@@ -284,6 +284,8 @@ export declare function phClass2(src: string): { cls: string; unknown?: boolean 
 export declare function textSymbol(src: string): boolean
 /** phClass2 as the layer reads a unit's placeholders: a 'symbol' that is no text symbol is 'other' */
 export declare function phClassProven(src: string): { cls: string; unknown?: boolean }
+/** a placeholder's source that is explicit glue, as TeX sets it: { em } or { bp }, and whether a line may break at it */
+export declare function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null
 /** the unit's characters by its rectangles; `exact`: each rectangle's baseline and size, the layout file's */
 export declare function charsOfUnit2(rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], extents: Map<Rect, number[]> | undefined, exact: ReadonlyMap<Rect, { baseline: number; size: number }>): Char[]
 /** `first`: the unit's first line (default rects[0]; `rects` may be its lines on one page alone); the rects are the layout file's lines, a justified line grown over what is not math only up to its run's measure (E3d) */
@@ -511,3 +513,6 @@ export declare function clearLines(lines: { block: number; baseline: number }[],
 /** the characters a target's rules set in its CJK face: the CJK blocks, and with `quotes` (the rules' cjkQuotes) the curly quotes,
  *  dashes, ellipsis and middle dot too */
 export declare const cjkClassRe: (quotes: boolean) => RegExp
+
+/** explicit glue as TeX sets it (L2:2406): { em } or { bp }, and whether a line may break at it */
+export declare function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null

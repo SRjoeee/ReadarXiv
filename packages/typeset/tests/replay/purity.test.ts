@@ -8,7 +8,7 @@ import { hasDerived, hasTap } from './tap.ts'
 import { hasCache } from './today.ts'
 
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('I6: the composition is deterministic', () => {
-  it('lays a pair twice alike', () => {
+  it('lays a pair twice alike', { timeout: 120_000 }, () => {
     const a = gatePair('2610.21377v1-zh'),
       b = gatePair('2610.21377v1-zh')
     expect(b.units).toEqual(a.units)

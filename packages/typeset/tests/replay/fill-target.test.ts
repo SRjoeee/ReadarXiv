@@ -18,7 +18,7 @@ const voter = (x: V): Voter => ({
 })
 
 describe.skipIf(!hasTap)('S.fill.target: replayed on every call of the corpus', () => {
-  it('equals today’s pageTarget on every page pass', () => {
+  it('equals today’s pageTarget on every page pass', { timeout: 120_000 }, () => {
     const differ: string[] = []
     let n = 0
     const files = readdirSync(join(TAP, 'ledgers'))

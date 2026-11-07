@@ -150,10 +150,12 @@ export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter
   const b0 = blocks[0]
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))
-  if (i.kind !== 'cell')
-    blocks.forEach((b, k) => {
-      widen(b, sideOf(b, k))
-    })
+  // (a cell's single line too, where today's widened none (RUN:2116): its rectangle was its cell's as PDF.js's text items read the
+  // table, the part's line is its ink's alone, and a column head laid in its own ink's width wrapped where the original's one
+  // line had room on both sides: 1810.04805v2 p7's "Ours", the checkpoint's measure-10)
+  blocks.forEach((b, k) => {
+    widen(b, sideOf(b, k))
+  })
   const kept = i.kept
   if (kept)
     for (const b of blocks)

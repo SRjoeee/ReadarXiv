@@ -184,7 +184,11 @@ export function layered(first, then) {
     }
   }
   return {
-    ready: first.ready,
+    // (ready where either is: the table holds the faces today measured, the measurer every served face)
+    ready: (face, text) => {
+      const a = first.ready(face, text)
+      return a === true ? a : then.ready(face, text)
+    },
     advance: or(first.advance, then.advance),
     ink: or(first.ink, then.ink),
   }

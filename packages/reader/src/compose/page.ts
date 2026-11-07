@@ -9,8 +9,8 @@ export type Ink = [page: number, x0: number, y0: number, x1: number, y1: number,
 export type FaceId = string
 
 export type Item =
-  /** a run of one face: from x, its characters at `dx` (per character) where given */
-  | { s: string; x: number; face: FaceId; size: number; fill?: number; skew?: 1; dx?: number[] }
+  /** a run of one face: from x, its characters at `dx` (per character) where given, `rise` over the baseline where raised */
+  | { s: string; x: number; face: FaceId; size: number; fill?: number; skew?: 1; dx?: number[]; rise?: number }
   /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter') */
   | { s: string; x: number; src: Ink; k: number; piece: string }
 

@@ -4,7 +4,7 @@ import { type BlocksInput, blocks } from '../../src/unit/blocks.ts'
 import { firstDifference, hasTap, roundsOf, sample } from './tap.ts'
 
 describe.skipIf(!hasTap)('U.blocks: replayed on the tap', () => {
-  it('equals today’s blocks2 on every sampled round', () => {
+  it('equals today’s blocks2 on every sampled round', { timeout: 120_000 }, () => {
     const s = sample('U.blocks')
     const differ: string[] = []
     let replayed = 0

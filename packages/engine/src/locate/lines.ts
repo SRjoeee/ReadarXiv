@@ -1,7 +1,8 @@
 // A unit's lines, cut in its own glyph run in stream order by one rule (design §4.1, "geometry is A's"; spike S1 §2): the next
-// glyph starts a line where it leaves the line's baseline band (half a size) and jumps back left of the glyph before it, or
-// far on to its right (two sizes), or more than one and a half sizes up or down (a column's top: no script is that far); and
-// wherever the page changes. A glyph off the band that goes on along it (a script, a fraction's parts) is the line's. A line's
+// glyph starts a line where it leaves the line's baseline band (half a size about the baseline its body glyphs so far share)
+// and jumps back left of the glyph before it, or far on to its right (two sizes), or more than one and a half sizes up or down
+// (a column's top: no script is that far); and wherever the page changes. A glyph off the band that goes on along it (a
+// script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
 // baseline is the one most of its body glyphs' characters share (to 0.01 pt; today's maker's rowOf); its extent their
 // advances'; its top and bottom their own ink's; its size today's (lineSize).
 import type { DocGlyph } from '../doc.ts'
@@ -51,25 +52,70 @@ export function lineSize(gs: readonly DocGlyph[]): number {
 
 /** the lines of `list` (each an index `at` resolves to its page and glyph), blank glyphs aside */
 export function cutLines(list: readonly number[], at: (i: number) => { page: number; g: DocGlyph }): CutLine[] {
-  const out: { page: number; y0: number; size: number; gs: number[] }[] = []
-  let L: (typeof out)[number] | null = null
+  type Open = {
+    page: number
+    y0: number
+    size: number
+    gs: number[]
+    votes: Map<number, number>
+    best: number
+    top: number
+    bottom: number
+    /** its first glyph's start */
+    x0: number
+  }
+  const out: Open[] = []
+  let L: Open | null = null
   let prev: DocGlyph | null = null
+  // (the band a line's next glyph is read against: the baseline its body glyphs so far share (those within BODY of its largest
+  // size, by characters), not its first glyph's, which may be a script or a fraction's part: 2610.21765v1 p9, a line opening
+  // with 1/√2π's numerator, whose band then cut the formula's last fraction off as a line of its own)
+  const vote = (l: Open, g: DocGlyph) => {
+    if (Math.abs(g.size - l.size) > BODY * l.size) return
+    const y = r2(g.y)
+    const n = (l.votes.get(y) ?? 0) + Math.max(1, g.u.length)
+    l.votes.set(y, n)
+    if (n > l.best) {
+      l.best = n
+      l.y0 = y
+    }
+  }
   for (const i of list) {
     const { page, g } = at(i)
     if (!/\S/.test(g.u)) continue
-    const off = L !== null && Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size)
+    // (a glyph whose ink reaches across the line's ink so far, not back to the line's start, stands on the line wherever its
+    // origin is: a big delimiter or operator, whose origin TeX's math extension sets at its top (17 pt over a 10 pt line in
+    // 2610.21026v1 p20, which cut the rest of its formula off as a line of its own on the same baseline), a fraction's
+    // denominator back under its numerator, and what follows a delimiter that opens a line; the next line begins back at the
+    // line's start)
+    const back = prev !== null && g.x0 < prev.x0 - 0.5 * g.size
+    // (back to the line's start or before it: where a line begins; back within the line, a fraction's denominator)
+    const toStart = back && L !== null && g.x0 <= L.x0 + 0.5 * g.size
+    const crosses = L !== null && !toStart && g.bottom < L.top && g.top > L.bottom
+    const off = L !== null && !crosses && Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size)
     const jump =
       L !== null &&
       prev !== null &&
-      (g.x0 < prev.x0 - 0.5 * g.size ||
+      (back ||
         g.x0 > prev.x1 + 2 * Math.max(prev.size, g.size) ||
-        Math.abs(g.y - L.y0) > 1.5 * Math.max(L.size, g.size))
+        (!crosses && Math.abs(g.y - L.y0) > 1.5 * Math.max(L.size, g.size)))
     if (L === null || page !== L.page || (off && jump)) {
-      L = { page, y0: g.y, size: g.size, gs: [] }
+      L = { page, y0: g.y, size: g.size, gs: [], votes: new Map(), best: 0, top: g.top, bottom: g.bottom, x0: g.x0 }
       out.push(L)
     }
     L.gs.push(i)
-    if (g.size > L.size) L.size = g.size
+    if (g.top > L.top) L.top = g.top
+    if (g.bottom < L.bottom) L.bottom = g.bottom
+    if (g.size > L.size * (1 + BODY)) {
+      // (a larger body than the glyphs before: the band is its, the votes counted again over the line's glyphs of that size)
+      L.size = g.size
+      L.votes = new Map()
+      L.best = 0
+      for (const j of L.gs) vote(L, at(j).g)
+    } else {
+      if (g.size > L.size) L.size = g.size
+      vote(L, g)
+    }
     prev = g
   }
   return out.map((l) => {

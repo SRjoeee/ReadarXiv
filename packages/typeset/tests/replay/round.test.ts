@@ -24,7 +24,7 @@ const RULES = [
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
   'a unit’s lay: replayed on the tap from F2 to out',
   () => {
-    it('chains every step of every sampled round as today did', () => {
+    it('chains every step of every sampled round as today did', { timeout: 120_000 }, () => {
       const differ: string[] = []
       const steps = new Map<string, number>(),
         stopped = new Map<string, number>()

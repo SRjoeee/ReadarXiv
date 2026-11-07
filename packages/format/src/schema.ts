@@ -138,8 +138,28 @@ export const El = z.object({
   ends: z.tuple([int, num]).optional(),
   opens: int.optional(),
   name: z.string().optional(),
+  // what the typesetter's other rules read of its source, stated (the instrument's: format's El and SpanAt carry them so that
+  // the part is the page's whole problem and no rule reads a source): its glue (a length in the font's em or in PDF units,
+  // a line may break at it), the command its source begins with (its name and star) and whether the source is that command
+  // alone (a declaration), a forced break, a citation's note, an earlier piece of its unit with the same source (by id), the
+  // fill TeX set its run in (a colour piece's), and a nested unit's mark
+  glue: z.union([z.tuple([num, z.enum(['em', 'bp'])]), z.tuple([num, z.enum(['em', 'bp']), flag])]).optional(),
+  cmd: z.string().optional(),
+  bare: flag.optional(),
+  brk: flag.optional(),
+  note: z.string().optional(),
+  same: z.string().optional(),
+  colour: int.optional(),
+  nested: flag.optional(),
 })
-export const SpanAt = z.object({ style: Style.optional(), opens: int.optional() })
+/** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and
+ *  star), the fill TeX set its run in */
+export const SpanAt = z.object({
+  style: Style.optional(),
+  opens: int.optional(),
+  cmd: z.string().optional(),
+  colour: int.optional(),
+})
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
   ink: Ink,
