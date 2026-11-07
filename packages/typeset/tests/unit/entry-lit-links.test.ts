@@ -434,12 +434,12 @@ describe('S.figures over the part: a figure text drawn in its translation where 
   })
   it('draws a turned one at its angle along its run about its anchor, its runs along it, lit by its turned box', () => {
     // (a y-axis title "Loss" set a quarter turned: its run from (150, 380) up for 20, centred, its room 20 before and after along
-    // it (P·dir from 360 to 420); its line on A its box on the page)
+    // it (Placed.run's own: Room.side keeps its meaning, the side of its box across the page, the label's 120-180, which an
+    // older typesetter reads as before); its line on A its box on the page)
     const quarter = label({
       dir: [0, 1],
-      run: [150, 380, 20],
+      run: [150, 380, 20, 20, 20],
       lines: [[1, 0, 144, 152, 380, 400, 380, 144, 152, 0, 8]],
-      room: { below: 1, side: [360, 420] },
     })
     const m = layPage(part(quarter), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
     expect(m).toMatchObject({ state: 'laid', off: 1 })
@@ -456,15 +456,18 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(b![0]).toBeLessThan(150)
     expect(b![2]).toBeGreaterThan(150)
     expect(b![2] - b![0]).toBeLessThan(10)
+    // (its room along its run is the run's: 4 before and after leave 28 to "Verluste", 32 at 8: its set at 7)
+    const tight = label({ ...quarter, run: [150, 380, 20, 4, 4] })
+    const t = layPage(part(tight), rowsOf([rowF('Verluste')]), rules, metrics()).members[0]!
+    expect(t.state).toBe('laid')
+    expect((t.lines[0]![3][0] as { size: number }).size).toBeCloseTo(7, 9)
     // (any angle the original states: one turned 30 degrees, set from its start, its room after it along its run)
     const [ux, uy] = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)]
-    const at = 100 * ux + 300 * uy
     const slant = label({
       align: 'l',
       dir: [ux, uy],
-      run: [100, 300, 20],
+      run: [100, 300, 20, 0, 60],
       lines: [[1, 0, 96, 121, 300, 316, 296, 96, 121, 0, 8]],
-      room: { below: 1, side: [at, at + 60] },
     })
     const s = layPage(part(slant), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
     expect(s.state).toBe('laid')

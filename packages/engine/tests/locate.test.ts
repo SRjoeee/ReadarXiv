@@ -748,9 +748,15 @@ describe('review of #605', () => {
     const L = locate(ins, A, align(B, A))
     const fig = L.members[1]!
     expect(fig.dir).toEqual([0, 1])
-    // (its run: the origin and length along (0, 1); its room along it, a point P at P·dir: from 400 − 5 to 400 + 24 + 30)
-    expect(fig.run).toEqual([60, 400, 24])
-    expect(fig.room.side).toEqual([395, 454])
+    // (its run: the origin and length along (0, 1) and its room before and after along it. Room.side keeps its meaning, the side
+    // of its box across the page, as for a turned text of a part made before: an older typesetter reads the same fields alike)
+    expect(fig.run).toEqual([60, 400, 24, 5, 30])
+    const plain = locate(
+      { ...ins, units: [units[0]!, unitOf('inkfigures', 'Loss', { figure: { set: 0, dir: [0, 1] }, align: 'l' })] },
+      A,
+      align(B, A),
+    ).members[1]!
+    expect(plain.room).toEqual(fig.room)
     const addOn = {
       ...addOnOf(L, 1),
       groups: new Set([...L.groups[0]!.glyphs, ...L.groups[0]!.turned].filter((g): g is string => g !== null)),
@@ -760,17 +766,9 @@ describe('review of #605', () => {
     ]
     const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
     const placed = read('part', part.bytes).flows.flat()[1]!
-    expect(placed).toMatchObject({ dir: [0, 1], run: [60, 400, 24], room: { side: [395, 454] }, align: 'l' })
-    // (a part made before states no run: S.figures leaves such a turned text the original's)
-    const level = locate(
-      {
-        ...ins,
-        units: [units[0]!, unitOf('inkfigures', 'Loss', { figure: { set: 0, dir: [0, 1] }, align: 'l' })],
-      },
-      A,
-      align(B, A),
-    ).members[1]!
-    expect(level.run).toBeUndefined()
+    expect(placed).toMatchObject({ dir: [0, 1], run: [60, 400, 24, 5, 30], room: fig.room, align: 'l' })
+    // (one today's reading tells no room of states no run: S.figures leaves such a turned text the original's)
+    expect(plain.run).toBeUndefined()
   })
   it('says a figure text whose ink stays is unwrapped: no group of it, so no translation is laid over it (#631 review)', () => {
     // (today's figure reading leaves a crowded label's ink where it stands (ink.ts: `fixed`, no group made of it); the part states

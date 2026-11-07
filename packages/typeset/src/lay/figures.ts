@@ -5,8 +5,8 @@
 // along its run and its baseline), its anchor (Placed.align: l start, c centre, r end), its room before and after its box
 // (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant), its own text
 // (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along x, from its run's
-// origin and length (Placed.run: its line is its box on the page) and its room along it (Room.side, a point P at P·dir), and
-// drawn at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs,
+// origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn at its angle (its
+// items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs,
 // its text group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label
 // today's figure reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one
 // whose anchor the part does not state (`kind`, align 'j'), its row none (`none`) or failed (the row's why, as the entry's
@@ -69,13 +69,11 @@ export function figuresOf(
       const size = m.style.size
       const side = m.room.side
       byOrd.set(m.ord, m)
-      // (its run: a level one's its line (its ink along x, its baseline); a turned one's as the part states it, its band across
-      // it the extent of its box on A about its origin)
+      // (its run: a level one's its line (its ink along x, its baseline), its room its side's; a turned one's as the part states
+      // it, its room with it, its band across it the extent of its box on A about its origin)
       const [ux, uy] = m.dir ?? [1, 0]
-      const [x, y, length] = m.dir && m.run ? m.run : [l[2], l[4], l[3] - l[2]]
-      // (where its box starts and ends along its run, a point P at P·dir, as its room is stated)
-      const at = m.dir ? x * ux + y * uy : l[2]
-      const end = m.dir ? at + length : l[3]
+      const run = m.dir ? m.run : undefined
+      const [x, y, length] = run ?? [l[2], l[4], l[3] - l[2]]
       // (its band across its run: a level one's its line's top and bottom about its baseline; a turned one's its box's corners
       // about its origin, across its direction)
       const across = m.dir
@@ -98,8 +96,8 @@ export function figuresOf(
         font: m.style.design ?? '',
         cls: { fam: m.style.role, bold: !!m.style.bold, italic: !!m.style.slant },
         set: setOf.get(m.ord) ?? `f${m.ord}`,
-        before: side ? at - side[0] : 0,
-        after: side ? side[1] - end : 0,
+        before: run ? run[3] : side ? l[2] - side[0] : 0,
+        after: run ? run[4] : side ? side[1] - l[3] : 0,
         under: m.room.under ?? null,
       })
     }

@@ -8,7 +8,9 @@
 //   moved with its piece, clicked, takes the right pane to the page its destination names (the original's annotation's own
 //   destination, resolved by the original document as PDF.js resolves the left's), and lies where the entry drew its piece;
 // - the turned runs (a figure text the original sets turned): drawn turned, each one's span of the right's text layer turned
-//   and over its drawing, and a drag along it (eight a page) selecting its characters alone.
+//   and over its drawing, and a drag along it (eight a page) selecting its characters alone; `--turned=<page>:<runs>,…` the
+//   count each named page is to hold (none laid there fails, never passes empty).
+// Usage: … entry-reader.mjs --laid=<file> --pair=1706.03762v7-zh --turned=13:46,14:84
 // Licensed papers are read in place from lab-data (the PDF, lane L7's bundles); nothing of them is written but the report's
 // numbers. Served on the loopback; Playwright's Chromium behind a route table that refuses every other request. Run from the
 // worktree's root through heavy-slot.sh e2e: npx tsx lab/typeset/checkpoint/entry-reader.mjs …
@@ -22,6 +24,14 @@ const ROOT = join(import.meta.dirname, '..', '..', '..')
 // (the lab's data, the paper catalogue and the bundles: AXT_LAB, AXT_PAPERS, AXT_L1_BUNDLES, each defaulting to this machine's)
 const LAB = process.env.AXT_LAB ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
 const PAIR = arg('pair')
+// (--turned=<page>:<runs>[,…]: the turned runs each named page is to hold, so that a page meant to exercise them fails where the
+// entry lays none there, rather than passing with nothing checked)
+const TURNED = new Map(
+  (arg('turned', '') || '')
+    .split(',')
+    .filter(Boolean)
+    .map((x) => x.split(':').map(Number)),
+)
 const LAID = JSON.parse(readFileSync(arg('laid'), 'utf8'))[PAIR]
 if (!LAID?.links) throw new Error(`${PAIR}: no entry pages with links in ${arg('laid')} (laid.mjs --entry)`)
 const OUT = arg('out', join(ROOT, 'packages/reader/e2e/.entry-out'))
@@ -137,6 +147,7 @@ await page.evaluate(([n, t]) => window.__h.layer(n, { pages: `/entry/${n}.json`,
 const wait = (fn, a, ms = 30_000) => page.waitForFunction(fn, a, { timeout: ms, polling: 50 })
 const failures = []
 const report = []
+for (const k of TURNED.keys()) if (!pages[k]) failures.push(`p${k}: named by --turned, not among the entry's pages`)
 for (const n of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
   await page.evaluate((k) => window.__h.panes.goToPage('right', k), n)
   await wait(
@@ -260,6 +271,8 @@ for (const n of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
     else failures.push(`p${n} ord ${t.ord}: a drag along "${t.s}" selected "${got.slice(0, 40)}"`)
   }
   await page.evaluate(() => getSelection()?.removeAllRanges())
+  if (TURNED.has(n) && runs.length !== TURNED.get(n))
+    failures.push(`p${n}: ${runs.length} turned runs laid, ${TURNED.get(n)} expected (--turned)`)
   for (const t of runs)
     if (!(t.drawn && t.span && t.turned && t.meets))
       failures.push(`p${n} ord ${t.ord} "${t.s}": drawn turned ${t.drawn}, span ${t.span}, turned ${t.turned}, over it ${t.meets}`)

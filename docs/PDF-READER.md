@@ -1503,8 +1503,13 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   forced layout at most 4.0 ms (budget 5 ms), at most 361 nodes (budget 2000), on 2602.23285v2 pp6-9 (977 items on p7, the
   heaviest) and 2608.16117v1 pp11, 13. Before runs were merged, every item its own span, p7 with nothing translated took 9.1 ms:
   the merge is what holds the budget. On the sample in the extension: 1.4-1.8 ms a page (`probe().textsRing`).
-- **Not in v1.** Rotated and vertical text (an axis label turned a quarter) is left out of our layer (`itemsOf`): the left's
-  layer has it. Right-to-left targets. Selection on a page turned a quarter (`/Rotate`) is PDF.js's own box and rotation rule,
+- **Turned text.** The original's rotated and vertical text (an axis label turned a quarter) stays out of our layer
+  (`itemsOf`; the reader package's `laidText` likewise): the left's layer has it. A figure text the original sets turned and
+  the layer translates is in it, turned (2026-11-08, the rebuild's lane L7: `packages/reader` `compose/text.ts`): each run of
+  its translation carries its direction in its matrix, at its place along its line, so that PDF.js's text layer turns its span
+  where the SVG draws it, and a drag along it selects it and a copy gives it (`lab/typeset/checkpoint/entry-reader.mjs`'s
+  turned-run check).
+- **Not in v1.** Right-to-left targets. Selection on a page turned a quarter (`/Rotate`) is PDF.js's own box and rotation rule,
   not checked in a browser yet (the sample has none). The SVG's text out of Firefox's and WebKit's find. A zoom does not measure the spans again (PDF.js scales them by CSS; their widths were
   measured once). The composed page's text content holds the hidden units' text too (PDF.js extracts text whatever a group's
   visibility): the operations' `hidden` rectangles, not the text content, say which of it the drawing replaces.
@@ -1829,7 +1834,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     | 2010.11929v2 | 87 (69), pages 6–9, 16–20 | 1.88 / 1.76 ms | 0.47 / 0.34 ms | 0.12 / 0.09 µs | within the collector's noise |
 
     A hit costs twice as much, a figure page's geometry up to four times, the shapes a third more: the labels are left
-    unlit and unheld, and they cost nothing. A turned label was in no text layer before and is in none now.
+    unlit and unheld, and they cost nothing. A turned label was in no text layer before and is in none now; its translation is in
+    the reader package's layer, turned (§11.11).
   - A float is still found on both sides, from a page's first drawing (§17.3): it is where the pointer finds a table's
     cells or nothing, and what a sentence's row keeps out of. A caption's float is a figure on both sides when it is one on
     either, once both pages are drawn.
