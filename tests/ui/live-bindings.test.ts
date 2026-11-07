@@ -65,6 +65,13 @@ function moduleLoadReads(source: string, file = join(SRC, 'ui/Example.tsx')): nu
   const visit = (node: Node, parent: Node | null, key: string, deferred: boolean): void => {
     // A type reads nothing at run time; an import declares the binding and reads nothing either
     if (node.type === 'ImportDeclaration' || (node.type.startsWith('TS') && !/^TS(AsExpression|SatisfiesExpression|NonNullExpression|TypeAssertion)$/.test(node.type))) return
+    // An export's list names bindings, the module's own or another's (`from`), and hands them on live: it reads none. What
+    // it declares (`export const x = S.y`) is read as any declaration is
+    if (node.type === 'ExportAllDeclaration') return
+    if (node.type === 'ExportNamedDeclaration') {
+      if (isNode(node.declaration)) visit(node.declaration, node, 'declaration', deferred)
+      return
+    }
     if (!deferred && node.type === 'Identifier' && names.has(node.name as string)) {
       // `x.S` and `{ S: 1 }` name a property, not the binding
       const property = parent !== null && !parent.computed && ((parent.type === 'MemberExpression' && key === 'property') || (parent.type === 'ObjectProperty' && key === 'key' && parent.shorthand !== true))
@@ -133,6 +140,14 @@ describe('the live bindings S, O and R', () => {
       expect(moduleLoadReads(`${IMPORT}export function Row() { return <p>{S.rows.mode}</p> }\n`)).toEqual([])
       expect(moduleLoadReads(`${IMPORT}const label = () => O.nav.services\nconst tools = { name() { return S.primary.translate } }\n`)).toEqual([])
       expect(moduleLoadReads(`${IMPORT}class Panel {\n  title = S.primary.translate\n  words() { return O.nav.services }\n}\n`)).toEqual([])
+    })
+
+    it('lets through a binding handed on, from the module or from the catalogue, and reads what an export declares', () => {
+      // (ui/strings hands the website the lookup it exported before the catalogue moved: the bindings, live)
+      expect(moduleLoadReads(`${IMPORT}export { O, S, setLocale } from '@readarxiv/ui'\n`)).toEqual([])
+      expect(moduleLoadReads(`${IMPORT}export { S, O as words }\nexport * from '@readarxiv/ui'\n`)).toEqual([])
+      expect(moduleLoadReads(`${IMPORT}export const TITLE = S.primary.translate\n`)).toEqual([2])
+      expect(moduleLoadReads(`${IMPORT}export function title() { return S.primary.translate }\n`)).toEqual([])
     })
 
     it('is not misled by a property of the same name, a type, or another export of the module', () => {
