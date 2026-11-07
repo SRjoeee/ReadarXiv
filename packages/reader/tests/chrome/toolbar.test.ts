@@ -327,3 +327,67 @@ describe("the narrow window's rule, the host's (parts.tsx narrow; interfaces/hos
     expect(radios(container)[1]).toEqual([R.display.bilingual, 'true', null])
   })
 })
+
+describe("the bar where neither side has anything to show, by the host's rule (parts.tsx bar; L11 third round, gap 4)", () => {
+  /** the original could not be read, and the translation cannot be had now (its layer refused for now) */
+  const NOTHING = {
+    phase: 'failed' as const,
+    failures: { pdf: 'network' as const, service: null },
+    failure: 'network' as const,
+    unavailable: { why: 'unreachable' as const, retryAt: null },
+  }
+  const SLOTS: Slots = {
+    lead: createElement('a', { 'data-slot': 'lead', href: '#home' }, 'home'),
+    afterTitle: createElement('a', { 'data-slot': 'after-title' }, 'arXiv'),
+    beforeOptions: (at) => createElement('span', { 'data-slot': `before-${at}` }),
+    afterOptions: (at) => createElement('span', { 'data-slot': `after-${at}` }),
+    options: createElement('div', { className: 'row', 'data-slot': 'options' }, 'ui'),
+  }
+  const at = (over: object, bar?: 'whole' | 'bare') => {
+    const fake = fakeController({ ...NOTHING, ...over })
+    return mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        slots: SLOTS,
+        ...(bar ? { bar } : {}),
+      }),
+    ).then((m) => ({ ...m, ...fake }))
+  }
+  /** what the bar draws, zone by zone: a host's slot by its name, the chrome's controls by their accessible names */
+  const zones = (c: HTMLElement) =>
+    Object.fromEntries(
+      [...c.querySelectorAll<HTMLElement>('header.bar > [data-zone]')].map((z) => [
+        z.dataset.zone,
+        [...z.querySelectorAll<HTMLElement>('[data-slot], button, [role="radiogroup"]')]
+          .filter((el) => !el.closest('[popover]'))
+          .map((el) => el.dataset.slot ?? el.getAttribute('aria-label')),
+      ]),
+    )
+  it("the website's: the lead's slot and the reading options alone, as its page for a paper arXiv does not have; no progress line", async () => {
+    const { container } = await at({}, 'bare')
+    expect(zones(container)).toEqual({ lead: ['lead'], centre: [], trail: [R.options.name] })
+    expect(container.querySelector('.progress-line')).toBeNull()
+    // the reading options without a paper's rows: the appearance, the dimming, the host's own last rows
+    const rows = [...container.querySelectorAll<HTMLElement>('[popover] > :is(.row, .sep, [data-slot])')].map(
+      (r) =>
+        r.dataset.slot ??
+        r.querySelector('[role="radiogroup"], [role="switch"]')?.getAttribute('aria-label') ??
+        r.className,
+    )
+    expect(rows).toEqual([R.options.appearance, R.options.dim, 'options'])
+  })
+  it("the whole bar wherever a side has something to show, and always by the extension's rule", async () => {
+    const whole = (c: HTMLElement) => zones(c).trail?.includes(R.zoom.in) && zones(c).lead?.includes(R.contents)
+    // (the extension's: no rule, or `whole`)
+    for (const bar of [undefined, 'whole'] as const) expect(whole((await at({}, bar)).container)).toBe(true)
+    // (the website's: the translation to be had, or there; the original read)
+    expect(whole((await at({ unavailable: null }, 'bare')).container)).toBe(true)
+    expect(whole((await at({ layer: { laid: 2, total: 9 } }, 'bare')).container)).toBe(true)
+    expect(
+      whole((await at({ failures: { pdf: null, service: null }, failure: null, phase: 'ready' }, 'bare')).container),
+    ).toBe(true)
+    // (and back once a retry reads the original)
+    const { container, set } = await at({}, 'bare')
+    await act(async () => set({ failures: { pdf: null, service: null }, failure: null, phase: 'ready' }))
+    expect(whole(container)).toBe(true)
+  })
+})

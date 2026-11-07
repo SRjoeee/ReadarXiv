@@ -267,10 +267,12 @@ export function createComposer(o: ComposerOptions): Composer {
   async function overlay(n: number, page: Page, doc: PDFDocumentProxy, g: Groups, at: SlotAt) {
     counts.overlays++
     const t0 = performance.now()
-    const faceIds = new Set<string>()
+    // (each face with the texts it draws: a served face's slices are those texts')
+    const drawn = new Map<string, string>()
     for (const m of page.members)
-      for (const [, , , items] of m.lines) for (const it of items) if ('face' in it) faceIds.add(it.face)
-    await faces.ready(faceIds)
+      for (const [, , , items] of m.lines)
+        for (const it of items) if ('face' in it) drawn.set(it.face, (drawn.get(it.face) ?? '') + it.s)
+    await faces.ready([...drawn])
     const el = document.createElement('div')
     el.className = 'axt-over'
     // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
@@ -320,7 +322,7 @@ export function createComposer(o: ComposerOptions): Composer {
   /** the commit holding the next lay (until its drawing is in place, HOLD_MS at most) */
   let holding: { n: number; key: string; timer: number } | null = null
   /** the faces the pages laid this round wait for, asked in one wave once the round is laid */
-  const wave = new Map<number, string[]>()
+  const wave = new Map<number, readonly (readonly [string, string])[]>()
   function partFor(n: number): Promise<Part | null> {
     let p = parts.get(n)
     if (!p && layer) {
@@ -424,10 +426,7 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     pages.set(n, page)
     if (page.wait.faces.length) {
-      wave.set(
-        n,
-        page.wait.faces.map(([f]) => f),
-      )
+      wave.set(n, page.wait.faces)
       return
     }
     if (!committed(page)) {
@@ -461,11 +460,12 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!wave.size) return
     const c = stack.centre() || 1
     const order = [...wave.keys()].sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)
-    const ids: string[] = []
-    for (const n of order) for (const f of wave.get(n) ?? []) if (!ids.includes(f)) ids.push(f)
+    // (each face with the texts the pages wait on it for, once)
+    const asked = new Map<string, readonly [string, string]>()
+    for (const n of order) for (const [f, t] of wave.get(n) ?? []) asked.set(`${f}\u0000${t}`, [f, t])
     wave.clear()
     const mine = gen
-    void faces.ready(ids).then(() => {
+    void faces.ready(asked.values()).then(() => {
       if (mine !== gen) return
       for (const n of order) if (stack.near(n)) askLay(n)
     })

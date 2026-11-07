@@ -11,13 +11,19 @@
 // only the read counts them (W open.ts bodyWithin, layer/files.ts).
 import { BOUNDS } from '@readarxiv/format'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
-import { type Doc, FORMATS, type PaperRef, type Ref } from './machine.ts'
+import { type Doc, FORMATS, type PaperRef, type Ref, WAIT_MAX_MS } from './machine.ts'
 
 /** how long one ask may take, its answer and its body together; how long a stream may be silent (the server beats every 15 s)
  *  (R server.ts REQUEST_MS: thirty seconds bring the largest object at 64 kbit/s) */
 export const REQUEST_MS = 30_000
-/** how long after a network failure, a 5xx or nothing in time an ask is made once more (R server.ts RETRY_MS) */
+/** how long after a network failure, a 5xx or nothing in time an ask is made once more (R server.ts RETRY_MS); the least a
+ *  follow waits before it asks again after a stream that ended */
 export const RETRY_MS = 1_000
+/** how long a follow waits before it asks again once the last document heard says nothing runs for what is followed (the
+ *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
+ *  (`retry: 60000`, server design-a "Followers"; worker v2 paper.ts `#tell`). Staging, 2026-11-07: a done paper asked again
+ *  at once each time its one-frame stream ended, 18 to 50 times a second */
+export const IDLE_MS = 60_000
 
 /** a paper version's segment (L5's Seg: `.` and `/` as `_`, its version) */
 export const segOf = (p: PaperRef, version: number): string => `${p.id.replace(/[./]/g, '_')}v${version}`
@@ -67,14 +73,17 @@ const sleep = (ms: number, a: Ask) =>
 
 /**
  * `url` asked and its answer read by `read`, the two within REQUEST_MS; the network, a 5xx or nothing in time asked once more
- * after RETRY_MS, a second failure `Refused('network')`. A body that breaks or stops is the server out of reach at once (today's
- * rule: the answer came, so asking again is no better). An abort of the caller's is thrown as it is
+ * after RETRY_MS, a second failure `Refused('network')`; an answer under 500 the caller names (`askAgain`: the wait it gives)
+ * asked once more after that wait, the one more ask's answer read as it is. A body that breaks or stops is the server out of
+ * reach at once (today's rule: the answer came, so asking again is no better). An abort of the caller's is thrown as it is
  */
 export async function request<T>(
   a: Ask,
   url: string,
   init: RequestInit,
   read: (r: Response) => Promise<T>,
+  /** an answer under 500 the caller would ask once more: the wait before that ask, else null (read as it is) */
+  askAgain?: (r: Response) => number | null,
 ): Promise<T> {
   const timers = a.timers ?? realTimers
   for (let again = true; ; again = false) {
@@ -104,6 +113,13 @@ export async function request<T>(
       await sleep(RETRY_MS, a)
       continue
     }
+    const wait = again ? (askAgain?.(r) ?? null) : null
+    if (wait !== null) {
+      done()
+      void r.body?.cancel().catch(() => {})
+      await sleep(wait, a)
+      continue
+    }
     try {
       return await read(r)
     } catch (e) {
@@ -123,7 +139,7 @@ export async function bodyWithin(
   r: Response,
   cap: number,
   past: () => Error = () => new Refused('bad'),
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   if (!r.body) {
     const b = new Uint8Array(await r.arrayBuffer())
     if (b.length > cap) throw past()
@@ -237,12 +253,20 @@ const afterOf = (r: Response): number | null => {
 const missOf = async (r: Response): Promise<string> =>
   ((await jsonOf(r)) as { error?: unknown } | null)?.error === 'not-found' ? 'not-found' : 'not-opened'
 
+/** whether anything runs for what is followed: the prepare, or the target's run (our server's `busy`, worker v2 machine.ts: a
+ *  work in flight is `running` in the document) */
+const runs = (d: Doc, target: string | null): boolean =>
+  d.prepare.state === 'running' || (target !== null && d.targets[target]?.state === 'running')
+
 /**
- * The paper followed: each whole document told (`onDoc`) as it comes, from a stream where the server gives one, else by polling
- * every `pollMs`, until `signal` ends it. A stream that ends is followed again at once; one that is silent for REQUEST_MS, or
- * breaks, is followed again as any ask is (once more, then out of reach); two in a row that told nothing are the server out of
- * reach. The end of a follow that is not the signal's is a Refused (`not-opened`, `not-found`, `update`, `busy`, `limit`,
- * `network`), which the session turns into its input
+ * The paper followed: each whole document told (`onDoc`) as it comes, from a stream where the server gives one, else by polling,
+ * until `signal` ends it. Its pace is the last document's, as our server sets it: while something runs, a stream that ends is
+ * followed again after the reconnection time its frames named (`retry:`, kept from stream to stream as an EventSource keeps it;
+ * our server names a second), at least RETRY_MS, and a poll every `pollMs`; once nothing runs, both after IDLE_MS at least (the
+ * stream then ended as our server ends it, after its last frame: nothing lost). One that is silent for REQUEST_MS, or breaks, is
+ * followed again as any ask is (once more, then out of reach); two in a row that told nothing are the server out of reach. The
+ * end of a follow that is not the signal's is a Refused (`not-opened`, `not-found`, `update`, `busy`, `limit`, `network`),
+ * which the session turns into its input
  */
 export async function follow(
   a: Ask & {
@@ -258,7 +282,17 @@ export async function follow(
   const q = new URLSearchParams({ f: FORMATS.join(',') })
   if (a.target) q.set('t', a.target)
   const url = `/api/v2/papers/${followSegOf(a.paper)}?${q}`
+  const pollMs = a.pollMs ?? 2000
   let quiet = 0
+  /** the reconnection time our server named (`retry:`), at most WAIT_MAX_MS: none until it names one */
+  let named = 0
+  /** the last document heard: whether anything runs in it sets the pace */
+  let last: Doc | null = null
+  const tell = (d: Doc) => {
+    last = d
+    a.onDoc(d)
+  }
+  const idle = () => last !== null && !runs(last, a.target)
   for (;;) {
     let told = false
     const outcome = await request(a, url, { headers: { accept: 'text/event-stream' } }, async (r) => {
@@ -273,13 +307,13 @@ export async function follow(
       if (!r.ok || !r.body) throw new Refused('network')
       if (!(r.headers.get('content-type') ?? '').startsWith('text/event-stream')) {
         const d = docOf(await jsonOf(r))
-        if (d) a.onDoc(d)
+        if (d) tell(d)
         return 'poll' as const
       }
       return r
     })
     if (outcome === 'poll') {
-      await sleep(a.pollMs ?? 2000, a)
+      await sleep(idle() ? Math.max(IDLE_MS, pollMs) : pollMs, a)
       continue
     }
     // the stream: `data:` lines, a frame each blank line; each read within REQUEST_MS of silence
@@ -306,10 +340,14 @@ export async function follow(
         buf += next.value
         let end = buf.indexOf('\n\n')
         while (end >= 0) {
-          const frame = buf.slice(0, end)
+          const lines = buf.slice(0, end).split('\n')
           buf = buf.slice(end + 2)
-          const data = frame
-            .split('\n')
+          // (the reconnection time, where a frame names it in digits alone, as an EventSource reads it)
+          for (const l of lines) {
+            const v = l.startsWith('retry:') ? l.slice(6).trimStart() : ''
+            if (/^\d+$/.test(v)) named = Math.min(WAIT_MAX_MS, Number(v))
+          }
+          const data = lines
             .filter((l) => l.startsWith('data:'))
             .map((l) => l.slice(5).trimStart())
             .join('\n')
@@ -322,7 +360,7 @@ export async function follow(
             }
             if (d) {
               told = true
-              a.onDoc(d)
+              tell(d)
             }
           }
           end = buf.indexOf('\n\n')
@@ -337,8 +375,9 @@ export async function follow(
     if (a.signal?.aborted) throw a.signal.reason
     quiet = told ? 0 : quiet + 1
     if (quiet >= 2) throw new Refused('network')
-    a.onQuiet?.()
-    if (!told) await sleep(RETRY_MS, a)
+    // (a stream that told a document in which nothing runs ended as our server ends it: not lost, followed again at its pace)
+    if (!told || !idle()) a.onQuiet?.()
+    await sleep(Math.max(RETRY_MS, named, idle() ? IDLE_MS : 0), a)
   }
 }
 

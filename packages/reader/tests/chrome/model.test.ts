@@ -270,6 +270,22 @@ describe("reduce: the layer's states (Task 12)", () => {
     })
   })
 
+  it("a run's rows coming, told whatever the phase: the original's failure holds the phase meanwhile (the capsule beside its own card tells the run, L11 third round, gap 5)", () => {
+    const failed = fold([
+      { type: 'fail', event: 'fetch failed', text: '', kind: 'network' },
+      { type: 'translating', got: 3, total: 9, lost: 0 },
+    ])
+    expect(failed).toMatchObject({ phase: 'failed', rowsComing: true, translated: { got: 3, total: 9 } })
+    expect(fold([{ type: 'translated', got: 9, total: 9, lost: 0, stopped: null }], failed).rowsComing).toBe(false)
+    expect(fold([{ type: 'unavailable', why: 'unreachable', retryAt: null }], failed).rowsComing).toBe(false)
+    // (and with the original read: from the first batch to the end)
+    const read = fold([opened, { type: 'translating', got: 1, total: 9, lost: 0 }])
+    expect([read.rowsComing, INITIAL.rowsComing]).toEqual([true, false])
+    expect(
+      fold([{ type: 'translated', got: 0, total: 9, lost: 0, stopped: 'network', retryAt: null }], read).rowsComing,
+    ).toBe(false)
+  })
+
   it('a target the layer does not set: the language not supported (the menu offered), the paper not greyed', () => {
     expect(fold([opened, { type: 'unavailable', why: 'target', retryAt: null }])).toMatchObject({
       languageSupported: false,

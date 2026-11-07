@@ -219,9 +219,13 @@ const v2Route = {
           rev: 2,
           targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
-      // (a newer catalog once the check says so: the same layer under the twin head)
-      if (m?.kind === 'recatalog' && m.switched)
-        return json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+      // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
+      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
+      // which nothing runs is followed again a minute on, client.ts IDLE_MS)
+      if (m?.kind === 'recatalog')
+        return m.switched
+          ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+          : json(200, { ...d, rev: 2, prepare: { ...d.prepare, state: 'running', stage: 'compiling' } })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
@@ -264,7 +268,42 @@ const v2Route = {
     return false
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route] })
+/** our site's static files the reader's own typesetter reads (compose/served.ts): the faces' tables, their slices and the
+ *  hyphenation patterns, where this machine has them (the website's build's, read in place: licensed faces are never copied
+ *  here); none, the checks that need them say so and pass nothing */
+const SITE = {
+  tables:
+    process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static',
+  slices: (
+    process.env.AXT_FACE_SLICES ??
+    '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
+  ).split(':'),
+  hyph: process.env.AXT_HYPH ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
+}
+const siteHas = existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+const siteLog = []
+const siteRoute = {
+  prefix: '/',
+  handle(_req, res, url) {
+    const table = /^\/static-fonts\/([a-z0-9-]+)\.json$/.exec(url.pathname)?.[1]
+    const slice = /^\/static-fonts\/([0-9a-f]{16}\.woff2)$/.exec(url.pathname)?.[1]
+    const hyph = /^\/hyph\/([a-z-]+)\.json$/.exec(url.pathname)?.[1]
+    if (!table && !slice && !hyph) return false
+    siteLog.push(url.pathname + url.search)
+    const file = table
+      ? join(SITE.tables, `${table}.json`)
+      : slice
+        ? SITE.slices.map((d) => join(d, slice)).find((f) => existsSync(f))
+        : join(SITE.hyph, `${hyph}.json`)
+    if (!file || !existsSync(file)) {
+      res.writeHead(404)
+      return res.end()
+    }
+    res.writeHead(200, { 'content-type': slice ? 'font/woff2' : 'application/json' })
+    return res.end(readFileSync(file))
+  },
+}
+const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route, siteRoute] })
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -912,6 +951,128 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   return { layer: [...seen] }
 })
 await check(
+  'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'not-opened', prepareMs: 120_000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web' }))
+      await waitFor(page, () => window.__h.readers[0].reader.state().layer.s === 'preparing', null, 20_000)
+      const follows = () => v2log.filter((x) => x.what === 'follow' && x.seg === seg).length
+      // (our server polled every 2 s while the paper is prepared)
+      const a = follows()
+      await page.waitForTimeout(4500)
+      const live = follows() - a
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })))
+      const b = follows()
+      await page.waitForTimeout(6000)
+      const away = follows() - b
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+      await page.waitForTimeout(1000)
+      const back = follows() - b - away
+      const drawn = await page.evaluate(() => document.querySelectorAll('canvas').length)
+      // (a reading, not a gate: a real visit away and back, restored from the cache or loaded again as the browser keeps the page;
+      // Playwright's Chromium loaded it again on the runs of 2026-11-07, so the events above are dispatched by hand)
+      await page.evaluate(() => {
+        window.__kept = true
+        addEventListener('pageshow', (e) => {
+          window.__persisted = e.persisted
+        })
+      })
+      await page.goto(`${server.origin}/chrome.html`)
+      await page.goBack()
+      const cached = await page.evaluate(() => ({ kept: !!window.__kept, persisted: window.__persisted ?? null }))
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(live >= 1 && away === 0 && back >= 1 && drawn > 0, JSON.stringify({ live, away, back, drawn }))
+      return { live, away, back, drawn, cached }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+/** a fixture opened with no engine (the reader's own typesetter), laid; what is drawn, the moments, the site's files asked */
+async function typesetLaid(name, target) {
+  const from = siteLog.length
+  const { page, context, errors } = await newPage()
+  await page.evaluate(([n, t]) => window.__h.reader(n, { host: 'web', typeset: true, target: t }), [name, target])
+  await waitFor(page, () => (window.__h.readers[0].reader.probe().laidPages ?? 0) > 0, null, 60_000)
+  await waitFor(page, () => document.querySelectorAll('.axt-over > svg').length > 0, null, 10_000).catch(() => {})
+  const p = await probe(page)
+  const drawn = await page.evaluate(() => {
+    const svg = [...document.querySelectorAll('.axt-over > svg')]
+    return {
+      overlays: svg.length,
+      words: svg
+        .map((s) => s.textContent ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200),
+      faces: [...document.fonts].filter((f) => f.family.replace(/"/g, '').startsWith('axt-') && f.status === 'loaded')
+        .length,
+    }
+  })
+  return { page, context, errors, p, drawn, asked: () => siteLog.slice(from) }
+}
+await check(
+  "reader: no engine given, the reader's own typesetter: the fixture's pages laid by layPage over our site's faces and patterns, the translation drawn; a toggle lays them again (the coordinator's priority of 2026-11-07)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors, p, drawn, asked } = await typesetLaid('s1-columns', 'de')
+    // (a toggle: the pages laid again, under the rules that leave what it leaves)
+    const laysBefore = Number(p.lays ?? 0)
+    await page.evaluate(() =>
+      window.__h.readers[0].reader.do({
+        do: 'set',
+        prefs: { classes: { figures: false, tables: true, heads: true, references: true, names: false } },
+      }),
+    )
+    await page.waitForTimeout(1500)
+    const after = await probe(page)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(drawn.overlays > 0 && /[a-zäöüß]{4}/i.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+    assert(
+      asked().includes('/static-fonts/index.json') && asked().some((u) => u.startsWith('/hyph/de')),
+      JSON.stringify(asked()),
+    )
+    assert(
+      Number(after.lays) > laysBefore && Number(after.laidPages) > 0,
+      `the toggle: ${laysBefore} → ${JSON.stringify(after)}`,
+    )
+    return {
+      firstLaidMs: p['at.firstLaid'],
+      leftDrawnMs: p['at.leftDrawn'],
+      laidPages: p.laidPages,
+      faces: drawn.faces,
+      asked: asked().length,
+      lays: [laysBefore, after.lays],
+      words: drawn.words.slice(0, 80),
+    }
+  },
+)
+for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))) {
+  await check(
+    `reader: no engine given, the reader's own typesetter on a corpus paper (${name}, zh): laid, drawn`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const { context, errors, p, drawn, asked } = await typesetLaid(name, 'zh')
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(drawn.overlays > 0 && /\p{Script=Han}/u.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+      return {
+        firstLaidMs: p['at.firstLaid'],
+        leftDrawnMs: p['at.leftDrawn'],
+        laidPages: p.laidPages,
+        faces: drawn.faces,
+        asked: asked().length,
+        words: drawn.words.slice(0, 40),
+      }
+    },
+  )
+}
+await check(
   "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
   async () => {
     const from = v2log.length
@@ -1141,6 +1302,94 @@ await check(
   },
 )
 await check(
+  'chrome: one pane alone where the display says so, the reader opened on <body> (its marks on its root, none on <html>): the original alone, the translation alone, swapped, a narrow window the translation alone; the pane out of the display laid out still (PDF.js scrolls it), no page error (L11 third round, gaps 1 and 2)',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns')
+    const look = () =>
+      page.evaluate(
+        () =>
+          new Promise((done) =>
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                const doc = document.querySelector('main.doc').getBoundingClientRect()
+                const pane = (side) => {
+                  const el = document.querySelector(`.pane[data-side="${side}"]`)
+                  const r = el.getBoundingClientRect()
+                  const cs = getComputedStyle(el)
+                  return {
+                    x: Math.round(r.left - doc.left),
+                    w: Math.round(r.width),
+                    shown: r.width > 0 && cs.visibility === 'visible' && cs.display !== 'none',
+                    // (a page of PDF.js's viewer placed: what its scrolls need)
+                    placed: !!el.querySelector('.pdfViewer .page')?.offsetParent,
+                  }
+                }
+                done({
+                  doc: Math.round(doc.width),
+                  html: document.documentElement.getAttribute('data-axt-pdf-mode'),
+                  root: document.body.getAttribute('data-axt-pdf-mode'),
+                  left: pane('left'),
+                  right: pane('right'),
+                })
+              }),
+            ),
+          ),
+      )
+    const shown = (display) =>
+      waitFor(page, (d) => document.body.getAttribute('data-axt-pdf-mode') === d, display).then(look, () => {
+        throw new Error(`never shown: ${display}`)
+      })
+    const both = await look()
+    await page.evaluate(() => window.__c.controller.setDisplay('original'))
+    const original = await shown('original')
+    await page.evaluate(() => window.__c.controller.setDisplay('translation'))
+    const translation = await shown('translation')
+    // (the reader scrolls both of its panes to a page: the one out of the display too)
+    await page.evaluate(() => window.__c.controller.goToPage('right', 2))
+    await page.waitForTimeout(400)
+    await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
+    await shown('bilingual')
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: true }))
+    await waitFor(page, () => document.body.hasAttribute('data-axt-swapped')).catch(() => {
+      throw new Error('never swapped')
+    })
+    const swapped = await look()
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: false }))
+    await page.setViewportSize({ width: 700, height: 900 })
+    await waitFor(page, () => document.body.hasAttribute('data-axt-narrow')).catch(() => {
+      throw new Error('never narrow')
+    })
+    const narrow = await look()
+    await page.evaluate(() => window.__c.controller.goToPage('right', 3))
+    await page.waitForTimeout(400)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const half = (p, at, doc) => p.shown && Math.abs(p.w - (doc - 8) / 2) <= 1 && Math.abs(p.x - at) <= 1
+    const whole = (p, doc) => p.shown && Math.abs(p.w - doc) <= 1 && p.x === 0
+    assert(
+      both.html === null &&
+        both.root === 'bilingual' &&
+        half(both.left, 0, both.doc) &&
+        half(both.right, both.doc / 2 + 4, both.doc),
+      `side by side: ${JSON.stringify(both)}`,
+    )
+    assert(whole(original.left, original.doc) && !original.right.shown, `the original: ${JSON.stringify(original)}`)
+    assert(
+      whole(translation.right, translation.doc) &&
+        !translation.left.shown &&
+        translation.left.w === 0 &&
+        translation.left.placed,
+      `the translation: ${JSON.stringify(translation)}`,
+    )
+    assert(swapped.right.x === 0 && swapped.left.x > swapped.right.x, `swapped: ${JSON.stringify(swapped)}`)
+    assert(
+      whole(narrow.right, narrow.doc) && !narrow.left.shown && narrow.left.placed,
+      `a narrow window: ${JSON.stringify(narrow)}`,
+    )
+    return { original: original.left.w, translation: translation.right.w, narrow: narrow.right.w }
+  },
+)
+await check(
   "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
   async () => {
     const look = (page) =>
@@ -1353,6 +1602,75 @@ await check(
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return { site: site.seen, own: own.seen }
+  },
+)
+await check(
+  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card, no capsule (L11 third round, gaps 4 and 5)",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'refused' }
+    const look = async (x) => {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate((o) => window.__c.open('s1-columns', o), x)
+      await waitFor(
+        page,
+        () => {
+          const s = window.__c.reader?.state()
+          return s?.original.s === 'failed' && s.layer.s === 'refused'
+        },
+        null,
+        20_000,
+      )
+      await page.waitForTimeout(600)
+      const seen = await page.evaluate(() => {
+        const zones = Object.fromEntries(
+          [...document.querySelectorAll('header.bar > [data-zone]')].map((z) => [
+            z.dataset.zone,
+            [...z.querySelectorAll('[data-host], button, [role="radiogroup"]')]
+              .filter((el) => !el.closest('[popover]'))
+              .map((el) => el.dataset.host ?? el.getAttribute('aria-label')),
+          ]),
+        )
+        const capsule = document.querySelector('.capsule:not([data-out])')
+        return {
+          zones,
+          line: !!document.querySelector('.progress-line'),
+          capsule: capsule && {
+            kind: capsule.getAttribute('data-kind'),
+            said: capsule.querySelector('.sr-only')?.textContent ?? capsule.textContent,
+          },
+          left: !!document.querySelector('.pane[data-side="left"] .card a'),
+          right: !!document.querySelector('.pane[data-side="right"] .card button'),
+        }
+      })
+      await context.close()
+      return { seen, errors: errors.filter((e) => !/status of (503|429)/.test(e)) }
+    }
+    try {
+      const site = await look({ site: true, slots: true, original: 'broken' })
+      const own = await look({ words: true, slots: true, original: 'broken' })
+      assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+      const en = { options: 'Reading options', zoom: 'Zoom in' }
+      assert(
+        JSON.stringify(site.seen.zones) === JSON.stringify({ lead: ['home'], centre: [], trail: [en.options] }) &&
+          !site.seen.line &&
+          site.seen.left &&
+          site.seen.capsule?.kind === 'notNow' &&
+          /^Busy/.test(site.seen.capsule.said),
+        `the website's: ${JSON.stringify(site.seen)}`,
+      )
+      assert(
+        own.seen.zones.lead?.includes('home') &&
+          own.seen.zones.trail?.includes(en.zoom) &&
+          own.seen.line &&
+          own.seen.right &&
+          own.seen.capsule === null,
+        `the extension's: ${JSON.stringify(own.seen)}`,
+      )
+      return { site: site.seen, own: { capsule: own.seen.capsule, trail: own.seen.zones.trail?.length } }
+    } finally {
+      delete modes[seg]
+    }
   },
 )
 await check(

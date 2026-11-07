@@ -44,3 +44,11 @@ export const sameClasses = (
   (Object.keys(CLASS_DEFAULTS) as ClassName[]).every(
     (k) => (a?.[k] ?? CLASS_DEFAULTS[k]) === (b?.[k] ?? CLASS_DEFAULTS[k]),
   )
+
+/** the unit kinds the toggles `classes` leave the original's (over the defaults): what the typesetter's rules are given to leave
+ *  (typeset Rules `leave`, the reader's choices of design-a §1.2), in a stable order */
+export function leftKinds(classes?: Readonly<Partial<Record<ClassName, boolean>>> | null): string[] {
+  return Object.keys(TOGGLE_OF)
+    .filter((kind) => !kindShown(kind, classes))
+    .sort()
+}
