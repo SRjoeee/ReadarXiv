@@ -31,10 +31,10 @@ export const RANGE_TRIES = 2
 export const RETRY_MS = 1_000
 export const RETRY_MAX_MS = 30_000
 
-/** why a source is refused: its answers not the object (`bytes`), a chunk not the one the head names, or before the head not
- *  the one first read (`digest`), the network failing its reads (`network`), or the source let go by its owner (`gone`: never
- *  told) */
-export type RefusalKind = 'bytes' | 'digest' | 'network' | 'gone'
+/** why a source is refused: no such object at its address (`missing`: a 404 or a 410, the paper not there), its answers not
+ *  the object (`bytes`), a chunk not the one the head names, or before the head not the one first read (`digest`), the
+ *  network failing its reads (`network`), or the source let go by its owner (`gone`: never told) */
+export type RefusalKind = 'missing' | 'bytes' | 'digest' | 'network' | 'gone'
 export class RangeRefusal extends Error {
   readonly kind: RefusalKind
   readonly why: string
@@ -247,10 +247,11 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       void r.body?.cancel().catch(() => {})
       throw new Error(`the server answered ${r.status}`)
     }
-    const fail = (why: string) => {
+    const fail = (why: string, kind: RefusalKind = 'bytes') => {
       void r.body?.cancel().catch(() => {})
-      return refuse('bytes', why)
+      return refuse(kind, why)
     }
+    if (r.status === 404 || r.status === 410) throw fail(`the server has no such object (${r.status})`, 'missing')
     if (r.status !== 206) throw fail(`the server answered ${r.status} to a range`)
     const m = CONTENT_RANGE.exec(r.headers.get('content-range') ?? '')
     const etag = r.headers.get('etag')

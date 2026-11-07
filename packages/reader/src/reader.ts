@@ -477,7 +477,12 @@ export function openReader(
           emit(
             e.kind === 'digest'
               ? { i: 'original.mismatch', t }
-              : { i: 'original.failed', t, why: e.kind === 'bytes' ? 'unreadable' : 'network' },
+              : {
+                  i: 'original.failed',
+                  t,
+                  // (no such file at its address: the paper is not there, a host's own page to show; ReaderState says it)
+                  why: e.kind === 'missing' ? 'not-found' : e.kind === 'bytes' ? 'unreadable' : 'network',
+                },
           ),
       })
       original = { source, doc: null }

@@ -86,6 +86,15 @@ describe('the byte store and the ranged source', () => {
     await src.read(0, CHUNK)
     expect(s.asks.length).toBe(4)
   })
+  it('refuses a source whose address has no such object (a 404, a 410) as missing, at once, its owner told', async () => {
+    for (const status of [404, 410]) {
+      const s = rangedServer(objects(), () => ({ kind: 'status', status }))
+      const refused: RangeRefusal[] = []
+      const src = own(s.fetch, { refused: (e: RangeRefusal) => refused.push(e) })
+      await expect(src.read(0, CHUNK)).rejects.toMatchObject({ kind: 'missing' })
+      expect([s.asks.length, refused.map((e) => e.kind)]).toEqual([1, ['missing']])
+    }
+  })
   it("asks again a read the network failed, then refuses it as the network's", async () => {
     const timers = manualTimers()
     const s = rangedServer(objects(), () => ({ kind: 'status', status: 503 }))

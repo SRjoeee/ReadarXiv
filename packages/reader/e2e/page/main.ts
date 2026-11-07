@@ -681,6 +681,8 @@ const h = {
       holdFirstLay?: boolean
       /** PDF.js's legacy build handed to the reader, as a host does below the modern build's floor */
       legacy?: boolean
+      /** another paper than the fixture's (one our server does not have) */
+      paper?: string
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -744,7 +746,7 @@ const h = {
       host,
       ...(o.panes ? { panes: { left: o.panes.left, right: o.panes.right } } : {}),
       ...(o.legacy ? { pdfjs: LEGACY } : {}),
-      paper: index.paper,
+      paper: o.paper ?? index.paper,
       visit: { target },
       engine: {
         faces: faceTable(h.kit?.base ?? '/pdfjs/6.3.289/'),

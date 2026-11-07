@@ -1140,6 +1140,26 @@ await check(
   },
 )
 await check(
+  "reader: a paper arXiv does not have: the state says why (the original not found, the layer refused as not found), for the host's own page (L11 difference 3)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', paper: '2600.09999v1' }))
+    await waitFor(page, () => {
+      const s = window.__h.readers[0].reader.state()
+      return s.original.s === 'failed' && s.layer.s === 'refused'
+    })
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    await context.close()
+    // (our server's 404s, of the original and of the follow, are the browser's console lines, and expected)
+    assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+    assert(
+      st.original.why === 'not-found' && st.layer.why === 'not-found' && !st.crashed,
+      `state ${JSON.stringify([st.original, st.layer, st.crashed])}`,
+    )
+    return { original: st.original, layer: st.layer }
+  },
+)
+await check(
   "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
   async () => {
     const from = server.log.length
