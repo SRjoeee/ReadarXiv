@@ -489,6 +489,33 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         mem.cause = 'no ink'
         continue
       }
+      // (a glyph B never printed between two of its own that B printed is text arXiv's page sets inside the unit and our compile
+      // does not, 2610.21084v1's initials: a content difference, and the unit stays the original's, as a source unit does (no
+      // fuzzy rescue), those glyphs A's ink (HELD), no unit born of them; a line-end hyphen A breaks at is none, nor an included
+      // figure's glyph inside it)
+      const mine = [...x.text, ...x.ph].sort((p, q) => p - q)
+      const paired = mine.map((a) => (m.aToB[a] as number) >= 0)
+      const firstPaired = paired.indexOf(true)
+      const lastPaired = paired.lastIndexOf(true)
+      const aOnly: number[] = []
+      let bad: string | null = null
+      for (let i = firstPaired + 1; firstPaired >= 0 && i < lastPaired; i++) {
+        const a = mine[i] as number
+        if (paired[i] || m.offpageA[a] || m.hunkA[a] === HUNK.hyphen) continue
+        let pv = i - 1
+        while (!paired[pv]) pv--
+        let nx = i + 1
+        while (!paired[nx]) nx++
+        if (gA(a).form && !gA(mine[pv] as number).form && !gA(mine[nx] as number).form) continue
+        aOnly.push(a)
+        const h = hunkName(m.hunkA[a] as number)
+        bad ??= `content difference: ${h === 'none' ? 'aonly' : h}`
+      }
+      if (bad) {
+        mem.cause = bad
+        for (const a of aOnly) claimedA[a] = HELD
+        continue
+      }
       mem.located = true
       mem.place = 'same'
       mem.text = x.text

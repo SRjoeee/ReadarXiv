@@ -292,13 +292,33 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
       return null
     }
     // (its box count likewise: before the partner of the first box from it on that has one on its A page, else after the last
-    // one before it that has one there, else the boxes before its glyph)
+    // one before it that has one there, else the boxes before its glyph. A turned glyph's own box partners through its glyph,
+    // which the alignment pairs: a label set turned stands in the stream where its show is, so a picture's end after it stays
+    // after it on A where no box of the page's own comes between them, 2610.21880v1 p5's third "Overhead (%)")
     const nb = pg.kinds.length
     const bp = m.boxPage[p]
     const bi = m.boxIndex[p]
+    const turnedBox = new Map<number, [number, number]>()
+    ;(pg.turned ?? []).forEach((t, j) => {
+      const ap = m.turnedPage[p]?.[j] ?? 0
+      if (t.box < 0 || ap === 0) return
+      const ab = inkA.pages[ap - 1]!.turned?.[m.turnedIndex[p]![j] as number]?.box ?? -1
+      if (ab >= 0) turnedBox.set(t.box, [ap, ab])
+    })
+    const partnerOn = (P: number, x: number): number => {
+      if (bp?.[x] === P) return bi![x] as number
+      const t = turnedBox.get(x)
+      return t && t[0] === P ? t[1] : -1
+    }
     const boxOf = (P: number, g: number, count: number) => {
-      for (let x = count; x < nb; x++) if (bp?.[x] === P) return bi![x] as number
-      for (let x = Math.min(count, nb) - 1; x >= 0; x--) if (bp?.[x] === P) return (bi![x] as number) + 1
+      for (let x = count; x < nb; x++) {
+        const a = partnerOn(P, x)
+        if (a >= 0) return a
+      }
+      for (let x = Math.min(count, nb) - 1; x >= 0; x--) {
+        const a = partnerOn(P, x)
+        if (a >= 0) return a + 1
+      }
       const A = inkA.pages[P - 1]!
       return A.boxAt[g] ?? A.kinds.length
     }

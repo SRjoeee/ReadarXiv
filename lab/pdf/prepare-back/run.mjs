@@ -213,16 +213,36 @@ if (located) for (const [o, b] of located.born) {
   dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
 }
-// (--front: each unit of the baseline's the new front half does not make, stated as the candidate's: its paper's stage 1c class)
-if (FRONT && BASELINE) {
-  const { STAGE_1C } = await import('./front-new.mjs')
+// (--baseline: each unit of the baseline's the candidate does not make, stated as the candidate's. A unit made on arXiv's page
+// that stands for it, read otherwise there: of its kind, no baseline unit's id, at its place (its first line's page and box) or,
+// with no line, at its ord (today's bundle's order, which the dump keeps), with how it reads otherwise: its cause where it stays
+// the original's, or its characters in another order, piece by piece. --front: else its paper's stage 1c class)
+if (BASELINE) {
+  const { STAGE_1C } = FRONT ? await import('./front-new.mjs') : { STAGE_1C: {} }
+  const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
-  for (const u of JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units) {
+  const baseIds = new Set(base.map(u => u.id))
+  const free = units.filter(u => !baseIds.has(u.id) && !u.replaced)
+  const meets = (a, b) => a.page === b.page && a.x0 < b.x1 && b.x0 < a.x1 && Math.min(a.top, a.bottom) < Math.max(b.top, b.bottom) && Math.min(b.top, b.bottom) < Math.max(a.top, a.bottom)
+  const standsFor = u => {
+    const L = u.lines?.[0]
+    const k = free.findIndex(c => c.kind === u.kind && (L && c.lines?.[0] ? meets(L, c.lines[0]) : c.ord === u.ord))
+    return k < 0 ? null : free.splice(k, 1)[0]
+  }
+  const chars = p => [...(p.kind === 'text' ? p.s : p.kind === 'ph' ? p.src : '')].sort().join('')
+  const howOf = (u, c) => {
+    if (c.why?.startsWith('content difference')) return c.why
+    const same = u.pieces.length === c.pieces.length && u.pieces.every((p, k) => p.kind === c.pieces[k].kind && chars(p) === chars(c.pieces[k]))
+    return same ? 'its characters in another order' : 'another reading'
+  }
+  for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
+    const c = standsFor(u)
     // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
     // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
-    const why = /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : !FRONT ? null : /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    if (why === null) continue
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }

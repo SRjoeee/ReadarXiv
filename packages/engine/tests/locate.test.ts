@@ -275,6 +275,7 @@ describe('review of #605', () => {
           n: 1,
           k: j,
           at: 18,
+          box: -1,
           ox: 60,
           oy: 400 + 6 * j,
           ex: 60,

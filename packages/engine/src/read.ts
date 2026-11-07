@@ -239,6 +239,7 @@ function docPageOf(
       n: t.n,
       k: t.k,
       at: t.at,
+      box: t.box,
       ox: t.ox,
       oy: t.oy,
       ex: t.ex,

@@ -1,6 +1,6 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else: run by locate over arXiv's page (../ink.ts), held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until stage 1c.
+// marked COPY, nothing else but one change, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf): run
+// by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the change apart. Today's file stays the production prepare's until stage 1c.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
 // glyphs, so that it is translated and drawn as any unit. Read from the ledger's lines (layout/ledger.mjs: each line of glyphs
@@ -168,11 +168,16 @@ function groupsOf(st, base) {
 
 /** a kept run's placeholder source: a formula of its characters, or an address */
 const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
+/** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
+ *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
+ *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993
+ *  and 451.282 on the other), which today's order by x0 read as their order. CHANGED: the locate copy's one change */
+const leftOf = (a, b) => (Math.abs(a - b) <= 64 * Number.EPSILON * Math.max(Math.abs(a), Math.abs(b)) ? 0 : a - b)
 /** a line's words, left to right: { gs (glyph indices), ts (each glyph's text), text, fam (math, mono, or text) }. A glyph's text
  *  is its character, a spacing accent TeX set over its letter joined to it (layout/accents.mjs: "F´ısica" read Física, "Cande`s"
  *  Candès, a capital's raised accent's "PE´REZ" PÉREZ) */
 function wordsOf(G, gs, fams) {
-  const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
+  const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => leftOf(G[a].x0, G[b].x0))
   const joined = accentTexts(G, gs)
   const out = []
   // (the line's text size, the one most of its glyphs have: a script set smaller than it, raised or lowered, is no text of the

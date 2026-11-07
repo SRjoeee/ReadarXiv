@@ -98,6 +98,29 @@ describe('today’s ink makers in the engine package', () => {
     expect(today.fig.units.map((u) => u.text)).toEqual(['Accuracy'])
     expect(today.kept.length).toBeGreaterThan(0)
   })
+  it('read a stack’s glyphs at one x in the stream’s order, where today’s read the float noise of their x (the one difference)', () => {
+    // (2307.16209v1 p14's "s = −1/2" in a list of figures: the fraction's 1 and 2 stand at one x, 451.282, which PDF.js composes
+    // as 451.28200000000004 and 451.282 on our compile's page and 451.28199999999993 and 451.282 on arXiv's; today's word order
+    // by x0 read "21" on the one and "12" on the other. TeX ships a stack top first, so its glyphs at one x are read as the
+    // stream holds them: "12" on both)
+    const stack = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: 'An orphan line with x 12 and its words after it', y: 688 },
+    ], { points: [['bs1', 16], ['be1', 100]] })
+    const g = stack.glyphs as G[]
+    const at = 16 + 15 + 'An orphan line with '.length
+    for (const k of [at, at + 2, at + 3]) g[k]!.font = 'ABCDEF+CMMI10'
+    Object.assign(g[at + 2]!, { x0: 182.28200000000004, ix0: 182.28200000000004, x1: 185.782, ix1: 185.782, y: 692, top: 697, bottom: 691, size: 7 })
+    Object.assign(g[at + 3]!, { x0: 182.282, ix0: 182.282, x1: 185.782, ix1: 185.782, y: 684, top: 689, bottom: 683, size: 7 })
+    const one = (I: Impl) => {
+      const own = { glyphs: [stack.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([stack], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([stack], ledger, { units: units.slice(0, 1), from: 1 }).flatMap((u) => u.pieces.filter((p) => p.t === 'ph').map((p) => p.src))
+    }
+    expect(one(TODAY)).toEqual(['$x21$'])
+    expect(one(T as unknown as Impl)).toEqual(['$x12$'])
+  })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
     for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
     expect(T.classOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)

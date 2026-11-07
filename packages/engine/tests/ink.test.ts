@@ -149,8 +149,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.units[1]).toMatchObject({ id: unitId('inkcontents', heading.content), content: heading.content, echo: 0 })
   })
 
-  it('makes a unit of A’s text where A sets text our compile does not, its glyphs among it', () => {
-    // (2610.21084v1's e-mail block: arXiv's page sets the initials our compile does not; the unit made on A is A's text)
+  it('leaves a unit made on A the original’s where A sets text inside it our compile does not: a content difference', () => {
+    // (2610.21084v1's e-mail block: arXiv's page sets the initials our compile does not; the unit made on A is A's text, and it
+    // stays the original's, as a source unit whose glyphs differ does: the coordinator's call of 2026-11-07)
     const B = docOf([
       {
         lines: ['Running Title', 'Body text here'],
@@ -165,7 +166,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const head = L.members.find((m) => m.kind === 'inkheads')!
     expect(L.units[head.unit]!.id).toBe(unitId('inkheads', [text('Running XY Title')]))
-    expect(head).toMatchObject({ located: true })
+    expect(head).toMatchObject({ located: false, cause: 'content difference: aonly' })
+    // (its glyphs A's ink, in no group; no unit born of the initials)
+    expect(L.groups[0]!.glyphs.slice(0, 16).every((g) => g === null)).toBe(true)
     expect(L.born.size).toBe(0)
   })
 
@@ -188,5 +191,72 @@ describe('carry: B’s marks onto A’s stream', () => {
     const [c] = carry(B, A, m, pageA)
     expect(c!.points).toEqual([{ name: 'q1', glyph: 8, box: 0 }])
     expect(c!.paras).toEqual([{ name: 'q1', glyph: 8, box: 0 }])
+  })
+
+  it('keeps a picture’s end after the label it sets turned, its points at one glyph count (the label’s boxes its glyphs’)', () => {
+    // (2610.21880v1 p5: a TikZ picture after the page's last level glyph holds an axis line and a y-axis title set turned; the
+    // picture's two points stand at one glyph count, so its box count alone says which side of them the title stands. A turned
+    // glyph's own box has no box partner on A, the alignment pairing the glyph instead: its partner's box is its box's)
+    const docWith = (points: boolean): Doc => {
+      const d = docOf([
+        {
+          lines: ['a caption'],
+          boxes: [[9, 0, 50, 380, 52, 440]],
+          ...(points
+            ? {
+                points: [
+                  ['zs', 9],
+                  ['ze', 9],
+                ],
+              }
+            : {}),
+        },
+      ])
+      const pg = d.pages[0]!
+      for (let j = 0; j < 4; j++) {
+        pg.boxes.push(40, 400 + 6 * j, 47, 406 + 6 * j)
+        pg.kinds.push(-4)
+      }
+      pg.turned = [...'Loss'].map((u, j) => ({
+        u,
+        code: u.codePointAt(0) as number,
+        base: 'CMR10',
+        n: 1,
+        k: j,
+        at: 9,
+        box: 1 + j,
+        ox: 45,
+        oy: 400 + 6 * j,
+        ex: 45,
+        ey: 406 + 6 * j,
+        ux: 0,
+        uy: 1,
+        size: 10,
+        ascent: 0.7,
+        descent: -0.2,
+        form: false,
+      }))
+      // (the picture opens before its axis and closes after its title: zs at no box yet, ze after the title's four)
+      if (points)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: 9, box: 0 },
+            { name: 'ze', glyph: 9, box: 5 },
+          ],
+        }
+      return d
+    }
+    const B = docWith(true)
+    const A = docWith(false)
+    const m = align(B, A)
+    const pageA = new Int32Array(A.pages[0]!.glyphs.length).fill(1)
+    const [c] = carry(B, A, m, pageA)
+    expect(c!.pictures).toEqual([
+      { name: 'zs', glyph: 9, box: 0 },
+      { name: 'ze', glyph: 9, box: 5 },
+    ])
   })
 })
