@@ -1150,7 +1150,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       url?: string
       unsafeUrl?: string
       dest?: unknown
-      overlaidText?: unknown
     }[]) {
       if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) continue
       const to =
@@ -1193,9 +1192,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           if (owner) break
         }
       }
-      // (the characters under it as PDF.js reads them, its own glyph points' rule (its overlaidText): today's annotation's `ov`,
-      // which its match finds among a piece's drawn characters (links.mjs placeText))
-      const text = typeof an.overlaidText === 'string' ? an.overlaidText.replace(/\s+/gu, ' ').trim() : ''
+      // (the characters of the glyphs under it, its glyph points' in their order: today's annotation's own (links.mjs g2.ch, which
+      // its placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server's reading
+      // skips it, pdf-lite.mjs's text guard)
+      const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
       out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}), ...(text ? { text } : {}) })
     }
     if (out.length) links.set(p + 1, out)
