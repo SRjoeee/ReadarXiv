@@ -2,8 +2,9 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner. A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone,
-// for their time. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
+// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner.
+// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time.
+// A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
 // is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
