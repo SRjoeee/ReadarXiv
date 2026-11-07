@@ -18,7 +18,7 @@ import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts
 import { adapt, rectOf } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
 import { layPagePrepared } from './page.ts'
-import { paperOf, readMember, rowPieces } from './read.ts'
+import { measured, paperOf, readMember, rowPieces } from './read.ts'
 import { waitOf } from './wait.ts'
 
 /** what laying a page reads besides its part and its rows: the target's head names (translator's dictionary, a data file of
@@ -113,18 +113,24 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const relabelled = new Set<number>()
   // (the members whose elements on this page are drawn otherwise than kept where they stand: a crop or text in the translation)
   const moved = new Set<number>()
+  // (each member read, its faces asked and only then measured: the reading takes no width, B.cover asks Metrics' readiness
+  // first, so that a face not loaded is waited for and never measured, PR #620's re-review)
+  const read = new Map<
+    number,
+    { rd: ReturnType<typeof readMember>; pieces: ReturnType<typeof rowPieces>; tokens: Tokens }
+  >()
   for (const flow of part.flows)
-    flow.forEach((m, k) => {
+    for (const m of flow) {
       if (leave.has(m.kind)) {
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
-        return
+        continue
       }
       const content = contentOf(m, rows)
       if (typeof content === 'string') {
         state.set(m.ord, content)
         if (!m.why && (typeof m.text !== 'string' || content === 'none')) unmeant.add(m.ord)
-        return
+        continue
       }
       const relabels = !!m.label && !((m.fixed ?? 0) & LABEL_KEPT)
       let rd: ReturnType<typeof readMember>
@@ -139,69 +145,91 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
           paper,
           labels: { words: rules.labels, captions: rules.captions, heads: o.heads ?? null, names: o.names ?? null },
           relabels,
-          metrics,
           shown: Number.POSITIVE_INFINITY,
         })
       } catch (e) {
         if (e instanceof RangeError) throw e
         state.set(m.ord, 'error')
-        return
+        continue
       }
       if (rd.unproven >= 0) {
         state.set(m.ord, 'unproven' as Unlaid)
-        return
+        continue
       }
       const c = cover(rd.tokens as never, metrics)
       if ('wait' in c) {
         faces.push(...c.wait)
-        return
+        continue
       }
       if (!c.ok) {
         state.set(m.ord, c.why as Unlaid)
-        return
+        continue
       }
-      const after = flow[k + 1] ?? null
-      const got = adapt({
-        m,
-        before: flow[k - 1] ?? null,
-        after,
-        afterOpen: !!after && typeof contentOf(after, rows) !== 'string',
-        R,
-        measure,
-        patterns: rules.hyph as never,
-        view: () => undefined,
-        rulesOf: (pg) => rules0.get(pg),
-        lineskip,
-        reading: {
-          tokens: rd.tokens as Tokens,
-          labelDrawn: rd.labelDrawn,
-          lead: rd.lead,
-          title: false,
-          front: false,
-          cjkSize: rd.cjkSize,
-          referenced: rd.referenced,
-          own: true,
-        },
-        bottomOf: (pg) => bottoms.get(pg),
-      })
-      if ('stop' in got) {
-        state.set(m.ord, 'kind')
-        return
+      let tokens: Tokens
+      try {
+        tokens = measured(rd.tokens as Tokens, metrics)
+      } catch (e) {
+        if (e instanceof RangeError) throw e
+        state.set(m.ord, 'error')
+        continue
       }
-      if (rd.labelDrawn !== null) relabelled.add(m.ord)
-      // (today's hide.mjs: its placeholders' group hidden on a page where one with ink there, no display, is not kept where it
-      // stands; an element kept in place by the part (El.keep) is in no group)
-      const els = new Map(m.els ?? [])
-      for (const [k, r] of rd.resolutions) {
-        const p = pieces[k] as { t: string; k?: number } | undefined
-        const e = p?.t === 'ph' || p?.t === 'nested' ? els.get(String(p.k)) : undefined
-        if (!e || e.keep || e.kind === 'display' || r.mode === 'kept' || r.inPlace) continue
-        if (e.ink.some((q) => q[0] === page)) moved.add(m.ord)
-      }
-      prepared.set(m.ord, got.member)
-    })
+      read.set(m.ord, { rd, pieces, tokens })
+    }
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
+  // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
+  // so that no head runs over the row of a member left the original's (the reader's leave, a row failed, unproven), PR #620's
+  // re-review: the follower's row was in, the follower left, the head drawn over its original text)
+  const adaptAt = (flow: readonly Placed[], k: number, open: boolean): void => {
+    const m = flow[k]!
+    const r = read.get(m.ord)
+    if (!r) return
+    const { rd, pieces, tokens } = r
+    const after = flow[k + 1] ?? null
+    const got = adapt({
+      m,
+      before: flow[k - 1] ?? null,
+      after,
+      afterOpen: open,
+      R,
+      measure,
+      patterns: rules.hyph as never,
+      view: () => undefined,
+      rulesOf: (pg) => rules0.get(pg),
+      lineskip,
+      reading: {
+        tokens,
+        labelDrawn: rd.labelDrawn,
+        lead: rd.lead,
+        title: false,
+        front: false,
+        cjkSize: rd.cjkSize,
+        referenced: rd.referenced,
+        own: true,
+      },
+      bottomOf: (pg) => bottoms.get(pg),
+    })
+    if ('stop' in got) {
+      state.set(m.ord, 'kind')
+      return
+    }
+    if (rd.labelDrawn !== null) relabelled.add(m.ord)
+    // (today's hide.mjs: its placeholders' group hidden on a page where one with ink there, no display, is not kept where it
+    // stands; an element kept in place by the part (El.keep) is in no group)
+    const els = new Map(m.els ?? [])
+    for (const [q, res] of rd.resolutions) {
+      const p = pieces[q] as { t: string; k?: number } | undefined
+      const e = p?.t === 'ph' || p?.t === 'nested' ? els.get(String(p.k)) : undefined
+      if (!e || e.keep || e.kind === 'display' || res.mode === 'kept' || res.inPlace) continue
+      if (e.ink.some((x) => x[0] === page)) moved.add(m.ord)
+    }
+    prepared.set(m.ord, got.member)
+  }
+  for (const flow of part.flows)
+    for (let k = flow.length - 1; k >= 0; k--) {
+      const next = flow[k + 1]
+      adaptAt(flow, k, !!next && prepared.has(next.ord))
+    }
   // (a table laid whole or not at all: a cell not set before its lay that holds its table (holdsTable) leaves every cell of it
   // the original's, the set ones 'cells', as settleTies withholds a table whose cell its lay refused; the others are decided
   // by their lays, over the cells set (a cell left out of the flows and its tie handed whole, settleTies skips the table))
@@ -229,6 +257,12 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       cells: cells.every((o) => inPart.has(o)) ? cells.filter((o) => prepared.has(o)) : cells,
     })
   }
+  // (a head whose follower's table is held runs over no row of it either)
+  for (const flow of part.flows)
+    flow.forEach((m, k) => {
+      const next = flow[k + 1]
+      if (next && held.has(next.ord) && prepared.get(m.ord)?.follower?.open && !held.has(m.ord)) adaptAt(flow, k, false)
+    })
   // (each flow cut where a member is not set: the one after it starts where TeX set it, as after a member left the original's)
   const flows: FlowMember[][] = []
   for (const flow of part.flows) {

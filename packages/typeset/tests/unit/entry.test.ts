@@ -191,6 +191,83 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     ])
     expect(layPage(both, rows, rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'laid'])
   })
+  it('asks a face’s readiness before any width: a face not loaded is waited for, never measured (PR #620 re-review)', () => {
+    // (a host whose Metrics cannot measure a face not loaded throws, or measures it in a fallback face: the reading measured
+    // its tokens before B.cover asked, so the member was 'error' and the page committed with no face to wait for)
+    const loading: Metrics = {
+      ready: () => false,
+      advance: () => {
+        throw new Error('a face not loaded measured')
+      },
+      ink: () => [0.7, 0.2, 0],
+    }
+    const p = layPage(part(member()), rowsOf([row([{ t: 'text', s: 'ein Satz' }])]), rules, loading)
+    expect(p.wait.faces.length).toBeGreaterThan(0)
+    expect(p.members.map((m) => m.state)).toEqual(['waiting'])
+  })
+  it('opens a run-in head’s follower only where the follower is set: one the reader leaves is no row to run over', () => {
+    // (PR #620 re-review: a heading at 72-100 sharing its row with a paragraph from 105 the reader leaves: the paragraph's row
+    // was in, so the heading's follower was open and its translation ran over the paragraph's original text, which stays)
+    const head = member({
+      ord: 0,
+      kind: 'heading',
+      align: 'l',
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      // (its side to the paragraph's first glyph on its baseline, as locate states it)
+      room: { below: 0, next: 300, side: [72, 105] },
+    })
+    const idB = 'b'.repeat(64)
+    const para = member({
+      ord: 1,
+      text: idB,
+      join: [5],
+      lines: [
+        [1, 0, 105, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(head), flows: [[head, para]] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: 'Eine sehr lange Überschrift' }]),
+      { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB },
+    ])
+    const laid = layPage(pt, rows, rulesFor('de', { leave: ['para'] }), metrics()).members
+    expect(laid[1]).toMatchObject({ state: 'left', off: 0 })
+    // (no line of the head's on the paragraph's row past where the paragraph's original text begins: within its room, or
+    // left the original's where it does not fit there (it ran to 207 over the paragraph's text before))
+    expect(laid[0]!.lines.filter(([y, , x1]) => y === 700 && x1 > 105)).toEqual([])
+    // (the paragraph set, the head runs on over its row as before)
+    const both = layPage(pt, rows, rules, metrics()).members
+    expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
+  })
+  it('caps a size tie’s members alike on every page it is laid for (PR #620 re-review: a member on pages 1-2, one on 2)', () => {
+    // (the tie's sizes were read off the members with a line on the page asked for: on page 1 the second member was no voter,
+    // and the first laid at 10, on page 2 at the second's 8.5)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [[2, 0, 72, 120, 600, 607, 598, 72, 120, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const rows = rowsOf([row([{ t: 'text', s: 'kurz' }]), { ...row([{ t: 'text', s: 'abcdefghijk' }]), id: idB }])
+    // (the page's fill off, as the review's case: the fill's growth is its own question)
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const on = (page: number) => {
+      const pt: Part = { ...part(a), page, flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      return layPage(pt, rows, still, metrics()).members.find((m) => m.ord === 0)!.fit!.size
+    }
+    expect(on(2)).toBeLessThan(10)
+    expect(on(1)).toBe(on(2))
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

@@ -394,7 +394,6 @@ export type ReadInput = {
   labels: Pick<LabelInput, 'words' | 'captions' | 'heads' | 'names'> | null
   /** the reader draws the member's label anew (its label group can be turned off) */
   relabels: boolean
-  metrics: Metrics
   /** the last page shown */
   shown: number
 }
@@ -409,7 +408,8 @@ export type ReadOut = {
   resolutions: Map<number, Res>
 }
 
-/** L5 and L7 of a member: its reading and its measured tokens, from the part and the row */
+/** L5 and L7 of a member: its reading and its tokens, from the part and the row; no width is taken (B.cover asks its faces'
+ *  readiness first, then `measured` takes the widths: a face not loaded is never measured, PR #620's re-review) */
 export function readMember(i: ReadInput): ReadOut {
   const { m, unit, paper } = i
   const pieces = unit.pieces
@@ -536,7 +536,7 @@ export function readMember(i: ReadInput): ReadOut {
     faces,
     tagWords: true,
   })
-  const toks = measure(made.tokens, i.metrics) as unknown as Tokens
+  const toks = made.tokens as unknown as Tokens
   ;(toks as { base?: unknown }).base = made.base
   const cjkSize = i.P.cjk
     ? faces.of({ fam: 'serif', bold: false, italic: false, caps: false, design: paper.designs.serif }, 'cjk').size
@@ -551,4 +551,11 @@ export function readMember(i: ReadInput): ReadOut {
     unproven: el.unproven,
     resolutions: res,
   }
+}
+
+/** B.measure over a reading's tokens, once B.cover has found their faces ready: each token's width at 100 px, its base kept */
+export function measured(tokens: Tokens, metrics: Metrics): Tokens {
+  const toks = measure(tokens as never, metrics) as unknown as Tokens
+  ;(toks as { base?: unknown }).base = (tokens as { base?: unknown }).base
+  return toks
 }
