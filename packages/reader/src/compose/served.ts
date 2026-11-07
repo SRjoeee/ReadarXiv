@@ -1,0 +1,561 @@
+// The served faces and the typesetter's Metrics over them (the default engine's: compose/typeset.ts). The faces are the files
+// our site serves, as today's reader reads them (src/pdf-reader/session/faces.ts servedFaces, layer-proto/fonts.mjs sliceFace):
+//
+//   GET /static-fonts/index.json                  { schema: 1, fonts, faces: { <face id>: { group }, … } }
+//   GET /static-fonts/<group>.json?fonts=<fonts>  { schema: 1, group, slices: [[start, end, …], …], faces: { <id>: [{ path } | null, …] } }
+//   GET /<path>                                   a slice's woff2 (`static-fonts/<16 hex>.woff2`)
+//   GET /hyph/<lang>.json                         a language's hyphenation patterns ({ patterns, exceptions })
+//
+// every one through the host's fetch, a path its fetch resolves against our server (the website's origin; the extension's our
+// server's). A slice is fetched as data and made a FontFace of its face's family, weight and style, its code points as its
+// unicode-range (never imported: compose/faces.ts says why), added to the document while the reader lives and taken out with it.
+// A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
+// the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
+//
+// The Metrics measure as lane L7's spec for the reader says (lanes/L7-converge.md "The reader's own Metrics", held in a browser
+// by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
+// characters' slice changes (the first family of the string whose face, by CSS's matching, has a slice declaring the
+// character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
+// between two adjacent CJK punctuation marks (no text-spacing-trim), the runs' widths summed; the ink their highest ascent,
+// deepest descent and furthest right. `ready` is true where every slice the text needs is loaded, 'never' where a character is
+// in no slice of the string's faces, or its slice is lost (an answer no ask would mend, or a failure met twice), else false: the
+// typesetter waits for the face (the page's `wait.faces`), and the composer asks it here (`faces.ready`).
+import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
+import type { Fetch } from '../bytes/source.ts'
+import { type Faces, WAVE_SLOTS } from './faces.ts'
+import type { FaceId } from './page.ts'
+
+/** the index's bytes at most (the FONTS 6 table is 13 KB), a group's (the largest, a CJK group's, is 183 KB), a language's
+ *  patterns (German's, 90 KB), a slice's */
+const CAPS = { index: 256 * 1024, group: 2 * 1024 * 1024, hyph: 1024 * 1024, slice: 4 * 1024 * 1024 }
+const GROUP = /^[a-z0-9-]{1,40}$/
+const FONTS = /^[A-Za-z0-9._-]{1,32}$/
+const FILE = /^static-fonts\/[0-9a-f]{16}\.woff2$/
+const LANG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
+
+/** a pseudo-face the default engine's lay waits on while a language's patterns come (compose/typeset.ts): `ready` loads them */
+export const HYPH_WAIT = 'axt-hyph'
+
+interface Slice {
+  key: string
+  path: string
+  ranges: readonly number[]
+}
+interface ServedFace {
+  id: string
+  family: string
+  weight: number
+  style: 'normal' | 'italic'
+  /** null until its group's table is read */
+  slices: Slice[] | null
+}
+/** a run of a text: one slice's characters (a CJK run apart), its face */
+interface Run {
+  slice: Slice
+  face: ServedFace
+  text: string
+  cjk: boolean
+}
+
+/** a character of the CJK scripts, set unkerned in a run of its own */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
+/** the CJK punctuation Chrome's text-spacing-trim narrows where two stand together: a CJK run is cut between two of them */
+const PUNCT = /[、-〃〈-】〔-〟・！-／：-＠［-｀｛-･]/u
+const inRanges = (r: readonly number[], cp: number) => {
+  for (let i = 0; i + 1 < r.length; i += 2) if (cp >= (r[i] as number) && cp <= (r[i + 1] as number)) return true
+  return false
+}
+const hex = (n: number) => n.toString(16).toUpperCase()
+/** a slice's unicode-range descriptor from its [start, end] pairs (today's layer-proto/fonts.mjs unicodeRangeOf) */
+export const unicodeRangeOf = (ranges: readonly number[]): string => {
+  const out: string[] = []
+  for (let i = 0; i + 1 < ranges.length; i += 2) {
+    const a = ranges[i] as number,
+      b = ranges[i + 1] as number
+    out.push(a === b ? `U+${hex(a)}` : `U+${hex(a)}-${hex(b)}`)
+  }
+  return out.join(', ')
+}
+
+/** a canvas font string read: its style, small capitals, weight, size and families */
+export function parseFont(font: string): {
+  style: 'normal' | 'italic'
+  caps: boolean
+  weight: number
+  px: number
+  families: string[]
+} | null {
+  const m = /^(italic )?(small-caps )?(?:(\d+) |(bold) )?([\d.]+)px (.+)$/.exec(font)
+  if (!m) return null
+  const families = [...(m[6] as string).matchAll(/"([^"]+)"|([^,\s][^,]*)/g)].map((x) => (x[1] ?? x[2] ?? '').trim())
+  return {
+    style: m[1] ? 'italic' : 'normal',
+    caps: !!m[2],
+    weight: m[3] ? Number(m[3]) : m[4] ? 700 : 400,
+    px: Number(m[5]),
+    families,
+  }
+}
+
+/** CSS's face matching within a family: the style asked (else normal, else any), then the weight asked, else the nearest lighter
+ *  one first for 500 and under, heavier first over 500 */
+function faceOf(list: readonly ServedFace[], weight: number, style: string): ServedFace | undefined {
+  const styled = list.filter((f) => f.style === style)
+  const normal = list.filter((f) => f.style === 'normal')
+  const pool = styled.length ? styled : normal.length ? normal : list
+  const exact = pool.find((f) => f.weight === weight)
+  if (exact) return exact
+  const lighter = pool.filter((f) => f.weight < weight).sort((a, b) => b.weight - a.weight)
+  const heavier = pool.filter((f) => f.weight > weight).sort((a, b) => a.weight - b.weight)
+  return (weight <= 500 ? [...lighter, ...heavier] : [...heavier, ...lighter])[0]
+}
+
+/** the parts a text is measured in: [the font string without small capitals, text, unkerned] */
+export function partsOf(font: string, runs: readonly { text: string; cjk: boolean }[]): [string, string, boolean][] {
+  const out: [string, string, boolean][] = []
+  const plain = font.replace(/^(italic )?small-caps /, '$1')
+  for (const r of runs) {
+    if (!r.cjk) {
+      out.push([plain, r.text, false])
+      continue
+    }
+    let cur = '',
+      prev = ''
+    for (const ch of r.text) {
+      if (cur && PUNCT.test(prev) && PUNCT.test(ch)) {
+        out.push([plain, cur, true])
+        cur = ''
+      }
+      cur += ch
+      prev = ch
+    }
+    out.push([plain, cur, true])
+  }
+  return out
+}
+
+/** what the served faces need of the browser: a canvas measure, and a FontFace made from a slice's bytes (a test's own) */
+export interface Platform {
+  measure(
+    font: string,
+    text: string,
+    unkerned: boolean,
+  ): { width: number; ascent: number; descent: number; right: number }
+  face(
+    family: string,
+    bytes: ArrayBuffer,
+    d: { weight: string; style: string; unicodeRange: string },
+  ): Promise<FontFaceLike>
+}
+export interface FontFaceLike {
+  add(): void
+  remove(): void
+}
+/** the browser's: a canvas element's 2D context (OffscreenCanvas is not in every browser the website serves), the document's
+ *  fonts */
+export function browserPlatform(): Platform {
+  let ctx: CanvasRenderingContext2D | null = null
+  const fin = (v: number) => (Number.isFinite(v) ? v : 0)
+  return {
+    measure(font, text, unkerned) {
+      ctx ??= document.createElement('canvas').getContext('2d') as CanvasRenderingContext2D
+      ctx.font = font
+      ctx.fontKerning = unkerned ? 'none' : 'normal'
+      const m = ctx.measureText(text)
+      return {
+        width: m.width,
+        ascent: fin(m.actualBoundingBoxAscent),
+        descent: fin(m.actualBoundingBoxDescent),
+        right: fin(m.actualBoundingBoxRight),
+      }
+    },
+    async face(family, bytes, d) {
+      const f = new FontFace(family, bytes, d)
+      await f.load()
+      return { add: () => document.fonts.add(f), remove: () => document.fonts.delete(f) }
+    },
+  }
+}
+
+export interface Served {
+  /** the typesetter's Metrics over the faces loaded */
+  readonly metrics: Metrics
+  /** the composer's faces: a font string's class and family, its slices for a text loaded (`[face, text]`) */
+  readonly faces: Faces
+  /** the hyphenation patterns of `langs`, each as the typesetter reads it (hyphenationOf), null where it cannot be had */
+  hyph(langs: readonly string[]): Promise<Record<string, Patterns | null>>
+  /** the patterns of a language read already (null: none to be had), undefined while not */
+  hyphNow(lang: string): Patterns | null | undefined
+}
+
+/** an answer's JSON, within its cap */
+async function jsonOf(r: Response, cap: number): Promise<unknown> {
+  if (!r.ok) {
+    void r.body?.cancel().catch(() => {})
+    throw new Answer(r.status)
+  }
+  const bytes = new Uint8Array(await r.arrayBuffer())
+  if (bytes.byteLength > cap) throw new Error(`an answer of ${bytes.byteLength} bytes, past ${cap}`)
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+}
+class Answer extends Error {
+  readonly status: number
+  constructor(status: number) {
+    super(`answered ${status}`)
+    this.status = status
+  }
+}
+/** a 4xx other than 408 and 429: not there, and will not be */
+const lasting = (e: unknown) =>
+  e instanceof Answer && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+function rangesOf(v: unknown): number[] | null {
+  if (!Array.isArray(v) || !v.length || v.length % 2) return null
+  for (let i = 0; i < v.length; i += 2) {
+    const a = v[i],
+      b = v[i + 1]
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < a || b > 0x10ffff) return null
+  }
+  return v as number[]
+}
+
+export function createServed(o: {
+  fetch: Fetch
+  root: HTMLElement
+  platform?: Platform
+  warn?(what: string, e: unknown): void
+  /** a face lost (one of its slices), told once a face */
+  lost?(id: FaceId): void
+}): Served {
+  const P = o.platform ?? browserPlatform()
+  // ---- the catalogue: each family's faces, their slices once their group's table is read
+  const families = new Map<string, ServedFace[]>()
+  const byId = new Map<string, ServedFace>()
+  for (const [id, f] of Object.entries(FACES)) {
+    const face: ServedFace = { id, family: f.family, weight: f.weight, style: f.style, slices: null }
+    byId.set(id, face)
+    const list = families.get(f.family) ?? []
+    list.push(face)
+    families.set(f.family, list)
+  }
+  let index: Promise<{ groups: Record<string, string>; fonts: string | null }> | null = null
+  const groups = new Map<string, Promise<void>>()
+  const theIndex = () =>
+    (index ??= (async () => {
+      const v = await jsonOf(await o.fetch('/static-fonts/index.json'), CAPS.index)
+      if (!isObject(v) || v.schema !== 1 || !isObject(v.faces)) throw new Error("the faces' index is of another shape")
+      const out: Record<string, string> = {}
+      for (const [id, e] of Object.entries(v.faces))
+        if (isObject(e) && typeof e.group === 'string' && GROUP.test(e.group)) out[id] = e.group
+      return { groups: out, fonts: typeof v.fonts === 'string' && FONTS.test(v.fonts) ? v.fonts : null }
+    })().catch((e) => {
+      index = null
+      throw e
+    }))
+  /** a face's group read: every face of the group given its slices (a face the group holds none of: none) */
+  const theGroup = (name: string, fonts: string | null) => {
+    let g = groups.get(name)
+    if (!g) {
+      g = (async () => {
+        const v = await jsonOf(
+          await o.fetch(`/static-fonts/${name}.json${fonts === null ? '' : `?fonts=${encodeURIComponent(fonts)}`}`),
+          CAPS.group,
+        )
+        if (!isObject(v) || v.schema !== 1 || v.group !== name || !Array.isArray(v.slices) || !isObject(v.faces))
+          throw new Error(`the faces' table ${name} is of another shape`)
+        const slices = v.slices.map(rangesOf)
+        for (const [id, files] of Object.entries(v.faces)) {
+          const face = byId.get(id)
+          if (!face || !Array.isArray(files)) continue
+          const out: Slice[] = []
+          files.forEach((file, k) => {
+            const ranges = slices[k]
+            if (ranges && isObject(file) && typeof file.path === 'string' && FILE.test(file.path))
+              out.push({ key: `${id}:${k}`, path: file.path, ranges })
+          })
+          face.slices = out
+        }
+      })()
+      g.catch(() => {
+        if (groups.get(name) === g) groups.delete(name)
+      })
+      groups.set(name, g)
+    }
+    return g
+  }
+  /** a font string's faces, one a family (CSS's matching), and whether every one's table is read */
+  const facesOf = (font: string) => {
+    const f = parseFont(font)
+    if (!f) return null
+    const list = f.families
+      .map((fam) => families.get(fam))
+      .filter((l): l is ServedFace[] => !!l)
+      .map((l) => faceOf(l, f.weight, f.style))
+      .filter((x): x is ServedFace => !!x)
+    return { faces: list, read: list.every((x) => x.slices !== null) }
+  }
+  /** a text's runs in a font: each a slice's characters, CJK apart; a blank no slice holds in the run before it. 'never' where a
+   *  character no served face holds is in it, null while a table is not read */
+  const runsCache = new Map<string, Run[] | 'never'>()
+  const runsOf = (font: string, text: string): Run[] | 'never' | null => {
+    const key = `${font}\u0000${text}`
+    const hit = runsCache.get(key)
+    if (hit) return hit
+    const fs = facesOf(font)
+    if (!fs) return 'never'
+    if (!fs.read) return null
+    const runs: Run[] = []
+    for (const ch of text) {
+      const cp = ch.codePointAt(0) as number
+      let at: { slice: Slice; face: ServedFace } | null = null
+      for (const face of fs.faces) {
+        const slice = face.slices?.find((s) => inRanges(s.ranges, cp))
+        if (slice) {
+          at = { slice, face }
+          break
+        }
+      }
+      if (!at) {
+        const last = runs.at(-1)
+        if (last && /\s/.test(ch)) {
+          last.text += ch
+          continue
+        }
+        runsCache.set(key, 'never')
+        return 'never'
+      }
+      const last = runs.at(-1)
+      const cjk = CJK.test(ch)
+      if (last && last.slice === at.slice && last.cjk === cjk) last.text += ch
+      else runs.push({ slice: at.slice, face: at.face, text: ch, cjk })
+    }
+    runsCache.set(key, runs)
+    return runs
+  }
+  // ---- the slices loaded, WAVE_SLOTS at a time
+  const loaded = new Set<string>(),
+    loading = new Map<string, Promise<void>>(),
+    failed = new Set<string>(),
+    lost = new Set<string>(),
+    told = new Set<string>()
+  const added: FontFaceLike[] = []
+  let gone = false,
+    busy = 0,
+    asked = 0,
+    most = 0
+  const waiting: (() => void)[] = []
+  const slot = () =>
+    new Promise<void>((go) => {
+      if (busy < WAVE_SLOTS) {
+        busy++
+        most = Math.max(most, busy)
+        go()
+      } else waiting.push(go)
+    })
+  const free = () => {
+    const next = waiting.shift()
+    if (next) next()
+    else busy--
+  }
+  const loadSlice = (face: ServedFace, slice: Slice): Promise<void> => {
+    if (loaded.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
+    let p = loading.get(slice.key)
+    if (p) return p
+    p = (async () => {
+      await slot()
+      try {
+        asked++
+        const r = await o.fetch(`/${slice.path}`)
+        if (!r.ok) {
+          void r.body?.cancel().catch(() => {})
+          throw new Answer(r.status)
+        }
+        const bytes = await r.arrayBuffer()
+        if (bytes.byteLength > CAPS.slice) throw new Error(`a slice of ${bytes.byteLength} bytes`)
+        const f = await P.face(face.family, bytes, {
+          weight: String(face.weight),
+          style: face.style,
+          unicodeRange: unicodeRangeOf(slice.ranges),
+        })
+        if (gone) return
+        f.add()
+        added.push(f)
+        loaded.add(slice.key)
+      } finally {
+        free()
+      }
+    })().catch((e) => {
+      o.warn?.(`the face ${face.id}'s slice ${slice.path}`, e)
+      // (an answer no ask would mend, or a failure met twice: lost, its texts left the original's; else asked again next time)
+      if (lasting(e) || failed.has(slice.key)) {
+        lost.add(slice.key)
+        if (!told.has(face.id)) {
+          told.add(face.id)
+          o.lost?.(face.id)
+        }
+      }
+      failed.add(slice.key)
+    })
+    loading.set(slice.key, p)
+    void p.finally(() => {
+      if (loading.get(slice.key) === p) loading.delete(slice.key)
+    })
+    return p
+  }
+  /** the tables a font string needs read, then the slices its text needs loaded */
+  const load = async (font: string, text: string) => {
+    const fs = facesOf(font)
+    if (!fs) return
+    if (!fs.read) {
+      const ix = await theIndex()
+      await Promise.all(
+        fs.faces
+          .filter((f) => f.slices === null)
+          .map((f) => {
+            const g = ix.groups[f.id]
+            if (!g) {
+              f.slices = []
+              return undefined
+            }
+            return theGroup(g, ix.fonts)
+          }),
+      )
+      for (const f of fs.faces) f.slices ??= []
+      runsCache.clear()
+    }
+    const runs = runsOf(font, text)
+    if (!runs || runs === 'never') return
+    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice)))
+  }
+  // ---- the patterns
+  const hyphs = new Map<string, Promise<Patterns | null>>()
+  const hyphDone = new Map<string, Patterns | null>()
+  const hyphOf = (lang: string): Promise<Patterns | null> => {
+    let p = hyphs.get(lang)
+    if (!p) {
+      p = (async () => {
+        if (!LANG.test(lang)) return null
+        try {
+          const v = await jsonOf(await o.fetch(`/hyph/${lang}.json`), CAPS.hyph)
+          if (!isObject(v) || !Array.isArray(v.patterns))
+            throw new Error(`the patterns of ${lang} are of another shape`)
+          return hyphenationOf({
+            patterns: v.patterns.filter((x): x is string => typeof x === 'string'),
+            exceptions: Array.isArray(v.exceptions)
+              ? v.exceptions.filter((x): x is string => typeof x === 'string')
+              : [],
+          })
+        } catch (e) {
+          // (a language whose patterns cannot be had hyphenates nothing this visit: no page waits on them again)
+          o.warn?.(`the patterns of ${lang}`, e)
+          return null
+        }
+      })()
+      void p.then((v) => hyphDone.set(lang, v))
+      hyphs.set(lang, p)
+    }
+    return p
+  }
+
+  // ---- the Metrics: 100 px measures, cached, scaled to the size asked
+  const measures = new Map<string, [number, number, number, number]>()
+  const measured = (font: string, text: string): [number, number, number, number] => {
+    const key = `${font}\u0000${text}`
+    const hit = measures.get(key)
+    if (hit) return hit
+    const runs = runsOf(font, text)
+    const parts = runs && runs !== 'never' ? partsOf(font, runs) : [[font, text, false] as [string, string, boolean]]
+    let w = 0,
+      a = parts.length ? Number.NEGATIVE_INFINITY : 0,
+      d = a,
+      right = a
+    for (const [pf, pt, flat] of parts) {
+      const m = P.measure(pf, pt, flat)
+      a = Math.max(a, m.ascent)
+      d = Math.max(d, m.descent)
+      right = Math.max(right, w + m.right)
+      w += m.width
+    }
+    const out: [number, number, number, number] = [w, a, d, right]
+    measures.set(key, out)
+    return out
+  }
+  const metrics: Metrics = {
+    ready(face, text) {
+      const runs = runsOf(face, text)
+      if (runs === 'never') return 'never'
+      if (!runs) return false
+      for (const r of runs) {
+        if (lost.has(r.slice.key)) return 'never'
+        if (!loaded.has(r.slice.key)) return false
+      }
+      return true
+    },
+    advance: (face, size, text) => (measured(face, text)[0] * size) / 100,
+    ink(face, size, text) {
+      const [, a, d, r] = measured(face, text)
+      return [(a * size) / 100, (d * size) / 100, (r * size) / 100]
+    },
+  }
+
+  // ---- the composer's faces: a class a font string, its slices loaded for the texts asked
+  let rid = 0
+  const sheet = document.createElement('style')
+  o.root.append(sheet)
+  const classes = new Map<FaceId, string>()
+  const familyOf = (id: FaceId) =>
+    parseFont(id)
+      ?.families.map((f) => JSON.stringify(f))
+      .join(', ') ?? 'serif'
+  const faces: Faces = {
+    classOf(id) {
+      let c = classes.get(id)
+      if (c) return c
+      c = `axt-sf-${++rid}`
+      classes.set(id, c)
+      const f = parseFont(id)
+      // (no synthesis of what the face lacks, no trim of CJK punctuation: as measured)
+      sheet.sheet?.insertRule(
+        `.${c}{font-family:${familyOf(id)};font-weight:${f?.weight ?? 400};font-style:${f?.style ?? 'normal'};font-variant-caps:${f?.caps ? 'small-caps' : 'normal'};font-synthesis:none;text-spacing-trim:space-all}`,
+      )
+      return c
+    },
+    familyOf,
+    async ready(items) {
+      const waits: Promise<unknown>[] = []
+      for (const it of items) {
+        if (typeof it === 'string') continue
+        const [id, text] = it
+        if (id === HYPH_WAIT) waits.push(hyphOf(text))
+        else waits.push(load(id, text).catch((e) => o.warn?.(`the faces of ${id}`, e)))
+      }
+      await Promise.all(waits)
+    },
+    get asked() {
+      return asked
+    },
+    get most() {
+      return most
+    },
+    dispose() {
+      gone = true
+      for (const f of added) f.remove()
+      added.length = 0
+      sheet.remove()
+    },
+  }
+  return {
+    metrics,
+    faces,
+    async hyph(langs) {
+      const out: Record<string, Patterns | null> = {}
+      await Promise.all(
+        langs.map(async (l) => {
+          out[l] = await hyphOf(l)
+        }),
+      )
+      return out
+    },
+    hyphNow: (lang) => (hyphDone.has(lang) ? (hyphDone.get(lang) as Patterns | null) : undefined),
+  }
+}

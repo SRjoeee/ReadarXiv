@@ -250,8 +250,9 @@ const facesStub = (loaded?: Set<string>): Faces & { waves: string[][] } => {
     waves,
     classOf: () => 'f',
     familyOf: () => 'sans-serif',
-    ready: async (ids: Iterable<string>) => {
-      const list = [...ids]
+    // (a face asked with the texts the pages wait on it for: told here by the face, once a wave)
+    ready: async (ids: Iterable<string | readonly [string, string]>) => {
+      const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
       if (list.length) waves.push(list)
       for (const id of list) loaded?.add(id)
     },

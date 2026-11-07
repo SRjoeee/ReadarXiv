@@ -264,7 +264,42 @@ const v2Route = {
     return false
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route] })
+/** our site's static files the reader's own typesetter reads (compose/served.ts): the faces' tables, their slices and the
+ *  hyphenation patterns, where this machine has them (the website's build's, read in place: licensed faces are never copied
+ *  here); none, the checks that need them say so and pass nothing */
+const SITE = {
+  tables:
+    process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static',
+  slices: (
+    process.env.AXT_FACE_SLICES ??
+    '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
+  ).split(':'),
+  hyph: process.env.AXT_HYPH ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
+}
+const siteHas = existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+const siteLog = []
+const siteRoute = {
+  prefix: '/',
+  handle(_req, res, url) {
+    const table = /^\/static-fonts\/([a-z0-9-]+)\.json$/.exec(url.pathname)?.[1]
+    const slice = /^\/static-fonts\/([0-9a-f]{16}\.woff2)$/.exec(url.pathname)?.[1]
+    const hyph = /^\/hyph\/([a-z-]+)\.json$/.exec(url.pathname)?.[1]
+    if (!table && !slice && !hyph) return false
+    siteLog.push(url.pathname + url.search)
+    const file = table
+      ? join(SITE.tables, `${table}.json`)
+      : slice
+        ? SITE.slices.map((d) => join(d, slice)).find((f) => existsSync(f))
+        : join(SITE.hyph, `${hyph}.json`)
+    if (!file || !existsSync(file)) {
+      res.writeHead(404)
+      return res.end()
+    }
+    res.writeHead(200, { 'content-type': slice ? 'font/woff2' : 'application/json' })
+    return res.end(readFileSync(file))
+  },
+}
+const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route, siteRoute] })
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -953,6 +988,86 @@ await check(
     }
   },
 )
+/** a fixture opened with no engine (the reader's own typesetter), laid; what is drawn, the moments, the site's files asked */
+async function typesetLaid(name, target) {
+  const from = siteLog.length
+  const { page, context, errors } = await newPage()
+  await page.evaluate(([n, t]) => window.__h.reader(n, { host: 'web', typeset: true, target: t }), [name, target])
+  await waitFor(page, () => (window.__h.readers[0].reader.probe().laidPages ?? 0) > 0, null, 60_000)
+  await waitFor(page, () => document.querySelectorAll('.axt-over > svg').length > 0, null, 10_000).catch(() => {})
+  const p = await probe(page)
+  const drawn = await page.evaluate(() => {
+    const svg = [...document.querySelectorAll('.axt-over > svg')]
+    return {
+      overlays: svg.length,
+      words: svg
+        .map((s) => s.textContent ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200),
+      faces: [...document.fonts].filter((f) => f.family.replace(/"/g, '').startsWith('axt-') && f.status === 'loaded')
+        .length,
+    }
+  })
+  return { page, context, errors, p, drawn, asked: () => siteLog.slice(from) }
+}
+await check(
+  "reader: no engine given, the reader's own typesetter: the fixture's pages laid by layPage over our site's faces and patterns, the translation drawn; a toggle lays them again (the coordinator's priority of 2026-11-07)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors, p, drawn, asked } = await typesetLaid('s1-columns', 'de')
+    // (a toggle: the pages laid again, under the rules that leave what it leaves)
+    const laysBefore = Number(p.lays ?? 0)
+    await page.evaluate(() =>
+      window.__h.readers[0].reader.do({
+        do: 'set',
+        prefs: { classes: { figures: false, tables: true, heads: true, references: true, names: false } },
+      }),
+    )
+    await page.waitForTimeout(1500)
+    const after = await probe(page)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(drawn.overlays > 0 && /[a-zäöüß]{4}/i.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+    assert(
+      asked().includes('/static-fonts/index.json') && asked().some((u) => u.startsWith('/hyph/de')),
+      JSON.stringify(asked()),
+    )
+    assert(
+      Number(after.lays) > laysBefore && Number(after.laidPages) > 0,
+      `the toggle: ${laysBefore} → ${JSON.stringify(after)}`,
+    )
+    return {
+      firstLaidMs: p['at.firstLaid'],
+      leftDrawnMs: p['at.leftDrawn'],
+      laidPages: p.laidPages,
+      faces: drawn.faces,
+      asked: asked().length,
+      lays: [laysBefore, after.lays],
+      words: drawn.words.slice(0, 80),
+    }
+  },
+)
+for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))) {
+  await check(
+    `reader: no engine given, the reader's own typesetter on a corpus paper (${name}, zh): laid, drawn`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const { context, errors, p, drawn, asked } = await typesetLaid(name, 'zh')
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(drawn.overlays > 0 && /\p{Script=Han}/u.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+      return {
+        firstLaidMs: p['at.firstLaid'],
+        leftDrawnMs: p['at.leftDrawn'],
+        laidPages: p.laidPages,
+        faces: drawn.faces,
+        asked: asked().length,
+        words: drawn.words.slice(0, 40),
+      }
+    },
+  )
+}
 await check(
   "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
   async () => {

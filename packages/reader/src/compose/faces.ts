@@ -30,8 +30,9 @@ export interface Faces {
   /** the CSS family a run of `id` is measured and drawn in */
   familyOf(id: FaceId): string
   /** the faces loaded (each once), in the order given, WAVE_SLOTS at a time; a face that cannot be read is left to its
-   *  fallback, and told */
-  ready(ids: Iterable<FaceId>): Promise<void>
+   *  fallback, and told. A face given with a text (`[face, text]`: what a page waits for, what it draws) is loaded as far as that
+   *  text needs (the served faces' slices: compose/served.ts); a face of a table is its one file either way */
+  ready(ids: Iterable<FaceId | readonly [FaceId, string]>): Promise<void>
   /** the faces asked of the network, and the most read at once (the probe's) */
   readonly asked: number
   readonly most: number
@@ -109,7 +110,8 @@ export function createFaces(o: {
     familyOf,
     ready(ids) {
       const waits: Promise<void>[] = []
-      for (const id of ids) {
+      for (const item of ids) {
+        const id = typeof item === 'string' ? item : item[0]
         const e = o.table[id]
         if (!e?.src) continue
         let p = loading.get(id)
