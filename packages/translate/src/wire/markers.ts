@@ -89,6 +89,21 @@ function around(content: readonly Piece[]): { ids: string[]; inner: readonly Pie
   }
 }
 
+type El = Extract<Piece, { t: 'el' }>
+/** the last element of pieces, through the groups that hold it: what a marker of them ends with (its display, its own stop),
+ *  a display inside a group inside a span's head too (`{\small $$ x = y. $$} Then…`) */
+function lastEl(content: readonly Piece[]): El | undefined {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const p = content[i] as Piece
+    if (p.t === 'el') return p
+    if (p.t === 'span') {
+      const inner = lastEl(p.content)
+      if (inner) return inner
+    }
+  }
+  return undefined
+}
+
 function itemsOf(content: readonly Piece[], at0: number): Item[] {
   const items: Item[] = []
   const walk = (ps: readonly Piece[], at: number, depth: number): number => {
@@ -113,14 +128,14 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
         if (k) {
           const head = p.content.slice(0, k)
           const len = projLength(head)
-          const last = [...head].reverse().find((q) => q.t === 'el')
+          const last = lastEl(head)
           items.push({
             t: 'void',
             out: [{ t: 'span', id: p.id, content: asOut(head) }],
             at,
             len,
-            display: last?.t === 'el' && (last.kind === DISPLAY || last.alone === true),
-            stop: last?.t === 'el' ? last.stop : undefined,
+            display: !!last && (last.kind === DISPLAY || last.alone === true),
+            stop: last?.stop,
           })
           at += len
         }
@@ -132,14 +147,14 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
       } else {
         // a `must` span with no text: one marker for it and what it holds
         const len = projLength(p.content)
-        const last = [...p.content].reverse().find((q) => q.t === 'el')
+        const last = lastEl(p.content)
         items.push({
           t: 'void',
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
           at,
           len,
-          display: last?.t === 'el' && (last.kind === DISPLAY || last.alone === true),
-          stop: last?.t === 'el' ? last.stop : undefined,
+          display: !!last && (last.kind === DISPLAY || last.alone === true),
+          stop: last?.stop,
         })
         at += len
       }

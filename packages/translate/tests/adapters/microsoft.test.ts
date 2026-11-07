@@ -11,6 +11,7 @@ import {
   BERT_STRATEGIES_REPLY,
   MICROSOFT_REPLIES,
   MICROSOFT_UNITS,
+  NESTED_DISPLAY,
   UNITS,
 } from './fixtures.ts'
 
@@ -87,6 +88,11 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       // (1810.04805v2's: the bytes Microsoft was sent, so the replies stored under them are read again, not asked again)
       'We introduce a new language representation model called @a#, which stands for Bidirectional Encoder Representations from Transformers. Unlike recent language representation models @b#, @c# is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers. As a result, the pre-trained BERT model can be fine-tuned with just one additional output layer to create state-of-the-art models for a wide range of tasks, such as question answering and language inference, without substantial task-specific architecture modifications.',
       'There are two existing strategies for applying pre-trained language representations to downstream tasks: @a# feature-based and @b# fine-tuning. The feature-based approach, such as ELMo @c#, uses task-specific architectures that include the pre-trained representations as additional features. The fine-tuning approach, such as the Generative Pre-trained Transformer (OpenAI GPT)@d#, introduces minimal task-specific parameters, and is trained on the downstream tasks by simply fine-tuning @e# all pre-trained parameters. The two approaches share the same objective function during pre-training, where they use unidirectional language models to learn general language representations.',
+      // (a display inside a group inside a span's head, and inside a `must` span of no text: its own stop after the marker,
+      // its boundary ending the stretch of elements)
+      'We have @a#. Then we go on.',
+      'We have @a# @b# that holds.',
+      'We have @a#. Then we go on.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -204,5 +210,22 @@ describe('microsoft: a span on no wire keeps its head (1810.04805v2, as staging 
       { t: 'text', s: '的新语言表示模型，代表Transformers的双向编码器表示。与近期的语言表示模型' },
     ])
     expect(accept(BERT_ABSTRACT, r?.content ?? [])).toEqual({ ok: true })
+  })
+})
+
+describe("microsoft: a head's last element found through its groups (a display inside a group)", () => {
+  it("reads the reply's stop after a head whose display stands inside a group, as after any display's own", () => {
+    const [stop, , must] = NESTED_DISPLAY as [never, never, never]
+    const tail = { t: 'text', s: '然后我们继续。' }
+    expect(readMicrosoft(stop, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
+      { t: 'text', s: '我们有 ' },
+      { t: 'span', id: 's', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
+      tail,
+    ])
+    expect(readMicrosoft(must, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
+      { t: 'text', s: '我们有 ' },
+      { t: 'span', id: 'g', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
+      tail,
+    ])
   })
 })

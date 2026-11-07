@@ -121,7 +121,32 @@ export const BERT_STRATEGIES_REPLY = JSON.stringify({
   text: '目前已有两种策略将预训练语言表示应用于下游任务：@a# 基于特征和 @b# 微调。基于特征的方法，如ELMo @c#，使用任务专用架构，将预训练表示作为附加功能。微调方法，如生成预训练变换器（OpenAI GPT）@d#，引入任务特定参数极少，下游任务则通过微调@e#所有预训练参数进行训练。这两种方法在预训练阶段共享相同的目标函数，即使用单向语言模型学习一般语言表示。',
 })
 /** Microsoft's fixture units: the shared ones and the units only its wire reads differently */
-export const MICROSOFT_UNITS: UnitIn[] = [...UNITS, /* 17 */ BERT_ABSTRACT, /* 18 */ BERT_STRATEGIES]
+/** a display inside a group inside a span's head (a group holding a display, `{\small $$ x = y. $$}`): the head's last
+ *  element is the display, whose own stop and boundary its marker carries */
+export const NESTED_DISPLAY: UnitIn[] = [
+  unit('nested-stop', [
+    t('We have'),
+    span('s', 'other', [span('n', 'other', [el('d', 'display', '.')]), t(' Then we go on.')]),
+  ]),
+  unit('nested-ends', [
+    t('We have '),
+    span('s', 'other', [span('n', 'other', [el('d', 'display')])]),
+    t(' '),
+    el('m', 'math'),
+    t(' that holds.'),
+  ]),
+  unit('nested-must', [
+    t('We have'),
+    span('g', 'link', [span('n', 'other', [el('d', 'display', '.')])], true),
+    t(' Then we go on.'),
+  ]),
+]
+export const MICROSOFT_UNITS: UnitIn[] = [
+  ...UNITS,
+  /* 17 */ BERT_ABSTRACT,
+  /* 18 */ BERT_STRATEGIES,
+  /* 19, 20, 21 */ ...NESTED_DISPLAY,
+]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
 const ms = (text: string, src?: number[], tr?: number[]) => JSON.stringify(src && tr ? { text, src, tr } : { text })
