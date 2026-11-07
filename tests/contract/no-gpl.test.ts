@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error — a plain node script, deliberately dependency-free and untyped (as tests/pdf-reader/engine-contract.test.ts reads it)
 import { closureOf } from '../../scripts/check-boundary.mjs'
 import { DEFAULT_LANG_CODE, LANG_CODES, RTL_LANGUAGES, toBcp47 } from '@/config/languages'
 import TAKEN from './languages.json'
