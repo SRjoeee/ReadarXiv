@@ -17,6 +17,9 @@ export {
   type Result,
 } from './reader.ts'
 export type { Side, Zoom } from './panes/panes.ts'
+// PDF.js's builds: which one a browser runs; the legacy one itself is `@readarxiv/reader/pdfjs-legacy`'s
+export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
+export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'
 export {
   CLASSES,
   type ClassName,

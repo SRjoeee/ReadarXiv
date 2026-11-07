@@ -945,6 +945,36 @@ await check(
   },
 )
 await check(
+  "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
+  async () => {
+    const from = server.log.length
+    const { page, context, errors } = await newPage()
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', legacy: true }))
+    await readerLaid(page)
+    const st = await page.evaluate(() => window.__h.readers[0].reader.state())
+    const p = await probe(page)
+    const scripts = await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .map((e) => new URL(e.name).pathname)
+        .filter((x) => x.endsWith('.js') || x.endsWith('.mjs')),
+    )
+    await context.close()
+    const asked = server.log.slice(from).map((x) => x.path)
+    assert(!errors.length, errors.join('; '))
+    const workers = asked.filter((x) => x.endsWith('pdf.worker.min.mjs'))
+    assert(
+      workers.length > 0 && workers.every((x) => /\/pdfjs\/[\d.]+\/legacy\/pdf\.worker\.min\.mjs$/.test(x)),
+      `the workers asked: ${JSON.stringify(workers)}`,
+    )
+    assert(
+      st.original.s === 'open' && st.layer.s === 'ready' && p.laidPages > 0,
+      `state ${JSON.stringify([st.original, st.layer])}`,
+    )
+    return { workers: [...new Set(workers)], laidPages: p.laidPages, chunks: scripts.length }
+  },
+)
+await check(
   'reader: close lets everything go, closed before PDF.js is in too; a second reader on the same page goes on',
   async () => {
     // (closed in the task that opened it, before PDF.js's modules are in: once they are, for the reader opened after it on the

@@ -21,7 +21,7 @@ import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
-import { type Kit, loadKit } from './pdfjs/kit.ts'
+import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
@@ -172,6 +172,9 @@ export function openReader(
     /** the two panes' elements, where the host's chrome renders them (its scrollers): drawn into, never removed; none: the
      *  reader makes `div.axt-pane.left` and `.right` under `root` */
     panes?: { left: HTMLElement; right: HTMLElement }
+    /** the PDF.js build the host serves this browser (its modules and its worker: `LEGACY` of `@readarxiv/reader/pdfjs-legacy`
+     *  below the modern build's floor, builds.ts `buildFor`); none: the modern build. The choice is the host's */
+    pdfjs?: PdfBuild
   },
 ): Reader {
   const words = (): Words => o.words ?? CATALOGUE_WORDS
@@ -206,7 +209,7 @@ export function openReader(
     root.append(left, right)
   }
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
-  const kitReady = loadKit()
+  const kitReady = loadKit(o.pdfjs ?? {})
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
