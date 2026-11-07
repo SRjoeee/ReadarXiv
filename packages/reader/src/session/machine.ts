@@ -100,6 +100,9 @@ export interface Doc {
     retryAt: number | null
     stage: string | null
     units: Ref[]
+    /** after a prepare that cannot be made (`cannot`, `too-large`): whether arXiv has an HTML version of the paper, as our
+     *  server knows it (null, or none: it does not say) */
+    html?: boolean | null
   }
   layer: { catalog: Ref; units: Ref[]; format: number } | null
   targets: Record<

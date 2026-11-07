@@ -40,7 +40,7 @@ import {
   targetOf,
   wanted,
 } from './session/machine.ts'
-import { abstractPage, htmlVersionOf, originalPdfOf, titleOf, VIEWER_HASH } from './session/paper.ts'
+import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VIEWER_HASH } from './session/paper.ts'
 import {
   anchorOf,
   contextOf,
@@ -557,7 +557,14 @@ export function openReader(
       return undefined
     },
     html(_spec, t, emit) {
-      void htmlVersionOf(host.fetch, ref).then((url) => emit({ i: 'html.answered', t, url }))
+      // our server's word first, where it gives one (L5's PaperDoc: after a prepare that cannot be made), before any ask of
+      // arXiv's (one a host's network may not make, and a failed ask offers the version)
+      const said = rt.state.doc?.prepare.html
+      const asked =
+        typeof said === 'boolean'
+          ? Promise.resolve(said ? `https://arxiv.org/html/${ref}${TRANSLATE_HASH}` : null)
+          : htmlVersionOf(host.fetch, ref)
+      void asked.then((url) => emit({ i: 'html.answered', t, url }))
       return undefined
     },
     code(_spec, t, emit, signal) {

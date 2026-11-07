@@ -155,7 +155,9 @@ export function StatusCapsule({
                 )}
                 {link && (
                   <a data-action className="chip" href={link} target={sameTab ? '_top' : '_blank'} rel="noopener">
-                    {R.status.useHtml}
+                    {(capsule.kind === 'unavailable' || capsule.kind === 'notNow') && capsule.label
+                      ? capsule.label
+                      : R.status.useHtml}
                   </a>
                 )}
                 {capsule.kind === 'unsupported' && (

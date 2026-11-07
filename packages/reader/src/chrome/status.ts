@@ -10,12 +10,12 @@ import type { Languages, Parts, StateWords } from './parts.tsx'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
-   *  closable */
-  | { kind: 'unavailable'; words: CapsuleWords; href?: string }
+   *  closable. `label`: the link's words where the host gives its own (StateWords `useHtml`) */
+  | { kind: 'unavailable'; words: CapsuleWords; href?: string; label?: string }
   /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
    *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable.
    *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's) */
-  | { kind: 'notNow'; words: CapsuleWords; href?: string; wait?: true }
+  | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
@@ -79,6 +79,15 @@ function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: b
   return w ? plain(w) : null
 }
 
+/** the link beside a bilingual version not to be had: arXiv's HTML version, or where the host says (its address and words), or
+ *  none where it offers none */
+function htmlLink(html: string | null, words: StateWords): { href: string; label?: string } | null {
+  if (!html) return null
+  if (!words.useHtml) return { href: html }
+  const own = words.useHtml(html)
+  return own ? { href: own.href, label: own.label } : null
+}
+
 export function capsuleOf(
   state: ReaderState,
   seen: Seen,
@@ -103,9 +112,8 @@ export function capsuleOf(
     const said = plain(
       (state.unavailable?.why === 'too-large' ? words.tooLarge : undefined) ?? words.noPdf ?? R.status.noPdf,
     )
-    return state.htmlVersion
-      ? { kind: 'unavailable', words: said, href: state.htmlVersion }
-      : { kind: 'unavailable', words: said }
+    const html = htmlLink(state.htmlVersion, words)
+    return html ? { kind: 'unavailable', words: said, ...html } : { kind: 'unavailable', words: said }
   }
   if (!state.languageSupported && state.prefs) {
     // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
@@ -139,9 +147,8 @@ export function capsuleOf(
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
-    return state.htmlVersion
-      ? { kind: 'notNow', words: notNow, href: state.htmlVersion, ...wait }
-      : { kind: 'notNow', words: notNow, ...wait }
+    const html = htmlLink(state.htmlVersion, words)
+    return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
   if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
