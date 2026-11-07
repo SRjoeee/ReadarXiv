@@ -130,5 +130,8 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
     expect(crops[0]![0]![3]).toBeCloseTo(120, 5)
     expect(crops[1]![0]![1]).toBeCloseTo(120, 5)
     expect(crops[1]![0]![3]).toBeCloseTo(292.4, 5)
+    // (the cut edges said, which the reader draws with no antialiased margin: the next glyph's ink is a fraction of a point off)
+    const cuts = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => (it as { cut?: number }).cut))
+    expect(cuts).toEqual([[2], [1]])
   })
 })

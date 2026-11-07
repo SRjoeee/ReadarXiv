@@ -1261,8 +1261,9 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 const URL_BREAKS = new Set(".@\\/!_|;>]),?&'+=#:")
 /**
  * Where a URL TeX set on one line may break (El.breaks): after a run of url.sty's break characters, never inside one (a
- * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle between the run's last glyph
- * and the next, with how many of its glyphs stand before it. Its glyphs in their order on the line
+ * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle of the paper between the run's
+ * last glyph's ink and the next one's (their outlines where read, else their advances), with how many of its glyphs stand
+ * before it. Its glyphs in their order on the line
  */
 export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
   const line = gs.filter((g) => /\S/.test(g.u)).sort((a, b) => a.x0 - b.x0)
@@ -1270,7 +1271,10 @@ export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
   for (let k = 1; k < line.length; k++) {
     const a = line[k - 1]!,
       b = line[k]!
-    if (URL_BREAKS.has(a.u) && !URL_BREAKS.has(b.u)) out.push([r2((a.x1 + b.x0) / 2), k])
+    if (!URL_BREAKS.has(a.u) || URL_BREAKS.has(b.u)) continue
+    const right = a.ix1 > a.ix0 ? a.ix1 : a.x1,
+      left = b.ix1 > b.ix0 ? b.ix0 : b.x0
+    out.push([r2((right + left) / 2), k])
   }
   return out
 }

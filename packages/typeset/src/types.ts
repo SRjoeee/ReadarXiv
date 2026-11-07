@@ -129,7 +129,9 @@ export type Item =
        *  size, today's svgOfUnit); the page's drawing sets the run that much higher (the checkpoint's (10): drawn on the baseline) */
       rise?: number
     }
-  | { s: string; x: number; src: Ink; k: number; piece: string }
+  /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
+   *  url package breaks it), which the reader draws with no antialiased margin */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
 
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {

@@ -9,7 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
-import { svgOf } from '../src/compose/paint.ts'
+import { CLIP_PAD, cropsOf, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -630,5 +630,35 @@ describe('the page drawn (svgOf)', () => {
       { classOf: () => 'f' } as unknown as Faces,
     )
     expect([...svg.querySelectorAll('tspan')].map((t) => t.getAttribute('y'))).toEqual(['92', '88.4'])
+  })
+})
+
+describe('a crop cut from its element’s ink between two glyphs (a URL broken where TeX’s url package breaks it)', () => {
+  it('reaches past its ink by the antialiased margin on its own edges, and not at all on a cut one', () => {
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      members: [
+        {
+          ord: 2,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [
+            [700, 72, 120, [{ s: 'https://', x: 72, src: [1, 235, 225, 277.1, 235, 228], k: 1, piece: '9', cut: 2 }]],
+            [688, 72, 200, [{ s: 'github.com', x: 72, src: [1, 277.1, 225, 450, 235, 228], k: 1, piece: '9', cut: 1 }]],
+          ],
+          lit: { left: [], right: [], own: [] },
+        },
+      ],
+      links: [],
+    }
+    const [head, tail] = cropsOf(page)
+    expect(head!.src[0]).toBeCloseTo(235 - CLIP_PAD, 5)
+    expect(head!.src[2]).toBeCloseTo(277.1, 5)
+    expect(head!.at[2]).toBeCloseTo(72 + 277.1 - 235, 5)
+    expect(tail!.src[0]).toBeCloseTo(277.1, 5)
+    expect(tail!.at[0]).toBeCloseTo(72, 5)
+    expect(tail!.src[2]).toBeCloseTo(450 + CLIP_PAD, 5)
   })
 })
