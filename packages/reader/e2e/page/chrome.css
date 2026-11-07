@@ -1,0 +1,10 @@
+/* The harness's host page sheet, as both hosts' page sheets build theirs (the extension's src/entrypoints/pdf-reader/reader.css,
+   the website's v2 reader.css): Tailwind's theme and the utilities of the sources this page draws (the chrome, the kit's menu
+   rows, the page's own slots), then the reader's own sheet. No Preflight; nothing of a host's own besides */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../../src/chrome/";
+@source "../../../ui/src/controls/MenuList.tsx";
+@source "./chrome.tsx";
+@import "../../src/chrome/reader.css";

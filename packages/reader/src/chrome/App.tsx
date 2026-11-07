@@ -1,4 +1,5 @@
-import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { localeInUse, onLocale } from '@readarxiv/ui'
 import type { ReaderController, Side } from './model.ts'
 import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from './appearance.ts'
 import { FailureCard } from './FailureCard.tsx'
@@ -18,12 +19,17 @@ import { useReader } from './use-reader.ts'
  * engine draws into their scrollers, and owns them), and what floats over them. The panes' ids are the probes' too
  */
 export function App({ controller, parts }: { controller: ReaderController; parts: Parts }) {
+  // the interface's language is the host's to choose (its `setLocale`: the website's interface language row); the chrome's
+  // words are read from the catalogue as each part renders, so a switch draws the whole chrome again, in place (this render
+  // of the page renders every part under it)
+  useSyncExternalStore(subscribeLocale, localeInUse)
   return (
     <PartsProvider value={parts}>
       <Page controller={controller} />
     </PartsProvider>
   )
 }
+const subscribeLocale = (told: () => void) => onLocale(() => told())
 
 function Page({ controller }: { controller: ReaderController }) {
   const { reason, probe } = useParts()

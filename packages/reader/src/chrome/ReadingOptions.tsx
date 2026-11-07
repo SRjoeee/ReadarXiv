@@ -1,7 +1,7 @@
 // The reading options (the reader's design, §6.1): the highlight and its colour, what to translate, the appearance and the
 // dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
 // window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
-// download, the settings and the way back
+// download, the settings and the way back; a host's own rows last (the website's interface language)
 import { type IconNode, Monitor, Moon, SlidersHorizontal, Sun } from 'lucide'
 import { useId, useRef } from 'react'
 import { Icon, O, Popover, R, radioKeys, S, Switch, usePopover, useTip } from '@readarxiv/ui'
@@ -121,6 +121,8 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
             onChange={(on) => controller.setPrefs({ dim: on })}
           />
         </label>
+        {/* the host's own last rows (the website's interface language) */}
+        {slots.options}
       </Popover>
     </>
   )

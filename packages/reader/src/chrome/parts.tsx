@@ -23,9 +23,14 @@ export interface Languages {
   items(current: string): readonly LanguageItem[]
 }
 export interface Slots {
+  /** first in the bar's lead, before the contents' button: the website's way home */
   lead?: ReactNode
+  /** last in the bar's lead, right after the paper's title (its next sibling): the website's short link to arXiv, which its
+   *  sheet shows where the lead cannot hold the id */
+  afterTitle?: ReactNode
   beforeOptions?: (at: 'bar' | 'options') => ReactNode
   afterOptions?: (at: 'bar' | 'options') => ReactNode
+  /** the reading options' last rows: the website's interface language */
   options?: ReactNode
   /** the action under a failure's card whose remedy is the host's (a key: its settings) */
   card?: (action: 'settings') => ReactNode

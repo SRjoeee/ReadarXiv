@@ -311,7 +311,7 @@ async function newPage(o = {}) {
     )
       errors.push(m.text())
   })
-  await page.goto(`${server.origin}/`)
+  await page.goto(`${server.origin}/${o.path ?? ''}`)
   return { page, context, errors }
 }
 
@@ -942,6 +942,66 @@ await check(
     assert(seen.href && seen.onLink, `the pointer over the link meets ${seen.hit}`)
     assert(opened.length === 1 && opened[0] === seen.href, `opened ${JSON.stringify(opened)}`)
     return { href: seen.href, opened }
+  },
+)
+/** the host page (chrome.html): the chrome over a reader of fixture `name`, with the host's parts `o`, laid */
+async function chromeLaid(name, o = {}, page0 = {}) {
+  const opened = await newPage({ ...page0, path: 'chrome.html' })
+  await opened.page.evaluate(([n, x]) => window.__c.open(n, x), [name, o])
+  await waitFor(opened.page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+  return opened
+}
+await check(
+  "chrome: a host's own controls in their places, each working: its way home first in the lead, its short link right after the title, its interface language the reading options' last row (L11 gap 2)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns', { slots: true })
+    const en = await page.evaluate(() => window.__c.words('en'))
+    const zh = await page.evaluate(() => window.__c.words('zh-CN'))
+    const lead = await page.evaluate(() => {
+      const el = document.querySelector('[data-zone="lead"]')
+      const home = el.querySelector('[data-host="home"]').getBoundingClientRect()
+      return {
+        // (a control's tooltip, its next sibling, left out)
+        children: [...el.children]
+          .map((x) => x.dataset.host ?? (x.matches('.paper-title') ? 'title' : x.getAttribute('aria-label')))
+          .filter((x) => x !== null),
+        short: !!el.querySelector(':scope > .paper-title + [data-host="short"]'),
+        home: [home.left + home.width / 2, home.top + home.height / 2],
+      }
+    })
+    await page.mouse.click(lead.home[0], lead.home[1])
+    await page.locator(`button[aria-label="${en.options}"]`).click()
+    const last = await page.evaluate(
+      () =>
+        document.getElementById('pop-options')?.lastElementChild?.querySelector('[data-host]')?.dataset.host ?? null,
+    )
+    await page.locator('[data-host="ui"]').click()
+    await waitFor(page, (w) => !!document.querySelector(`button[aria-label="${w}"]`), zh.options).catch(() => {})
+    const after = await page.evaluate((w) => {
+      const pop = document.getElementById('pop-options')
+      return {
+        bar: !!document.querySelector(`button[aria-label="${w.options}"]`),
+        dim: [...(pop?.querySelectorAll('[role="switch"]') ?? [])]
+          .map((x) => x.getAttribute('aria-label'))
+          .includes(w.dim),
+        clicked: window.__c.clicked,
+        writes: window.__c.writes,
+      }
+    }, zh)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      JSON.stringify(lead.children) === JSON.stringify(['home', en.contents, 'title', 'short']) && lead.short,
+      `the lead ${JSON.stringify(lead)}`,
+    )
+    assert(last === 'ui', `the reading options' last row ${last}`)
+    assert(after.bar && after.dim, `the chrome after the pick: ${JSON.stringify(after)}`)
+    assert(JSON.stringify(after.clicked) === JSON.stringify(['home', 'ui:zh-CN']), `clicked ${after.clicked}`)
+    assert(
+      after.writes.some((w) => w.ui === 'zh-CN'),
+      `the reader wrote ${JSON.stringify(after.writes)}`,
+    )
+    return { lead: lead.children, last, clicked: after.clicked }
   },
 )
 await check(

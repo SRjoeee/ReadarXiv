@@ -162,6 +162,27 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
   })
 
+  it("draws the host's own in the lead: first (the website's way home), and right after the title (its short link to arXiv)", async () => {
+    const slot = (at: string) => createElement('a', { 'data-slot': at, href: '#' }, at)
+    const { container } = await mount(
+      { paper: { id: '2401.00001v2', title: 'A paper' } },
+      { lead: slot('lead'), afterTitle: slot('after-title') },
+    )
+    const lead = container.querySelector('[data-zone="lead"]')!
+    const order = [...lead.children].map(
+      (el) => el.getAttribute('data-slot') ?? (el.matches('.paper-title') ? 'title' : nameOf(el)),
+    )
+    expect(order.filter((w) => w !== null && w !== R.contents)).toEqual(['lead', 'title', 'after-title'])
+    expect(order.indexOf('lead')).toBe(0)
+    expect(nameOf(lead.children[1]!)).toBe(R.contents)
+    // (the title's next sibling: a host's sheet shows its short link by `.paper-title + …`)
+    expect(lead.querySelector('.paper-title + [data-slot="after-title"]')).not.toBeNull()
+    // none: the lead is the chrome's alone, the contents' button first
+    const { container: bare } = await mount()
+    expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
+    expect(nameOf(bare.querySelector('[data-zone="lead"]')!.firstElementChild!)).toBe(R.contents)
+  })
+
   it('says whether the contents are open, and which region they are, as a disclosure does (the interface review)', async () => {
     const { container } = await mount()
     const toggle = button(container, '目录')
