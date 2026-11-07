@@ -127,7 +127,7 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
       // (I3 reads ink, design §4.9: the line to its last glyph's ink, not its advance, so that a CJK mark's blank half (a run-in
-      // head's "。", its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
+      // head's ideographic full stop, its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
       boxes.push({
         ord: pm.ord,
         x0: l.x0,
