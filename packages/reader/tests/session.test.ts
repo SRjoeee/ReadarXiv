@@ -3,7 +3,7 @@
 // through the runtime with recording handlers. Stage 5a's part B adds today's pacing of our server (PDF-READER §11.10, UI.md
 // S-R-24, S-R-26), the holds of the original, the paper's title and HTML version, and the heads that cannot be used.
 import type { Head } from '@readarxiv/format'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULTS } from '../src/prefs.ts'
 import {
   type Doc,
@@ -769,6 +769,108 @@ describe("the session's runtime", () => {
     await rt.dispose()
     expect(rt.live.size).toBe(0)
     expect(r.log).toContain(`released ${rows}`)
+  })
+  it("acquires a replacement once the outgoing resource of its slot has been released, never while its release is under way (a PDF.js role's worker goes only after its document's destroy)", async () => {
+    // the original's and the composed document's releases are slow, as a PDF.js document's destroy() is: each held until let go
+    const log: string[] = []
+    const emits = new Map<Ticket, (x: Input) => void>()
+    const slow = new Map<Ticket, () => void>()
+    const handler = (slot: string) => (_spec: unknown, t: Ticket, emit: (x: Input) => void, signal: AbortSignal) => {
+      log.push(`+${t}`)
+      emits.set(t, emit)
+      signal.addEventListener('abort', () => log.push(`-${t}`))
+      if (slot !== 'original' && slot !== 'composed') return () => {}
+      return () =>
+        new Promise<void>((done) =>
+          slow.set(t, () => {
+            log.push(`released ${t}`)
+            done()
+          }),
+        )
+    }
+    const handlers = Object.fromEntries(
+      ['original', 'link', 'open', 'code', 'composed', 'rows', 'html', 'timer'].map((s) => [s, handler(s)]),
+    ) as unknown as Handlers
+    const rt = createRuntime({ state: start(), handlers, effect() {}, crash() {}, check: true, now: () => 0 })
+    const get = (slot: string) => [...rt.live].find(([, s]) => s === slot)?.[0] as Ticket
+    const original = get('original'),
+      link = get('link')
+    emits.get(original)?.({ i: 'original.opened', t: original, pages: 4, bytes: 9 })
+    rt.input({ i: 'panes.drawn' })
+    emits.get(link)?.({ i: 'paper', t: link, doc: ready(1) })
+    const code = get('code')
+    emits.get(code)?.({ i: 'code.loaded', t: code })
+    rt.input({ i: 'head', digest: CATALOG.sha256, head: HEAD })
+    const composed = get('composed')
+    // a newer catalog: its composed document's ticket live at once (I1), its acquisition held until the outgoing one is released
+    emits.get(link)?.({ i: 'paper', t: link, doc: ready(2, ref('c')) })
+    rt.input({ i: 'head', digest: ref('c').sha256, head: HEAD })
+    const newer = get('composed')
+    expect(newer).not.toBe(composed)
+    expect(log).toContain(`-${composed}`)
+    await Promise.resolve()
+    expect(log).not.toContain(`+${newer}`)
+    slow.get(composed)?.()
+    await vi.waitFor(() => expect(log).toContain(`+${newer}`))
+    expect(log.indexOf(`released ${composed}`)).toBeLessThan(log.indexOf(`+${newer}`))
+    // the original's the same: a mismatch opens our copy once the tab's document is released (the composed document let go
+    // first, a dependent)
+    rt.input({ i: 'original.mismatch', t: original })
+    const ours = get('original')
+    expect(ours).not.toBe(original)
+    await Promise.resolve()
+    expect(log).not.toContain(`+${ours}`)
+    slow.get(original)?.()
+    await vi.waitFor(() => expect(log).toContain(`+${ours}`))
+    expect(log.indexOf(`released ${original}`)).toBeLessThan(log.indexOf(`+${ours}`))
+    // (the newer composed document released by the mismatch, then a close while nothing waits: everything drained)
+    slow.get(newer)?.()
+    const closing = rt.dispose()
+    slow.get(ours)?.()
+    await closing
+    expect(rt.live.size).toBe(0)
+  })
+  it('a replacement let go while it waits is never acquired, and the next still waits for the outgoing release', async () => {
+    const log: string[] = []
+    const emits = new Map<Ticket, (x: Input) => void>()
+    const slow = new Map<Ticket, () => void>()
+    const handler = (slot: string) => (_spec: unknown, t: Ticket, emit: (x: Input) => void, signal: AbortSignal) => {
+      log.push(`+${t}`)
+      emits.set(t, emit)
+      signal.addEventListener('abort', () => log.push(`-${t}`))
+      if (slot !== 'original') return () => {}
+      return () =>
+        new Promise<void>((done) =>
+          slow.set(t, () => {
+            log.push(`released ${t}`)
+            done()
+          }),
+        )
+    }
+    const handlers = Object.fromEntries(
+      ['original', 'link', 'open', 'code', 'composed', 'rows', 'html', 'timer'].map((s) => [s, handler(s)]),
+    ) as unknown as Handlers
+    const rt = createRuntime({ state: start(), handlers, effect() {}, crash() {}, check: true, now: () => 0 })
+    const get = (slot: string) => [...rt.live].find(([, s]) => s === slot)?.[0] as Ticket
+    const first = get('original')
+    rt.input({ i: 'original.mismatch', t: first })
+    const waiting = get('original')
+    // the replacement fails before it was acquired (its ticket live, its input taken), and a retry mints another
+    rt.input({ i: 'original.failed', t: waiting, why: 'unreadable' })
+    rt.input({ i: 'cmd.retry' })
+    const third = get('original')
+    expect(third).not.toBe(waiting)
+    await Promise.resolve()
+    expect(log).not.toContain(`+${waiting}`)
+    expect(log).not.toContain(`+${third}`)
+    slow.get(first)?.()
+    await vi.waitFor(() => expect(log).toContain(`+${third}`))
+    expect(log).not.toContain(`+${waiting}`)
+    expect(slow.has(waiting)).toBe(false)
+    const closing = rt.dispose()
+    slow.get(third)?.()
+    await closing
+    expect(rt.live.size).toBe(0)
   })
   it('two sessions on one page never move each other', () => {
     const a = recording(),
