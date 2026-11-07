@@ -772,7 +772,7 @@ const SPECS: readonly RuleSpec[] = [
     how: 'ported',
     ruling: '2026-10-09 one page size',
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
-    file: 'shared/fill-page.mjs',
+    file: 'shared/fill-page.ts',
     state: {
       is: 'ported',
       replay:

@@ -4,7 +4,7 @@
 // pass); the table groups settled (L11, S.table.settle: a group on two pages or with a cell unfit is withheld whole); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
-import type { PageRules } from '../shared/fill-page.types.ts'
+import type { PageRules } from '../shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
 import type { FillTarget } from '../shared/fill-target.ts'
 import { tableSettle } from '../shared/table-settle.ts'
