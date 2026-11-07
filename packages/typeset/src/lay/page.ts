@@ -66,10 +66,15 @@ export function layPagePrepared(
     for (const o of laid) if ((fitOf.get(o) as number) > least + 0.005) cap.set(o, Math.min(cap.get(o) ?? least, least))
   }
   if (!cap.size) return first
+  // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
+  // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not)
+  const floor = Number((R as unknown as { floor?: number }).floor ?? 0)
   const capped = flows.map((f) =>
     f.map((m) => {
       const c = cap.get(m.ord)
-      return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, c / m.s) } }
+      return c === undefined
+        ? m
+        : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, Math.max(c / m.s, floor)) } }
     }),
   )
   return layPageTied(page, capped, cells, R, trace)

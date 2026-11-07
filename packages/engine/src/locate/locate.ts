@@ -900,12 +900,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const insert = (x: Member) => ownBox(x) || x.kind === 'caption' || x.kind === 'footnote'
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
-  // (the units of one paragraph of TeX's: a member of the body and the one of the body before it, the inserts between passed
-  // over, with no paragraph end of B's between them where the instrument states them: a paragraph the front end cut at a float
-  // set inside it, each part fitted alone, the one at its size, the other shrunk (2608.16117v1 p19, the checkpoint's free-9).
-  // They are laid at one size, the paragraph's (a size tie))
-  const paraOf = new Map<number, number[]>()
-  const paragraphs: number[][] = []
   let body: number | null = null
   for (let q = 0; q < members.length; q++) {
     const mem = members[q]!
@@ -948,32 +942,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (
-      ends.length &&
-      prev &&
-      !insert(mem) &&
-      !insert(prev) &&
-      prev.located &&
-      mem.located &&
-      prev.unit >= 0 &&
-      mem.unit >= 0 &&
-      prev.bLast >= 0 &&
-      mem.bFirst > prev.bLast &&
-      !endsBetween(prev.bLast, mem.bFirst)
-    ) {
-      let para = paraOf.get(prev.ord)
-      if (!para) {
-        para = [prev.ord]
-        paragraphs.push(para)
-        paraOf.set(prev.ord, para)
-      }
-      para.push(mem.ord)
-      paraOf.set(mem.ord, para)
-    }
     if (!insert(mem)) body = q
   }
 
-  // ---- ties: a table's cells, laid together; a figure's set, at one size; a paragraph's units, at one size
+  // ---- ties: a table's cells, laid together; a figure's set, at one size; a flow's members, at one size
   const ties: Located['ties'] = []
   {
     const tables = new Map<number, Map<number, number[]>>()
@@ -1003,7 +975,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         ...(heads.has(t) ? { head: 1 as const } : {}),
       })
     for (const ords of sets.values()) if (ords.length > 1) ties.push({ rule: 'size', ords })
-    for (const ords of paragraphs) ties.push({ rule: 'size', ords })
+    // (the members of one flow: one paragraph of TeX's, a member's first line the one before's last, on its baseline after its
+    // end, no paragraph end between them — a paragraph the front end cut at a float set inside it (2608.16117v1 p19, the
+    // checkpoint's free-9: one part laid at its size, the other shrunk), a run-in head and its paragraph — laid at one size)
+    for (const ords of flows) if (ords.length > 1) ties.push({ rule: 'size', ords: [...ords] })
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the

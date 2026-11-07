@@ -287,26 +287,33 @@ describe('locate: the room under a unit', () => {
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
   })
-  it("ties at one size the units of one TeX paragraph a float cut in two (the checkpoint's free-9)", () => {
-    // (2608.16117v1 p19: "… 8(d)). The increasing-" [a figure] "decreasing trend …", one paragraph of TeX's the front end cut
-    // at the figure into two units, each fitted alone: the one at its size, the other shrunk; one size for both, the maintainer's
-    // ruling: the text of one paragraph is to be even. The paragraph after them, past a paragraph end, is none of theirs)
-    const B = docOf([{ lines: ['first part of it', 'Figure 1: a caption', 'second part here', 'Next paragraph'] }])
+  it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
+    // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
+    // paragraph of TeX's the front end cut at the figure into two units, each fitted alone, the one at its size, the other shrunk;
+    // one size for both. A paragraph end between them, or no row shared: no tie)
     const units = [
       unitOf('para', 'first part of it'),
       unitOf('caption', 'Figure 1: a caption'),
       unitOf('para', 'second part here'),
-      unitOf('para', 'Next paragraph'),
     ]
-    const ins = instrumentOf(B, units, [[0, 1, 2, 3]])
-    const ends = (at: number[]) => ({ ...ins, tex: { paragraphEnds: [at] } })
-    const n = (k: number) => B.pages[0]!.glyphs.filter((g) => g.n < k).length
-    const sizeTies = (I: Instrument) => locate(I, B, align(B, B)).ties.filter((t) => t.rule === 'size')
+    const sizeTies = (second: { x: number; y: number }, ends: (n: (k: number) => number) => number[]) => {
+      const B = docOf([
+        {
+          lines: [
+            { text: 'first part of it', y: 700 },
+            { text: 'Figure 1: a caption', y: 650 },
+            { text: 'second part here', ...second },
+          ],
+        },
+      ])
+      const n = (k: number) => B.pages[0]!.glyphs.filter((g) => g.n < k).length
+      const ins = { ...instrumentOf(B, units, [[0, 1, 2]]), tex: { paragraphEnds: [ends(n)] } }
+      return locate(ins, B, align(B, B)).ties.filter((t) => t.rule === 'size')
+    }
     // (the caption's own paragraph ends inside it, the second part's at its end)
-    expect(sizeTies(ends([n(2), n(3)]))).toEqual([{ rule: 'size', ords: [0, 2] }])
-    // (a paragraph end between the two parts: two paragraphs, no tie; none stated: nothing told, no tie)
-    expect(sizeTies(ends([n(1), n(2), n(3)]))).toEqual([])
-    expect(sizeTies(ins)).toEqual([])
+    expect(sizeTies({ x: 172, y: 700 }, (n) => [n(2), n(3)])).toEqual([{ rule: 'size', ords: [0, 2] }])
+    expect(sizeTies({ x: 172, y: 700 }, (n) => [n(1), n(2), n(3)])).toEqual([])
+    expect(sizeTies({ x: 72, y: 638 }, (n) => [n(2), n(3)])).toEqual([])
   })
   it("holds the glyphs an element of no piece and a label cut from the text by them as A's ink, not the unit's text", () => {
     // (2610.37818v1 p14, the checkpoint's measure-4: the instrument gave sub-caption (b)'s unit the glyphs of sub-caption (a), which

@@ -4,7 +4,8 @@
 // (waitOf: rows not in while more may come, before any work), each member's reading and tokens (read.ts readMember over the row's
 // pieces made from the member's stated facts, rowPieces: no Units object), its faces (B.cover: a face not loaded is waited for, a
 // character no served face holds leaves it `served`), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
-// rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own), and the members as drawn
+// rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells laid
+// whole or not at all, a size tie's members at one size), and the members as drawn
 // (D.display). What it does not compose yet, each said where it is decided: a babel name's and a figure text's members (S.names,
 // S.figures: their members stay the original's, `name` / `kind`), the sentences' boxes (Laid.lit: empty), the page's links
 // (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
