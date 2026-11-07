@@ -1051,7 +1051,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
-      sameColumn(a[1], b[1]) &&
+      (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
       !ownBox(prev) &&
@@ -1290,10 +1290,11 @@ export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
   return out
 }
 
-/** whether two lines stand in one column as columnsAndMeasures reads them: the same, or either over both (2). One rule for a
- *  name that leads a unit and for members that share a TeX line (a run-in head and its paragraph): on a one-column page that
- *  reads as two (a table's cells on both halves, 1706.03762v7 p10), a run-in head's line keeps to the left half and its
- *  paragraph's first line, after it on its row, spans both */
+/** whether a run-in lead's line and the line TeX set after it stand in one column as columnsAndMeasures reads them: the same,
+ *  or either over both (2). One rule for a name that leads a unit and a run-in head before its paragraph: on a one-column page
+ *  that reads as two (a table's cells on both halves, 1706.03762v7 p10), the head's line keeps to the left half and its
+ *  paragraph's first line, after it on its row, spans both. Members a tabular row sets side by side (an author block's names,
+ *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
 const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line

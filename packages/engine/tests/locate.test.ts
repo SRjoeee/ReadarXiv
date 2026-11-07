@@ -140,6 +140,27 @@ describe('locate', () => {
     expect(L.flows[0]).toEqual([0, 1])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(214 - (108 + 16 * 6), 5)
   })
+  it('keeps apart two members a tabular row sets side by side, one of them over the page middle (1706.03762v7 p1)', () => {
+    // (the author block's three columns of names on one baseline, the middle one over the page's middle: no run-in head, two
+    // boxes TeX set in one row, each its own flow)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [{ text: 'Ashish Vaswani', x: 120, y: 700 }, { text: 'Noam Shazeer', x: 280, y: 700 }, ...cells],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Ashish Vaswani'),
+      unitOf('author', 'Noam Shazeer'),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 1, ...cells.map((_, k) => 2 + k)]]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
