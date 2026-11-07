@@ -6,6 +6,8 @@
 //
 // - a crop's text is the original's text under its source, moved to where the crop is drawn (a formula's text where its ink is
 //   drawn); a crop with none under it carries its own plain text;
+// - a run laid along a direction (a figure text the original sets turned) is placed turned, its matrix its direction, where it
+//   is drawn (the original's own turned text stays out of the layer, as today's);
 // - a kept item the stream sets between two of one member's dropped items (a display the unit keeps, a float set inside its
 //   run) goes inside the member's block, before the first of its lines below it or on its line to its right;
 // - between two sources a copy breaks the line where they stand on two lines and gets a space where they stand apart on one;
@@ -233,10 +235,22 @@ export function laidText(
         const font = `axt-${face ?? 'crop'}`
         styles[font] ??= { fontFamily: family, ascent: 0.8, descent: -0.2, vertical: false }
         const width = 'src' in it ? (it.src[3] - it.src[1]) * it.k : measure(it.s, family, size)
+        // (a run set along a direction, a figure text the original sets turned: its matrix turned with it, at its place along its
+        // line from the line's origin, so that PDF.js's layer turns its span as it is drawn, selected and copied there)
+        const dir = 'dir' in it ? it.dir : undefined
         const t: TextItem = {
           str: it.s,
           dir: 'ltr',
-          transform: [size, 0, 0, size, it.x, y],
+          transform: dir
+            ? [
+                size * dir[0],
+                size * dir[1],
+                -size * dir[1],
+                size * dir[0],
+                x0 + (it.x - x0) * dir[0],
+                y + (it.x - x0) * dir[1],
+              ]
+            : [size, 0, 0, size, it.x, y],
           width,
           height: size,
           fontName: font,

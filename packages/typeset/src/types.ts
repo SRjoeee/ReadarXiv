@@ -128,6 +128,10 @@ export type Item =
       /** a superscript's raise over the line's baseline, PDF units (a footnote's mark, a symbol drawn raised: 0.36 of the line's
        *  size, today's svgOfUnit); the page's drawing sets the run that much higher (the checkpoint's (10): drawn on the baseline) */
       rise?: number
+      /** a run set along a direction (a figure text the original sets turned: Placed.dir, a unit vector, the page's y up): its
+       *  line's baseline runs from (x0, y) along it, and `x` (and `dx`) is its place along it from x0 (x − x0 its distance from
+       *  the line's start); drawn turned, its characters along it, a raise across it */
+      dir?: [ux: number, uy: number]
     }
   | { s: string; x: number; src: Ink; k: number; piece: string }
 
@@ -139,7 +143,8 @@ export type Laid = {
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
   fit?: { size: number; lead: number; track: number; borrowed: number }
-  /** its laid lines on this page, baseline first */
+  /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
+   *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
   /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes */
   lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][] }

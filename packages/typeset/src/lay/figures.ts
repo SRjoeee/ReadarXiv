@@ -4,10 +4,12 @@
 // facts are the part's, as the prepare states them from today's figure reading (layout/figure-text.mjs): its line (its box
 // along its run and its baseline), its anchor (Placed.align: l start, c centre, r end), its room before and after its box
 // (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant), its own text
-// (Placed.plain), its set (Tie size). A figure text drawn is one laid line of its runs, its text group off. What is not drawn
-// stays the original's: a turned one (`kind`: design-a's Item has no turn, a contract for lane L4), one a part made before
-// the prepare stated its anchor (`kind`, align 'j'), its row none or failed (`none`, the row's why), the same as its source
-// (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`).
+// (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along x, from its run's
+// origin and length (Placed.run: its line is its box on the page) and its room along it (Room.side, a point P at P·dir), and
+// drawn at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs,
+// its text group off. What is not drawn stays the original's: a turned one a part made before the prepare stated its run
+// (`kind`), one a part made before the prepare stated its anchor (`kind`, align 'j'), its row none or failed (`none`, the
+// row's why), the same as its source (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`).
 import type { Part, Placed } from '@readarxiv/format'
 import { faceOf } from '../breaker/faces.ts'
 import { fontString } from '../breaker/measure.ts'
@@ -58,30 +60,42 @@ export function figuresOf(
     const l = m.lines[0]
     if (!l || l[0] !== page) continue
     if (m.why) why.set(m.ord, m.why)
-    else if (m.dir || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
+    else if ((m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
     else {
       const size = m.style.size
       const side = m.room.side
       byOrd.set(m.ord, m)
+      // (its run: a level one's its line (its ink along x, its baseline); a turned one's as the part states it, its band across
+      // it the extent of its box on A about its origin)
+      const [ux, uy] = m.dir ?? [1, 0]
+      const [x, y, length] = m.dir && m.run ? m.run : [l[2], l[4], l[3] - l[2]]
+      // (where its box starts and ends along its run, a point P at P·dir, as its room is stated)
+      const at = m.dir ? x * ux + y * uy : l[2]
+      const end = m.dir ? at + length : l[3]
+      // (its band across its run: a level one's its line's top and bottom about its baseline; a turned one's its box's corners
+      // about its origin, across its direction)
+      const across = m.dir
+        ? [l[2], l[3]].flatMap((px) => [l[5], l[6]].map((py) => -(px - x) * uy + (py - y) * ux))
+        : null
       rowsOf.push({
         id: m.ord,
         group: `f${m.ord}`,
         page,
-        x: l[2],
-        y: l[4],
-        ux: 1,
-        uy: 0,
-        length: l[3] - l[2],
+        x,
+        y,
+        ux,
+        uy,
+        length,
         size,
-        ascent: (l[5] - l[4]) / size,
-        descent: (l[4] - l[6]) / size,
+        ascent: (across ? Math.max(...across) : l[5] - l[4]) / size,
+        descent: (across ? -Math.min(...across) : l[4] - l[6]) / size,
         anchor: ANCHOR[m.align as keyof typeof ANCHOR],
         fill: m.style.fill ?? -1,
         font: m.style.design ?? '',
         cls: { fam: m.style.role, bold: !!m.style.bold, italic: !!m.style.slant },
         set: setOf.get(m.ord) ?? `f${m.ord}`,
-        before: side ? l[2] - side[0] : 0,
-        after: side ? side[1] - l[3] : 0,
+        before: side ? at - side[0] : 0,
+        after: side ? side[1] - end : 0,
         under: m.room.under ?? null,
       })
     }
@@ -116,10 +130,20 @@ export function figuresOf(
       )
       continue
     }
+    // (its runs one after another along its line from its origin, a turned one's places along its run from x0)
+    const m = byOrd.get(f.id)!
+    const turn = m.dir ? { dir: m.dir } : {}
     const items: TextItem[] = []
     let x = f.x!
     for (const r of f.runs!) {
-      items.push({ s: r.s, x, face: fontString(r.face, 100), size: f.size!, ...(f.fill ? { fill: f.fill } : {}) })
+      items.push({
+        s: r.s,
+        x,
+        face: fontString(r.face, 100),
+        size: f.size!,
+        ...(f.fill ? { fill: f.fill } : {}),
+        ...turn,
+      })
       x += (w100(r.s, r.face) / 100) * f.size!
     }
     laid.set(f.id, [[f.y!, f.x!, x, items]])

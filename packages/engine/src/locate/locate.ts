@@ -69,6 +69,9 @@ export interface Member {
   pages: number[]
   join?: [number] | [number, 1]
   dir?: [number, number]
+  /** a figure text set turned (`dir`): its run, its first glyph's origin and its box's length along `dir` (Placed.run; its line is
+   *  its box on the page), as today's figure reading tells it */
+  run?: [x: number, y: number, length: number]
   /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
   plain?: string
   /** a babel name TeX set right before a unit on that unit's first line (amsthm's "Proof.", IEEEtran's "Abstract—"): the ord of

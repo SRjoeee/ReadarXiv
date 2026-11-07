@@ -1,5 +1,6 @@
 // A laid page painted over its page view (design §4.5 "Painting"): the SVG painter, today's look (layer2.mjs svgOfUnit: a
-// <text> a line at its baseline, a <tspan> a run of one face at its own place, an oblique run skewed about its baseline), drawn
+// <text> a line at its baseline, a <tspan> a run of one face at its own place, an oblique run skewed about its baseline, a line
+// set turned turned about its origin as svgOfFigure turns a figure's text), drawn
 // from `Page` alone; and the crops, each element's (or label's) own ink cut from the page's crop render and drawn where its item
 // stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4).
 //
@@ -52,31 +53,47 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
     if (m.state !== 'laid' || !m.lines.length) continue
     const g = document.createElementNS(SVG, 'g')
     g.dataset.axtOrd = String(m.ord)
-    for (const [y, , , items] of m.lines) {
+    for (const [y, x0, , items] of m.lines) {
       let text: SVGTextElement | null = null
+      let frame = ''
       for (const it of items) {
         if (isCrop(it)) continue
+        // (a run set along a direction, a figure text the original sets turned: its line's <text> turned about the line's origin,
+        // as today's svgOfFigure turns it, the SVG's y down; the run at its place along it, its raise across it)
+        const turn = it.dir
+          ? `translate(${X(x0)} ${Y(y)}) rotate(${n2((-Math.atan2(it.dir[1], it.dir[0]) * 180) / Math.PI)})`
+          : ''
         const span = document.createElementNS(SVG, 'tspan')
         span.setAttribute('class', faces.classOf(it.face))
-        span.setAttribute('x', it.dx?.length ? it.dx.map((d) => X(it.x + d)).join(' ') : String(X(it.x)))
-        // (a superscript's raise over the line's baseline: the typesetter's Item.rise)
-        span.setAttribute('y', String(Y(y + (it.rise ?? 0))))
+        if (turn) {
+          span.setAttribute('x', it.dx?.length ? it.dx.map((d) => n2(it.x + d - x0)).join(' ') : String(n2(it.x - x0)))
+          span.setAttribute('y', String(n2(-(it.rise ?? 0))))
+        } else {
+          span.setAttribute('x', it.dx?.length ? it.dx.map((d) => X(it.x + d)).join(' ') : String(X(it.x)))
+          // (a superscript's raise over the line's baseline: the typesetter's Item.rise)
+          span.setAttribute('y', String(Y(y + (it.rise ?? 0))))
+        }
         span.setAttribute('font-size', String(n2(it.size)))
         if (it.fill !== undefined) span.setAttribute('fill', `#${it.fill.toString(16).padStart(6, '0')}`)
         span.textContent = it.s
         if (it.skew) {
           const t = document.createElementNS(SVG, 'text')
+          const at = turn ? n2(it.x - x0) : 0
           t.setAttribute(
             'transform',
-            `translate(${X(it.x)} ${Y(y)}) skewX(${-OBLIQUE_DEG}) translate(${-X(it.x)} ${-Y(y)})`,
+            turn
+              ? `${turn} translate(${at} 0) skewX(${-OBLIQUE_DEG}) translate(${-at} 0)`
+              : `translate(${X(it.x)} ${Y(y)}) skewX(${-OBLIQUE_DEG}) translate(${-X(it.x)} ${-Y(y)})`,
           )
           t.append(span)
           g.append(t)
           text = null
           continue
         }
-        if (!text) {
+        if (!text || frame !== turn) {
           text = document.createElementNS(SVG, 'text')
+          if (turn) text.setAttribute('transform', turn)
+          frame = turn
           g.append(text)
         }
         text.append(span)

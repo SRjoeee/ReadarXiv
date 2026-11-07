@@ -169,8 +169,9 @@ export const Label = z.object({
   punct: z.tuple([z.string(), Ink]).optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a figure text's: the free line
- *  along its run today's figure reading gives it), a cell's clear band; `under` a figure text's depth under its baseline of the
- *  nearest stroke under its text (S.figures: a translation that reaches it is crowded) */
+ *  along its run today's figure reading gives it, a point P at P·dir, along a level run its x), a cell's clear band; `under` a
+ *  figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
+ *  crowded) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -205,7 +206,10 @@ export const Placed = z.object({
   cuts: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
   plain: z.string().optional(),
+  // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
+  // origin and its box's length along `dir` (its lines are its box on the page, which tells neither; Room.side along it)
   dir: z.tuple([num, num]).optional(),
+  run: z.tuple([num, num, num]).optional(),
   // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),
