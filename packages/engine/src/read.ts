@@ -13,7 +13,7 @@
 // only opened with fontExtraProperties) and a glyph whose Unicode no character of that map gives, or one no Unicode stands for
 // (private use, a replacement character, a control), is `nu`: its text is no reading of its glyph (2307.16209v1's newtx sum
 // sign, which PDF.js reads by its code as "Í"). The glyph's state rides through pageInk on the same tag.
-import type { Doc, DocGlyph, DocPage, DocTurned } from './doc.ts'
+import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
@@ -50,6 +50,8 @@ export interface ReadOptions<X> {
   options?: Record<string, unknown>
   /** pageInk's `turned` (the figures' reading) */
   turned?: boolean
+  /** with `turned`: every painted path's lines kept (pageInk's `shapesAll`): arXiv's page, whose figures its own points do not tell */
+  shapesAll?: boolean
   /** made of each page's operator list before pageInk reads it (the wrap's alignment facts) */
   extra?: (OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }) => X
   /** read each page's annotations too (A's links) */
@@ -117,6 +119,7 @@ export async function readPdf<X = never>(
         rotate: page.rotate ?? 0,
         indices: true,
         turned: o.turned ?? false,
+        shapesAll: o.shapesAll ?? false,
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
       })
@@ -236,6 +239,7 @@ function docPageOf(
       n: t.n,
       k: t.k,
       at: t.at,
+      box: t.box,
       ox: t.ox,
       oy: t.oy,
       ex: t.ex,
@@ -261,9 +265,25 @@ function docPageOf(
           glyph: x.glyph,
           box: x.box,
         })),
+    ...(unread ? {} : marksOf(ink)),
     view,
     rotate,
     unread,
   }
   return { page, raw: unread ? null : ink }
+}
+
+/** the page's points pageInk keeps apart (DocMarks), where it has any: none on a page no marked compile set (arXiv's) */
+function marksOf(ink: PageInk): { marks?: DocMarks } {
+  const lower = (x: { name: string; glyph: number; box: number }) => ({
+    name: /[A-Z]/.test(x.name) ? x.name.toLowerCase() : x.name,
+    glyph: x.glyph,
+    box: x.box,
+  })
+  const paras = (ink.paras ?? []).map(lower)
+  const paraEnds = (ink.paraEnds ?? []).map((x) => ({ ...lower(x), point: x.point, para: x.para }))
+  const regions = (ink.regions ?? []).map((r) => ({ kind: r.kind, from: r.from, to: r.to }))
+  const pictures = (ink.pictures ?? []).map(lower)
+  if (!paras.length && !paraEnds.length && !regions.length && !pictures.length) return {}
+  return { marks: { paras, paraEnds, regions, pictures } }
 }

@@ -2,20 +2,18 @@
 // marks and compile outputs to the prepare's seam, the Instrument (packages/engine/src/instrument.ts). The only code that knows
 // today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
-// reads), each glyph's and rule's owner by today's ownership (own.mjs by the marks' points, figure-text.mjs's figure units,
-// the ledger's ink units and kept blocks, ink-units.mjs), and TeX's statements in the marked compile's log (the units'
-// alignments, \lineskip). It writes nothing and wraps nothing: the back half carries the ownership onto arXiv's page.
+// reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
+// statements in the marked compile's log (the units' alignments, \lineskip). It writes nothing and wraps nothing: the back half
+// carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (today's
+// ledger, ink-units.mjs, figure-text.mjs) are made by the back half's locate on arXiv's page, of the glyphs no source unit owns
+// there (packages/engine/src/locate/ink.ts), from B's marks the Doc carries (its points and DocPage.marks).
 //
 // The units, in today's bundle's order, so that a unit's index is today's id: the paper's source units, its names (cleveref's
-// and the counters' words, kind `name`), the ink units and the kept blocks (their ids from the bundle's length on), the
-// figure units; then one unit for each babel name's key that occurs (kind `name`, `name` its key: drawn in the target's word,
-// never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
+// and the counters' words, kind `name`); then one unit for each babel name's key that occurs (kind `name`, `name` its key:
+// drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { figureUnitsOf } from '../layout/figure-text.mjs'
-import { claimInk, inkUnitsOf, keptUnitsOf } from '../layout/ink-units.mjs'
-import { ledgerOf } from '../layout/ledger.mjs'
 import { classOf, followsOf, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
@@ -299,13 +297,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
-  const fig = figureUnitsOf(pages, own)
-  const withFigures = all => own.glyphs.map((row, i) => { const m = fig.glyphs[i]; if (!m?.size) return row; const out = Array.from(row); for (const [g, k] of m) if (all || !fig.units[k].why) out[g] = fig.units[k].group; return out })
-  const withLeads = rows => rows.map((row, i) => { const m = own.leads?.[i]; if (!m?.size) return row; const out = Array.from(row); for (const [g, group] of m) out[g] ??= group; return out })
-  const classed = ledgerOf(pages, { ...own, glyphs: withLeads(withFigures(true)) }, { units })
-  const ink = inkUnitsOf(pages, classed, { units, from: inkBase })
-  claimInk(own, ink, pages)
-  const kept = keptUnitsOf(pages, classed, (p, g) => own.glyphs[p - 1]?.[g] ?? (fig.glyphs[p - 1]?.has(g) ? 'f' : null) ?? own.leads?.[p - 1]?.get(g) ?? null, { from: inkBase + ink.length })
 
   // ---- the units
   const align = new Map(readAlign(log))
@@ -327,21 +318,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
     out.push({ id: unitId(bundle[i][0], content), kind: bundle[i][0], content })
   }
-  for (const u of [...ink, ...kept]) {
-    const content = contentOf(u.pieces ?? [], { kindOf })
-    const classes = classesOf(u.pieces ?? []), spans = spansOf(u.pieces ?? [])
-    out.push({ id: unitId(u.kind, content), kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(u.kept ? { kept: true, fixed: true } : {}), ...(Number.isInteger(u.echo) ? { echo: u.echo } : {}) })
-  }
-  const figBase = out.length
-  // (the figure units in today's bundle's order: those it draws first, in their order, then those whose ink stays, crowded or
-  // without a Unicode a reader can trust, as the bundle lists the units it does not hold after the ones it does)
-  const figOrder = [...fig.units.keys()].sort((a, b) => (fig.units[a].why ? 1 : 0) - (fig.units[b].why ? 1 : 0) || a - b)
-  const figAt = new Map(figOrder.map((k, q) => [k, figBase + q]))
-  figOrder.map(k => fig.units[k]).forEach(f => {
-    const content = [{ t: 'text', s: f.text ?? '' }]
-    const dir = Math.abs((f.ux ?? 1) - 1) > 1e-6 || Math.abs(f.uy ?? 0) > 1e-6 ? [Math.round((f.ux ?? 1) * 1e4) / 1e4, Math.round((f.uy ?? 0) * 1e4) / 1e4] : undefined
-    out.push({ id: unitId('inkfigures', content), kind: 'inkfigures', content, figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}) }, ...(f.why ? { why: `figure: ${f.why}`, fixed: true } : {}) })
-  })
   // a babel name's every key that occurs: a unit whose occurrences are its own (drawn in the target's word)
   const keyUnit = new Map()
   const keyOf = new Map()
@@ -350,7 +326,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
 
   // ---- the owners of B's glyphs and boxes
   const glyphs = [], boxes = [], turnedOwners = []
-  const kept0 = inkBase + ink.length
   pages.forEach((pg, i) => {
     const G = ownersOf(pg.glyphs.length), X = ownersOf(pg.boxes.length / 4)
     const row = own.glyphs[i] ?? [], brow = own.boxes[i] ?? []
@@ -364,22 +339,10 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     }
     for (let j = 0; j < pg.glyphs.length; j++) set(G, j, row[j], pieceG)
     for (let j = 0; j < pg.boxes.length / 4; j++) set(X, j, brow[j], pieceX)
-    // an ink unit's `.p` glyphs: its pieces' elements in their order (no points of its own)
-    for (const [g, k] of fig.glyphs[i] ?? []) { if (G.unit[g] < 0) { G.unit[g] = figAt.get(k); G.role[g] = ROLE.text } }
     glyphs.push(G)
     boxes.push(X)
-    // (a figure unit's turned glyphs: a y-axis title)
-    const T = ownersOf(pg.turned?.length ?? 0)
-    for (const [j, k] of fig.turned[i] ?? []) { T.unit[j] = figAt.get(k); T.role[j] = ROLE.text }
-    turnedOwners.push(T)
-  })
-  // (the kept blocks' glyphs, which no group holds: their units' own, fixed)
-  kept.forEach((u, q) => { for (const [p, g] of u.glyphs?.text ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] < 0) { G.unit[g] = kept0 + q; G.role[g] = ROLE.text } } })
-  // (an ink unit's placeholder glyphs: its first element's, there being no points to tell them apart)
-  ink.forEach(u => {
-    const el = (u.pieces ?? []).findIndex(p => p.t === 'ph')
-    if (el < 0) return
-    for (const [p, g] of u.glyphs?.ph ?? []) { const G = glyphs[p - 1]; if (G && G.unit[g] === u.id && G.role[g] === ROLE.element && G.piece[g] < 0) G.piece[g] = el }
+    // (no source unit owns a turned glyph: own.mjs reads none; a figure's turned text is locate's, on arXiv's page)
+    turnedOwners.push(ownersOf(pg.turned?.length ?? 0))
   })
   // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
   // what today's file states); the marked compile's log where the options have none)
@@ -392,6 +355,6 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   pages.forEach((pg, i) => { for (const pt of pg.points) { const m = /^p(\d+)\.(\d+)([ab])$/.exec(pt.name); if (m && Number(m[1]) < units.length) places.push({ unit: Number(m[1]), piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' }) } })
   return {
     instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
-    today: { own, fig, ink, kept, inkBase, figBase },
+    today: { own, inkBase },
   }
 }
