@@ -1,6 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but one change, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf): run
-// by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the change apart. Today's file stays the production prepare's until stage 1c.
+// marked COPY, nothing else but two changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// head's number of its phrase no folio, phrased): run
+// by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until stage 1c.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
 // glyphs, so that it is translated and drawn as any unit. Read from the ledger's lines (layout/ledger.mjs: each line of glyphs
@@ -241,6 +242,31 @@ function gapBefore(G, w, v) {
   return l - r > WORD_GAP * size
 }
 
+/** two gaps one glue of TeX's: within this share of their size of each other, the PDF's text unit (a TJ adjustment, a width: whole
+ *  thousandths of the size) twice: amsart's head's word spaces 3.990 to 3.999 at 8.97, 2610.21884v1 */
+const SAME_GLUE = 0.002
+/** whether a head's line's number at its end (`b`) or its start (`a`) stands from the word beside it at the line's word space: as
+ *  far as two of its other words stand from each other, or, the line holding no two others, a word's gap (CHANGED: a number of the
+ *  head's phrase, "5 of 21", 2610.30875v1, is no folio) */
+function phrased(G, words, side) {
+  const n = words.length
+  const gapOf = (w, v) => {
+    let r = -Infinity, l = Infinity, size = 0
+    for (const g of w.gs) { r = Math.max(r, G[g].x1); size = Math.max(size, G[g].size) }
+    for (const g of v.gs) { l = Math.min(l, G[g].x0); size = Math.max(size, G[g].size) }
+    return [l - r, size]
+  }
+  const [gap, size] = side === 'b' ? gapOf(words[n - 2], words[n - 1]) : gapOf(words[0], words[1])
+  const rest = side === 'b' ? words.slice(0, -1) : words.slice(1)
+  let others = 0
+  for (let i = 1; i < rest.length; i++) {
+    if (!gapBefore(G, rest[i - 1], rest[i])) continue
+    others++
+    if (Math.abs(gapOf(rest[i - 1], rest[i])[0] - gap) <= SAME_GLUE * size) return true
+  }
+  return others === 0 && gap > WORD_GAP * size
+}
+
 /** a head's line's number at its end (`b`) or its start (`a`), keyed by the line's other words: the numbers set there wherever
  *  those words recur */
 const folioKey = (words, side) => `${side}|${(side === 'b' ? words.slice(0, -1) : words.slice(1)).map(w => w.text).join(' ')}`
@@ -255,8 +281,10 @@ function trimmed(G, words, cls, folios = null) {
   let a = 0, b = words.length
   let ended = false
   // (a running head's folio however close TeX set it: amsart's \llap{\thepage} after a title as wide as the line, its two digits
-  // nearer its last word than its words are to each other, 2610.21884v1)
-  const folio = side => cls === 'heads' && !!folios?.has(folioKey(words, side))
+  // nearer its last word than its words are to each other, 2610.21884v1. CHANGED: not where it stands from the word beside it at
+  // the line's word space, a word of the head's phrase: "5 of 21", whose 5 stands from "of" as "of" from "21", was taken for the
+  // folio and "of 21" translated beside the original's 5, 2610.30875v1 — the head is one unit, each page's its own, phrased)
+  const folio = side => cls === 'heads' && !!folios?.has(folioKey(words, side)) && !phrased(G, words, side)
   // (its page number: its last word, one number, after its leaders, set apart from the text before it or a running head's folio)
   if (b - 1 > a && PAGE_NUMBER.test(words[b - 1].text) && (LEADER.test(words[b - 2].text) || apart(G, words[b - 2], words[b - 1]) || folio('b'))) { ended = true; b-- }
   // (its leaders: dots each a word a word's gap from the one before it, \@dottedtocline's \mkern\@dotsep; a stop that abuts the

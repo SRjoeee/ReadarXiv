@@ -121,6 +121,56 @@ describe('today’s ink makers in the engine package', () => {
     expect(one(TODAY)).toEqual(['$x21$'])
     expect(one(T as unknown as Impl)).toEqual(['$x12$'])
   })
+  it('keep a running head\'s number in its phrase where it stands a word space from it, as its words do: the whole head one unit (the checkpoint\'s "5 of 21")', () => {
+    // (2610.30875v1's head "5 of 21" at the page's right: today's took the 5 for the folio, its words recurring with another
+    // number on every page, and translated "of 21" beside the original's 5; the 5 stands from "of" as "of" from "21", the phrase's
+    // word space, so the copy keeps it the head's: "5 of 21" one unit, each page's its own. amsart's \llap'ed folio, nearer its
+    // title's last word than the title's words stand from each other, stays the page's own ink in both)
+    const at = (s: string, n: number, x: number) => pageOf([
+      { s, x, y: 760 },
+      { s: 'Body owned text', y: 700 },
+    ], { points: [['bs1', s.length], ['be1', s.length + 15]] })
+    const heads = (I: Impl, list: ReturnType<typeof pageOf>[]) => {
+      const own = { glyphs: list.map((p) => p.glyphs.map((g) => ((g as G).y === 700 ? 'u0' : null))), boxes: list.map(() => []) }
+      const ledger = I.ledgerOf(list, own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf(list, ledger, { units: units.slice(0, 1), from: 1 }).map((u) => u.pieces.filter((p) => p.t === 'text').map((p) => p.src ?? (p as { s?: string }).s).join(''))
+    }
+    const of21 = [1, 2, 3].map((n) => at(`${n} of 21`, n, 520))
+    expect(heads(TODAY, of21)).toEqual(['of 21', 'of 21', 'of 21'])
+    expect(heads(T as unknown as Impl, of21)).toEqual(['1 of 21', '2 of 21', '3 of 21'])
+    // (amsart's: the title's words a word space apart, its two-digit folio nearer the last: the folio the page's in both)
+    const amsart = [11, 13, 15].map((n) => {
+      const p = at('MEAN CURVATURE FLOW', n, 100)
+      const g = p.glyphs as G[]
+      const last = g[18] as G
+      const digits = String(n).split('').map((u, k) => ({ ...last, u, x0: (last.x1 as number) + 3 + 5 * k, ix0: (last.x1 as number) + 3 + 5 * k, x1: (last.x1 as number) + 8 + 5 * k, ix1: (last.x1 as number) + 8 + 5 * k, k: g.length + k }))
+      p.glyphs = [...g.slice(0, 19), ...digits, ...g.slice(19)] as typeof p.glyphs
+      p.points = [{ name: 'bs1', glyph: 21, box: 0 }, { name: 'be1', glyph: 36, box: 0 }]
+      return p
+    })
+    expect(heads(TODAY, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
+    expect(heads(T as unknown as Impl, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
+  })
+  it('class a word in a text face between a formula\'s lines a line of the formula, no unit (the checkpoint\'s "tr")', () => {
+    // (2610.21765v1 p10's display (22): its "tr" in CMR10 a line of its own between the fraction's denominator, a formula's line,
+    // and a big bracket, symbols: today's made it an orphan ink unit, translated "TR" over the formula; the copy reads it the
+    // formula's, the formula's lines kept as they stand)
+    const pg = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'ab', x: 100, y: 640, font: 'ABCDEF+CMMI10' },
+      { s: 'tr', x: 112, y: 650 },
+      { s: '[', x: 122, y: 660, font: 'ABCDEF+CMEX10' },
+      { s: 'An orphan line of words after it here', y: 600 },
+    ], { points: [['bs1', 0], ['be1', 57]] })
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) }) as { lines: { cls: string; gs: number[] }[] }
+      const ink = I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 })
+      return { lines: ledger.lines.map((l) => [l.cls, l.gs.map((g) => (pg.glyphs[g] as G).u).join('')]), ink: ink.map((u) => u.pieces.map((p) => (p as { s?: string }).s ?? '').join('')) }
+    }
+    expect(one(TODAY)).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
+    expect(one(T as unknown as Impl)).toEqual({ lines: [['symbols', 'ab'], ['math', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['An orphan line of words after it here'] })
+  })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
     for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
     expect(T.classOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)

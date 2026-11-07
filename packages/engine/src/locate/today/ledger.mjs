@@ -1,6 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else: run by locate over arXiv's page (../ink.ts), held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until stage 1c.
+// marked COPY, nothing else but one change, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
+// the formula's): run by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts,
+// the change apart. Today's file stays the production prepare's until stage 1c.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
 // class (rules/content-classes.mjs), so that what no class explains — an orphan — is counted, listed and gated (the sweep's
 // invariant (o): orphan letters, none). Read from what the maker child already has: the pages pageInk read (`indices`, with
@@ -213,16 +214,13 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       }
     }
     let line = null
+    // (CHANGED: the page's lines classed once the page is read, so that a line's class may read the lines TeX set right before
+    // and after it: a formula's interior, below)
+    const made = []
     const close = () => {
       if (!line) return
       Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs, lp) })
-      const rule = RULES.find(r => r.test(line))
-      for (const g of line.gs) out[g] = rule.code
-      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, listed: line.listed, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
-      if (rule.cls === 'orphan') {
-        orphanLetters += line.letters
-        if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(line.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: line.letters, x0: line.x0, x1: line.x1, y: line.y })
-      }
+      made.push([line, RULES.find(r => r.test(line))])
       line = null
     }
     for (let g = 0; g < n; g++) {
@@ -251,6 +249,26 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (RELATION.test(x.u)) line.relation = true
     }
     close()
+    // (CHANGED: an orphan line between two of a formula's lines in TeX's stream — math or symbols, its glyphs and theirs one run
+    // of no unit's, in one region —, with fewer words than a formula's line holds (MATH_WORDS), is the formula's: an operator's
+    // name in a text face, 2610.21765v1 p10's "tr" between a fraction's denominator and a big bracket, was an orphan ink unit,
+    // translated "TR" over the formula)
+    const FORMULA = new Set(['math', 'symbols'])
+    made.forEach(([l, rule], i) => {
+      if (rule.cls !== 'orphan' || l.words >= MATH_WORDS) return
+      const before = made[i - 1]?.[0], after = made[i + 1]?.[0]
+      if (!before || !after || !FORMULA.has(made[i - 1][1].cls) || !FORMULA.has(made[i + 1][1].cls)) return
+      if (before.gs.at(-1) !== l.gs[0] - 1 || after.gs[0] !== l.gs.at(-1) + 1 || before.region !== l.region || after.region !== l.region) return
+      made[i][1] = RULES.find(r => r.cls === 'math')
+    })
+    for (const [l, rule] of made) {
+      for (const g of l.gs) out[g] = rule.code
+      lines.push({ page: pi + 1, cls: rule.cls, gs: l.gs, region: l.region, zone: l.zone, para: l.para, opens: l.opens, entry: l.entry, entryFrom: l.entryFrom, listed: l.listed, y: l.y, size: l.size, x0: l.x0, x1: l.x1, letters: l.letters })
+      if (rule.cls === 'orphan') {
+        orphanLetters += l.letters
+        if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(l.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: l.letters, x0: l.x0, x1: l.x1, y: l.y })
+      }
+    }
     // the counts, every glyph that is no blank
     for (let g = 0; g < n; g++) {
       const x = G[g]
