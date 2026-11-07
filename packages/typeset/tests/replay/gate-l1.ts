@@ -21,6 +21,7 @@ import {
   sourcePieces,
 } from '../../src/lay/read.ts'
 import { fontString } from '../../src/breaker/measure.ts'
+import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
 import { doorRows } from './rows.ts'
@@ -173,8 +174,8 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
     }
 }
 const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
-/** where a laid line's ink ends: its last item's (a crop's box; a text's last character's ink, its blank right side off),
- *  null where the measure has no ink for it */
+/** where a laid line's ink ends: its last item's (a crop's box; a text's ink, the blank right side of its last glyph off),
+ *  null where the measure has no ink for it (a table of today's measures lacks it: MissingMeasure) */
 function inkEnd(
   l: { items: readonly { t: unknown; x?: number; w: number }[] },
   size: number,
@@ -184,11 +185,15 @@ function inkEnd(
   if (!last || last.x === undefined || !m) return null
   const t = last.t as { crop?: unknown; s?: string; face?: Face; sup?: boolean; sc?: number }
   if (t.crop) return last.x + last.w
-  const ch = t.s ? [...t.s].at(-1) : undefined
-  if (!ch || !t.face) return null
-  const right = m.inkRight100(ch, t.face)
-  if (right === null) return null
-  return last.x + last.w - ((m.w100(ch, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+  if (!t.s || !t.face) return null
+  try {
+    const right = m.inkRight100(t.s, t.face)
+    if (right === null) return null
+    return last.x + last.w - ((m.w100(t.s, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+  } catch (e) {
+    if (e instanceof MissingMeasure) return null
+    throw e
+  }
 }
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
