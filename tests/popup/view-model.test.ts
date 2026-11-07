@@ -139,7 +139,7 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(m.items.length).toBeGreaterThan(150)
     const cmn = m.items.find(i => i.id === 'cmn')!
     expect(cmn.checked).toBe(true)
-    expect(cmn.keywords).toMatch(/Mandarin/)
+    expect(cmn.keywords).toMatch(/Simplified Chinese/)
     expect(cmn.keywords).toMatch(/cmn/)
   })
   it('P4 translating: the button says it and keeps the shortcut, the rows stay open, no counts anywhere', () => {
