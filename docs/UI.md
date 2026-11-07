@@ -513,7 +513,7 @@ a paper reader can mostly get by in English for a while. So adding a language ha
 - **The styles and highlight colours shipped with the extension take their names from the interface language**; once the reader has renamed one, the reader's name is used (`profileName`).
   A configuration the reader added always keeps the name they wrote. The built-in prompts too (默认 · 精准改写, S-O-61c: `O.prompts.builtInNames` through `promptName`; the maintainer, 2026-09-28), which are copied, never renamed.
 - **The target language's name is written in the interface language too**: the menu shows 「日语（日本語）」 / "Japanese (日本語)", the parentheses following
-  the outer half, never mixing full-width and half-width (full-width after Chinese and Japanese, half-width after the rest; Korean sets no space before them, 「독일어(Deutsch)」). A name that ends on a parenthetical of its own takes the own name inside it, after the enumeration comma of its kind, never a second pair after the first: 「Chinese (Simplified, 简体中文)」, 「중국어(간체, 简体中文)」, 「库尔德语（索拉尼、کوردیی ناوەندی）」 (2026-11-04; the rows keep the name alone). When an interface language has no table of language names the English names are read — adding a language need not start with 180 language names. The tables: Chinese Read Frog's (`LANG_CODE_TO_ZH_NAME`), English its overlay (`LANG_CODE_TO_EN_UI_NAME`), Traditional Chinese, Japanese and Korean CLDR 48's, generated once (`src/config/language-names.ts` by `scripts/language-names.ts`; a language CLDR does not name, four or six rare ones, reads in English). A language menu's search finds a target by its name in every interface language (`src/ui/language-keywords.ts`): ドイツ語 finds Deutsch on an English interface.
+  the outer half, never mixing full-width and half-width (full-width after Chinese and Japanese, half-width after the rest; Korean sets no space before them, 「독일어(Deutsch)」). A name that ends on a parenthetical of its own takes the own name inside it, after the enumeration comma of its kind, never a second pair after the first: 「Chinese (Simplified, 简体中文)」, 「중국어(간체, 简体中文)」, 「库尔德语（索拉尼、کوردیی ناوەندی）」 (2026-11-04; the rows keep the name alone). When an interface language has no table of language names the English names are read — adding a language need not start with 180 language names. The tables: Simplified Chinese, English and each language's own name under the naming policy below (`src/config/language-table.ts`, by `scripts/languages.ts`), Traditional Chinese, Japanese and Korean CLDR 48's, generated once (`src/config/language-names.ts` by `scripts/language-names.ts`; a language CLDR does not name, four or six rare ones, reads in English). A language menu's search finds a target by its name in every interface language (`src/ui/language-keywords.ts`): ドイツ語 finds Deutsch on an English interface.
   **The row shows one name only** (`languageName`); the native name appears in the menu only (`languageLabel`) [decided, 2026-09-11, user feedback]:
   the row is one line of the interface, and where there is only one line, "Simplified Mandarin Chinese (简体中…)" is cut off mid-word in the English interface,
   while the Chinese interface, whose two names happen to coincide, shows a clean 「简体中文」 — a defect of the English side alone. Finding a language goes by the native name,
@@ -522,12 +522,34 @@ a paper reader can mostly get by in English for a while. So adding a language ha
   the reading options, S-R-13's sentence — it shows the language's own name (its endonym), exactly as its menu lists it, whatever the interface language:
   日本語, never 日语 or "Japanese" (`ownName`, from `LANG_CODE_TO_LOCALE_NAME`). An own name is one short name, so the cut-off argument above does not reach it.
   The popup's and the settings page's rows keep `languageName` and are not changed by this.
-- **The language names in the interface and the ones sent to the model are two tables**: `LANG_CODE_TO_EN_NAME` holds the ISO 639-3 scholarly names
-  (coded as "individual languages"), just right for the model — `Simplified Mandarin Chinese` is not the least ambiguous; for the reader it is a mouthful,
-  and no product writes it so. `LANG_CODE_TO_EN_UI_NAME` overrides 14 entries on top of it (`Chinese (Simplified)`, `Arabic`,
-  `Greek`, `Pashto`…), for the interface only. The base table is not changed because it enters the prompt: changing it means bumping `PROMPT_VERSION`
-  and voiding the whole LLM cache, not worth it for a name. Directional words that really distinguish (`Western Frisian`, `Northern Sotho`) stay; parentheses
-  naming a script (`Uzbek (Cyrillic)`, `Malay (Jawi)`) stay too — the reader really does get that script.
+- **Language names: one policy** [the maintainer, 2026-11-07: CLDR's words, under good interface practice]. Every target
+  language's name is written by `scripts/languages.ts` into `src/config/language-table.ts` under these rules — this list
+  is the rule, the generator its implementation; a word taken from elsewhere than CLDR stands in the generator's override
+  table with its public source.
+  1. **A name is the common form** a speaker recognises and a reader looks for: Unicode CLDR's word (CLDR 48, read through
+     Intl), plain — no parenthetical qualifier, date, "(macrolanguage)", "Standard X", "Modern X (1453-)" (CLDR's words
+     for the 180 carry none). Where CLDR has no English name, ISO 639-3's reference name (Saraiki, Southern Qiandong
+     Miao, Wallisian); where it has no Simplified Chinese one, the English name, as an interface without a name reads
+     English (Chimborazo Highland Quichua, Southern Qiandong Miao, Hmong Njua, Banjar, Wallisian, Fiji Hindi).
+  2. **The own name** (the menus' second name, the reader's language button) is CLDR's autonym, asked under CLDR's own
+     code where the product sends another for the same language (tl → Filipino, rn, mg, za, ps). Where CLDR has none, the
+     native name the language's English Wikipedia article gives, its spelling, diacritics and script exactly (44
+     languages, and Dari, which CLDR files under Persian: دری); never a Latin transliteration of a name written in
+     another script, never an English word. Bahasa Indonesia and Bahasa Melayu (and Jawi بهاس ملايو) are sourced the
+     same way: CLDR's "Indonesia" and "Melayu" name a country and a people out of context. A menu entry's first letter
+     is a capital, unless the name's own capitals start later (isiZulu, siSwati).
+  3. **One language, one word per column**: the English name sent to an LLM (`{{targetLanguage}}`, DESIGN §8.2) is the
+     English menu's — there is no separate interface overlay — and the menu, the row, the prompt and the settings page
+     read the same table.
+  4. **The Simplified Chinese column** reads 语 at the end of every name, Chinese itself 中文 (简体中文, 繁体中文); the
+     native column keeps 简体中文 and 繁體中文. An entry offered in another script than its language's usual one (the
+     four Cyrillic entries; Malay in Jawi) names the script after it in every column, as CLDR writes it — 波斯尼亚语
+     （西里尔文）, Uzbek (Cyrillic) — and Jawi Malay as its speakers do: Malay (Jawi), 马来语（爪夷文）. That says which
+     writing the reader gets, and keeps the two Malays apart.
+  5. **Names only**: the menu's order and grouping, the codes, the tags sent and the right-to-left set are not names and
+     do not move with them (`tests/contract/languages.json` holds them).
+  The change of 2026-11-07 (CLDR's words for Read Frog's tables) moved 24 English names, so `PROMPT_VERSION` 5, 27
+  Simplified Chinese and 43 own names; each is listed with its old word in the rebuild's record.
 
 ## 8. Feature coverage list
 
