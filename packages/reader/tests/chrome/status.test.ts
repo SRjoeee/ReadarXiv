@@ -429,6 +429,59 @@ describe("a host's words for the states (parts.tsx StateWords: the website's own
   })
 })
 
+describe("the capsule beside the lost original's own card (StateWords openOriginal: the website's; L11 third round, gap 5)", () => {
+  const WORDS: StateWords = {
+    preparing: 'preparing',
+    queued: (n) => `queued #${n}`,
+    translating: (got, total) => `translating ${got} / ${total}`,
+    notNow: () => 'unavailable for now',
+    noPdf: 'no pdf',
+    originalLost: 'no original',
+    openOriginal: 'Open the PDF on arXiv',
+  }
+  /** the original could not be read: its failure the phase */
+  const lost = (over: Partial<ReaderState>) =>
+    at({ phase: 'failed', failures: { pdf: 'network', service: null }, failure: 'network', ...over })
+  const said = (s: ReaderState, words: StateWords = WORDS) => {
+    const c = capsuleOf(s, none, LANGUAGES, words)
+    return c && { kind: c.kind, text: textOf(c.words), ...('href' in c && c.href ? { href: c.href } : {}) }
+  }
+  it("tells the translation's state beside it, as the website's page does: a refusal for now with its retry, a run's stage, the paper's own refusal", () => {
+    expect(said(lost({ unavailable: { why: 'unreachable', retryAt: null } }))).toEqual({
+      kind: 'notNow',
+      text: 'unavailable for now',
+    })
+    expect(said(lost({ preparing: { position: null, progress: 0.3 } }))).toEqual({
+      kind: 'progress',
+      text: 'preparing',
+    })
+    expect(said(lost({ preparing: { position: 2, progress: null } }))).toEqual({ kind: 'progress', text: 'queued #2' })
+    expect(said(lost({ rowsComing: true, translated: { got: 3, total: 10 } }))).toEqual({
+      kind: 'progress',
+      text: 'translating 3 / 10',
+    })
+    expect(said(lost({ available: false, unavailable: { why: 'no-pdf', retryAt: null } }))).toEqual({
+      kind: 'unavailable',
+      text: 'no pdf',
+    })
+    // (nothing under way, nothing refused: nothing to tell)
+    expect(said(lost({}))).toBeNull()
+  })
+  it("tells nothing where the card is the pane's whole answer: the extension's (no card of the original's own), a service's failure too, a load", () => {
+    const states = [
+      lost({ unavailable: { why: 'unreachable', retryAt: null } }),
+      lost({ preparing: { position: null, progress: 0.3 } }),
+      lost({ rowsComing: true, translated: { got: 3, total: 10 } }),
+    ]
+    const { openOriginal: _, ...extension } = WORDS
+    for (const s of states) {
+      expect(said(s, extension)).toBeNull()
+      expect(said({ ...s, failures: { pdf: 'network', service: 'no-key' } })).toBeNull()
+    }
+    expect(said(at({ phase: 'loading', preparing: { position: null, progress: 0.3 } }))).toBeNull()
+  })
+})
+
 describe("the original held by the host's rules (status.ts heldOf; L11's second round, gaps 7 and 8)", () => {
   const busy = { unavailable: { why: 'busy' as const, retryAt: null } }
   it("neither rule given (the extension's): never", () => {

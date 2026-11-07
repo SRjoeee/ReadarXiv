@@ -1444,6 +1444,75 @@ await check(
   },
 )
 await check(
+  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card, no capsule (L11 third round, gaps 4 and 5)",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'refused' }
+    const look = async (x) => {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate((o) => window.__c.open('s1-columns', o), x)
+      await waitFor(
+        page,
+        () => {
+          const s = window.__c.reader?.state()
+          return s?.original.s === 'failed' && s.layer.s === 'refused'
+        },
+        null,
+        20_000,
+      )
+      await page.waitForTimeout(600)
+      const seen = await page.evaluate(() => {
+        const zones = Object.fromEntries(
+          [...document.querySelectorAll('header.bar > [data-zone]')].map((z) => [
+            z.dataset.zone,
+            [...z.querySelectorAll('[data-host], button, [role="radiogroup"]')]
+              .filter((el) => !el.closest('[popover]'))
+              .map((el) => el.dataset.host ?? el.getAttribute('aria-label')),
+          ]),
+        )
+        const capsule = document.querySelector('.capsule:not([data-out])')
+        return {
+          zones,
+          line: !!document.querySelector('.progress-line'),
+          capsule: capsule && {
+            kind: capsule.getAttribute('data-kind'),
+            said: capsule.querySelector('.sr-only')?.textContent ?? capsule.textContent,
+          },
+          left: !!document.querySelector('.pane[data-side="left"] .card a'),
+          right: !!document.querySelector('.pane[data-side="right"] .card button'),
+        }
+      })
+      await context.close()
+      return { seen, errors: errors.filter((e) => !/status of (503|429)/.test(e)) }
+    }
+    try {
+      const site = await look({ site: true, slots: true, original: 'broken' })
+      const own = await look({ words: true, slots: true, original: 'broken' })
+      assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+      const en = { options: 'Reading options', zoom: 'Zoom in' }
+      assert(
+        JSON.stringify(site.seen.zones) === JSON.stringify({ lead: ['home'], centre: [], trail: [en.options] }) &&
+          !site.seen.line &&
+          site.seen.left &&
+          site.seen.capsule?.kind === 'notNow' &&
+          /^Busy/.test(site.seen.capsule.said),
+        `the website's: ${JSON.stringify(site.seen)}`,
+      )
+      assert(
+        own.seen.zones.lead?.includes('home') &&
+          own.seen.zones.trail?.includes(en.zoom) &&
+          own.seen.line &&
+          own.seen.right &&
+          own.seen.capsule === null,
+        `the extension's: ${JSON.stringify(own.seen)}`,
+      )
+      return { site: site.seen, own: { capsule: own.seen.capsule, trail: own.seen.zones.trail?.length } }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+await check(
   "chrome: a narrow window while the paper is made, by the website's rule: the original held, the switch at the original, the chip that shows the translation once some is there, pressed the translation shown; the extension's shows the translation alone from the first (L11 second round, gaps 7 and 4)",
   async () => {
     const seg = indexOf['s2-splits'].seg

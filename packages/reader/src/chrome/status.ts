@@ -56,11 +56,18 @@ export interface Seen {
   refusalsSeen: number
 }
 
+/** the original's failure is the phase, its own card standing apart (StateWords `openOriginal`: the website's) and no failure of
+ *  the service's beside it: the translation's state is told in the capsule beside that card, as the website's page tells it */
+const originalApart = (state: ReaderState, words: StateWords): boolean =>
+  state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
 /** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
  *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
- *  as the website says it; else the paragraphs translated. Null where none is under way */
+ *  as the website says it; else the paragraphs translated. Null where none is under way. A run under the original's failure
+ *  (the phase held by it) by its own marks: a prepare told, rows coming */
 export function stageOf(state: ReaderState): Stage | null {
-  if (!running(state)) return null
+  const apart =
+    state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
+  if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
   if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
   return 'translating'
@@ -117,8 +124,10 @@ export function capsuleOf(
     if (state.refusals > Math.max(seen.refusalsSeen, state.mended))
       return { kind: 'saveFailed', words: plain(words.saveFailed ?? O.saveFailed) }
   }
-  // no paper: its card says that much, and nothing about a paper is true of it
-  if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
+  // no paper: its card says that much, and nothing about a paper is true of it. A failure's card is the pane's whole answer, but
+  // the original's own card standing apart: the translation's state is told beside it (L11 third round, gap 5)
+  if (state.noPaper || (state.phase === 'failed' && !originalApart(state, words)) || state.phase === 'loading')
+    return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) {
     const said = plain(
