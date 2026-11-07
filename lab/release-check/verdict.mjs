@@ -15,16 +15,20 @@ export function gatesOf(gates, tier) {
     .map(({ g }) => g)
 }
 
+/** the lowest tier among some gates' */
+const tierOfAll = gates => gates.map(g => g.tier).sort((a, b) => TIERS.indexOf(a) - TIERS.indexOf(b))[0]
+
 /**
  * One invariant's line in a tier. `results`: the gates' results by id (`{ status: 'pass'|'fail'|'skipped'|'private',
  * reason?, findings? }`). GO only where gates of this tier hold it, each passed, none counted a breach, and no part of it is
- * left without a gate (`gap`); an invariant only higher tiers hold is "beyond this tier"; one no gate holds is NO-GO.
+ * left without a gate (`gap`); "GO in part" where gates of a higher tier hold it too; "beyond this tier" where only higher
+ * tiers' gates hold it; NO-GO where no gate holds it.
  */
 export function invariantLine(inv, gates, tier, results) {
   const all = gates.filter(g => g.holds.includes(inv.id))
   const here = gatesOf(all, tier)
   if (!all.length) return { id: inv.id, says: inv.says, status: 'NO-GO', gates: [], why: [`no gate holds it: ${inv.gap ?? 'none exists'}`] }
-  if (!here.length) return { id: inv.id, says: inv.says, status: 'beyond this tier', gates: [], why: [`held in tier ${all.map(g => g.tier).sort((a, b) => TIERS.indexOf(a) - TIERS.indexOf(b))[0]} (${all.map(g => g.id).join(', ')})`] }
+  if (!here.length) return { id: inv.id, says: inv.says, status: 'beyond this tier', gates: [], why: [`held in tier ${tierOfAll(all)} (${all.map(g => g.id).join(', ')})`] }
   const why = []
   for (const g of here) {
     const r = results[g.id] ?? { status: 'not run' }
@@ -33,6 +37,9 @@ export function invariantLine(inv, gates, tier, results) {
     if (f && !f.held) why.push(`${g.id} counts ${f.count} against it`)
   }
   if (inv.gap) why.push(`no gate for the rest: ${inv.gap}`)
+  // (an invariant a higher tier holds too is held here in part only: GO is said of the whole, at the tier that runs them all)
+  const above = all.filter(g => !here.includes(g))
+  if (!why.length && above.length) return { id: inv.id, says: inv.says, status: 'GO in part', gates: here.map(g => g.id), why: [`the rest in tier ${tierOfAll(above)} (${above.map(g => g.id).join(', ')})`] }
   return { id: inv.id, says: inv.says, status: why.length ? 'NO-GO' : 'GO', gates: here.map(g => g.id), why }
 }
 

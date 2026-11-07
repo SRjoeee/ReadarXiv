@@ -57,7 +57,9 @@ describe('a tier', () => {
 
   it('reads an invariant as GO only where every gate of the tier holding it passed, counted no breach and leaves no gap', () => {
     const I1 = { id: 'I1', says: '', gap: null }
-    expect(invariantLine(I1, table, 'fast', { r: { status: 'pass' } }).status).toBe('GO')
+    expect(invariantLine(I1, table, 'full', { r: { status: 'pass' }, b: { status: 'pass' } }).status).toBe('GO')
+    // (held here and by a higher tier's gate too: GO is said only of the whole)
+    expect(invariantLine(I1, table.slice(1), 'fast', { r: { status: 'pass' } })).toMatchObject({ status: 'GO in part', why: ['the rest in tier full (b)'] })
     expect(invariantLine(I1, table, 'full', { r: { status: 'pass' }, b: { status: 'skipped', reason: 'needs the tap' } })).toMatchObject({ status: 'NO-GO', why: ['b: skipped (needs the tap)'] })
     expect(invariantLine(I1, table, 'fast', { r: { status: 'pass', findings: { I1: { held: false, count: 3 } } } })).toMatchObject({ status: 'NO-GO', why: ['r counts 3 against it'] })
     expect(invariantLine({ ...I1, gap: 'the corpus' }, table, 'fast', { r: { status: 'pass' } })).toMatchObject({ status: 'NO-GO', why: ['no gate for the rest: the corpus'] })
