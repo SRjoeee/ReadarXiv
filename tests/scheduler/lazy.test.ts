@@ -80,7 +80,7 @@ describe('createLazyScheduler', () => {
     expect(entered[0]!.map(b => b.el.id).sort()).toEqual(blocks.map(b => b.el.id).sort())
   })
 
-  it('parameters as in Read Frog: rootMargin takes the preload distance, threshold the visibility threshold', () => {
+  it('the observer\'s parameters: rootMargin takes the preload distance, threshold the visibility threshold', () => {
     const { io } = setup()
     expect(io.options).toEqual({ rootMargin: '1000px 0px', threshold: 0 })
   })
