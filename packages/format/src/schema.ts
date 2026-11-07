@@ -152,7 +152,8 @@ export const El = z.object({
   colour: int.optional(),
   nested: flag.optional(),
   // where a URL TeX set on one line may break, as its url package lets it: after a run of \UrlBreaks' and \UrlBigBreaks'
-  // characters, each the x between two of its glyphs on its ink's line and how many of its characters stand before it
+  // characters, each the x between two of its glyphs on its ink's line and how much of its copy text stands before it, in UTF-16
+  // code units (a ligature's glyph its letters, an astral character two): the unit the typesetter slices `copy` in
   breaks: z.array(z.tuple([num, int])).optional(),
 })
 /** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and

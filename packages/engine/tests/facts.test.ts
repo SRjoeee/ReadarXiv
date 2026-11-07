@@ -21,7 +21,7 @@ import {
   tailOf,
   textOf,
 } from '../src/locate/facts.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate, urlBreaks } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -316,6 +316,27 @@ describe('locate states the facts on arXiv’s page', () => {
       [234, 10],
       [252, 13],
       [264, 15],
+    ])
+  })
+  it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
+    // (the typesetter cuts the crop's copy text, the source's, with String.slice: a count of glyphs put every cut after "𠮷"
+    // (U+20BB7, two code units) or "ﬁ" (one glyph, two letters in the copy) a character early)
+    const copy = 'https://𠮷.io/profile/x'
+    const glyphs = run('https://𠮷.io/proﬁle/x')
+    const asLetters = glyphs.map((x) => (x.u === 'ﬁ' ? { ...x, u: 'fi' } : x))
+    const want = [
+      [120, 8],
+      [132, 11],
+      [150, 14],
+      [192, 22],
+    ]
+    expect(urlBreaks(glyphs)).toEqual(want)
+    expect(urlBreaks(asLetters)).toEqual(want)
+    expect(want.map(([, n]) => copy.slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/profile/',
     ])
   })
   it('keeps a line inside a unit that no unit owns (a held line) as KEPT, in its place', () => {

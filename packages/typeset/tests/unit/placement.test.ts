@@ -137,6 +137,31 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
     const cuts = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => (it as { cut?: number }).cut))
     expect(cuts).toEqual([[2], [1]])
   })
+  it('cuts its copy text at the break’s code units, an astral character before it two (Devin on #630)', () => {
+    // (El.breaks counts the copy text's UTF-16 code units, which String.slice cuts: "𠮷" is two, "profile" its seven letters
+    // where the page set a ligature's one glyph)
+    const [, el] = url.els![0]!
+    const astral: Placed = {
+      ...url,
+      els: [
+        [
+          '1',
+          {
+            ...el,
+            copy: 'https://𠮷.io/profile/ij',
+            text: 'https://𠮷.io/profile/ij',
+            breaks: [
+              [100, 11],
+              [118, 22],
+            ],
+          },
+        ],
+      ],
+    }
+    const laid = laidOf(layPage(partOf([[astral]]), rows, rules, metrics), 2)
+    const texts = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => it.s))
+    expect(texts).toEqual([['https://𠮷.io/profile/'], ['ij']])
+  })
 })
 
 describe('a head or a name and its follower on one line: each the original’s separation after the one before it', () => {

@@ -1270,22 +1270,29 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 /** the characters after which TeX's url package may break a URL (url.sty's \UrlBreaks and \UrlBigBreaks; a hyphen only under
  *  its `hyphens` option) */
 const URL_BREAKS = new Set(".@\\/!_|;>]),?&'+=#:")
+/** a glyph's share of a URL's copy text (the source's, which TeX's url package sets character by character), in UTF-16 code
+ *  units, the unit the typesetter slices that text in: a ligature its letters (ﬁ, ﬄ: NFKC), whether PDF.js gives it as one
+ *  character or as its letters; a character past the Basic Multilingual Plane its two */
+const copyUnitsOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normalize('NFKC')).length
 /**
  * Where a URL TeX set on one line may break (El.breaks): after a run of url.sty's break characters, never inside one (a
  * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle of the paper between the run's
- * last glyph's ink and the next one's (their outlines where read, else their advances), with how many of its glyphs stand
- * before it. Its glyphs in their order on the line
+ * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text stands
+ * before it (UTF-16 code units, copyUnitsOf: a glyph's count would misplace every cut after an astral character or a
+ * ligature). Its glyphs in their order on the line
  */
 export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
   const line = gs.filter((g) => /\S/.test(g.u)).sort((a, b) => a.x0 - b.x0)
   const out: [number, number][] = []
+  let units = 0
   for (let k = 1; k < line.length; k++) {
     const a = line[k - 1]!,
       b = line[k]!
+    units += copyUnitsOf(a.u)
     if (!URL_BREAKS.has(a.u) || URL_BREAKS.has(b.u)) continue
     const right = a.ix1 > a.ix0 ? a.ix1 : a.x1,
       left = b.ix1 > b.ix0 ? b.ix0 : b.x0
-    out.push([r2((right + left) / 2), k])
+    out.push([r2((right + left) / 2), units])
   }
   return out
 }

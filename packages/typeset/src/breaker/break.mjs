@@ -49,9 +49,9 @@ export function lineExtent(line, f, scale, m) {
 }
 /**
  * A URL's crop cut at the last of its break points (El.breaks: where TeX's url package may break it, the x between two of its
- * glyphs on the page and the characters before it) whose head is no wider than `room` at the layout's scale: the head, its
- * crop up to the cut and its text the characters before it, and the tail, from the cut, the break points after it its own;
- * null where none fits (`least`: the first, where nothing of the line holds anything yet)
+ * glyphs on the page and the UTF-16 code units of its copy text before it) whose head is no wider than `room` at the layout's
+ * scale: the head, its crop up to the cut and its text the copy text before it, and the tail, from the cut, the break points
+ * after it its own; null where none fits (`least`: the first, where nothing of the line holds anything yet)
  */
 const urlCut = (t, room, scale, least) => {
   const c = t.crop, rect = c.crop, text = c.text ?? ''
