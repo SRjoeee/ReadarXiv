@@ -739,4 +739,35 @@ describe('the faces, in one wave', () => {
       Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
     }
   })
+  it("tells a face lost, once: an answer no ask would mend at once, a failure that may pass when met again (L11's second round, gap 6)", async () => {
+    const answers: Record<string, number[]> = { gone: [404], flaky: [503, 503], blip: [503, 200], ok: [200] }
+    const fetch = vi.fn(
+      async (src: string) => new Response(new Uint8Array(4), { status: answers[src]?.shift() ?? 200 }),
+    )
+    const was = globalThis.FontFace
+    ;(globalThis as { FontFace?: unknown }).FontFace = class {
+      load = async () => this
+    }
+    const fonts = (document as { fonts?: unknown }).fonts
+    Object.defineProperty(document, 'fonts', { value: { add: () => {}, delete: () => {} }, configurable: true })
+    try {
+      const lost: string[] = []
+      const faces = createFaces({
+        table: { gone: { src: 'gone' }, flaky: { src: 'flaky' }, blip: { src: 'blip' }, ok: { src: 'ok' } },
+        fetch: fetch as never,
+        root: document.body,
+        lost: (id) => lost.push(id),
+      })
+      await faces.ready(['gone', 'flaky', 'blip', 'ok'])
+      expect(lost).toEqual(['gone'])
+      // (the next wave asks the passing failures again: the one that fails again is lost, the one that comes is not)
+      await faces.ready(['gone', 'flaky', 'blip', 'ok'])
+      await faces.ready(['flaky'])
+      expect(lost).toEqual(['gone', 'flaky'])
+      faces.dispose()
+    } finally {
+      ;(globalThis as { FontFace?: unknown }).FontFace = was
+      Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
+    }
+  })
 })

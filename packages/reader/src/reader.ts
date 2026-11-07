@@ -136,6 +136,10 @@ export interface ReaderState {
   }
   /** our server's document followed, its stream lost and asked again, nothing heard since (the website says "reconnecting") */
   reconnecting: boolean
+  /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
+   *  passages drawn in their fallback until the page is loaded again (a host may say so: the website's faces-lost); null
+   *  while none is */
+  faces: 'lost' | null
   crashed: boolean
 }
 export interface Reader {
@@ -214,6 +218,8 @@ export function openReader(
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
   let syncAvailable = false
+  /** a face lost this visit (faces.ts `lost`): kept, as its passages stay in their fallback */
+  let facesLost = false
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
@@ -578,7 +584,16 @@ export function openReader(
       ]).then(
         async ([C, F, H, k]) => {
           if (signal.aborted || !panes) return
-          faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root })
+          faces = F.createFaces({
+            table: o.engine?.faces ?? {},
+            fetch: host.fetch,
+            root,
+            lost: () => {
+              if (facesLost) return
+              facesLost = true
+              tellSoon()
+            },
+          })
           // (the lay itself is made once the head is read: the composed document's open, whose own it is)
           const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)
           composer = C.createComposer({
@@ -960,6 +975,7 @@ export function openReader(
         heading,
       },
       reconnecting: l.s === 'on' && !!l.lost,
+      faces: facesLost ? 'lost' : null,
       crashed,
     }
     return told

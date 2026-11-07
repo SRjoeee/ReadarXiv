@@ -22,6 +22,7 @@ const base: ReaderState = {
     heading: null,
   },
   reconnecting: false,
+  faces: null,
   crashed: false,
 }
 /** the chrome's state after the reader went through `states`, each told as its events */
