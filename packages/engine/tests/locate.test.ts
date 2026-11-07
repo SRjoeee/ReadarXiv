@@ -204,6 +204,34 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
   })
 })
 
+describe('a babel name’s text', () => {
+  it('states a name’s own text on A (Placed.plain), so that S.names tells a target word the original’s already', () => {
+    // (S.names leaves a name the original's where the target's word is its own text (today's nameInTarget over its characters);
+    // the part stated its Word alone)
+    const B = docOf([{ lines: ['Abstract', 'Body text here'] }])
+    const units = [{ ...unitOf('name', 'Abstract'), name: 'abstract' }, unitOf('para', 'Body text here')]
+    const ins = instrumentOf(B, units, [[0, 1]], [[ROLE.name, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members.find((m) => m.kind === 'name')).toMatchObject({ name: 'abstract', plain: 'Abstract' })
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ]
+    const o = objects.find((x) => x.kind === 'part')!
+    const part = read('part', o.bytes, o.digest)
+    expect(part.flows.flat().find((m) => m.kind === 'name')).toMatchObject({
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+    })
+  })
+})
+
 describe('bundle', () => {
   const B = docOf([
     { lines: ['page one text', 'runs on'] },
@@ -476,6 +504,34 @@ describe('review of #605', () => {
     const L = locate(ins, B, align(B, B))
     expect(L.members[1]).toMatchObject({ located: false, cause: 'no text' })
     expect(L.groups[0]!.boxes).toEqual([null])
+  })
+  it('reads a cell’s band between the table’s rules, no unit’s ink: an underscore TeX draws as a rule on a baseline', () => {
+    // (1512.03385v1 p5's "conv2_x": OT1's \_ is a \vrule, the cell's own box on its baseline, read as the rule over it; and
+    // 2610.21924v1 p21: the cells' of the rows above and below. The CJK cell's band shut at a baseline, its size cut, 5.80 for
+    // 6.46: the entry against the runner's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'conv2x', y: 700 },
+          { text: 'conv3x', y: 690 },
+        ],
+        boxes: [
+          [0, 0, 60, 720, 300, 720.26],
+          [5, 0, 102, 700, 104.2, 700.26],
+          [11, 0, 102, 690, 104.2, 690.26],
+          [12, 0, 60, 680, 300, 680.26],
+        ],
+      },
+    ])
+    const cell = (s: string, row: number) => unitOf('cell', s, { cell: { table: 0, row, col: 0 } })
+    const ins = instrumentOf(B, [cell('conv2x', 0), cell('conv3x', 1)], [[0, 1]])
+    ins.boxes[0]!.unit[1] = 0
+    ins.boxes[0]!.role[1] = ROLE.text
+    ins.boxes[0]!.unit[2] = 1
+    ins.boxes[0]!.role[2] = ROLE.text
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[0]!.room.band).toEqual([680.26, 720])
+    expect(L.members[1]!.room.band).toEqual([680.26, 720])
   })
   it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
     // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine)

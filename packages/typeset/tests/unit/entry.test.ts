@@ -268,6 +268,63 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(on(2)).toBeLessThan(10)
     expect(on(1)).toBe(on(2))
   })
+  it('never grows a tie’s member past the tie’s size by the page’s fill (a paragraph’s parts one size, the fill on)', () => {
+    // (the page's fill grows a page's body units to one larger size where all of them can take it; a member a size tie capped
+    // at another's size took the page's growth over its cap: 11 beside its tie's 8.5, the paragraph's two parts unequal again)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [[2, 0, 72, 120, 600, 607, 598, 72, 120, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const rows = rowsOf([row([{ t: 'text', s: 'kurz' }]), { ...row([{ t: 'text', s: 'abcdefghijk' }]), id: idB }])
+    const sizes = (page: number) => {
+      const pt: Part = { ...part(a), page, flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      return layPage(pt, rows, rules, metrics()).members.map((m) => m.fit?.size ?? null)
+    }
+    const [a2, b2] = sizes(2)
+    expect(b2).toBeLessThan(10)
+    expect(a2).toBe(b2)
+    expect(sizes(1)[0]).toBe(b2)
+  })
+  it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
+    // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+      align: 'c',
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      lines: [[1, 0, 140, 180, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+    const [laid] = layPage(part(name), rowsOf([], true), rules, metrics()).members
+    expect(laid).toMatchObject({ state: 'laid', off: 1 })
+    const [y, x0, x1, items] = laid!.lines[0]!
+    expect(items.map((it) => ('face' in it ? it.s : ''))).toEqual(['Zusammenfassung'])
+    // (its centre the original's: 160; the word 75 wide at the table metrics' half a size a character)
+    expect([y, x0, x1]).toEqual([700, 122.5, 197.5])
+    // (its word the original's already: left)
+    const same = layPage(part({ ...name, plain: 'Zusammenfassung' }), rowsOf([], true), rules, metrics()).members[0]
+    expect(same).toMatchObject({ state: 'name', off: 0 })
+    // (amsthm's "Proof." on its paragraph's first row: the paragraph's lead, U.lead's, not drawn by itself)
+    const idB = 'b'.repeat(64)
+    const proof = { ...name, text: { name: 'proof' }, plain: 'Proof', align: 'j' as const }
+    const para = member({ ord: 1, text: idB, lines: [[1, 0, 190, 300, 700, 707, 698, 72, 300, 2, 10]] })
+    const pt: Part = { ...part(proof), flows: [[proof], [para]] }
+    const both = layPage(pt, rowsOf([{ ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }], true), rules, metrics())
+    expect(both.members[0]).toMatchObject({ state: 'name', off: 0 })
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

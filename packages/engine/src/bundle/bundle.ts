@@ -122,6 +122,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
+  if (mem.plain !== undefined) p.plain = mem.plain
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
   return p

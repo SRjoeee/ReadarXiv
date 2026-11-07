@@ -309,7 +309,9 @@ export function fillPage(
     const all = (k: number): (Layout | null)[] | null => {
       const ls: (Layout | null)[] = []
       for (const f of grown) {
-        if (!steps(f)) {
+        // (never past a unit's cap, P.capScale: its size tie's size (one paragraph of TeX's at one size, layPagePrepared) or a
+        // CJK cell's band; a capped unit keeps its own size where the page's grows past it)
+        if (!steps(f) || scaleOf(k) > (f.p.P.capScale ?? Number.POSITIVE_INFINITY)) {
           ls.push(null)
           continue
         }

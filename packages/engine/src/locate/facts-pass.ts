@@ -157,6 +157,12 @@ export function factsOf({
     const k = `${c.table}|${c.col}|${c.span ?? 1}`
     ;(column.get(k) ?? column.set(k, []).get(k)!).push(mem)
   }
+  // (the boxes a member owns, its text's and its elements': a unit's ink, never a table's rule)
+  const ownedBox = new Set<string>()
+  for (const mem of members) {
+    for (const [p, j] of mem.textBoxes) ownedBox.add(`${p}|${j}`)
+    for (const l of mem.elBoxes.values()) for (const [p, j] of l) ownedBox.add(`${p}|${j}`)
+  }
 
   for (const mem of members) {
     if (!mem.located || !mem.lines.length) continue
@@ -374,7 +380,10 @@ export function factsOf({
     const side = sideOf(mem.lines, foreign, blockOf)
     if (side) mem.room.side = side
     if (unit?.cell) {
-      const band = bandOf(mem.lines, (p) => boxes(p).filter((b) => b.rule))
+      // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a
+      // fraction's bar its element's: 1512.03385v1 p5's "conv2_x" read its own as the rule over it, 2610.21924v1 p21's cells
+      // the row's above and below)
+      const band = bandOf(mem.lines, (p) => boxes(p).filter((b) => b.rule && !ownedBox.has(`${p}|${b.j}`)))
       if (band) mem.room.band = band
     }
 

@@ -63,6 +63,8 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     bottom: number
     /** its first glyph's start */
     x0: number
+    /** each baseline's glyphs' ink, over and under (a hundredth's grid): the band of the line's own text is its baseline's */
+    bands: Map<number, [top: number, bottom: number]>
   }
   const out: Open[] = []
   let L: Open | null = null
@@ -91,7 +93,11 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     const back = prev !== null && g.x0 < prev.x0 - 0.5 * g.size
     // (back to the line's start or before it: where a line begins; back within the line, a fraction's denominator)
     const toStart = back && L !== null && g.x0 <= L.x0 + 0.5 * g.size
-    const crosses = L !== null && !toStart && g.bottom < L.top && g.top > L.bottom
+    // (the ink it crosses is the line's own text's, on the baseline its body glyphs share: a tall formula's ink beside it is
+    // no line of it, so an indented continuation under a formula reaching down to it starts a line (cloud Codex on
+    // fa6e1c089: an item's second line, x 85, baseline 688, beside an inline formula down to 680, read with the first))
+    const band = L ? (L.bands.get(r2(L.y0)) ?? [L.top, L.bottom]) : null
+    const crosses = L !== null && band !== null && !toStart && g.bottom < band[0] && g.top > band[1]
     const off = L !== null && !crosses && Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size)
     const jump =
       L !== null &&
@@ -100,10 +106,28 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
         g.x0 > prev.x1 + 2 * Math.max(prev.size, g.size) ||
         (!crosses && Math.abs(g.y - L.y0) > 1.5 * Math.max(L.size, g.size)))
     if (L === null || page !== L.page || (off && jump)) {
-      L = { page, y0: g.y, size: g.size, gs: [], votes: new Map(), best: 0, top: g.top, bottom: g.bottom, x0: g.x0 }
+      L = {
+        page,
+        y0: g.y,
+        size: g.size,
+        gs: [],
+        votes: new Map(),
+        best: 0,
+        top: g.top,
+        bottom: g.bottom,
+        x0: g.x0,
+        bands: new Map(),
+      }
       out.push(L)
     }
     L.gs.push(i)
+    const yb = r2(g.y)
+    const bd = L.bands.get(yb)
+    if (!bd) L.bands.set(yb, [g.top, g.bottom])
+    else {
+      if (g.top > bd[0]) bd[0] = g.top
+      if (g.bottom < bd[1]) bd[1] = g.bottom
+    }
     if (g.top > L.top) L.top = g.top
     if (g.bottom < L.bottom) L.bottom = g.bottom
     if (g.size > L.size * (1 + BODY)) {

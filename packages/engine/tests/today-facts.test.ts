@@ -92,6 +92,25 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
     )
     expect(lines.map((l) => [l.base, l.x0])).toEqual([[692.64, 61]])
   })
+  it('starts a line where an indented continuation stands beside a tall formula: ink overlap alone shares no line', () => {
+    // (cloud Codex on fa6e1c089: 10 pt text from x 72 on baseline 700 with an inline formula whose ink reaches down to 680, then
+    // an item's second line from x 85 on baseline 688, indented: back left, not to the line's start, its ink inside the
+    // formula's but under the line's text: one line read for two, the member a row short)
+    const gs = [
+      ...[...'item text'].map((u, i) => g(u, 72 + 5 * i, 700, 10)),
+      g('∑', 125, 690, 10, { bottom: 680, top: 708 }),
+      ...[...'more'].map((u, i) => g(u, 140 + 5 * i, 700, 10)),
+      ...[...'continued'].map((u, i) => g(u, 85 + 5 * i, 688, 10)),
+    ]
+    const lines = cutLines(
+      gs.map((_, i) => i),
+      (i) => ({ page: 1, g: gs[i]! }),
+    )
+    expect(lines.map((l) => [l.base, l.x0])).toEqual([
+      [700, 72],
+      [688, 85],
+    ])
+  })
   it('keeps a big delimiter on its line, its origin at its top: its ink crosses the baseline', () => {
     // (2610.21026v1 p20: a 10 pt line, then \left( with its origin 17 pt over the baseline and its ink from 12 pt under to it,
     // then the formula's numerator and the rest on the baseline: one line; the next line's first glyph, back left and a

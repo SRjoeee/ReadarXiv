@@ -69,6 +69,8 @@ export interface Member {
   pages: number[]
   join?: [number] | [number, 1]
   dir?: [number, number]
+  /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
+  plain?: string
   /** its first and last glyph on B (global), -1 for none */
   bFirst: number
   bLast: number
@@ -774,6 +776,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
     }
+    // (a babel name's own text: S.names leaves it the original's where the target's word is it already)
+    if (mem.name !== undefined) mem.plain = textOf(mem.text.map(gA))
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
