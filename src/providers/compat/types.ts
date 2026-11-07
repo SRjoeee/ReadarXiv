@@ -1,19 +1,11 @@
 // The uniform provider interface (DESIGN §8). One file per engine; no sharing of unpublished interface details across files.
-// A frozen copy of the members of src/providers/types.ts (and alignment.ts's SentenceAlignment) at dc98f697f that
-// google-web.ts, http-errors.ts and request/retry-policy.ts use, so the live types.ts changes without them.
-// Kept at this path for the website's Worker (readarxiv-web, through @vendor/providers/google-web) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
+// A frozen copy of the members of src/providers/types.ts at dc98f697f that google-web.ts, http-errors.ts and
+// compat/microsoft.ts use, so the live types.ts changes without them.
+// Kept at this path for the website's Worker (readarxiv-web, through @vendor/providers/google-web and @vendor/providers/microsoft) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 
 import type { WireFormat } from '@/core/protector/tokens'
 import { attachRequestErrorMeta, type RequestErrorMeta } from '../request/retry-policy'
-
-/**
- * Sentence lengths in **wire-text coordinates**, in order. `source` describes the text we sent and
- * `target` the text that came back; entry *i* of each is one sentence pair.
- */
-export interface SentenceAlignment {
-  source: number[]
-  target: number[]
-}
+import type { SentenceAlignment } from './alignment'
 
 export interface TranslateSegment {
   id: string

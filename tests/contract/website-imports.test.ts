@@ -1,75 +1,93 @@
 // The website's contract (CLAUDE.md hard rule 7). The website (readarxiv-web) pins this repository as a submodule and
-// imports modules of its src/ through an alias, `@vendor/<path>` → `src/<path>`, in its reader and its Worker. A module
-// moved or deleted here breaks the website's build at its next pin, so each stays at its old path (a re-export where the
-// code moved, a frozen copy where it was deleted) until the website's cut-over.
-import { existsSync } from 'node:fs'
+// imports modules of its src/ through an alias, `@vendor/<path>` → `src/<path>`, in its reader, its Worker and its tests.
+// A module moved or deleted here, or a name it no longer exports, breaks the website's build at its next pin, so each
+// stays at its old path with every name the website takes from it (a re-export where the code moved, a frozen copy where
+// it was deleted) until the website's cut-over.
+import { existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Every path the website imports as `@vendor/<path>`: its source's and its tests' `@vendor/` imports, by path under src/
- * without an extension (gathered from readarxiv-web's tree on 2026-11-07). A path is removed from this list only when the
- * website stops importing it, in a pull request that names the website's commit that stopped.
+ * Every path the website imports as `@vendor/<path>`, by path under src/ (without an extension, as the website writes
+ * it, except for a style sheet), with every value it imports from it: the static and dynamic imports and the members it
+ * reads off a namespace import, in its source and its tests (readarxiv-web 0bf496b5, gathered 2026-11-07). A path or a
+ * name is removed from this list only when the website stops importing it, in a pull request that names the website's
+ * commit that stopped.
+ *
+ * Type-only imports are not held: the website types every `@vendor/` module by its own `types/vendor.d.ts` and never
+ * compiles against these sources (three of the controller's types it imports, ReaderEvent, ReaderHost and ReaderPrefs,
+ * exist only there), and its bundlers erase type imports. Its `web/tests/vendor-types.test.ts` holds those declarations
+ * to the pin's source.
  */
-const WEBSITE_IMPORTS = [
-  'locales',
-  'pdf-reader/controller',
-  'pdf-reader/support',
-  'pdf-reader/ui/appearance',
-  'pdf-reader/ui/Capsule',
-  'pdf-reader/ui/capsule-words',
-  'pdf-reader/ui/DisplaySwitch',
-  'pdf-reader/ui/link-names',
-  'pdf-reader/ui/Menus',
-  'pdf-reader/ui/Outline',
-  'pdf-reader/ui/PagePill',
-  'pdf-reader/ui/PaperTitle',
-  'pdf-reader/ui/pinch',
-  'pdf-reader/ui/ProgressLine',
-  'pdf-reader/ui/scroll-show',
-  'pdf-reader/ui/ScrollIndicator',
-  'pdf-reader/ui/settings-lock',
-  'pdf-reader/ui/status',
-  'pdf-reader/ui/StatusCapsule',
-  'pdf-reader/ui/ToolbarButton',
-  'pdf-reader/ui/use-reader',
-  'providers/google-web',
-  'providers/microsoft',
-  'providers/request/retry-policy',
-  'ui/controls/Icon',
-  'ui/controls/MenuList',
-  'ui/controls/modality',
-  'ui/controls/Popover',
-  'ui/controls/radio',
-  'ui/controls/Switch',
-  'ui/controls/tip',
-  'ui/menu-nav',
-  'ui/strings',
-] as const
+const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
+  { path: 'config/appearance', names: ['BUILT_IN_HIGHLIGHTS', 'DEFAULT_APPEARANCE', 'HL_OPACITY_MAX', 'HL_OPACITY_MIN', 'lookOf'] },
+  { path: 'core/renderer/style-preset', names: ['appearanceRule'] },
+  { path: 'core/rules/latexml', names: ['RULES_VERSION'] },
+  { path: 'entrypoints/pdf-reader/reader.css', names: [] },
+  { path: 'locales', names: ['LOCALE_CODES', 'LOCALES', 'pickLocale'] },
+  { path: 'pdf-reader/controller', names: ['createController', 'INITIAL', 'reduce'] },
+  { path: 'pdf-reader/engine/view/engine.css', names: [] },
+  { path: 'pdf-reader/support', names: ['readerRuns'] },
+  { path: 'pdf-reader/ui/appearance', names: ['applyAppearance', 'dimmed', 'themeOf', 'withoutTransitions'] },
+  { path: 'pdf-reader/ui/Capsule', names: ['Capsule'] },
+  { path: 'pdf-reader/ui/capsule-words', names: ['words'] },
+  { path: 'pdf-reader/ui/DisplaySwitch', names: ['DisplaySwitch'] },
+  { path: 'pdf-reader/ui/link-names', names: ['linkNameOf'] },
+  { path: 'pdf-reader/ui/Menus', names: ['LanguageMenu', 'ZoomMenu'] },
+  { path: 'pdf-reader/ui/Outline', names: ['Outline'] },
+  { path: 'pdf-reader/ui/PagePill', names: ['PagePill'] },
+  { path: 'pdf-reader/ui/PaperTitle', names: ['PaperTitle'] },
+  { path: 'pdf-reader/ui/pinch', names: ['usePinch'] },
+  { path: 'pdf-reader/ui/ProgressLine', names: ['ProgressLine'] },
+  { path: 'pdf-reader/ui/scroll-show', names: ['useScrollShow'] },
+  { path: 'pdf-reader/ui/ScrollIndicator', names: ['ScrollIndicator'] },
+  { path: 'pdf-reader/ui/settings-lock', names: ['useSettingsLock'] },
+  { path: 'pdf-reader/ui/status', names: ['capsuleOf', 'cardOf', 'lineOf', 'spokenOf'] },
+  { path: 'pdf-reader/ui/StatusCapsule', names: ['NARROW_MS', 'useTimedLeave'] },
+  { path: 'pdf-reader/ui/ToolbarButton', names: ['ToolbarButton'] },
+  { path: 'pdf-reader/ui/use-reader', names: ['useReader'] },
+  { path: 'providers/google-web', names: ['createGoogleWebProvider'] },
+  { path: 'providers/microsoft', names: ['createMicrosoftProvider', 'supportsTarget'] },
+  { path: 'providers/request/retry-policy', names: ['getRequestErrorMeta', 'RATE_LIMIT_BASE_PAUSE_MS'] },
+  { path: 'styles/image.css', names: [] },
+  { path: 'ui/controls/Icon', names: ['Icon'] },
+  { path: 'ui/controls/MenuList', names: ['MenuList'] },
+  { path: 'ui/controls/modality', names: ['trackModality'] },
+  { path: 'ui/controls/Popover', names: ['Popover', 'usePopover'] },
+  { path: 'ui/controls/radio', names: ['radioKeys'] },
+  { path: 'ui/controls/Switch', names: ['Switch'] },
+  { path: 'ui/controls/tip', names: ['useTip'] },
+  { path: 'ui/menu-nav', names: ['useMenuNav'] },
+  { path: 'ui/strings', names: ['languageName', 'profileName', 'R', 'S', 'setLocale'] },
+]
 
 const SRC = resolve(__dirname, '../../src')
 /** What a bundler finds for `<path>`, in the order it tries: the module's own file, then a directory's index */
 const CANDIDATES = ['.ts', '.tsx', '.mjs', '.d.mts', '/index.ts', '/index.tsx', '/index.mjs', '/index.d.mts']
-/** A declaration file is types only: it resolves, and there is nothing to load */
-const isCode = (file: string) => !file.endsWith('.d.mts')
+/** A declaration file is types only and a style sheet is the page's: each resolves, and there is nothing to load here */
+const isCode = (file: string) => !file.endsWith('.d.mts') && !file.endsWith('.css')
 
-const resolved = (path: string): string | undefined => CANDIDATES.map(ext => `${SRC}/${path}${ext}`).find(existsSync)
+const isFile = (file: string) => existsSync(file) && statSync(file).isFile()
+/** A style sheet is named with its extension; a module without one */
+const resolved = (path: string): string | undefined =>
+  (/\.css$/.test(path) ? [''] : CANDIDATES).map(ext => `${SRC}/${path}${ext}`).find(isFile)
 
-describe("the website's @vendor/ imports: every module resolves at its path under src/ and loads", () => {
-  it('the list names each path once', () => {
-    expect(new Set(WEBSITE_IMPORTS).size).toBe(WEBSITE_IMPORTS.length)
+describe("the website's @vendor/ imports: every module resolves at its path under src/, loads, and exports every value the website takes from it", () => {
+  it('the list names each path once and each name once', () => {
+    expect(new Set(WEBSITE_IMPORTS.map(entry => entry.path)).size).toBe(WEBSITE_IMPORTS.length)
+    for (const { path, names } of WEBSITE_IMPORTS) expect(new Set(names).size, path).toBe(names.length)
   })
 
-  it.each(WEBSITE_IMPORTS)('@vendor/%s resolves', path => {
+  it.each(WEBSITE_IMPORTS)('@vendor/$path resolves', ({ path }) => {
     expect(resolved(path), `src/${path} (.ts, .tsx, .mjs, .d.mts or an index)`).toBeDefined()
   })
 
   // Under happy-dom, the environment of every test here, so the reader's and the controls' components load as in a page
-  it.each(WEBSITE_IMPORTS)('@vendor/%s imports without throwing and exports something', async path => {
+  it.each(WEBSITE_IMPORTS.filter(entry => entry.names.length > 0))('@vendor/$path loads and exports $names', async ({ path, names }) => {
     const file = resolved(path)
     expect(file, `src/${path}`).toBeDefined()
     if (!file || !isCode(file)) return
     const module: Record<string, unknown> = await import(/* @vite-ignore */ file)
-    expect(Object.keys(module).length, `${file} exports nothing`).toBeGreaterThan(0)
+    expect(names.filter(name => !(name in module)), `${file} no longer exports`).toEqual([])
   })
 })
