@@ -120,7 +120,9 @@ describe('costs', () => {
     const read = await timedAsync(async () => { await store.answers.read(entries(880, 'b880').map(e => e[0])) })
     lines.push(`read 880 → ${ms(read)}`)
     report(`answers store (fake-indexeddb): ${lines.join('; ')}`)
-    expect((await store.stats()).entries).toBe(1131)
+    // stats() counts the rows (S-O-70's passages); the answers written here show in the bytes
+    expect((await store.stats()).entries).toBe(0)
+    expect((await store.stats()).bytes).toBeGreaterThan(1131 * 20)
   })
 
   measure('sentence highlight MutationObserver taking a pipeline burst', () => {

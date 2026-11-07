@@ -174,7 +174,7 @@ export interface TranslateStore {
   cleanup(): Promise<number>
   /** every table emptied (the settings page's Data section); how many entries went */
   clear(): Promise<number>
-  /** every table's entries and bytes */
+  /** the rows' count (S-O-70's passages) and every table's bytes */
   stats(): Promise<{ entries: number; bytes: number }>
 }
 
@@ -192,8 +192,10 @@ export function createTranslateStore(o: { db?: TranslateDatabase; limits?: Parti
     cleanup: async () => (await Promise.all(all.map(t => t.cleanup()))).reduce((a, b) => a + b, 0),
     clear: async () => (await Promise.all(all.map(t => t.clear()))).reduce((a, b) => a + b, 0),
     stats: async () => {
+      // S-O-70 "{n} passages": the translated passages are the rows; a raw answer behind a row and a figure's reading are
+      // not passages, but their bytes are held, so the size is every table's
       const s = await Promise.all(all.map(t => t.stats()))
-      return { entries: s.reduce((n, x) => n + x.entries, 0), bytes: s.reduce((n, x) => n + x.bytes, 0) }
+      return { entries: (await tables.rows.stats()).entries, bytes: s.reduce((n, x) => n + x.bytes, 0) }
     },
   }
 }

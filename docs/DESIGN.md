@@ -740,8 +740,9 @@ decision: clearing it costs a re-translation and nothing else.
   (`tests/cache/translate-store.test.ts` opens a database made by version 2's schema). Every page is translated once more
   on its first open: the free engines cost nothing, an LLM the reader's own key one more request a unit.
 - **Management is a global clear on the settings page** (`axt:cache-stats`, `axt:cache-clear`) over the three tables: the
-  count and size shown, expired entries removed before counting, a failure reported as a failure — never as "the cache is
-  empty". **A worker's start sweeps the expired entries too** (`sweepAtStart`, #88 E6): its failure is a line in the log.
+  size shown is every table's bytes; the count shown (S-O-70, "{n} passages") is the rows', because a row is a translated
+  passage and the raw answer behind it and a figure's reading are not; expired entries removed before counting, a failure
+  reported as a failure — never as "the cache is empty". **A worker's start sweeps the expired entries too** (`sweepAtStart`, #88 E6): its failure is a line in the log.
 - **What left the key, and why**: `CACHE_KEY_VERSION` (deleted with `cache/key.ts`: the wire's bytes stand where its
   request shaping did), the `rules` slot and `RULES_VERSION` (an HTML block's wire is in the key, and a rule that changes
   what is sent changes the wire), `renderPath` (the wire again), the cuts and `marked-over-cap` (the tags adapter writes its

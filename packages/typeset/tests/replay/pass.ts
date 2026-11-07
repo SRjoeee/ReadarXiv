@@ -5,7 +5,7 @@
 // and each begun unit's final layout (its L10 slot). A pass any of whose units the chain did not lay is not replayed, and says
 // which.
 import type { FitState, Layout } from '../../src/fit/types.ts'
-import type { FillDecision, FillLaid, PageRules } from '../../src/shared/fill-page.types.ts'
+import type { FillDecision, FillLaid, PageRules } from '../../src/shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'

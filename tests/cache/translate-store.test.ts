@@ -75,11 +75,11 @@ describe("today's bounds, per table", () => {
     const db = createTranslateDb(name(), options)
     const store = createTranslateStore({ db, now: () => ++now, limits: { maxEntries: 3 } })
     // a page's batches end together: each write found the totals not counted and counted its own
-    await Promise.all(['a', 'b', 'c', 'd'].map(k => store.answers.write([[k, '1']])))
-    await store.answers.write([['e', '1']])
+    await Promise.all(['a', 'b', 'c', 'd'].map(k => store.rows.write([[k, '1']])))
+    await store.rows.write([['e', '1']])
     // the table itself, not the store's own count of it
-    expect(await db.answers.count()).toBeLessThanOrEqual(3)
-    expect((await store.stats()).entries).toBe(await db.answers.count())
+    expect(await db.rows.count()).toBeLessThanOrEqual(3)
+    expect((await store.stats()).entries).toBe(await db.rows.count())
   })
   it('a write that holds one key twice keeps one entry and counts one, the last value', async () => {
     const db = createTranslateDb(name(), options)
@@ -104,7 +104,10 @@ describe("today's bounds, per table", () => {
     await store.answers.write([['a', '1']])
     await store.rows.write([['r', '2']])
     await store.ocr.write([['o', '3']])
-    expect((await store.stats()).entries).toBe(3)
+    // S-O-70 counts translated passages (the rows): a raw answer and a figure's reading are not passages, their bytes are held
+    const s = await store.stats()
+    expect(s.entries).toBe(1)
+    expect(s.bytes).toBeGreaterThan(await (async () => { const x = (await store.rows.read(['r']))[0] ?? ''; return x.length })())
     expect(await store.clear()).toBe(3)
     expect(await store.stats()).toEqual({ entries: 0, bytes: 0 })
   })

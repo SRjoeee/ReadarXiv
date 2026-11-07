@@ -135,38 +135,6 @@ const FILES = {
       ['    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })\n', '    p.fillLaid = { state: st, lead: p.fillLead, l: laid }\n', 1],
     ],
   },
-  'shared/fill-page.mjs': {
-    rule: 'S.fill.page',
-    from: 'run',
-    head: ['// S.fill.page (design-b §1.5, T33): a page\'s fill over the units begun on it, each spread over its frame at the page\'s target',
-      '// leading, tracked where it stays short, and the page\'s one size where every body unit is short. Today\'s code (run.mjs',
-      '// RUN:319-492: fillUnitsOf, fillPage), moved by lab/typeset/move-fit.mjs; typed by fill-page.types.ts. Its target is',
-      '// S.fill.target\'s port, its settling S.settle\'s, the layout S.fill.leads found the unit\'s field `fillLaid` (today\'s module',
-      '// WeakMap), the shared row\'s ink ends measured by the unit\'s own measure (`p.P.measure`); an optional `trace` is told what the',
-      '// tap read inside it, at its probes\' places (baseline/tap/engine.diff): each unit\'s decision, the page\'s size, each unit filled.'],
-    imports: ["import { footFloorOf } from '../breaker/slots.mjs'", "import { layoutAt } from '../fit/at.ts'", "import { keepsPages } from '../fit/runs.ts'",
-      "import { closerLead, fillLeadsOf, guessCloser } from './fill-leads.mjs'", "import { BODY_KINDS, fillTarget } from './fill-target.ts'", "import { keepsShare } from './share.ts'",
-      "import { settleLayout } from './settle.ts'", '', '/** a unit as S.fill.target reads it */', 'const voterOf = p => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines })'],
-    names: ['fillUnitsOf', 'fillPage'],
-    exports: [],
-    changes: [
-      ['L2.layoutAt(', 'layoutAt(', 1],
-      ['L2.keepsPages(', 'keepsPages(', 1],
-      ['L2.footFloorOf(', 'footFloorOf(', 1],
-      ['L2.keepsShare(p.share, l)', 'keepsShare(p.share, l, p.P.measure)', 2],
-      ['L2.keepsShare(f.p.share, best[i])', 'keepsShare(f.p.share, best[i], f.p.P.measure)', 1],
-      ['const told = pageTarget(voters ?? units, continuing, band)', 'const told = fillTarget((voters ?? units).map(voterOf), continuing.map(voterOf), band)', 1],
-      ['BODY_KINDS.has(', 'BODY_KINDS.includes(', 1],
-      ['    const kept = fillLaid.get(p)\n    fillLaid.delete(p)\n', '    const kept = p.fillLaid\n    delete p.fillLaid\n', 1],
-      // (the trace: what the tap read inside fillPage, its probes' places and values, handed to an optional `trace`)
-      ['onFilled = () => {}, { continuing = [], voters = null } = {}) {', 'onFilled = () => {}, { continuing = [], voters = null, trace = null } = {}) {', 1],
-      ['    if (p.fillLead === null) continue\n', "    if (p.fillLead === null) { trace?.unit(p, { skip: 'no fill leading' }); continue }\n", 1],
-      ['    if (!l) continue\n', "    if (!l) { trace?.unit(p, { skip: 'not set', lead, next }); continue }\n", 1],
-      ['    filled.push({ p, st, l, full, tracked, untracked })\n', '    filled.push({ p, st, l, full, tracked, untracked })\n    trace?.unit(p, { lead, next, same: !!same, closer, short, full, tracked })\n', 1],
-      ["f.l = best[i] })\n", "f.l = best[i] })\n    trace?.size(ok, scaleOf(ok), grown.map(f => [f.p.id, f.p.run ?? null, f.st.knob === 'grow']))\n", 1],
-      ['    onFilled(p, target)\n', '    trace?.filled(p, st, l, target)\n    onFilled(p, target)\n', 1],
-    ],
-  },
 }
 
 // (the declarations moved first and since ported to TypeScript, each still today's: held by the same replays)

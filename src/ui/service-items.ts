@@ -2,7 +2,7 @@
 // (the reader's design, §6.7) show the same list with the same words. Moved here from the popup's view model
 import type { Config } from '@/config/schema'
 import { serviceRuns } from '@/config/services'
-import { supportsTarget } from '@/providers/microsoft'
+import { supportsTarget } from '@/providers/targets'
 import type { PackState } from '@/shared/pack'
 import type { MenuItem } from './menu-item'
 import { S } from '@readarxiv/ui'
