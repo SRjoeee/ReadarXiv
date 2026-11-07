@@ -14,6 +14,7 @@ import {
   pinnedOf,
   shortSkipLines,
   sideOf,
+  centredByBlock,
   sourceEndMarks,
   styleOf,
   fillRunsOf,
@@ -207,6 +208,23 @@ describe('alignment where TeX did not tell (B3, E8)', () => {
     // (TeX's justified one-line paragraph, centred by its own glue, off both edges by more than 2 em)
     expect(alignOf([L(200, 412, 700)], () => 10, edges, 'j')).toBe('c')
     expect(alignOf([L(80, 532, 700)], () => 10, edges, 'j')).toBe('j')
+  })
+  it('reads a unit centred on its own block’s middle, off its column’s: its lines, or a single line’s stack, share a middle and not their edges', () => {
+    // (2303.11366v4 p1's author block, NeurIPS's centred tabulars on a one-column page: "Ashwin Gopinath" over "Massachusetts
+    // Institute of Technology" over "agopi@mit.edu", their middles at 393.83, the column's at 306; the row above 28 pt off)
+    const name = L(356.32, 431.34, 553.27)
+    const place = L(317.4, 470.27, 542.36)
+    const mail = L(359.84, 427.82, 531.45)
+    const rowAbove = L(321.7, 457.65, 581.45)
+    const page = [rowAbove, name, place, mail, L(108, 504, 413.51), L(143.87, 469.79, 402.6)]
+    expect(alignOf([place], () => 10, () => [108, 504])).toBe('j')
+    expect(centredByBlock([place], page, 11.96)).toBe(true)
+    expect(centredByBlock([name], page, 11.96)).toBe(true)
+    // (a paragraph's short last line stays its own: its lines share their left edge; a lone line, nothing to read it by)
+    expect(centredByBlock([L(108, 504, 413.51), L(108, 300, 402.6)], page, 10.91)).toBe(false)
+    expect(centredByBlock([L(108, 300, 300)], page, 10.91)).toBe(false)
+    // (two lines of one unit centred off the column: a centred block of its own)
+    expect(centredByBlock([L(320, 470, 600), L(345, 445, 588)], page, 12)).toBe(true)
   })
   it('centres a single-line cell by its column’s cells: middles within 2 pt, widths spread over 4', () => {
     expect(

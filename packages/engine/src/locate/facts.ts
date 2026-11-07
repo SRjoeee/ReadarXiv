@@ -646,6 +646,31 @@ export function alignOf(
   if (told === 'j') return centred && inset ? 'c' : 'j'
   return centred && short ? 'c' : 'j'
 }
+/**
+ * Whether a unit nothing tells the alignment of, and its column does not centre, is centred by its own block: its lines share
+ * a middle and not their edges (cellCentred's reading), a single line by the lines stacked on it, the nearest over it and under
+ * it that meet its extent within its leading `lead` (a tabular's centred column: an author block's name, place and e-mail).
+ * A line the original centres stands on its own middle, never the page's or the column's (the maintainer, 2026-11-08:
+ * 2303.11366v4 p1's "Massachusetts Institute of Technology", centred under its name at 393.8, was read justified by the
+ * column's middle at 306 and its translation set from its left edge); a paragraph's short last line shares its left edge
+ * with the lines over it and stays its own
+ */
+export function centredByBlock(own: readonly Line[], page: readonly Line[], lead: number): boolean {
+  if (own.length > 1) return cellCentred(own.map((l) => [l[2], l[3]])) === true
+  const l = own[0]
+  if (!l) return false
+  let over: Line | null = null
+  let under: Line | null = null
+  for (const k of page) {
+    if (k === l || k[0] !== l[0] || k[9] & 1 || k[3] <= l[2] || k[2] >= l[3]) continue
+    const d = k[4] - l[4]
+    if (d > 0.05 && d <= lead + 0.05) {
+      if (!over || k[4] < over[4]) over = k
+    } else if (d < -0.05 && -d <= lead + 0.05 && (!under || k[4] > under[4])) under = k
+  }
+  const stack = [l, ...(over ? [over] : []), ...(under ? [under] : [])]
+  return cellCentred(stack.map((x) => [x[2], x[3]])) === true
+}
 /** a single-line cell's centring by its table column's cells on its page (E8, today's cellCentred RUN:1508, its column by
  *  table, column and span; the tabular preamble's l/c/r is stage 1b's): every middle
  *  within 2 of every other and the widths spread by more than 4 (a column whose cells share a start or an end has its middles
