@@ -13,8 +13,13 @@ export type Unavailable =
   | 'no-source'
   | 'no-pdf'
   | 'cannot-prepare'
+  /** the paper too large for our server to prepare (a host may say it in words of its own; else as `cannot-prepare`) */
+  | 'too-large'
   | 'unknown-versions'
+  /** at a limit: the visitor's share of new papers (a 429's quota) */
   | 'refused'
+  /** our server busy (a 429 of capacity: a host may say it in words of its own; else as `refused`) */
+  | 'busy'
   | 'unreachable'
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's */
@@ -22,6 +27,7 @@ export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>([
   'no-source',
   'no-pdf',
   'cannot-prepare',
+  'too-large',
   'unknown-versions',
   'target',
 ])
@@ -89,6 +95,8 @@ export type SessionEvent =
   | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }
   /** no bilingual version for now, or for this paper or language */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
+  /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
+  | { type: 'link'; reconnecting: boolean }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -126,6 +134,10 @@ export interface ReaderState {
   unavailable: { why: Unavailable; retryAt: number | null } | null
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
+  /** the paragraphs translated of the paper's, as the run last told them (a host's words count them) */
+  translated: { got: number; total: number }
+  /** our server's document followed, its stream lost and asked again: the run under way not heard for now */
+  reconnecting: boolean
   /** 0–1, the share of the paper's PDF downloaded, in hundredths; 0 while its size is unknown */
   loaded: number
   /** the paragraphs the service failed on: the notice's {n} */
@@ -183,6 +195,8 @@ export const INITIAL: ReaderState = {
   layer: { laid: 0, total: 0 },
   unavailable: null,
   progress: 0,
+  translated: { got: 0, total: 0 },
+  reconnecting: false,
   loaded: 0,
   failedUnits: 0,
   failure: null,
@@ -374,6 +388,8 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
         return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
+    case 'link':
+      return event.reconnecting === state.reconnecting ? state : { ...state, reconnecting: event.reconnecting }
     case 'translating':
     case 'translated':
     case 'unavailable':
@@ -408,15 +424,17 @@ function reduceRunFree(
         begun: true,
         laying: false,
         progress,
+        translated: countOf(state, event),
         failedUnits: event.lost,
       }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
+      const counted = { ...state, translated: countOf(state, event) }
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state))
         return {
-          ...withFailures(state, { ...state.failures, service: event.stopped }),
+          ...withFailures(counted, { ...state.failures, service: event.stopped }),
           phase: 'failed',
           begun: true,
           progress,
@@ -426,7 +444,7 @@ function reduceRunFree(
       // (laying)
       if (!event.stopped && !settled(state.layer) && state.display !== 'original')
         return {
-          ...withFailures(state, { ...state.failures, service: null }),
+          ...withFailures(counted, { ...state.failures, service: null }),
           phase: 'translating',
           begun: true,
           laying: true,
@@ -434,7 +452,7 @@ function reduceRunFree(
           failedUnits: event.lost,
         }
       return {
-        ...withFailures(state, { ...state.failures, service: event.stopped }),
+        ...withFailures(counted, { ...state.failures, service: event.stopped }),
         phase: 'ready',
         begun: true,
         laying: false,
@@ -456,6 +474,12 @@ function reduceRunFree(
     }
   }
 }
+
+/** the run's count, the same object while it is the same */
+const countOf = (state: ReaderState, e: { got: number; total: number }): ReaderState['translated'] =>
+  state.translated.got === e.got && state.translated.total === e.total
+    ? state.translated
+    : { got: e.got, total: e.total }
 
 /** a download's file name (the reader's design, §6.1): the paper's id, the translation's with its language; the slash of
  *  an old-style id (hep-th/9711200) made safe */

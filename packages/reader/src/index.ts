@@ -51,7 +51,7 @@ export {
 export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'
 export { mountChrome } from './chrome/mount.tsx'
 export { CATALOGUE_WORDS, linkNameOf, type Words } from './compose/words.ts'
-export { type LanguageItem, type Languages, PARTS, type Parts, type Slots } from './chrome/parts.tsx'
+export { type LanguageItem, type Languages, PARTS, type Parts, type Slots, type StateWords } from './chrome/parts.tsx'
 export { useSettingsLock } from './chrome/settings-lock.ts'
 export { ToolbarButton } from './chrome/ToolbarButton.tsx'
 export { useReader } from './chrome/use-reader.ts'

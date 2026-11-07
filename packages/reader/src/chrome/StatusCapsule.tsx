@@ -2,7 +2,7 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here. A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone,
+// words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner. A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone,
 // for their time. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
@@ -18,6 +18,7 @@ import type { ReaderController } from './model.ts'
 import { Capsule as Drawn } from './Capsule.tsx'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
+import { textOf } from './capsule-words.ts'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status.ts'
 import { useReader } from './use-reader.ts'
 
@@ -34,9 +35,11 @@ export function StatusCapsule({
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
   const parts = useParts()
-  const now = useReader(controller, (s) => capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages))
+  const now = useReader(controller, (s) =>
+    capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages, parts.words),
+  )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
-  const card = useReader(controller, (s) => cardOf(s, parts.reason))
+  const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
   // a load or a translation under way: said here, shown by the progress line alone
   const spoken = useReader(controller, spokenOf)
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
@@ -56,9 +59,18 @@ export function StatusCapsule({
   }, [now?.kind, now?.words])
   const linger = useTimedLeave(now?.kind === 'narrow', NARROW_MS, () => setNarrowShown(true))
   const capsule = now ?? leaving
+  // a run's capsule (a host's words) says its stage once, with the count it starts at: the count that moves is not said again
+  // (the website's), and the status line of the run is its own then, so that nothing is read twice
+  const stageSaid = useRef<{ stage: string; words: string } | null>(null)
+  if (now?.kind === 'progress' && stageSaid.current?.stage !== now.stage)
+    stageSaid.current = { stage: now.stage, words: textOf(now.words) }
+  if (now?.kind !== 'progress') stageSaid.current = null
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone =
-    capsule?.kind === 'narrow' || capsule?.kind === 'toast' || (capsule?.kind === 'unavailable' && !capsule.href)
+    capsule?.kind === 'narrow' ||
+    capsule?.kind === 'toast' ||
+    capsule?.kind === 'progress' ||
+    (capsule?.kind === 'unavailable' && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
   // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
@@ -69,13 +81,20 @@ export function StatusCapsule({
   return (
     <div role="status" className="capsule-slot">
       {card && <span className="sr-only">{card.reason}</span>}
-      {spoken && <span className="sr-only">{spoken}</span>}
+      {spoken && now?.kind !== 'progress' && <span className="sr-only">{spoken}</span>}
       {capsule && (
         <Drawn
           key={capsule.kind}
           kind={capsule.kind}
-          icon={capsule.kind === 'toast' && capsule.icon === 'check' ? Check : Info}
+          icon={
+            capsule.kind === 'progress'
+              ? 'spinner'
+              : capsule.kind === 'toast' && capsule.icon === 'check'
+                ? Check
+                : Info
+          }
           words={capsule.words}
+          {...(capsule.kind === 'progress' ? { spoken: now === null ? '' : (stageSaid.current?.words ?? '') } : {})}
           wordsId={words}
           alone={alone}
           out={now === null}
@@ -86,6 +105,7 @@ export function StatusCapsule({
           after={
             capsule.kind === 'narrow' ||
             capsule.kind === 'toast' ||
+            capsule.kind === 'progress' ||
             (capsule.kind === 'unavailable' && !link) ? null : (
               <>
                 {capsule.kind === 'unreadable' && parts.settingsHref && (

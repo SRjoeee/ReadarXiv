@@ -133,6 +133,8 @@ export interface ReaderState {
     /** the contents entry being read: the last heading at or above the reading line of the pane read; null before the first */
     heading: number | null
   }
+  /** our server's document followed, its stream lost and asked again, nothing heard since (the website says "reconnecting") */
+  reconnecting: boolean
   crashed: boolean
 }
 export interface Reader {
@@ -521,6 +523,7 @@ export function openReader(
         target: spec.target,
         signal,
         onDoc: (doc) => emit({ i: 'paper', t, doc }),
+        onQuiet: () => emit({ i: 'link.quiet', t }),
       }).catch((e) => {
         if (signal.aborted) return
         emit({
@@ -938,6 +941,7 @@ export function openReader(
         outline,
         heading,
       },
+      reconnecting: l.s === 'on' && !!l.lost,
       crashed,
     }
     return told

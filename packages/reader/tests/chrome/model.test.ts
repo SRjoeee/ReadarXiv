@@ -817,3 +817,24 @@ describe("a host's toast (ReaderController.toast: the website's share menu's wor
     expect(capsuleOf({ ...INITIAL, phase: 'ready', toast }, SEEN, PARTS.languages)?.words.prefix).toBe('Link copied')
   })
 })
+
+describe("the run's count and our server's document not heard, as a host's words say them", () => {
+  it('keeps the count the run last told, the same object while it is the same; reconnecting as the reader tells it', () => {
+    const a = fold([opened, { type: 'translating', got: 3, total: 10, lost: 0 }])
+    expect(a.translated).toEqual({ got: 3, total: 10 })
+    expect(reduce(a, { type: 'translating', got: 3, total: 10, lost: 0 }).translated).toBe(a.translated)
+    expect(reduce(a, { type: 'translated', got: 10, total: 10, lost: 0, stopped: null }).translated).toEqual({
+      got: 10,
+      total: 10,
+    })
+    const lost = reduce(a, { type: 'link', reconnecting: true })
+    expect([lost.reconnecting, reduce(lost, { type: 'link', reconnecting: true })]).toEqual([true, lost])
+    expect(reduce(lost, { type: 'link', reconnecting: false }).reconnecting).toBe(false)
+  })
+  it('a paper too large is lasting, our server busy passing: each its own for a host to word', () => {
+    const tooLarge = fold([opened, { type: 'unavailable', why: 'too-large', retryAt: null }])
+    const busy = fold([opened, { type: 'unavailable', why: 'busy', retryAt: 9 }])
+    expect([tooLarge.available, tooLarge.unavailable?.why]).toEqual([false, 'too-large'])
+    expect([busy.available, busy.unavailable]).toEqual([true, { why: 'busy', retryAt: 9 }])
+  })
+})

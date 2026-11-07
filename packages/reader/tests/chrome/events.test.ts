@@ -21,6 +21,7 @@ const base: ReaderState = {
     outline: [],
     heading: null,
   },
+  reconnecting: false,
   crashed: false,
 }
 /** the chrome's state after the reader went through `states`, each told as its events */
@@ -91,7 +92,7 @@ describe("the reader's state as the chrome's", () => {
     expect(fold([open, { ...open, layer: { s: 'refused', why: 'no-source', retryAt: null } }]).available).toBe(false)
     expect(fold([open, { ...open, layer: { s: 'refused', why: 'busy', retryAt: 5 } }])).toMatchObject({
       available: true,
-      unavailable: { why: 'refused', retryAt: 5 },
+      unavailable: { why: 'busy', retryAt: 5 },
     })
   })
   it("rows failing: a key missing is the settings' card; out of reach the network; a refusal a bad request; a target the reader does not set its own notice", () => {

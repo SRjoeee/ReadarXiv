@@ -1,11 +1,12 @@
 // The reader's states (the reader's design, §8) as what the capsule, the progress line and the card show: one anatomy,
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
 // failure's card. A capsule's sentence is its words in parts (capsule-words.ts): a count drawn in cells of its own, a
-// language's own name drawn in that language
+// language's own name drawn in that language. Every sentence is the catalogue's, or the host's for its state where it gives
+// one (parts.tsx StateWords: the website's own)
 import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
 import type { ReaderState } from './model.ts'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
-import type { Languages } from './parts.tsx'
+import type { Languages, StateWords } from './parts.tsx'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
@@ -28,6 +29,11 @@ export type Capsule =
   | { kind: 'saveFailed'; words: CapsuleWords }
   /** a host's passing words (ReaderController.toast: the website's "copied"), in its words and sign, for their time */
   | { kind: 'toast'; words: CapsuleWords; icon: 'check' | 'info' }
+  /** a run under way, in the host's words where it gives them (the website's): with the spinner, its count a part of its own;
+   *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25) */
+  | { kind: 'progress'; stage: Stage; words: CapsuleWords }
+/** where a run under way stands, as a host's words say it */
+export type Stage = 'queued' | 'preparing' | 'translating' | 'reconnecting'
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
 export interface Card {
   reason: string
@@ -47,24 +53,53 @@ export interface Seen {
   refusalsSeen: number
 }
 
-export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Languages, 'name' | 'tag'>): Capsule | null {
+/** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
+ *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
+ *  as the website says it; else the paragraphs translated. Null where none is under way */
+export function stageOf(state: ReaderState): Stage | null {
+  if (!running(state)) return null
+  if (state.reconnecting) return 'reconnecting'
+  if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
+  return 'translating'
+}
+/** a run's stage in the host's words, or null where it gives none */
+function stageWords(stage: Stage, state: ReaderState, words: StateWords): CapsuleWords | null {
+  if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
+  if (stage === 'translating') {
+    const { got, total } = state.translated
+    return words.translating ? withCount(words.translating(got, total), got) : null
+  }
+  const w = words[stage]
+  return w ? plain(w) : null
+}
+
+export function capsuleOf(
+  state: ReaderState,
+  seen: Seen,
+  languages: Pick<Languages, 'name' | 'tag'>,
+  words: StateWords = {},
+): Capsule | null {
   // a host's passing words first, over whatever else stands, for their time: what the reader just did (the website's)
   if (state.toast) return { kind: 'toast', words: plain(state.toast.words), icon: state.toast.icon }
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
   // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused. They
   // are true of an address with no paper too, whose controls they explain, and stand beside its card
   if (state.phase !== 'failed') {
-    if (state.settingsUnreadable) return { kind: 'unreadable', words: plain(R.status.unreadable) }
+    if (state.settingsUnreadable) return { kind: 'unreadable', words: plain(words.unreadable ?? R.status.unreadable) }
     if (state.refusals > Math.max(seen.refusalsSeen, state.mended))
-      return { kind: 'saveFailed', words: plain(O.saveFailed) }
+      return { kind: 'saveFailed', words: plain(words.saveFailed ?? O.saveFailed) }
   }
   // no paper: its card says that much, and nothing about a paper is true of it
   if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
-  if (!state.available)
+  if (!state.available) {
+    const said = plain(
+      (state.unavailable?.why === 'too-large' ? words.tooLarge : undefined) ?? words.noPdf ?? R.status.noPdf,
+    )
     return state.htmlVersion
-      ? { kind: 'unavailable', words: plain(R.status.noPdf), href: state.htmlVersion }
-      : { kind: 'unavailable', words: plain(R.status.noPdf) }
+      ? { kind: 'unavailable', words: said, href: state.htmlVersion }
+      : { kind: 'unavailable', words: said }
+  }
   if (!state.languageSupported && state.prefs) {
     // the language named by its own name, and drawn in its own language: the name a part with the target's tag as its
     // `lang`
@@ -72,32 +107,44 @@ export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Langua
       name = languages.name(code)
     return {
       kind: 'unsupported',
-      words: withPart(R.status.unsupported(name), { text: name, lang: languages.tag(code) }),
+      words: withPart((words.unsupported ?? R.status.unsupported)(name), { text: name, lang: languages.tag(code) }),
       action: 'language',
     }
   }
+  // a run under way, where the host words it (the website's stage and count); else the progress line alone shows it
+  const stage = stageOf(state)
+  const said = stage && stageWords(stage, state, words)
+  if (stage && said) return { kind: 'progress', stage, words: said }
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
   // (the layer-only plan's "Offline, drafted")
   const why = state.unavailable?.why
   // (a 429 is our server's limit, said as such: past the run's few waits it asks no more by itself, and the reader's retry is
-  // what asks again, #88 E5)
-  if (!running(state) && (why === 'refused' || why === 'unreachable')) {
-    const words = plain(why === 'refused' ? R.status.limited : R.status.notNow)
-    return state.htmlVersion ? { kind: 'notNow', words, href: state.htmlVersion } : { kind: 'notNow', words }
+  // what asks again, #88 E5; busy, its capacity, said as the limit unless the host words it)
+  if (!running(state) && (why === 'refused' || why === 'busy' || why === 'unreachable')) {
+    const at = state.unavailable?.retryAt ?? null
+    const text =
+      why === 'unreachable'
+        ? (words.notNow?.(at) ?? R.status.notNow)
+        : ((why === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
+    const notNow = plain(text)
+    return state.htmlVersion
+      ? { kind: 'notNow', words: notNow, href: state.htmlVersion }
+      : { kind: 'notNow', words: notNow }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
   if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
     return {
       kind: 'notice',
-      words: withCount(S.failed.text(state.failedUnits), state.failedUnits),
+      words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
       action: state.failure ? 'retry' : null,
     }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown)
-    return { kind: 'narrow', words: plain(R.status.narrow) }
+    return { kind: 'narrow', words: plain(words.narrow ?? R.status.narrow) }
   return null
 }
 
-/** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it */
+/** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it
+ *  (where a host's words show it, the capsule says them itself) */
 export function spokenOf(state: ReaderState): string {
   return state.phase === 'loading'
     ? R.status.loading
@@ -130,15 +177,22 @@ export function lineOf(state: ReaderState): Line {
   return { on: running(state), value: DOWNLOAD + (1 - DOWNLOAD) * state.progress }
 }
 
-/** `reason`: a failure's sentence, the host's (it knows whether the translator in use has a key) */
-export function cardOf(state: ReaderState, reason: (kind: ProviderErrorKind) => string): Card | null {
-  if (state.noPaper) return { reason: R.status.noPaper, action: 'arxiv' }
+/** `reason`: a failure's sentence, the host's (it knows whether the translator in use has a key); `words`, the host's for the
+ *  card's states, over it */
+export function cardOf(
+  state: ReaderState,
+  reason: (kind: ProviderErrorKind) => string,
+  words: StateWords = {},
+): Card | null {
+  if (state.noPaper) return { reason: words.noPaper ?? R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
   const kind = state.failure ?? 'unknown'
+  // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
+  if (state.failures.pdf !== null && words.originalLost) return { reason: words.originalLost, action: 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
   // is the key's only where the service chosen carries one (the host's reason)
   return {
-    reason: kind === 'rate-limit' ? R.status.rateLimited : reason(kind),
+    reason: words.failed?.(kind) ?? (kind === 'rate-limit' ? R.status.rateLimited : reason(kind)),
     action: KEYS.has(kind) ? 'settings' : 'retry',
   }
 }

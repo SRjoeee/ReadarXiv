@@ -32,7 +32,7 @@ export function App({ controller, parts }: { controller: ReaderController; parts
 const subscribeLocale = (told: () => void) => onLocale(() => told())
 
 function Page({ controller }: { controller: ReaderController }) {
-  const { reason, probe } = useParts()
+  const { reason, probe, words } = useParts()
   const left = useRef<HTMLDivElement>(null)
   const right = useRef<HTMLDivElement>(null)
   // what the page itself shows; each part below takes its own (use-reader.ts)
@@ -41,7 +41,7 @@ function Page({ controller }: { controller: ReaderController }) {
     dimPages: s.prefs?.dim,
     swapped: s.prefs?.swapped ?? false,
     title: s.paper.title,
-    card: cardOf(s, reason) !== null && !s.noPaper,
+    card: cardOf(s, reason, words) !== null && !s.noPaper,
     noPaper: s.noPaper,
   }))
   const doc = useRef<HTMLElement>(null)

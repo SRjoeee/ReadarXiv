@@ -1041,6 +1041,53 @@ await check(
   },
 )
 await check(
+  "chrome: a host's words for the capsule's states: a paper being prepared said in them, with the spinner; the catalogue's look (the progress line alone) where it gives none (L11 differences 1, 2)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    const seen = async (words) => {
+      modes[seg] = { kind: 'not-opened', prepareMs: 2500 }
+      try {
+        const { page, context, errors } = await newPage({ path: 'chrome.html' })
+        await page.evaluate((w) => window.__c.open('s2-splits', { words: w }), words)
+        await waitFor(page, () => window.__c.reader?.state().layer.s === 'preparing', null, 20_000)
+        await page.waitForTimeout(300)
+        const during = await page.evaluate(() => {
+          const el = document.querySelector('.capsule:not([data-out])')
+          return el
+            ? {
+                kind: el.getAttribute('data-kind'),
+                said: el.querySelector('.sr-only')?.textContent,
+                spinner: !!el.querySelector('svg.spin'),
+              }
+            : null
+        })
+        const line = await page.evaluate(
+          () => document.querySelector('.progress-line')?.hasAttribute('data-on') ?? null,
+        )
+        await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+        await page.waitForTimeout(400)
+        const after = await page.evaluate(
+          () => document.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null,
+        )
+        await context.close()
+        return { during, line, after, errors: errors.filter((e) => !/status of 404/.test(e)) }
+      } finally {
+        delete modes[seg]
+      }
+    }
+    const host = await seen(true)
+    const none = await seen(false)
+    assert(!host.errors.length && !none.errors.length, [...host.errors, ...none.errors].join('; '))
+    assert(
+      host.during?.kind === 'progress' && host.during.said === 'Preparing the paper' && host.during.spinner,
+      `the host's words while preparing: ${JSON.stringify(host.during)}`,
+    )
+    assert(host.after !== 'progress', `a capsule of the run after it: ${host.after}`)
+    assert(none.during === null && none.line === true, `no words given: ${JSON.stringify(none)}`)
+    return { host: host.during.said, none: { capsule: none.during, line: none.line } }
+  },
+)
+await check(
   "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
   async () => {
     const from = server.log.length

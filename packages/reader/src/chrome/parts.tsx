@@ -35,9 +35,56 @@ export interface Slots {
   /** the action under a failure's card whose remedy is the host's (a key: its settings) */
   card?: (action: 'settings') => ReactNode
 }
+/**
+ * A host's words for the states the status capsule and the failure cards show, each in place of the catalogue's (the
+ * website's own sentences: its words today): one override typed by state, never a second catalogue; a state the host does
+ * not word keeps the catalogue's. A run under way (queued, preparing, translating, reconnecting) has no sentence of the
+ * catalogue's (the progress line under the bar shows it, the extension's approved look): where a host words it, the capsule
+ * says it too, with the spinner. A function is given what the state holds (a place in the queue, a count, the time a retry
+ * is due, ms since the epoch) and is asked again as it changes
+ */
+export interface StateWords {
+  /** the paper waiting in our server's queue, at its place */
+  queued?: (position: number) => string
+  /** the paper's layer being made */
+  preparing?: string
+  /** the paragraphs translated so far of the paper's: the count drawn as a part of its own where it stands in the sentence */
+  translating?: (got: number, total: number) => string
+  /** our server's document followed, its stream lost and asked again */
+  reconnecting?: string
+  /** the paper cannot be had as a bilingual PDF (R.status.noPdf) */
+  noPdf?: string
+  /** the paper too large to prepare (R.status.noPdf) */
+  tooLarge?: string
+  /** our server out of reach for now (R.status.notNow) */
+  notNow?: (retryAt: number | null) => string
+  /** our server busy for now (R.status.limited) */
+  busy?: (retryAt: number | null) => string
+  /** at the limit of new papers (R.status.limited) */
+  limited?: (retryAt: number | null) => string
+  /** a target the typesetter does not set, named by its own name (R.status.unsupported) */
+  unsupported?: (language: string) => string
+  /** passages that failed (S.failed.text) */
+  failedPassages?: (n: number) => string
+  /** the narrow window's translation alone (R.status.narrow) */
+  narrow?: string
+  /** the settings not read, the defaults in use (R.status.unreadable) */
+  unreadable?: string
+  /** a write of the settings refused (O.saveFailed) */
+  saveFailed?: string
+  /** the card of a run that translated nothing, by the chain's kind (the host's `reason`; R.status.rateLimited for a limit) */
+  failed?: (kind: ProviderErrorKind) => string
+  /** the card where the original could not be read (the host's `reason` of the network) */
+  originalLost?: string
+  /** the card of an address that names no paper (R.status.noPaper) */
+  noPaper?: string
+}
+
 export interface Parts {
   slots: Slots
   languages: Languages
+  /** the host's words for the capsule's and the cards' states; none: the catalogue's */
+  words?: StateWords
   /** a failure's reason as a sentence */
   reason(kind: ProviderErrorKind): string
   /** where the host's settings are, for the capsule's way there while they cannot be read (S-R-21); none: no link */

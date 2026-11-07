@@ -20,6 +20,7 @@ import {
   type ReaderController,
   type ReaderState,
   type Slots,
+  type StateWords,
   ToolbarButton,
   type UiLanguage,
   useReader,
@@ -32,6 +33,23 @@ interface Options {
   /** a host's own controls in every slot: its way home, its short link, its share (which says "copied" in the chrome's toast
    *  place), its interface language */
   slots?: boolean
+  /** a host's words for the capsule's and the cards' states (HOST_WORDS) */
+  words?: boolean
+}
+
+/** a host's words, each naming its state, as the website's table says its own */
+const HOST_WORDS: StateWords = {
+  queued: (n) => `Queued, number ${n}`,
+  preparing: 'Preparing the paper',
+  translating: (got, total) => `Translating ${got} / ${total}`,
+  reconnecting: 'Reconnecting',
+  noPdf: 'No bilingual PDF of this paper',
+  tooLarge: 'The paper is too large',
+  notNow: () => 'Unavailable for now',
+  busy: () => 'Busy for now',
+  limited: () => 'Your share of new papers is spent',
+  failed: () => 'The translation is unavailable',
+  originalLost: 'The original could not be read',
 }
 interface Fixture {
   paper: string
@@ -148,7 +166,11 @@ const c = {
     })
     c.controller = controller
     trackModality()
-    const parts: Parts = { ...PARTS, ...(o.slots ? { slots: hostSlots(controller) } : {}) }
+    const parts: Parts = {
+      ...PARTS,
+      ...(o.slots ? { slots: hostSlots(controller) } : {}),
+      ...(o.words ? { words: HOST_WORDS } : {}),
+    }
     mountChrome(document.getElementById('root') as HTMLElement, { controller, parts })
     return { paper: fx.paper }
   },

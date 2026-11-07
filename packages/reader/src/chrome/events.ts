@@ -13,11 +13,11 @@ export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
   'no-source': 'no-source',
   'not-found': 'no-source',
   'cannot-prepare': 'cannot-prepare',
-  'too-large': 'cannot-prepare',
+  'too-large': 'too-large',
   outdated: 'unknown-versions',
   mismatch: 'cannot-prepare',
   broken: 'cannot-prepare',
-  busy: 'refused',
+  busy: 'busy',
   limit: 'refused',
   unreachable: 'unreachable',
 }
@@ -95,6 +95,7 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
   }
   if (l.s === 'refused' && (pl?.s !== 'refused' || pl.why !== l.why))
     out.push({ type: 'unavailable', why: LAYER_WHY[l.why] ?? 'unreachable', retryAt: l.retryAt })
+  if (!!p?.reconnecting !== !!next.reconnecting) out.push({ type: 'link', reconnecting: !!next.reconnecting })
   const r = next.rows,
     pr = p?.rows
   if (r.s === 'arriving' && (pr?.s !== 'arriving' || pr.got !== r.got || pr.total !== r.total || pr.lost !== r.lost))

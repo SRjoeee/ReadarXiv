@@ -1,4 +1,4 @@
-import { Check, Info } from 'lucide'
+import { Check, Info, Loader } from 'lucide'
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { O, R, S, setLocale } from '@readarxiv/ui'
@@ -426,5 +426,48 @@ describe("a host's toast in the capsule's place", () => {
     await act(async () => fake.set({ toast: null }))
     await act(async () => new Promise((r) => setTimeout(r, 200)))
     expect(container.querySelector('.capsule')).toBeNull()
+  })
+})
+
+describe("a run under way in a host's words (the website's stage and count)", () => {
+  it('the capsule with the spinner, alone; its stage said once with the count it starts at, the count that moves not said again; none without them', async () => {
+    const translating = (got: number) => ({
+      phase: 'translating' as const,
+      progress: got / 10,
+      translated: { got, total: 10 },
+    })
+    const fake = fakeController({ phase: 'ready' })
+    const words = { translating: (got: number, total: number) => `${got} / ${total}`, reconnecting: 'reconnecting' }
+    const { container } = await mountElement(capsuleOf(fake.controller, { words }))
+    await act(async () => fake.set(translating(3)))
+    const capsule = () => container.querySelector('.capsule:not([data-out])')
+    const line = () => capsule()?.querySelector('.sr-only')?.textContent
+    const sign = JSON.stringify(Loader.map(([, a]) => a))
+    const drawnSign = () =>
+      JSON.stringify(
+        [...(capsule()?.querySelector('svg')?.children ?? [])].map((x) =>
+          Object.fromEntries([...x.attributes].map((a) => [a.name, a.value])),
+        ),
+      )
+    expect([capsule()?.getAttribute('data-kind'), capsule()?.hasAttribute('data-alone'), drawnSign(), line()]).toEqual([
+      'progress',
+      true,
+      sign,
+      '3 / 10',
+    ])
+    // (the status region says the run in the capsule's own line alone: no second line of it)
+    expect([...container.querySelectorAll('[role="status"] > .sr-only')].length).toBe(0)
+    await act(async () => fake.set(translating(4)))
+    expect(line()).toBe('3 / 10')
+    await act(async () => fake.set({ reconnecting: true }))
+    expect(line()).toBe('reconnecting')
+    // (none: the progress line alone, its words said in the region)
+    const bare = fakeController({ phase: 'ready' })
+    const none = await mountElement(capsuleOf(bare.controller))
+    await act(async () => bare.set(translating(3)))
+    expect([
+      none.container.querySelector('.capsule'),
+      none.container.querySelector('[role="status"]')!.textContent,
+    ]).toEqual([null, R.status.translating])
   })
 })
