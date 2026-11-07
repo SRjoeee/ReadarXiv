@@ -71,6 +71,16 @@ export interface Member {
   dir?: [number, number]
   /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
   plain?: string
+  /** a babel name TeX set right before a unit on that unit's first line (amsthm's "Proof.", IEEEtran's "Abstract—"): the ord of
+   *  the member it leads (Placed.bound: drawn as that member's lead, in its flow before it) */
+  leads?: number
+  /** the name that leads it, by its ord: its glyphs are its lead's, no ink beside its first line */
+  leader?: number
+  /** a babel name's counter TeX set after it on its line, where it leads no unit (IEEEtran's "APPENDIX A", "Appendix A:" in a
+   *  contents list: Word.counter): its A glyphs, those of its occurrence after its end point on B (marks.mjs `n<occ>.<key>.e`;
+   *  the wrap gives them the name's group, own.mjs, names.mjs counterAfter) */
+  counterA?: number[]
+  counter?: [string, Ink]
   /** its first and last glyph on B (global), -1 for none */
   bFirst: number
   bLast: number
@@ -117,6 +127,8 @@ export const FREE = -1
 export const HELD = -2
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
+/** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
+const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
@@ -152,6 +164,32 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
     }
   }
   return best
+}
+
+/** Each index of lo..hi with no partner that stands between two with one, with `pv` the last paired index before it and `nx` the
+ * first after it. One walk: `pv` is the last paired index passed, `nx` found once for the whole run of unpaired indices it ends,
+ * so each index is read at most twice (linear in the span; a walk back and forth from each unpaired index is quadratic in its run:
+ * PR #620's finding 1, and the same walk in the units made on A) */
+export function eachBetweenPaired(
+  lo: number,
+  hi: number,
+  paired: (i: number) => boolean,
+  visit: (i: number, pv: number, nx: number) => void,
+): void {
+  let pv = lo - 1
+  let nx = lo - 1
+  for (let i = lo; i <= hi; i++) {
+    // (`nx`, once found, is paired: not read again)
+    if (i === nx || paired(i)) {
+      pv = i
+      continue
+    }
+    if (i > nx) {
+      nx = i + 1
+      while (nx <= hi && !paired(nx)) nx++
+    }
+    if (pv >= lo && nx <= hi) visit(i, pv, nx)
+  }
 }
 
 export interface LocateOptions {
@@ -381,44 +419,41 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const sorted = [...aIdx].sort((x, y) => x - y)
       const lo = sorted[0] as number
       const hi = sorted.at(-1) as number
-      // (one walk: the paired glyph before an unpaired one is the last paired passed, the one after it found once for its
-      // whole run of unpaired glyphs, and the B range between the two read once for the run: linear in the span)
-      let pv = lo - 1
-      let nx = lo - 1
+      // (one walk, eachBetweenPaired's; the B range between the two partners read once for a run of unpaired glyphs)
+      let run = -1
       let between: boolean | undefined
-      for (let a = lo; a <= hi; a++) {
-        if ((m.aToB[a] as number) >= 0) {
-          pv = a
-          continue
-        }
-        if (a > nx) {
-          nx = a + 1
-          while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
-          between = undefined
-        }
-        if (m.offpageA[a] || (claimedA[a] as number) !== FREE) continue
-        if (pv < lo || nx > hi) continue
-        const bp = m.aToB[pv] as number
-        const bn = m.aToB[nx] as number
-        if (unitB[bp] !== u || unitB[bn] !== u) continue
-        // (B's glyphs between the two partners: none with no partner of another unit's)
-        if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
-          between = true
-          for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
-            if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
-        }
-        const own = m.hunkA[a] === HUNK.hyphen && between === true
-        if (own) {
-          const rp = roleOfB(bp)
-          const rn = roleOfB(bn)
-          claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
-          continue
-        }
-        if (gA(a).form && !gA(pv).form && !gA(nx).form) continue
-        claims.push([a, [ROLE.none, -1]])
-        const h = hunkName(m.hunkA[a] as number)
-        bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
-      }
+      eachBetweenPaired(
+        lo,
+        hi,
+        (a) => (m.aToB[a] as number) >= 0,
+        (a, pv, nx) => {
+          if (nx !== run) {
+            run = nx
+            between = undefined
+          }
+          if (m.offpageA[a] || (claimedA[a] as number) !== FREE) return
+          const bp = m.aToB[pv] as number
+          const bn = m.aToB[nx] as number
+          if (unitB[bp] !== u || unitB[bn] !== u) return
+          // (B's glyphs between the two partners: none with no partner of another unit's)
+          if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
+            between = true
+            for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
+              if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
+          }
+          const own = m.hunkA[a] === HUNK.hyphen && between === true
+          if (own) {
+            const rp = roleOfB(bp)
+            const rn = roleOfB(bn)
+            claims.push([a, rp[0] === rn[0] && rp[1] === rn[1] ? rp : [ROLE.text, -1]])
+            return
+          }
+          if (gA(a).form && !gA(pv).form && !gA(nx).form) return
+          claims.push([a, [ROLE.none, -1]])
+          const h = hunkName(m.hunkA[a] as number)
+          bad ??= `content difference: ${h === 'none' || h === 'hyphen' ? 'aonly' : h}`
+        },
+      )
     }
     if (bad || (!aIdx.length && !turnedA.length)) {
       for (const [a] of claims) claimedA[a] = HELD
@@ -520,7 +555,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       else runs.push([b])
     }
     if (!runs.length) members.push(place(u, [], []))
-    for (const r of runs) members.push(place(u, r, [], unit.name))
+    for (const r of runs) {
+      const mem = place(u, r, [], unit.name)
+      // (its counter: its glyphs after its end point, which stands inside the run)
+      const p = (pageB[r[0] as number] as number) - 1
+      const o = m.offB[p] as number
+      const end = (B.pages[p]?.points ?? []).find(
+        (x) => NAME_END.test(x.name) && o + x.glyph > (r[0] as number) && o + x.glyph <= (r.at(-1) as number),
+      )
+      if (end) {
+        const after = r.filter((b) => b >= o + end.glyph && !gB(b).blank).map((b) => m.bToA[b] as number)
+        if (after.length && after.every((a) => a >= 0)) mem.counterA = after
+      }
+      members.push(mem)
+    }
   }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
@@ -551,25 +599,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // fuzzy rescue), those glyphs A's ink (HELD), no unit born of them; a line-end hyphen A breaks at is none, nor an included
       // figure's glyph inside it)
       const mine = [...x.text, ...x.ph].sort((p, q) => p - q)
-      const paired = mine.map((a) => (m.aToB[a] as number) >= 0)
-      const firstPaired = paired.indexOf(true)
-      const lastPaired = paired.lastIndexOf(true)
       const aOnly: number[] = []
-      let bad: string | null = null
-      for (let i = firstPaired + 1; firstPaired >= 0 && i < lastPaired; i++) {
-        const a = mine[i] as number
-        if (paired[i] || m.offpageA[a] || m.hunkA[a] === HUNK.hyphen) continue
-        let pv = i - 1
-        while (!paired[pv]) pv--
-        let nx = i + 1
-        while (!paired[nx]) nx++
-        if (gA(a).form && !gA(mine[pv] as number).form && !gA(mine[nx] as number).form) continue
-        aOnly.push(a)
-        const h = hunkName(m.hunkA[a] as number)
-        bad ??= `content difference: ${h === 'none' ? 'aonly' : h}`
-      }
-      if (bad) {
-        mem.cause = bad
+      eachBetweenPaired(
+        0,
+        mine.length - 1,
+        (i) => (m.aToB[mine[i] as number] as number) >= 0,
+        (i, pv, nx) => {
+          const a = mine[i] as number
+          if (m.offpageA[a] || m.hunkA[a] === HUNK.hyphen) return
+          if (gA(a).form && !gA(mine[pv] as number).form && !gA(mine[nx] as number).form) return
+          aOnly.push(a)
+        },
+      )
+      if (aOnly.length) {
+        const h = hunkName(m.hunkA[aOnly[0] as number] as number)
+        mem.cause = `content difference: ${h === 'none' ? 'aonly' : h}`
         for (const a of aOnly) claimedA[a] = HELD
         continue
       }
@@ -776,8 +820,25 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
     }
-    // (a babel name's own text: S.names leaves it the original's where the target's word is it already)
-    if (mem.name !== undefined) mem.plain = textOf(mem.text.map(gA))
+    // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
+    // sets the counter after the target's word)
+    if (mem.name !== undefined) {
+      const ctr = new Set(mem.counterA ?? [])
+      mem.plain = textOf(mem.text.filter((a) => !ctr.has(a)).map(gA))
+      const cs = [...ctr].map(gA).filter((g) => !g.blank)
+      if (cs.length && cs.length < mem.text.length)
+        mem.counter = [
+          textOf(cs),
+          [
+            pageA[mem.counterA![0] as number] as number,
+            r2(Math.min(...cs.map((g) => g.x0))),
+            r2(Math.min(...cs.map((g) => g.bottom))),
+            r2(Math.max(...cs.map((g) => g.x1))),
+            r2(Math.max(...cs.map((g) => g.top))),
+            r2(cs[0]!.y),
+          ],
+        ]
+    }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
@@ -905,6 +966,32 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   columnsAndMeasures(members, inkA, gA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
+  // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
+  // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
+  // aside), that glyph its first, on the name's baseline on B (0.5 pt, leadAt's) from the name's end on (0.05 pt, leadAt's).
+  // TeX's stream tells the column: after a column's last line it goes on at the next column's top, never at a line beside it
+  {
+    const memberOfUnit = new Map<number, Member>()
+    for (const mem of members) if (mem.name === undefined && mem.unit >= 0) memberOfUnit.set(mem.unit, mem)
+    for (const n of members) {
+      if (n.name === undefined || !n.located || n.bLast < 0) continue
+      let b = n.bLast + 1
+      while (b < NB && pageB[b] === pageB[n.bLast] && (unitB[b] as number) < 0) b++
+      if (b >= NB || pageB[b] !== pageB[n.bLast]) continue
+      const led = memberOfUnit.get(unitB[b] as number)
+      if (!led || led.bFirst !== b) continue
+      const g = gB(b),
+        e = gB(n.bLast)
+      if (Math.abs(g.y - e.y) > 0.5 || g.x0 < e.x1 - 0.05) continue
+      // (in its column: a left column's last line and the right column's first can share a baseline, the stream going on from
+      // the one to the other; the columns as columnsAndMeasures read them on A, a line over both (2) of either)
+      const nc = n.lines.at(-1)?.[1],
+        lc = led.lines[0]?.[1]
+      if (nc !== undefined && lc !== undefined && nc !== 2 && lc !== 2 && nc !== lc) continue
+      n.leads = led.ord
+      led.leader = n.ord
+    }
+  }
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
 
@@ -1013,6 +1100,28 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // end, no paragraph end between them — a paragraph the front end cut at a float set inside it (2608.16117v1 p19, the
     // checkpoint's free-9: one part laid at its size, the other shrunk), a run-in head and its paragraph — laid at one size)
     for (const ords of flows) if (ords.length > 1) ties.push({ rule: 'size', ords: [...ords] })
+  }
+  // (a name that leads a unit stands before it in its flow, the unit's join its separation from the name (the joint, the unit's
+  // label, kept between): design-a's `bound`, set only with the member after it. Where the unit's first line on A is not the
+  // name's line (its page, its baseline within leadAt's 0.5 pt, from the name's end on), the name keeps its own flow, bound to a
+  // member its part does not hold after it. (No column read: B's stream told it, and a name's short line is given the column its
+  // own extent falls in, the left of a one-column page's, 2610.18513v1 p21.) No size tie: the name is drawn at its unit's size)
+  for (const n of members) {
+    if (n.leads === undefined) continue
+    const led = members[n.leads]!
+    const flow = flowOf.get(led.ord)
+    const l = n.lines[0]
+    const f = led.lines[0]
+    if (!flow || !l || !f || n.lines.length !== 1) continue
+    if (f[0] !== l[0] || Math.abs(f[4] - l[4]) > 0.5 || f[2] < l[3] - 0.05) continue
+    const own = flowOf.get(n.ord)
+    if (own) flows.splice(flows.indexOf(own), 1)
+    const k = flow.indexOf(led.ord)
+    const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
+    if (prev && led.join) n.join = [r2(l[2] - prev[3])]
+    flow.splice(k, 0, n.ord)
+    flowOf.set(n.ord, flow)
+    led.join = led.labelAt && led.labelAt.ink[0] === f[0] ? [r2(f[2] - l[3]), 1] : [r2(f[2] - l[3])]
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the

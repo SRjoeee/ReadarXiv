@@ -329,6 +329,9 @@ export function factsOf({
     // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
     // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
     const label = new Set(mem.label)
+    // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), as today's line starts at the name)
+    const leader = mem.leader !== undefined ? members[mem.leader] : undefined
+    for (const a of leader?.text ?? []) label.add(a)
     // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
     // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
     const spans: [number, number][] = []
@@ -370,7 +373,8 @@ export function factsOf({
       // (a glyph nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink beside it: 1706.03762v7 p13's
       // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-        if (/\S/.test(g.u) && !g.unseen && (claimedA[o + j] as number) !== mem.ord)
+        const c = claimedA[o + j] as number
+        if (/\S/.test(g.u) && !g.unseen && c !== mem.ord && c !== mem.leader)
           f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)

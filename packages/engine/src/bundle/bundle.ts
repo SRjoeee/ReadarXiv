@@ -102,7 +102,8 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   const p: Placed = {
     ord: mem.ord,
     kind: mem.kind === 'name' && mem.name !== undefined ? 'name' : mem.figure ? 'figure' : mem.kind,
-    text: mem.name !== undefined ? { name: mem.name } : (echo ?? mem.id),
+    text:
+      mem.name !== undefined ? { name: mem.name, ...(mem.counter ? { counter: mem.counter } : {}) } : (echo ?? mem.id),
     lead: mem.lead,
     style: mem.style,
     align: mem.align,
@@ -111,6 +112,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   }
   if (st.why) p.why = st.why
   if (mem.join) p.join = mem.join
+  if (mem.leads !== undefined) p.bound = 1
   if (mem.elements.length) {
     // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
     // states them so that no rule of the typesetter reads a source)
