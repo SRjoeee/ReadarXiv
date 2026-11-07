@@ -223,9 +223,42 @@ export type SetName = {
   wait?: [FaceId, string][]
 }
 
-/** S.names: one name of a page set in the target (RUN:1357-1424) */
+/** what S.names reads of a name's own characters (today's, over the page's; the part states them: Placed.plain, Style): its
+ *  text without the counter TeX set after it, the counter's, its size and whether it is set in faked small capitals, its
+ *  style; `chars` its characters, a lead's joint (none from the part) */
+export type NameRead = {
+  text: string
+  counter: string
+  size: number
+  small: boolean
+  st: TStyle
+  chars: readonly PageChar[]
+}
+
+/** S.names: one name of a page set in the target (RUN:1357-1424), its readings today's over the page's characters */
 export function setName(i: NameInput): SetName {
   const { nm, mine } = i
+  if (!mine.length) return setNameOf({ ...i, own: null })
+  const counter = nm.unit >= 0 ? [] : counterOf(mine, nm)
+  const text0 = mine.filter((c) => !counter.includes(c))
+  const own = nameStyleOf(text0, nm)
+  const st0 = styleOfChars(mine as never, i.serif) as TStyle
+  return setNameOf({
+    ...i,
+    own: {
+      text: text0.map((c) => c.ch).join(''),
+      counter: counter.map((c) => c.ch).join(''),
+      size: own.size,
+      small: own.small,
+      st: own.small ? { ...st0, caps: true } : st0,
+      chars: mine,
+    },
+  })
+}
+
+/** S.names' decision over what is read of the name (setName's readings, or the part's facts: lay/entry.ts) */
+export function setNameOf(i: Omit<NameInput, 'mine'> & { own: NameRead | null }): SetName {
+  const { nm, own } = i
   const rec: NameRecord = {
     occurrence: nm.occurrence,
     key: nm.key,
@@ -235,25 +268,16 @@ export function setName(i: NameInput): SetName {
     box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size },
     column: [nm.cx0, nm.cx1],
   }
-  if (!mine.length) return { rec: { ...rec, why: 'unread' } }
-  const counter = nm.unit >= 0 ? [] : counterOf(mine, nm)
-  const text0 = mine.filter((c) => !counter.includes(c))
-  const own = nameStyleOf(text0, nm)
-  const word = nameInTarget(
-    own.small ? { ...nm, capitals: false } : nm,
-    text0.map((c) => c.ch).join(''),
-    i.labels,
-    i.to,
-  )
-  const text = word === null ? null : counter.length ? `${word} ${counter.map((c) => c.ch).join('')}` : word
+  if (!own) return { rec: { ...rec, why: 'unread' } }
+  const word = nameInTarget(own.small ? { ...nm, capitals: false } : nm, own.text, i.labels, i.to)
+  const text = word === null ? null : own.counter ? `${word} ${own.counter}` : word
   if (text === null) return { rec: { ...rec, why: !i.labels?.[nm.key] ? 'no word' : 'same' } }
-  const st0 = styleOfChars(mine as never, i.serif) as TStyle
-  const st: TStyle = own.small ? { ...st0, caps: true } : st0
+  const st = own.st
   const at = own.small && i.P.cjk ? own.size * CJK_CAPS_SIZE : own.size
   if (nm.unit >= 0)
     return {
       rec: { ...rec, why: 'inline: its unit not drawn', text, unit: nm.unit },
-      lead: { nm, text, st, chars: mine },
+      lead: { nm, text, st, chars: own.chars },
     }
   const drawn = nameScriptRuns(text, (cls) => i.faceOf(st, cls), i.to, !!i.P.cjkQuotes, i.ownSmallCaps)
   const covered = cover(

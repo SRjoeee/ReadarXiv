@@ -12,13 +12,15 @@
 // empty), the page's links (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
-import { fitMeasure } from '../breaker/measure.ts'
+import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
+import { fitMeasure, fontString } from '../breaker/measure.ts'
+import { type NameRow, setNameOf } from '../shared/names.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import { adapt, rectOf } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
 import { layPagePrepared } from './page.ts'
-import { measured, paperOf, readMember, rowPieces } from './read.ts'
+import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { waitOf } from './wait.ts'
 
 /** what laying a page reads besides its part and its rows: the target's head names (translator's dictionary, a data file of
@@ -65,6 +67,80 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (!row) return 'none'
   if (!row.ok) return row.why.kind
   return row.content
+}
+
+/**
+ * S.names over the part (RUN:1355 paintNames): a babel name drawn on its own, in the target's word, at its size, weight and
+ * slant, its left edge kept or, centred, its centre, shrunk into the room on its line to the last floor at most. Its facts are
+ * the part's: its Word, its own text (Placed.plain), Style, its line, its column (the line's measure) and Room.side, the next
+ * ink either side (a glyph's edge a quarter of its size clear, as nameRoom reads a character's). A name that shares its row
+ * with a member set after it leads that member (amsthm's "Proof."): U.lead's, not drawn by itself here
+ */
+function nameOf(
+  m: Placed,
+  members: readonly Placed[],
+  rules: Rules,
+  metrics: Metrics,
+  paper: ReturnType<typeof paperOf>,
+): { laid: Laid['lines'] } | { why: Unlaid } | { wait: [string, string][] } {
+  const word = m.text as Exclude<Placed['text'], string>
+  const l = m.lines[0]
+  if (!l || m.lines.length !== 1) return { why: 'name' }
+  if (members.some((o) => o !== m && o.lines.some((q) => q[0] === l[0] && q[4] === l[4] && q[2] >= l[3])))
+    return { why: 'name' }
+  const size = m.style.size
+  const nm: NameRow = {
+    occurrence: m.ord,
+    key: word.name,
+    page: l[0],
+    x0: l[2],
+    baseline: l[4],
+    x1: l[3],
+    top: l[5],
+    bottom: l[6],
+    size,
+    font: 0,
+    centred: m.align === 'c',
+    capitals: !!word.caps,
+    unit: -1,
+    glue: 0,
+    counter: 0,
+    cx0: l[7],
+    cx1: l[8],
+  }
+  const side = m.room.side
+  const room = () => {
+    const left = !side ? l[7] : side[0] === l[7] ? side[0] : side[0] + 0.25 * size
+    const right = !side ? l[8] : side[1] === l[8] ? side[1] : side[1] - 0.25 * size
+    return { left: Math.min(left, l[2]), right: Math.max(right, l[3]) }
+  }
+  const color = m.style.fill ? `#${m.style.fill.toString(16).padStart(6, '0')}` : undefined
+  const st = { ...tstyleOf(m.style, paper.designs), ...(m.style.sc ? { caps: true } : {}), ...(color ? { color } : {}) }
+  const set = setNameOf({
+    nm,
+    own: { text: m.plain ?? '', counter: word.counter?.[0] ?? '', size, small: !!m.style.sc, st, chars: [] },
+    room,
+    to: rules.target,
+    labels: rules.labels,
+    serif: paper.designs.serif,
+    P: rules.set as never,
+    faceOf: (s, cls) => faceOf(paper.roles, s, cls),
+    ownSmallCaps,
+    metrics,
+    shown: !m.why,
+  })
+  if (set.wait) return { wait: set.wait }
+  const d = set.drawn
+  if (!d) return { why: set.rec.why === 'unfit' ? 'unfit' : set.rec.why === 'served' ? ('served' as Unlaid) : 'name' }
+  const items: Item[] = []
+  let x = d.x
+  const fill = typeof d.color === 'string' ? Number.parseInt(d.color.slice(1), 16) : undefined
+  for (const r of d.runs) {
+    const face = fontString(r.face ?? d.face, 100)
+    items.push({ s: r.s, x, face, size: d.size * r.k, ...(fill !== undefined ? { fill } : {}) })
+    x += (metrics.advance(face, 100, r.s) / 100) * r.k * d.size
+  }
+  return { laid: [[d.baseline, d.x, x, items]] }
 }
 
 /** layPage (design-a §1.2): page `part.page` laid from its part and the target's rows */
@@ -119,11 +195,25 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     number,
     { rd: ReturnType<typeof readMember>; pieces: ReturnType<typeof rowPieces>; tokens: Tokens }
   >()
+  // (a babel name's: S.names over the part, nameOf)
+  const names = new Map<number, Laid['lines']>()
   for (const flow of part.flows)
     for (const m of flow) {
       if (leave.has(m.kind)) {
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
+        continue
+      }
+      if (m.kind === 'name' && typeof m.text !== 'string') {
+        unmeant.add(m.ord)
+        if (m.why) {
+          state.set(m.ord, m.why)
+          continue
+        }
+        const n = nameOf(m, members, rules, metrics, paper)
+        if ('wait' in n) faces.push(...n.wait)
+        else if ('why' in n) state.set(m.ord, n.why)
+        else names.set(m.ord, n.laid)
         continue
       }
       const content = contentOf(m, rows)
@@ -285,6 +375,17 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
   const out: Laid[] = members.map((m) => {
+    // (a name drawn on its own: its word on its line, its text group off)
+    const nl = names.get(m.ord)
+    if (nl)
+      return {
+        ord: m.ord,
+        page,
+        state: 'laid',
+        off: 1,
+        lines: m.lines[0]![0] === page ? nl : [],
+        lit: { left: [], right: [], own: [] },
+      }
     const x = byOrd.get(m.ord)
     const st = x?.state ?? state.get(m.ord) ?? 'none'
     const lines = (x?.lines ?? []).map(

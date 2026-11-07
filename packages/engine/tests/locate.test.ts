@@ -204,6 +204,34 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
   })
 })
 
+describe('a babel name’s text', () => {
+  it('states a name’s own text on A (Placed.plain), so that S.names tells a target word the original’s already', () => {
+    // (S.names leaves a name the original's where the target's word is its own text (today's nameInTarget over its characters);
+    // the part stated its Word alone)
+    const B = docOf([{ lines: ['Abstract', 'Body text here'] }])
+    const units = [{ ...unitOf('name', 'Abstract'), name: 'abstract' }, unitOf('para', 'Body text here')]
+    const ins = instrumentOf(B, units, [[0, 1]], [[ROLE.name, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members.find((m) => m.kind === 'name')).toMatchObject({ name: 'abstract', plain: 'Abstract' })
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ]
+    const o = objects.find((x) => x.kind === 'part')!
+    const part = read('part', o.bytes, o.digest)
+    expect(part.flows.flat().find((m) => m.kind === 'name')).toMatchObject({
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+    })
+  })
+})
+
 describe('bundle', () => {
   const B = docOf([
     { lines: ['page one text', 'runs on'] },

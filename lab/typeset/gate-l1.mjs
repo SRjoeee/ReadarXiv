@@ -34,7 +34,7 @@ const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
 // (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
 const ENTRY = args.includes('--entry')
-const entry = { alike: 0, differ: 0, ex: [], ms: [] }
+const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map() }
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
@@ -72,7 +72,7 @@ for (const pair of pairs) {
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`) }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n) }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -191,6 +191,7 @@ console.log(`the reading (L5, L7 from the part) ${Math.round(readMs)} ms in all`
 if (ENTRY) {
   const q = [...entry.ms].sort((a, b) => a - b), at = f => Math.round(q[Math.min(q.length - 1, Math.floor(f * q.length))] * 100) / 100
   console.log(`the entry (layPage over each part and its rows): ${entry.alike} of the runner's members laid alike, ${entry.differ} not${entry.ex.length ? `: ${entry.ex.join(' | ')}` : ''}; a page, ms: p50 ${at(0.5)}, p90 ${at(0.9)}, p99 ${at(0.99)}, max ${at(1)} over ${q.length} pages`)
+  console.log(`the entry's babel names (S.names over the part), by key and state: ${[...entry.names].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
 }
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)

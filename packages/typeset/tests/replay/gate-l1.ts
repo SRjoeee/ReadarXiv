@@ -76,7 +76,7 @@ export type GateL1 = {
   tokens: Map<number, string>
   /** the entry's check (o.entry): the runner's laid members laid alike by layPage, those not, examples; each page's time by the
    *  entry (the reading, the adapter and the lay: what a reader pays a page), ms */
-  entry?: { alike: number; differ: number; ex: string[]; ms: number[] }
+  entry?: { alike: number; differ: number; ex: string[]; ms: number[]; names: Map<string, number> }
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
@@ -416,7 +416,7 @@ export function gateL1Pair(
     inputs: new Map(),
     readMs: 0,
     tokens: new Map(),
-    ...(o.entry ? { entry: { alike: 0, differ: 0, ex: [], ms: [] } } : {}),
+    ...(o.entry ? { entry: { alike: 0, differ: 0, ex: [], ms: [], names: new Map() } } : {}),
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -762,6 +762,13 @@ export function gateL1Pair(
         },
       )
       out.entry.ms.push(performance.now() - t1)
+      // (the babel names the entry sets, S.names over the part: each name member on its first page, by its key and state)
+      for (const m of (part as Part).flows.flat())
+        if (m.kind === 'name' && typeof m.text !== 'string' && m.lines[0]?.[0] === pg) {
+          const st = page.members.find((x) => x.ord === m.ord)?.state ?? 'none'
+          const k = `${m.text.name}: ${st}`
+          out.entry.names.set(k, (out.entry.names.get(k) ?? 0) + 1)
+        }
       const mine = new Map(page.members.map((m) => [unitOf.get(m.ord)?.ord ?? m.ord, m]))
       for (const pm of got.members) {
         const e = mine.get(pm.ord)
