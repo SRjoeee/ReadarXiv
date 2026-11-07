@@ -584,6 +584,11 @@ export function gateL1Pair(
       if ((todays[0] as { ownLabel?: boolean } | undefined)?.ownLabel) todays = todays.slice(1)
       tokensVerdict = rd.unproven >= 0 ? 'U.elements: unproven' : tokensDiff(rd.tokens as unknown as Tok[], todays)
       out.tokens.set(u.ord, tokensVerdict ?? 'equal')
+      // (a member whose reading is unproven is not laid, as the entry leaves it: its ink stays the original's)
+      if (rd.unproven >= 0) {
+        stop('the reading: unproven')
+        continue
+      }
       if (DEEP === `${pair}:${u.ord}`)
         console.log(
           JSON.stringify({
