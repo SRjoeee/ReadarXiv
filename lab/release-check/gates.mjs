@@ -46,7 +46,7 @@ export const INVARIANTS = [
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: 'held on fixtures (the harness, the website\'s e2e); no corpus check',
+    gap: 'held on the fixtures and five corpus papers (the harness; the website\'s e2e on fixtures); not on the corpus',
   },
   {
     id: 'I9',
@@ -407,10 +407,10 @@ export const GATES = [
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with corpus papers (their I1 residue and I3 reported, not asserted)",
+    title: "the reader package's browser checks with five corpus papers (the text layer's order asserted; their I1 residue and I3 reported, not asserted)",
     tier: 'full',
     stage: 'reader',
-    holds: [],
+    holds: ['I8'],
     needs: ctx => [exists("lane L1's bundles of the corpus papers", lab(ctx, 'lanes/L1-out4/bundles/1512.03385v1'))],
     steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1', AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
     judge: (ctx, steps) => ({ pass: steps[0].exit === 0 && !/route table violated/.test(steps[0].text), numbers: checksOf(steps[0].text) }),

@@ -124,7 +124,13 @@ async function runGate(g, results) {
   mkdirSync(ctx.work, { recursive: true })
   const steps = []
   const t0 = performance.now()
-  for (const [i, step] of g.steps(ctx).entries()) {
+  let planned
+  try {
+    planned = g.steps(ctx)
+  } catch (e) {
+    return { ...base, status: 'fail', reason: `its command could not be made: ${e.message}` }
+  }
+  for (const [i, step] of planned.entries()) {
     console.log(`release-check: ${g.id} ${i + 1}: ${step.cmd.join(' ').slice(0, 160)}`)
     const s = await runStep(step, join(out, 'logs', `${g.id.replace(/[^\w.-]/g, '_')}.${i + 1}.log`))
     steps.push(s)
