@@ -135,3 +135,70 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
     expect(cuts).toEqual([[2], [1]])
   })
 })
+
+describe('a head or a name and its follower on one line: each the original’s separation after the one before it', () => {
+  // (a name the part binds to its follower, the follower's own label the joint TeX set between: "Figure 1: text")
+  const name: Placed = {
+    ord: 0,
+    kind: 'name',
+    text: { name: 'figure' },
+    plain: 'Figure',
+    bound: 1,
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    lines: [[1, 0, 72, 102, 700, 707, 698, 72, 300, 0, 10]],
+    room: { below: 12, next: 20, side: [72, 102] },
+  }
+  const caption: Placed = {
+    ord: 1,
+    kind: 'caption',
+    text: idOf(5),
+    join: [2.5, 1],
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    label: {
+      kind: 'float',
+      ink: [1, 104.5, 698, 112, 707, 700],
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      num: ['1', [1, 104.5, 698, 109.5, 707, 700]],
+      punct: [':', [1, 109.5, 698, 112, 707, 700]],
+    },
+    lines: [
+      [1, 0, 117, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+    ],
+    room: { below: 12, next: 20, side: [72, 300] },
+  }
+  it('keeps the separation between a name and its numbered joint, as before the text (Codex on #624: "Abbildung1:")', () => {
+    const p = layPage(partOf([[name, caption]]), rowsOf([[5, 'eine Beschriftung']]), rules, metrics)
+    const first = laidOf(p, 1).lines[0]!
+    // (toy metrics: 5 pt a character at size 10; "Abbildung" from 72 to 117, then 2.5 pt, then "1:")
+    const at = (s: string) => {
+      for (const it of first[3]) {
+        const k = it.s.indexOf(s)
+        if (k < 0) continue
+        const dx = (it as { dx?: number[] }).dx
+        return it.x + (dx ? dx[k]! : 5 * k)
+      }
+      return Number.NaN
+    }
+    expect(first[3].map((it) => it.s).join('')).toMatch(/^Abbildung\s*1:/)
+    expect(at('1:') - at('Abbildung')).toBeCloseTo(45 + 2.5, 1)
+  })
+  it('sets the follower of a name the reader leaves the original’s after it, pinned by it, never over it (Devin on #624)', () => {
+    // (a one-line caption centred on its line, after the name: widened as far to either side, it ran over the name)
+    const one: Placed = { ...caption, align: 'c', lines: [[1, 0, 117, 200, 700, 707, 698, 72, 300, 0, 10]] }
+    const p = layPage(
+      partOf([[name, one]]),
+      rowsOf([[5, 'eine Beschriftung die we']]),
+      rulesFor('de', { leave: ['name'] }),
+      metrics,
+    )
+    expect(laidOf(p, 0).state).toBe('left')
+    const laid = laidOf(p, 1)
+    expect(laid.state).toBe('laid')
+    expect(Math.min(...laid.lines.map((l) => l[1]))).toBeGreaterThanOrEqual(102)
+  })
+})

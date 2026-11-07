@@ -217,6 +217,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       if (leave.has(m.kind)) {
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
+        // (a name left the original's before the member the part binds it to: that member set after it, pinned by it, as after
+        // any name kept (keptBefore; Devin on #624: its follower could widen over the name))
+        const next = m.kind === 'name' && m.bound ? flow[k + 1] : undefined
+        if (next && next.kind !== 'name') leadFor.set(next.ord, { name: m, word: null })
         continue
       }
       if (m.kind === 'name' && typeof m.text !== 'string') {

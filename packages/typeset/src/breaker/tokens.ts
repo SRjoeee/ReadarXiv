@@ -539,7 +539,16 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   if (lead?.parts?.length) {
-    for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
+    for (const part of lead.parts) {
+      pushText(part.text, { ...base, ...part.st }, { label: true })
+      // (the glue TeX set after a part another follows on the line: the name's before its joint)
+      const t = tokens.at(-1)
+      if (t && part.gap !== undefined && part.gap > 0) {
+        t.leadGap = 100 * part.gap
+        t.kern = true
+        if (plain) t.kernEm = part.gap
+      }
+    }
     const st = { ...base, ...lead.parts.at(-1)!.st }
     if (lead.gap === undefined) pushText(' ', st)
     else if (tokens.length) {
