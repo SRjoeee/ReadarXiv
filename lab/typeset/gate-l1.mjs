@@ -18,7 +18,7 @@ import { layered, servedMetrics } from './served-metrics.mjs'
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
 const named = args.filter(a => !a.startsWith('--'))
-// (AXT_GATE_LIST=<class prefix>: each member whose setting's first difference starts so, printed with its pair and ord)
+// (AXT_GATE_LIST=<class prefix>: each member whose setting's first difference starts so, printed with its pair and ord; `*` every member)
 const LIST = process.env.AXT_GATE_LIST
 const pairs = named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
 mkdirSync(join(OUT, 'reader'), { recursive: true })
@@ -90,7 +90,7 @@ for (const pair of pairs) {
   for (const [k, n] of g.stops) add(stops, k, n)
   for (const [o, v] of g.setting) {
     add(setting, v.replace(/ \[.*$| [-\d.,]+$/, ''))
-    if (LIST && v.startsWith(LIST)) console.log(`LIST ${pair} ord ${o} ${v}`)
+    if (LIST && (LIST === '*' || v.startsWith(LIST))) console.log(`LIST ${pair} ord ${o} ${v}`)
   }
   for (const t of g.threw) threw.push(`${pair} ${t}`)
   for (const why of g.thrown.values()) add(stops, `its flow's lay threw: ${why}`)
