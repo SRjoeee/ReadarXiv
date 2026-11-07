@@ -74,7 +74,8 @@ function required(threshold: number, height: number, rootHeight: number): number
   return most < threshold ? quantizeThreshold(most) : threshold
 }
 
-const hasBox = (r: DOMRect) => r.width > 0 || r.height > 0
+/** A layout box has a height: an image with a width and no height yet is not on show (#614) */
+const hasBox = (r: DOMRect) => r.height > 0
 
 /** Where the targets are: their anchors, and which anchors are within reach now */
 export function readViewport<T extends { el: Element } = Block>(targets: readonly T[], preload: PreloadOptions): ViewportReading<T> {
@@ -118,7 +119,7 @@ export function readViewport<T extends { el: Element } = Block>(targets: readonl
   for (const anchor of byAnchor.keys()) {
     const r = rectOf(anchor)
     if (!hasBox(r) || r.top > bottom || r.bottom < top) continue
-    const shown = r.height > 0 ? (Math.min(r.bottom, bottom) - Math.max(r.top, top)) / r.height : 1
+    const shown = (Math.min(r.bottom, bottom) - Math.max(r.top, top)) / r.height
     if (shown + EPSILON >= required(preload.threshold, r.height, bottom - top)) seeded.push(anchor)
   }
   return { byAnchor, seeded }
@@ -158,8 +159,23 @@ export function createLazyScheduler<T extends { el: Element } = Block>(
     }
     return out
   }
+  /**
+   * Drop what has left the page: a target whose element is gone, an anchor that is gone with every target on it. A removed
+   * block is never handed over and no longer counts as waiting (#614: kept, it held its element and read as unrequested)
+   */
+  const prune = () => {
+    for (const [anchor, group] of waitingAt) {
+      for (const target of group) if (!target.el.isConnected || !anchor.isConnected) group.delete(target)
+      if (group.size === 0) {
+        waitingAt.delete(anchor)
+        observer?.unobserve(anchor)
+      }
+    }
+  }
   const hand = (picked: T[]) => {
-    if (picked.length > 0) onEnter(picked)
+    prune()
+    const live = picked.filter(target => target.el.isConnected)
+    if (live.length > 0) onEnter(live)
   }
   const atAnchors = (anchors: Element[]) => take(anchors.flatMap(anchor => [...(waitingAt.get(anchor) ?? [])]))
 
@@ -190,6 +206,7 @@ export function createLazyScheduler<T extends { el: Element } = Block>(
     trigger: picked => hand(take(picked)),
     claim: picked => void take(picked),
     waiting: () => {
+      prune()
       let n = 0
       for (const group of waitingAt.values()) n += group.size
       return n
