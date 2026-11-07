@@ -38,6 +38,7 @@ import {
   type RowsWhy,
   type State,
   targetOf,
+  translationShown,
   wanted,
 } from './session/machine.ts'
 import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VIEWER_HASH } from './session/paper.ts'
@@ -232,6 +233,9 @@ export function openReader(
     highlight: Highlight | null = null
   /** the served faces and the reader's Metrics over them, the reader's own typesetter's (no engine of the host's), with the code */
   let served: import('./compose/served.ts').Served | null = null
+  /** the typesetter's chunk, asked with the code; the target its first reads were asked ahead for (warmSoon) */
+  let typesetCode: Promise<typeof import('./compose/typeset.ts')> | null = null
+  let warmed = ''
   const ready = kitReady.then((k) => {
     // (a reader closed while PDF.js was loading makes nothing: no sheet, no pane, no mark on a root it has given back; its kit
     // let go. Everything below waits on `ready` and finds no panes, or its released ticket)
@@ -610,10 +614,11 @@ export function openReader(
       // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s); the
       // reader's own typesetter and its served faces with it, where the host gives no engine. What the composed document's open
       // reads is asked with it, the code's load waiting for none of it: its groups, and the typesetter, whose patterns, faces'
-      // index and CJK tables are asked as it comes (staging, 2026-11-08: three round trips in a row before composedOpen)
+      // index and CJK tables are asked once a translation is to be shown (warmSoon; staging, 2026-11-08: three round trips in a
+      // row before composedOpen)
       let faces: import('./compose/faces.ts').Faces | null = null
       void import('./compose/groups.ts').catch(() => {})
-      const typesetCode = o.engine ? null : import('./compose/typeset.ts')
+      typesetCode = o.engine ? null : import('./compose/typeset.ts')
       typesetCode?.catch(() => {})
       Promise.all([
         import('./compose/composer.ts'),
@@ -632,13 +637,7 @@ export function openReader(
           if (S) {
             served = S.createServed({ fetch: host.fetch, root, lost })
             faces = served.faces
-            const s = served
-            void typesetCode?.then(
-              (TS) => {
-                if (!signal.aborted && served === s) TS.warmTypeset(s, rowsTarget || targetOf(rt.state))
-              },
-              () => {},
-            )
+            warmSoon(rt.state)
           } else faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root, lost })
           // (the lay itself is made once the head is read: the composed document's open, whose own it is)
           const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)
@@ -682,6 +681,8 @@ export function openReader(
         highlight = null
         faces = null
         served = null
+        typesetCode = null
+        warmed = ''
       }
     },
     composed(spec, t, emit, signal) {
@@ -910,7 +911,24 @@ export function openReader(
   })
   // ---- the objects wanted (the head), and the view following the state
   const fetching = new Set<string>()
+  /** what laying the target reads first, asked ahead (warmTypeset) once a composed translation is to be shown (the display
+   *  shows it, the reader sets the target: translationShown), once a target; a visit that shows the original asks none of it */
+  function warmSoon(s: State) {
+    const sv = served,
+      code = typesetCode
+    if (!sv || !code || !translationShown(s)) return
+    const target = targetOf(s)
+    if (warmed === target) return
+    warmed = target
+    void code.then(
+      (TS) => {
+        if (!closed && served === sv) TS.warmTypeset(sv, target)
+      },
+      () => {},
+    )
+  }
   const onState = (s: State) => {
+    warmSoon(s)
     // (the layer's units, once its head is read: the contents' headings, and the rows made here read them from the same objects)
     if (s.layer.s === 'ready' && s.layer.head && wanted(s).length) contentsFor(s.layer.head, s.layer.units)
     for (const r of wanted(s)) {
