@@ -55,13 +55,13 @@ export interface StateWords {
   reconnecting?: string
   /** the run's chip that shows the translation (the reader's own choice of a display), where the translation is not on screen
    *  and some of it is there to be read: the original's display, or the original held while the paper is made (the
-   *  website's 查看译文); none, no chip */
+   *  website's "show translation"); none, no chip */
   showTranslation?: string
   /** the paper cannot be had as a bilingual PDF (R.status.noPdf) */
   noPdf?: string
   /** the link offered beside a bilingual version not to be had, given arXiv's HTML version of the paper with the hash that
    *  translates it: its address and its words (the website's: arXiv's HTML version where the extension is on the page, its
-   *  store page, 安装扩展翻译 HTML, where it is not), or null for none (a phone, where the extension cannot be had); none:
+   *  store page where it is not), or null for none (a phone, where the extension cannot be had); none:
    *  the HTML version, R.status.useHtml */
   htmlLink?: (href: string) => { href: string; label: string } | null
   /** the paper too large to prepare (R.status.noPdf) */

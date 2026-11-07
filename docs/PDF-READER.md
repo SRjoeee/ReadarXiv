@@ -178,7 +178,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   extension's, as above; `shown`, the website's (its owner's rule of 2026-11-03), where the display switch shows the
   translation chosen and side by side greyed, the stored choice kept for a wider window, and the capsule says so only
   where a window that showed the paper side by side was narrowed while reading (a page opened narrow, or widened again,
-  says nothing). The widths are to be checked by reading at them while building.
+  says nothing); while the paper is made there (prepared, translated after its prepare this visit, or refused for now
+  with nothing laid), `shown` holds the original on screen, the switch at the original, until the reader chooses a
+  display (the website's `displayFor`), a hold never written. The widths are to be checked by reading at them while
+  building.
 
 ## 6. Components
 
@@ -381,6 +384,36 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
 - **Two notes that are not a notice**: settings that cannot be read stand for as long as it is so, with a link to the settings page and no close (UI.md S-R-21); a write storage refused is told with the settings page's sentence until it is closed or a later write of this page goes through (S-R-22).
 - **When the translation's pane has nothing to show**, the same anatomy is a card centred in that pane (300 px, 14 px
   radius, the popover shadow), with a filled action; the capsule is not shown as well.
+- **The host's look of the states.** The reader package's chrome draws both hosts' readers, and the coordinator's ruling
+  for the website's cut-over is that nothing its readers see changes: where the website's page drew a state otherwise,
+  the difference is a host's rule or word (`Parts`, `StateWords` of `packages/reader`), which the extension gives none
+  of, so that its reader is as above. The website's, each as its page drew it before the package:
+  - `signs: 'by-state'` (its interface review of 2026-11-03): a refusal for now's capsule a clock while its time is to
+    come, the information sign once it has come (the chrome drawn again at the time); a run stopped by a fault the alert
+    in the danger's red (`data-tone="alert"`); a card that waits (our server or the service out of reach, a limit) a
+    clock in quiet ink (`data-tone="wait"`), a fault's card the alert. The extension's: the information sign, the alert
+    on every card.
+  - `retry: 'when-due'`: a retry whose time is named is offered at that time: the capsule's chip absent until then (its
+    words alone, asked again at the time so that they drop it), the card's retry greyed and still a stop of the
+    keyboard's, pressing it doing nothing, its lines under the reason the host's (`cardLines`: the time, the limit's
+    note). The extension's offers it at once, a press before the time asking nothing.
+  - `refusal: 'original'`: a refusal for now with nothing laid holds the original on screen, the two translated displays
+    greyed (swap and sync with them), until it passes. The extension's keeps the display chosen, arXiv's pages where the
+    translation would be.
+  - `sync: 'located'`: the sync greyed until the sides can scroll together (both sides' pages laid out).
+  - `openOriginal`: the original that could not be read is the original's pane's card (the file sign in quiet ink, a
+    link to arXiv's PDF of the version), the translation's pane left as it is. Without it, the translation's pane's card
+    with its retry.
+  - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
+    it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
+    choice.
+  - `htmlLink`: the link beside a bilingual version not to be had in the host's address and words (the extension's store
+    page, where the extension is not on the page), or none (a phone). The HTML version itself is our server's word first
+    (its prepare's `html`, after a prepare that cannot be made), arXiv asked only where it says nothing.
+  - A face the translation is set in that cannot be had is the reader's state (`ReaderState.faces`), for the host to
+    say.
+  The hold of the original (`refusal`, `narrow: 'shown'`) is the reader's `hold` command: never written and not a
+  choice, so the run the chosen display engages goes on, and the reader's own choice of a display ends it.
 
 The states are §8's.
 

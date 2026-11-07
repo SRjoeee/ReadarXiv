@@ -101,7 +101,7 @@ describe("the toolbar (the reader's design, §6.1)", () => {
   })
 
   it("greys the sync until the sides can scroll together where the host's rule says so (the website's, L11's second round, gap 9); the extension's leaves it to the display", async () => {
-    const sync = (c: HTMLElement) => button(c, '同步滚动').getAttribute('aria-disabled')
+    const sync = (c: HTMLElement) => button(c, R.sync).getAttribute('aria-disabled')
     const own = await mount({ syncAvailable: false })
     expect(sync(own.container)).toBeNull()
     document.body.innerHTML = ''
@@ -112,7 +112,7 @@ describe("the toolbar (the reader's design, §6.1)", () => {
       }),
     )
     expect(sync(container)).toBe('true')
-    button(container, '同步滚动').click()
+    button(container, R.sync).click()
     expect(fake.controller.setSync).not.toHaveBeenCalled()
     await act(async () => fake.set({ syncAvailable: true }))
     expect(sync(container)).toBeNull()
