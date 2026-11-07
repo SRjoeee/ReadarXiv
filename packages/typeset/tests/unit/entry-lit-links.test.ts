@@ -5,6 +5,7 @@
 import type { Link, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
+import type { LinkFate } from '../../src/lay/links.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Laid, Metrics, Page, Rows } from '../../src/types.ts'
 
@@ -276,6 +277,28 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const f = laid.fit!.size
     expect(b[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
     expect(b[2]).toBeGreaterThan(b[0] + 8 * 0.5 * f)
+  })
+  it('lays a link over the member’s text in a \\url group beside other text over that group’s drawing (#626 review)', () => {
+    // (the prepare reads \url as a link group, as \href: its tokens tagged with the group, the annotation paired with it; the
+    // whole tier takes no annotation over part of the paragraph)
+    const m = member({ spans: [['1', { cmd: 'url' }]] })
+    const link: Link = { box: [100, 697, 220, 708], to: { url: 'https://example.org/x' }, owner: [0, ''] }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'https://example.org/x' }] },
+      { t: 'text', s: ' dort, wo es weiter geht.' },
+    ])
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, [link]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    const laid = p.members[0]!
+    expect(laid.state).toBe('laid')
+    expect(fates).toEqual(['pair'])
+    const [b, to] = only(p)
+    expect(to).toEqual({ url: 'https://example.org/x' })
+    // (from the URL's run, after "Siehe ", to past its start)
+    const url = laid.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.startsWith('https'))!
+    expect(b[0]).toBeCloseTo(url.x, 6)
+    expect(b[2]).toBeGreaterThan(url.x)
   })
   it('lays two \\href groups of one target each over its own translation, one annotation each (#626 review)', () => {
     // (two links to one address, one after the other: one run of one target, two groups drawn; each occurrence its group)
