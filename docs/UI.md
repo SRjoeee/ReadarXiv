@@ -211,7 +211,7 @@ undone, not confirmed), S-O-15's 更多选项 (now 更多), S-O-17's dots, S-O-4
 
 | Id | Where | Copy | Notes |
 |---|---|---|---|
-| S-I-01 | Loading | (no text) | The skeleton: one to three faint red bars sized by the paper's font size, breathing as a whole (DESIGN §7.6). The original mock-up's spinner is gone — a placeholder the size of the translation says “where and how much” better than a 6px ring |
+| S-I-01 | Loading | (no text) | The skeleton: one to three faint red bars sized by the paper's font size, breathing as a whole (DESIGN §7.6: the bars' widths and the pulse). The original mock-up's spinner is gone — a placeholder the size of the translation says “where and how much” better than a 6px ring |
 | S-I-02 | Failed block | {S-E 原因} · 重试 | The raw message in `title`; its retry and its line in danger, light or dark by the paper's colour scheme (DESIGN §4.0c) |
 | S-I-04 | Image overlay | (the translation itself) | A white translucent rounded box over the original text; hover shows the original; no node while waiting or failed (§15) |
 | S-I-05 | Split-view handle (#83, experimental) | (no text) | Appears on hovering the gutter; drag changes the column width, double-click resets |
