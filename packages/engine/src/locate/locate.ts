@@ -379,19 +379,33 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const sorted = [...aIdx].sort((x, y) => x - y)
       const lo = sorted[0] as number
       const hi = sorted.at(-1) as number
+      // (one walk: the paired glyph before an unpaired one is the last paired passed, the one after it found once for its
+      // whole run of unpaired glyphs, and the B range between the two read once for the run: linear in the span)
+      let pv = lo - 1
+      let nx = lo - 1
+      let between: boolean | undefined
       for (let a = lo; a <= hi; a++) {
-        if ((m.aToB[a] as number) >= 0 || m.offpageA[a] || (claimedA[a] as number) !== FREE) continue
-        let pv = a - 1
-        while (pv >= lo && (m.aToB[pv] as number) < 0) pv--
-        let nx = a + 1
-        while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
+        if ((m.aToB[a] as number) >= 0) {
+          pv = a
+          continue
+        }
+        if (a > nx) {
+          nx = a + 1
+          while (nx <= hi && (m.aToB[nx] as number) < 0) nx++
+          between = undefined
+        }
+        if (m.offpageA[a] || (claimedA[a] as number) !== FREE) continue
         if (pv < lo || nx > hi) continue
         const bp = m.aToB[pv] as number
         const bn = m.aToB[nx] as number
         if (unitB[bp] !== u || unitB[bn] !== u) continue
-        let own = m.hunkA[a] === HUNK.hyphen
-        for (let b = Math.min(bp, bn) + 1; own && b < Math.max(bp, bn); b++)
-          if ((m.bToA[b] as number) < 0 && unitB[b] !== u) own = false
+        // (B's glyphs between the two partners: none with no partner of another unit's)
+        if (m.hunkA[a] === HUNK.hyphen && between === undefined) {
+          between = true
+          for (let b = Math.min(bp, bn) + 1; between && b < Math.max(bp, bn); b++)
+            if ((m.bToA[b] as number) < 0 && unitB[b] !== u) between = false
+        }
+        const own = m.hunkA[a] === HUNK.hyphen && between === true
         if (own) {
           const rp = roleOfB(bp)
           const rn = roleOfB(bn)
@@ -751,7 +765,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mostOf(txt.map((g) => r2(g.size))) ??
       (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
     if (read === undefined && mem.lines.length) mem.read.push('size:lines')
-    // (in the text's capitals by today's walk (fakedCaps' `upper`): a faked small capital is no case change, an ink unit none)
+    // (in the text's capitals by fakedCaps' `upper`: a faked small capital is no case change; an ink unit's by its capitals' share)
     const { upper: _upper, ...read0 } = styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null)
     void _upper
     mem.style = {

@@ -144,7 +144,13 @@ const medianOf = (xs: readonly number[]) => {
  * source's own case are set at is a faked small capital; `ratio` their median size over that, to the hundredth (Style.sc, the
  * share the typesetter fakes its own at). An ink unit, whose source is the page's own text: where every cased glyph is a
  * capital, those at most SMALL_CAPS_SHARE of its full letters' size (the letters past SMALL_CAPS_SHARE of its largest). A
- * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (today's shortcut)
+ * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (today's shortcut).
+ * `upper`, in the text's capitals: the capitals the source writes lowercase set at their full size, more than half of its
+ * letters that can tell (today's L2:1099); where no letter is of the source's own case, every one set as a capital, there is
+ * no size to tell a small capital by, and none is (drawn at the unit's size, theirs, the target's capitals look as the page's
+ * do: REVTeX's "RELATED WORK"; today's walk answers none there). A unit whose source is its own case (an ink unit, or none
+ * told): every letter that can tell a capital, two at least, none faked small (a running head's "ABSTRACT"; "BERT (Ours)" is
+ * set in its own case; today's inkSmallCaps answers none)
  */
 export function fakedCaps(
   gs: readonly DocGlyph[],
@@ -157,10 +163,17 @@ export function fakedCaps(
   let big = 0
   for (const g of t) if (g.size > big) big = g.size
   if (ink || source === null) {
-    if (!ink || t.some((g) => casedChar(g.u) && g.u !== g.u.toUpperCase())) return none
+    // (its source its own case: in the text's capitals where every letter of it that can tell is a capital, two at least, and
+    // none a faked small capital; a lowercase letter among them says it is set in its own case, which its translation keeps)
+    const cased = t.filter((g) => casedChar(g.u))
+    const capitals = cased.every((g) => g.u === g.u.toUpperCase())
+    const upper = capitals && cased.length > 1 ? { upper: true as const } : {}
+    if (!ink || !capitals) return { ...none, ...upper }
     const ref = medianOf(t.filter((g) => g.size > SMALL_CAPS_SHARE * big).map((g) => g.size))
-    const small = new Set(t.filter((g) => casedChar(g.u) && g.size <= SMALL_CAPS_SHARE * ref))
-    return small.size ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 } : none
+    const small = new Set(cased.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
+    return small.size
+      ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 }
+      : { ...none, ...upper }
   }
   const isLow = (ch: string) => /\p{Ll}/u.test(ch)
   const lows = t.filter((g) => isLow(g.u)).length
@@ -184,9 +197,9 @@ export function fakedCaps(
     if (low && casedChar(g.u) && g.u === g.u.toUpperCase()) changed.push(g)
     else same.push(g.size)
   }
-  if (!same.length) return none
-  const ref = medianOf(same)
-  const small = new Set(changed.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
+  // (no letter of the source's own case: no size to tell a small capital by, none is)
+  const ref = same.length ? medianOf(same) : Number.NaN
+  const small = new Set(same.length ? changed.filter((g) => g.size <= SMALL_CAPS_SHARE * ref) : [])
   // (in the text's capitals: the capitals the source writes lowercase set at their full size, more than half its letters that
   // can tell (today's `upper`, L2:1099); a faked small capital is none)
   const upperN = changed.length - small.size

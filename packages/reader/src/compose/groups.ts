@@ -65,9 +65,10 @@ export function groupsOf(doc: PDFDocumentProxy): Groups {
             const name = groupName(m.ord, page.page, bit)
             if (ids.has(name)) off.add(name)
           }
+      // (the groups the page had off, read now: by the time the configuration is read, the page's entry is this set's)
+      const was = byPage.get(page.page)
       void laid.then((c) => {
-        for (const name of byPage.get(page.page) ?? [])
-          if (!off.has(name)) c.setVisibility(ids.get(name) as string, true, false)
+        for (const name of was ?? []) if (!off.has(name)) c.setVisibility(ids.get(name) as string, true, false)
         for (const name of off) c.setVisibility(ids.get(name) as string, false, false)
       })
       byPage.set(page.page, off)

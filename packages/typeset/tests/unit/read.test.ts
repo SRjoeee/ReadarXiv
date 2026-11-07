@@ -4,7 +4,7 @@
 import type { Placed } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { rectOf } from '../../src/lay/adapt.ts'
-import { paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
+import { measured, paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Metrics } from '../../src/types.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
@@ -27,8 +27,8 @@ const member = (o: Partial<Placed> = {}): Placed => ({
   room: { below: 0 },
   ...o,
 })
-const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
-  readMember({
+const read = (m: Placed, pieces: V0Piece[], kind = 'para') => {
+  const r = readMember({
     m,
     unit: { kind, state: 'whole', pieces } as RowUnit,
     rects: m.lines.map((l) => rectOf(l, m)),
@@ -42,9 +42,10 @@ const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
       names: null,
     },
     relabels: !!m.label,
-    metrics,
     shown: Number.POSITIVE_INFINITY,
   })
+  return { ...r, tokens: measured(r.tokens, metrics) }
+}
 
 describe('the reading from the part', () => {
   it('keeps a display the unit ends with in place: no region of it is referenced, no token blocks to it', () => {

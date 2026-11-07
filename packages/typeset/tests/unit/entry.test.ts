@@ -2,7 +2,7 @@
 // 'waiting', nothing off; a face not loaded: the same), a row that will not come ('none'), a member laid from its row and its
 // facts alone (no Units object: its pieces made from the member's stated El, rowPieces), its text group off, an element
 // drawn on a laid line off with it.
-import type { Part, Placed, Row } from '@readarxiv/format'
+import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
@@ -122,6 +122,151 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       ['laid', apart[1]![1]],
       ['laid', apart[1]![1]],
     ])
+  })
+  // (two cells of one table, a row of them: the second's row holds a paper's own macro the part states no ink and no text of)
+  const idC = 'c'.repeat(64)
+  const cell = (ord: number, x0: number, o: Partial<Placed> = {}): Placed =>
+    member({
+      ord,
+      kind: 'cell',
+      align: 'l',
+      lines: [[1, 0, x0, x0 + 60, 700, 707, 698, x0, x0 + 60, 0, 10]],
+      room: { below: 0, next: 300, side: [x0 - 2, x0 + 120] },
+      ...o,
+    })
+  const twoCells = (o: Partial<Placed> = {}): Part => ({
+    ...part(cell(0, 72)),
+    flows: [[cell(0, 72)], [cell(1, 200, { text: idC, ...o })]],
+    ties: [{ rule: 'cells', cells: [[0, 1]] }],
+  })
+  const cellRows = (second: OutPiece[] | null = [{ t: 'text', s: 'zwei' }]) =>
+    rowsOf([row([{ t: 'text', s: 'eins' }]), ...(second ? [{ ...row(second), id: idC }] : [])], true)
+  it("leaves a table's every cell the original's where one of them cannot be set before its lay (PR #620 review: one English cell, its peers laid)", () => {
+    // (today's contract, RUN:1223 and settleGroup RUN:2411: a translated cell that cannot be drawn — unproven, its row refused
+    // or never come, unfit — keeps every cell of its group the original's; the laid ones are withheld, 'cells', and turn
+    // nothing off)
+    const unproven = twoCells({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'sys', bare: 1, ink: [] }]] })
+    const r2 = cellRows([
+      { t: 'el', id: '0' },
+      { t: 'text', s: ' zwei' },
+    ])
+    expect(layPage(unproven, r2, rules, metrics()).members.map((m) => [m.state, m.off, m.lines.length])).toEqual([
+      ['cells', 0, 0],
+      ['unproven', 0, 0],
+    ])
+    // (a translation that failed: the cell was to be translated with the rest)
+    const failed = rowsOf([row([{ t: 'text', s: 'eins' }]), { id: idC, ok: false, why: { kind: 'refused' } }], true)
+    expect(layPage(twoCells(), failed, rules, metrics()).members.map((m) => m.state)).toEqual(['cells', 'refused'])
+    // (no row with every row in: a cell no translator was sent (a cell of digits), the original's in a table laid)
+    expect(layPage(twoCells(), cellRows(null), rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'none'])
+    // (both set: the table laid whole)
+    expect(layPage(twoCells(), cellRows(), rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'laid'])
+    // (a cell the wrap cannot hide is the original's alone, the rest of its table laid (the coordinator's ruling of
+    // 2026-10-24); one that spans columns keeps its table whole)
+    expect(layPage(twoCells({ why: 'unwrapped' }), cellRows(), rules, metrics()).members.map((m) => m.state)).toEqual([
+      'laid',
+      'unwrapped',
+    ])
+    const spanning: Part = {
+      ...twoCells({ why: 'unwrapped' }),
+      ties: [{ rule: 'cells', cells: [[0, 1]], spanning: [1] }],
+    }
+    expect(layPage(spanning, cellRows(), rules, metrics()).members.map((m) => m.state)).toEqual(['cells', 'unwrapped'])
+  })
+  it('leaves a member of a kind the reader leaves the original’s, nothing of it off, and waits for no row of it (Rules.leave)', () => {
+    // (PR #620 review: the reader's "what to translate" was read nowhere, references laid and their ink turned off)
+    const ref = member({ kind: 'reference' })
+    const leave = rulesFor('de', { leave: ['reference'] })
+    const p = layPage(part(ref), rowsOf([]), leave, metrics())
+    expect(p.wait).toEqual({ rows: [], faces: [] })
+    expect(p.members.map((m) => [m.state, m.off, m.lines.length])).toEqual([['left', 0, 0]])
+    // (the next member of its flow starts where TeX set it, as after any member left the original's; one of another kind laid)
+    const idB = 'b'.repeat(64)
+    const after = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 676, 683, 674, 72, 300, 0, 10]] })
+    const both: Part = { ...part(ref), flows: [[ref, after]] }
+    const rows = rowsOf([row([{ t: 'text', s: 'ein Satz' }]), { ...row([{ t: 'text', s: 'noch einer' }]), id: idB }])
+    expect(layPage(both, rows, leave, metrics()).members.map((m) => [m.state, m.off])).toEqual([
+      ['left', 0],
+      ['laid', 1],
+    ])
+    expect(layPage(both, rows, rules, metrics()).members.map((m) => m.state)).toEqual(['laid', 'laid'])
+  })
+  it('asks a face’s readiness before any width: a face not loaded is waited for, never measured (PR #620 re-review)', () => {
+    // (a host whose Metrics cannot measure a face not loaded throws, or measures it in a fallback face: the reading measured
+    // its tokens before B.cover asked, so the member was 'error' and the page committed with no face to wait for)
+    const loading: Metrics = {
+      ready: () => false,
+      advance: () => {
+        throw new Error('a face not loaded measured')
+      },
+      ink: () => [0.7, 0.2, 0],
+    }
+    const p = layPage(part(member()), rowsOf([row([{ t: 'text', s: 'ein Satz' }])]), rules, loading)
+    expect(p.wait.faces.length).toBeGreaterThan(0)
+    expect(p.members.map((m) => m.state)).toEqual(['waiting'])
+  })
+  it('opens a run-in head’s follower only where the follower is set: one the reader leaves is no row to run over', () => {
+    // (PR #620 re-review: a heading at 72-100 sharing its row with a paragraph from 105 the reader leaves: the paragraph's row
+    // was in, so the heading's follower was open and its translation ran over the paragraph's original text, which stays)
+    const head = member({
+      ord: 0,
+      kind: 'heading',
+      align: 'l',
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      // (its side to the paragraph's first glyph on its baseline, as locate states it)
+      room: { below: 0, next: 300, side: [72, 105] },
+    })
+    const idB = 'b'.repeat(64)
+    const para = member({
+      ord: 1,
+      text: idB,
+      join: [5],
+      lines: [
+        [1, 0, 105, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(head), flows: [[head, para]] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: 'Eine sehr lange Überschrift' }]),
+      { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB },
+    ])
+    const laid = layPage(pt, rows, rulesFor('de', { leave: ['para'] }), metrics()).members
+    expect(laid[1]).toMatchObject({ state: 'left', off: 0 })
+    // (no line of the head's on the paragraph's row past where the paragraph's original text begins: within its room, or
+    // left the original's where it does not fit there (it ran to 207 over the paragraph's text before))
+    expect(laid[0]!.lines.filter(([y, , x1]) => y === 700 && x1 > 105)).toEqual([])
+    // (the paragraph set, the head runs on over its row as before)
+    const both = layPage(pt, rows, rules, metrics()).members
+    expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
+  })
+  it('caps a size tie’s members alike on every page it is laid for (PR #620 re-review: a member on pages 1-2, one on 2)', () => {
+    // (the tie's sizes were read off the members with a line on the page asked for: on page 1 the second member was no voter,
+    // and the first laid at 10, on page 2 at the second's 8.5)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [[2, 0, 72, 120, 600, 607, 598, 72, 120, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const rows = rowsOf([row([{ t: 'text', s: 'kurz' }]), { ...row([{ t: 'text', s: 'abcdefghijk' }]), id: idB }])
+    // (the page's fill off, as the review's case: the fill's growth is its own question)
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const on = (page: number) => {
+      const pt: Part = { ...part(a), page, flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      return layPage(pt, rows, still, metrics()).members.find((m) => m.ord === 0)!.fit!.size
+    }
+    expect(on(2)).toBeLessThan(10)
+    expect(on(1)).toBe(on(2))
   })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's

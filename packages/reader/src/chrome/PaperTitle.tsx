@@ -17,6 +17,7 @@ import { ArrowUpRight } from 'lucide'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { R, S, Icon, useTip } from '@readarxiv/ui'
+import { ARXIV_ORIGIN, linkable } from './links.ts'
 
 export function PaperTitle({ id, title }: { id: string; title: string }) {
   const whole = useTip(title)
@@ -71,7 +72,7 @@ export function PaperTitle({ id, title }: { id: string; title: string }) {
           <a
             id={`${linkId}-id`}
             data-arxiv
-            href={`https://arxiv.org/abs/${id}`}
+            href={linkable(`${ARXIV_ORIGIN}/abs/${id}`) ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
             className="arxiv-id"

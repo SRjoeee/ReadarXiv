@@ -3,7 +3,9 @@
 // it; the verdict is compared with today's: readsBack for the PDF engine's units (its spans not `must` but the pairs its
 // markers wire keeps), the protector's validate for the HTML page's blocks (every pair `must`). A comparison is made only
 // where the adapter writes the unit's wire as today does, byte for byte or but for the DOM's white space (the two are
-// counted apart); every other record is listed with why the wires differ. Run: npx tsx lab/translate/equivalence.ts <capture.jsonl> <out-dir>
+// counted apart); every other record is listed with why the wires differ. A disagreement of a class the package's owners
+// chose (ACCEPTED: its cause, its test, its count) is listed apart; the run exits 1 on any other disagreement, or where an
+// accepted class's count is not the one stated. Run: npx tsx lab/translate/equivalence.ts <capture.jsonl> <out-dir>
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { accept, type Fetch, google, microsoft, type Piece, type UnitIn } from '../../packages/translate/src/index.ts'
@@ -184,8 +186,21 @@ const records: Rec[] = [
   ...readFileSync(input, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as Rec),
   ...WEB.map(([wire, reply, today]): Rec => ({ src: 'web', format: 'markers', wire, reply, today, file: 'readarxiv-web worker/tests/mt.test.ts', test: 'the reading table' })),
 ]
+/** the differences the package makes on purpose, each with its cause, the test that puts a disagreement in it (read from the
+ *  record, not from the package's code) and the count on the capture (lanes/L6/capture.jsonl): a count other than this one
+ *  is a change, as a disagreement of no class is */
+const ACCEPTED: { name: string; cause: string; count: number; test: (r: Rec, why: string | null) => boolean }[] = [
+  {
+    name: 'a `#` of its own',
+    cause:
+      "a block whose text holds a `#` of its own, a reply with a `#` right after a marker: refused here, taken today. Microsoft's doubled closer (`@a##`) and the text's own `#` moved beside the marker cannot be told apart, and either way a reader would see one `#` too many or too few; the reply goes to the next translator (stage 4b, lanes/L6-translate.md \"Stage 4b, checks\", check 1; packages/translate/src/wire/markers.ts readMarkers)",
+    count: 3,
+    test: (r, why) => r.format === 'markers' && r.today && why === 'unread' && r.wire.replace(/@@|@[a-z]+#/g, '').includes('#') && /@[a-z]+#[ \t]*#/.test(r.reply.replace(/@@/g, '')),
+  },
+]
 const seen = new Set<string>()
-type Row = { src: string; format: string; outcome: 'agree' | 'disagree' | 'agree, white space apart' | 'disagree, white space apart' | 'wire'; today: boolean; mine?: boolean; cause?: string; wire: string; mineWire?: string; reply: string; test?: string | null; file?: string | null; must?: boolean }
+type Outcome = 'agree' | 'disagree' | 'accepted' | 'wire'
+type Row = { src: string; format: string; outcome: Outcome | `${Exclude<Outcome, 'wire'>}, white space apart`; today: boolean; mine?: boolean; cause?: string; accepted?: string; wire: string; mineWire?: string; reply: string; test?: string | null; file?: string | null; must?: boolean }
 const rows: Row[] = []
 for (const r of records) {
   const key = JSON.stringify([r.src, r.format, r.pieces ?? r.wire, r.reply])
@@ -209,11 +224,13 @@ for (const r of records) {
   const verdict = got ? accept(unit, got.content) : { ok: false as const, why: 'unread' as const }
   const mine = verdict.ok
   const tail = loose ? ', white space apart' : ''
-  rows.push(
-    mine === r.today
-      ? { ...base, outcome: `agree${tail}` as Row['outcome'], mine }
-      : { ...base, outcome: `disagree${tail}` as Row['outcome'], mine, cause: verdict.ok ? `taken here, refused today${r.reason ? ` (${r.reason})` : ''}` : `refused here (${verdict.why})${r.reason ? `, today ${r.reason}` : ''}` },
-  )
+  if (mine === r.today) {
+    rows.push({ ...base, outcome: `agree${tail}`, mine })
+    continue
+  }
+  const cause = verdict.ok ? `taken here, refused today${r.reason ? ` (${r.reason})` : ''}` : `refused here (${verdict.why})${r.reason ? `, today ${r.reason}` : ''}`
+  const accepted = ACCEPTED.find(a => a.test(r, verdict.ok ? null : verdict.why))
+  rows.push(accepted ? { ...base, outcome: `accepted${tail}`, mine, cause, accepted: accepted.name } : { ...base, outcome: `disagree${tail}`, mine, cause })
 }
 
 function wireCause(r: Rec, typed: { unit: UnitIn; notes: Set<string>; order?: number[] }, mine: string): string {
@@ -235,20 +252,35 @@ const by = (f: (r: Row) => string) => {
   return [...m.entries()].sort((a, b) => b[1] - a[1])
 }
 const groups = by(r => `${r.src}|${r.format}|${r.outcome}`)
+const line = (r: Row) => `${r.src}/${r.format}${r.must ? ' (must spans)' : ''}: today ${r.today ? 'takes' : 'refuses'}, here ${r.mine ? 'takes' : 'refuses'}: ${r.cause}. Wire \`${r.wire.slice(0, 160)}\`, reply \`${r.reply.slice(0, 160)}\`${r.test ? ` (${r.file ?? ''} › ${r.test})` : ''}`
+const disagree = rows.filter(r => r.outcome.startsWith('disagree'))
+const classes = ACCEPTED.map(a => ({ ...a, rows: rows.filter(r => r.accepted === a.name) }))
+const off = classes.filter(c => c.rows.length !== c.count)
+const pass = disagree.length === 0 && off.length === 0
+const compared = rows.filter(r => r.outcome !== 'wire').length
+const verdict = `${pass ? 'PASS' : 'FAIL'}: ${compared} compared, ${compared - disagree.length - classes.reduce((n, c) => n + c.rows.length, 0)} agree, ${classes.map(c => `${c.rows.length} of the accepted class "${c.name}" (stated ${c.count})`).join(', ')}, ${disagree.length} disagreements of no class`
 const lines = [
   '# Equivalence with today on recorded material (lane L6)',
   '',
   `Input: ${records.length} records from today's tests (${seen.size} distinct). A verdict is compared only where the adapter writes today's wire, byte for byte or but for the DOM's white space (the rows "white space apart").`,
   '',
+  `**${verdict}.**`,
+  '',
   '| source | wire | outcome | records |',
   '|---|---|---|---|',
   ...groups.map(([k, n]) => `| ${k.split('|').join(' | ')} | ${n} |`),
   '',
-  '## Disagreements (the same wire, or one but for white space; different verdicts), each with its cause',
+  '## Accepted differences (the package\'s on purpose), each with its cause and count',
   '',
-  ...rows
-    .filter(r => r.outcome.startsWith('disagree'))
-    .map(r => `- ${r.src}/${r.format}${r.must ? ' (must spans)' : ''}: today ${r.today ? 'takes' : 'refuses'}, here ${r.mine ? 'takes' : 'refuses'}: ${r.cause}. Wire \`${r.wire.slice(0, 160)}\`, reply \`${r.reply.slice(0, 160)}\`${r.test ? ` (${r.file ?? ''} › ${r.test})` : ''}`),
+  '| class | cause | stated | found |',
+  '|---|---|---|---|',
+  ...classes.map(c => `| ${c.name} | ${c.cause} | ${c.count} | ${c.rows.length} |`),
+  '',
+  ...classes.flatMap(c => c.rows.map(r => `- ${c.name}: ${line(r)}`)),
+  '',
+  '## Disagreements (the same wire, or one but for white space; different verdicts) of no accepted class, each with its cause',
+  '',
+  ...disagree.map(r => `- ${line(r)}`),
   '',
   '## Records whose wire differs, by cause',
   '',
@@ -257,3 +289,5 @@ const lines = [
 writeFileSync(join(outDir, 'equivalence.md'), `${lines.join('\n')}\n`)
 writeFileSync(join(outDir, 'equivalence.json'), JSON.stringify(rows, null, 1))
 console.log(groups.map(([k, n]) => `${k.split('|').join(' ')}: ${n}`).join('\n'))
+console.log(verdict)
+if (!pass) process.exitCode = 1

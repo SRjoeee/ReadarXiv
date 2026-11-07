@@ -1,0 +1,588 @@
+// lab/release-check/gates.mjs: what `pnpm release-check` runs and how it reads each gate (design §4.9): the invariants I1 to
+// I9 and the migration's differential, the targets of §7, and every gate that exists, each as it exists: its command, the
+// inputs it reads from outside the repository, the tier it first runs in, the invariants it holds and how its output is
+// read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
+// bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
+import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
+
+/** the tiers, each holding the gates of the ones before it (lab/release-check/CI.md says where each runs) */
+export const TIERS = ['fast', 'full', 'release']
+
+/** design §4.9's tiers, the order the gates run in */
+export const STAGES = ['unit', 'pipeline', 'reader', 'platform', 'box', 'corpus']
+
+/** design §4.9's invariants, and the migration's differential; `gap`: what no gate of either repository holds today */
+export const INVARIANTS = [
+  {
+    id: 'I1',
+    says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
+    gap: "the composed page in the reader is held on the harness's own fixtures only; on corpus papers the harness measures its residue and holds nothing, and the canvas gate (the release tier's) passed in lane L1 only with a stand-in (`--normalize`) for a reader change not built",
+  },
+  {
+    id: 'I2',
+    says: 'a group off hides exactly its ink, rules and images included; no pixel outside that ink changes',
+    gap: 'no check of a group turned off in the reader; the prepare proves it in PDF.js and Cairo only',
+  },
+  { id: 'I3', says: "a laid unit's ink stays inside its regions and room and overlaps no other ink", gap: null },
+  { id: 'I4', says: 'every element of a laid unit appears exactly once', gap: null },
+  {
+    id: 'I5',
+    says: 'no line wider than its frame beyond the stated tolerance; no unit set under the size floor',
+    gap: 'the runners count the restated form (a closing mark\'s blank half and an overfull line with nothing to shrink set apart); no gate counts the size floor',
+  },
+  {
+    id: 'I6',
+    says: 'the same inputs give the same bytes (prepare) and the same display list (typesetting on table metrics)',
+    gap: 'the display list is held on one pair (`purity.test.ts`, with lab data); no corpus check of typesetting twice',
+  },
+  {
+    id: 'I7',
+    says: "a unit's boxes on the left and on the right are the same boxes",
+    gap: "no gate: the harness holds the slots' page boxes at five scales and the highlight lighting one unit on both panes, not a unit's boxes",
+  },
+  {
+    id: 'I8',
+    says: 'the text layer of a laid page reads the translation in reading order',
+    gap: 'held on the fixtures and five corpus papers (the harness; the website\'s e2e on fixtures); not on the corpus',
+  },
+  {
+    id: 'I9',
+    says: 'the box refuses each escape of the security suite, passes its canary and has no network',
+    gap: 'the security suite has run under emulation only; three of its cases hold as written on native amd64 alone',
+  },
+  {
+    id: 'D',
+    says: "the migration's differential: no unit drawn or laid at the frozen baseline is lost, but for the acceptance list",
+    gap: null,
+  },
+]
+
+/** design §7's rows; `from`: the gate whose numbers give the value, read by `value(numbers)`; none: not measured, `why` */
+export const TARGETS = [
+  { id: 'prepare', measure: 'Prepare, median on staging (n ≥ 90)', baseline: '33.6 s', target: 'under 20 s', from: 'private-soak', why: "staging's prepare records (the private repository's)" },
+  { id: 'tex-runs', measure: 'TeX runs a paper', baseline: '4 compiles, 5 passes', target: "the paper's own passes; no final pass", from: 'front-count', value: n => n.compiles != null && `${n.compiles} compiles on ${n.papers} papers (${(n.compiles / n.papers).toFixed(2)} a paper), TeX ${n.texS} s` },
+  { id: 'reprepare', measure: 'A new prepare after an engine change that keeps the marks', baseline: '33.6 s', target: 'under 6 s, no TeX', from: 'private-soak', why: 'the box on staging (the private repository\'s)' },
+  { id: 'reuse', measure: 'Translation after an engine change', baseline: 'every language of every paper again', target: 'changed units only', from: null, why: 'no gate measures the rows\' reuse rate after an engine change' },
+  {
+    id: 'units',
+    measure: 'Units drawn on the 87 papers',
+    baseline: '27,150 source, 2,668 ink',
+    target: 'not fewer, but for the acceptance list; gains listed',
+    from: 'prepare-diff',
+    value: n => n.source != null && `${n.source} source, ${n.ink} ink, ${n.figures} figure texts drawn; lost ${n.lost} (+${n.accepted} accepted), gained ${n.gained}`,
+    met: n => n.lost === 0,
+  },
+  { id: 'refused', measure: 'Papers refused whole for a page box or page count', baseline: '1 of 87', target: '0', from: 'prepare', value: n => n.refusedWhole != null && `${n.refusedWhole} of ${n.papers}`, met: n => n.refusedWhole === 0 },
+  {
+    id: 'layout',
+    measure: "A page's layout, p50 / p95",
+    baseline: '21.8 / 52.7 ms',
+    target: 'under 10 / 30 ms',
+    from: 'typeset-parts',
+    value: n => n.layP50 != null && `p50 ${n.layP50}, p90 ${n.layP90}, p99 ${n.layP99} ms over ${n.layPages} pages (the runner prints no p95)`,
+    // (no p95 printed: under 30 where the p99 is; over it where the p90 is; else the numbers cannot tell)
+    met: n => (n.layP50 >= 10 || n.layP90 >= 30 ? false : n.layP99 < 30 ? true : null),
+  },
+  { id: 'commit', measure: "A page's commit at 1×, p50", baseline: '42 ms', target: 'under 20 ms', from: 'harness', value: n => n.commitP50 != null && `${n.commitP50} ms over ${n.commitPages} laid pages of the fixtures (the fixtures' pages are lighter than a paper's)`, met: n => n.commitP50 < 20 },
+  { id: 'switch', measure: 'Switching language', baseline: 'every page read again', target: 'rows and layout only', from: 'harness', value: n => n.languageSwitch != null && (n.languageSwitch ? 'no object asked again (the harness\'s check)' : 'objects asked again'), met: n => n.languageSwitch === true },
+  { id: 'thresholds', measure: 'Geometric thresholds and name tables in the prepare', baseline: 'about 150 and about 100', target: 'each one left listed with its reason', from: null, why: 'no census script exists' },
+  { id: 'versions', measure: 'Version numbers raised by hand', baseline: 'about 12', target: '1', from: null, why: 'no gate counts them' },
+  { id: 'unchecked', measure: 'Engine lines never type-checked', baseline: 'about 55,000', target: '0', from: null, why: "no gate counts them; `src/pdf-reader/engine` (today's engine, still shipped) is JavaScript outside `tsc`" },
+  { id: 'imports', measure: "The website's imports of engine internals", baseline: '262, and 142 of the interface source', target: '0: package entries only', from: 'private-platform', why: "the private repository's boundary" },
+  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: 'planned in lab/release-check/CI.md; the workflows are not written yet' },
+]
+
+// ---------------------------------------------------------------- reading a gate's output
+const num = s => Number(String(s).replace(/,/g, ''))
+
+/** "N of M checks passed" (the reader's harness) or "N/M passed" (the extension's e2e scripts) */
+export function checksOf(text) {
+  const m = /(\d+) of (\d+) checks passed/.exec(text) ?? /(\d+)\/(\d+) passed/.exec(text)
+  return m ? { passed: num(m[1]), checks: num(m[2]) } : {}
+}
+
+/** a terminal's colours (vitest colours its summary where it is asked to) */
+const COLOUR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
+/** vitest's summary: "Tests  9074 passed | 56 skipped (9130)" */
+export function vitestOf(text) {
+  const plain = text.replace(COLOUR, '')
+  const t = /Tests\s+(?:(\d+) failed \| )?(\d+) passed(?: \| (\d+) skipped)?/.exec(plain)
+  const f = /Test Files\s+(?:(\d+) failed \| )?(\d+) passed/.exec(plain)
+  return t ? { tests: num(t[2]), failed: num(t[1] ?? 0), skipped: num(t[3] ?? 0), files: f ? num(f[2]) : undefined } : {}
+}
+
+/** baseline/tools/diff.mjs's summary line: "<scope>: 87 of 87 files; units 44180; shown 37793 -> 38146; lost 0 (+3 accepted), gained 356, changed 9398" */
+export function diffOf(text) {
+  const m = /(\w+): (\d+) of (\d+) files; units (\d+); shown (\d+) -> (\d+); lost (\d+) \(\+(\d+) accepted\), gained (\d+), changed (\d+)/.exec(text)
+  if (!m) return {}
+  return { files: num(m[2]), of: num(m[3]), units: num(m[4]), shownBefore: num(m[5]), shown: num(m[6]), lost: num(m[7]), accepted: num(m[8]), gained: num(m[9]), changed: num(m[10]) }
+}
+
+/** the typeset runners' invariant line: "invariants over the laid members[ (page by page)]: {json}" */
+export function typesetOf(text) {
+  const out = {}
+  const inv = /invariants over the laid members(?: \(page by page\))?: (\{[^}]*\})/.exec(text)
+  if (inv) Object.assign(out, JSON.parse(inv[1]))
+  const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
+  if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
+  const first = /^\{"pairs":.*\}$/m.exec(text)
+  if (first) {
+    const c = JSON.parse(first[0])
+    Object.assign(out, { pairs: c.pairs, pages: c.pages, msPerPage: c.msPerPage })
+  }
+  return out
+}
+
+/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh, lab/marks/front.sh): one line a paper, `id <tab> exit <tab> summary` */
+export function corpusLogOf(file) {
+  const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'))
+  const out = { papers: rows.length, made: 0, failed: [], refused: [], missingCompile: [], proofs: { a: 0, c: 0, on: 0, offOutside: 0 } }
+  for (const [id, rc, summary] of rows) {
+    if (rc === 'refused') { out.refused.push(`${id} (${summary})`); continue }
+    if (rc === '3') { out.missingCompile.push(id); continue }
+    if (rc !== '0') { out.failed.push(`${id}: exit ${rc}: ${summary}`); continue }
+    out.made++
+    let s
+    // (the summary is the paper's JSON, after its id where the runner prints one: lab/marks/front.sh, gate.sh)
+    try { s = JSON.parse(summary.slice(summary.indexOf('{'))) } catch { out.failed.push(`${id}: no summary`); continue }
+    const p = s.proofs ?? {}
+    // (a proof the prover refused is no count: run.mjs writes its reason where the count would be, `offOutside: '<why>'`, or
+    // `refused`; that paper fails, named, and adds nothing to the counts)
+    const refusals = Object.entries(p).filter(([k, v]) => k === 'refused' || typeof v === 'string' || (v && typeof v === 'object' && Object.values(v).some(x => typeof x !== 'number')))
+    if (refusals.length) {
+      out.failed.push(`${id}: a proof refused: ${refusals.map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`)
+      continue
+    }
+    out.proofs.a += p.a ?? 0
+    out.proofs.c += p.c ?? 0
+    out.proofs.on += p.on ?? 0
+    out.proofs.offOutside += Object.values(p.offOutside ?? {}).reduce((n, v) => n + v, 0)
+  }
+  return out
+}
+
+/** the candidate's prepare dumps (baseline FORMAT.md §3): units drawn by group, and the papers refused whole (no source
+ *  unit drawn), as baseline/tools/acceptance.mjs counts them */
+export function drawnOf(dir) {
+  const groupOf = u => (u.kind === 'name' ? 'names' : u.kind === 'inkfigures' ? 'figures' : /^ink/.test(u.kind ?? '') ? 'ink' : 'source')
+  const out = { source: 0, ink: 0, figures: 0, refusedWhole: 0, papers: 0 }
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.prepare.json'))) {
+    const d = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+    out.papers++
+    let source = 0
+    for (const u of d.units) {
+      if (u.state !== 'drawn') continue
+      const g = groupOf(u)
+      if (g === 'source') source++
+      if (g in out) out[g]++
+    }
+    if (!source) out.refusedWhole++
+  }
+  return out
+}
+
+/** canvas.mjs's line a paper, held to the bound its header names (the erasure's E4: at most 0.1 % of the split glyphs'
+ *  pixels, max channel Δ 16; no pixel outside them); a paper it refused (`{ id, refused }`: no add-on) or did not report at
+ *  all, of the `ids` asked, is over, by name */
+export function canvasOf(text, ids = []) {
+  const rows = text.split('\n').filter(l => l.startsWith('{"id"') && (l.includes('"splitShows"') || l.includes('"refused"'))).map(l => JSON.parse(l))
+  const over = rows.filter(r => r.refused || r.outsidePages?.length || r.shareMax > 0.001 || r.maxDelta > 16)
+  const seen = new Set(rows.map(r => r.id))
+  return {
+    papers: rows.length,
+    pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
+    over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
+  }
+}
+
+/** the marks' sum against the record the owner judged: every count and class but the compiles' (a replay compiles nothing) */
+export function sameSum(made, recorded) {
+  const strip = t => {
+    const [first, ...rest] = t.trim().split('\n')
+    const head = JSON.parse(first)
+    delete head.compiles
+    return [JSON.stringify(head), ...rest].join('\n')
+  }
+  return strip(made) === strip(recorded)
+}
+
+// ---------------------------------------------------------------- the gates
+// A gate: `id`, `title`, `tier` (the first it runs in), `stage` (design §4.9), `holds` (invariant ids), `steps(ctx)` (each
+// `{ cmd, slot?, env?, out? }`, run in order, the first that fails ends the gate), `needs(ctx)` (inputs outside the
+// repository: `{ what, path }`, a gate whose input is missing is skipped and says which), `after` (gates whose output it
+// reads), `disk` (writes corpus outputs: refused under the free disk the lab's runners require), `network` ('live': runs
+// only with --online), `judge(ctx, steps)` (its pass and numbers; by default every step's exit code 0), and for a gate of
+// the private repository `private: true` (named, never run here).
+const pnpm = (...a) => ({ cmd: ['pnpm', ...a] })
+const e2e = (script, title, holds = [], extra = {}) => ({
+  id: script,
+  title,
+  tier: 'fast',
+  stage: 'reader',
+  holds,
+  after: ['build'],
+  steps: () => [{ cmd: ['pnpm', script], slot: 'e2e' }],
+  judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: checksOf(steps.at(-1).text) }),
+  ...extra,
+})
+const lab = (ctx, ...p) => join(ctx.refactor, ...p)
+const exists = (what, path) => ({ what, path })
+
+export const GATES = [
+  // ---------------------------------------------------------------- unit (hosted CI, every pull request)
+  { id: 'typecheck', title: 'the type check (the extension, the packages, the website\'s calls in tests/contract/website-use.tsx)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('typecheck')] },
+  { id: 'lint', title: 'Biome, the packages\' format, the English, boundary and review-citation gates', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('lint')] },
+  {
+    id: 'test',
+    title: "the unit tests: the extension's and every package's (the typeset replays read the tap where the machine has it)",
+    tier: 'fast',
+    stage: 'unit',
+    holds: [],
+    steps: () => [{ cmd: ['pnpm', 'test'], slot: 'test' }],
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: vitestOf(steps[0].text) }),
+  },
+  {
+    id: 'contract',
+    title: "the contract tests: the website's import contract, no GPL from any entry point, the language table",
+    tier: 'fast',
+    stage: 'unit',
+    holds: [],
+    steps: () => [pnpm('exec', 'vitest', 'run', '--project', 'extension', 'tests/contract')],
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: vitestOf(steps[0].text) }),
+  },
+  { id: 'build', title: 'the build (wxt build, scripts/check-output.mjs)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('build')] },
+  // ---------------------------------------------------------------- reader (hosted CI, every pull request: offline browsers)
+  {
+    id: 'harness',
+    title: "the reader package's browser checks on its own fixtures (packages/reader/e2e/run.mjs)",
+    tier: 'fast',
+    stage: 'reader',
+    holds: ['I1', 'I3', 'I4', 'I8'],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_TIMINGS_OUT: join(ctx.work, 'harness-timings.json') } }],
+    judge: (ctx, steps) => {
+      const text = steps[0].text
+      const numbers = checksOf(text)
+      const sw = /^(ok|FAIL) +compose: a language switch reuses/m.exec(text)
+      if (sw) numbers.languageSwitch = sw[1] === 'ok'
+      const f = join(ctx.work, 'harness-timings.json')
+      if (existsSync(f)) {
+        const rows = Object.entries(JSON.parse(readFileSync(f, 'utf8'))).filter(([k]) => k.endsWith('@1x')).flatMap(([, r]) => r.map(x => x.commitMs)).sort((a, b) => a - b)
+        if (rows.length) Object.assign(numbers, { commitP50: rows[rows.length >> 1], commitPages: rows.length })
+      }
+      return { pass: steps[0].exit === 0 && !/route table violated/.test(text), numbers }
+    },
+  },
+  e2e('e2e:reader', "today's reader (the shipped build's) on the stand-in of the v1 layer API"),
+  e2e('e2e:framing', 'the reader and the popup framed: every way the extension opens them works, a framing page gets nothing'),
+  e2e('e2e:a11y', 'the A/B axe audit: no finding the extension adds'),
+  e2e('e2e:viewer', "the figure viewer's control under a pinned header"),
+  e2e('e2e:registration', "today's reader: a laid page's copy, SVG and links registered at every zoom"),
+  e2e('e2e:small-caps', "today's layer's small capitals in Chromium, Firefox and WebKit", [], { after: [] }),
+  // ---------------------------------------------------------------- pipeline (the self-hosted runner, with lab data)
+  {
+    id: 'prepare',
+    title: "the prepare's back half on the 87 papers from cached compiles, with PDF.js's proofs (I1 (a), I2 (c′))",
+    tier: 'full',
+    stage: 'pipeline',
+    holds: ['I1', 'I2'],
+    disk: true,
+    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
+    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove'], slot: 'test', fresh: join(ctx.work, 'prepare') }],
+    judge: ctx => corpusJudge(ctx, join(ctx.work, 'prepare'), ['a', 'c']),
+  },
+  {
+    id: 'prepare-diff',
+    title: "the migration's differential, the prepare's scope (baseline/tools/diff.mjs against the frozen baseline)",
+    tier: 'full',
+    stage: 'pipeline',
+    holds: ['D'],
+    after: ['prepare'],
+    needs: ctx => [exists('the frozen baseline', lab(ctx, 'baseline/acceptance.json'))],
+    steps: ctx => [{ cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'prepare'), '--scope=prepare', `--json=${join(ctx.work, 'prepare-diff.json')}`] }],
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0, numbers: { ...diffOf(steps[0].text), ...drawnOf(join(ctx.work, 'prepare', 'prepare')) } }),
+  },
+  {
+    id: 'prepare-same',
+    title: 'the same inputs give the same bytes: the prepare run again and compared object by object (lab/pdf/prepare-back/same.mjs)',
+    tier: 'full',
+    stage: 'pipeline',
+    holds: ['I6'],
+    disk: true,
+    after: ['prepare'],
+    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt'))],
+    steps: ctx => [
+      { cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'prepare-2'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2'], slot: 'test', fresh: join(ctx.work, 'prepare-2') },
+      { cmd: ['node', 'lab/pdf/prepare-back/same.mjs', join(ctx.work, 'prepare'), join(ctx.work, 'prepare-2')] },
+    ],
+    judge: (ctx, steps) => {
+      const log = corpusLogOf(join(ctx.work, 'prepare-2', 'log.tsv'))
+      if (log.refused.length) return { skip: `the corpus runner refused ${log.refused.length} papers: ${log.refused[0]}` }
+      return { pass: steps.every(s => s.exit === 0), numbers: { papers: log.papers, same: steps[1]?.text.trim().split('\n').at(-1) } }
+    },
+  },
+  {
+    id: 'marks-replay',
+    title: "the marks' equivalence again over run 6's kept inputs, no TeX (lab/marks/replay.mjs), judged by the marks' census",
+    tier: 'full',
+    stage: 'pipeline',
+    holds: [],
+    // (gate.mjs --keep's inputs: today's owners and the new instrument's B pages, plan and source. Valid while markSource writes
+    // the same marks; after a change to the writer the gate is gate.sh again, the release tier's marks-gate. The census is
+    // the tree's where it is, lab/marks/census.json judged by census.mjs; before it, run 6's census r13 in lab data)
+    needs: ctx => [exists("run 6's kept inputs", lab(ctx, 'lanes/L2/marks/gate6/keep')), ...censusNeeds(ctx)],
+    steps: ctx => [
+      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/replay.mjs', `--keep=${lab(ctx, 'lanes/L2/marks/gate6/keep')}`, `--out=${join(ctx.work, 'marks-replay')}`], slot: 'test', fresh: join(ctx.work, 'marks-replay') },
+      censusStep(ctx, join(ctx.work, 'marks-replay')),
+    ],
+    judge: (ctx, steps) => censusJudge(ctx, steps),
+  },
+  {
+    id: 'translate-equivalence',
+    title: "the translate package's adapters against today's readers on recorded replies (lab/translate/equivalence.ts)",
+    tier: 'full',
+    stage: 'pipeline',
+    holds: [],
+    needs: ctx => [exists("today's readers' replies, captured", lab(ctx, 'lanes/L6/capture.jsonl'))],
+    steps: ctx => [{ cmd: ['pnpm', 'exec', 'tsx', 'lab/translate/equivalence.ts', lab(ctx, 'lanes/L6/capture.jsonl'), join(ctx.work, 'equivalence')], fresh: join(ctx.work, 'equivalence') }],
+    // (its rows in either shape of the tool: before its accepted classes every difference is `disagree`; with them, a
+    // difference of a class the package's owners chose is `accepted`, compared and counted apart, and the tool exits 1 on any
+    // other disagreement or a class's count moved)
+    judge: (ctx, steps) => {
+      const rows = JSON.parse(readFileSync(join(ctx.work, 'equivalence', 'equivalence.json'), 'utf8'))
+      const n = k => rows.filter(r => String(r.outcome).startsWith(k)).length
+      const [agree, accepted, disagree] = [n('agree'), n('accepted'), n('disagree')]
+      return { pass: steps[0].exit === 0 && disagree === 0, numbers: { compared: agree + accepted + disagree, agree, accepted, disagree, wireDiffers: rows.filter(r => r.outcome === 'wire').length } }
+    },
+  },
+  // ---------------------------------------------------------------- reader, with lab data
+  {
+    id: 'typeset-today',
+    title: "the typesetter over today's members (lab/typeset/gate.mjs) and the reader's differential",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['D', 'I3', 'I4', 'I5'],
+    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers')), exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')), exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers'))],
+    steps: ctx => [
+      { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'test', fresh: join(ctx.work, 'typeset-today') },
+      { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-today'), '--scope=reader', `--json=${join(ctx.work, 'typeset-today-diff.json')}`] },
+    ],
+    judge: (ctx, steps) => typesetJudge(steps),
+  },
+  {
+    id: 'typeset-parts',
+    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs) and the reader's differential",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['D', 'I3', 'I4', 'I5'],
+    after: ['prepare'],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES), the measurer of a width the tap lacks", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
+    steps: ctx => [
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
+      { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
+    ],
+    judge: (ctx, steps) => typesetJudge(steps),
+  },
+  {
+    id: 'typeset-replays',
+    title: "the typesetter's port against today's recorded rounds (lab/typeset/replay-*.mjs)",
+    tier: 'full',
+    stage: 'reader',
+    holds: [],
+    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/samples'))],
+    steps: () => ['fit', 'fill', 'emit', 'names', 'figures', 'display'].map(r => ({ cmd: ['node', `lab/typeset/replay-${r}.mjs`], slot: 'test', all: true })),
+    judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: Object.fromEntries(steps.map(s => [s.cmd[1].replace(/^.*replay-|\.mjs$/g, ''), s.exit === 0 ? 'equal' : `exit ${s.exit}: ${lastLine(s.text)}`])) }),
+  },
+  {
+    id: 'typeset-data',
+    title: "the typesetter's generated data equal to their sources, and today's readings derived again (lab/typeset/*-data.mjs --check, derive.mjs)",
+    tier: 'full',
+    stage: 'reader',
+    holds: [],
+    // (today's engine at 065c1d973, read only: AXT_TODAY, else the worktree beside this one that packages/typeset/tests/replay/tap.ts names)
+    needs: ctx => [exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/rules/tex-names.json'))],
+    steps: () => [
+      { cmd: ['node', 'lab/typeset/faces-data.mjs', '--check'], all: true },
+      { cmd: ['node', 'lab/typeset/rules-data.mjs', '--check'], all: true },
+      { cmd: ['node', 'lab/typeset/move-fit.mjs', '--check'], all: true },
+      { cmd: ['node', '--import', './lab/typeset/register.mjs', 'lab/typeset/derive.mjs'], all: true },
+      { cmd: ['pnpm', 'exec', 'vitest', 'run', '--config', 'lab/typeset/vitest.config.ts'], all: true },
+    ],
+  },
+  {
+    id: 'harness-lab',
+    title: "the reader package's browser checks with five corpus papers (the text layer's order asserted; their I1 residue and I3 reported, not asserted)",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I8'],
+    needs: ctx => [exists("lane L1's bundles of the corpus papers", lab(ctx, 'lanes/L1-out4/bundles/1512.03385v1'))],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: '1512.03385v1,1706.03762v7,2609.26457v1,2307.16209v1,2610.20030v1', AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    judge: (ctx, steps) => ({ pass: steps[0].exit === 0 && !/route table violated/.test(steps[0].text), numbers: checksOf(steps[0].text) }),
+  },
+  // ---------------------------------------------------------------- the private repository's (named, never run here)
+  { id: 'private-platform', title: "the private repository's platform tier: the Worker, the paper's object and the Workflows under workerd, the routes' contract suite, the persisted contracts", tier: 'full', stage: 'platform', holds: [], private: true },
+  { id: 'private-box', title: "the private repository's box tier: the security suite on native amd64", tier: 'release', stage: 'box', holds: ['I9'], private: true },
+  { id: 'private-box-bytes', title: "the private repository's box tier: the corpus through the box, byte for byte the lab's prepare", tier: 'release', stage: 'box', holds: ['I6'], private: true },
+  { id: 'private-site', title: "the private repository's website reader e2e (the reader package behind the site's host)", tier: 'full', stage: 'reader', holds: ['I8'], private: true },
+  { id: 'private-soak', title: "the private repository's staging soak: the prepare's and the translation's records on staging", tier: 'release', stage: 'corpus', holds: [], private: true },
+  { id: 'private-sweep', title: "the private repository's release sweep against staging", tier: 'release', stage: 'corpus', holds: ['D'], private: true },
+  // ---------------------------------------------------------------- corpus (before a release, the owner's machine)
+  {
+    id: 'pixels',
+    title: "the prepare's pixel proofs on every page of the 87 papers: all groups on is arXiv's page under Splash (I1 (b)), each kind off changes only its ink under Cairo (I2 (c))",
+    tier: 'release',
+    stage: 'corpus',
+    holds: ['I1', 'I2'],
+    disk: true,
+    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt')), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
+    steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'pixels'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove', '--pixels', '--cairo'], slot: 'test', fresh: join(ctx.work, 'pixels') }],
+    judge: ctx => corpusJudge(ctx, join(ctx.work, 'pixels'), ['a', 'c', 'on', 'offOutside']),
+  },
+  {
+    id: 'canvas',
+    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
+    tier: 'release',
+    stage: 'corpus',
+    holds: ['I1'],
+    after: ['prepare'],
+    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv'))],
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, 'lanes/L1-papers87.tsv'), ...canvasIds(ctx)], slot: 'e2e' }],
+    judge: (ctx, steps) => {
+      const c = canvasOf(steps[0].text, canvasIds(ctx))
+      return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
+    },
+  },
+  {
+    id: 'marks-gate',
+    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh), judged by the marks' census",
+    tier: 'release',
+    stage: 'corpus',
+    holds: [],
+    disk: true,
+    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/marks/answers.json')), exists('Docker', which('docker')), ...censusNeeds(ctx)],
+    steps: ctx => [{ cmd: ['bash', 'lab/marks/gate.sh', join(ctx.work, 'marks-gate')], fresh: join(ctx.work, 'marks-gate') }, censusStep(ctx, join(ctx.work, 'marks-gate'))],
+    judge: (ctx, steps) => censusJudge(ctx, steps),
+  },
+  {
+    id: 'front-count',
+    title: 'the rebuilt front half on the 87 with TeX: compiles a paper, papers without a layer (lab/marks/front.sh, count.mjs)',
+    tier: 'release',
+    stage: 'corpus',
+    holds: [],
+    disk: true,
+    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/defs')), exists('Docker', which('docker')), exists("today's gate run 6 (the count's comparison)", lab(ctx, 'lanes/L2/marks/gate6'))],
+    // (the instrument's store of this run's own, so that lane L2's is not written and every paper's TeX runs are counted; the
+    // instruments' inputs kept, which the count replays)
+    steps: ctx => [
+      { cmd: ['bash', 'lab/marks/front.sh', join(ctx.work, 'front')], env: { KEEP: '1', STORE: join(ctx.work, 'front-store') }, fresh: join(ctx.work, 'front') },
+      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/count.mjs', `--today=${lab(ctx, 'lanes/L2/marks/gate6')}`, `--defs=${lab(ctx, 'lanes/L2/defs')}`, `--run=new:${join(ctx.work, 'front')}`] },
+    ],
+    judge: (ctx, steps) => {
+      const log = corpusLogOf(join(ctx.work, 'front', 'log.tsv'))
+      if (log.refused.length) return { skip: `the front half's runner refused ${log.refused.length} papers: ${log.refused[0]}` }
+      if (steps[1]?.exit !== 0) return { pass: false, note: log.failed[0] }
+      const row = JSON.parse(steps[1].text.slice(steps[1].text.indexOf('{'))).rows?.new ?? {}
+      return {
+        pass: !log.failed.length && !(row.noLayer ?? []).length,
+        numbers: { papers: row.papers, compiles: row.compiles, texS: Math.round((row.texMs ?? 0) / 1000), noLayer: (row.noLayer ?? []).length, delimited: row.delimited, units: row.units },
+        note: log.failed[0],
+      }
+    },
+  },
+  {
+    id: 'speed',
+    title: "today's engine's speed check, head against a base worktree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release)",
+    tier: 'release',
+    stage: 'corpus',
+    holds: [],
+    // (the driver is a zsh script and only measures: its runs' logs go to the work directory, and the verdict is speed.mjs's
+    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass)
+    needs: ctx => [exists('a base worktree (RELEASE_CHECK_BASE)', process.env.RELEASE_CHECK_BASE ?? ''), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
+    steps: ctx => [
+      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, process.env.RELEASE_CHECK_BASE ?? '', '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
+      { cmd: ['node', 'lab/pdf/spikes/layer-gate/speed.mjs', join(ctx.work, 'speed')] },
+    ],
+    judge: (ctx, steps) => {
+      const analysis = steps[1]
+      if (!analysis) return { pass: false, note: 'no verdict: the analysis did not run' }
+      const verdict = analysis.exit === 0 ? 'PASS' : analysis.exit === 1 ? 'FAIL' : analysis.exit === 2 ? 'INCOMPARABLE' : `exit ${analysis.exit}`
+      return { pass: analysis.exit === 0, note: `the analysis: ${verdict}` }
+    },
+  },
+  // the online scripts: arXiv, the free engines and staging, under the project's User-Agent (tests/e2e/lib/online.mjs)
+  { id: 'build-staging', title: 'the staging build the online scripts take (pnpm build:staging)', tier: 'release', stage: 'corpus', holds: [], network: 'live', steps: () => [pnpm('build:staging')] },
+  ...[
+    ['e2e', 'whole-page translation, the cache, restore, the fallback, the popup, diagnostics'],
+    ['e2e:pdf', "arXiv's PDF page: the button and the popup open the bilingual version"],
+    ['e2e:floating', 'the floating button on the abstract, PDF and full-text pages'],
+    ['e2e:popup', 'the popup: finding a paper, the menus, the entries'],
+    ['e2e:layout', 'the side-mode layout contract'],
+    ['e2e:local-endpoint', 'an http endpoint without CORS headers translates a whole page'],
+    ['e2e:image', 'image translation, bitmaps read by the shipped recogniser'],
+    ['e2e:placeholders', 'the live placeholder run: survival per sentence shape against a real engine'],
+  ].map(([script, title]) => ({ ...e2e(script, title), tier: 'release', stage: 'corpus', network: 'live', after: ['build-staging'], steps: () => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_E2E_ONLINE: '1' } }] })),
+]
+
+/** the marks' census: the tree's where it is (lab/marks/census.mjs over lab/marks/census.json), else run 6's r13 in lab data,
+ *  compared with lab/marks/gate-sum.mjs's sum but for its compiles */
+const treeCensus = ctx => existsSync(join(ctx.root, 'lab/marks/census.mjs'))
+const censusNeeds = ctx => (treeCensus(ctx) ? [] : [exists("run 6's census (r13)", lab(ctx, 'lanes/L2/marks/r13-sum.txt'))])
+const censusStep = (ctx, out) => ({ cmd: ['node', treeCensus(ctx) ? 'lab/marks/census.mjs' : 'lab/marks/gate-sum.mjs', out] })
+function censusJudge(ctx, steps) {
+  if (steps[0]?.exit !== 0 || !steps[1]) return { pass: false }
+  if (treeCensus(ctx)) return { pass: steps[1].exit === 0, note: steps[1].exit === 0 ? 'every class as the census' : lastLine(steps[1].text) }
+  if (steps[1].exit !== 0) return { pass: false }
+  const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
+  const head = JSON.parse(steps[1].text.trim().split('\n')[0])
+  return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
+}
+
+/** the canvas gate's papers: spike S1c's, as lane L1's canvas runs list them */
+const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)
+/** the layer gate's fixture pack: PACK, else where the rules gate restores it */
+const packOf = ctx => process.env.PACK ?? join(ctx.root, 'lab/pdf/out/gate-pack')
+
+const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1)?.slice(0, 200) ?? ''
+
+function which(bin) {
+  for (const dir of (process.env.PATH ?? '').split(':')) if (dir && existsSync(join(dir, bin))) return join(dir, bin)
+  return ''
+}
+
+function corpusJudge(ctx, out, proofs) {
+  const log = corpusLogOf(join(out, 'log.tsv'))
+  if (log.refused.length) return { skip: `the corpus runner refused ${log.refused.length} of ${log.papers} papers: ${log.refused[0]}` }
+  const failing = proofs.filter(k => log.proofs[k] > 0)
+  const drawn = existsSync(join(out, 'prepare')) ? drawnOf(join(out, 'prepare')) : {}
+  return {
+    pass: !log.failed.length && !log.missingCompile.length && !failing.length && log.made === log.papers,
+    numbers: { papers: log.papers, made: log.made, ...Object.fromEntries(proofs.map(k => [`proof ${k}`, log.proofs[k]])), refusedWhole: drawn.refusedWhole },
+    note: [log.failed[0], log.missingCompile.length && `${log.missingCompile.length} papers missing a compile (exit 3): ${log.missingCompile.slice(0, 3).join(', ')}`, failing.length && `proofs failing: ${failing.join(', ')}`].filter(Boolean).join('; '),
+    // (I1: (a) the ink nothing moved, (b) every group on is A's pixels; I2: (c′) each glyph and box in exactly its group, (c)
+    // a kind off changes pixels inside its ink alone)
+    findings: Object.fromEntries(
+      [['I1', ['a', 'on']], ['I2', ['c', 'offOutside']]].map(([i, ks]) => {
+        const bad = ks.filter(k => proofs.includes(k) && log.proofs[k] > 0)
+        return [i, { held: !bad.length, count: bad.length ? bad.map(k => `${k} ${log.proofs[k]}`).join(', ') : 0 }]
+      }),
+    ),
+  }
+}
+
+function typesetJudge(steps) {
+  const t = typesetOf(steps[0].text)
+  const d = steps[1] ? diffOf(steps[1].text) : {}
+  return {
+    pass: steps.every(s => s.exit === 0),
+    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
+    findings: Object.fromEntries(['I3', 'I4', 'I5'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
+  }
+}

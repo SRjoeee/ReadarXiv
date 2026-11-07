@@ -44,12 +44,18 @@ export function createFaces(o: {
   fetch: Fetch
   root: HTMLElement
   warn?(what: string, e: unknown): void
+  /** a face lost: its passages drawn in its fallback for good (an answer no ask would mend), or again after it was asked once
+   *  more (a failure that may pass, met twice): told once a face */
+  lost?(id: FaceId): void
 }): Faces {
   const rid = ++readers
   const sheet = document.createElement('style')
   o.root.append(sheet)
   const classes = new Map<FaceId, string>()
   const loading = new Map<FaceId, Promise<void>>()
+  /** the faces whose read failed once, and those told lost */
+  const failed = new Set<FaceId>(),
+    told = new Set<FaceId>()
   const added: FontFace[] = []
   /** let go: a face whose read ends after is not added (it would outlive the reader in the document) */
   let gone = false
@@ -127,6 +133,11 @@ export function createFaces(o: {
             }
           })().catch((err) => {
             o.warn?.(`the face ${id}`, err)
+            if (!gone && !told.has(id) && (lasting(err) || failed.has(id))) {
+              told.add(id)
+              o.lost?.(id)
+            }
+            failed.add(id)
             // (a failure that may pass is forgotten: the next wave that wants the face asks it again)
             if (!lasting(err) && loading.get(id) === mine) loading.delete(id)
           })

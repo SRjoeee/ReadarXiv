@@ -2,13 +2,13 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { localeInUse, onLocale } from '@readarxiv/ui'
 import type { ReaderController, Side } from './model.ts'
 import { type Appearance, applyAppearance, dimmed, themeOf, withoutTransitions } from './appearance.ts'
-import { FailureCard } from './FailureCard.tsx'
+import { FailureCard, OriginalCard } from './FailureCard.tsx'
 import { Outline } from './Outline.tsx'
 import { PagePill } from './PagePill.tsx'
 import { ScrollIndicator } from './ScrollIndicator.tsx'
 import { useScrollShow } from './scroll-show.ts'
 import { usePinch } from './pinch.ts'
-import { cardOf } from './status.ts'
+import { cardOf, heldOf, originalCardOf, originalCardSide } from './status.ts'
 import { StatusCapsule } from './StatusCapsule.tsx'
 import { Toolbar } from './Toolbar.tsx'
 import { type Parts, PartsProvider, useParts } from './parts.tsx'
@@ -41,7 +41,12 @@ function Page({ controller }: { controller: ReaderController }) {
     dimPages: s.prefs?.dim,
     swapped: s.prefs?.swapped ?? false,
     title: s.paper.title,
-    card: cardOf(s, reason, words) !== null && !s.noPaper,
+    // (the original not read, where the host draws its own card for it, StateWords `openOriginal`: on the original's pane where
+    // it is shown, else on the translation's)
+    card:
+      (cardOf(s, reason, words) !== null && !s.noPaper) ||
+      (originalCardOf(s, reason, words) !== null && originalCardSide(s) === 'right'),
+    leftCard: originalCardOf(s, reason, words) !== null && originalCardSide(s) === 'left',
     noPaper: s.noPaper,
   }))
   const doc = useRef<HTMLElement>(null)
@@ -66,6 +71,7 @@ function Page({ controller }: { controller: ReaderController }) {
     )
   }, [controller, probe])
   useAppearance(state.appearance, state.dimPages)
+  useHold(controller)
   // the contents sidebar, open or not: this visit's, not a setting. The document area moves with it at once, each side
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
@@ -100,7 +106,7 @@ function Page({ controller }: { controller: ReaderController }) {
       {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
           accessibility audit); its layout is the class's */}
       <main className="doc" ref={doc}>
-        <Pane controller={controller} side="left" scroller={left} empty={state.noPaper} />
+        <Pane controller={controller} side="left" scroller={left} card={state.leftCard} empty={state.noPaper} />
         <Pane controller={controller} side="right" scroller={right} card={state.card} empty={state.noPaper} />
         {/* an address with no paper: its card is the page's, not a pane's (the display may hide the pane) */}
         {state.noPaper && <FailureCard controller={controller} of="page" />}
@@ -163,8 +169,21 @@ function Pane({
       <PagePill ref={pill} controller={controller} side={side} />
       <ScrollIndicator ref={indicator} controller={controller} side={side} />
       {side === 'right' && <FailureCard controller={controller} />}
+      <OriginalCard controller={controller} side={side} />
     </section>
   )
+}
+
+/** the original held on screen by the host's rules (status.ts heldOf), told to the session as it changes: none at first */
+function useHold(controller: ReaderController) {
+  const { narrow, refusal } = useParts()
+  const want = useReader(controller, (s) => heldOf(s, { narrow, refusal }))
+  const told = useRef(false)
+  useEffect(() => {
+    if (told.current === want) return
+    told.current = want
+    controller.hold(want)
+  }, [controller, want])
 }
 
 /** the appearance the settings ask for, on <html>; changes after the first crossfade, and the system's is followed */
