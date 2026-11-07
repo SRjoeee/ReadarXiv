@@ -31,8 +31,10 @@ export interface Faces {
   familyOf(id: FaceId): string
   /** the faces loaded (each once), in the order given, WAVE_SLOTS at a time; a face that cannot be read is left to its
    *  fallback, and told. A face given with a text (`[face, text]`: what a page waits for, what it draws) is loaded as far as that
-   *  text needs (the served faces' slices: compose/served.ts); a face of a table is its one file either way */
-  ready(ids: Iterable<FaceId | readonly [FaceId, string]>): Promise<void>
+   *  text needs (the served faces' slices: compose/served.ts); a face of a table is its one file either way. `wanted`, the
+   *  demand of the page that asks (none: always): a load still waiting for its slot when its slot comes is let go, not asked,
+   *  where no ready() that asked it wants it any more (a page scrolled away, a generation before); a later ask asks it again */
+  ready(ids: Iterable<FaceId | readonly [FaceId, string]>, wanted?: () => boolean): Promise<void>
   /** the faces asked of the network, and the most read at once (the probe's) */
   readonly asked: number
   readonly most: number
@@ -40,6 +42,7 @@ export interface Faces {
 }
 
 let readers = 0
+const always = () => true
 export function createFaces(o: {
   table: FaceTable
   fetch: Fetch
@@ -54,6 +57,8 @@ export function createFaces(o: {
   o.root.append(sheet)
   const classes = new Map<FaceId, string>()
   const loading = new Map<FaceId, Promise<void>>()
+  /** the demands of each face waiting for its slot (compose/served.ts's, the same rule) */
+  const demands = new Map<FaceId, (() => boolean)[]>()
   /** the faces whose read failed once, and those told lost */
   const failed = new Set<FaceId>(),
     told = new Set<FaceId>()
@@ -108,17 +113,27 @@ export function createFaces(o: {
   return {
     classOf,
     familyOf,
-    ready(ids) {
+    ready(ids, wanted = always) {
       const waits: Promise<void>[] = []
       for (const item of ids) {
         const id = typeof item === 'string' ? item : item[0]
         const e = o.table[id]
         if (!e?.src) continue
         let p = loading.get(id)
-        if (!p) {
+        if (p) demands.get(id)?.push(wanted)
+        else {
+          demands.set(id, [wanted])
           const mine: Promise<void> = (async () => {
             await slot()
+            const want = demands.get(id) ?? []
+            demands.delete(id)
             try {
+              // (no page wants it any more: not asked, and forgotten, so that a later ask asks it)
+              // (the entry is this load's: none other is made while it stands)
+              if (!want.some((f) => f())) {
+                loading.delete(id)
+                return
+              }
               asked++
               const r = await o.fetch(e.src as string)
               if (!r.ok) throw new Answer(r.status)

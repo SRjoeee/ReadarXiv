@@ -472,6 +472,52 @@ describe('the reader closed, and the bounds of what is read', () => {
     await new Promise((go) => setTimeout(go, 0))
     expect(asked).toHaveLength(before)
   })
+  it('a slice queued behind the wave whose demand is gone (its page scrolled away, another generation) asks nothing; a demand later asks it again', async () => {
+    const SLICES = Array.from({ length: 6 }, (_, k) => [0x41 + k, 0x41 + k])
+    const tables: Record<string, unknown> = {
+      '/static-fonts/index.json': {
+        schema: 1,
+        fonts: '6',
+        faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' } },
+      },
+      '/static-fonts/nimbus-roman.json?fonts=6': {
+        schema: 1,
+        group: 'nimbus-roman',
+        slices: SLICES,
+        faces: {
+          'nimbus-roman-regular': SLICES.map((_, k) => ({ path: `static-fonts/${String(k).padStart(16, '0')}.woff2` })),
+        },
+      },
+    }
+    const asked: string[] = []
+    const open: (() => void)[] = []
+    const fetch = async (url: string) => {
+      asked.push(url)
+      if (url in tables) return new Response(JSON.stringify(tables[url]), { status: 200 })
+      await new Promise<void>((go) => open.push(go))
+      return new Response(new Uint8Array([1]), { status: 200 })
+    }
+    const s = createServed({ fetch, root: document.body, platform: platformOf() })
+    let wanted = true
+    const ready = s.faces.ready([[FONT, 'ABCDEF']], () => wanted)
+    await vi.waitFor(() => expect(open).toHaveLength(WAVE_SLOTS))
+    // (the page's demand gone while two of its slices wait for a slot: those two are never asked)
+    wanted = false
+    for (const go of open.splice(0)) go()
+    await ready
+    await new Promise((go) => setTimeout(go, 0))
+    const slices = () => asked.filter((u) => u.endsWith('.woff2'))
+    expect(slices()).toHaveLength(WAVE_SLOTS)
+    expect(s.metrics.ready(FONT, 'ABCD')).toBe(true)
+    expect(s.metrics.ready(FONT, 'EF')).toBe(false)
+    // (a page that wants them later asks them, as any slice not loaded)
+    const again = s.faces.ready([[FONT, 'EF']], () => true)
+    await vi.waitFor(() => expect(open).toHaveLength(2))
+    for (const go of open.splice(0)) go()
+    await again
+    expect(slices()).toHaveLength(WAVE_SLOTS + 2)
+    expect(s.metrics.ready(FONT, 'EF')).toBe(true)
+  })
   it('a face table whose index comes in after the reader is closed is never asked', async () => {
     const asked: string[] = []
     let release: (() => void) | undefined

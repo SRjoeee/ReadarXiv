@@ -401,15 +401,25 @@ export function createServed(o: {
     if (next) next(true)
     else busy--
   }
-  const loadSlice = (face: ServedFace, slice: Slice): Promise<void> => {
+  /** the demands of each slice waiting for its slot: let go there, never asked, where none of them wants it any more */
+  const demands = new Map<string, (() => boolean)[]>()
+  const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean): Promise<void> => {
     if (loaded.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
     let p = loading.get(slice.key)
-    if (p) return p
+    if (p) {
+      demands.get(slice.key)?.push(wanted)
+      return p
+    }
+    demands.set(slice.key, [wanted])
     p = (async () => {
-      if (!(await slot())) return
+      const held = await slot()
+      const want = demands.get(slice.key) ?? []
+      demands.delete(slice.key)
+      if (!held) return
       try {
-        // (a reader closed while this waited asks nothing)
-        if (gone) return
+        // (a reader closed while this waited asks nothing; nor a slice no page wants any more (a page scrolled away, a
+        // generation before): it is forgotten, and a later ask asks it)
+        if (gone || !want.some((f) => f())) return
         asked++
         const bytes = await fileOf(`/${slice.path}`, CAPS.slice)
         if (gone) return
@@ -470,13 +480,13 @@ export function createServed(o: {
       runsCache.clear()
     }
   }
-  /** the tables a font string needs read, then the slices its text needs loaded */
-  const load = async (font: string, text: string) => {
+  /** the tables a font string needs read, then the slices its text needs loaded, while `wanted` */
+  const load = async (font: string, text: string, wanted: () => boolean) => {
     await tablesOf(font)
-    if (gone) return
+    if (gone || !wanted()) return
     const runs = runsOf(font, text)
     if (!runs || runs === 'never') return
-    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice)))
+    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted)))
   }
   // ---- the patterns
   const hyphs = new Map<string, Promise<Patterns | null>>()
@@ -567,13 +577,13 @@ export function createServed(o: {
       return c
     },
     familyOf,
-    async ready(items) {
+    async ready(items, wanted = () => true) {
       const waits: Promise<unknown>[] = []
       for (const it of items) {
         if (typeof it === 'string') continue
         const [id, text] = it
         if (id === HYPH_WAIT) waits.push(hyphOf(text))
-        else waits.push(load(id, text).catch((e) => o.warn?.(`the faces of ${id}`, e)))
+        else waits.push(load(id, text, wanted).catch((e) => o.warn?.(`the faces of ${id}`, e)))
       }
       await Promise.all(waits)
     },

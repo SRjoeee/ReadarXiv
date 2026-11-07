@@ -486,11 +486,14 @@ export function createComposer(o: ComposerOptions): Composer {
     const c = stack.centre() || 1
     const order = [...wave.keys()].sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)
     const mine = gen
-    // (each page's faces asked in that order: a slice another page asked first is read once, and this page waits for it too)
-    for (const n of order)
-      void faces.ready(wave.get(n) ?? []).then(() => {
-        if (mine === gen && stack.near(n)) askLay(n)
+    // (each page's faces asked in that order: a slice another page asked first is read once, and this page waits for it too;
+    // its loads not begun let go once the page is not near or its generation is gone, its early asks too)
+    for (const n of order) {
+      const wanted = () => !disposed && mine === gen && stack.near(n)
+      void faces.ready(wave.get(n) ?? [], wanted).then(() => {
+        if (wanted()) askLay(n)
       })
+    }
     wave.clear()
   }
   function failed(n: number) {

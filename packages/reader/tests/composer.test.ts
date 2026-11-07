@@ -690,12 +690,16 @@ function heldFaces(loaded: Set<string>) {
   }
   const stub = facesStub()
   const asked: string[][] = []
+  /** each ready()'s demand, as the composer gives it (none: always) */
+  const wants: (() => boolean)[] = []
   const faces = {
     ...stub,
     asked,
-    ready: async (ids: Iterable<string | readonly [string, string]>) => {
+    wants,
+    ready: async (ids: Iterable<string | readonly [string, string]>, wanted?: () => boolean) => {
       const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
       asked.push(list)
+      wants.push(wanted ?? (() => true))
       await Promise.all(list.map(gate))
     },
     /** face `id` loaded */
@@ -705,7 +709,11 @@ function heldFaces(loaded: Set<string>) {
       waits.get(id)?.()
     },
   }
-  return faces as unknown as ReturnType<typeof facesStub> & { asked: string[][]; load(id: string): void }
+  return faces as unknown as ReturnType<typeof facesStub> & {
+    asked: string[][]
+    wants: (() => boolean)[]
+    load(id: string): void
+  }
 }
 
 describe('the units the paper keeps', () => {
@@ -754,6 +762,30 @@ describe('the faces, in one wave', () => {
     faces.load('c')
     await settle()
     expect(w.composer.laid(2)).not.toBeNull()
+  })
+  it("a page's faces are asked while the page is wanted: gone from the view, or in a generation before, its loads not begun are let go", async () => {
+    const loaded = new Set<string>()
+    const pages = new Map([
+      [1, partOf(1, [member(10, 1, 0, 'face:a')])],
+      [2, partOf(2, [member(20, 2, 0, 'face:b')])],
+    ])
+    const faces = heldFaces(loaded)
+    const w = world({ pages, lay: waitingLay(loaded), faces })
+    w.stack.setNear([1, 2])
+    const rows = rowsOf('de', ['u10'])
+    open(w, rows)
+    await settle()
+    // (page 1 laid as if its rows had ended, page 2 waiting for its own: page 1's faces asked early)
+    expect(faces.asked).toEqual([['a']])
+    expect(faces.wants[0]?.()).toBe(true)
+    // (page 1 out of the view: its demand gone)
+    w.stack.setNear([2])
+    expect(faces.wants[0]?.()).toBe(false)
+    w.stack.setNear([1, 2])
+    expect(faces.wants[0]?.()).toBe(true)
+    // (another generation, the toggles: the demand of the one before gone, whatever the view)
+    w.composer.setClasses({ figures: false, tables: true, heads: true, references: true, names: false })
+    expect(faces.wants[0]?.()).toBe(false)
   })
   it('a page waiting for rows asks the faces of the rows it has meanwhile, again only once more of its rows are in', async () => {
     const loaded = new Set<string>()
