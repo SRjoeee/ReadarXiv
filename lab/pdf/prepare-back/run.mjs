@@ -213,8 +213,9 @@ if (located) for (const [o, b] of located.born) {
   dumpOrds.push([ord, mem.ord])
   units.push({ id: mem.id, ord: ord++, kind: b.kind, text: textOfPieces(pieces), pieces, state: st.drawn ? 'drawn' : 'laid', why: 'born on arXiv\'s page', lines: mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size })) })
 }
-// (--baseline: each unit of the baseline's the candidate does not make, stated as the candidate's. A unit made on arXiv's page
-// that stands for it, read otherwise there: of its kind, no baseline unit's id, at its place (its first line's page and box) or,
+// (--baseline: each unit of the baseline's the candidate does not make, stated as the candidate's. For one of today's ink
+// units and figure texts, a unit made on arXiv's page that stands for it, read otherwise there: of its kind, no baseline unit's
+// id, at its place (its first line's page and box) or,
 // with no line, at its ord (today's bundle's order, which the dump keeps), with how it reads otherwise: its cause where it stays
 // the original's, or its characters in another order, piece by piece. --front: else its paper's stage 1c class)
 if (BASELINE) {
@@ -238,7 +239,9 @@ if (BASELINE) {
   }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
-    const c = standsFor(u)
+    // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts: a source unit the candidate does
+    // not make is the front half's, by its stage 1c class)
+    const c = /^ink/.test(u.kind) ? standsFor(u) : null
     // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
     // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
     const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : !FRONT ? null : /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'

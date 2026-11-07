@@ -276,6 +276,32 @@ describe('locate states the facts on arXiv’s page', () => {
       [676, 0],
     ])
   })
+  it('keeps no element with a held line of another column at its height (L1’s 6 elements kept)', () => {
+    // (2610.20595v1 p9 ord 55: a paragraph across two columns, a display row KEPT in the left one; its formulas on the right
+    // column's text lines at that height were kept with it: an element's line is the one its ink stands on, across and along)
+    const pages: PageSpec[] = [
+      {
+        lines: ['first line of it', 'a held line here', 'last line of it', { text: 'more of it x', x: 320, y: 688 }],
+      },
+    ]
+    const B = docOf(pages)
+    const content: Piece[] = [
+      text('first line of it last line of it more of it '),
+      { t: 'el', id: '1', kind: 'other', src: '$x$' },
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, n, j) =>
+      n === 1 ? [-1, 0, -1] : n === 3 && j === 58 ? [0, ROLE.element, 1] : [0, ROLE.text, -1],
+    )
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.lines.map((l) => [l[2], l[4], l[9] & 1])).toEqual([
+      [72, 700, 0],
+      [72, 688, 1],
+      [72, 676, 0],
+      [320, 688, 0],
+    ])
+    expect(M.elements.find(([id]) => id === '1')?.[1].keep).toBeUndefined()
+  })
   it('states a forced break’s line from its point on B, and the class’s tail', () => {
     const pages: PageSpec[] = [
       {

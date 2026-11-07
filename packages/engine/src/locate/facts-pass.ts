@@ -201,9 +201,15 @@ export function factsOf({
       }
       if (el.ink.length && !el.keep) {
         // (its ink on a held line (KEPT, D11): kept with it, and the line's own next mark after it; one outside the unit's
-        // lines is kept by locate (B11 OUTSIDE))
+        // lines is kept by locate (B11 OUTSIDE). Its line the one its ink stands on, across and along: a line of the other
+        // column at its height is none of its, 2610.20595v1 p9 ord 55's formulas beside a display row KEPT in the left column)
         const on = el.ink.map((k) =>
-          mem.lines.findIndex((l) => l[0] === k[0] && Math.min(k[4], l[5]) > Math.max(k[2], l[6])),
+          mem.lines.findIndex(
+            (l) =>
+              l[0] === k[0] &&
+              Math.min(k[4], l[5]) > Math.max(k[2], l[6]) &&
+              Math.min(k[3], l[3]) > Math.max(k[1], l[2]),
+          ),
         )
         {
           const j = on.find((x) => x >= 0) ?? -1
