@@ -58,7 +58,10 @@ export function StatusCapsule({
   // drawn again once a retry's time has come: its clock gives way, the host's words for it drop the time
   const clock = useClock(useReader(controller, (s) => dueAt(s, Date.now())))
   const now = useReader(controller, (s) =>
-    capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words),
+    capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words, {
+      retry: parts.retry,
+      now: clock,
+    }),
   )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
@@ -87,12 +90,15 @@ export function StatusCapsule({
   if (now?.kind === 'progress' && stageSaid.current?.stage !== now.stage)
     stageSaid.current = { stage: now.stage, words: textOf(now.words) }
   if (now?.kind !== 'progress') stageSaid.current = null
+  // a refusal's retry, offered unless the host's rule withholds it until its time (status.ts `wait`)
+  const retryNow = capsule?.kind === 'notNow' && !capsule.wait
   // words alone, no chip at the end: padded there as at the start (reader.css)
   const alone =
     capsule?.kind === 'narrow' ||
     capsule?.kind === 'toast' ||
     capsule?.kind === 'progress' ||
-    (capsule?.kind === 'unavailable' && !capsule.href)
+    (capsule?.kind === 'unavailable' && !capsule.href) ||
+    (capsule?.kind === 'notNow' && !retryNow && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
   // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
@@ -120,19 +126,16 @@ export function StatusCapsule({
           {...timed}
           {...linger}
           // what follows the words, named by what it holds: another brings it in with the motion
-          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : capsule.kind === 'notNow' ? 'retry' : ''}`}
+          afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : retryNow ? 'retry' : ''}`}
           after={
-            capsule.kind === 'narrow' ||
-            capsule.kind === 'toast' ||
-            capsule.kind === 'progress' ||
-            (capsule.kind === 'unavailable' && !link) ? null : (
+            alone ? null : (
               <>
                 {capsule.kind === 'unreadable' && parts.settingsHref && (
                   <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">
                     {S.settings}
                   </a>
                 )}
-                {((capsule.kind === 'notice' && capsule.action === 'retry') || capsule.kind === 'notNow') && (
+                {((capsule.kind === 'notice' && capsule.action === 'retry') || retryNow) && (
                   <button type="button" data-action className="chip" onClick={controller.retry}>
                     {S.failed.retry}
                   </button>

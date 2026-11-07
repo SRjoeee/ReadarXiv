@@ -249,6 +249,12 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .card button, .card a { display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 8px; background: var(--ink); color: var(--chrome); font-weight: 500; text-decoration: none; transition: scale 150ms ease-out; }
   .card button:active { scale: 0.96; }
   .card a:active { scale: 0.96; }
+  /* a host's lines under the reason (its time, a limit's note), and a retry greyed until its time (a host's rule, parts.tsx
+     `retry`: the website's) */
+  .card .lines { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .card .sub { color: var(--ink-2); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .card button[aria-disabled="true"] { background: var(--fill); color: var(--ink-3); }
+  .card button[aria-disabled="true"]:active { scale: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .tbtn, .tbtn:active { transition: none; scale: 1; } }
 @media (width < 900px) { .pop .row.narrow-only { display: flex; } .pop .sep.narrow-only { display: block; } [data-zone="trail"] > .menu-btn { display: none; } }

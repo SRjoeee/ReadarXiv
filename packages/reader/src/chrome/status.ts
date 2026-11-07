@@ -13,8 +13,9 @@ export type Capsule =
    *  closable */
   | { kind: 'unavailable'; words: CapsuleWords; href?: string }
   /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
-   *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable */
-  | { kind: 'notNow'; words: CapsuleWords; href?: string }
+   *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable.
+   *  `wait`: its retry withheld until its time (a host's rule, parts.tsx `retry`: the website's) */
+  | { kind: 'notNow'; words: CapsuleWords; href?: string; wait?: true }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
    *  of 2026-10-04) */
@@ -78,6 +79,7 @@ export function capsuleOf(
   seen: Seen,
   languages: Pick<Languages, 'name' | 'tag'>,
   words: StateWords = {},
+  rules: Rules = {},
 ): Capsule | null {
   // a host's passing words first, over whatever else stands, for their time: what the reader just did (the website's)
   if (state.toast) return { kind: 'toast', words: plain(state.toast.words), icon: state.toast.icon }
@@ -127,16 +129,18 @@ export function capsuleOf(
         ? (words.notNow?.(at) ?? R.status.notNow)
         : ((why === 'busy' ? words.busy?.(at) : undefined) ?? words.limited?.(at) ?? R.status.limited)
     const notNow = plain(text)
+    // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
+    const wait = withheld(state, rules) ? { wait: true as const } : {}
     return state.htmlVersion
-      ? { kind: 'notNow', words: notNow, href: state.htmlVersion }
-      : { kind: 'notNow', words: notNow }
+      ? { kind: 'notNow', words: notNow, href: state.htmlVersion, ...wait }
+      : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
   if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed)
     return {
       kind: 'notice',
       words: withCount((words.failedPassages ?? S.failed.text)(state.failedUnits), state.failedUnits),
-      action: state.failure ? 'retry' : null,
+      action: state.failure && !withheld(state, rules) ? 'retry' : null,
     }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown)
     return { kind: 'narrow', words: plain(words.narrow ?? R.status.narrow) }
@@ -189,13 +193,27 @@ export interface Look {
 /** the failures that are a wait, not a fault: our server or the service out of reach for now, a limit */
 const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network', 'timeout', 'rate-limit'])
 
-/** the time a retry is due where one is still to come at `now`: a refusal's for now (its `retryAt`); null where none is named,
- *  or it has come */
+/** the time a retry is due where one is still to come at `now`: a refusal's for now (its `retryAt`), else the run's failure's
+ *  (a rows' wait); null where none is named, or it has come */
 export function dueAt(state: ReaderState, now: number): number | null {
   const u = state.unavailable
-  const at = u && !LASTING.has(u.why) ? u.retryAt : null
+  const at = u && !LASTING.has(u.why) ? u.retryAt : state.failureAt
   return at !== null && at > now ? at : null
 }
+/** the time a retry of the card's failure is due where one is still to come (a rows' wait; not the original's, whose own retry
+ *  is at once); null where none */
+export function cardDueAt(state: ReaderState, now: number): number | null {
+  const at = state.failures.pdf === null ? state.failureAt : null
+  return at !== null && at > now ? at : null
+}
+/** the host's rules a state is drawn by beside its words (parts.tsx), and the time it is drawn at */
+export interface Rules {
+  retry?: Parts['retry']
+  now?: number
+}
+/** a retry withheld for now: the host's rule offers it at its time (`when-due`), and that time is still to come */
+const withheld = (state: ReaderState, rules: Rules) =>
+  rules.retry === 'when-due' && dueAt(state, rules.now ?? Date.now()) !== null
 
 /** how a capsule is drawn: by the host's rule for the signs (parts.tsx `signs`) */
 export function capsuleLook(c: Capsule, state: ReaderState, signs: Parts['signs'], now: number): Look {

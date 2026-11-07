@@ -560,3 +560,73 @@ describe("the signs by the host's rule (parts.tsx `signs`; L11's second round, g
     ])
   })
 })
+
+describe("a retry offered at its time by the host's rule (parts.tsx `retry`; L11's second round, gap 2)", () => {
+  const chip = (c: HTMLElement) => c.querySelector<HTMLElement>('.capsule button[data-action]')
+  it("the extension's (the default): a refusal for now's retry at once, its time to come or not", async () => {
+    const fake = fakeController({ phase: 'ready', unavailable: { why: 'refused', retryAt: Date.now() + 3_600_000 } })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    expect(chip(container)?.textContent).toBe(S.failed.retry)
+  })
+  it("the website's: no chip until the time has come, the words alone; then the chip, the host's words asked again without the time", async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const words = { busy: (at: number | null) => (at !== null && Date.now() < at ? 'busy until later' : 'busy') }
+    const { container } = await mountElement(capsuleOf(fake.controller, { retry: 'when-due', words }))
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ unavailable: { why: 'busy', retryAt: Date.now() + 90_000 } }))
+      const capsule = container.querySelector('.capsule')!
+      expect([
+        chip(container),
+        capsule.hasAttribute('data-alone'),
+        capsule.querySelector('.sr-only')?.textContent,
+      ]).toEqual([null, true, 'busy until later'])
+      await act(async () => vi.advanceTimersByTime(90_000))
+      expect(chip(container)?.textContent).toBe(S.failed.retry)
+      expect(container.querySelector('.capsule .sr-only')?.textContent).toBe('busy')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the website's card: its retry greyed until the time, still a stop, pressing it doing nothing; the host's lines under the reason; then offered", async () => {
+    const fake = fakeController({ phase: 'loading' })
+    const cardLines = (kind: string, at: number | null) => ({
+      sub: at !== null && Date.now() < at ? 'retry later' : null,
+      note: kind === 'rate-limit' ? 'papers translated before still open' : null,
+    })
+    const { container } = await mountElement(
+      cardOf(fake.controller, 'pane', { retry: 'when-due', words: { cardLines } }),
+    )
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    try {
+      await act(async () => fake.set({ phase: 'failed', failure: 'rate-limit', failureAt: Date.now() + 30_000 }))
+      const button = () => container.querySelector<HTMLButtonElement>('.card button')!
+      const lines = () => [...container.querySelectorAll('.card .lines p')].map((p) => [p.className, p.textContent])
+      expect([button().getAttribute('aria-disabled'), button().disabled, lines()]).toEqual([
+        'true',
+        false,
+        [
+          ['', R.status.rateLimited],
+          ['sub', 'retry later'],
+          ['sub', 'papers translated before still open'],
+        ],
+      ])
+      button().click()
+      expect(fake.controller.retry).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(30_000))
+      expect([button().getAttribute('aria-disabled'), lines().length]).toEqual([null, 2])
+      button().click()
+      expect(fake.controller.retry).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it("the extension's card: offered at once, one line, whatever the time", async () => {
+    const fake = fakeController({ phase: 'failed', failure: 'network', failureAt: Date.now() + 30_000 })
+    const { container } = await mountElement(cardOf(fake.controller))
+    const button = container.querySelector<HTMLButtonElement>('.card button')!
+    expect([button.getAttribute('aria-disabled'), container.querySelector('.card .lines')]).toEqual([null, null])
+    button.click()
+    expect(fake.controller.retry).toHaveBeenCalledOnce()
+  })
+})

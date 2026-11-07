@@ -93,7 +93,15 @@ export type SessionEvent =
   | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number; original?: number }
   /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */
   | { type: 'translating'; got: number; total: number; lost: number }
-  | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }
+  /** `retryAt`: when a retry of a run stopped short is due, where the service named a time (none: at once) */
+  | {
+      type: 'translated'
+      got: number
+      total: number
+      lost: number
+      stopped: ProviderErrorKind | null
+      retryAt?: number | null
+    }
   /** no bilingual version for now, or for this paper or language */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null }
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again) */
@@ -150,6 +158,8 @@ export interface ReaderState {
    *  may fail during the start, so one slot cannot hold them. `failure` is the one shown: the PDF's first (nothing reads
    *  without the original), then the service's */
   failures: { pdf: ProviderErrorKind | null; service: ProviderErrorKind | null }
+  /** when a retry of the run's failure is due, where the service named a time (a rows' wait); null: none named */
+  failureAt: number | null
   languageSupported: boolean
   /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
   download: 'none' | 'original' | 'translation'
@@ -204,6 +214,7 @@ export const INITIAL: ReaderState = {
   failedUnits: 0,
   failure: null,
   failures: { pdf: null, service: null },
+  failureAt: null,
   languageSupported: true,
   download: 'none',
   scale: 1,
@@ -434,11 +445,16 @@ function reduceRunFree(
         progress,
         translated: countOf(state, event),
         failedUnits: event.lost,
+        failureAt: null,
       }
     }
     case 'translated': {
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
-      const counted = { ...state, translated: countOf(state, event) }
+      const counted = {
+        ...state,
+        translated: countOf(state, event),
+        failureAt: event.stopped ? (event.retryAt ?? null) : null,
+      }
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state))
         return {

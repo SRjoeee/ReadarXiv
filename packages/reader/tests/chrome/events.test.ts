@@ -113,7 +113,15 @@ describe("the reader's state as the chrome's", () => {
         lost: 0,
       },
     }
-    expect(fold([base, ready, noKey])).toMatchObject({ phase: 'failed', failure: 'no-key' })
+    expect(fold([base, ready, noKey])).toMatchObject({ phase: 'failed', failure: 'no-key', failureAt: null })
+    // (a wait the translator named: when a retry is due, for a host that offers it at its time; a new run clears it)
+    const waiting = { ...noKey, rows: { ...noKey.rows, why: { kind: 'unavailable' as const }, retryAt: 9_000 } }
+    expect(fold([base, ready, waiting])).toMatchObject({ phase: 'failed', failure: 'network', failureAt: 9_000 })
+    const again = {
+      ...ready,
+      rows: { target: 'de', from: 'here' as const, s: 'arriving' as const, got: 1, total: 10, lost: 0 },
+    }
+    expect(fold([base, ready, waiting, again]).failureAt).toBeNull()
     const target = {
       ...ready,
       rows: {

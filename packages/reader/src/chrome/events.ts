@@ -111,7 +111,15 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     })
   if (r.s === 'failed' && pr?.s !== 'failed') {
     if (r.why.kind === 'target') out.push({ type: 'unavailable', why: 'target', retryAt: null })
-    else out.push({ type: 'translated', got: r.got, total: r.total, lost: r.lost, stopped: kindOf(r.why) })
+    else
+      out.push({
+        type: 'translated',
+        got: r.got,
+        total: r.total,
+        lost: r.lost,
+        stopped: kindOf(r.why),
+        retryAt: r.retryAt ?? null,
+      })
   }
   return out
 }

@@ -74,6 +74,9 @@ export interface StateWords {
   saveFailed?: string
   /** the card of a run that translated nothing, by the chain's kind (the host's `reason`; R.status.rateLimited for a limit) */
   failed?: (kind: ProviderErrorKind) => string
+  /** that card's lines under its reason, each a line of its own (the website's: when a retry can work, while its time is to
+   *  come; the limit's note), given the kind and the time a retry is due (null: none named); none, or null: no line */
+  cardLines?: (kind: ProviderErrorKind, retryAt: number | null) => { sub?: string | null; note?: string | null }
   /** the card where the original could not be read (the host's `reason` of the network) */
   originalLost?: string
   /** the card of an address that names no paper (R.status.noPaper) */
@@ -97,6 +100,10 @@ export interface Parts {
    *  red for a failure, in the capsule as on its card, and a card that waits (our server or the service out of reach for
    *  now, a limit) a clock in quiet ink */
   signs?: 'plain' | 'by-state'
+  /** when a retry is offered where its time is named (a refusal for now, a rows' wait): `at-once` (the extension's, the default)
+   *  at once, a press before the time asking nothing; `when-due` (the website's) at its time: the capsule's chip absent until
+   *  then, the card's greyed (still a stop of the keyboard's, pressing it doing nothing), the chrome drawn again at the time */
+  retry?: 'at-once' | 'when-due'
   /** when the sync's switch can be pressed: `side-by-side` (the extension's, the default) wherever both sides are shown;
    *  `located` (the website's) there only once the sides can scroll together (both sides' pages laid out), greyed until then */
   sync?: 'side-by-side' | 'located'

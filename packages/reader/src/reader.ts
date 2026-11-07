@@ -119,7 +119,8 @@ export interface ReaderState {
     | { s: 'arriving'; got: number; total: number; lost: number }
     /** `stopped`: why the units lost got no translation (the service's word: the run stopped short), null where none was */
     | { s: 'complete'; got: number; total: number; lost: number; stopped: RowsStop | null }
-    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number }
+    /** `retryAt`: when a retry is due, where the translator named a wait (a retry before it asks nothing) */
+    | { s: 'failed'; why: RowsWhy; got: number; total: number; lost: number; retryAt?: number | null }
   )
   view: {
     display: Display
@@ -934,7 +935,7 @@ export function openReader(
         r.s === 'none'
           ? { ...rowsView, s: 'none' }
           : r.s === 'failed'
-            ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost }
+            ? { ...rowsView, s: 'failed', why: r.why, got: r.got, total: r.total, lost: r.lost, retryAt: r.retryAt }
             : r.s === 'complete'
               ? { ...rowsView, s: 'complete', got: r.got, total: r.total, lost: r.lost, stopped: r.stopped }
               : { ...rowsView, s: 'arriving', got: r.got, total: r.total, lost: r.lost },
