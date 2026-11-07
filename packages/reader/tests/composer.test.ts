@@ -2,7 +2,7 @@
 // drawing: a page "is put in place" when the test says so, as the stack's swap tells it) and a clock moved by hand: laying one page
 // at a time (the hold), what stays the original's, the stall clock, failures asked again, another target and the toggles in
 // place, the translating marks, the pages ahead, the faces' wave; and the faces' own rules (four at a time, asked once, a lasting
-// answer never asked again).
+// answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -16,6 +16,7 @@ import {
 import { createFaces, type Faces, WAVE_SLOTS } from '../src/compose/faces.ts'
 import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
+import { createServed, type Served } from '../src/compose/served.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
 
@@ -250,8 +251,9 @@ const facesStub = (loaded?: Set<string>): Faces & { waves: string[][] } => {
     waves,
     classOf: () => 'f',
     familyOf: () => 'sans-serif',
-    ready: async (ids: Iterable<string>) => {
-      const list = [...ids]
+    // (a face asked with the texts the pages wait on it for: told here by the face, once a wave)
+    ready: async (ids: Iterable<string | readonly [string, string]>) => {
+      const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
       if (list.length) waves.push(list)
       for (const id of list) loaded?.add(id)
     },
@@ -770,4 +772,155 @@ describe('the faces, in one wave', () => {
       Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
     }
   })
+})
+
+describe("the served faces' tables that cannot be had, under the composer", () => {
+  const FONT = '400 100px "axt-nimbus-roman", "axt-shs-sc"'
+  const INDEX = '/static-fonts/index.json',
+    CJK = '/static-fonts/shs-sc.json?fonts=6'
+  const TABLES: Record<string, unknown> = {
+    [INDEX]: {
+      schema: 1,
+      fonts: '6',
+      faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' }, 'shs-sc-regular': { group: 'shs-sc' } },
+    },
+    '/static-fonts/nimbus-roman.json?fonts=6': {
+      schema: 1,
+      group: 'nimbus-roman',
+      slices: [[0x20, 0x7e]],
+      faces: { 'nimbus-roman-regular': [{ path: 'static-fonts/0000000000000001.woff2' }] },
+    },
+    [CJK]: {
+      schema: 1,
+      group: 'shs-sc',
+      slices: [[0x4e00, 0x9fff]],
+      faces: { 'shs-sc-regular': [{ path: 'static-fonts/0000000000000002.woff2' }] },
+    },
+  }
+  /** a lay over the served Metrics as the typesetter's cover reads them (typeset breaker/cover.ts): a member of kind 'cjk' set
+   *  in FONT's CJK text, any other in its Latin; a face not ready waited for, a character no face serves leaving the member the
+   *  original's */
+  function metricsLay(metrics: Served['metrics']): Lay & { calls: number } {
+    const lay = ((part: Part) => {
+      lay.calls++
+      const ms = part.flows.flat()
+      const textOf = (m: Placed) => (m.kind === 'cjk' ? '\u4e2d\u6587' : 'Satz')
+      const ready = ms.map((m) => metrics.ready(FONT, textOf(m)))
+      const box1 = (m: Placed) => box(m.lines[0]?.[4] as number)
+      if (ready.some((r) => r === false))
+        return {
+          page: part.page,
+          wait: { rows: [], faces: ms.filter((_, k) => ready[k] === false).map((m) => [FONT, textOf(m)]) },
+          members: ms.map(
+            (m): Laid => ({
+              ord: m.ord,
+              page: part.page,
+              state: 'waiting',
+              off: 0,
+              lines: [],
+              lit: { left: [[box1(m)]], right: [[box1(m)]], own: [] },
+            }),
+          ),
+          links: [],
+        } satisfies Page
+      return {
+        page: part.page,
+        wait: { rows: [], faces: [] },
+        members: ms.map((m, k): Laid => {
+          const y = m.lines[0]?.[4] as number
+          return ready[k] === true
+            ? {
+                ord: m.ord,
+                page: part.page,
+                state: 'laid',
+                off: 1,
+                lines: [[y, 50, 300, [{ s: 'x', x: 50, face: FONT, size: 10 }]]],
+                lit: { left: [[box(y)]], right: [[box(y)]], own: [] },
+              }
+            : {
+                ord: m.ord,
+                page: part.page,
+                state: 'face',
+                off: 0,
+                lines: [],
+                lit: { left: [[box(y)]], right: [[box(y)]], own: [] },
+              }
+        }),
+        links: [],
+      }
+    }) as unknown as Lay & { calls: number }
+    lay.calls = 0
+    return lay
+  }
+  it.each([
+    [INDEX, 'not there'],
+    [INDEX, 'of another shape'],
+    [INDEX, 'the network'],
+    [CJK, 'not there'],
+    [CJK, 'of another shape'],
+    [CJK, 'the network'],
+  ] as const)(
+    '%s %s: its faces lost, the page laid with what it has, nothing asked or laid again over two minutes',
+    async (url, how) => {
+      const clock = handClock()
+      const asked: string[] = []
+      const fetch = async (u: string) => {
+        asked.push(u)
+        // (a loop of asks stopped here, for the count to say so)
+        if (asked.length > 40) return new Promise<Response>(() => {})
+        if (u === url) {
+          if (how === 'not there') return new Response('', { status: 404 })
+          if (how === 'of another shape') return new Response('{"schema":1,', { status: 200 })
+          throw new TypeError('Failed to fetch')
+        }
+        if (u in TABLES) return new Response(JSON.stringify(TABLES[u]), { status: 200 })
+        return new Response(new Uint8Array([1]), { status: 200 })
+      }
+      const lost: string[] = []
+      const served = createServed({
+        fetch,
+        root: document.body,
+        platform: {
+          measure: (_f, t) => ({ width: t.length * 50, ascent: 70, descent: 20, right: t.length * 50 }),
+          face: async () => ({ add() {}, remove() {} }),
+        },
+        timers: clock,
+        lost: (id) => lost.push(id),
+      })
+      const part = partOf(1, [member(10, 1, 0), member(11, 1, 1, 'cjk')])
+      const stack = fakeStack(1)
+      const lay = metricsLay(served.metrics)
+      const composer = createComposer({
+        stack: stack as unknown as Stack,
+        kit: {} as never,
+        faces: served.faces,
+        lay,
+        unlaid: 'original',
+        lang: () => 'de',
+        links: { open: () => {}, follow: () => {}, unnamed: () => 'Link' },
+        clock,
+        original: (_n, settled) => ({ key: settled ? 'own' : 'left', kind: 'skeleton' }) as unknown as PageContent,
+      })
+      composer.setDocuments({ original: {} as never, composed: {} as never, groups: groupsStub() })
+      stack.setNear([1])
+      composer.setLayer({ pages: 1, part: async () => part }, rowsOf('de', ['u10', 'u11'], true))
+      for (let t = 0; t < 120_000; t += 5000) {
+        await settle()
+        if (composer.laid(1) && !stack.showing(1)) stack.put(1)
+        clock.advance(5000)
+      }
+      await settle()
+      expect(asked.filter((u) => u === url)).toHaveLength(how === 'the network' ? 2 : 1)
+      expect(asked.length).toBeLessThan(8)
+      // (the page laid twice: waiting for the faces, then with what it has once they are lost)
+      expect(lay.calls).toBe(2)
+      expect(lost).toEqual(url === INDEX ? ['nimbus-roman-regular', 'shs-sc-regular'] : ['shs-sc-regular'])
+      if (url === INDEX) {
+        // (nothing the served faces hold: arXiv's page)
+        expect([composer.laid(1), composer.settled(1)]).toEqual([null, true])
+      } else expect(composer.laid(1)?.members.map((m) => m.state)).toEqual(['laid', 'face'])
+      composer.dispose()
+      served.faces.dispose()
+    },
+  )
 })

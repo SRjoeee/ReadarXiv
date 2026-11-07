@@ -20,7 +20,7 @@ import { ownedClock } from '../../src/stack/clock.ts'
 import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
 import { CATALOGUE_WORDS } from '../../src/compose/words.ts'
-import { openReader, type Reader } from '../../src/reader.ts'
+import { type Engine, openReader, type Reader } from '../../src/reader.ts'
 import { LEGACY } from '../../src/pdfjs/legacy.ts'
 
 const root = document.getElementById('root') as HTMLElement
@@ -718,6 +718,8 @@ const h = {
       legacy?: boolean
       /** another paper than the fixture's (one our server does not have) */
       paper?: string
+      /** no engine given: the reader's own typesetter (layPage over our site's faces and patterns, the reader's Metrics) */
+      typeset?: boolean
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -783,7 +785,14 @@ const h = {
       ...(o.legacy ? { pdfjs: LEGACY } : {}),
       paper: o.paper ?? index.paper,
       visit: { target },
-      engine: {
+      ...(o.typeset ? {} : { engine: fixtureEngine() }),
+    })
+    if (o.closeAtOnce) reader.close()
+    const returnedAt = performance.now() - t0
+    h.readers.push({ reader, root, asked })
+    return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
+    function fixtureEngine(): Engine {
+      return {
         faces: faceTable(h.kit?.base ?? '/pdfjs/6.3.289/'),
         unlaid: o.unlaid ?? 'original',
         lay: async (partOf, pages) => {
@@ -818,12 +827,8 @@ const h = {
             return laid(part, rows)
           }
         },
-      },
-    })
-    if (o.closeAtOnce) reader.close()
-    const returnedAt = performance.now() - t0
-    h.readers.push({ reader, root, asked })
-    return { returnedAt, askedBeforeReturn: asked.map((a) => a.url) }
+      }
+    }
   },
   /** way (b): the left on the composed document too (its pages drawn again from it), the original's document let go */
   async toComposed() {

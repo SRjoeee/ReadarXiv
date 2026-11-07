@@ -56,11 +56,18 @@ export interface Seen {
   refusalsSeen: number
 }
 
+/** the original's failure is the phase, its own card standing apart (StateWords `openOriginal`: the website's) and no failure of
+ *  the service's beside it: the translation's state is told in the capsule beside that card, as the website's page tells it */
+const originalApart = (state: ReaderState, words: StateWords): boolean =>
+  state.phase === 'failed' && !!words.openOriginal && state.failures.pdf !== null && state.failures.service === null
 /** a run under way and where it stands: our server's document not heard for now; the paper's layer being made while its
  *  prepare lasts (its place in the queue where our server names one), the rows its units start meanwhile counted under it,
- *  as the website says it; else the paragraphs translated. Null where none is under way */
+ *  as the website says it; else the paragraphs translated. Null where none is under way. A run under the original's failure
+ *  (the phase held by it) by its own marks: a prepare told, rows coming */
 export function stageOf(state: ReaderState): Stage | null {
-  if (!running(state)) return null
+  const apart =
+    state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
+  if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
   if (state.preparing) return state.preparing.position != null ? 'queued' : 'preparing'
   return 'translating'
@@ -69,6 +76,11 @@ export function stageOf(state: ReaderState): Stage | null {
  *  "drawn": the layer's first rows taken this visit) */
 export const translationThere = (state: ReaderState): boolean =>
   state.layer.laid > 0 || (state.layer.total > 0 && state.translated.got > 0)
+/** neither side has anything to show: the original could not be read, nothing of the translation is there, and none is to be
+ *  had now (its layer refused, for now or for the paper): the website's `originalLost && layer === 'unavailable'` (its
+ *  reader/Toolbar.tsx), whose bar is then its page's for a paper arXiv does not have (parts.tsx `bar`) */
+export const nothingShown = (state: ReaderState): boolean =>
+  state.failures.pdf !== null && !translationThere(state) && (!state.available || state.unavailable !== null)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
 function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: boolean): CapsuleWords | null {
   if (stage === 'queued') return words.queued ? plain(words.queued(state.preparing?.position ?? 0)) : null
@@ -112,8 +124,10 @@ export function capsuleOf(
     if (state.refusals > Math.max(seen.refusalsSeen, state.mended))
       return { kind: 'saveFailed', words: plain(words.saveFailed ?? O.saveFailed) }
   }
-  // no paper: its card says that much, and nothing about a paper is true of it
-  if (state.noPaper || state.phase === 'failed' || state.phase === 'loading') return null
+  // no paper: its card says that much, and nothing about a paper is true of it. A failure's card is the pane's whole answer, but
+  // the original's own card standing apart: the translation's state is told beside it (L11 third round, gap 5)
+  if (state.noPaper || (state.phase === 'failed' && !originalApart(state, words)) || state.phase === 'loading')
+    return null
   // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
   if (!state.available) {
     const said = plain(
@@ -195,7 +209,11 @@ export interface Line {
 /** the line's share for the download where a translation follows it, and the prepare's of the rest */
 const DOWNLOAD = 0.15,
   PREPARE = 0.5
-export function lineOf(state: ReaderState): Line {
+/** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
+ *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
+ *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3) */
+export function lineOf(state: ReaderState, held = false): Line {
+  if (held && running(state)) return { on: true, value: state.loaded }
   if (state.phase === 'loading')
     return { on: true, value: state.loaded * (state.display === 'original' ? 1 : DOWNLOAD) }
   if (state.phase === 'preparing')
