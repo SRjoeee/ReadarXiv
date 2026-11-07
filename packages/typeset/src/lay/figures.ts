@@ -5,10 +5,12 @@
 // along its run and its baseline), its anchor (Placed.align: l start, c centre, r end), its room before and after its box
 // (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant), its own text
 // (Placed.plain), its set (Tie size). A figure text drawn is one laid line of its runs, its text group off. What is not drawn
-// stays the original's: a turned one (`kind`: design-a's Item has no turn, a contract for lane L4), one a part made before
-// the prepare stated its anchor (`kind`, align 'j'), its row none or failed (`none`, the row's why), the same as its source
-// (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`).
-import type { Part, Placed } from '@readarxiv/format'
+// stays the original's: one whose ink stays (the part's why, `unwrapped`: a label today's figure reading leaves where it
+// stands), a turned one (`kind`: design-a's Item has no turn, a contract for lane L4), one whose anchor the part does not state
+// (`kind`, align 'j'), its row none (`none`) or failed (the row's why, as the entry's contentOf), the same as its source
+// (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`). A part made before the prepare stated a figure
+// text's own text (Placed.plain) is not read here: the entry reads its figure texts as it did before (entry.ts).
+import type { Part, Placed, Row } from '@readarxiv/format'
 import { faceOf } from '../breaker/faces.ts'
 import { fontString } from '../breaker/measure.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
@@ -19,12 +21,10 @@ import type { PaperReading } from './read.ts'
 
 const ANCHOR = { l: 'start', c: 'centre', r: 'end' } as const
 
-/** a figure text's row as S.figures reads it: its translation's text pieces (an element a space), or its state */
-function unitOf(m: Placed, rows: Rows): FigureUnit | undefined {
-  if (typeof m.text !== 'string') return undefined
-  const row = rows.get(m.text)
-  if (!row) return undefined
-  if (!row.ok) return { state: 'none' }
+/** a figure text's row as S.figures reads it: its translation's text pieces (an element a space); none where it has none (a
+ *  failed row's reason is the entry's, figuresOf) */
+function unitOf(row: Row | undefined): FigureUnit | undefined {
+  if (!row?.ok) return undefined
   const pieces: TextPiece[] = []
   const walk = (ps: typeof row.content) => {
     for (const p of ps)
@@ -57,8 +57,11 @@ export function figuresOf(
   for (const m of members) {
     const l = m.lines[0]
     if (!l || l[0] !== page) continue
+    const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
     if (m.why) why.set(m.ord, m.why)
     else if (m.dir || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
+    // (a row that failed: its reason kept, as the entry's contentOf keeps it, #631's review; S.figures fits no set over it)
+    else if (row && !row.ok) why.set(m.ord, row.why.kind)
     else {
       const size = m.style.size
       const side = m.room.side
@@ -90,7 +93,10 @@ export function figuresOf(
   const R = o.R as unknown as { cjkQuotes?: boolean; floorMin: number }
   const got = figures({
     figures: rowsOf,
-    unit: (id) => unitOf(byOrd.get(id)!, rows),
+    unit: (id) => {
+      const t = byOrd.get(id)!.text
+      return unitOf(typeof t === 'string' ? rows.get(t) : undefined)
+    },
     src: (id) =>
       shown({ t: 'text', s: byOrd.get(id)?.plain ?? '' })
         .replace(/\s+/g, ' ')

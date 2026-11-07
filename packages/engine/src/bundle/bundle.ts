@@ -56,7 +56,10 @@ export interface MemberState {
 
 export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   if (!mem.located) return { why: 'unlocated', drawn: false, fixed: 0 }
-  if (mem.fixed) return { drawn: false, fixed: 0 }
+  // (its ink stays whatever the translation: no group of it. A figure text so left (today's figure reading's crowded one,
+  // ink.ts) holds text a translation could be laid over, over ink that stays: unwrapped, the original's, #631's review. A kept
+  // block holds none)
+  if (mem.fixed) return mem.figure ? { why: 'unwrapped', drawn: false, fixed: 0 } : { drawn: false, fixed: 0 }
   if ('refused' in addOn) return { why: 'page', drawn: false, fixed: 0 }
   // (an image of its own the wrap could not group: hiding its text would leave that image standing under a translation)
   for (const g of addOn.lost ?? []) if (g.startsWith(`${mem.ord}.`)) return { why: 'unwrapped', drawn: false, fixed: 0 }

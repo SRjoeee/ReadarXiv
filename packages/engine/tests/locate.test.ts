@@ -704,6 +704,29 @@ describe('review of #605', () => {
         .map((x) => x.ord),
     ).toEqual([0, 1])
   })
+  it('says a figure text whose ink stays is unwrapped: no group of it, so no translation is laid over it (#631 review)', () => {
+    // (today's figure reading leaves a crowded label's ink where it stands (ink.ts: `fixed`, no group made of it); the part states
+    // why, as for a member whose group the wrap did not make. A kept block holds no text a translation could stand for: as before)
+    const B = docOf([{ lines: ['a caption under it', 'Loss', 'kept as it is'] }])
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Loss', { figure: { set: 0 }, fixed: true }),
+      unitOf('inkorphan', 'kept as it is', { kept: true, fixed: true }),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members.map((m) => m.located)).toEqual([true, true, true])
+    const addOn = addOnOf(L, 1)
+    expect(stateOf(L.members[1]!, addOn)).toEqual({ why: 'unwrapped', drawn: false, fixed: 0 })
+    expect(stateOf(L.members[2]!, addOn)).toEqual({ drawn: false, fixed: 0 })
+    const objs = [
+      ...bundle({ ins, located: L, addOn, original, paper: { id: '2501.00001', version: 1, pages: 1 }, made: 't' }),
+    ]
+    const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
+    const placed = read('part', part.bytes).flows.flat()
+    expect(placed.find((x) => x.ord === 1)).toMatchObject({ kind: 'figure', why: 'unwrapped' })
+    expect(placed.find((x) => x.ord === 2)?.why).toBeUndefined()
+  })
   it('lays no member one of whose images the wrap could not group (planOf’s lost)', () => {
     const B = docOf([{ lines: ['a unit with an image'] }])
     const L = locate(instrumentOf(B, [unitOf('para', 'a unit with an image')], [[0]]), B, align(B, B))

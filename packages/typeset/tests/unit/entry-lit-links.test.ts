@@ -212,6 +212,23 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const { text: _b, ...b0 } = b
     expect(layPage(part(m, [a0, b0]), rowsOf([r]), rules, metrics()).links).toEqual([])
   })
+  it('lays each of a piece’s annotations of one text over its own occurrence, in their order on A, whatever their targets (#631 review)', () => {
+    // (two works of one author and year cited in one citation: the same characters twice, each its own destination. One search
+    // over the piece's drawn characters, moving forward only, in the annotations' order on A: the second never lands on the
+    // first's occurrence)
+    const m = cite({ text: '(Smith 2020; Smith 2020)', style: { role: 'serif', size: 10 } })
+    const a: Link = { box: [150, 697, 158, 708], to: { dest: '"cite.smith-a"' }, owner: [0, '5'], text: 'Smith 2020' }
+    const b: Link = { box: [161, 697, 169, 708], to: { dest: '"cite.smith-b"' }, owner: [0, '5'], text: 'Smith 2020' }
+    const p = layPage(part(m, [a, b]), rowsOf([r]), rules, metrics())
+    expect(p.links.map(([, to]) => to)).toEqual([a.to, b.to])
+    const [ba, bb] = p.links.map(([box]) => box) as unknown as [number[], number[]]
+    // (the first a character into its run "(Smith ", the second from the start of the run "Smith " after "2020; ")
+    const f = p.members[0]!.fit!.size
+    const runs = p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it)
+    expect(ba[0]).toBeCloseTo(runs.find((it) => it.s === '(Smith ')!.x + 0.5 * f, 6)
+    expect(bb[0]).toBeCloseTo(runs.find((it) => it.s === 'Smith ')!.x, 6)
+    expect(ba[2]!).toBeLessThanOrEqual(bb[0]!)
+  })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
     // crop path and by the text path)
@@ -414,6 +431,30 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(sizes[0]!).toBeLessThan(8)
     // (its translation the same as its source: the original's)
     expect(layPage(part(label()), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!.state).toBe('none')
+  })
+  it('lays no translation over a figure text whose ink stays: the part’s why, the original’s (#631 review)', () => {
+    // (a label today's figure reading leaves where it stands, crowded: no group of it, the part states it unwrapped)
+    const p = layPage(part(label({ why: 'unwrapped' })), rowsOf([rowF('Verlust')]), rules, metrics())
+    expect(p.members[0]).toMatchObject({ state: 'unwrapped', off: 0, lines: [] })
+  })
+  it('keeps a failed row’s reason for a figure text, as for any member (#631 review)', () => {
+    const failed: Row = { id: idF, ok: false, why: { kind: 'unavailable' } }
+    expect(layPage(part(label()), rowsOf([failed]), rules, metrics()).members[0]).toMatchObject({
+      state: 'unavailable',
+      off: 0,
+      lines: [],
+    })
+  })
+  it('sets a figure text of a part that states no plain text of it as before S.figures read parts (#631 review)', () => {
+    // (a part made before the prepare stated Placed.plain: S.figures would tell its translation from an empty source and redraw
+    // even a label its translation leaves as it was. It is read as the entry read every figure text before (ec6715946's: a
+    // paragraph's reading, its fit and its line), these numbers that entry's own on this part)
+    const { plain: _, ...older } = label()
+    const m = layPage(part(older), rowsOf([rowF('Loss')]), rules, metrics()).members[0]!
+    expect(m).toMatchObject({ state: 'laid', off: 1, fit: { size: 8, lead: 1, track: 0, borrowed: 0 } })
+    expect(m.lines.map(([y, x0, x1, items]) => [y, x0, x1, items.map((it) => [it.s, it.x])])).toEqual([
+      [400, 124, 158, [['Loss ', 142]]],
+    ])
   })
   it('leaves the original’s a turned one (design-a’s Item has no turn) and one whose anchor the part does not state', () => {
     const turned = layPage(part(label({ dir: [0, 1] })), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
