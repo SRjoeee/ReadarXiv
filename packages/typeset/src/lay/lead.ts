@@ -15,9 +15,10 @@ const PINNED = 2
 
 /** a name's word in the target as S.names reads it for a lead (setNameOf's `lead`): its text and style */
 export type NameWord = { text: string; st: TStyle }
-/** the reading's lead (tokensOf2's `lead`): its parts in their styles, its glue in em of the member's first line's size, and
- *  the label it draws (the name's word and the joint) */
-export type Lead = { parts: { text: string; st: TStyle }[]; gap?: number; drawn: string }
+/** the reading's lead (tokensOf2's `lead`): its parts in their styles, each with the glue TeX set after it on the line where
+ *  another part follows (`gap`, in em of the member's first line's size: the name's before its joint), its glue after the
+ *  last, and the label it draws (the name's word and the joint) */
+export type Lead = { parts: { text: string; st: TStyle; gap?: number }[]; gap?: number; drawn: string }
 
 /** the member's own label on the name's line, after the name: the joint TeX set between the two */
 function jointOf(name: Placed, led: Placed): Placed['label'] | undefined {
@@ -47,11 +48,17 @@ export function ledBy(
         ...(joint.style.fill ? { color: `#${joint.style.fill.toString(16).padStart(6, '0')}` } : {}),
       }
     : null
-  // (the glue after the joint, or after the name where none stands between: TeX's, none within a carry's 0.05 pt)
+  // (the glue after the joint, or after the name where none stands between: TeX's, none within a carry's 0.05 pt; and the
+  // glue between the name and its joint, "Figure 1:" (Codex on #624: "Abbildung1:"): every piece on the line the original's
+  // separation after the one before it, as a run-in head's follower after the head, S.rowStart)
   const glue = f[2] - (joint ? joint.ink[3] : l[3])
+  const between = joint ? joint.ink[1] - l[3] : 0
   const size0 = f[10] ?? led.style.size
   const lead: Lead = {
-    parts: [{ text: word.text, st: word.st }, ...(jText && jSt ? [{ text: jText, st: jSt }] : [])],
+    parts: [
+      { text: word.text, st: word.st, ...(jText && jSt && between > 0.05 ? { gap: between / size0 } : {}) },
+      ...(jText && jSt ? [{ text: jText, st: jSt }] : []),
+    ],
     gap: glue > 0.05 ? glue / size0 : 0,
     drawn: word.text + jText,
   }

@@ -38,6 +38,8 @@ export type Res = {
   crop?: readonly number[]
   baseline?: number
   parts?: readonly unknown[]
+  /** a URL's crop: where TeX's url package may break it (El.breaks: x on the page, the copy text's UTF-16 code units before) */
+  breaks?: readonly (readonly [number, number])[]
   proof?: true
   empty?: true
   inPlace?: true

@@ -14,13 +14,14 @@ import {
   pinnedOf,
   shortSkipLines,
   sideOf,
+  centredByBlock,
   sourceEndMarks,
   styleOf,
   fillRunsOf,
   tailOf,
   textOf,
 } from '../src/locate/facts.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate, urlBreaks } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -166,6 +167,36 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       ),
     ).toEqual([50, 500])
   })
+  it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
+    // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
+    // 290.6 and 429; a rule across the line's band above it and the table's horizontal rule under it are no wall)
+    const glyphs = [
+      { x0: 280, x1: 290.6, y0: 676, y1: 685, y: 678.91 },
+      { x0: 429.01, x1: 440, y0: 676, y1: 685, y: 678.91 },
+    ]
+    const walls = [
+      { x0: 296, x1: 296.4, y0: 555.6, y1: 686.6 },
+      { x0: 409, x1: 409.4, y0: 555.6, y1: 686.6 },
+      { x0: 107.5, x1: 505.6, y0: 686.5, y1: 686.9 },
+      { x0: 107.5, x1: 505.6, y0: 676.6, y1: 677 },
+    ]
+    const line = [L(302.56, 402.52, 678.91)]
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+      ),
+    ).toEqual([290.6, 429.01])
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual([296.4, 409])
+  })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [
       { x0: 50, x1: 400, y0: 712, y1: 712.4 },
@@ -190,6 +221,29 @@ describe('alignment where TeX did not tell (B3, E8)', () => {
     // (TeX's justified one-line paragraph, centred by its own glue, off both edges by more than 2 em)
     expect(alignOf([L(200, 412, 700)], () => 10, edges, 'j')).toBe('c')
     expect(alignOf([L(80, 532, 700)], () => 10, edges, 'j')).toBe('j')
+  })
+  it('reads a unit centred on its own block’s middle, off its column’s: its lines, or a single line’s stack, share a middle and not their edges', () => {
+    // (2303.11366v4 p1's author block, NeurIPS's centred tabulars on a one-column page: "Ashwin Gopinath" over "Massachusetts
+    // Institute of Technology" over "agopi@mit.edu", their middles at 393.83, the column's at 306; the row above 28 pt off)
+    const name = L(356.32, 431.34, 553.27)
+    const place = L(317.4, 470.27, 542.36)
+    const mail = L(359.84, 427.82, 531.45)
+    const rowAbove = L(321.7, 457.65, 581.45)
+    const page = [rowAbove, name, place, mail, L(108, 504, 413.51), L(143.87, 469.79, 402.6)]
+    expect(
+      alignOf(
+        [place],
+        () => 10,
+        () => [108, 504],
+      ),
+    ).toBe('j')
+    expect(centredByBlock([place], page, 11.96)).toBe(true)
+    expect(centredByBlock([name], page, 11.96)).toBe(true)
+    // (a paragraph's short last line stays its own: its lines share their left edge; a lone line, nothing to read it by)
+    expect(centredByBlock([L(108, 504, 413.51), L(108, 300, 402.6)], page, 10.91)).toBe(false)
+    expect(centredByBlock([L(108, 300, 300)], page, 10.91)).toBe(false)
+    // (two lines of one unit centred off the column: a centred block of its own)
+    expect(centredByBlock([L(320, 470, 600), L(345, 445, 588)], page, 12)).toBe(true)
   })
   it('centres a single-line cell by its column’s cells: middles within 2 pt, widths spread over 4', () => {
     expect(
@@ -242,6 +296,49 @@ function instrument(
 }
 
 describe('locate states the facts on arXiv’s page', () => {
+  it('states where a URL TeX set on one line may break: after a run of url.sty’s break characters, between two glyphs', () => {
+    // (2303.11366v4 p1's abstract ends "datasets at https://github.com/noahshinn024/reflexion.", the URL whole on its last
+    // line: TeX's url package may break it after its . / : _ and the rest of \UrlBreaks and \UrlBigBreaks, never inside a run
+    // of them ("https:/" + "/…"); the typesetter breaks the URL's crop there as TeX would its text)
+    const B = docOf([{ lines: ['We release it at https://a.io/b_c.'] }])
+    const content: Piece[] = [
+      text('We release it at '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/b_c}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 17 && j < 33 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const M = locate(ins, B, align(B, B)).members[0]!
+    const el = new Map(M.elements).get('1')!
+    expect(el.ink.length).toBe(1)
+    expect(el.breaks).toEqual([
+      [222, 8],
+      [234, 10],
+      [252, 13],
+      [264, 15],
+    ])
+  })
+  it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
+    // (the typesetter cuts the crop's copy text, the source's, with String.slice: a count of glyphs put every cut after "𠮷"
+    // (U+20BB7, two code units) or "ﬁ" (one glyph, two letters in the copy) a character early)
+    const copy = 'https://𠮷.io/profile/x'
+    const glyphs = run('https://𠮷.io/proﬁle/x')
+    const asLetters = glyphs.map((x) => (x.u === 'ﬁ' ? { ...x, u: 'fi' } : x))
+    const want = [
+      [120, 8],
+      [132, 11],
+      [150, 14],
+      [192, 22],
+    ]
+    expect(urlBreaks(glyphs)).toEqual(want)
+    expect(urlBreaks(asLetters)).toEqual(want)
+    expect(want.map(([, n]) => copy.slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/profile/',
+    ])
+  })
   it('keeps a line inside a unit that no unit owns (a held line) as KEPT, in its place', () => {
     const pages: PageSpec[] = [{ lines: ['first line of it', 'a held line here', 'last line of it'] }]
     const B = docOf(pages)

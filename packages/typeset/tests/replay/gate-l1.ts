@@ -21,12 +21,14 @@ import {
   sourcePieces,
 } from '../../src/lay/read.ts'
 import { fontString } from '../../src/breaker/measure.ts'
+import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
 import { doorRows } from './rows.ts'
 import { todayFile } from './tap.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
-import { fitMeasure } from '../../src/breaker/measure.ts'
+import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
+import type { Face } from '../../src/breaker/tokens.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
@@ -124,20 +126,37 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
         if (cls.startsWith('past') || cls.startsWith('squeezed'))
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
+      // (I3 reads ink, design §4.9: the line to its last glyph's ink, not its advance, so that a CJK mark's blank half (a run-in
+      // head's ideographic full stop, its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
       boxes.push({
         ord: pm.ord,
         x0: l.x0,
-        x1: l.x0 + used,
+        x1: inkEnd(l, size, (pm.lay!.P as { measure?: FitMeasure }).measure) ?? l.x0 + used,
         y0: l.baseline - 0.215 * size,
         y1: l.baseline + 0.683 * size,
       })
     }
     if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
     if (L.scale < Number((R as Raw).floor ?? 0) - 1e-9 && l0Page(L) === page) inv.below.push(pm.ord)
-    // (each element's crop token drawn once over its lines, every page's)
+    // (each element's crop token drawn once over its lines, every page's; a URL cut where TeX's url package breaks it, the
+    // breaker's urlCut, is drawn once where its parts tile its crop: each part `of` it, from its left edge to its right)
     const seen = new Map<unknown, number>()
+    const cuts = new Map<unknown, number[][]>()
     for (const l of L.lines)
-      for (const it of l.items) if ((it.t as { crop?: unknown }).crop) seen.set(it.t, (seen.get(it.t) ?? 0) + 1)
+      for (const it of l.items) {
+        const t = it.t as { crop?: { crop: number[] }; of?: unknown }
+        if (!t.crop) continue
+        if (t.of) (cuts.get(t.of) ?? cuts.set(t.of, []).get(t.of)!).push(t.crop.crop)
+        else seen.set(it.t, (seen.get(it.t) ?? 0) + 1)
+      }
+    for (const [of, rects] of cuts) {
+      const whole = (of as { crop: { crop: number[] } }).crop.crop
+      const xs = rects.map((r) => [r[0]!, r[2]!]).sort((a, b) => a[0]! - b[0]!)
+      const tiles = xs.every((r, k) =>
+        k ? Math.abs(r[0]! - xs[k - 1]![1]!) < 1e-9 : Math.abs(r[0]! - whole[0]!) < 1e-9,
+      )
+      if (tiles && Math.abs(xs.at(-1)![1]! - whole[2]!) < 1e-9) seen.set(of, (seen.get(of) ?? 0) + 1)
+    }
     if (l0Page(L) === page)
       for (const t of pm.lay!.tokens as readonly { crop?: unknown; ownLabel?: boolean }[])
         if (t.crop && !t.ownLabel && (seen.get(t) ?? 0) !== 1) {
@@ -155,6 +174,27 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
     }
 }
 const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
+/** where a laid line's ink ends: its last item's (a crop's box; a text's ink, the blank right side of its last glyph off),
+ *  null where the measure has no ink for it (a table of today's measures lacks it: MissingMeasure) */
+function inkEnd(
+  l: { items: readonly { t: unknown; x?: number; w: number }[] },
+  size: number,
+  m: FitMeasure | undefined,
+): number | null {
+  const last = [...l.items].reverse().find((it) => !(it.t as { space?: boolean }).space)
+  if (!last || last.x === undefined || !m) return null
+  const t = last.t as { crop?: unknown; s?: string; face?: Face; sup?: boolean; sc?: number }
+  if (t.crop) return last.x + last.w
+  if (!t.s || !t.face) return null
+  try {
+    const right = m.inkRight100(t.s, t.face)
+    if (right === null) return null
+    return last.x + last.w - ((m.w100(t.s, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+  } catch (e) {
+    if (e instanceof MissingMeasure) return null
+    throw e
+  }
+}
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
 /** AXT_GATE_DEEP=<pair>:<ord>: every field of that member's preparation that differs from today's, printed */
@@ -519,7 +559,6 @@ export function gateL1Pair(
     }
     patternsSeen ??= (c.P as Raw).patterns as Record<string, unknown> | undefined
     const label = c.slot('U.label', 'label')?.label as { drawn?: string } | null | undefined
-    const decor = c.slot('U.decor', 'heading')
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
@@ -527,8 +566,6 @@ export function gateL1Pair(
       tokens: c.tokens as never,
       labelDrawn: label?.drawn ?? null,
       lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
-      title: u.kind === 'heading' && !decor?.heading,
-      front: false,
       cjkSize: undefined as number | undefined,
       // (the regions today's tokens block to: U.breaks' referenced, as the tokens were made with)
       referenced: new Set(
@@ -582,7 +619,7 @@ export function gateL1Pair(
       try {
         rd = readMember({
           m: mm,
-          unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
+          unit: { kind: u.kind, ...(x.m.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
           rects: mm.lines.map((l) => rectOf(l, mm)),
           to: L.target,
           P: R as never,
@@ -631,8 +668,6 @@ export function gateL1Pair(
         tokens: rd.tokens as never,
         labelDrawn: rd.labelDrawn,
         lead: rd.lead,
-        title: reading.title,
-        front: false,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
         own: true,

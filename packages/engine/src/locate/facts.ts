@@ -633,12 +633,16 @@ export interface InkBox {
  * and no rule or image) to the left and to the right, within the text block `block` (its column's extent on the page), the
  * narrowest over its lines. Today's widen keeps clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
  * which stood for the unit's own glyphs past its rectangle: ownership says which are its own (a named correction where
- * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's
+ * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's.
+ * A table's cell, which today's never widened (its rectangle was its cell's), is also walled by `walls`, the painted boxes
+ * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (the
+ * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column)
  */
 export function sideOf(
   lines: readonly Line[],
   foreign: (page: number) => readonly InkBox[],
   block: (l: Line) => [number, number],
+  walls?: (page: number) => readonly InkBox[],
 ): [number, number] | undefined {
   let lo = Number.NEGATIVE_INFINITY
   let hi = Number.POSITIVE_INFINITY
@@ -650,6 +654,13 @@ export function sideOf(
     const band = 0.4 * (l[10] ?? l[5] - l[6])
     for (const k of foreign(l[0])) {
       if (k.y === undefined || Math.abs(k.y - l[4]) >= band) continue
+      if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
+      else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
+    }
+    // (a cell's walls: the painted boxes beside its line whose height meets its band, its column's rules and its neighbours'
+    // fills; one across the line is none)
+    for (const k of walls?.(l[0]) ?? []) {
+      if (k.y0 >= l[4] + band || k.y1 <= l[4] - band) continue
       if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
       else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
     }
@@ -738,6 +749,31 @@ export function alignOf(
   })
   if (told === 'j') return centred && inset ? 'c' : 'j'
   return centred && short ? 'c' : 'j'
+}
+/**
+ * Whether a unit nothing tells the alignment of, and its column does not centre, is centred by its own block: its lines share
+ * a middle and not their edges (cellCentred's reading), a single line by the lines stacked on it, the nearest over it and under
+ * it that meet its extent within its leading `lead` (a tabular's centred column: an author block's name, place and e-mail).
+ * A line the original centres stands on its own middle, never the page's or the column's (the maintainer, 2026-11-08:
+ * 2303.11366v4 p1's "Massachusetts Institute of Technology", centred under its name at 393.8, was read justified by the
+ * column's middle at 306 and its translation set from its left edge); a paragraph's short last line shares its left edge
+ * with the lines over it and stays its own
+ */
+export function centredByBlock(own: readonly Line[], page: readonly Line[], lead: number): boolean {
+  if (own.length > 1) return cellCentred(own.map((l) => [l[2], l[3]])) === true
+  const l = own[0]
+  if (!l) return false
+  let over: Line | null = null
+  let under: Line | null = null
+  for (const k of page) {
+    if (k === l || k[0] !== l[0] || k[9] & 1 || k[3] <= l[2] || k[2] >= l[3]) continue
+    const d = k[4] - l[4]
+    if (d > 0.05 && d <= lead + 0.05) {
+      if (!over || k[4] < over[4]) over = k
+    } else if (d < -0.05 && -d <= lead + 0.05 && (!under || k[4] > under[4])) under = k
+  }
+  const stack = [l, ...(over ? [over] : []), ...(under ? [under] : [])]
+  return cellCentred(stack.map((x) => [x[2], x[3]])) === true
 }
 /** a single-line cell's centring by its table column's cells on its page (E8, today's cellCentred RUN:1508, its column by
  *  table, column and span; the tabular preamble's l/c/r is stage 1b's): every middle

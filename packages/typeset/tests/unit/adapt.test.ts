@@ -45,8 +45,6 @@ const input = (m: Placed, o: Partial<AdaptInput> = {}): AdaptInput => ({
     tokens: [],
     labelDrawn: null,
     lead: false,
-    title: false,
-    front: false,
     cjkSize: undefined,
     referenced: new Set(),
   },

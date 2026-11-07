@@ -144,7 +144,7 @@ export type TokensInput = {
   base: TStyle
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
-  lead: { parts?: { text: string; st: TStyle }[]; gap?: number } | null
+  lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
   faces: { of(st: TStyle, cls: 'cjk' | 'latin'): Face; ownSmallCaps(id: string): boolean }
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean
@@ -539,7 +539,16 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   if (lead?.parts?.length) {
-    for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
+    for (const part of lead.parts) {
+      pushText(part.text, { ...base, ...part.st }, { label: true })
+      // (the glue TeX set after a part another follows on the line: the name's before its joint)
+      const t = tokens.at(-1)
+      if (t && part.gap !== undefined && part.gap > 0) {
+        t.leadGap = 100 * part.gap
+        t.kern = true
+        if (plain) t.kernEm = part.gap
+      }
+    }
     const st = { ...base, ...lead.parts.at(-1)!.st }
     if (lead.gap === undefined) pushText(' ', st)
     else if (tokens.length) {
