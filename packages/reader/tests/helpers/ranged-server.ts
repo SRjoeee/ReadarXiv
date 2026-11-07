@@ -108,6 +108,10 @@ export function manualTimers() {
     get pending() {
       return due.size
     },
+    /** the time on this clock (ms from its start) */
+    get now() {
+      return now
+    },
   }
 }
 
