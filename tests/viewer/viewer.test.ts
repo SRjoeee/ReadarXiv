@@ -4,7 +4,7 @@ import { VIEWED_ATTR, VIEWED_FRAME_ATTR } from '@/core/marks'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installFigureViewer, SPOT_CLASS, type FigureViewer, VIEWER_CLASS } from '@/core/viewer'
 import { restore } from '@/core/renderer/page'
-import { tokenSheet } from '@/shared/tokens'
+import { tokenSheet } from '@readarxiv/ui'
 import { ruleOf, rules } from '../styles/css-rules'
 
 const OPTIONS = {

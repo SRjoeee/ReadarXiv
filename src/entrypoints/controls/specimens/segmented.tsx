@@ -3,9 +3,7 @@
 // display, once more with a display the page cannot show
 import { Columns2, Monitor, Moon, Rows2, Sun, Type } from 'lucide'
 import { useState } from 'react'
-import { Icon } from '@/ui/controls/Icon'
-import { Segmented } from '@/ui/controls/Segmented'
-import { O, R, S } from '@/ui/strings'
+import { Icon, Segmented, O, R, S } from '@readarxiv/ui'
 
 type Theme = 'system' | 'light' | 'dark'
 type Line = 'none' | 'solid' | 'dotted' | 'dashed' | 'wavy'

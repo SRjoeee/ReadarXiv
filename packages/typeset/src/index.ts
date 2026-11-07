@@ -170,7 +170,7 @@ export {
   fillPage,
   fillUnitsOf,
   type PageRules,
-} from './shared/fill-page.types.ts'
+} from './shared/fill-page.ts'
 export { type Filled, fillPass, type PassUnit } from './shared/fill-pass.ts'
 export {
   counterOf,

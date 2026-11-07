@@ -3,6 +3,7 @@
 // the queue's (a malformed reply is sent once more, DESIGN §8.2).
 // Request error classification, Retry-After parsing and the rate-limit backoff policy; driven by this directory's
 // request-queue (since 2026-09-05; before that by src/providers/retry.ts's withRetry).
+// Kept at this path for the website's Worker (readarxiv-web, @vendor/providers/request/retry-policy) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 
 export type RequestErrorKind =
   | "rate-limit"

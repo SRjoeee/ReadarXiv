@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/StatusCapsule) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The status capsule (the reader's design, §6.6): the document area's bottom centre, 58 px up, above the pills. A status
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
@@ -16,8 +17,8 @@ import { R, S } from '@/ui/strings'
 import type { ReaderController } from '../controller'
 import { Icon } from '@/ui/controls/Icon'
 import { Capsule as Drawn } from './Capsule'
-import { settingsUrl } from './links'
-import { TippedButton } from './TippedButton'
+import { settingsUrl } from '../host/links'
+import { TippedButton } from '../../../packages/reader/src/chrome/TippedButton.tsx'
 import { type Capsule, capsuleOf, cardOf, spokenOf } from './status'
 import { useReader } from './use-reader'
 

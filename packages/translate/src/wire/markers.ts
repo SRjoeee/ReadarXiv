@@ -7,14 +7,15 @@
 //   unit goes on no wire either and comes back around the translation; a `must` span is kept as two markers, or as one
 //   when it holds no text;
 // - side-by-side elements, white space alone between them, go as one marker read back as all of them in order (28,203 of
-//   the 53 sweep papers' 97,053 markers touched the one before); a display ends such a stretch;
+//   the 53 sweep papers' 97,053 markers touched the one before); a display, and an element its host states `alone`, ends
+//   such a stretch (`display` below is that property and nothing else);
 // - a marker touching a word is read as part of it, and one right after a full stop leaves the last word untranslated: a
 //   space of ours around it, taken back on reading where the reply kept it beside a stop or a digit;
 // - a display's own end punctuation goes after its marker or the sentence runs on (0/444 vs 1,357/1,357), and the reply's
 //   marks after that marker are taken off on reading;
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
-//   the wire holds no `#` of its own.
+//   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
 import { asOut, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, SAYS } from './text.ts'
@@ -93,7 +94,14 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
         items.push({ t: 'text', s: p.s, at })
         at += p.s.length
       } else if (p.t === 'el') {
-        items.push({ t: 'void', out: [{ t: 'el', id: p.id }], at, len: 1, display: p.kind === DISPLAY, stop: p.stop })
+        items.push({
+          t: 'void',
+          out: [{ t: 'el', id: p.id }],
+          at,
+          len: 1,
+          display: p.kind === DISPLAY || p.alone === true,
+          stop: p.stop,
+        })
         at += 1
       } else if (!p.must) at = walk(p.content, at, depth)
       else if (SOLID.test(textOf(p.content))) {
@@ -109,7 +117,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
           at,
           len,
-          display: last?.t === 'el' && last.kind === DISPLAY,
+          display: last?.t === 'el' && (last.kind === DISPLAY || last.alone === true),
           stop: last?.t === 'el' ? last.stop : undefined,
         })
         at += len
@@ -235,10 +243,13 @@ export type Tok =
 /** a marker's `#` doubled is its own, a space or a tab between or none, where the wire holds no `#` of its own */
 const CLOSER = '#(?:[ \\t]*#)*'
 /** the reply's markers: strictly (each with its `#`), or tolerantly (one without it too, of at most the highest id's
- *  width, followed by no letter of an id and no `#`: `@b形`) */
+ *  width, followed by no letter of an id and no `#`: `@b形`). A marker without its `#` is read only where the wire holds no
+ *  `#` of its own: there every other `#` of the reply is taken out as the marker's, elsewhere the one it lost may stand in
+ *  the text, which a reader would see (`F# @a(#)` → `F# … (#)`; the HTML page's 20 fixture blocks with a `#` of their own,
+ *  DESIGN §6.3's reason; stage 4b's slip check) */
 function readerOf(hashFree: boolean, bare: number | null): RegExp {
   const closer = hashFree ? CLOSER : '#'
-  if (bare === null) return new RegExp(`@@|@([a-z]+)${closer}`, 'g')
+  if (bare === null || !hashFree) return new RegExp(`@@|@([a-z]+)${closer}`, 'g')
   const letters = `[a-z]{1,${bare}}`
   return new RegExp(`@@|@(${letters})${closer}|@(${letters})(?![a-z#])`, 'g')
 }
@@ -258,6 +269,9 @@ export const MARKER_ATOM = new RegExp(`@@|@[a-z]+(?:${CLOSER})?|${ENTITY}`, 'g')
 
 /** A reply → tokens, or null where it cannot be read: a marker unknown, doubled or lost, every word lost */
 export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean): Tok[] | null {
+  // where the wire holds a `#` of its own, a `#` right after a marker is either Microsoft's doubled closer or the text's own
+  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b)
+  if (!plan.hashFree && /@[a-z]+#[ \t]*#/.test(text.replace(/@@/g, ''))) return null
   const toks: Tok[] = []
   const seen = new Set<number>()
   let afterNumber = false

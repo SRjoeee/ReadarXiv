@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { LOCALES, LOCALE_CODES, LOCALE_NAMES, type LocaleCode, isLocaleCode, localeOfTag, pickLocale } from '@/locales'
+import { LOCALES, LOCALE_CODES, LOCALE_NAMES, type LocaleCode, isLocaleCode, localeOfTag, pickLocale, S, localeInUse, setLocale } from '@readarxiv/ui'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
-import { S, copyName, localeInUse, setLocale } from '@/ui/strings'
+import { copyName } from '@/ui/strings'
 import { NAME_MAX } from '@/config/appearance'
 import { styleSample } from '@/ui/style-sample'
 

@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/Menus) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The toolbar's menus (the reader's design, §6.1, §6.7): zoom, the target language, the translation service, the
 // download. Each is a toolbar control and its anchored popover; choosing closes it
 import { ChevronDown, Download } from 'lucide'

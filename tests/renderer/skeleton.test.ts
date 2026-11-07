@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { MAX_ANIMATED_SKELETONS, SKELETON_CLASS, SKELETON_LINE_CLASS, activeSkeletonAnimations, cancelSkeletonAnimation, cancelSkeletonsIn, createSkeleton, createSkeletonInside, skeletonLines } from '@/core/renderer/skeleton'
-// The skeleton keeps Read Frog's performance approach for the ring: WAAPI, at most 60 animating, cancellable handles (§7.6).
+// The skeleton (DESIGN §7.6): a Web Animation of opacity, at most 60 pulsing at once, each handle cancellable.
 // Whether happy-dom has Element.animate decides which branch runs
 const canAnimate = typeof HTMLElement.prototype.animate === 'function'
 
@@ -32,6 +32,9 @@ describe('skeleton', () => {
     // The last line is clearly shorter than a full one: that is the “looks like text” touch
     expect(Number.parseInt(widths[2]!, 10)).toBeLessThan(70)
     cancelSkeletonAnimation(long)
+    const two = createSkeleton(document, { chars: 200 })
+    expect(Array.from(two.querySelectorAll<HTMLElement>(`.${SKELETON_LINE_CLASS}`), l => l.style.width)).toEqual(['100%', '48%'])
+    cancelSkeletonAnimation(two)
   })
 
   it('an inline short heading (§7.3) gets one bar only, its width following the font size', () => {
@@ -72,6 +75,18 @@ describe('skeleton', () => {
     }
     many.forEach(cancelSkeletonAnimation)
     expect(activeSkeletonAnimations()).toBe(0)
+  })
+
+  it('none pulses where the reader asks for reduced motion', () => {
+    const matchMedia = window.matchMedia
+    window.matchMedia = ((query: string) => ({ ...matchMedia.call(window, query), matches: query.includes('prefers-reduced-motion') })) as typeof window.matchMedia
+    try {
+      const skeleton = createSkeleton(document)
+      expect(activeSkeletonAnimations()).toBe(0)
+      expect(skeleton.getAnimations?.() ?? []).toHaveLength(0)
+    } finally {
+      window.matchMedia = matchMedia
+    }
   })
 
   it('opacity only: the compositor can carry it, no relayout and no repaint (the trade-off of §7.6)', () => {

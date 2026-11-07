@@ -1,4 +1,5 @@
-// The PDF reader's own style sheet (src/entrypoints/pdf-reader/reader.css), held to a rule the interface review of
+// The PDF reader's own style sheet (packages/reader/src/chrome/reader.css, which the extension's page sheet,
+// src/entrypoints/pdf-reader/reader.css, imports after Tailwind's), held to a rule the interface review of
 // 2026-09-26 brought in: a hover's look only where a pointer can hover — on a touch screen :hover latches after a tap
 // and reads as a state stuck on (better-accessibility, hit areas)
 import { readFileSync } from 'node:fs'
@@ -6,8 +7,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { type Rule, ruleOf, rules, sheet } from './css-rules'
 
-/** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls. A sheet renamed or gone fails here */
-const SHEET = ['../../src/entrypoints/pdf-reader/reader.css', '../../src/styles/tokens.css', '../../src/styles/controls.css']
+/** the reader's sheet and the shared sheets it imports: the tokens (the redesign's design, §2.2) and the controls; and the
+ *  extension's page sheet over it. A sheet renamed or gone fails here */
+const READER = '../../packages/reader/src/chrome/reader.css'
+const PAGE = '../../src/entrypoints/pdf-reader/reader.css'
+const SHEET = [PAGE, READER, '../../packages/ui/src/tokens.css', '../../packages/ui/src/controls.css']
   .map(p => join(import.meta.dirname, p))
   .map(p => readFileSync(p, 'utf8'))
   .join('\n')
@@ -38,8 +42,10 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
   })
 
   it('holds the language list under its search to eight rows and a half, scrolling in its own box; no other menu\'s list capped, the pages\' five and a half (ui.css) out of its sheet (the owner, 2026-11-03)', () => {
-    const reader = readFileSync(join(import.meta.dirname, '../../src/entrypoints/pdf-reader/reader.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(reader).not.toMatch(/@import[^;]*ui\.css/)
+    for (const own of [READER, PAGE]) {
+      const reader = readFileSync(join(import.meta.dirname, own), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      expect(reader, own).not.toMatch(/@import[^;]*ui\.css/)
+    }
     expect(all.filter(r => /\[role="(listbox|menu)"\]/.test(r.selector) && /max-height/.test(r.body)).map(r => r.selector)).toEqual(['.pop .search ~ [role="listbox"]'])
     // 30 px rows (controls.css .pop .item): eight whole and the half that says there is more
     expect(ruleOf(all, '.pop .search ~ [role="listbox"]', ['@layer components'])).toEqual({ 'max-height': `${8.5 * 30}px`, overflow: 'auto', 'overscroll-behavior': 'contain', 'scrollbar-width': 'none' })
@@ -51,6 +57,11 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
     const itemRing = all.filter(r => r.selector.includes('.search:focus-visible') && r.selector.includes('.item[data-active]'))
     expect(itemRing.length).toBeGreaterThan(0)
     expect(itemRing.every(r => r.selector.includes(':not([data-axt-pointer])'))).toBe(true)
+  })
+
+  it('places a pane\'s scroller in the reader\'s own sheet, as PDF.js\'s viewer requires: a host\'s page sheet adds none (L11\'s gap 4)', () => {
+    const own = rules(sheet(READER))
+    expect(ruleOf(own, '.pane .viewerContainer', [])).toMatchObject({ position: 'absolute', inset: '0', overflow: 'auto', 'overflow-anchor': 'none' })
   })
 
   it('sets the capsule\'s words on a whole 17 px line, so that they sit on its middle (the maintainer, 2026-10-04)', () => {
@@ -96,7 +107,7 @@ describe('the reader\'s style sheet (the interface review, 2026-09-26)', () => {
   })
 
   it('presses nothing in by a scale under reduced motion: each press that scales has its rule there, as the toolbar\'s and the card\'s (#299, Part 6; §4.2: a motion is a fade or nothing)', () => {
-    const own = rules(sheet('../../src/entrypoints/pdf-reader/reader.css'))
+    const own = rules(sheet(READER, PAGE))
     const reduced = (r: Rule) => r.within.some(a => /prefers-reduced-motion:\s*reduce/.test(a))
     const still = (r: Rule) => ['1', 'none'].includes(/(?:^|;)\s*scale:\s*([^;]+)/.exec(r.body)?.[1]?.trim() ?? '')
     const pressed = own.filter(r => !reduced(r) && r.selector.includes(':active') && /(?:^|;)\s*scale:/.test(r.body) && !still(r))

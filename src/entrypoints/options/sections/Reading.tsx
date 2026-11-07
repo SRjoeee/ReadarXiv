@@ -2,11 +2,8 @@
 // from an abstract or a PDF page, the floating button, the PDF group, and what the PDF reader translates. Every control
 // writes at once; the whole-paper way reaches an open paper at once (the session releases what waits, Part 2). The
 // floating button's state is not in the configuration: the background, its only writer, is asked (floating-entry.ts)
-import { Reveal } from '@/ui/controls/Reveal'
-import { Segmented } from '@/ui/controls/Segmented'
-import { Switch } from '@/ui/controls/Switch'
+import { Reveal, Segmented, Switch, O, R, S } from '@readarxiv/ui'
 import { CLASS_ROWS } from '@/pdf-reader/settings'
-import { O, R, S } from '@/ui/strings'
 import type { OptionsData } from '../data'
 import { useFloatingEntry } from '../floating-entry'
 import { Card, GroupHeading } from '../ui/Card'

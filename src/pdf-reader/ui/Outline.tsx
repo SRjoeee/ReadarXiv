@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/Outline) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The contents (the reader's design, §6.3): the paper's headings as a folding tree, one 28 px row each, the translated
 // title truncating, the original in its tooltip, the page at the end. The section being read — the last heading above
 // the reading line, as the session places it — is marked and its branch opened as the reading moves; the rest folds as
@@ -10,7 +11,7 @@ import type { ReaderController } from '../controller'
 import type { OutlineEntry } from '../engine/view/outline'
 import { Icon } from '@/ui/controls/Icon'
 import { useTip } from '@/ui/controls/tip'
-import { TippedButton } from './TippedButton'
+import { TippedButton } from '../../../packages/reader/src/chrome/TippedButton.tsx'
 import { useReader } from './use-reader'
 
 export function Outline({ controller, open }: { controller: ReaderController; open: boolean }) {

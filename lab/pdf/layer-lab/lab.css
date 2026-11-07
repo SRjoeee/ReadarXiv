@@ -1,5 +1,5 @@
 /* The layer lab's page, drawn in the extension's tokens and controls (/styles/tokens.css and controls.css, served from
-   src/styles: the neutral ramp, both themes, the font, the ease, the switch and the buttons) with the PDF reader's
+   packages/ui/src: the neutral ramp, both themes, the font, the ease, the switch and the buttons) with the PDF reader's
    toolbar measures (reader.css: a 44 px bar, 30 px controls, radius 7, menus as popovers). The layer's own text names
    only its faces (font-synthesis off).
    (Whole pixels wherever a page's position depends on it: the bar and the pane heads have fixed heights and the first

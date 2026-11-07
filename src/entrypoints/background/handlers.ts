@@ -8,7 +8,6 @@
 // and the listener answers with the failure reply that `sendMessage` turns back into a rejection.
 import type { Config } from '@/config/schema'
 import { SERVICE_ID_RE } from '@/config/services'
-import { toErrorInfo } from '@/providers/translate-service'
 import { type DiagnosticsExport, failureLine } from '@/shared/diagnostics'
 import type { FloatingEntryState } from '@/shared/entry-settings'
 import type { MessageHandlers } from '@/shared/messages'
@@ -52,11 +51,11 @@ export interface HandlerDeps {
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
 
 /**
- * What a worker's start does of itself for the cache: its expired entries deleted. Nothing else deletes an entry nobody asks
- * for — `get()` drops an expired one it is asked for, and only the settings page's Data section cleaned the rest — so the rows
- * a `CACHE_KEY_VERSION` bump leaves behind, which no key reaches again, stayed until the cap evicted them (#88 E6). Swept at
- * every start, they go once they expire (30 days), and each start has only what expired since the last to delete. A failure
- * is a line in the log: the cache degrades to a miss, never the worker
+ * What a worker's start does of itself for the stores of translation (cache/translate-store.ts): their expired entries
+ * deleted. A read of an expired entry is a miss and nothing else deletes it, so the entries a changed translator or chain
+ * leaves behind, which no key reaches again, would stay until the caps evicted them (#88 E6). Swept at every start, they go
+ * once they expire (30 days), and each start has only what expired since the last to delete. A failure is a line in the
+ * log: a store degrades to a miss, never the worker
  */
 export function sweepAtStart(deps: Pick<HandlerDeps, 'cache' | 'diagnostics'>): Promise<void> {
   return deps.cache.cleanup().then(
@@ -81,19 +80,23 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
         const id = message.providerId
         if (id && SERVICE_ID_RE.test(id)) {
           try {
+            // the test's one unit: answered, or the failure its result names
+            const first = response.ok ? response.results[0] : undefined
+            const answered = first?.ok === true
+            const error = !response.ok ? response.error : first && !first.ok ? first.error : undefined
             if (message.candidate) {
               // A candidate: a service as the settings page would save it, tested before it is (ruling 16). Its success
               // clears the mark only when it tested the stored key and address; another key is cleared by the watcher
               // once the save lands (idsToClear). Its failure touches nothing: it says nothing of the key stored. The
               // page itself never writes the record (ruling 17)
-              if (response.ok) {
+              if (answered) {
                 const stored = await deps.getConfig().catch(() => null)
                 if (stored && testsStoredKey(message.candidate, stored)) await deps.health.clear(id)
               }
-            } else if (response.ok) await deps.health.clear(id)
-            else if (isRefusal({ id, ...response.error })) {
+            } else if (answered) await deps.health.clear(id)
+            else if (error && isRefusal({ id, ...error })) {
               const stored = await deps.getConfig().catch(() => null)
-              if (stored && shouldMarkRefusal({ id, ...response.error }, stored, stored)) await deps.health.reject(id)
+              if (stored && shouldMarkRefusal({ id, ...error }, stored, stored)) await deps.health.reject(id)
             }
           } catch {
             diag('[axt] a connection test\'s answer could not be recorded: the service health record could not be written')
@@ -102,7 +105,7 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
         return response
       })
       .catch((e: unknown) => {
-        const error = toErrorInfo(e)
+        const error = { kind: 'unknown' as const, message: messageOf(e) }
         diag(`[axt] translate call failed before any request: ${failureLine(error.kind, error.message)}`)
         return { ok: false as const, error }
       }),

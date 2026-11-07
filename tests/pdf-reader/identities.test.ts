@@ -1,9 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cacheKeyFor } from '@/cache/key'
-import { translateCall } from '@/core/run/call'
-import type { TranslateCall } from '@/providers/translate-service'
 import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { type RuleField, RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
@@ -15,7 +12,6 @@ import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 
 afterEach(() => {
   vi.doUnmock('@/pdf-reader/engine/translate/version.mjs')
-  vi.doUnmock('@/core/rules/latexml')
   vi.resetModules()
 })
 
@@ -67,51 +63,6 @@ describe('the kept rule lives in translate/', () => {
     // the rule is the translation's: the TeX path's table of CJK strategies (Hans, Hant, Jpan, Kore) went with the compiled
     // translation (2026-11-04); a script whose authors are translated is a decision taken here (and a change of TRANSLATE_VERSION)
     expect(['zh', 'zh-TW', 'ja', 'ko'].map(scriptOf).sort()).toEqual(['Hans', 'Hant', 'Jpan', 'Kore'])
-  })
-})
-
-describe('the per-text cache key (rules as data, §9.1)', () => {
-  const identity = { providerId: 'p', model: 'm', promptKey: '', target: 'zh-CN', renderPath: 'tags' as const, text: 'Hello <x id="1"/> world.' }
-  /** the keys of one text from an HTML block and from a PDF, under a module whose RULES_VERSION is `rules` */
-  async function keysUnder(rules: string) {
-    vi.resetModules()
-    vi.doMock('@/core/rules/latexml', () => ({ RULES_VERSION: rules }))
-    const { cacheKeyFor } = await import('@/cache/key')
-    return { html: await cacheKeyFor({ ...identity, source: 'html' }), pdf: await cacheKeyFor({ ...identity, source: 'pdf' }) }
-  }
-
-  it("a PDF text's key does not move when RULES_VERSION moves; an HTML block's does", async () => {
-    const before = await keysUnder('0.11.0'), after = await keysUnder('0.12.0')
-    expect(after.pdf).toBe(before.pdf)
-    expect(after.html).not.toBe(before.html)
-    expect(before.pdf).not.toBe(before.html)
-    expect(before.pdf).toMatch(/^[0-9a-f]{64}$/)
-  })
-
-  it("a PDF text's key still moves with everything else it is made of", async () => {
-    vi.resetModules()
-    const { cacheKeyFor } = await import('@/cache/key')
-    const pdf = await cacheKeyFor({ ...identity, source: 'pdf' })
-    for (const change of [{ providerId: 'q' }, { model: 'n' }, { promptKey: 'custom' }, { target: 'ja' }, { renderPath: 'markers' as const }, { text: 'Another text.' }]) {
-      expect(await cacheKeyFor({ ...identity, ...change, source: 'pdf' }), JSON.stringify(change)).not.toBe(pdf)
-    }
-  })
-
-  it('CACHE_KEY_VERSION stays 6: no HTML key changes meaning, and the PDF texts\' old entries (a rules string in the slot) orphan themselves', async () => {
-    vi.resetModules()
-    const { CACHE_KEY_VERSION } = await import('@/cache/key')
-    expect(CACHE_KEY_VERSION).toBe(6)
-  })
-
-  it('a key and a cache descriptor name their source: a caller that leaves it out does not type-check, and the HTML page\'s says html', () => {
-    // (pnpm typecheck holds these two: an unused @ts-expect-error is an error)
-    // @ts-expect-error source is required
-    void cacheKeyFor({ ...identity })
-    // @ts-expect-error source is required
-    const unnamed: TranslateCall['cache'] = { paper: 'p', renderPath: 'tags' }
-    void unnamed
-    const call = translateCall({ target: 'zh-CN', paper: '2608.04322' }, [{ id: 'a', text: 'x' }], 'tags')
-    expect(call.cache).toEqual({ paper: '2608.04322', renderPath: 'tags', source: 'html' })
   })
 })
 

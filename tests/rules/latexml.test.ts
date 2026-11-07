@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
 import {
-  PROTECT_RULES, RULES_VERSION, SKIP_RULES, TABLE_RULES, UNIT_RULES,
+  PROTECT_RULES, SKIP_RULES, TABLE_RULES, UNIT_RULES,
   classify, documentRoot, isNamedTag, isNumericCell, visibleText,
 } from '@/core/rules/latexml'
 
@@ -30,10 +30,6 @@ describe('the rule table\'s integrity', () => {
     for (const r of all) expect(() => probe.matches(r.selector), r.id).not.toThrow()
     expect(() => probe.matches(TABLE_RULES.root)).not.toThrow()
     expect(() => probe.matches(TABLE_RULES.cell)).not.toThrow()
-  })
-
-  it('the version number was bumped for this change of rules', () => {
-    expect(RULES_VERSION).toBe('0.11.0')
   })
 })
 

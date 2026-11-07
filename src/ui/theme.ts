@@ -3,7 +3,7 @@
 // (better-ui). The reader applies it its own way (pdf-reader/ui/appearance.ts): it crossfades and dims its pages
 import type { Config } from '@/config/schema'
 import { watchConfig } from '@/config/storage'
-import { withoutTransitions } from './controls/transitions'
+import { withoutTransitions } from '@readarxiv/ui'
 
 export function applyTheme(root: HTMLElement, theme: Config['theme']): void {
   if ((root.dataset.theme ?? 'system') === theme) return

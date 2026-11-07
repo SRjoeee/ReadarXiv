@@ -100,8 +100,8 @@ One cool neutral ramp at hue 255 and one status hue, all oklch; light and dark v
 appearance is dark, or is the system's and the system is dark.
 
 **Shared since 2026-09-27** (the extension's redesign, its design §2.1): these tokens are the extension's now, held as
-data in `src/shared/tokens.ts`, from which `pnpm tokens` writes `src/styles/tokens.css`; the reader's sheet imports it,
-with the controls it shares (`src/styles/controls.css`, `src/ui/controls/`). The values below are unchanged, and the
+data in `packages/ui/src/tokens.ts`, from which `pnpm tokens` writes `packages/ui/src/tokens.css`; the reader's sheet imports it,
+with the controls it shares (`packages/ui/src/controls.css`, `packages/ui/src/controls/`). The values below are unchanged, and the
 reader was held to its pixels before and after the move (`lab/pdf/spikes/reader-pixels.mjs`). The
 extension adds roles the reader has no use for — the brand, success, the search mark, the page's and the popup's
 grounds — in the redesign's §2.1.
@@ -134,7 +134,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 ### 4.2 Type, icons, motion
 
 - Type: the system stack, the platform's Latin face and then the CJK face of the element's language (`FONT_STACKS` in
-  `src/shared/tokens.ts`: PingFang SC / TC / HK, Hiragino Sans, Apple SD Gothic Neo on macOS, and their Windows and Linux
+  `packages/ui/src/tokens.ts`: PingFang SC / TC / HK, Hiragino Sans, Apple SD Gothic Neo on macOS, and their Windows and Linux
   counterparts; UI.md §1, fonts; 2026-11-04, the one Simplified stack before), 13 px base; 12.5 px for controls, 12 px for secondary text, 11 px only for page numbers; 500 for control
   labels, 600 for the title and the current section; tabular figures wherever numbers change.
 - Icons: Lucide, 16 px, stroke 1.5 on the 24 grid (1 CSS px), `currentColor`; the display switch's own three (§6.2).
@@ -172,8 +172,13 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
   暂按上下显示). The words stay 5 s of being read: the time stands while the pointer is over the capsule or it holds the
   focus, and the rest of it runs once neither does (the maintainer, 2026-10-01); holding no action, the capsule is a
-  stop of its own for the keyboard while it is shown (Codex and Devin on #307). The widths are to be checked by
-  reading at them while building.
+  stop of its own for the keyboard while it is shown (Codex and Devin on #307). That is the extension's rule; the rule is
+  the host's (`Parts.narrow` of the reader package's chrome), so that each host keeps the behaviour its readers have today
+  (the coordinator's ruling for the website's cut-over: nothing a reader sees changes): `told`, the default and the
+  extension's, as above; `shown`, the website's (its owner's rule of 2026-11-03), where the display switch shows the
+  translation chosen and side by side greyed, the stored choice kept for a wider window, and the capsule says so only
+  where a window that showed the paper side by side was narrowed while reading (a page opened narrow, or widened again,
+  says nothing). The widths are to be checked by reading at them while building.
 
 ## 6. Components
 
@@ -603,7 +608,7 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 The reader's menus are built on `Menu`, the shared component of `src/ui/` at the time, and its gaps are closed for every user of it (the popup, the
 settings page's drawers): the active item announced as the arrows move; Home and End; typing a letter jumps to it; focus
 back on the trigger when it closes; no buttons inside a listbox. (Retired with the redesign: the reader's menus are
-`MenuList`, `src/ui/controls/`, and `Menu` is gone.)
+`MenuList`, `packages/ui/src/controls/`, and `Menu` is gone.)
 
 ## 10. Engine changes, each measured
 
@@ -772,7 +777,7 @@ viewer's control does).
 
 ### 11.5 Styling
 
-Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`src/styles/tokens.css`
+Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`packages/ui/src/tokens.css`
 since the redesign; §4.1) through `@theme inline`, not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside
 the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for want of it).
 
@@ -1269,7 +1274,7 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
   as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
   with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by the view's placeholder:
-  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
+  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/host/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Moved with the text they are over** (`layer-proto/links.mjs` `matchUnit`, `placeUnit`): an annotation over ink the layer
   redraws is matched to what the unit draws of it (a citation, a reference, a url, an `\href` pair, a footnote's mark) and laid
@@ -1536,7 +1541,7 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 
 The words as agreed, zh-CN with the English they stand for; `docs/UI.md` gives them `S-R` ids. Where the popup already says
 the same thing, its string is reused (marked). Traditional Chinese, Japanese and Korean (2026-11-04) say the same in their
-packs (`src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`), in their own register (UI.md §1): a page's name in Japanese and Korean
+packs (`packages/ui/src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`), in their own register (UI.md §1): a page's name in Japanese and Korean
 sets no space before its counter, and Korean names an unsupported language after a colon, where no particle meets it.
 
 | Where | zh-CN | English |
@@ -2143,7 +2148,7 @@ A rule that does two of these is split, or classed by the more expensive.
 
 | Kind | Where it runs | Where it lives | Its identity | A change reaches readers by | Cost of a change |
 |---|---|---|---|---|---|
-| Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the ownership and the wrap. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: `RULES_VERSION`, in the per-text key) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt; the extension's per-text cache answers every unit the change left alone, the web's journal of answers is its output's and asks them all again (`worker/src/mt/journal.ts`) |
+| Extraction | the server, when a paper's bundle is made | engine code: `latex-front.mjs`, `arg-roles.mjs`, `latexml-args.mjs`, `groups.mjs` `groupOf`, the layout maker, the ownership and the wrap. HTML: `src/core/rules/latexml.ts`, in the extension | `PIPELINE_VERSION`, `LAYOUT`, `REMOVAL`: the bundle's content versions, in its key (HTML: none since stage 4b; a block's wire is in its key, DESIGN §5.5) | the web's deploy. Each paper's bundle is made again on its next open (§18.4). HTML: an extension release | one compile per opened paper. Rows are rebuilt; the extension's store of answers answers every unit whose wire the change left alone, the web's journal of answers is its output's and asks them all again (`worker/src/mt/journal.ts`) |
 | Layout | each reader, at draw time | the rule set, `rules/layout-rules.json` (§18.5) | `RULES_SCHEMA` (the shape and how the engine reads it) and the set's `version` (the values) | publishing: both readers take it on their next load | none |
 | Translation | each reader (the extension), the translation workflow (the web) | engine code: `translate/mt.mjs` (`serialize`, `rehydrate`, the wires, `translateUnits`), `toTranslate` (the KEPT flag, the structural names the target's packages answer), `translate/groups.mjs` `decideGroups` and `NAMES_SHARE`, `batchesOf`; and, held by each reader, the paper's context sent with every batch (`paperContext`) | `TRANSLATE_VERSION` (`translate/version.mjs`) | the next release of each reader's engine. Rows of the old version are translated again on open | the rows. The extension's per-text cache holds the translator's raw answers, so there the translator is asked again only for texts that changed; the web's journal is its output's, and a raise asks a reopened paper's every text again |
 
@@ -2176,10 +2181,9 @@ The edge cases, decided:
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'10'`: fewer markers, what the wire tells read from TeX's tables and definitions — a pair whose command sets its argument alone (revtex's and ACM's `\bibinfo`, a paper's `\newcommand\x[1]{#1}`) no pair on either wire, a stretch of placeholders side by side one marker, a space riding a kept pair's edge, `\label`, `\penalty` and a table's row rules on no wire, every display a break, a pair's lone end at its unit's edge off the wire and inside it a marker in its place, a structural name the target's heads hold not sent: over the 53 sweep papers' zh units the wire 3.9 % shorter and 36.8 % of its markers gone, §19.13; `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `toTranslate` (the KEPT flag and the names the target's packages answer), `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `10`: the switches no set ever turned the other way gone, their shipped values the engine's own (the rules audit of 2026-11-04, T-D1): `leadRel` (the leading relative to the original's pitch, as the page fill set it for every unit), `trackStart` (the face's size correction given back), `even` and `fillSize` (no page-even pass, no growth by size), `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (B1 and B2, §18.8, on); and `further`'s `flow` step, the text run past a display (T-M5b: it set none of the release sweep's or the gate pack's units the steps around it had not); 9: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
-| `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 
 - **The web's translation identity** is `axt-tr/2|<paper>|v<version>|<target>|<chain>|p<PIPELINE>|t<TRANSLATE>|b<BUNDLE>`, with no `r<RULES>`: the rules of the HTML page cut none of a PDF's units.
-- **The background's per-text key** keeps `RULES_VERSION` for the HTML page's blocks only; a PDF text's key holds none (`cache/key.ts` `CacheSource`, named by every cache descriptor and `CACHE_KEY_VERSION` still 6: no HTML key changed, and a PDF text's old entries are no key of the new ones). The cache holds the translator's raw answer to a text, which no rule of reading changes.
+- **The background's key** (since stage 4b, DESIGN §9): the reader's texts go to the background's one chain as units, each keyed by the translator's identity, the target and the bytes of the wire the translator is sent; no rule of the HTML page enters it. The store holds the translator's raw answer, judged again on every read, and the background's rows answer a paper opened again with nothing sent.
 - **A file is refused by its schema, never by its maker.** `parseLayout` refuses a layout file whose `schema` is not 5 (4 before a found placeholder's row ended with its glyphs' fill, 2026-10-19; 3 before a display group's later displays were written `JOINED`, their ink the group's first display's, and a LOST piece outside its unit's lines `OUTSIDE`, the LOST survey of 2026-10-15; 2 before the paper's `\lineskip` and `\lineskiplimit`, 1 before the babel names, D1a) (the add-on's manifest, refused by its own `schema` the same way, went with REMOVAL 8); the file's `layout` is read for its shape (a version token) and never compared, so a reader opens what a newer maker wrote. A change of the file's fields, bounds or meaning raises its `schema` and `BUNDLE`, not `LAYOUT` or `REMOVAL` — but the layout file's schemas 4 and 5 did not raise `BUNDLE` (the controller's ruling of 2026-10-15: the next `BUNDLE`, 4, is the pipeline lane's new wire). This breaks the contract's promise for `b3`: a released reader of schema 3 asking `b3` of content this engine makes would refuse it whole, as `parseLayout` refuses any schema but its own. It holds only because no released reader asks for such content: the web's pin does not move before `BUNDLE` 4 lands, and moves with it (M1).
 
 ### 18.3 Bump rules
@@ -2619,18 +2623,14 @@ extension's compile client (`parked/extension-compile/`).
   `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
   `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
 - **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
-  package (the web's R21 detector, `portedInClosure`). The shared interface (`controller.ts`, `src/pdf-reader/ui/**`,
-  `src/ui/controls/**`) reaches four GPL-ported files today, by one import each: `src/config/languages.ts` (the language
-  table), `src/providers/microsoft.ts`, `src/providers/prompt-library.ts` and `src/providers/request/retry-policy.ts`. The
-  web imports `controller.ts` and `src/pdf-reader/ui/**` through its pin today and replaces modules by its own seams (an
-  importer-scoped alias: `@/config/languages` and `pdf-reader/ui/languages` are its own files), so it must carry none of the
-  four in its bundle: each is either replaced by a web seam or not imported, which the web's own R21 gate checks. That holds
-  until Task 7 cuts the four from the shared interface's closure (the `ReaderHost` seams). The test pins the four as a list
-  that may shrink and never grow.
+  package (the web's R21 detector, `portedInClosure`). The shared interface (the reader's chrome,
+  `packages/reader/src/chrome/**`, and `packages/ui/src/**`) reaches no GPL-ported file since the chrome moved into the
+  package (stage 5a): the language tables, the service menu and the keyed reasons that reached them are the extension's
+  host (`src/pdf-reader/host/`), given to the chrome as its slots and words. The test pins that list as empty.
 - **Notices.** What the web carries with the engine and the shared interface: the LaTeXML acknowledgement now
   (`rules/latexml-args.mjs` is in the closures of `pipeline` and `layer`; `docs/THIRD_PARTY.md` has its row), and Lucide (ISC)
-  and Noto Sans SC (OFL) with the shared interface (the icons of `src/ui/controls/Icon.tsx`, the glyphs of
-  `src/pdf-reader/ui/display-glyphs.ts`).
+  and Noto Sans SC (OFL) with the shared interface (the icons of `packages/ui/src/controls/Icon.tsx`, the glyphs of
+  `packages/ui/src/controls/display-glyphs.ts`).
 - **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by a file under
   `src/` or `lab/` outside the engine (`unreached`: the shipped extension and every file of the lab, its bench and spikes, not
   only its kept gates); a module only a test or a script reaches is parked with its tests.
@@ -2682,8 +2682,7 @@ The web moves its imports to the five entries, once: its server takes `pipeline`
 `translate` and `rules`; its fork-session script and the copies of the session it makes go with the reading view that replaces
 them. The extension's own modules are not importable from the web, and a module the web needs that no entry exports is a
 request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
-(`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the four ported files are replaced by
-its seams or left out of its bundle until they are cut from it.
+(the reader's chrome and `packages/ui`) stays under the licence rule of section 19.3: it reaches no ported file.
 
 ### 19.6 The page pass
 

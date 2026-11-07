@@ -6,7 +6,7 @@
 // corpus; a row of three is settled back one pair at a time). A member is prepared from its part (L5-L7: the unit's rules,
 // the tokens) by the adapter; the composition reads nothing else.
 import type { FitBlock } from '../fit/types.ts'
-import type { FillLaid } from '../shared/fill-page.types.ts'
+import type { FillLaid } from '../shared/fill-page.ts'
 import { relay } from '../shared/relay.ts'
 import { type Row, rowStart } from '../shared/row-start.ts'
 import type { Json, LedgerSlot, RuleParams } from '../types.ts'

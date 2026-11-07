@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LOCALES, LOCALE_CODES } from '@/locales'
+import { LOCALES, LOCALE_CODES } from '@readarxiv/ui'
 
 const DIR = join(import.meta.dirname, '../../public/_locales')
 const read = (folder: string) => JSON.parse(readFileSync(join(DIR, folder, 'messages.json'), 'utf8')) as Record<string, { message: string; description: string }>

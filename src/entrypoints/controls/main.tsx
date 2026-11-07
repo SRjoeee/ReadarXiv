@@ -1,14 +1,12 @@
 // The controls sheet (a dev page, like the gallery: wxt.config.ts DEV_PAGES keeps it out of a release): every control of
-// src/ui/controls that the redesign's Part 3 adds, in each of its states, light and dark side by side on the pages' own
+// the kit (@readarxiv/ui, packages/ui/src/controls) that the redesign's Part 3 adds, in each of its states, light and dark side by side on the pages' own
 // sheet (ui.css), in the language `?lang=` names — to look at in a real browser before the popup and the settings page
 // use them, and for tests/e2e/probes/controls.mjs to measure
 import '@/styles/ui.css'
 import './sheet.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LOCALE_CODES, type LocaleCode } from '@/locales'
-import { trackModality } from '@/ui/controls/modality'
-import { setLocale } from '@/ui/strings'
+import { LOCALE_CODES, type LocaleCode, trackModality, setLocale } from '@readarxiv/ui'
 import { SPECIMENS } from './specimens'
 
 const asked = new URLSearchParams(location.search).get('lang') as LocaleCode | null

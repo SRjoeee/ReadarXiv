@@ -31,7 +31,7 @@ export const FORBIDDEN = [
   { under: 'src/shared/transport', why: 'runtime messaging' },
   { under: 'src/entrypoints', why: 'an entry point' },
   { under: 'src/ui', why: 'the UI layer' },
-  { under: 'src/locales', why: 'the locale packs' },
+  { under: '@readarxiv/ui', why: 'the interface package: the controls and the locale packs (src/shared/tokens.ts hands the core its tokens)' },
   { under: 'wxt', why: 'WXT' },
   { under: 'webextension-polyfill', why: 'the extension API polyfill' },
 ]

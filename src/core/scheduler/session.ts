@@ -1,14 +1,8 @@
-// Ported from reference/read-frog/src/utils/host/translate/translation-session.ts@9b44f82 (GPL-3.0), 2026-09-05,
-// modified: the two providerRef functions are dropped (that is its hosted state; our provider is fetched once in start());
-// 2026-09-12 (DESIGN §4.3): the module-level "current session" singleton is gone — the page session owns its id — and
-// only the id format remains.
-//
-// The id is a correlation key, not cryptographic material — deliberately not getRandomUUID, and a source of its own
-// separate from the walk ids; the random part keeps several frames of one tab apart, the counter keeps one frame's
-// sessions apart within a millisecond.
-let sessionCounter = 0
+// A page session's id (DESIGN §4.3, §4.5): the scope the background binds a tab's requests to and withdraws them by,
+// and the document's own id in the page's action epoch. A random UUID: unique however many are made at once, with no
+// white space, and its first eight characters (the diagnostics' scope tag, `shared/diagnostics.ts`) tell sessions apart.
+import { getRandomUUID } from '@/shared/uuid'
 
 export function newSessionId(): string {
-  sessionCounter += 1
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${sessionCounter}`
+  return getRandomUUID()
 }

@@ -4,7 +4,7 @@
 # takes from its verticals given back by a stroke of 0.18 px round its outline (icons.tsx WEN_GAIN) — the maintainer's
 # round 11 (2026-09-25: 9 px, 0.8 and 0.16 before). Outlines, so that every system draws the same shapes. Prints
 # display-glyphs.ts:
-#   python3 scripts/pdf-reader-glyphs.py <NotoSansSC-VariableFont_wght.ttf> > src/pdf-reader/ui/display-glyphs.ts
+#   python3 scripts/pdf-reader-glyphs.py <NotoSansSC-VariableFont_wght.ttf> > packages/ui/src/controls/display-glyphs.ts
 # Needs fontTools (pip install fonttools); the font is Google Fonts' Noto Sans SC, the variable face.
 import sys
 from fontTools.pens.boundsPen import BoundsPen
