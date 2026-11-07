@@ -19,7 +19,7 @@ export const INVARIANTS = [
   {
     id: 'I1',
     says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
-    gap: "the composed page in the reader is checked on the harness's own fixtures only; on corpus papers it is measured, not held, and the canvas check holds a stand-in (`--normalize`) for a reader change not built",
+    gap: "the composed page in the reader is held on the harness's own fixtures only; on corpus papers the harness measures its residue and holds nothing, and the canvas gate (the release tier's) passed in lane L1 only with a stand-in (`--normalize`) for a reader change not built",
   },
   {
     id: 'I2',
