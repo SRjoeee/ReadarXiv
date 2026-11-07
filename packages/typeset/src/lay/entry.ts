@@ -7,9 +7,10 @@
 // rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells laid
 // whole or not at all, a size tie's members at one size), and the members as drawn (D.display). The reader's leave
 // (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
-// off and no row of it waited for. What it does not compose yet, each said where it is decided: a babel name's and a figure
-// text's members (S.names, S.figures: their members stay the original's, `name` / `kind`), the sentences' boxes (Laid.lit:
-// empty), the page's links (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
+// off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
+// member after it in its flow, as that member's lead (lay/lead.ts). What it does not compose yet, each said where it is
+// decided: a figure text's members (S.figures: they stay the original's, `kind`), the sentences' boxes (Laid.lit: empty), the
+// page's links (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -17,8 +18,10 @@ import { fitMeasure, fontString } from '../breaker/measure.ts'
 import { type NameRow, setNameOf } from '../shared/names.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
+import type { TextItem } from '../emit/display.ts'
 import { adapt, rectOf } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
+import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { layPagePrepared } from './page.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { waitOf } from './wait.ts'
@@ -72,22 +75,21 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
 /**
  * S.names over the part (RUN:1355 paintNames): a babel name drawn on its own, in the target's word, at its size, weight and
  * slant, its left edge kept or, centred, its centre, shrunk into the room on its line to the last floor at most. Its facts are
- * the part's: its Word, its own text (Placed.plain), Style, its line, its column (the line's measure) and Room.side, the next
- * ink either side (a glyph's edge a quarter of its size clear, as nameRoom reads a character's). A name that shares its row
- * with a member set after it leads that member (amsthm's "Proof."): U.lead's, not drawn by itself here
+ * the part's: its Word, its own text (Placed.plain), Style (its case: the text's capitals, Style.upper, never faked small
+ * capitals), its line, its column (the line's measure) and Room.side, the next ink either side (a glyph's edge a quarter of its
+ * size clear, as nameRoom reads a character's). A name the part binds to the member after it in its flow (Placed.bound:
+ * amsthm's "Proof.") leads that member: its word and style handed on (`lead`), not drawn by itself here
  */
-function nameOf(
+export function nameOf(
   m: Placed,
-  members: readonly Placed[],
+  leads: boolean,
   rules: Rules,
   metrics: Metrics,
   paper: ReturnType<typeof paperOf>,
-): { laid: Laid['lines'] } | { why: Unlaid } | { wait: [string, string][] } {
+): { laid: Laid['lines'] } | { lead: NameWord } | { why: Unlaid } | { wait: [string, string][] } {
   const word = m.text as Exclude<Placed['text'], string>
   const l = m.lines[0]
   if (!l || m.lines.length !== 1) return { why: 'name' }
-  if (members.some((o) => o !== m && o.lines.some((q) => q[0] === l[0] && q[4] === l[4] && q[2] >= l[3])))
-    return { why: 'name' }
   const size = m.style.size
   const nm: NameRow = {
     occurrence: m.ord,
@@ -101,8 +103,10 @@ function nameOf(
     size,
     font: 0,
     centred: m.align === 'c',
-    capitals: !!word.caps,
-    unit: -1,
+    // (the class's case change: Word.caps, or the text's capitals the part states (Style.upper, which faked small capitals
+    // never are: S.names sets those in its word's own case, in small capitals))
+    capitals: !!word.caps || (!!m.style.upper && !m.style.sc),
+    unit: leads ? m.ord : -1,
     glue: 0,
     counter: 0,
     cx0: l[7],
@@ -130,14 +134,18 @@ function nameOf(
     shown: !m.why,
   })
   if (set.wait) return { wait: set.wait }
+  if (set.lead) return { lead: { text: set.lead.text, st: set.lead.st } }
   const d = set.drawn
   if (!d) return { why: set.rec.why === 'unfit' ? 'unfit' : set.rec.why === 'served' ? ('served' as Unlaid) : 'name' }
-  const items: Item[] = []
+  const items: TextItem[] = []
   let x = d.x
   const fill = typeof d.color === 'string' ? Number.parseInt(d.color.slice(1), 16) : undefined
   for (const r of d.runs) {
-    const face = fontString(r.face ?? d.face, 100)
-    items.push({ s: r.s, x, face, size: d.size * r.k, ...(fill !== undefined ? { fill } : {}) })
+    const f = r.face ?? d.face
+    const face = fontString(f, 100)
+    // (an oblique face's slant, a CJK face's synthetic italic: the run skewed, as D.display's)
+    const slant = f?.oblique ? { skew: 1 as const, slant: f.oblique } : {}
+    items.push({ s: r.s, x, face, size: d.size * r.k, ...(fill !== undefined ? { fill } : {}), ...slant })
     x += (metrics.advance(face, 100, r.s) / 100) * r.k * d.size
   }
   return { laid: [[d.baseline, d.x, x, items]] }
@@ -197,8 +205,15 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   >()
   // (a babel name's: S.names over the part, nameOf)
   const names = new Map<number, Laid['lines']>()
+  // (a name the part binds to the member after it (Placed.bound): that member's lead where its word is drawn with it (lay/lead.ts
+  // ledBy), else the original's before it (keptBefore); by the member it leads. `boundTo`: each name drawn as a lead, its member)
+  const leadFor = new Map<number, { name: Placed; word: NameWord | null }>()
+  const boundTo = new Map<number, number>()
+  // (each member as it is set: one led by a name with the name and the joint its label, one after a name kept pinned by it)
+  const setAs = new Map<number, Placed>()
   for (const flow of part.flows)
-    for (const m of flow) {
+    for (let k = 0; k < flow.length; k++) {
+      const m = flow[k]!
       if (leave.has(m.kind)) {
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
@@ -206,14 +221,25 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       }
       if (m.kind === 'name' && typeof m.text !== 'string') {
         unmeant.add(m.ord)
-        if (m.why) {
-          state.set(m.ord, m.why)
+        // (bound: set only with the member after it, which its part holds; none there, it stays the original's with it)
+        const next = m.bound ? flow[k + 1] : undefined
+        if (m.bound && (!next || next.kind === 'name')) {
+          state.set(m.ord, 'bound')
           continue
         }
-        const n = nameOf(m, members, rules, metrics, paper)
+        if (m.why) {
+          state.set(m.ord, m.why)
+          if (next) leadFor.set(next.ord, { name: m, word: null })
+          continue
+        }
+        const n = nameOf(m, !!next, rules, metrics, paper)
         if ('wait' in n) faces.push(...n.wait)
         else if ('why' in n) state.set(m.ord, n.why)
-        else names.set(m.ord, n.laid)
+        else if ('lead' in n) {
+          leadFor.set(next!.ord, { name: m, word: n.lead })
+          state.set(m.ord, 'bound')
+        } else names.set(m.ord, n.laid)
+        if (next && !('lead' in n)) leadFor.set(next.ord, { name: m, word: null })
         continue
       }
       const content = contentOf(m, rows)
@@ -222,19 +248,29 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         if (!m.why && (typeof m.text !== 'string' || content === 'none')) unmeant.add(m.ord)
         continue
       }
-      const relabels = !!m.label && !((m.fixed ?? 0) & LABEL_KEPT)
+      // (led by a name: its lead drawn anew with it, or the name kept the original's before it)
+      const ld = leadFor.get(m.ord)
+      const led: { m: Placed; lead: Lead } | null = ld?.word ? ledBy(ld.name, m, ld.word, paper.designs) : null
+      const mm = led ? led.m : ld ? keptBefore(ld.name, m) : m
+      if (ld) {
+        setAs.set(m.ord, mm)
+        if (led) boundTo.set(ld.name.ord, m.ord)
+        else if (ld.word) state.set(ld.name.ord, 'name')
+      }
+      const relabels = !!mm.label && !((mm.fixed ?? 0) & LABEL_KEPT)
       let rd: ReturnType<typeof readMember>
-      const pieces = rowPieces(m, content)
+      const pieces = rowPieces(mm, content)
       try {
         rd = readMember({
-          m,
+          m: mm,
           unit: { kind: m.kind, state: 'whole', pieces },
-          rects: m.lines.map((l) => rectOf(l, m)),
+          rects: mm.lines.map((l) => rectOf(l, mm)),
           to: rules.target,
           P: R as never,
           paper,
           labels: { words: rules.labels, captions: rules.captions, heads: o.heads ?? null, names: o.names ?? null },
           relabels,
+          lead: led?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
         })
       } catch (e) {
@@ -270,17 +306,19 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
   // so that no head runs over the row of a member left the original's (the reader's leave, a row failed, unproven), PR #620's
   // re-review: the follower's row was in, the follower left, the head drawn over its original text)
+  // (a name in a flow is no row for the member beside it: the member it leads is set with it, or after it kept)
+  const besideOf = (x: Placed | undefined) => (!x || x.kind === 'name' ? null : (setAs.get(x.ord) ?? x))
   const adaptAt = (flow: readonly Placed[], k: number, open: boolean): void => {
-    const m = flow[k]!
+    const m = setAs.get(flow[k]!.ord) ?? flow[k]!
     const r = read.get(m.ord)
     if (!r) return
     const { rd, pieces, tokens } = r
-    const after = flow[k + 1] ?? null
+    const after = besideOf(flow[k + 1])
     const got = adapt({
       m,
-      before: flow[k - 1] ?? null,
+      before: besideOf(flow[k - 1]),
       after,
-      afterOpen: open,
+      afterOpen: open && !!after,
       R,
       measure,
       patterns: rules.hyph as never,
@@ -386,6 +424,19 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         lines: m.lines[0]![0] === page ? nl : [],
         lit: { left: [], right: [], own: [] },
       }
+    // (a name drawn as its member's lead: its text off where that member is laid, both the original's where it is not)
+    const to = boundTo.get(m.ord)
+    if (to !== undefined) {
+      const with_ = (byOrd.get(to)?.state ?? state.get(to)) === 'laid'
+      return {
+        ord: m.ord,
+        page,
+        state: with_ ? 'laid' : 'bound',
+        off: with_ ? 1 : 0,
+        lines: [],
+        lit: { left: [], right: [], own: [] },
+      }
+    }
     const x = byOrd.get(m.ord)
     const st = x?.state ?? state.get(m.ord) ?? 'none'
     const lines = (x?.lines ?? []).map(

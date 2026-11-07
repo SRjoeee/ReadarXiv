@@ -6,7 +6,8 @@
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { OutPiece, Part, Row } from '@readarxiv/format'
-import { layPage } from '../../src/lay/entry.ts'
+import { layPage, nameOf } from '../../src/lay/entry.ts'
+import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { readFileSync } from 'node:fs'
 import { adapt, rectOf } from '../../src/lay/adapt.ts'
@@ -457,13 +458,26 @@ export function gateL1Pair(
           bottoms.set(r[0], Math.min(bottoms.get(r[0]) ?? Number.POSITIVE_INFINITY, y))
         }
       }
-  // (every member once, from the part of its first page; its flow's neighbours)
-  const byOrd = new Map<number, { m: L1Placed; before: L1Placed | null; after: L1Placed | null }>()
+  // (every member once, from the part of its first page; its flow's neighbours, a name none (it is no row of theirs): the name
+  // the part binds to a member its lead (lay/lead.ts, as the entry sets it))
+  const byOrd = new Map<
+    number,
+    { m: L1Placed; before: L1Placed | null; after: L1Placed | null; leader: L1Placed | null }
+  >()
+  const beside = (x: L1Placed | undefined) => (!x || x.kind === 'name' ? null : x)
   for (const part of bundle.parts.values())
     for (const flow of part.flows)
       flow.forEach((m, k) => {
-        if (!byOrd.has(m.ord)) byOrd.set(m.ord, { m, before: flow[k - 1] ?? null, after: flow[k + 1] ?? null })
+        const b = flow[k - 1]
+        if (!byOrd.has(m.ord))
+          byOrd.set(m.ord, {
+            m,
+            before: beside(b),
+            after: beside(flow[k + 1]),
+            leader: b?.kind === 'name' && b.bound ? b : null,
+          })
       })
+  const rules0 = rulesFor(L.target as never)
   // (L1's members joined to today's units by content id, equal ids by order among equals: the baseline's join rule)
   const todayById = new Map<string, (typeof L.units)[number][]>()
   for (const u of [...L.units].sort((a, b) => a.ord - b.ord)) {
@@ -523,6 +537,17 @@ export function gateL1Pair(
       own: false,
     }
     let tokensVerdict: string | null = null
+    // (led by a name: set with its lead (the entry's ledBy), or after the name kept the original's (keptBefore); today's reading
+    // holds its own lead in its tokens, the member its label and first line from the name)
+    let mm: L1Placed = x.m
+    let nameLead: ReturnType<typeof ledBy> = null
+    if (x.leader && metrics) {
+      const designs = (paperR ?? paperReading(part0!.paper.faces.fonts, L.target, rules0.cjkFaces as never)).designs
+      const w = x.leader.why ? null : nameOf(x.leader, true, { ...rules0, set: R }, metrics, { designs } as never)
+      nameLead =
+        w && 'lead' in w && (o.reading === 'part' || reading.lead) ? ledBy(x.leader, x.m, w.lead, designs) : null
+      mm = nameLead ? nameLead.m : keptBefore(x.leader, x.m)
+    }
     if (o.reading === 'part') {
       // (a row by the unit's id: rows are keyed by content (design-a §1.5), and a unit the paper repeats (a running head on
       // every page) has one row, which today's door holds under its first ord)
@@ -551,14 +576,14 @@ export function gateL1Pair(
         ? (row[1].map((q) =>
             typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
           ) as V0Piece[])
-        : rowPieces(x.m, content)
+        : rowPieces(mm, content)
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {
         rd = readMember({
-          m: x.m,
+          m: mm,
           unit: { kind: u.kind, ...(reading.title ? { title: true } : {}), state: row[2], pieces } as RowUnit,
-          rects: x.m.lines.map((l) => rectOf(l, x.m)),
+          rects: mm.lines.map((l) => rectOf(l, mm)),
           to: L.target,
           P: R as never,
           paper: paperR,
@@ -568,7 +593,8 @@ export function gateL1Pair(
             heads: heads?.[L.target]?.heads ?? null,
             names: null,
           },
-          relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
+          relabels: !!mm.label && !((mm.fixed ?? 0) & 4),
+          lead: nameLead?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
         })
         rd = { ...rd, tokens: measured(rd.tokens, metrics!) }
@@ -614,7 +640,7 @@ export function gateL1Pair(
     }
     const ta = performance.now()
     const got = adapt({
-      m: x.m,
+      m: mm,
       before: x.before,
       after: x.after,
       afterOpen: !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,

@@ -204,6 +204,116 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
   })
 })
 
+describe('a babel name’s counter', () => {
+  it('states the counter TeX set after a name that leads no unit (Word.counter), its own text the word alone', () => {
+    // (IEEEtran's "APPENDIX A" over its title: the wrap gives the counter the name's group (own.mjs); the part stated the name's
+    // text "APPENDIX A" and no counter, so S.names drew "ANHANG" over both and the counter was erased)
+    const B = docOf([
+      {
+        lines: ['APPENDIX A', 'Body text here'],
+        points: [
+          ['n1.appendix.s', 0],
+          ['n1.appendix.e', 8],
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'Body text here'), { ...unitOf('name', 'Appendix'), name: 'appendix' }]
+    const ins = instrumentOf(B, units, [[1, 0]], [[ROLE.name, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const name = read('part', o.bytes, o.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'name')!
+    expect(name.plain).toBe('APPENDIX')
+    expect(name.text).toEqual({ name: 'appendix', counter: ['A', [1, 126, 698, 132, 707, 700]] })
+  })
+})
+
+describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', () => {
+  const partOf = (ins: Instrument, L: ReturnType<typeof locate>) => {
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    return read('part', o.bytes, o.digest)
+  }
+  it('states the unit a name TeX set right before on its line leads: the name bound, before it in its flow', () => {
+    // (amsthm's "Proof." on its paragraph's first row: the name, the paragraph's label "." (the joint), its text; the part stated
+    // no relation, so the entry read one off any member to the right on the baseline)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Proof', y: 700 },
+          { text: '.', x: 102, y: 700 },
+          { text: 'The claim holds', x: 112, y: 700 },
+          { text: 'on the next line', y: 688 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('theorem', '. The claim holds on the next line'),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+    ]
+    const ins = instrumentOf(B, units, [[1, 0, 0, 0]], [[ROLE.name, ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    const para = L.members.find((m) => m.kind === 'theorem')!
+    expect(L.flows.find((f) => f.includes(para.ord))).toEqual([name.ord, para.ord])
+    const flow = partOf(ins, L).flows.find((f) => f.some((m) => m.ord === para.ord))!
+    expect(flow.map((m) => [m.kind, m.bound ?? 0])).toEqual([
+      ['name', 1],
+      ['theorem', 0],
+    ])
+    // (TeX's separation from the name to its text, the joint standing between: kept)
+    expect(flow[1]!.join).toEqual([10, 1])
+    // (the name's glyphs its lead's, not ink beside its first line: no PINNED by them, its room beside not stopped at them)
+    expect(flow[1]!.lines[0]![9] & 2).toBe(0)
+    expect(flow[1]!.room.side?.[0] ?? 0).toBeLessThan(72.01)
+  })
+  it('leads no unit across the columns: a name whose next glyph in the stream is its column’s next line', () => {
+    // (Devin on #623: a left column's "Abstract" at 72-120 and the right column's paragraph on its baseline, 700: the entry took
+    // the right column for the name's run-in follower and left the name the original's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Abstract', y: 700 },
+          { text: 'The abstract text', y: 688 },
+          { text: 'A right column paragraph', x: 320, y: 700 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('abstract', 'The abstract text'),
+      unitOf('para', 'A right column paragraph'),
+      { ...unitOf('name', 'Abstract'), name: 'abstract' },
+    ]
+    const ins = instrumentOf(B, units, [[2, 0, 1]], [[ROLE.name, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    expect(L.flows.find((f) => f.includes(name.ord))).toEqual([name.ord])
+    expect(
+      partOf(ins, L)
+        .flows.flat()
+        .find((m) => m.kind === 'name')!.bound,
+    ).toBeUndefined()
+  })
+})
+
 describe('eachBetweenPaired', () => {
   // (the walk of a unit made on A's glyphs for those B never printed between two it did: each looked for its paired neighbours by
   // walking its run back and forth, k² reads in a run of k; the sixth owner's finding after PR #620's, the class of its finding 1)

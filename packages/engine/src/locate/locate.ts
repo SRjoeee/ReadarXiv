@@ -71,6 +71,16 @@ export interface Member {
   dir?: [number, number]
   /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
   plain?: string
+  /** a babel name TeX set right before a unit on that unit's first line (amsthm's "Proof.", IEEEtran's "Abstract—"): the ord of
+   *  the member it leads (Placed.bound: drawn as that member's lead, in its flow before it) */
+  leads?: number
+  /** the name that leads it, by its ord: its glyphs are its lead's, no ink beside its first line */
+  leader?: number
+  /** a babel name's counter TeX set after it on its line, where it leads no unit (IEEEtran's "APPENDIX A", "Appendix A:" in a
+   *  contents list: Word.counter): its A glyphs, those of its occurrence after its end point on B (marks.mjs `n<occ>.<key>.e`;
+   *  the wrap gives them the name's group, own.mjs, names.mjs counterAfter) */
+  counterA?: number[]
+  counter?: [string, Ink]
   /** its first and last glyph on B (global), -1 for none */
   bFirst: number
   bLast: number
@@ -117,6 +127,8 @@ export const FREE = -1
 export const HELD = -2
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
+/** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
+const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
@@ -543,7 +555,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       else runs.push([b])
     }
     if (!runs.length) members.push(place(u, [], []))
-    for (const r of runs) members.push(place(u, r, [], unit.name))
+    for (const r of runs) {
+      const mem = place(u, r, [], unit.name)
+      // (its counter: its glyphs after its end point, which stands inside the run)
+      const p = (pageB[r[0] as number] as number) - 1
+      const o = m.offB[p] as number
+      const end = (B.pages[p]?.points ?? []).find(
+        (x) => NAME_END.test(x.name) && o + x.glyph > (r[0] as number) && o + x.glyph <= (r.at(-1) as number),
+      )
+      if (end) {
+        const after = r.filter((b) => b >= o + end.glyph && !gB(b).blank).map((b) => m.bToA[b] as number)
+        if (after.length && after.every((a) => a >= 0)) mem.counterA = after
+      }
+      members.push(mem)
+    }
   }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
@@ -795,8 +820,25 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
     }
-    // (a babel name's own text: S.names leaves it the original's where the target's word is it already)
-    if (mem.name !== undefined) mem.plain = textOf(mem.text.map(gA))
+    // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
+    // sets the counter after the target's word)
+    if (mem.name !== undefined) {
+      const ctr = new Set(mem.counterA ?? [])
+      mem.plain = textOf(mem.text.filter((a) => !ctr.has(a)).map(gA))
+      const cs = [...ctr].map(gA).filter((g) => !g.blank)
+      if (cs.length && cs.length < mem.text.length)
+        mem.counter = [
+          textOf(cs),
+          [
+            pageA[mem.counterA![0] as number] as number,
+            r2(Math.min(...cs.map((g) => g.x0))),
+            r2(Math.min(...cs.map((g) => g.bottom))),
+            r2(Math.max(...cs.map((g) => g.x1))),
+            r2(Math.max(...cs.map((g) => g.top))),
+            r2(cs[0]!.y),
+          ],
+        ]
+    }
     // the lead: the pitch of its lines, where it has two on one page; else its size's
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
@@ -924,6 +966,27 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   columnsAndMeasures(members, inkA, gA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
+  // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
+  // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
+  // aside), that glyph its first, on the name's baseline on B (0.5 pt, leadAt's) from the name's end on (0.05 pt, leadAt's).
+  // TeX's stream tells the column: after a column's last line it goes on at the next column's top, never at a line beside it
+  {
+    const memberOfUnit = new Map<number, Member>()
+    for (const mem of members) if (mem.name === undefined && mem.unit >= 0) memberOfUnit.set(mem.unit, mem)
+    for (const n of members) {
+      if (n.name === undefined || !n.located || n.bLast < 0) continue
+      let b = n.bLast + 1
+      while (b < NB && pageB[b] === pageB[n.bLast] && (unitB[b] as number) < 0) b++
+      if (b >= NB || pageB[b] !== pageB[n.bLast]) continue
+      const led = memberOfUnit.get(unitB[b] as number)
+      if (!led || led.bFirst !== b) continue
+      const g = gB(b),
+        e = gB(n.bLast)
+      if (Math.abs(g.y - e.y) > 0.5 || g.x0 < e.x1 - 0.05) continue
+      n.leads = led.ord
+      led.leader = n.ord
+    }
+  }
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
 
@@ -1032,6 +1095,28 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // end, no paragraph end between them — a paragraph the front end cut at a float set inside it (2608.16117v1 p19, the
     // checkpoint's free-9: one part laid at its size, the other shrunk), a run-in head and its paragraph — laid at one size)
     for (const ords of flows) if (ords.length > 1) ties.push({ rule: 'size', ords: [...ords] })
+  }
+  // (a name that leads a unit stands before it in its flow, the unit's join its separation from the name (the joint, the unit's
+  // label, kept between): design-a's `bound`, set only with the member after it. Where the unit's first line on A is not the
+  // name's line (its page, its baseline within leadAt's 0.5 pt, from the name's end on), the name keeps its own flow, bound to a
+  // member its part does not hold after it. (No column read: B's stream told it, and a name's short line is given the column its
+  // own extent falls in, the left of a one-column page's, 2610.18513v1 p21.) No size tie: the name is drawn at its unit's size)
+  for (const n of members) {
+    if (n.leads === undefined) continue
+    const led = members[n.leads]!
+    const flow = flowOf.get(led.ord)
+    const l = n.lines[0]
+    const f = led.lines[0]
+    if (!flow || !l || !f || n.lines.length !== 1) continue
+    if (f[0] !== l[0] || Math.abs(f[4] - l[4]) > 0.5 || f[2] < l[3] - 0.05) continue
+    const own = flowOf.get(n.ord)
+    if (own) flows.splice(flows.indexOf(own), 1)
+    const k = flow.indexOf(led.ord)
+    const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
+    if (prev && led.join) n.join = [r2(l[2] - prev[3])]
+    flow.splice(k, 0, n.ord)
+    flowOf.set(n.ord, flow)
+    led.join = led.labelAt && led.labelAt.ink[0] === f[0] ? [r2(f[2] - l[3]), 1] : [r2(f[2] - l[3])]
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
