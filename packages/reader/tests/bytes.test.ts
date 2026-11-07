@@ -151,6 +151,44 @@ describe('the byte store and the ranged source', () => {
     expect(await late.prove(chunkDigests(A))).toBe(false)
     expect(late.refusal?.kind).toBe('digest')
   })
+  it('holds a chunk read again, after the store let it go, to the digest the head names, else to the one first read', async () => {
+    // (arXiv's server answers no entity-tag: a chunk asked again is the same object's by its length alone)
+    const other = A.slice()
+    other[5] = (other[5] as number) ^ 1
+    let swap = false
+    const foreign = (more = {}) => {
+      const refused: string[] = []
+      const s = rangedServer(objects(), (a) => (swap && a.range[0] === 0 ? { kind: 'swap', bytes: other } : null))
+      const src = rangeSource({
+        fetch: s.fetch,
+        url: 'https://arxiv.org/pdf/x',
+        own: false,
+        store: chunkStore(CHUNK),
+        refused: (e: RangeRefusal) => refused.push(e.kind),
+        ...more,
+      })
+      return { s, src, refused }
+    }
+    for (const chunks of [chunkDigests(A), null]) {
+      swap = false
+      const { s, src, refused } = foreign(chunks ? { chunks } : {})
+      expect(await src.read(0, CHUNK)).toEqual(A.slice(0, CHUNK))
+      // (chunk 1 read: the store, one chunk large, lets chunk 0 go)
+      await src.read(CHUNK, 2 * CHUNK)
+      swap = true
+      await expect(src.read(0, CHUNK)).rejects.toMatchObject({ kind: 'digest' })
+      expect(s.asks.filter((a) => a.range[0] === 0)).toHaveLength(2)
+      expect(refused).toEqual(['digest'])
+      expect(src.refusal?.kind).toBe('digest')
+    }
+    // the same bytes asked again are given, and a chunk proven once is counted once
+    swap = false
+    const { src } = foreign({ chunks: chunkDigests(A) })
+    await src.read(0, CHUNK)
+    await src.read(CHUNK, 2 * CHUNK)
+    expect(await src.read(0, CHUNK)).toEqual(A.slice(0, CHUNK))
+    expect(src.digested).toEqual({ chunks: 2, proven: 2 })
+  })
   it("holds a foreign server's entity-tag where it answers one, and needs none", async () => {
     const s = rangedServer(new Map([['https://arxiv.org/pdf/x', { bytes: A, etag: 'W/"weak"' }]]))
     const src = rangeSource({ fetch: s.fetch, url: 'https://arxiv.org/pdf/x', own: false, store: chunkStore() })

@@ -210,7 +210,8 @@ export type Input =
   | { i: 'original.progress'; t: Ticket; loaded: number; total?: number }
   | { i: 'original.opened'; t: Ticket; pages: number; bytes: number }
   | { i: 'original.failed'; t: Ticket; why: OriginalWhy }
-  /** the head's chunk digests do not hold the bytes read: our copy for both panes */
+  /** the head's chunk digests do not hold the bytes read, or a chunk read again is not the one first read: our copy for both
+   *  panes */
   | { i: 'original.mismatch'; t: Ticket }
   | { i: 'paper'; t: Ticket; doc: Doc }
   /** the follow's end (client.ts Refused): its why, a 429's wait and the document it carried */

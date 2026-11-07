@@ -11,9 +11,10 @@
 //   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, W ranges.ts:478-488); our
 //   server reads the path alone. arXiv's URL is asked as it is, with `cache: 'no-store'` (unverified, host design-a §1.5).
 // - **Digests.** The head carries each 64 KiB chunk's digest of the original the layer was made over (format's `chunkDigests`).
-//   Every whole chunk read is digested as it comes; once the digests are known (`prove`), every chunk read before is compared,
-//   and every chunk after is compared before it is given. One that disagrees refuses the source (`digest`): the session then
-//   reads our copy for both panes.
+//   Every whole chunk fetched is digested as it comes, a chunk the store let go and fetched again too; once the digests are known
+//   (`prove`), every chunk read before is compared, and every chunk after is compared before it is given; before they are known,
+//   a chunk fetched again is compared with its first reading (a server that answers no entity-tag may answer other bytes of the
+//   same length). One that disagrees refuses the source (`digest`): the session then reads our copy for both panes.
 // - **Progress.** A read is let go where nothing comes for STALL_MS (no answer, or no byte of its body) and asked again at once;
 //   one the network fails at once is asked again after a pause (1 s, doubling to 30 s; while the browser says it is offline,
 //   until it says it is online). RANGE_TRIES failures refuse the source as the network's, unless its owner keeps reading (the
@@ -30,8 +31,9 @@ export const RANGE_TRIES = 2
 export const RETRY_MS = 1_000
 export const RETRY_MAX_MS = 30_000
 
-/** why a source is refused: its answers not the object (`bytes`), a chunk not the one the head names (`digest`), the network
- *  failing its reads (`network`), or the source let go by its owner (`gone`: never told) */
+/** why a source is refused: its answers not the object (`bytes`), a chunk not the one the head names, or before the head not
+ *  the one first read (`digest`), the network failing its reads (`network`), or the source let go by its owner (`gone`: never
+ *  told) */
 export type RefusalKind = 'bytes' | 'digest' | 'network' | 'gone'
 export class RangeRefusal extends Error {
   readonly kind: RefusalKind
@@ -160,10 +162,10 @@ export function rangeSource(o: SourceOptions): OriginalSource {
   const ac = new AbortController(),
     signal = ac.signal
   const counts = { asks: 0, bytes: 0, retries: 0 }
-  /** each whole chunk's digest as read, and the head's once known */
+  /** each whole chunk's digest as first read, and the head's once known; the chunks found to be the head's */
   const seen = new Map<number, string>()
   let chunks: string | null = o.chunks ?? null
-  let proven = 0
+  const proven = new Set<number>()
   const letGo = () => {
     if (dead) return
     dead = new RangeRefusal('gone', 'let go')
@@ -185,13 +187,17 @@ export function rangeSource(o: SourceOptions): OriginalSource {
   /** the head's digest of chunk i, where it names one */
   const named = (i: number): string | null =>
     chunks && chunks.length >= 22 * (i + 1) ? chunks.slice(22 * i, 22 * i + 22) : null
-  /** chunk i's digest kept, and compared where the head's is known: a refusal where it disagrees */
+  /** chunk i's digest compared with the head's where it is known, else with the one first read of it (a chunk the store let go
+   *  and read again: a server that names no entity-tag may answer other bytes under the same length), and kept where it is the
+   *  first: a refusal where it disagrees */
   const check = (i: number, d: string) => {
-    seen.set(i, d)
-    const want = named(i)
-    if (want === null) return
-    if (want !== d) throw refuse('digest', `chunk ${i} is not the one the layer was made over`)
-    proven++
+    const head = named(i)
+    const first = seen.get(i) ?? null
+    if (first === null) seen.set(i, d)
+    if (head !== null && head !== d) throw refuse('digest', `chunk ${i} is not the one the layer was made over`)
+    if (head === null && first !== null && first !== d)
+      throw refuse('digest', `chunk ${i} read again is not the one first read`)
+    if (head !== null) proven.add(i)
   }
   const pauseBefore = (n: number) =>
     new Promise<void>((resolve) => {
@@ -327,17 +333,14 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       if (dead) throw dead
     }
   }
-  /** the whole chunks of a read digested (and checked where the head is known); a read that is not whole chunks is not */
+  /** the whole chunks of a read digested and checked, every time one is fetched (a read that is not whole chunks is not) */
   async function digestChunks(begin: number, bytes: Uint8Array) {
     const total = bound?.total
     if (total === undefined || begin % CHUNK !== 0) return
     const end = begin + bytes.byteLength
     if (end % CHUNK !== 0 && end !== total) return
-    for (let at = 0; at < bytes.byteLength; at += CHUNK) {
-      const i = (begin + at) / CHUNK
-      if (seen.has(i)) continue
-      check(i, await chunkDigest(bytes.subarray(at, Math.min(at + CHUNK, bytes.byteLength))))
-    }
+    for (let at = 0; at < bytes.byteLength; at += CHUNK)
+      check((begin + at) / CHUNK, await chunkDigest(bytes.subarray(at, Math.min(at + CHUNK, bytes.byteLength))))
   }
   const nameOf = (b: Bound) => `${o.url}|${b.etag ?? ''}|${b.total}`
   return {
@@ -351,13 +354,13 @@ export function rangeSource(o: SourceOptions): OriginalSource {
       return counts
     },
     get digested() {
-      return { chunks: seen.size, proven }
+      return { chunks: seen.size, proven: proven.size }
     },
     abort: letGo,
     async prove(c) {
       if (dead) return false
       chunks = c
-      proven = 0
+      proven.clear()
       try {
         for (const [i, d] of seen) check(i, d)
       } catch {
