@@ -26,7 +26,8 @@ import type { V0Piece } from '../../src/unit/breaks.ts'
 import { doorRows } from './rows.ts'
 import { todayFile } from './tap.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
-import { fitMeasure } from '../../src/breaker/measure.ts'
+import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
+import type { Face } from '../../src/breaker/tokens.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
@@ -124,10 +125,12 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
         if (cls.startsWith('past') || cls.startsWith('squeezed'))
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
+      // (I3 reads ink, design §4.9: the line to its last glyph's ink, not its advance, so that a CJK mark's blank half (a run-in
+      // head's "。", its follower set after its ink and the original's separation, today's shareOf `ink`) overlaps nothing)
       boxes.push({
         ord: pm.ord,
         x0: l.x0,
-        x1: l.x0 + used,
+        x1: inkEnd(l, size, (pm.lay!.P as { measure?: FitMeasure }).measure) ?? l.x0 + used,
         y0: l.baseline - 0.215 * size,
         y1: l.baseline + 0.683 * size,
       })
@@ -170,6 +173,23 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
     }
 }
 const l0Page = (L: { lines: readonly { page: number }[] }) => L.lines[0]?.page
+/** where a laid line's ink ends: its last item's (a crop's box; a text's last character's ink, its blank right side off),
+ *  null where the measure has no ink for it */
+function inkEnd(
+  l: { items: readonly { t: unknown; x?: number; w: number }[] },
+  size: number,
+  m: FitMeasure | undefined,
+): number | null {
+  const last = [...l.items].reverse().find((it) => !(it.t as { space?: boolean }).space)
+  if (!last || last.x === undefined || !m) return null
+  const t = last.t as { crop?: unknown; s?: string; face?: Face; sup?: boolean; sc?: number }
+  if (t.crop) return last.x + last.w
+  const ch = t.s ? [...t.s].at(-1) : undefined
+  if (!ch || !t.face) return null
+  const right = m.inkRight100(ch, t.face)
+  if (right === null) return null
+  return last.x + last.w - ((m.w100(ch, t.face) - right) * (t.sup ? 0.62 : 1) * (t.sc ?? 1) * size) / 100
+}
 
 const DETAIL = !!process.env.AXT_GATE_DETAIL
 /** AXT_GATE_DEEP=<pair>:<ord>: every field of that member's preparation that differs from today's, printed */
