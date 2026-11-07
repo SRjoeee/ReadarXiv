@@ -1,5 +1,5 @@
 // lab/typeset/checkpoint/real.mjs --examples=<pick.mjs's file> --render=<render.mjs's render.json> --out=<dir>
-// [--only=<example id>,…] [--variants=c,b,d]: the checkpoint's examples drawn by the reader itself, so that what the sheet shows
+// [--only=<example id>,…] [--variants=c,b,d] [--fresh] [--suffix=<s>]: the checkpoint's examples drawn by the reader itself, so that what the sheet shows
 // can be told apart from what the sheet's own drawing page adds. Each example's paper is opened by `openReader` (real/main.ts)
 // with a website-like host: our server's v2 document of the paper (its layer the bundle the sheet used, the head's canonical
 // bytes under its digest; its rows one object made from the variant's dump, a row a unit), arXiv's PDF under our server's path;
@@ -25,6 +25,9 @@ const BUILD = arg('build', join(OUT, '.real'))
 const only = arg('only')?.split(',') ?? null
 const LAID = arg('laid') ? JSON.parse(readFileSync(arg('laid'), 'utf8')) : null
 const VARIANTS = LAID ? ['c'] : arg('variants', 'c').split(',')
+const FRESH = process.argv.includes('--fresh')
+/** --suffix=<s>: each example's image `img/<id>-<s>.png` (the second sheet's after: `fixed`) */
+const SUFFIX = arg('suffix')
 const sheet = JSON.parse(readFileSync(arg('examples'), 'utf8'))
 const regions = JSON.parse(readFileSync(arg('render'), 'utf8'))
 const DPR = 2
@@ -76,7 +79,8 @@ for (const e of todo) {
     if (/^[0-9a-f]{64}\./.test(f)) objects.set(`/api/v2/o/p/${seg}/fx/${f.split('.')[0]}`, join(e.bundle, f))
   // (the head: the canonical bytes of the bundle's head.json, whose digest is the sheet's head: checked)
   const { bytes, digest } = write('head', JSON.parse(readFileSync(join(e.bundle, 'head.json'), 'utf8')))
-  if (digest !== e.head) throw new Error(`${e.id}: the bundle's head is ${digest}, the sheet's ${e.head}`)
+  // (--fresh: the bundle prepared again since the sheet, by a later head of the engine: its own head served)
+  if (digest !== e.head && !FRESH) throw new Error(`${e.id}: the bundle's head is ${digest}, the sheet's ${e.head}`)
   bytesAt.set(`/api/v2/o/p/${seg}/fx/${digest}`, Buffer.from(bytes))
   const head = JSON.parse(readFileSync(join(e.bundle, 'head.json'), 'utf8'))
   const refOf = (d) => {
@@ -266,7 +270,7 @@ for (const [key, list] of byKey) {
         width: (reg[2] - reg[0]) * k,
         height: (reg[3] - reg[1]) * k,
       }
-      const file = `img/${e.id}-r${LAID ? 'l' : v === 'c' ? '' : v}.png`
+      const file = SUFFIX ? `img/${e.id}-${SUFFIX}.png` : `img/${e.id}-r${LAID ? 'l' : v === 'c' ? '' : v}.png`
       await page.screenshot({ path: join(OUT, file), clip })
       Object.assign(res, { file, scale: Math.round(k * 1000) / 1000, members: s.members, crops: s.crops, size: [Math.round(clip.width * DPR), Math.round(clip.height * DPR)] })
     } catch (err) {

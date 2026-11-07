@@ -19,6 +19,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
+const ENTRY = args.includes('--entry')
 const asks = args.filter((a) => !a.startsWith('--')).map((a) => {
   const [pair, pages] = a.split(':')
   return { pair, pages: new Set(pages.split(',').map(Number)) }
@@ -77,8 +78,15 @@ for (const { pair, pages } of asks) {
       lit: { left: [], right: [], own: [] },
     })
   }
-  gateL1Pair(pair, { metricsOf, reading: 'part' })
-  out[pair] = { pages: laid, dropped }
+  // (--entry: the entry's own Page, design-a's, as the reader receives it: its members by the part's ord, their groups off by
+  // layPage's rule, their runs' raises kept)
+  const entryPages = {}
+  globalThis.__ckPage = (p, pg, page) => {
+    if (p !== pair || !pages.has(pg)) return
+    entryPages[pg] = page.members.filter((m) => m.page === pg)
+  }
+  gateL1Pair(pair, { metricsOf, reading: 'part', ...(ENTRY ? { entry: true } : {}) })
+  out[pair] = { pages: ENTRY ? entryPages : laid, dropped }
   console.log(`${pair}: ${Object.entries(laid).map(([p, ms]) => `p${p} ${ms.length} laid`).join(', ')}; dropped rise ${dropped.rise}, track ${dropped.track}`)
 }
 writeFileSync(OUT, `${JSON.stringify(out)}\n`)

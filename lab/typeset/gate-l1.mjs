@@ -40,7 +40,7 @@ const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDi
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
 const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
-const I5by = new Map(), byPaper = new Map()
+const I5by = new Map(), byPaper = new Map(), below = []
 const inv = { laid: 0, lines: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
 const pageMs = []
 let adaptMs = 0, readMs = 0
@@ -77,6 +77,8 @@ for (const pair of pairs) {
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
   inv.lines += g.inv.lines
+  // (the members set under the fit's floor, pair and today's ord: the checkpoint's (6))
+  for (const o of g.inv.below ?? []) below.push(`${pair} ${o}`)
   { const paper = pair.replace(/-[a-z]{2,3}(\.pack)?$/, ''), b = byPaper.get(paper) ?? byPaper.set(paper, { I3: 0, I4: 0 }).get(paper); b.I3 += g.inv.I3.length; b.I4 += g.inv.I4.length }
   for (const [k, b] of g.inv.I5by ?? []) { const t = I5by.get(k) ?? I5by.set(k, { n: 0, max: 0 }).get(k); t.n += b.n; t.max = Math.max(t.max, b.max) }
   for (const k of ['I3', 'I4', 'I5']) {
@@ -164,6 +166,8 @@ console.log(JSON.stringify(count))
 }
 console.log(`not set by the adapter: ${top(stops)}`)
 console.log(`I3, I4 by paper: ${JSON.stringify(Object.fromEntries(byPaper))}`)
+console.log(`under the fit's floor (X.further's shrink): ${below.length} members`)
+if (process.env.AXT_GATE_BELOW) writeFileSync(process.env.AXT_GATE_BELOW, `${below.join('\n')}\n`)
 console.log(`I5, each line past its slot by the placement's rule (count, largest excess pt): ${[...I5by].map(([k, b]) => `${k} ${b.n} (${b.max.toFixed(2)})`).join('; ')}`)
 console.log(`invariants over the laid members (page by page): ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)
 console.log(`setting against today's (first differing field): ${top(setting)}`)

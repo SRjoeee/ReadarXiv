@@ -59,6 +59,9 @@ export type GateL1 = {
     I4: string[]
     I5: string[]
     I5by: Map<string, { n: number; max: number }>
+    /** members set under the fit's floor (R.floor), by today's ord: X.further's `shrink` (the checkpoint's (6): a correction
+     *  never drives a unit there, so the runner lists them, its run with today's members (--subst=all) beside) */
+    below: number[]
   }
   /** each page's lay (layPagePrepared: L8-E1), ms; the adapter's setting of every member (L6), ms in all */
   ms: number[]
@@ -128,6 +131,7 @@ export function invariantsOf(page: number, members: readonly PageMember[], R: Ru
       })
     }
     if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
+    if (L.scale < Number((R as Raw).floor ?? 0) - 1e-9 && l0Page(L) === page) inv.below.push(pm.ord)
     // (each element's crop token drawn once over its lines, every page's)
     const seen = new Map<unknown, number>()
     for (const l of L.lines)
@@ -405,7 +409,7 @@ export function gateL1Pair(
     threw: [],
     thrown: new Map(),
     tieHeld: new Set(),
-    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map() },
+    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map(), below: [] },
     ms: [],
     adaptMs: 0,
     inputs: new Map(),
