@@ -1,0 +1,181 @@
+// lab/typeset/parity/today/entry.mjs: today's side of the parity check, the page render.mjs bundles (esbuild) and drives in
+// Chromium. Today's door (`openLayer`, the engine at AXT_TODAY) opened over a paper version's server-made layer as the
+// website's reader opens it (baseline/tools/reader-entry.mjs: the bundle's index, the composed document, the parts, the
+// target, the web's own face sources over the static index the reader carries, the served hyphenation, the left parts by
+// ref, OPS), the pair's door rows taken whole, then each page drawn as the reading view draws a laid page
+// (view/layer-side.mjs drawingOf): the door's copy of the composed page (render A, the groups of the units drawn there
+// hidden, its crops and pastes) at the place's resolution, the door's SVG over it in the copy's frame, the page's links
+// (view/links.mjs linkLayer), in `.axt-layer` under the engine's own sheet (view/engine.css) and its text-rendering decision
+// (view/text-rendering.mjs applyLayerText). arXiv's own page drawn beside it by PDF.js (the original). What is read back is
+// what was drawn: each character of the SVG where the browser placed it, in the face, weight, style and size it was set in.
+// Two choices are not the product's, both the baseline's (NOTES.md §4): `fillsMs: Infinity` and `records: true`.
+import * as pdfjs from 'pdfjs-dist'
+import INDEX from '@web/fonts/static/index.json'
+import { faceSourcesOf, groupsAt, tableUrlsOf } from '@web/layer/faces.ts'
+import { indexOf, readHead, readPart, readUnitsChunk } from '@today/layer-proto/format.mjs'
+import { openLayer, PDF_OPTIONS } from '@today/layer-proto/reader.mjs'
+import { pagesOf } from '@today/layout/delta-wire.mjs'
+import { linkLayer } from '@today/view/links.mjs'
+import { applyLayerText } from '@today/view/text-rendering.mjs'
+import { linesOfSvg } from '../measure-dom.mjs'
+
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
+const ASSETS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
+/** the door's scale (reader.mjs SCALE): its SVG's user units a PDF unit, its audit's device pixels a PDF unit (dpr 1) */
+const DOOR = 2.5
+const bytes = async (url) => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`${url}: ${r.status}`)
+  return new Uint8Array(await r.arrayBuffer())
+}
+const obj = (ref) => bytes(`/obj/${ref.sha256}`)
+const concat = (a, b) => {
+  const out = new Uint8Array(a.length + b.length)
+  out.set(a)
+  out.set(b, a.length)
+  return out
+}
+let layer = null,
+  doc = null,
+  orig = null,
+  target = null,
+  head = null
+const faceSources = faceSourcesOf(INDEX, groupsAt(tableUrlsOf(INDEX)))
+const stage = () => document.getElementById('stage')
+
+window.today = {
+  async open(desc) {
+    window.__baseRuns = []
+    target = desc.target
+    const chunks = []
+    for (const ref of desc.units) chunks.push(await readUnitsChunk(await obj(ref), { ref, before: chunks.at(-1) ?? null }))
+    head = await readHead(await obj(desc.head), { ref: desc.head })
+    const index = indexOf(head, chunks)
+    const parts = []
+    for (const ref of desc.parts) parts.push(await readPart(await obj(ref), { ref, index, chain: parts.at(-1)?.chain ?? null }))
+    // (the composed document: over a delta, arXiv's PDF the head's `orig` names and then the delta; else the head's base)
+    const delta = head.base.source === 'ours' && head.base.kind === 'delta'
+    const composed = delta
+      ? concat(await bytes(`/obj/${head.orig.sha256}`), await bytes(`/obj/${head.base.sha256}`))
+      : await bytes(`/obj/${head.base.sha256}`)
+    doc = await pdfjs.getDocument({ data: composed, ...ASSETS, ...PDF_OPTIONS, disableAutoFetch: true }).promise
+    orig = await pdfjs.getDocument({ data: await bytes(desc.original), ...ASSETS }).promise
+    layer = await openLayer({
+      index,
+      doc,
+      parts,
+      target,
+      faceSources,
+      hyphUrl: (lang) => `/hyph/${lang}.json`,
+      OPS: pdfjs.OPS,
+      fillsMs: Number.POSITIVE_INFINITY,
+      leftPart: (_page, ref) => obj(ref),
+      onRetired: () => {},
+    })
+    const rows = await (await fetch(desc.rows)).json()
+    layer.take(rows)
+    layer.end()
+    layer.endParts()
+    return { pages: head.paper.pages, numPages: doc.numPages, orig: orig.numPages, delta }
+  },
+  /** arXiv's page n drawn by PDF.js at `scale` CSS px a point (dpr device px each), and its link annotations */
+  async original(n, scale) {
+    const p = await orig.getPage(n)
+    const vp = p.getViewport({ scale })
+    const dpr = window.devicePixelRatio
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.floor(vp.width * dpr)
+    canvas.height = Math.floor(vp.height * dpr)
+    Object.assign(canvas.style, { width: `${vp.width}px`, height: `${vp.height}px`, display: 'block' })
+    canvas.className = 'axt-original'
+    await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
+    const links = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action)).length
+    stage().replaceChildren(canvas)
+    p.cleanup()
+    return { view: [...p.view], links, size: [vp.width, vp.height] }
+  },
+  /** page n laid by the door and drawn as the reading view draws it, at `scale` CSS px a point; what was drawn read back */
+  async page(n, scale) {
+    const p = await doc.getPage(n)
+    const view = [...p.view]
+    const vp = p.getViewport({ scale })
+    let laid
+    try {
+      laid = await layer.pageOf(n, { lang: target })
+    } catch (e) {
+      stage().replaceChildren()
+      return { page: n, committed: false, view, error: String(e?.message ?? e).slice(0, 300) }
+    }
+    // (a page the layer draws nothing of its own on shows arXiv's page: layer-side commit's shownOriginal)
+    if (laid.hides === 0) {
+      await window.today.original(n, scale)
+      return { page: n, committed: true, shownOriginal: true, view, hides: 0, units: [], figures: [], names: [], crops: [], recs: [], links: 0, linksDrawn: 0, lit: [], original: laid.words.original }
+    }
+    const dpr = window.devicePixelRatio
+    const k = scale * dpr
+    const width = Math.max(1, Math.round(vp.width * dpr)),
+      height = Math.max(1, Math.round(vp.height * dpr))
+    // (a delta's replaced page keeps the original's /Annots: the layer draws its own links, so the copy draws none: layer-side copyAt)
+    const replaced = head.base.kind === 'delta' && pagesOf(head.base.replaced ?? []).includes(n)
+    const canvas = await layer.copyOf(n, { k, width, height, context: { alpha: false }, ...(replaced ? { annotationMode: pdfjs.AnnotationMode.DISABLE } : {}) })
+    // (the reading view's drawingOf: the copy, the SVG in the copy's frame, the links over them)
+    laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
+    laid.svg.setAttribute('preserveAspectRatio', 'none')
+    laid.svg.setAttribute('aria-hidden', 'true')
+    canvas.className = 'axt-layer-copy'
+    const wrap = document.createElement('div')
+    wrap.className = 'axt-layer'
+    wrap.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${vp.width / scale}px)`)
+    wrap.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${vp.height / scale}px)`)
+    const links = linkLayer(laid.links, { viewport: vp, open: () => {}, follow: () => {}, words: null })
+    wrap.append(canvas, laid.svg, ...(links ? [links] : []))
+    const place = document.createElement('div')
+    place.className = 'axt-place'
+    Object.assign(place.style, { position: 'relative', width: `${vp.width}px`, height: `${vp.height}px` })
+    place.style.setProperty('--total-scale-factor', String(scale))
+    place.append(wrap)
+    stage().replaceChildren(place)
+    applyLayerText(laid.svg)
+    await document.fonts.ready
+    // (what the page drew, read back: each unit's lines (g[data-u]) from its characters' places, in PDF units, y up)
+    const run = window.__baseRuns.at(-1)
+    const crops = (run?.audit ?? [])
+      .filter((a) => a.what === 'crop' && a.page === n && a.dst)
+      .map((a) => [a.unit, view[0] + a.dst[0] / DOOR, view[3] - a.dst[3] / DOOR, view[0] + a.dst[2] / DOOR, view[3] - a.dst[1] / DOOR])
+    const k2 = laid.w / (view[2] - view[0])
+    const units = linesOfSvg(laid.svg, 'data-u', view, k2, crops)
+    // (the figure texts and babel names it drew, groups of their own: g[data-f], g[data-n])
+    const figures = linesOfSvg(laid.svg, 'data-f', view, k2)
+    const names = linesOfSvg(laid.svg, 'data-n', view, k2)
+    const recs = (run?.stats ?? []).filter((r) => (r.pages ?? []).includes(n)).map((r) => ({ id: r.id, s: r.s ?? null, lead: r.lead ?? null }))
+    const spans = laid.words.spans.filter(([, ranges]) => ranges.some((v, i) => i % 2 === 1 && v > 0)).map(([id]) => id)
+    return {
+      page: n,
+      committed: true,
+      view,
+      hides: laid.hides ?? null,
+      units,
+      figures,
+      names,
+      crops,
+      recs,
+      links: laid.links.length,
+      linksDrawn: links ? links.querySelectorAll('a').length : 0,
+      lit: spans,
+      original: laid.words.original,
+    }
+  },
+  /** the drawing's translated text alone (its copy and links hidden), or the whole of it again */
+  textOnly(on) {
+    document.documentElement.toggleAttribute('data-parity-text', on)
+    return true
+  },
+  dispose() {
+    layer?.dispose()
+    layer = null
+    // (the composed document is the layer's to let go; arXiv's own is ours)
+    void orig?.loadingTask?.destroy()
+    doc = orig = null
+  },
+}
+window.todayReady = true

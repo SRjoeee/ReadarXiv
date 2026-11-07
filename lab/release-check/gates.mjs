@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
+import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
 
 /** the tiers, each holding the gates of the ones before it (lab/release-check/CI.md says where each runs) */
@@ -216,7 +217,8 @@ export function sameSum(made, recorded) {
 // repository: `{ what, path }`, a gate whose input is missing is skipped and says which), `after` (gates whose output it
 // reads), `disk` (writes corpus outputs: refused under the free disk the lab's runners require), `network` ('live': runs
 // only with --online), `judge(ctx, steps)` (its pass and numbers; by default every step's exit code 0), and for a gate of
-// the private repository `private: true` (named, never run here).
+// the private repository `private: true` (named, never run here). `cutover: true`: a cut-over blocker (CI.md): the report's
+// cut-over verdict is NO-GO while it has not passed, whatever the tier's verdict.
 const pnpm = (...a) => ({ cmd: ['pnpm', ...a] })
 const e2e = (script, title, holds = [], extra = {}) => ({
   id: script,
@@ -390,6 +392,42 @@ export const GATES = [
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
     ],
     judge: (ctx, steps) => typesetJudge(steps),
+  },
+  {
+    id: 'display',
+    title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original)",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I3'],
+    // (the maintainer's base threshold for the refactor: v2's display equal to or better than the production site's)
+    cutover: true,
+    after: ['prepare'],
+    disk: true,
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')),
+      exists("today's prepare dumps (the original's lines of today's units)", lab(ctx, 'baseline/prepare')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+      exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/view/engine.css')),
+    ],
+    steps: ctx => {
+      const work = join(ctx.work, 'display')
+      const env = { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }
+      return [
+        { cmd: ['node', 'lab/typeset/parity/v2.mjs', `--out=${join(work, 'v2')}`, ...PARITY_PAIRS], slot: 'test', env, fresh: work },
+        { cmd: ['node', 'lab/typeset/parity/render.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], slot: 'e2e', env },
+        { cmd: ['node', 'lab/typeset/parity/measure.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`], env },
+      ]
+    },
+    judge: (ctx, steps) => {
+      const text = steps.at(-1)?.text ?? ''
+      const m = /parity: (\d+) pages of (\d+) pairs; (\d+) worse than today/.exec(text)
+      const numbers = m ? { pages: num(m[1]), pairs: num(m[2]), worse: num(m[3]) } : {}
+      for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
+      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
+    },
   },
   {
     id: 'typeset-replays',

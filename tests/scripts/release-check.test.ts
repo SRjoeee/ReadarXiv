@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, sameSum, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
-import { gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
+import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -191,6 +191,30 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(1)]).pass).toBe(false)
     rows(['agree', 'disagree'])
     expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toMatchObject({ pass: false, numbers: { compared: 2, disagree: 1 } })
+  })
+
+  it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, passing on its exit", () => {
+    const text = [
+      'parity: 365 pages of 22 pairs; 2 worse than today; missing 2303.11366v4-zh',
+      '  weight         0 pages worse (0 differences), 4 nearer; faults: v2 0 pages, today 0',
+      '  cross          2 pages worse (5 differences), 1 nearer; faults: v2 3 pages, today 1',
+    ].join('\n')
+    const ctx = ctxAt('/repo', '/work')
+    const judged = gate('display').judge!(ctx, [run(0), run(0), run(1, text)])
+    expect(judged).toMatchObject({ pass: false, numbers: { pages: 365, pairs: 22, worse: 2, weight: '0 pages worse, 4 nearer', cross: '2 pages worse, 1 nearer' } })
+    expect(gate('display').judge!(ctx, [run(0), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).pass).toBe(true)
+    // (a step that did not run is no pass)
+    expect(gate('display').judge!(ctx, [run(0), run(2)]).pass).toBe(false)
+  })
+
+  it('keeps the cut-over NO-GO until every cut-over blocker passed in the run, a blocker the run left out named', () => {
+    const blocker = gate('display')
+    expect(blocker.cutover).toBe(true)
+    const other = gate('typecheck')
+    expect(cutoverOf(GATES, [other], { typecheck: { status: 'pass' } })).toMatchObject({ verdict: 'NO-GO', why: ['display: not in this run (tier full)'] })
+    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'pass' }, display: { status: 'fail' } }).verdict).toBe('NO-GO')
+    expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
+    expect(markdownOf({ tier: 'full', verdict: 'NO-GO', why: [], cutover: { verdict: 'NO-GO', why: ['display: fail'], blockers: ['display'] }, invariants: [], gates: [], targets: [] })).toContain('**Cut-over: NO-GO.**')
   })
 
   it("judges the marks' replay by the census in the tree where it is (lab/marks/census.mjs), else by run 6's census r13", () => {

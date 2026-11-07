@@ -67,11 +67,24 @@ export function verdictOf(tier, gates, results, invariants) {
   const why = []
   for (const g of gates) {
     const r = results[g.id]
-    if (r?.status !== 'pass') why.push(`${g.id}: ${r ? r.status : 'not run'}${r?.reason ? ` (${r.reason})` : ''}`)
+    if (r?.status !== 'pass') why.push(`${g.id}: ${r ? r.status : 'not run'}${r?.reason ? ` (${r.reason})` : ''}${g.cutover ? ' — a cut-over blocker' : ''}`)
   }
   // (an invariant no gate holds is NO-GO until one exists, by design: the release verdict waits for its gate)
   if (tier === 'release') for (const i of invariants) if (i.status !== 'GO') why.push(`${i.id}: ${i.status}${noGate(i) ? ' (no gate holds it yet: an invariant without a gate is NO-GO until one exists)' : ''}`)
   return { verdict: why.length ? 'NO-GO' : 'GO', why }
+}
+
+/** the cut-over's verdict (the maintainer's base threshold: v2's display equal to or better than the production site's, and
+ *  performance, complexity and debt improved): GO only where every cut-over blocker (a gate with `cutover`) passed in this
+ *  run; a blocker the tier does not run, or that was skipped, keeps it NO-GO and says so */
+export function cutoverOf(gates, ran, results) {
+  const why = []
+  for (const g of gates.filter(x => x.cutover)) {
+    const r = results[g.id]
+    if (!ran.some(x => x.id === g.id)) why.push(`${g.id}: not in this run (tier ${g.tier})`)
+    else if (r?.status !== 'pass') why.push(`${g.id}: ${r ? r.status : 'not run'}${r?.reason ? ` (${r.reason})` : ''}`)
+  }
+  return { verdict: why.length ? 'NO-GO' : 'GO', why, blockers: gates.filter(x => x.cutover).map(x => x.id) }
 }
 
 const noGate = i => i.status === 'NO-GO' && !i.gates?.length && i.why?.some(w => w.startsWith('no gate holds it'))
@@ -104,6 +117,11 @@ export function markdownOf(report) {
   const which = report.only ? `of this run (--only ${report.only.join(',')})` : `of tier ${report.tier}`
   L.push(`**Verdict: ${report.verdict}.** ${report.verdict === 'GO' ? `Every gate ${which} passed.` : `Not every gate ${which} passed:`}`)
   for (const w of report.why) L.push(`- ${w}`)
+  if (report.cutover) {
+    const c = report.cutover
+    L.push('', `**Cut-over: ${c.verdict}.** ${c.verdict === 'GO' ? `Every cut-over blocker (${c.blockers.join(', ')}) passed.` : `A cut-over blocker has not passed (${c.blockers.join(', ')}):`}`)
+    for (const w of c.why) L.push(`- ${w}`)
+  }
   const without = report.invariants.filter(noGate).map(i => i.id)
   if (report.tier === 'release' && without.length)
     L.push('', `An invariant no gate holds (${without.join(', ')}) keeps the release verdict NO-GO on purpose: it is NO-GO until a gate holds it, whatever every other gate says. Not a fault of the runner.`)

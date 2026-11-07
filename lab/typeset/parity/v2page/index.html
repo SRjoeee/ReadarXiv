@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>parity: v2 through the reader</title>
+<style>
+  html, body { margin: 0; background: #fff; height: 100%; }
+  #root { position: absolute; inset: 0; }
+  /* the page at a whole device pixel of the pane, as today's stage is: PDF.js's sheet centres a page (margin: auto), and an
+     A4 page (793.7 CSS px wide at scale 1) centred stands at a fraction of a pixel, which the compositor resamples: a
+     difference of the screenshot, not of the drawing. Its left margin fixed; nothing else of the layout is touched */
+  .axt-pane.right .pdfViewer .page.axt-slot { margin-left: 16px !important; margin-right: auto !important; }
+  /* the translated text alone: the page view's canvas, the crops and the links hidden, the page white */
+  html[data-parity-text] .axt-pane.right .page canvas { visibility: hidden !important; }
+  html[data-parity-text] .axt-pane.right .page .axt-links { display: none !important; }
+  html[data-parity-text] .axt-pane.right .page { background: #fff !important; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>
