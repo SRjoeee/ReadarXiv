@@ -891,6 +891,8 @@ export function openReader(
       // (the display shown: the one chosen, the original where it is held for the visit)
       panes?.setDisplay(displayOf(s))
       panes?.setSync(s.visit.sync ?? s.prefs.value.sync)
+      // (side by side swapped, marked on the root with the display, where the sheets read it: the chrome's and the reader's own)
+      panes?.setSwapped(s.prefs.value.swapped)
       composer?.setShown(displayOf(s) !== 'original')
       // (what to translate, shown or hidden in place; the highlight's switch; no layer for the paper: every page the original's)
       composer?.setClasses(s.prefs.value.classes)

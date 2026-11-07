@@ -1141,6 +1141,94 @@ await check(
   },
 )
 await check(
+  'chrome: one pane alone where the display says so, the reader opened on <body> (its marks on its root, none on <html>): the original alone, the translation alone, swapped, a narrow window the translation alone; the pane out of the display laid out still (PDF.js scrolls it), no page error (L11 third round, gaps 1 and 2)',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns')
+    const look = () =>
+      page.evaluate(
+        () =>
+          new Promise((done) =>
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                const doc = document.querySelector('main.doc').getBoundingClientRect()
+                const pane = (side) => {
+                  const el = document.querySelector(`.pane[data-side="${side}"]`)
+                  const r = el.getBoundingClientRect()
+                  const cs = getComputedStyle(el)
+                  return {
+                    x: Math.round(r.left - doc.left),
+                    w: Math.round(r.width),
+                    shown: r.width > 0 && cs.visibility === 'visible' && cs.display !== 'none',
+                    // (a page of PDF.js's viewer placed: what its scrolls need)
+                    placed: !!el.querySelector('.pdfViewer .page')?.offsetParent,
+                  }
+                }
+                done({
+                  doc: Math.round(doc.width),
+                  html: document.documentElement.getAttribute('data-axt-pdf-mode'),
+                  root: document.body.getAttribute('data-axt-pdf-mode'),
+                  left: pane('left'),
+                  right: pane('right'),
+                })
+              }),
+            ),
+          ),
+      )
+    const shown = (display) =>
+      waitFor(page, (d) => document.body.getAttribute('data-axt-pdf-mode') === d, display).then(look, () => {
+        throw new Error(`never shown: ${display}`)
+      })
+    const both = await look()
+    await page.evaluate(() => window.__c.controller.setDisplay('original'))
+    const original = await shown('original')
+    await page.evaluate(() => window.__c.controller.setDisplay('translation'))
+    const translation = await shown('translation')
+    // (the reader scrolls both of its panes to a page: the one out of the display too)
+    await page.evaluate(() => window.__c.controller.goToPage('right', 2))
+    await page.waitForTimeout(400)
+    await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
+    await shown('bilingual')
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: true }))
+    await waitFor(page, () => document.body.hasAttribute('data-axt-swapped')).catch(() => {
+      throw new Error('never swapped')
+    })
+    const swapped = await look()
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: false }))
+    await page.setViewportSize({ width: 700, height: 900 })
+    await waitFor(page, () => document.body.hasAttribute('data-axt-narrow')).catch(() => {
+      throw new Error('never narrow')
+    })
+    const narrow = await look()
+    await page.evaluate(() => window.__c.controller.goToPage('right', 3))
+    await page.waitForTimeout(400)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const half = (p, at, doc) => p.shown && Math.abs(p.w - (doc - 8) / 2) <= 1 && Math.abs(p.x - at) <= 1
+    const whole = (p, doc) => p.shown && Math.abs(p.w - doc) <= 1 && p.x === 0
+    assert(
+      both.html === null &&
+        both.root === 'bilingual' &&
+        half(both.left, 0, both.doc) &&
+        half(both.right, both.doc / 2 + 4, both.doc),
+      `side by side: ${JSON.stringify(both)}`,
+    )
+    assert(whole(original.left, original.doc) && !original.right.shown, `the original: ${JSON.stringify(original)}`)
+    assert(
+      whole(translation.right, translation.doc) &&
+        !translation.left.shown &&
+        translation.left.w === 0 &&
+        translation.left.placed,
+      `the translation: ${JSON.stringify(translation)}`,
+    )
+    assert(swapped.right.x === 0 && swapped.left.x > swapped.right.x, `swapped: ${JSON.stringify(swapped)}`)
+    assert(
+      whole(narrow.right, narrow.doc) && !narrow.left.shown && narrow.left.placed,
+      `a narrow window: ${JSON.stringify(narrow)}`,
+    )
+    return { original: original.left.w, translation: translation.right.w, narrow: narrow.right.w }
+  },
+)
+await check(
   "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
   async () => {
     const look = (page) =>
