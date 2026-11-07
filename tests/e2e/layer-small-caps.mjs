@@ -10,9 +10,10 @@
 // Chromium and Firefox, the unkerned advances 533.) Each browser's own
 // synthesis of the same words is printed beside it, for the record: what the layer no longer leaves to the browser (Chromium's at
 // 0.7 of the size, Firefox's at 0.8, WebKit's SVG and canvas two widths of their own).
-// No network, no extension: a server of its own on 127.0.0.1 serves the engine's modules as they are and the faces; the faces are
-// a stand-in (PDF.js's Liberation Sans, which this tree's node_modules holds) for every face the units ask, or, with
-// AXT_FONTS=<a folder of the role table's files> (a gate pack's data/fonts), the role table's own.
+// No network, no extension: a server of its own on 127.0.0.1 serves the engine's modules as they are, the workspace packages they
+// import by name (`@readarxiv/engine` and what it imports, by the page's import map: lab/pdf/packages-route.mjs) and the faces;
+// the faces are a stand-in (PDF.js's Liberation Sans, which this tree's node_modules holds) for every face the units ask, or,
+// with AXT_FONTS=<a folder of the role table's files> (a gate pack's data/fonts), the role table's own.
 //
 // Usage: pnpm e2e:small-caps        (first time: npx playwright install chromium firefox webkit)
 // Environment: AXT_BROWSERS=chromium,firefox,webkit (the default; a browser that does not launch fails the run unless
@@ -22,10 +23,13 @@ import { createServer } from 'node:http'
 import { join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, firefox, webkit } from 'playwright'
+import { PACKAGES_IMPORTS, packageFile, ZOD_PATH } from '../../lab/pdf/packages-route.mjs'
 import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { BUILTIN_RULES, resolveRules } from '../../src/pdf-reader/engine/rules/layout.mjs'
 
+const REPO = fileURLToPath(new URL('../../', import.meta.url))
 const ENGINE = fileURLToPath(new URL('../../src/pdf-reader/engine/', import.meta.url))
+const ZOD = fileURLToPath(new URL('../../node_modules/zod/', import.meta.url))
 const STAND_IN = fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url))
 const FONTS = process.env.AXT_FONTS ? resolve(process.env.AXT_FONTS) : null
 const BROWSERS = (process.env.AXT_BROWSERS ?? 'chromium,firefox,webkit').split(',').map(s => s.trim()).filter(Boolean)
@@ -50,6 +54,7 @@ const faceFile = id => {
 }
 const PAGE = `<!doctype html><meta charset="utf-8"><title>small capitals</title>
 <style>body{margin:0}.tl{position:absolute;left:0;top:0;overflow:visible;font-synthesis:none}.tl text{white-space:pre;fill:#141414}</style>
+<script type="importmap">${JSON.stringify({ imports: PACKAGES_IMPORTS })}</script>
 <script type="module">
 import * as L2 from '/engine/layer-proto/layer2.mjs'
 import * as F from '/engine/layer-proto/fonts.mjs'
@@ -126,6 +131,17 @@ const server = createServer((req, res) => {
     const file = normalize(join(ENGINE, path.slice('/engine/'.length)))
     const ext = file.slice(file.lastIndexOf('.'))
     if (file.startsWith(ENGINE.endsWith(sep) ? ENGINE : ENGINE + sep) && types[ext] && existsSync(file)) { res.writeHead(200, { 'content-type': types[ext] }); res.end(readFileSync(file)); return }
+  }
+  // (the workspace packages an engine module imports, TypeScript stripped, and zod under the format's schema)
+  if (path.startsWith('/packages/')) {
+    const f = packageFile(REPO, path)
+    res.writeHead(f ? 200 : 404, { 'content-type': f ? f.type : 'text/plain' })
+    res.end(f ? f.body : 'not found')
+    return
+  }
+  if (path.startsWith('/zod/') && ZOD_PATH.test(path)) {
+    const file = normalize(join(ZOD, path.slice('/zod/'.length)))
+    if (file.startsWith(ZOD) && existsSync(file)) { res.writeHead(200, { 'content-type': 'text/javascript' }); res.end(readFileSync(file)); return }
   }
   if (path.startsWith('/face/')) {
     const id = path.slice('/face/'.length)
