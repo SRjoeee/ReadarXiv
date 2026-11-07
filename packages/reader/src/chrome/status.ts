@@ -231,6 +231,11 @@ export interface OriginalCard {
   href: string
   label: string
 }
+/** the pane the lost original's card stands in: the original's where it is shown (its own display, side by side in a wide
+ *  window), else the translation's, the one shown, so that it is in reach in every view (the package's translation is
+ *  composed over the original's bytes: with the original lost the translation's pane has nothing else to show) */
+export const originalCardSide = (state: ReaderState): 'left' | 'right' =>
+  state.display === 'original' || (state.display === 'bilingual' && !state.narrow) ? 'left' : 'right'
 export function originalCardOf(
   state: ReaderState,
   reason: (kind: ProviderErrorKind) => string,
@@ -261,10 +266,12 @@ export function dueAt(state: ReaderState, now: number): number | null {
   const at = u && !LASTING.has(u.why) ? u.retryAt : state.failureAt
   return at !== null && at > now ? at : null
 }
-/** the time a retry of the card's failure is due where one is still to come (a rows' wait; not the original's, whose own retry
- *  is at once); null where none */
-export function cardDueAt(state: ReaderState, now: number): number | null {
-  const at = state.failures.pdf === null ? state.failureAt : null
+/** the time a retry of the translation's card is due where one is still to come: that of the failure it shows, the service's
+ *  (a rows' wait) where it shows the service's (no original lost, or one the host draws apart: `openOriginal`); none where it
+ *  shows the original's, whose retry asks it again at once */
+export function cardDueAt(state: ReaderState, now: number, words: StateWords = {}): number | null {
+  const service = state.failures.pdf === null || (!!words.openOriginal && state.failures.service !== null)
+  const at = service ? state.failureAt : null
   return at !== null && at > now ? at : null
 }
 /** the host's rules a state is drawn by beside its words (parts.tsx), and the time it is drawn at */
@@ -305,8 +312,14 @@ export function cardOf(
 ): Card | null {
   if (state.noPaper) return { reason: words.noPaper ?? R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
-  // (the original not read, where the host draws it on the original's pane: this pane's card is the service's alone)
-  if (state.failures.pdf !== null && words.openOriginal && state.failures.service === null) return null
+  // (the original not read, where the host draws its own card for it: this pane's card is the service's alone, and none where
+  // the original's card stands here, its pane not shown)
+  if (
+    state.failures.pdf !== null &&
+    words.openOriginal &&
+    (state.failures.service === null || originalCardSide(state) === 'right')
+  )
+    return null
   const kind = (words.openOriginal ? state.failures.service : state.failure) ?? 'unknown'
   // (the original not read: its own words where the host gives them, else the network's, as the failure it is told as)
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)

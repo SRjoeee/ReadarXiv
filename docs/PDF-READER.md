@@ -402,8 +402,11 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     translation would be.
   - `sync: 'located'`: the sync greyed until the sides can scroll together (both sides' pages laid out).
   - `openOriginal`: the original that could not be read is the original's pane's card (the file sign in quiet ink, a
-    link to arXiv's PDF of the version), the translation's pane left as it is. Without it, the translation's pane's card
-    with its retry.
+    link to arXiv's PDF of the version), the translation's pane left as it is. Where the original's pane is not shown
+    (the translation alone, side by side in a narrow window) the translation's pane carries it: the package composes the
+    translation over the original's bytes, so that pane has nothing else to show (today's page drew the translation from
+    its own files and left the card to the original's pane). The translation's card, the service's, is due at the
+    service's time. Without the word, the translation's pane's card with its retry.
   - `showTranslation`: the run's capsule carries a chip that shows the translation where it is not on screen and some of
     it is there (the original's display, or the original held for the narrow window), pressing it the reader's own
     choice.

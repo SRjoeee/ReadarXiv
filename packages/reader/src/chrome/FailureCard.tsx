@@ -10,7 +10,7 @@ import { R, S, Icon } from '@readarxiv/ui'
 import { useClock } from './clock.ts'
 import type { ReaderController } from './model.ts'
 import { useParts } from './parts.tsx'
-import { cardDueAt, cardLook, cardOf, originalCardOf, type Sign } from './status.ts'
+import { cardDueAt, cardLook, cardOf, originalCardOf, originalCardSide, type Sign } from './status.ts'
 import { useReader } from './use-reader.ts'
 
 const SIGNS: Readonly<Partial<Record<Sign, IconNode>>> = { alert: CircleAlert, clock: Clock, file: FileText }
@@ -18,9 +18,12 @@ const SIGNS: Readonly<Partial<Record<Sign, IconNode>>> = { alert: CircleAlert, c
 /** the original's pane's card, where the original could not be read and the host draws its loss there (StateWords
  *  `openOriginal`: the website's): the file sign in quiet ink, its words, and a link to arXiv's PDF of the version, opened where
  *  the settings say */
-export function OriginalCard({ controller }: { controller: ReaderController }) {
+export function OriginalCard({ controller, side }: { controller: ReaderController; side: 'left' | 'right' }) {
   const parts = useParts()
-  const card = useReader(controller, (s) => originalCardOf(s, parts.reason, parts.words))
+  // (on the pane shown: the original's, else the translation's)
+  const card = useReader(controller, (s) =>
+    originalCardSide(s) === side ? originalCardOf(s, parts.reason, parts.words) : null,
+  )
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   if (!card) return null
   return (
@@ -42,7 +45,7 @@ export function FailureCard({ controller, of = 'pane' }: { controller: ReaderCon
   const look = useReader(controller, (s) => (card ? cardLook(card, s, parts.signs) : null))
   const sameTab = useReader(controller, (s) => s.prefs?.links === 'same-tab')
   // the retry's time where one is named and to come: drawn again at it
-  const due = useReader(controller, (s) => cardDueAt(s, Date.now()))
+  const due = useReader(controller, (s) => cardDueAt(s, Date.now(), parts.words))
   const now = useClock(due)
   const waiting = parts.retry === 'when-due' && due !== null && now < due
   // the host's lines under the reason, asked at the time drawn

@@ -239,3 +239,50 @@ describe("the original held by the host's rules, told to the session (L11's seco
     await n.unmount()
   })
 })
+
+describe("the lost original's card where the original's pane is not shown (the cloud review of #616)", () => {
+  const lost = {
+    phase: 'failed' as const,
+    failure: 'network' as const,
+    failures: { pdf: 'network' as const, service: null },
+  }
+  const words = { originalLost: 'The original cannot be shown here', openOriginal: 'Open the PDF on arXiv' }
+  const where = (c: HTMLElement) =>
+    (['left', 'right'] as const).map((side) => {
+      const pane = c.querySelector(`.pane[data-side="${side}"]`)!
+      return [side, pane.hasAttribute('data-card'), pane.querySelector('.card a')?.getAttribute('href') ?? null]
+    })
+  it("the translation alone, or side by side in a narrow window: the translation's pane carries it; side by side wide, the original's", async () => {
+    const out = []
+    for (const over of [
+      { display: 'translation' as const },
+      { display: 'bilingual' as const, narrow: true },
+      { display: 'bilingual' as const },
+      { display: 'original' as const },
+    ]) {
+      const { controller } = fakeController({ ...lost, ...over, paper: { id: '2608.02163v2', title: '' } })
+      const m = await mountElement(app(controller, { words }))
+      out.push(where(m.container))
+      await m.unmount()
+    }
+    const pdf = 'https://arxiv.org/pdf/2608.02163v2'
+    expect(out).toEqual([
+      [
+        ['left', false, null],
+        ['right', true, pdf],
+      ],
+      [
+        ['left', false, null],
+        ['right', true, pdf],
+      ],
+      [
+        ['left', true, pdf],
+        ['right', false, null],
+      ],
+      [
+        ['left', true, pdf],
+        ['right', false, null],
+      ],
+    ])
+  })
+})

@@ -729,3 +729,31 @@ describe('the links the chrome draws from a host or a document, checked (chrome/
     expect([!!b.container.querySelector('.capsule'), link(b.container)]).toEqual([true, null])
   })
 })
+
+describe("the card's retry due at the time of the failure it shows (the cloud review of #616)", () => {
+  it("the original lost on its own pane and the service waiting: the translation's card, the service's, greyed until the service's time", async () => {
+    const fake = fakeController({
+      phase: 'failed',
+      failure: 'network',
+      failures: { pdf: 'network', service: 'network' },
+      failureAt: Date.now() + 60_000,
+    })
+    const { container } = await mountElement(
+      cardOf(fake.controller, 'pane', { retry: 'when-due', words: { openOriginal: 'Open the PDF on arXiv' } }),
+    )
+    const button = container.querySelector<HTMLButtonElement>('.card button')!
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    button.click()
+    expect(fake.controller.retry).not.toHaveBeenCalled()
+  })
+  it("the card that shows the original's failure (no way to arXiv's PDF given): its retry at once, the original asked again", async () => {
+    const fake = fakeController({
+      phase: 'failed',
+      failure: 'network',
+      failures: { pdf: 'network', service: 'network' },
+      failureAt: Date.now() + 60_000,
+    })
+    const { container } = await mountElement(cardOf(fake.controller, 'pane', { retry: 'when-due' }))
+    expect(container.querySelector('.card button')!.getAttribute('aria-disabled')).toBeNull()
+  })
+})

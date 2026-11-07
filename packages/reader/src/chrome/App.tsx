@@ -8,7 +8,7 @@ import { PagePill } from './PagePill.tsx'
 import { ScrollIndicator } from './ScrollIndicator.tsx'
 import { useScrollShow } from './scroll-show.ts'
 import { usePinch } from './pinch.ts'
-import { cardOf, heldOf, originalCardOf } from './status.ts'
+import { cardOf, heldOf, originalCardOf, originalCardSide } from './status.ts'
 import { StatusCapsule } from './StatusCapsule.tsx'
 import { Toolbar } from './Toolbar.tsx'
 import { type Parts, PartsProvider, useParts } from './parts.tsx'
@@ -41,9 +41,12 @@ function Page({ controller }: { controller: ReaderController }) {
     dimPages: s.prefs?.dim,
     swapped: s.prefs?.swapped ?? false,
     title: s.paper.title,
-    card: cardOf(s, reason, words) !== null && !s.noPaper,
-    // (the original not read, where the host draws its loss on the original's pane: StateWords `openOriginal`)
-    leftCard: originalCardOf(s, reason, words) !== null,
+    // (the original not read, where the host draws its own card for it, StateWords `openOriginal`: on the original's pane where
+    // it is shown, else on the translation's)
+    card:
+      (cardOf(s, reason, words) !== null && !s.noPaper) ||
+      (originalCardOf(s, reason, words) !== null && originalCardSide(s) === 'right'),
+    leftCard: originalCardOf(s, reason, words) !== null && originalCardSide(s) === 'left',
     noPaper: s.noPaper,
   }))
   const doc = useRef<HTMLElement>(null)
@@ -165,7 +168,8 @@ function Pane({
       </div>
       <PagePill ref={pill} controller={controller} side={side} />
       <ScrollIndicator ref={indicator} controller={controller} side={side} />
-      {side === 'right' ? <FailureCard controller={controller} /> : <OriginalCard controller={controller} />}
+      {side === 'right' && <FailureCard controller={controller} />}
+      <OriginalCard controller={controller} side={side} />
     </section>
   )
 }
