@@ -784,8 +784,12 @@ export function gateL1Pair(
               tie?.rule === 'cells'
                 ? tie.cells.flat().map((o) => `${o}:${page.members.find((x) => x.ord === o)?.state}`)
                 : []
+            const ln = (l: readonly unknown[] | undefined) =>
+              l
+                ? `[${(l as number[]).slice(0, 3).join(', ')}] ${((l[3] as { s?: string; size?: number }[]) ?? []).map((it) => `${it.s}@${it.size?.toFixed?.(2)}`).join('|')}`
+                : '-'
             console.log(
-              `ENTRY ${pair} p${pg} ord ${pm.ord}: ${e?.state ?? 'none'} against ${pm.state}; its table: ${states.join(' ')}`,
+              `ENTRY ${pair} p${pg} ord ${pm.ord}: ${e?.state ?? 'none'} against ${pm.state}; its table: ${states.join(' ')}; entry ${ln(e?.lines[0])} runner ${ln(pm.lines[0])}`,
             )
           }
           out.entry.differ++
