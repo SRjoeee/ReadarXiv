@@ -199,6 +199,9 @@ export interface Served {
   hyph(langs: readonly string[]): Promise<Record<string, Patterns | null>>
   /** the patterns of a language read already (null: none to be had), undefined while not */
   hyphNow(lang: string): Patterns | null | undefined
+  /** the tables these font strings' faces need read ahead (the faces' index, their groups'), no slice: so that a page's first
+   *  slices wait for no table */
+  warm(fonts: readonly string[]): Promise<void>
 }
 
 class Answer extends Error {
@@ -439,8 +442,8 @@ export function createServed(o: {
     })
     return p
   }
-  /** the tables a font string needs read, then the slices its text needs loaded */
-  const load = async (font: string, text: string) => {
+  /** the tables a font string's faces need read: the index, then the group of each face not read yet */
+  const tablesOf = async (font: string) => {
     // (nothing asked once the reader is closed: not before the index, nor after an index or a table that came in since)
     if (gone) return
     const fs = facesOf(font)
@@ -466,6 +469,11 @@ export function createServed(o: {
       })
       runsCache.clear()
     }
+  }
+  /** the tables a font string needs read, then the slices its text needs loaded */
+  const load = async (font: string, text: string) => {
+    await tablesOf(font)
+    if (gone) return
     const runs = runsOf(font, text)
     if (!runs || runs === 'never') return
     await Promise.all(runs.map((r) => loadSlice(r.face, r.slice)))
@@ -597,5 +605,9 @@ export function createServed(o: {
       return out
     },
     hyphNow: (lang) => (hyphDone.has(lang) ? (hyphDone.get(lang) as Patterns | null) : undefined),
+    async warm(fonts) {
+      if (gone) return
+      await Promise.all([theIndex(), ...fonts.map((f) => tablesOf(f).catch((e) => o.warn?.(`the faces of ${f}`, e)))])
+    },
   }
 }
