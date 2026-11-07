@@ -2,7 +2,8 @@
 // region present from the first paint, so that what it says later is announced; it rises in (240 ms) and leaves lighter
 // (160 ms); a new state of the same kind changes its words in place, moving with its box (Capsule, capsule-motion.ts).
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
-// words are said here. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
+// words are said here. A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone,
+// for their time. A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
 // is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
@@ -10,7 +11,7 @@
 // for as long as it is so, with the way to the settings page and no close (S-R-21). A paper that cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where
 // the settings say — a new tab, or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame
 // navigate its page). A failure never takes the focus; the card's reason is said in this region
-import { Info, X } from 'lucide'
+import { Check, Info, X } from 'lucide'
 import { type FocusEvent, type HTMLAttributes, useEffect, useId, useRef, useState } from 'react'
 import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from './model.ts'
@@ -56,7 +57,8 @@ export function StatusCapsule({
   const linger = useTimedLeave(now?.kind === 'narrow', NARROW_MS, () => setNarrowShown(true))
   const capsule = now ?? leaving
   // words alone, no chip at the end: padded there as at the start (reader.css)
-  const alone = capsule?.kind === 'narrow' || (capsule?.kind === 'unavailable' && !capsule.href)
+  const alone =
+    capsule?.kind === 'narrow' || capsule?.kind === 'toast' || (capsule?.kind === 'unavailable' && !capsule.href)
   // the capsule that leaves by itself holds nothing a keyboard can reach, so it is a stop of its own while it is shown: a
   // group its words name, whose focus holds it as the pointer does. The others are reached by
   // their actions
@@ -72,7 +74,7 @@ export function StatusCapsule({
         <Drawn
           key={capsule.kind}
           kind={capsule.kind}
-          icon={Info}
+          icon={capsule.kind === 'toast' && capsule.icon === 'check' ? Check : Info}
           words={capsule.words}
           wordsId={words}
           alone={alone}
@@ -82,7 +84,9 @@ export function StatusCapsule({
           // what follows the words, named by what it holds: another brings it in with the motion
           afterKey={`${link ? 'link' : ''}|${capsule.kind === 'notice' ? capsule.action : capsule.kind === 'unreadable' ? 'settings' : capsule.kind === 'notNow' ? 'retry' : ''}`}
           after={
-            capsule.kind === 'narrow' || (capsule.kind === 'unavailable' && !link) ? null : (
+            capsule.kind === 'narrow' ||
+            capsule.kind === 'toast' ||
+            (capsule.kind === 'unavailable' && !link) ? null : (
               <>
                 {capsule.kind === 'unreadable' && parts.settingsHref && (
                   <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">

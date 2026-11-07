@@ -1,3 +1,4 @@
+import { Check, Info } from 'lucide'
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { O, R, S, setLocale } from '@readarxiv/ui'
@@ -395,5 +396,35 @@ describe("the capsule and the card (the reader's design, §6.6)", () => {
       true,
       null,
     ])
+  })
+})
+
+describe("a host's toast in the capsule's place", () => {
+  /** an icon as drawn, by its shapes' attributes */
+  const signOf = (node: typeof Check) => JSON.stringify(node.map(([, a]) => a))
+  const drawn = (el: Element) =>
+    JSON.stringify(
+      [...(el.querySelector('svg')?.children ?? [])].map((x) =>
+        Object.fromEntries([...x.attributes].filter((a) => a.name !== 'key').map((a) => [a.name, a.value])),
+      ),
+    )
+  it('its words alone, the check for something done, the information sign else; said in the status region; gone with it', async () => {
+    const fake = fakeController({ phase: 'ready' })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    await act(async () => fake.set({ toast: { words: 'Link copied', icon: 'check' } }))
+    const capsule = container.querySelector('.capsule')!
+    expect([
+      capsule.getAttribute('data-kind'),
+      capsule.hasAttribute('data-alone'),
+      capsule.querySelector('.after'),
+      drawn(capsule),
+      // (said in the status region, in the capsule's line for screen readers; its drawn words hidden from them)
+      capsule.querySelector('.sr-only')?.textContent,
+    ]).toEqual(['toast', true, null, signOf(Check), 'Link copied'])
+    await act(async () => fake.set({ toast: { words: 'Something went wrong', icon: 'info' } }))
+    expect(drawn(container.querySelector('.capsule')!)).toBe(signOf(Info))
+    await act(async () => fake.set({ toast: null }))
+    await act(async () => new Promise((r) => setTimeout(r, 200)))
+    expect(container.querySelector('.capsule')).toBeNull()
   })
 })

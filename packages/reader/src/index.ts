@@ -44,6 +44,8 @@ export {
   type Session,
   type SessionEvent,
   type SessionHost,
+  TOAST_MS,
+  type Toast,
   type Unavailable,
 } from './chrome/model.ts'
 export { eventsOf, kindOf, LAYER_WHY } from './chrome/events.ts'

@@ -35,6 +35,16 @@ export interface OutlineEntry {
   level: 1 | 2 | 3
   page: number | null
 }
+/** a host's passing words in the capsule's place (the website's share menu's "copied", its word for a crash with something on
+ *  screen): its own words and sign, shown for `ms` (TOAST_MS by default) */
+export interface Toast {
+  words: string
+  /** the check for something done (a link copied), else the information sign */
+  icon?: 'check' | 'info'
+  ms?: number
+}
+/** how long a toast stands when its host names no time (the website's TOAST_MS) */
+export const TOAST_MS = 3000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
   | { type: 'saved' }
@@ -158,6 +168,8 @@ export interface ReaderState {
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
+  /** a host's passing words shown now (ReaderController.toast); null while none stands */
+  toast: { words: string; icon: 'check' | 'info' } | null
 }
 
 export const INITIAL: ReaderState = {
@@ -190,6 +202,7 @@ export const INITIAL: ReaderState = {
   outline: [],
   currentHeading: null,
   zoom: 'page-width',
+  toast: null,
 }
 
 /** the session's commands the controller passes on */
@@ -474,6 +487,10 @@ export interface ReaderController {
   goToHeading(id: number): void
   /** a side's PDF saved as a file, named by the paper (fileName) */
   download(which: 'translation' | 'original'): Promise<void>
+  /** a host's passing words in the capsule's place, over whatever it shows, for their time; words said again start their time
+   *  again, and a toast replaced before its time comes back after the one that replaced it for the time it has left (the
+   *  website's "copied" over its word for a crash) */
+  toast(t: Toast): void
 }
 
 /** what an address with no paper starts from: nothing is loading, and no translated display can be had */
@@ -526,6 +543,22 @@ export function createController({
     state = { ...state, ...patch }
     for (const listener of listeners) listener()
   }
+  /** the host's toasts standing, each until its end, the last shown; the timer to the shown one's end */
+  let toasts: { t: Toast; until: number }[] = []
+  let toastTimer: ReturnType<typeof setTimeout> | undefined
+  const showToast = () => {
+    clearTimeout(toastTimer)
+    const now = Date.now()
+    toasts = toasts.filter((x) => x.until > now)
+    const top = toasts.at(-1)
+    if (!top) {
+      set({ toast: null })
+      return
+    }
+    const icon = top.t.icon ?? 'info'
+    if (state.toast?.words !== top.t.words || state.toast.icon !== icon) set({ toast: { words: top.t.words, icon } })
+    toastTimer = setTimeout(showToast, top.until - now)
+  }
   return {
     getState: () => state,
     subscribe(listener) {
@@ -571,6 +604,12 @@ export function createController({
       if (state.narrow === on) return
       set({ narrow: on })
       later((s) => s.setNarrow(on))
+    },
+    toast(t) {
+      if (!t.words) return
+      toasts = toasts.filter((x) => x.t.words !== t.words)
+      toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
+      showToast()
     },
     async download(which) {
       const s = await session

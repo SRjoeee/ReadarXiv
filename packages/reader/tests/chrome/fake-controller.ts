@@ -48,6 +48,7 @@ export function fakeController(over: Partial<ReaderState> = {}) {
     lead: vi.fn(),
     retry: vi.fn(),
     setNarrow: vi.fn(),
+    toast: vi.fn(),
   } as unknown as Spied<ReaderController>
   return {
     controller,

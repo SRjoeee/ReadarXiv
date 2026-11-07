@@ -173,7 +173,14 @@ function hostSlots(controller: ReaderController): Slots {
     ),
     afterOptions: (at) =>
       at === 'bar' ? (
-        <ToolbarButton label="Share" data-host="share" onClick={() => c.clicked.push('share')}>
+        <ToolbarButton
+          label="Share"
+          data-host="share"
+          onClick={() => {
+            c.clicked.push('share')
+            controller.toast({ words: 'Link copied', icon: 'check' })
+          }}
+        >
           <Icon node={Share} />
         </ToolbarButton>
       ) : null,

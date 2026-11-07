@@ -26,6 +26,8 @@ export type Capsule =
   /** a write of the settings that storage refused (S-R-22): the settings page's one sentence for a failed save, until it
    *  is closed, or a later write lands; closable */
   | { kind: 'saveFailed'; words: CapsuleWords }
+  /** a host's passing words (ReaderController.toast: the website's "copied"), in its words and sign, for their time */
+  | { kind: 'toast'; words: CapsuleWords; icon: 'check' | 'info' }
 /** `arxiv`: a link to arXiv, for an address that names no paper (S-R-20) */
 export interface Card {
   reason: string
@@ -46,6 +48,8 @@ export interface Seen {
 }
 
 export function capsuleOf(state: ReaderState, seen: Seen, languages: Pick<Languages, 'name' | 'tag'>): Capsule | null {
+  // a host's passing words first, over whatever else stands, for their time: what the reader just did (the website's)
+  if (state.toast) return { kind: 'toast', words: plain(state.toast.words), icon: state.toast.icon }
   // what the reader just did or cannot do, over a load too (its controls are in reach then), but not beside a failure's
   // card, which is the pane's whole answer: the unreadable settings first, since they are why a write is refused. They
   // are true of an address with no paper too, whose controls they explain, and stand beside its card

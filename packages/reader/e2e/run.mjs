@@ -1005,6 +1005,42 @@ await check(
   },
 )
 await check(
+  "chrome: a host's toast in the capsule's place, in its words and sign, for its time; the word it replaced back after it (L11 gap 6, difference 8)",
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns', { slots: true })
+    const capsule = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('.capsule:not([data-out])')
+        return el
+          ? {
+              kind: el.getAttribute('data-kind'),
+              said: el.querySelector('.sr-only')?.textContent ?? '',
+              sign: el.querySelector('svg path')?.getAttribute('d') ?? null,
+            }
+          : null
+      })
+    // (the host's word for a crash with something on screen, as the website's page says it: 8 s)
+    await page.evaluate(() => window.__c.controller.toast({ words: 'The translation did not load', ms: 8000 }))
+    const lost = await capsule()
+    await page.locator('[data-host="share"]').click()
+    const copied = await capsule()
+    await page.waitForTimeout(3300)
+    const back = await capsule()
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      lost?.kind === 'toast' && lost.said === 'The translation did not load',
+      `the crash's word ${JSON.stringify(lost)}`,
+    )
+    assert(
+      copied?.kind === 'toast' && copied.said === 'Link copied' && copied.sign === 'M20 6 9 17l-5-5',
+      `the share's word ${JSON.stringify(copied)}`,
+    )
+    assert(back?.said === 'The translation did not load', `after the share's word ${JSON.stringify(back)}`)
+    return { lost: lost.said, copied: copied.said, back: back.said }
+  },
+)
+await check(
   "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
   async () => {
     const from = server.log.length
