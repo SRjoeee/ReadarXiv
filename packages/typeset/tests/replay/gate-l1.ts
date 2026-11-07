@@ -13,6 +13,7 @@ import { adapt, rectOf } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
+  measured,
   readMember,
   type RowUnit,
   rowPieces,
@@ -568,9 +569,9 @@ export function gateL1Pair(
             names: null,
           },
           relabels: !!x.m.label && !((x.m.fixed ?? 0) & 4),
-          metrics,
           shown: Number.POSITIVE_INFINITY,
         })
+        rd = { ...rd, tokens: measured(rd.tokens, metrics!) }
       } catch (e) {
         // (a width the Metrics given lacks: the tap's table holds today's measures alone)
         if ((e as Error)?.name !== 'MissingMeasure') throw e
@@ -721,10 +722,19 @@ export function gateL1Pair(
       }
       if (cur.length) flows.push(cur)
     }
-    // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set)
+    // (a table's cells, and the members laid at one size: one paragraph of TeX's the front end cut at a float, a figure's set;
+    // a table decided over the cells handed in, as today's settleGroup over the cells whose rows are translated: a cell left
+    // out that holds its table is tieHeld's, and one handed whole with a cell left out, settleTies skips: the entry's rule)
+    const handed = new Set(flows.flat().map((m) => m.ord))
     const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) =>
       t.rule === 'cells'
-        ? { rule: 'cells' as const, cells: (t.cells ?? []).flat().map((o) => unitOf.get(o)?.ord ?? o) }
+        ? {
+            rule: 'cells' as const,
+            cells: (t.cells ?? [])
+              .flat()
+              .map((o) => unitOf.get(o)?.ord ?? o)
+              .filter((o) => handed.has(o)),
+          }
         : { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) },
     )
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
@@ -768,6 +778,17 @@ export function gateL1Pair(
           )
         if (same) out.entry.alike++
         else {
+          // (AXT_GATE_ENTRY=1: each member the entry lays otherwise, with the states of its table's cells in the entry)
+          if (process.env.AXT_GATE_ENTRY) {
+            const tie = (part.ties ?? []).find((t) => t.rule === 'cells' && t.cells.flat().includes(e?.ord ?? -1))
+            const states =
+              tie?.rule === 'cells'
+                ? tie.cells.flat().map((o) => `${o}:${page.members.find((x) => x.ord === o)?.state}`)
+                : []
+            console.log(
+              `ENTRY ${pair} p${pg} ord ${pm.ord}: ${e?.state ?? 'none'} against ${pm.state}; its table: ${states.join(' ')}`,
+            )
+          }
           out.entry.differ++
           if (out.entry.ex.length < 5)
             out.entry.ex.push(

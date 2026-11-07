@@ -175,6 +175,33 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     // (its A-only glyphs stay A's ink inside it: no unit is born of them)
     expect(L.born.size).toBe(0)
   })
+  it('reads a run of A-only glyphs once, not once for each glyph of it (PR #620 review: a scan quadratic in the run)', () => {
+    // (each glyph of a run of k A-only glyphs looked for its paired neighbours by walking the run: k² reads of the mapping)
+    // (30 lines of 50 inside it: a line of 1,500 would run off the page, whose glyphs no unit claims)
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose',
+          ...Array.from({ length: 30 }, () => 'x'.repeat(50)),
+          'word continues on its last line',
+        ],
+      },
+    ])
+    const m = align(B, A)
+    let reads = 0
+    const counted = <T extends Int32Array>(arr: T): T =>
+      new Proxy(arr, {
+        get(t, p) {
+          if (typeof p === 'string' && /^\d+$/.test(p)) reads++
+          const v = Reflect.get(t, p, t)
+          return typeof v === 'function' ? v.bind(t) : v
+        },
+      })
+    const L = locate(ins, A, { ...m, aToB: counted(m.aToB), bToA: counted(m.bToA) })
+    expect(L.members[0]).toMatchObject({ located: false, cause: expect.stringMatching(/^content difference: /) })
+    const glyphs = A.pages[0]!.glyphs.length + B.pages[0]!.glyphs.length
+    expect(reads).toBeLessThan(20 * glyphs)
+  })
 })
 
 describe('bundle', () => {

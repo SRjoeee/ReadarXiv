@@ -147,6 +147,39 @@ describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pa
         'Experiments',
       ).small.size,
     ).toBe(0)
+    // (in the text's capitals where every letter of the source is lowercase and set as a capital, REVTeX's
+    // "RELATED WORK" of `related work`: no letter of the source's own case gives a size to tell a small capital by, and drawn
+    // at the unit's size, theirs, the target's capitals look as the page's do; no capital is drawn larger than it stands)
+    const allChanged = [...'RELATEDWORK'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96))
+    expect(fakedCaps(allChanged, 'related work')).toMatchObject({ upper: true })
+    expect(fakedCaps(allChanged, 'related work').small.size).toBe(0)
+    // (an ink unit, its source the page's own text: in the text's capitals where every letter of it that can tell is a capital,
+    // a running head's "ABSTRACT"; its faked small capitals no case change, "R" at 12 and "EFERENCES" at 9.6)
+    const abstract = [...'ABSTRACT'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96))
+    expect(fakedCaps(abstract, 'ABSTRACT', true)).toMatchObject({ upper: true })
+    const refs = [g('R', 72, 700, 12), ...[...'EFERENCES'].map((u, i) => g(u, 80 + 5 * i, 700, 9.6))]
+    expect(fakedCaps(refs, 'REFERENCES', true)).toMatchObject({ ratio: 0.8 })
+    expect(fakedCaps(refs, 'REFERENCES', true).upper).toBeUndefined()
+    expect(
+      fakedCaps(
+        [...'Abstract'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),
+        'Abstract',
+        true,
+      ).upper,
+    ).toBeUndefined()
+    // (a lowercase letter among them: set in its own case, which the translator reads and keeps, a figure's "BERT (Ours)")
+    expect(
+      fakedCaps(
+        [...'BERT(Ours)'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),
+        null,
+      ).upper,
+    ).toBeUndefined()
+    expect(
+      fakedCaps(
+        [...'MMLU'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96)),
+        null,
+      ).upper,
+    ).toBe(true)
     // (as the page states it: pdfTeX's 10 pt is 9.9626 bp, which every width the lay sets is scaled by; no 1/100 grid)
     expect(unitSize([...'ten'].map((u, i) => g(u, 72 + 5 * i, 700, 9.9626)))).toBe(9.9626)
   })
