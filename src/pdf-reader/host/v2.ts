@@ -129,7 +129,9 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
 export function v2Open(o: { host: Host; paper: string; visit: Parameters<typeof import('@readarxiv/reader').openReader>[1]['visit']; original: string }): (chrome: ChromeHost) => Promise<ChromeSession> {
   return async chrome => {
     const { openReader } = await import('@readarxiv/reader')
-    const root = (chrome.left.closest('main') as HTMLElement | null) ?? document.body
+    // the reader's marks and sheets on the page's body: its own `.axt-reader { position: relative }` on the chrome's document
+    // area (main.doc) took that area's own placement and left the panes no height
+    const root = document.body
     const reader: Reader = openReader(root, { host: o.host, paper: o.paper, ...(o.visit ? { visit: o.visit } : {}), panes: { left: chrome.left, right: chrome.right } } as Parameters<typeof openReader>[1])
     let told: ReaderState | null = null
     const tell = () => {

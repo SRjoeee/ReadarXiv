@@ -19,7 +19,7 @@ import { loadKit } from '../../src/pdfjs/kit.ts'
 import { ownedClock } from '../../src/stack/clock.ts'
 import { createScheduler } from '../../src/stack/scheduler.ts'
 import { addSheets } from '../../src/styles.ts'
-import { ENGLISH_WORDS } from '../../src/compose/words.ts'
+import { CATALOGUE_WORDS } from '../../src/compose/words.ts'
 import { openReader, type Reader } from '../../src/reader.ts'
 
 const root = document.getElementById('root') as HTMLElement
@@ -201,7 +201,7 @@ const h = {
       links: {
         open: (u) => h.external.push(u),
         follow: (d, how) => void panes.follow(d, how),
-        unnamed: (to) => ENGLISH_WORDS.linkName(to),
+        unnamed: (to) => CATALOGUE_WORDS.linkName(to),
       },
       clock: h.clock as NonNullable<typeof h.clock>,
       root,

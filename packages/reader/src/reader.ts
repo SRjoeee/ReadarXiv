@@ -19,7 +19,7 @@ import type { Composer, RowsSource } from './compose/composer.ts'
 import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
-import { ENGLISH_WORDS, type Words } from './compose/words.ts'
+import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
 import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit } from './pdfjs/kit.ts'
 import { dirOf, follow, objectStore, open, Refused, segOf } from './session/client.ts'
@@ -159,7 +159,7 @@ const PAPER = /^((?:[a-z-]+(?:\.[A-Z]{2})?\/\d{7})|(?:\d{4}\.\d{4,5}))(?:v(\d+))
 /** how long a new reading place stands before its units are asked first (a scroll's pages passed over ask nothing) */
 const NEAR_MS = 150
 
-export { ENGLISH_WORDS, type Words }
+export type { Words }
 
 export function openReader(
   root: HTMLElement,
@@ -174,7 +174,7 @@ export function openReader(
     panes?: { left: HTMLElement; right: HTMLElement }
   },
 ): Reader {
-  const words = (): Words => o.words ?? ENGLISH_WORDS
+  const words = (): Words => o.words ?? CATALOGUE_WORDS
   const m = PAPER.exec(o.paper)
   if (!m) throw new TypeError(`not an arXiv paper: ${o.paper}`)
   const paper: PaperRef = { id: m[1] as string, version: m[2] ? Number(m[2]) : null }

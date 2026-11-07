@@ -49,6 +49,9 @@ const seen = await page.evaluate(() => ({
   capsule: document.querySelector('.capsule')?.textContent ?? null,
   state: window.__reader?.reader?.state?.() ? (s => ({ original: s.original.s, layer: s.layer.s, rows: s.rows.s, pages: s.view.sides.left.pages }))(window.__reader.reader.state()) : null,
   phase: window.__reader?.controller?.getState?.().phase ?? null,
+  canvases: document.querySelectorAll('canvas').length,
+  panes: ['left', 'right'].map(id => { const el = document.getElementById(id); return el ? { box: [el.clientWidth, el.clientHeight, el.scrollHeight], children: [...el.children].map(c => `${c.tagName.toLowerCase()}.${[...c.classList].join('.')}[${c.children.length}]`).slice(0, 4) } : null }),
+  root: document.querySelector('main')?.className ?? null,
 }))
 const shot = arg('--shot')
 if (shot) await page.screenshot({ path: shot })

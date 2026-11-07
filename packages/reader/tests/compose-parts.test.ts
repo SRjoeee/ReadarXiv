@@ -13,7 +13,7 @@ import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, onIos, pastBudget, skeleton } from '../src/stack/stack.ts'
-import { ENGLISH_WORDS } from '../src/compose/words.ts'
+import { CATALOGUE_WORDS } from '../src/compose/words.ts'
 
 const handClock = (): Clock & { frames: (() => void)[] } => {
   const frames: (() => void)[] = []
@@ -121,10 +121,10 @@ describe("a link's name, order and border (S-R-25)", () => {
     expect(textUnder(c, [38, 95, 75, 110])).toEqual({ name: 'figure', at: 1 })
     expect(textUnder(c, [0, 95, 75, 110]).name).toBe('see the figure')
     expect(textUnder(c, [200, 0, 300, 10])).toEqual({ name: '', at: -1 })
-    expect(ENGLISH_WORDS.linkName({ internal: true })).toBe('Elsewhere in this paper')
-    expect(ENGLISH_WORDS.linkName({ url: 'https://example.org/x' })).toBe('Opens example.org')
-    expect(ENGLISH_WORDS.linkName({ url: 'mailto:a%40b.org' })).toBe('Email a@b.org')
-    expect(ENGLISH_WORDS.linkName({ url: 'ftp://x' })).toBe('Link')
+    expect(CATALOGUE_WORDS.linkName({ internal: true })).toBe('Elsewhere in this paper')
+    expect(CATALOGUE_WORDS.linkName({ url: 'https://example.org/x' })).toBe('Opens example.org')
+    expect(CATALOGUE_WORDS.linkName({ url: 'mailto:a%40b.org' })).toBe('Email a@b.org')
+    expect(CATALOGUE_WORDS.linkName({ url: 'ftp://x' })).toBe('Link')
   })
   it('leaves out a box of no area and an address off the list; orders by the text; draws the PDF border', () => {
     expect(LINK_SCHEMES).toEqual(['http:', 'https:', 'mailto:'])
@@ -161,7 +161,7 @@ describe("a link's name, order and border (S-R-25)", () => {
     const layer = linkLayer(
       page,
       vp,
-      { open: (u) => opened.push(u), follow: () => {}, unnamed: (to) => ENGLISH_WORDS.linkName(to) },
+      { open: (u) => opened.push(u), follow: () => {}, unnamed: (to) => CATALOGUE_WORDS.linkName(to) },
       c,
       borders,
     ) as HTMLElement
