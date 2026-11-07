@@ -5,10 +5,11 @@
 // pieces made from the member's stated facts, rowPieces: no Units object), its faces (B.cover: a face not loaded is waited for, a
 // character no served face holds leaves it `served`), its setting (adapt.ts: U.blocks, U.decor, U.params, its flow's shared
 // rows), every flow laid and each pass page filled (layPagePrepared: L8-L11, a flow that throws its own; a table's cells laid
-// whole or not at all, a size tie's members at one size), and the members as drawn
-// (D.display). What it does not compose yet, each said where it is decided: a babel name's and a figure text's members (S.names,
-// S.figures: their members stay the original's, `name` / `kind`), the sentences' boxes (Laid.lit: empty), the page's links
-// (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
+// whole or not at all, a size tie's members at one size), and the members as drawn (D.display). The reader's leave
+// (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
+// off and no row of it waited for. What it does not compose yet, each said where it is decided: a babel name's and a figure
+// text's members (S.names, S.figures: their members stay the original's, `name` / `kind`), the sentences' boxes (Laid.lit:
+// empty), the page's links (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { fitMeasure } from '../breaker/measure.ts'
@@ -44,6 +45,18 @@ function bottomsOf(part: Part): Map<number, number> {
   return out
 }
 
+/**
+ * Whether a member a table's tie names, not set for `why`, holds its table the original's (today's contract, RUN:1223 and
+ * settleGroup RUN:2411: a translated cell that cannot be drawn keeps every cell of its group the original's): a cell to be
+ * translated that cannot be set does — unlocated, its row failed (a Row not ok: refused, unavailable, …), unproven, a face it
+ * lacks, unfit, an error — and one the wrap cannot hide is the original's alone, the rest of its table laid (the coordinator's
+ * ruling of 2026-10-24), unless it spans columns or rows (its box is the others' too). One never to be translated holds
+ * nothing (today's "one not expected never has a row, and is the original's in a group drawn"): no text of its own, a kind the
+ * reader leaves, or no row with every row in (`none`: a unit no translator was sent, a cell of digits; a translation that
+ * failed is a Row, not ok)
+ */
+const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
+
 /** a member's row content, or why it has none to be set from */
 function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (m.why) return m.why
@@ -58,7 +71,9 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
 export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
   const members = part.flows.flat()
-  const waiting = waitOf(part, rows)
+  // (the kinds the reader leaves the original's: its "what to translate", design-a's Choices.leave)
+  const leave = new Set(rules.leave)
+  const waiting = waitOf(part, rows, leave)
   const waitAll = (faces: [string, string][]): Page => ({
     page,
     wait: { rows: waiting, faces },
@@ -91,6 +106,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   }
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   const state = new Map<number, Unlaid>()
+  // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
+  const unmeant = new Set<number>()
   const faces: [string, string][] = []
   const prepared = new Map<number, FlowMember>()
   const relabelled = new Set<number>()
@@ -98,9 +115,15 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const moved = new Set<number>()
   for (const flow of part.flows)
     flow.forEach((m, k) => {
+      if (leave.has(m.kind)) {
+        state.set(m.ord, 'left')
+        unmeant.add(m.ord)
+        return
+      }
       const content = contentOf(m, rows)
       if (typeof content === 'string') {
         state.set(m.ord, content)
+        if (!m.why && (typeof m.text !== 'string' || content === 'none')) unmeant.add(m.ord)
         return
       }
       const relabels = !!m.label && !((m.fixed ?? 0) & LABEL_KEPT)
@@ -179,12 +202,39 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     })
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
+  // (a table laid whole or not at all: a cell not set before its lay that holds its table (holdsTable) leaves every cell of it
+  // the original's, the set ones 'cells', as settleTies withholds a table whose cell its lay refused; the others are decided
+  // by their lays, over the cells set (a cell left out of the flows and its tie handed whole, settleTies skips the table))
+  const inPart = new Set(members.map((m) => m.ord))
+  const held = new Set<number>()
+  const cellTies: { rule: 'cells'; cells: number[] }[] = []
+  for (const t of part.ties ?? []) {
+    if (t.rule !== 'cells') continue
+    const cells = t.cells.flat()
+    const spanning = new Set(t.spanning ?? [])
+    const holds = cells.some((o) => {
+      const why = state.get(o)
+      return why !== undefined && !unmeant.has(o) && holdsTable(why, spanning.has(o))
+    })
+    if (holds) {
+      for (const o of cells) {
+        held.add(o)
+        if (!state.has(o) && prepared.has(o)) state.set(o, 'cells')
+      }
+      continue
+    }
+    // (a tie naming a member its part does not hold is no tie of this page's: handed whole, settleTies decides nothing of it)
+    cellTies.push({
+      rule: 'cells',
+      cells: cells.every((o) => inPart.has(o)) ? cells.filter((o) => prepared.has(o)) : cells,
+    })
+  }
   // (each flow cut where a member is not set: the one after it starts where TeX set it, as after a member left the original's)
   const flows: FlowMember[][] = []
   for (const flow of part.flows) {
     let cur: FlowMember[] = []
     for (const m of flow) {
-      const p = prepared.get(m.ord)
+      const p = held.has(m.ord) ? undefined : prepared.get(m.ord)
       if (!p) {
         if (cur.length) flows.push(cur)
         cur = []
@@ -194,9 +244,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     }
     if (cur.length) flows.push(cur)
   }
-  const ties = (part.ties ?? []).map((t) =>
-    t.rule === 'cells' ? { rule: 'cells' as const, cells: t.cells.flat() } : { rule: 'size' as const, ords: t.ords },
-  )
+  const ties = [
+    ...cellTies,
+    ...(part.ties ?? []).flatMap((t) => (t.rule === 'size' ? [{ rule: 'size' as const, ords: t.ords }] : [])),
+  ]
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
   const out: Laid[] = members.map((m) => {

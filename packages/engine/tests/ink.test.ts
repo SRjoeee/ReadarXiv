@@ -86,6 +86,19 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.born.size).toBe(0)
     expect(L.stats.made).toMatchObject({ ink: 1, kept: 0, figures: 0 })
   })
+  it('sets a running head in capitals in the text’s capitals, its source its own case (PR #620 review: "ABSTRACT" lost upper)', () => {
+    const { B, A } = pair({
+      lines: ['RUNNING TITLE', 'Body text here'],
+      points: [
+        ['bs1', 13],
+        ['be1', 27],
+      ],
+    })
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.find((m) => m.kind === 'inkheads')!.style).toMatchObject({ upper: 1 })
+    expect(L.members.find((m) => m.kind === 'para')!.style.upper).toBeUndefined()
+  })
 
   it('makes a contents line an ink unit of its title alone, justified as today’s file sets a list', () => {
     // (the list's babel name ends before it: the contents' zone; its number, leaders and page number the original's ink)

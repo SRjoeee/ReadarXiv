@@ -7,8 +7,13 @@
 import type { Part } from '@readarxiv/format'
 import type { Rows } from '../types.ts'
 
-/** the ids of the rows page `part` waits for, each once, in the part's stream order; empty where it can be laid */
-export function waitOf(part: Pick<Part, 'flows' | 'paper'>, rows: Rows): string[] {
+/** the ids of the rows page `part` waits for, each once, in the part's stream order; empty where it can be laid. A member of a
+ *  kind in `leave` (the reader's: shown untranslated) waits for nothing */
+export function waitOf(
+  part: Pick<Part, 'flows' | 'paper'>,
+  rows: Rows,
+  leave: ReadonlySet<string> = new Set(),
+): string[] {
   if (rows.done) return []
   const out: string[] = []
   const seen = new Set<string>()
@@ -20,7 +25,7 @@ export function waitOf(part: Pick<Part, 'flows' | 'paper'>, rows: Rows): string[
   for (const flow of part.flows)
     for (const m of flow) {
       // (a member that stays the original's whatever the rows (the prepare's why) waits for nothing)
-      if (m.why || typeof m.text !== 'string') continue
+      if (m.why || typeof m.text !== 'string' || leave.has(m.kind)) continue
       need(m.text)
     }
   return out
