@@ -64,8 +64,9 @@ export type SessionEvent =
   | { type: 'heading'; id: number | null }
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
-  /** the panes scroll together, as the reader applies it */
-  | { type: 'sync'; on: boolean }
+  /** the panes scroll together, as the reader applies it; `available`: whether they can (both sides' pages laid out), none
+   *  where the session does not say (the extension's today session: as if they could) */
+  | { type: 'sync'; on: boolean; available?: boolean }
   /** the visitor's preferences, each time they land (the one model, prefs.ts) */
   | { type: 'prefs'; prefs: Prefs }
   | { type: 'display'; mode: EngineDisplay }
@@ -180,6 +181,8 @@ export interface ReaderState {
   zoom: 'page-width' | 'page-fit' | 'page-actual' | number | null
   /** the sides scroll together, as the reader applies it — not the stored setting, which a refused write or an address may not match */
   sync: boolean
+  /** the sides can scroll together (both sides' pages laid out), as the session says; true where it says nothing */
+  syncAvailable: boolean
   /** a host's passing words shown now (ReaderController.toast); null while none stands */
   toast: { words: string; icon: 'check' | 'info' } | null
 }
@@ -213,6 +216,7 @@ export const INITIAL: ReaderState = {
   noPaper: false,
   narrow: false,
   sync: true,
+  syncAvailable: true,
   outline: [],
   currentHeading: null,
   zoom: 'page-width',
@@ -319,8 +323,12 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       return { ...state, outline: event.entries }
     case 'paper':
       return { ...state, paper: { id: event.id, title: event.title } }
-    case 'sync':
-      return event.on === state.sync ? state : { ...state, sync: event.on }
+    case 'sync': {
+      const available = event.available ?? true
+      return event.on === state.sync && available === state.syncAvailable
+        ? state
+        : { ...state, sync: event.on, syncAvailable: available }
+    }
     case 'html':
       return event.url === state.htmlVersion ? state : { ...state, htmlVersion: event.url }
     case 'prefs':

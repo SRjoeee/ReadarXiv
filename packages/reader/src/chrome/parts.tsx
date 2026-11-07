@@ -91,6 +91,9 @@ export interface Parts {
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
    *  the paper side by side was narrowed while reading */
   narrow?: 'told' | 'shown'
+  /** when the sync's switch can be pressed: `side-by-side` (the extension's, the default) wherever both sides are shown;
+   *  `located` (the website's) there only once the sides can scroll together (both sides' pages laid out), greyed until then */
+  sync?: 'side-by-side' | 'located'
   /** a failure's reason as a sentence */
   reason(kind: ProviderErrorKind): string
   /** where the host's settings are, for the capsule's way there while they cannot be read (S-R-21); none: no link */

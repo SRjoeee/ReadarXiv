@@ -100,6 +100,24 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     ]).toEqual(['true', 'true'])
   })
 
+  it("greys the sync until the sides can scroll together where the host's rule says so (the website's, L11's second round, gap 9); the extension's leaves it to the display", async () => {
+    const sync = (c: HTMLElement) => button(c, '同步滚动').getAttribute('aria-disabled')
+    const own = await mount({ syncAvailable: false })
+    expect(sync(own.container)).toBeNull()
+    document.body.innerHTML = ''
+    const fake = fakeController({ syncAvailable: false })
+    const { container } = await mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        sync: 'located',
+      }),
+    )
+    expect(sync(container)).toBe('true')
+    button(container, '同步滚动').click()
+    expect(fake.controller.setSync).not.toHaveBeenCalled()
+    await act(async () => fake.set({ syncAvailable: true }))
+    expect(sync(container)).toBeNull()
+  })
+
   it('zooms by a tenth each way, and shows the scale', async () => {
     const { container, controller } = await mount({ scale: 1.25 })
     expect(named(container, '缩放比例').querySelector('[data-value]')!.textContent).toBe('125%')

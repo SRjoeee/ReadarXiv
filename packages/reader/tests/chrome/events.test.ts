@@ -128,4 +128,12 @@ describe("the reader's state as the chrome's", () => {
     }
     expect(fold([base, ready, target])).toMatchObject({ languageSupported: false, unavailable: { why: 'target' } })
   })
+  it("whether the sides can scroll together, as the reader knows it (L11's second round, gap 9); a session that does not say leaves them able", () => {
+    const apart = { ...open, view: { ...open.view, sync: { on: true, available: false } } }
+    expect(fold([base, apart])).toMatchObject({ sync: true, syncAvailable: false })
+    expect(fold([base, apart, open])).toMatchObject({ sync: true, syncAvailable: true })
+    expect(eventsOf(open, apart)).toEqual([{ type: 'sync', on: true, available: false }])
+    // (the extension's today session tells the sync with no word of it)
+    expect(reduce({ ...INITIAL, syncAvailable: false }, { type: 'sync', on: false }).syncAvailable).toBe(true)
+  })
 })

@@ -68,7 +68,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     })
   const v = next.view
   if (!p || p.view.display !== v.display) out.push({ type: 'display', mode: v.display })
-  if (!p || p.view.sync.on !== v.sync.on) out.push({ type: 'sync', on: v.sync.on })
+  if (!p || p.view.sync.on !== v.sync.on || p.view.sync.available !== v.sync.available)
+    out.push({ type: 'sync', on: v.sync.on, available: v.sync.available })
   if (!p || p.view.scale !== v.scale || p.view.zoom !== v.zoom)
     out.push({ type: 'scale', scale: v.scale, zoom: v.zoom })
   for (const side of ['left', 'right'] as const) {

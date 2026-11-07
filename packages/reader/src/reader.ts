@@ -212,6 +212,7 @@ export function openReader(
   }
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
+  let syncAvailable = false
   let kit: Kit | null = null,
     panes: Panes | null = null,
     composer: Composer | null = null,
@@ -243,6 +244,10 @@ export function openReader(
       if (e.side === 'right' && e.page === 1) mark('rightDrawn')
     })
     for (const k2 of ['page', 'scale', 'sync', 'display'] as const) panes.on(k2, () => tellSoon())
+    // (whether the sides can scroll together: the original open and its pages laid out on both, as the panes tell it)
+    panes.on('sync', (e) => {
+      syncAvailable = e.available
+    })
     // (the heading being read follows the scroll of either pane; the rows made here, the reading place)
     panes.on('scrolled', () => headingSoon())
     panes.on('page', () => {
@@ -935,7 +940,7 @@ export function openReader(
               : { ...rowsView, s: 'arriving', got: r.got, total: r.total, lost: r.lost },
       view: {
         display: displayOf(s),
-        sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc },
+        sync: { on: s.visit.sync ?? s.prefs.value.sync, available: !!p?.doc && syncAvailable },
         scale: p?.scale ?? 1,
         zoom: p?.zoom ?? null,
         narrow: root.hasAttribute('data-axt-narrow'),

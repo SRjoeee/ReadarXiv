@@ -32,7 +32,7 @@ export function Toolbar({
   contents: boolean
   onContents: () => void
 }) {
-  const { slots, narrow: narrowRule } = useParts()
+  const { slots, narrow: narrowRule, sync: syncRule } = useParts()
   const state = useReader(controller, (s) => ({
     swapped: s.prefs?.swapped ?? false,
     display: s.display,
@@ -41,6 +41,8 @@ export function Toolbar({
     available: s.available,
     languageSupported: s.languageSupported,
     sync: s.sync,
+    // (the host's rule: greyed until the sides can scroll together, the website's; else wherever both are shown)
+    syncLocated: syncRule !== 'located' || s.syncAvailable,
   }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
   const shownAlone = narrowRule === 'shown' && state.narrow && state.display === 'bilingual'
@@ -83,7 +85,7 @@ export function Toolbar({
         <ToolbarButton
           label={R.sync}
           pressed={state.sync}
-          disabled={!sideBySide}
+          disabled={!sideBySide || !state.syncLocated}
           data-side-by-side
           onClick={() => controller.setSync(!state.sync)}
         >
