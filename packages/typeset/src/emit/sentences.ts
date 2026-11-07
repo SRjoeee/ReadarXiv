@@ -148,7 +148,7 @@ export function keptLines(i: KeptInput, page: number): KeptLine[] {
 
 type Box = readonly [number, number, number, number] | readonly number[]
 /** whether a line [x0, y0, x1, y1] is a display's: its band meets one of its segments by more than half its height (onDisplay) */
-function onDisplay(displays: readonly { box: Box }[], x0: number, y0: number, x1: number, y1: number) {
+export function onDisplay(displays: readonly { box: Box }[], x0: number, y0: number, x1: number, y1: number) {
   const h = y1 - y0
   return displays.some(
     ({ box: [a0, b0, a1, b1] }) =>
@@ -188,6 +188,55 @@ type WordToken = BandToken & {
   end?: number
   k?: number
 }
+/**
+ * A laid token's box on its line, as the page's table holds it (addUnitWords): a crop's drawn box (its ink scaled by the line's
+ * scale, its top where the crop's top stands over its baseline), a text token's slot across (less its kern) and its band
+ * (tokenBand); null for a space or a token of no text
+ */
+export function tokenBox(
+  it: LaidLine['items'][number],
+  line: LaidLine,
+  L: Layout,
+): { l: number; r: number; y: number; h: number; top: number; bottom: number } | null {
+  const t = it.t as WordToken
+  if (t.space) return null
+  const by = line.baseline
+  const LL = (line.seg as { f: number; scale: number } | undefined) ?? L
+  const l = it.x! - (it.shift ?? 0)
+  if (t.crop) {
+    const c = t.crop.crop,
+      h = (c[3]! - c[1]!) * LL.scale,
+      top = by + (c[3]! - t.crop.baseline) * LL.scale
+    return { l, r: l + it.w, y: by, h, top, bottom: top - h }
+  }
+  if (typeof t.s !== 'string') return null
+  const { y, h, top, bottom } = tokenBand(t, LL, by)
+  return { l, r: l + it.w - (t.kern ? (t.kernEm ?? 0) * LL.f : 0), y, h, top, bottom }
+}
+
+/** each of a laid member's lines on `page` as one box over its tokens' boxes ([x0, bottom, x1, top], tokenBox): what the right
+ *  pane lights of it whole (design-a's Laid.lit); a line of no token none */
+export function lineBoxes(L: Layout, page: number): [number, number, number, number][] {
+  const out: [number, number, number, number][] = []
+  for (const line of L.lines) {
+    if (line.page !== page) continue
+    let x0 = Number.POSITIVE_INFINITY,
+      y0 = Number.POSITIVE_INFINITY,
+      x1 = Number.NEGATIVE_INFINITY,
+      y1 = Number.NEGATIVE_INFINITY
+    for (const it of line.items) {
+      const b = tokenBox(it, line, L)
+      if (!b) continue
+      x0 = Math.min(x0, b.l)
+      x1 = Math.max(x1, b.r)
+      y0 = Math.min(y0, b.bottom)
+      y1 = Math.max(y1, b.top)
+    }
+    if (x0 < x1 && y0 < y1) out.push([x0, y0, x1, y1])
+  }
+  return out
+}
+
 /**
  * D.sentences: the member's tokens on page `page` appended to the page's table, in the order of its text (words.mjs
  * addUnitWords): its kept lines before the line its text passes them at; each line's text tokens on their slots and bands, each
@@ -234,33 +283,24 @@ export function addUnitWords(
   }
   lines.forEach((line: LaidLine, j) => {
     keptBefore(j)
-    const by = line.baseline
-    const LL = (line.seg as { f: number; scale: number } | undefined) ?? L
     for (const it of line.items) {
       const t = it.t as WordToken
-      if (t.space) continue
-      const l = it.x! - (it.shift ?? 0)
-      if (t.crop) {
-        if (!drawnCrop(t.crop)) continue
-        const c = t.crop.crop,
-          h = (c[3]! - c[1]!) * LL.scale,
-          top = by + (c[3]! - t.crop.baseline) * LL.scale
-        push(W, l, l + it.w, by, h, top, top - h, -1, placeOf(t.crop.k))
-        continue
-      }
-      if (typeof t.s !== 'string') continue
-      const { y, h, top, bottom } = tokenBand(t, LL, by)
-      push(
-        W,
-        l,
-        l + it.w - (t.kern ? (t.kernEm ?? 0) * LL.f : 0),
-        y,
-        h,
-        top,
-        bottom,
-        t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end),
-        t.at ?? placeOf(t.k),
-      )
+      if (t.space || (t.crop && !drawnCrop(t.crop))) continue
+      const b = tokenBox(it, line, L)
+      if (!b) continue
+      if (t.crop) push(W, b.l, b.r, b.y, b.h, b.top, b.bottom, -1, placeOf(t.crop.k))
+      else
+        push(
+          W,
+          b.l,
+          b.r,
+          b.y,
+          b.h,
+          b.top,
+          b.bottom,
+          t.at === undefined || !wordOf ? -1 : wordOf(t.at, t.end),
+          t.at ?? placeOf(t.k),
+        )
     }
   })
   keptBefore(lines.length)
