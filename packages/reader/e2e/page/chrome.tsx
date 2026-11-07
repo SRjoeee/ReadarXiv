@@ -232,6 +232,8 @@ const c = {
             retry: 'when-due' as const,
             refusal: 'original' as const,
             sync: 'located' as const,
+            // (its store page's origin, which its HTML link leads to)
+            linkOrigins: ['https://example.org'],
           }
         : {}),
     }

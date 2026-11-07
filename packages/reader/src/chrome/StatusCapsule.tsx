@@ -18,6 +18,7 @@ import { R, S, Icon } from '@readarxiv/ui'
 import type { ReaderController } from './model.ts'
 import { Capsule as Drawn } from './Capsule.tsx'
 import { useClock } from './clock.ts'
+import { linkable } from './links.ts'
 import { useParts } from './parts.tsx'
 import { TippedButton } from './TippedButton.tsx'
 import { textOf } from './capsule-words.ts'
@@ -61,6 +62,7 @@ export function StatusCapsule({
     capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words, {
       retry: parts.retry,
       now: clock,
+      ...(parts.linkOrigins ? { origins: parts.linkOrigins } : {}),
     }),
   )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
@@ -107,6 +109,8 @@ export function StatusCapsule({
   const timed =
     capsule?.kind === 'narrow' && now !== null ? { tabIndex: 0, role: 'group', 'aria-labelledby': words } : {}
   const link = capsule && (capsule.kind === 'unavailable' || capsule.kind === 'notNow') && capsule.href
+  // the host's settings page, as every link the chrome draws from a host (chrome/links.ts)
+  const settings = linkable(parts.settingsHref, parts.linkOrigins)
   // its sign by the host's rule (parts.tsx `signs`), at the time drawn
   const look = useReader(controller, (s) => (capsule ? capsuleLook(capsule, s, parts.signs, clock) : null))
   return (
@@ -132,8 +136,8 @@ export function StatusCapsule({
           after={
             alone ? null : (
               <>
-                {capsule.kind === 'unreadable' && parts.settingsHref && (
-                  <a data-action className="chip" href={parts.settingsHref} target="_blank" rel="noopener">
+                {capsule.kind === 'unreadable' && settings && (
+                  <a data-action className="chip" href={settings} target="_blank" rel="noopener">
                     {S.settings}
                   </a>
                 )}

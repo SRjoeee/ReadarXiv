@@ -6,6 +6,7 @@
 import { O, type ProviderErrorKind, R, S } from '@readarxiv/ui'
 import { LASTING, type ReaderState } from './model.ts'
 import { type CapsuleWords, plain, withCount, withPart } from './capsule-words.ts'
+import { ARXIV_ORIGIN, linkable } from './links.ts'
 import type { Languages, Parts, StateWords } from './parts.tsx'
 
 export type Capsule =
@@ -80,12 +81,18 @@ function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: b
 }
 
 /** the link beside a bilingual version not to be had: arXiv's HTML version, or where the host says (its address and words), or
- *  none where it offers none */
-function linkOf(html: string | null, words: StateWords): { href: string; label?: string } | null {
+ *  none where it offers none; drawn only to arXiv's, the page's own origin or one the host names (chrome/links.ts), so that an
+ *  address a host forwards from elsewhere (a script's, a foreign one) draws none */
+function linkOf(
+  html: string | null,
+  words: StateWords,
+  origins: readonly string[] = [],
+): { href: string; label?: string } | null {
   if (!html) return null
-  if (!words.htmlLink) return { href: html }
-  const own = words.htmlLink(html)
-  return own ? { href: own.href, label: own.label } : null
+  const own = words.htmlLink ? words.htmlLink(html) : { href: html }
+  const href = own && linkable(own.href, origins)
+  if (!own || !href) return null
+  return 'label' in own ? { href, label: own.label } : { href }
 }
 
 export function capsuleOf(
@@ -112,7 +119,7 @@ export function capsuleOf(
     const said = plain(
       (state.unavailable?.why === 'too-large' ? words.tooLarge : undefined) ?? words.noPdf ?? R.status.noPdf,
     )
-    const html = linkOf(state.htmlVersion, words)
+    const html = linkOf(state.htmlVersion, words, rules.origins)
     return html ? { kind: 'unavailable', words: said, ...html } : { kind: 'unavailable', words: said }
   }
   if (!state.languageSupported && state.prefs) {
@@ -147,7 +154,7 @@ export function capsuleOf(
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
-    const html = linkOf(state.htmlVersion, words)
+    const html = linkOf(state.htmlVersion, words, rules.origins)
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
@@ -230,11 +237,9 @@ export function originalCardOf(
   words: StateWords = {},
 ): OriginalCard | null {
   if (state.noPaper || state.failures.pdf === null || !words.openOriginal || !state.paper.id) return null
-  return {
-    reason: words.originalLost ?? reason(state.failures.pdf),
-    href: `https://arxiv.org/pdf/${state.paper.id}`,
-    label: words.openOriginal,
-  }
+  // (the paper's id is a document's: its link checked as every other the chrome draws)
+  const href = linkable(`${ARXIV_ORIGIN}/pdf/${state.paper.id}`)
+  return href ? { reason: words.originalLost ?? reason(state.failures.pdf), href, label: words.openOriginal } : null
 }
 
 /** a capsule's or a card's sign (parts.tsx `signs`): the information sign, a run's spinner, a toast's check; a clock for a wait
@@ -266,6 +271,8 @@ export function cardDueAt(state: ReaderState, now: number): number | null {
 export interface Rules {
   retry?: Parts['retry']
   now?: number
+  /** the origins the host's links may lead to besides arXiv's and the page's own (parts.tsx `linkOrigins`) */
+  origins?: Parts['linkOrigins']
 }
 /** a retry withheld for now: the host's rule offers it at its time (`when-due`), and that time is still to come */
 const withheld = (state: ReaderState, rules: Rules) =>

@@ -130,6 +130,9 @@ export interface Parts {
   reason(kind: ProviderErrorKind): string
   /** where the host's settings are, for the capsule's way there while they cannot be read (S-R-21); none: no link */
   settingsHref: string | null
+  /** the origins besides arXiv's and the page's own that a link the chrome draws from the host's words may lead to, each
+   *  `https://host[:port]` (the website's: its extension's store page); none: those two alone (chrome/links.ts) */
+  linkOrigins?: readonly string[]
   /** the preferences shown, greyed, until the host's land */
   defaults: Prefs
   /** the host's probe hooks, given the controller and the session once it is open (the extension's `window.__reader`) */

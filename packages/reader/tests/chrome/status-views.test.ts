@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 /** where the host's settings are, which the capsule's note of unreadable ones links to (parts.tsx settingsHref) */
-const SETTINGS = 'chrome-extension://reader/options.html#reading/pdf'
+const SETTINGS = `${location.origin}/options.html#reading/pdf`
 const capsuleOf = (controller: ReaderController, over: Partial<Parts> = {}) =>
   withParts(createElement(StatusCapsule, { controller, onChooseLanguage: () => {} }), {
     settingsHref: SETTINGS,
@@ -671,7 +671,10 @@ describe("arXiv's HTML version as the host offers it (StateWords htmlLink; L11's
     const store = 'https://chromewebstore.google.com/detail/read-arxiv'
     const htmlLink = (href: string) => (href.includes('2608') ? { href: store, label: 'Install the extension' } : null)
     const lasting = fakeController({ phase: 'ready', available: false, htmlVersion: html })
-    const a = await mountElement(capsuleOf(lasting.controller, { words: { htmlLink } }))
+    // (the store's origin named by the host, as every origin its links lead to besides arXiv's and its own)
+    const a = await mountElement(
+      capsuleOf(lasting.controller, { words: { htmlLink }, linkOrigins: ['https://chromewebstore.google.com'] }),
+    )
     expect([link(a.container)?.getAttribute('href'), link(a.container)?.textContent]).toEqual([
       store,
       'Install the extension',
@@ -689,5 +692,40 @@ describe("arXiv's HTML version as the host offers it (StateWords htmlLink; L11's
       capsuleOf(fakeController({ phase: 'ready', available: false, htmlVersion: html }).controller),
     )
     expect([link(c.container)?.getAttribute('href'), link(c.container)?.textContent]).toEqual([html, R.status.useHtml])
+  })
+})
+
+describe('the links the chrome draws from a host or a document, checked (chrome/links.ts; the review of #616)', () => {
+  const link = (c: HTMLElement) => c.querySelector<HTMLAnchorElement>('.capsule a[data-action]')
+  it("the host's HTML link drawn only to arXiv's, the page's own or an origin it names; a script's or a foreign one draws none", async () => {
+    const html = 'https://arxiv.org/html/2608.02163v2#readarxiv'
+    const hrefs = []
+    for (const [to, origins] of [
+      ['javascript:alert(1)', []],
+      ['data:text/html,x', []],
+      ['https://evil.example/x', []],
+      ['https://store.example/detail/x', ['https://store.example']],
+    ] as const) {
+      const fake = fakeController({ phase: 'ready', available: false, htmlVersion: html })
+      const { container } = await mountElement(
+        capsuleOf(fake.controller, { words: { htmlLink: () => ({ href: to, label: 'Go' }) }, linkOrigins: origins }),
+      )
+      hrefs.push(link(container)?.getAttribute('href') ?? null)
+      document.body.innerHTML = ''
+    }
+    expect(hrefs).toEqual([null, null, null, 'https://store.example/detail/x'])
+  })
+  it("a document's HTML version and a host's settings page the same: a script's draws no link", async () => {
+    const a = await mountElement(
+      capsuleOf(fakeController({ phase: 'ready', available: false, htmlVersion: 'javascript:alert(1)' }).controller),
+    )
+    expect(link(a.container)).toBeNull()
+    document.body.innerHTML = ''
+    const b = await mountElement(
+      capsuleOf(fakeController({ phase: 'ready', settingsUnreadable: true }).controller, {
+        settingsHref: 'javascript:alert(1)',
+      }),
+    )
+    expect([!!b.container.querySelector('.capsule'), link(b.container)]).toEqual([true, null])
   })
 })

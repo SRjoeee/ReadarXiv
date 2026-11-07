@@ -409,7 +409,10 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     choice.
   - `htmlLink`: the link beside a bilingual version not to be had in the host's address and words (the extension's store
     page, where the extension is not on the page), or none (a phone). The HTML version itself is our server's word first
-    (its prepare's `html`, after a prepare that cannot be made), arXiv asked only where it says nothing.
+    (its prepare's `html`, after a prepare that cannot be made), arXiv asked only where it says nothing. Every link the
+    chrome draws from a host or a document (this one, the settings page's, the lost original's, the title's) is parsed
+    and drawn only to the page's own origin, or by https to arXiv's or an origin the host names (`linkOrigins`: the
+    website's store page); a `javascript:` or `data:` address, a foreign origin, draws none (`chrome/links.ts`).
   - A face the translation is set in that cannot be had is the reader's state (`ReaderState.faces`), for the host to
     say.
   The hold of the original (`refusal`, `narrow: 'shown'`) is the reader's `hold` command: never written and not a
