@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
-import { LOCALES } from '@/locales'
+import { LOCALES } from '@readarxiv/ui'
 import { DEFAULT_ENTRY_SETTINGS, type EntrySettings, type FloatingEntryState } from '@/shared/entry-settings'
 
 // The floating button's life on a page (shared/floating.ts): what the settings say is what the page shows — the

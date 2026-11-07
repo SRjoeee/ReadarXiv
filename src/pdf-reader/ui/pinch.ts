@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/pinch) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // Pinch zoom (the reader's design, §6.8): a trackpad pinch arrives as a wheel event with Ctrl held; over the pages it
 // zooms both sides together about the pointer — PDF.js scales them by CSS while the fingers move and draws them once,
 // 400 ms after they stop. A trackpad's small deltas zoom continuously, a mouse notch a tenth. One call per frame, with the

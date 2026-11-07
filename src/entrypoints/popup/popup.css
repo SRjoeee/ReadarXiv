@@ -1,5 +1,5 @@
 /* The popup (the redesign's design, §5; round 6 of its prototypes, and the rounds it builds on): 320 px on the chrome.
-   Every measure is the prototype's, every colour a role of src/shared/tokens.ts. Two leading edges, the controls at 12
+   Every measure is the prototype's, every colour a role of packages/ui/src/tokens.ts. Two leading edges, the controls at 12
    px and the group's words at 24; two trailing, the controls at 12 and the group's values at 24 (§12's probe measures
    them: tests/e2e/probes/popup-align.mjs). No :has() (tests/popup/sheet.test.ts) */
 .ui.popup { display: flex; flex-direction: column; width: 320px; background: var(--chrome); color: var(--ink); font: 13px/1.4 var(--font); -webkit-font-smoothing: antialiased; anchor-name: --popup; anchor-scope: --popup; }

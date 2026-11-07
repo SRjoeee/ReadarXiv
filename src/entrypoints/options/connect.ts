@@ -12,7 +12,8 @@ import { unitOfWire } from '@/core/protector/units'
 import type { ProviderErrorKind } from '@/providers/types'
 import { wireFormatOfProvider } from '@/providers/wire-formats'
 import { sendMessage } from '@/shared/messages'
-import { O, reasonText } from '@/ui/strings'
+import { O } from '@readarxiv/ui'
+import { reasonText } from '@/ui/strings'
 import { PermissionError, ensureHostPermission } from './permissions'
 
 /** The sample says whether the endpoint keeps our placeholders: two elements and a styled word, as a unit of the chain */

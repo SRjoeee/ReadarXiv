@@ -55,7 +55,7 @@ import { listModels } from '@/entrypoints/options/models'
 import { DEPARTURE_CHECK_MS, createOriginKeeper } from '@/entrypoints/background/origin-keeper'
 import { ensureHostPermission } from '@/entrypoints/options/permissions'
 import { KeyForm, STILL_MS, ServiceForm } from '@/entrypoints/options/sections/ServiceForm'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 /** OpenRouter's origin is the manifest's own; the others are granted as a form asks */
 const START = ['https://openrouter.ai/*']

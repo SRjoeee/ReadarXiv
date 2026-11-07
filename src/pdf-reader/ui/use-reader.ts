@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/use-reader) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The reader's state for React: the controller is an external store (the reader's design, §11.3). A component takes the
 // part it shows, and renders again only when that part changes: a page turned in a pane renders its pill, not the page
 // (the final review: every event rendered the whole interface, a pinch twice a frame)

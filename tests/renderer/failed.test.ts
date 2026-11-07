@@ -5,12 +5,12 @@ import { ERROR_CLASS, FOR_ATTR, PARTIAL_ATTR, SPLIT_CLASS, STATE_ATTR } from '@/
 import { REASON_ATTR, relabelFailed, renderFailed } from '@/core/renderer/failed'
 import { restore } from '@/core/renderer/page'
 import { renderPending } from '@/core/renderer/pending'
-import { resolve } from '@/shared/tokens'
+import { resolve, S, setLocale } from '@readarxiv/ui'
 import { ruleOf, rules, sheet } from '../styles/css-rules'
 import { splitFigures } from '@/core/renderer/split-figures'
 import { clearTranslation, markPartial, renderTable } from '@/core/renderer/translation'
 import { docOfChecked, frag } from './helpers'
-import { S, reasonText, setLocale } from '@/ui/strings'
+import { reasonText } from '@/ui/strings'
 
 // Every document a case renders into is held to the tail mark's invariant afterwards (helpers.ts)
 const docOf = docOfChecked()

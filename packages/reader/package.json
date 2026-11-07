@@ -5,17 +5,25 @@
   "type": "module",
   "license": "GPL-3.0-only",
   "description": "the page stack, composing, session, highlight and the Host a reader runs in",
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./vite": "./src/vite.ts",
+    "./reader.css": "./src/chrome/reader.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@readarxiv/format": "workspace:*",
-    "@readarxiv/typeset": "workspace:*",
     "@readarxiv/text": "workspace:*",
-    "@readarxiv/ui": "workspace:*"
+    "@readarxiv/typeset": "workspace:*",
+    "@readarxiv/ui": "workspace:*",
+    "pdfjs-dist": "6.3.289",
+    "lucide": "1.47.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }

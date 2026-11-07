@@ -31,6 +31,10 @@ const DIRECTORIES = new Set(tracked.flatMap(file => { const parts = file.split('
 /** what a lab keeps on the machine and not in the repository (its .gitignore says so, checked below) */
 const MACHINE = /^(?:lab\/pdf\/(?:data|out|node_modules|poc-reader\/papers)|parked\/(?:lab|tex-page)\/(?:data|out))(?:\/|$)/
 const IGNORED: Record<string, string[]> = { 'lab/pdf': ['data/', 'out/', 'node_modules/', 'poc-reader/papers/'], parked: ['data/', 'out/'] }
+/** a path a document names that has moved, where the document is the maintainer's to edit (CLAUDE.md, the agents' rules):
+ *  its line on `pnpm tokens` names the token sheet's place before stage 5a (now packages/ui/src/tokens.css), held here until
+ *  he updates it — and only that path of that document */
+const MOVED: Record<string, readonly string[]> = { 'CLAUDE.md': ['src/styles/tokens.css'] }
 
 /** the words of a document that sit in backticks: a code span's words, and every word of a fenced block */
 function backticked(text: string): string[] {
@@ -76,7 +80,7 @@ describe('the paths in the documents', () => {
       if (!FILES.has(doc)) continue
       for (const word of backticked(readFileSync(join(ROOT, doc), 'utf8'))) {
         const path = repositoryPath(word)
-        if (path === null || MACHINE.test(path) || FILES.has(path) || STEMS.has(path) || DIRECTORIES.has(path.replace(/\/$/, '')) || GENERATED.has(path)) continue
+        if (path === null || MACHINE.test(path) || FILES.has(path) || STEMS.has(path) || DIRECTORIES.has(path.replace(/\/$/, '')) || GENERATED.has(path) || MOVED[doc]?.includes(path)) continue
         missing.push(`${doc}: ${path}`)
       }
     }

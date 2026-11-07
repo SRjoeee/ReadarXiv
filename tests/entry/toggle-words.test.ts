@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { askAgainOnRestore, createToggleWords } from '@/entrypoints/content/toggle-words'
-import { LOCALES } from '@/locales'
+import { LOCALES } from '@readarxiv/ui'
 import type { PageAction } from '@/shared/page-action'
 
 // The floating button's words on the full text (UI.md S-I-06): what its press does, as the toggle decides it

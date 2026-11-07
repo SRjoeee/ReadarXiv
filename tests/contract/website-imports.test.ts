@@ -1,9 +1,10 @@
 // The website's contract (CLAUDE.md hard rule 7). The website (readarxiv-web) pins this repository as a submodule and
 // imports modules of its src/ through an alias, `@vendor/<path>` → `src/<path>`, in its reader, its Worker and its tests.
 // A module moved or deleted here, or a name it no longer exports, breaks the website's build at its next pin, so each
-// stays at its old path with every name the website takes from it (a re-export where the code moved, a frozen copy where
-// it was deleted) until the website's cut-over.
-import { existsSync, statSync } from 'node:fs'
+// stays at its old path with every name the website takes from it (a re-export where the code moved and its API stayed, a
+// frozen copy of the old module where its API changed or it was deleted) until the website's cut-over. The calls the website
+// makes are held in their shapes by website-use.tsx, which `pnpm typecheck` compiles.
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -89,5 +90,20 @@ describe("the website's @vendor/ imports: every module resolves at its path unde
     if (!file || !isCode(file)) return
     const module: Record<string, unknown> = await import(/* @vite-ignore */ file)
     expect(names.filter(name => !(name in module)), `${file} no longer exports`).toEqual([])
+  })
+
+  // A path can resolve and export every name and still have changed what a call passes or gets back (5a.4's controller, at
+  // the same path): website-use.tsx makes the website's calls, in its shapes, and `pnpm typecheck` compiles them. This holds
+  // the two lists together: every value listed here is imported there from its path, and nothing the website does not take
+  it('website-use.tsx calls from each path every value the website takes from it', () => {
+    const use = readFileSync(resolve(__dirname, 'website-use.tsx'), 'utf8')
+    const imported = new Map<string, string[]>()
+    for (const [, list = '', path = ''] of use.matchAll(/^import \{([^}]*)\} from '@\/([^']+)'$/gm)) {
+      const values = list.split(',').map(name => name.trim()).filter(name => name !== '' && !name.startsWith('type '))
+      imported.set(path, values.map(name => name.split(/\s+as\s+/)[0] as string).sort())
+    }
+    const listed = WEBSITE_IMPORTS.filter(entry => entry.names.length > 0)
+    expect([...imported.keys()].sort()).toEqual(listed.map(entry => entry.path).sort())
+    for (const { path, names } of listed) expect(imported.get(path), path).toEqual([...names].sort())
   })
 })

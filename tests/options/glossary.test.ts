@@ -12,7 +12,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 
 import { GlossaryTable, entriesOf } from '@/entrypoints/options/sections/Glossary'
 import { drafts } from '@/ui/drafts'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 /** `fail`, when given, decides per call whether the write is refused — never resolves, so a chained `.catch` sees it */
 function data(config: Config, patches: Config[] = [], fail: () => boolean = () => false): OptionsData {

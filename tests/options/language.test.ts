@@ -5,7 +5,7 @@ import { createElement as h } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
-import { LOCALE_CODES, LOCALE_NAMES } from '@/locales'
+import { LOCALE_CODES, LOCALE_NAMES, O, setLocale } from '@readarxiv/ui'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { mountElement } from '../ui/render-hook'
 
@@ -15,7 +15,6 @@ vi.mock('@/entrypoints/options/data', () => ({ useOptionsData: () => state.data 
 
 import { App } from '@/entrypoints/options/App'
 import { LanguageFoot, LanguageRow } from '@/entrypoints/options/sections/Language'
-import { O, setLocale } from '@/ui/strings'
 
 function data(config: Config, patches: Config[]): OptionsData {
   return {

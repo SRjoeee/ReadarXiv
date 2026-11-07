@@ -13,7 +13,7 @@ import { onMessages, sendMessage } from '@/shared/messages'
 import { watchRejected } from '@/shared/service-health'
 import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
-import { S, localeInUse } from '@/ui/strings'
+import { S, localeInUse } from '@readarxiv/ui'
 import { enableDebug } from './debug'
 import { askAgainOnRestore, createToggleWords } from './toggle-words'
 

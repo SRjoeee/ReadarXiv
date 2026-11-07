@@ -98,7 +98,7 @@ export const BUNDLED_DATA = [{
   ].join('\n'),
 }, {
   // the PDF reader's display switch draws two of the face's glyphs, A and U+6587, as outline path data made by
-  // scripts/pdf-reader-glyphs.py (src/pdf-reader/ui/display-glyphs.ts); no font file is bundled
+  // scripts/pdf-reader-glyphs.py (packages/ui/src/controls/display-glyphs.ts); no font file is bundled
   name: 'Noto Sans SC — the outlines of two glyphs, in the PDF reader\'s display switch',
   licence: 'OFL-1.1',
   source: 'https://github.com/notofonts/noto-cjk',

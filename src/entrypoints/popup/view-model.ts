@@ -8,7 +8,7 @@
 // stopped and the information for something that goes on; every menu the view offers is drawn whether open or not (a
 // popover's contents exist before it opens), they open at any time, a change while the page is on restarts it in place
 // (data.ts), and only a choice that cannot run leaves the page behind the settings.
-import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
+import { languageItems, READER_LANGUAGES } from '@/pdf-reader/host/languages'
 import { activeStyle } from '@/config/appearance'
 import { LANG_CODES, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -27,9 +27,9 @@ import { promptName } from '@/ui/prompt-name'
 import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
-import type { MenuListItem } from '@/ui/controls/MenuList'
+import { type MenuListItem, PREVIEW_LANG, PREVIEW_TARGET, S } from '@readarxiv/ui'
 import { languageKeywords } from '@/ui/language-keywords'
-import { PREVIEW_LANG, PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
+import { languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 import { isPaperAddress, offeredQuery, readQuery } from './find'
 
 export type { PackState }
@@ -89,7 +89,7 @@ export interface Entry { label: string; disabled: boolean }
  * goes on; `settings` adds the button that opens the options page
  */
 export interface Note { text: string; tone: 'alert' | 'info'; settings: boolean }
-/** A menu as the shared menu list draws it (@/ui/controls/MenuList, Part 3): its name, whether it searches, its rows */
+/** A menu as the shared menu list draws it (@readarxiv/ui's MenuList, Part 3): its name, whether it searches, its rows */
 export interface MenuView { label: string; search: boolean; items: MenuListItem[] }
 /** One of P0's entries for a paper it names: the address it opens, or null where the checks ruled it out */
 export interface FoundEntry { label: string; href: string | null }
