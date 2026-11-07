@@ -264,6 +264,76 @@ describe('locate: the room under a unit', () => {
     // borrowed lines run into a display)
     expect(L.members[0]!.room.below).toBe(5)
   })
+  it("reads no ink nothing of which is shown beside a unit or under it (the checkpoint's measure-9: a figure's clipped title)", () => {
+    // (1706.03762v7 p13: "Attention Visualizations", and on its baseline's band to its right a figure's "Layer5", clipped out of
+    // its form, nothing of it shown: Room.side stopped at it, the heading could not widen, and its translation was set at 70 %)
+    const make = (unseen: boolean) => {
+      const B = docOf([
+        {
+          lines: [
+            { text: 'A heading', y: 700 },
+            { text: 'Layer5', x: 140, y: 703, form: true },
+            { text: 'hidden', x: 72, y: 690, form: true },
+            { text: 'the body text', y: 650 },
+          ],
+        },
+      ])
+      if (unseen) for (const g of B.pages[0]!.glyphs) if (g.n === 1 || g.n === 2) g.unseen = true
+      const units = [unitOf('heading', 'A heading'), unitOf('para', 'the body text')]
+      return locate(instrumentOf(B, units, [[0, -1, -1, 1]]), B, align(B, B)).members[0]!.room
+    }
+    expect(make(false).side?.[1]).toBe(140)
+    expect(make(false).below).toBe(1)
+    expect(make(true).side?.[1]).not.toBe(140)
+    expect(make(true).below).toBe(41)
+  })
+  it("ties at one size the units of one TeX paragraph a float cut in two (the checkpoint's free-9)", () => {
+    // (2608.16117v1 p19: "… 8(d)). The increasing-" [a figure] "decreasing trend …", one paragraph of TeX's the front end cut
+    // at the figure into two units, each fitted alone: the one at its size, the other shrunk; one size for both, the maintainer's
+    // ruling: the text of one paragraph is to be even. The paragraph after them, past a paragraph end, is none of theirs)
+    const B = docOf([{ lines: ['first part of it', 'Figure 1: a caption', 'second part here', 'Next paragraph'] }])
+    const units = [
+      unitOf('para', 'first part of it'),
+      unitOf('caption', 'Figure 1: a caption'),
+      unitOf('para', 'second part here'),
+      unitOf('para', 'Next paragraph'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 3]])
+    const ends = (at: number[]) => ({ ...ins, tex: { paragraphEnds: [at] } })
+    const n = (k: number) => B.pages[0]!.glyphs.filter((g) => g.n < k).length
+    const sizeTies = (I: Instrument) => locate(I, B, align(B, B)).ties.filter((t) => t.rule === 'size')
+    // (the caption's own paragraph ends inside it, the second part's at its end)
+    expect(sizeTies(ends([n(2), n(3)]))).toEqual([{ rule: 'size', ords: [0, 2] }])
+    // (a paragraph end between the two parts: two paragraphs, no tie; none stated: nothing told, no tie)
+    expect(sizeTies(ends([n(1), n(2), n(3)]))).toEqual([])
+    expect(sizeTies(ins)).toEqual([])
+  })
+  it("holds the glyphs an element of no piece and a label cut from the text by them as A's ink, not the unit's text", () => {
+    // (2610.37818v1 p14, the checkpoint's measure-4: the instrument gave sub-caption (b)'s unit the glyphs of sub-caption (a), which
+    // has no unit, "(a)" as its label and "Dark rim band" as an element of no piece (today's u<id>.p with no placeholder's points
+    // round them); read as the unit's text, its line ran over (a) and its text group erased (a)'s English with nothing drawn
+    // there, its label crop "(a)" drawn before "(b)". They stay A's ink where they stand, as today's reader kept them)
+    const B = docOf([
+      {
+        lines: [
+          { text: '(a)', x: 100, y: 700 },
+          { text: 'Dark rim band', x: 120, y: 700 },
+          { text: '(b) Rim and edge', x: 300, y: 700 },
+          { text: 'Figure 8: a caption under them', y: 680 },
+        ],
+      },
+    ])
+    const units = [unitOf('para', '(b) Rim and edge'), unitOf('caption', 'Figure 8: a caption under them')]
+    const L = locate(
+      instrumentOf(B, units, [[0, 0, 0, 1]], [[ROLE.label, ROLE.element, ROLE.text, ROLE.text]]),
+      B,
+      align(B, B),
+    )
+    const sub = L.members[0]!
+    expect(sub.located).toBe(true)
+    expect(sub.lines.map((l) => l[2])).toEqual([300])
+    expect(sub.labelAt).toBeUndefined()
+  })
 })
 
 describe('review of #605', () => {
