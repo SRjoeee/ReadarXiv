@@ -25,5 +25,11 @@ export declare const FORCED_BREAK: RegExp
 export declare function noteOf(src: string): string | null
 /** the command a source begins with, and whether the source is that command alone */
 export declare function commandOf(src: string): { cmd: string; bare?: true } | null
+/** each element's places in B's stream from the marked compile's points (Instrument `places`): a placeholder's two, a head
+ *  macro's opening and its unit's start, a trailing macro's unit end and its point after its group */
+export declare function placesOf(
+  pages: readonly { points: readonly { name: string; glyph: number; box?: number }[] }[],
+  count: number,
+): NonNullable<Instrument['places']>
 /** the Instrument of today's marked compile */
 export declare function instrumentOf(o: Record<string, unknown>): Promise<{ instrument: Instrument; today: unknown }>

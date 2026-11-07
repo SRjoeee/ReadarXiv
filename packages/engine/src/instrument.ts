@@ -94,8 +94,14 @@ export interface Instrument {
   turned?: Owners[]
   /** where each element of a source unit begins (`end` false) and ends in B's stream: its unit, its piece id, its B page
    *  (1-based) and the count of that page's glyphs shown before the point (the marked compile's points around a
-   *  placeholder), where the marked compile has them. A forced break's, which sets no ink, says which line TeX ended at it */
+   *  placeholder), where the marked compile has them. A forced break's, which sets no ink, says which line TeX ended at it.
+   *  A paper's macro at a unit's head ends at the unit's start point (its own opening point before it); one after the unit's
+   *  last text begins at the unit's end point and ends at the point after the group it stands in, which bounds what TeX set
+   *  there. Both places of a piece stated, no glyph of B between them: TeX set none for it */
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
+  /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point): their span stated empty, by
+   *  unit index and piece id */
+  empty?: { unit: number; piece: string }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
   tex: {

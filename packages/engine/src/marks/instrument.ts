@@ -455,10 +455,19 @@ export function instrumentFromPlan({
     }
     const passed: { unit: number; from: number; to: number }[] = []
     let qq = q - 1
+    /** whether the walk passed a head piece's own point (\axthpk's, kind `head`): the glyphs after it are that piece's */
+    let pointed = false
     for (; qq >= 0; qq--) {
       const X = pg.points[qq] as PagePoint
       for (; g >= X.glyph; g--) glyphAt(g)
       if (endUnit.has(X.name)) break
+      const hm = byName.get(X.name)
+      if (hm?.kind === 'head' && hm.unit === id) {
+        for (const j of lead) set(glyphs[p] as Owners, j, id, ROLE.element, hm.piece)
+        lead.length = 0
+        pointed = true
+        continue
+      }
       const open = openOf.get(X.name) ?? (NAME_END.test(X.name) ? X.name.replace(/\.e$/, '.s') : null)
       const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : undefined
       const c = open && !NAME_END.test(X.name) ? byName.get(X.name) : undefined
@@ -503,7 +512,8 @@ export function instrumentFromPlan({
     }
     // (a unit whose head is a piece of ink the marking passed over, before its first text: that piece's ink stands between the
     // label and the start; the label ends at the first word space, and with none the run is the piece's)
-    const head = headPiece(id)
+    // (a head piece whose point TeX set has its ink already, after that point: what stands before it is the label)
+    const head = pointed ? -1 : headPiece(id)
     let cut = lead.length
     if (head >= 0) {
       cut = 0
@@ -746,12 +756,57 @@ export function instrumentFromPlan({
 
   // ---- where each element begins and ends in B's stream (its points)
   const places: NonNullable<Instrument['places']> = []
+  // (a paper's macro at a unit's head, its point `head`: its span ends at the unit's start point or at the next head point of the
+  // unit, whichever stands first on the page; one after the unit's last text, its point `after` past the group it stands in: its
+  // span begins at the unit's end point before it)
   pages.forEach((pg, p) => {
-    for (const x of pg.points) {
+    pg.points.forEach((x, q) => {
       const m = byName.get(x.name)
-      if (!m || (m.kind !== 'open' && m.kind !== 'close') || m.pieceId === null) continue
-      places.push({ unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: m.kind === 'close' })
-    }
+      if (!m || m.pieceId === null) return
+      if (m.kind === 'open' || m.kind === 'close')
+        places.push({ unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: m.kind === 'close' })
+      else if (m.kind === 'head') {
+        const start = w.start(m.unit)
+        let r = q + 1
+        while (r < pg.points.length && (pg.points[r] as PagePoint).name !== start) r++
+        if (r === pg.points.length) return
+        let n = q + 1
+        while (
+          n < r &&
+          !(
+            byName.get((pg.points[n] as PagePoint).name)?.kind === 'head' &&
+            byName.get((pg.points[n] as PagePoint).name)?.unit === m.unit
+          )
+        )
+          n++
+        const N = pg.points[n] as PagePoint
+        // (no glyph between but a painted box, an image the macro set: not stated, TeX set something)
+        if (N.glyph === x.glyph && N.box !== x.box) return
+        places.push(
+          { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: false },
+          { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: N.glyph, end: true },
+        )
+      } else if (m.kind === 'after') {
+        const end = w.end(m.unit)
+        let e = q - 1
+        while (e >= 0 && (pg.points[e] as PagePoint).name !== end) e--
+        const E = pg.points[e] as PagePoint | undefined
+        if (E && !(E.glyph === x.glyph && E.box !== x.box))
+          places.push(
+            { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: E.glyph, end: false },
+            { unit: m.unit, piece: m.pieceId, page: p + 1, glyph: x.glyph, end: true },
+          )
+      }
+    })
+  })
+  // (the pieces TeX said set no ink, the probe's `inkless`, to which the marking gives no point: their span stated empty)
+  const empty: NonNullable<Instrument['empty']> = []
+  doc.units.forEach((u, i) => {
+    const ids = pieceIdsOf(u.pieces)
+    u.pieces.forEach((pc, k) => {
+      const id = ids[k]
+      if (pc.t === 'ph' && classOf(pc) === 'macro' && noInk.has(pc.src) && id) empty.push({ unit: i, piece: id })
+    })
   })
   // ---- the colour TeX was in after each colour piece (AXT-COLOUR c<u>.<k> <\current@color>, its 79-column wrap joined)
   const colours: NonNullable<Instrument['tex']['colours']> = []
@@ -775,6 +830,7 @@ export function instrumentFromPlan({
     glyphs,
     boxes,
     places,
+    ...(empty.length ? { empty } : {}),
     tex: {
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),

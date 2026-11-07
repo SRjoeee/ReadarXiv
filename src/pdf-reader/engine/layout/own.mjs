@@ -85,6 +85,8 @@ export const HEAD_ABUT = 0.2
 export const TAIL_PUNCT = /^[.,;:!?)\]]$/
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
+/** whether a point is the opening point of one of unit `id`'s own pieces: before its start point, a head piece's (\\axthpk) */
+const headOpen = (name, id) => { const m = /^p(\d+)\.\d+a$/.exec(name); return !!m && Number(m[1]) === id }
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
 const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 const BRACKET = /^[bf][se]\d+$/
@@ -313,6 +315,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
       if (END.test(X.name)) break
+      // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
+      // or the next such point, are that piece's ink, and the label is what stands before it)
+      if (headOpen(X.name, id)) { if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p'); lead.glyphs = []; continue }
       const c = CLOSING.exec(X.name), nm = NAME_END.exec(X.name)
       const open = c ? `${c[1]}${c[2]}.${c[3]}a` : nm ? `n${nm[1]}.${nm[2]}.s` : null
       const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : null
