@@ -95,7 +95,13 @@ function runStep(step, log) {
         chunks.push(d)
         file.write(d)
       })
-    const end = exit => file.end(() => done({ cmd: step.cmd, exit, ms: Math.round(performance.now() - t0), log, text: Buffer.concat(chunks).toString('utf8') }))
+    const end = exit =>
+      file.end(() => {
+        const text = Buffer.concat(chunks).toString('utf8')
+        // (the time it waited for the heavy slot, which another lane held, is not the gate's)
+        const waited = Number(/heavy-slot: \w+ slot \S+ taken after (\d+)s/.exec(text)?.[1] ?? 0) * 1000
+        done({ cmd: step.cmd, exit, ms: Math.max(0, Math.round(performance.now() - t0) - waited), waited, log, text })
+      })
     child.on('error', e => {
       chunks.push(Buffer.from(String(e)))
       end(127)
@@ -124,8 +130,9 @@ async function runGate(g, results) {
     steps.push(s)
     if (s.exit !== 0 && !step.all) break
   }
-  const ms = Math.round(performance.now() - t0)
-  const stepsOut = steps.map(s => ({ cmd: s.cmd.join(' '), exit: s.exit, ms: s.ms, log: relative(ROOT, s.log) }))
+  const waited = steps.reduce((n, s) => n + s.waited, 0)
+  const ms = Math.round(performance.now() - t0) - waited
+  const stepsOut = steps.map(s => ({ cmd: s.cmd.join(' '), exit: s.exit, ms: s.ms, waited: s.waited, log: relative(ROOT, s.log) }))
   let judged
   try {
     judged = g.judge ? g.judge(ctx, steps) : { pass: steps.every(s => s.exit === 0) }
@@ -135,8 +142,8 @@ async function runGate(g, results) {
   const failed = steps.find(s => s.exit !== 0)
   const status = judged.skip ? 'skipped' : judged.pass ? 'pass' : 'fail'
   const reason = judged.skip ?? (status === 'fail' ? (failed ? `${failed.cmd.slice(0, 3).join(' ')} … exit ${failed.exit}` : 'its counts') : undefined)
-  console.log(`release-check: ${g.id}: ${status}${reason ? ` (${reason})` : ''}, ${Math.round(ms / 1000)} s`)
-  return { ...base, status, reason, note: judged.note || undefined, ms, numbers: judged.numbers, findings: judged.findings, steps: stepsOut }
+  console.log(`release-check: ${g.id}: ${status}${reason ? ` (${reason})` : ''}, ${Math.round(ms / 1000)} s${waited ? ` (and ${Math.round(waited / 1000)} s waiting for the heavy slot)` : ''}`)
+  return { ...base, status, reason, note: judged.note || undefined, ms, waited, numbers: judged.numbers, findings: judged.findings, steps: stepsOut }
 }
 
 if (argv.includes('--plan')) {

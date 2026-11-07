@@ -5,6 +5,8 @@
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
+import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
 
 /** the tiers, each holding the gates of the ones before it (lab/release-check/CI.md says where each runs) */
 export const TIERS = ['fast', 'full', 'release']
@@ -347,7 +349,7 @@ export const GATES = [
     tier: 'full',
     stage: 'reader',
     holds: ['D', 'I3', 'I4', 'I5'],
-    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers')), exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay'))],
+    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers')), exists("lane L3's derived inputs", lab(ctx, 'lanes/L3/replay')), exists("the release sweep's cache (AXT_SWEEP_CACHE): the views and rules today's reader read", join(SWEEP_CACHE, 'papers'))],
     steps: ctx => [
       { cmd: ['node', 'lab/typeset/gate.mjs', `--out=${join(ctx.work, 'typeset-today')}`], slot: 'test', fresh: join(ctx.work, 'typeset-today') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-today'), '--scope=reader', `--json=${join(ctx.work, 'typeset-today-diff.json')}`] },
@@ -361,7 +363,12 @@ export const GATES = [
     stage: 'reader',
     holds: ['D', 'I3', 'I4', 'I5'],
     after: ['prepare'],
-    needs: ctx => [exists('the tap', lab(ctx, 'baseline/tap/ledgers'))],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES), the measurer of a width the tap lacks", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
     steps: ctx => [
       { cmd: ['node', 'lab/typeset/gate-l1.mjs', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
