@@ -126,6 +126,11 @@ export function reasonText(kind: ProviderErrorKind, engine?: string): string {
 /** `kind: diagnostic` → its parts; lives in the core now (pipeline/fatal.ts), re-exported for the popup and the tests */
 export { parseFatal } from '@/core/pipeline/fatal'
 
+// Kept at this path for the website's reader (readarxiv-web, @vendor/ui/strings) until its cut-over: the lookup and the
+// preview's words this module exported before they moved into `@readarxiv/ui` (live bindings, re-exported as they are).
+// See tests/contract/website-imports.test.ts.
+export { localeInUse, O, PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET, R, S, setLocale } from '@readarxiv/ui'
+
 /** service id → the name a reader sees (§2): built-ins by id, the reader's own by the name they gave */
 export function serviceName(id: string, services: readonly { id: string; name: string }[] = []): string {
   switch (id) {
