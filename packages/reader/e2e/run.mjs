@@ -883,6 +883,68 @@ await check(
   },
 )
 await check(
+  "reader: a laid page's links reached by the pointer in a host's panes; no slot keeps the left's loading mark (L11 gap 5)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    // (the host's scrollers as both hosts' chrome gives them: a .viewerContainer a pane, its own .pdfViewer, under which
+    // pdf_viewer.css draws a page's loading dots over it while it is marked loading)
+    await page.evaluate(() => {
+      const root = document.createElement('div')
+      root.style.cssText = 'position:absolute;inset:0'
+      const panes = { root }
+      for (const side of ['left', 'right']) {
+        const el = document.createElement('div')
+        el.className = `viewerContainer axt-pane ${side}`
+        el.id = side
+        el.append(Object.assign(document.createElement('div'), { className: 'pdfViewer' }))
+        root.append(el)
+        panes[side] = el
+      }
+      document.body.append(root)
+      window.__opened = []
+      window.open = (u) => {
+        window.__opened.push(String(u))
+        return null
+      }
+      window.__h.given = panes
+    })
+    await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', panes: window.__h.given }))
+    await readerLaid(page)
+    // (the laid page put in place, the left's copy before it and its frame gone by)
+    await page.waitForTimeout(400)
+    const seen = await page.evaluate(() => {
+      const right = window.__h.given.right
+      const loading = [...right.querySelectorAll('.axt-slot')]
+        .filter((s) => s.classList.contains('loading') || s.classList.contains('loadingIcon'))
+        .map((s) => s.dataset.pageNumber)
+      const slot = right.querySelector('.axt-slot[data-page-number="1"]')
+      const a = [...(slot?.querySelectorAll('.axt-over a.axt-link') ?? [])].find((x) =>
+        x.getAttribute('href')?.startsWith('https:'),
+      )
+      const r = a?.getBoundingClientRect()
+      const x = r ? r.left + r.width / 2 : 0,
+        y = r ? r.top + r.height / 2 : 0
+      const hit = r ? document.elementFromPoint(x, y) : null
+      return {
+        loading,
+        href: a?.getAttribute('href') ?? null,
+        at: [x, y],
+        hit: hit ? `${hit.tagName}.${hit.className}` : null,
+        onLink: !!a && !!hit && hit.closest('a') === a,
+      }
+    })
+    if (seen.href) await page.mouse.click(seen.at[0], seen.at[1])
+    await page.waitForTimeout(200)
+    const opened = await page.evaluate(() => window.__opened)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(!seen.loading.length, `slots still marked loading: ${seen.loading}`)
+    assert(seen.href && seen.onLink, `the pointer over the link meets ${seen.hit}`)
+    assert(opened.length === 1 && opened[0] === seen.href, `opened ${JSON.stringify(opened)}`)
+    return { href: seen.href, opened }
+  },
+)
+await check(
   'reader: close lets everything go, closed before PDF.js is in too; a second reader on the same page goes on',
   async () => {
     // (closed in the task that opened it, before PDF.js's modules are in: once they are, for the reader opened after it on the
