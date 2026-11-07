@@ -58,7 +58,7 @@ import { connectService } from '@/entrypoints/options/connect'
 import type { ConnectResult } from '@/entrypoints/options/connect'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
-import { O, S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@readarxiv/ui'
 
 const MINE: Service = { id: 'svc-mine0000', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-old', model: 'm-1', thinking: 'disabled' }
 const OTHER: Service = { ...MINE, id: 'svc-othr0000', name: 'Other', baseURL: 'https://other.example.com/v1' }

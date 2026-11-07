@@ -1,7 +1,9 @@
-// The licence contract (stage 7, lane L10): no file of the extension, of its packages or of its tests carries code ported
-// from a GPL-3.0 project, and the record of third-party code names none. The files below were ported from Read Frog and
-// KISS Translator and are replaced by code written from the product's own documents (docs/THIRD_PARTY.md says what
-// remains). A port is found by the statement its header made of it: the words "ported from" followed by a GPL project's
+// The licence contract (stage 7, lane L10): nothing the extension bundles or imports carries code ported from a GPL-3.0
+// project — proved from the import graph of every extension entry point, and the workspace packages hold no port (they
+// import nothing of src/: the boundary gate of `pnpm lint`). The only GPL-3.0 ports left in the repository are the website's
+// (KEPT_FOR_WEBSITE: kept at the paths its Worker imports until its cut-over, #613), and the test fails if one more
+// appears anywhere or if the extension comes to import one of them. The files of REPLACED were ported from Read Frog and
+// KISS Translator and are replaced by code written from the product's own documents (docs/THIRD_PARTY.md). A port is found by the statement its header made of it: the words "ported from" followed by a GPL project's
 // snapshot path or Read Frog's package, or the GPL-3.0 licence named in parentheses, in a comment that opens a line (a
 // string in a test that spells such a header out, as tests/scripts/engine-boundary.test.ts does, is not a header).
 //
@@ -14,6 +16,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { closureOf } from '../../scripts/check-boundary.mjs'
 import { DEFAULT_LANG_CODE, LANG_CODES, RTL_LANGUAGES, toBcp47 } from '@/config/languages'
 import TAKEN from './languages.json'
 
@@ -32,6 +35,23 @@ const REPLACED = [
   'src/config/languages.ts',
   'src/core/floating/button.ts',
 ]
+
+/**
+ * Kept, unchanged and under their GPL-3.0 headers, at the paths the website's Worker (readarxiv-web, through its pin)
+ * imports them from, each headed "Kept at this path for the website's Worker … until its cut-over; nothing in the extension
+ * imports it" (#613). They are deleted at the website's cut-over to the packages, and this list with them; until then the
+ * repository holds them under GPL-3.0. `gpl`: the file states a GPL-3.0 port (the other three are kept with them, frozen
+ * copies of the same cut-over, docs/THIRD_PARTY.md "Kept for the website's Worker")
+ */
+const KEPT_FOR_WEBSITE: readonly { file: string; gpl: boolean }[] = [
+  { file: 'src/providers/google-web.ts', gpl: true },
+  { file: 'src/providers/request/retry-policy.ts', gpl: true },
+  { file: 'src/providers/compat/microsoft.ts', gpl: true },
+  { file: 'src/providers/http-errors.ts', gpl: false },
+  { file: 'src/providers/compat/alignment.ts', gpl: false },
+  { file: 'src/providers/compat/types.ts', gpl: false },
+]
+const KEPT_HEADER = /Kept at this path for the website's Worker[\s\S]{0,400}?until its cut-over/
 
 /** the GPL-3.0 projects' snapshots and package, as a port statement names them */
 const GPL_SOURCE = String.raw`(?:reference\/(?:kiss-translator|read-frog|fluent-?read)\b|@read-frog\/)`
@@ -76,18 +96,41 @@ describe('no code ported from a GPL-3.0 project', () => {
     if (existsSync(file)) expect(carriesGplPort(readFileSync(file, 'utf8'))).toBe(false)
   })
 
-  it('holds for every file of src/, packages/ and tests/', () => {
+  it('holds for every file of src/, packages/ and tests/ but the website\'s kept ones, and no other port appears', () => {
     const ported = tracked.filter(file => CODE.test(file) && existsSync(file) && carriesGplPort(readFileSync(file, 'utf8')))
-    expect(ported).toEqual([])
+    expect(ported.sort()).toEqual(KEPT_FOR_WEBSITE.filter(k => k.gpl && existsSync(k.file)).map(k => k.file).sort())
   })
 
-  it("is what docs/THIRD_PARTY.md's ported files say: none from a GPL-3.0 source", () => {
+  it('the website\'s kept files say what they are kept for and until when, in their header', () => {
+    for (const { file } of KEPT_FOR_WEBSITE.filter(k => existsSync(k.file))) expect([file, KEPT_HEADER.test(readFileSync(file, 'utf8'))]).toEqual([file, true])
+  })
+
+  it('nothing the extension bundles or imports is one of them, or any other port: the import graph of every entry point', () => {
+    // every code file under src/entrypoints is an entry WXT builds or is reached from one; the closure follows the aliases
+    // and relative imports (scripts/check-boundary.mjs); the workspace packages it reaches by name import nothing of src/
+    const entries = tracked.filter(file => file.startsWith('src/entrypoints/') && /\.(?:[cm]?[jt]sx?)$/.test(file) && !/\.d\.ts$/.test(file) && existsSync(file))
+    expect(entries.length).toBeGreaterThan(20)
+    const closure = [...closureOf(entries)] as string[]
+    expect(closure.length).toBeGreaterThan(200)
+    const kept = new Set(KEPT_FOR_WEBSITE.map(k => k.file))
+    expect(closure.filter(file => kept.has(file))).toEqual([])
+    expect(closure.filter(file => CODE.test(file) && carriesGplPort(readFileSync(file, 'utf8')))).toEqual([])
+    // the packages: no port in any of them
+    expect(tracked.filter(file => file.startsWith('packages/') && CODE.test(file) && existsSync(file) && carriesGplPort(readFileSync(file, 'utf8')))).toEqual([])
+  })
+
+  it("is what docs/THIRD_PARTY.md says: no GPL-3.0 source among the extension's ported files, the website's kept ones apart", () => {
     const doc = readFileSync('docs/THIRD_PARTY.md', 'utf8')
-    const start = doc.indexOf('\n## Ported files')
-    expect(start).toBeGreaterThan(0)
-    const end = doc.indexOf('\n## ', start + 1)
-    const section = doc.slice(start, end < 0 ? undefined : end)
-    expect(section.match(new RegExp(`${GPL_SOURCE}|GPL-3\\.0`, 'gi')) ?? []).toEqual([])
+    const sectionOf = (heading: string) => {
+      const start = doc.indexOf(`\n## ${heading}`)
+      expect(start, heading).toBeGreaterThan(0)
+      const end = doc.indexOf('\n## ', start + 1)
+      return doc.slice(start, end < 0 ? undefined : end)
+    }
+    expect(sectionOf('Ported files').match(new RegExp(`${GPL_SOURCE}|GPL-3\\.0`, 'gi')) ?? []).toEqual([])
+    const kept = sectionOf("Kept for the website's Worker until its cut-over")
+    expect(kept).toContain('the extension ships no GPL-3.0 code')
+    for (const { file } of KEPT_FOR_WEBSITE.filter(k => existsSync(k.file))) expect([file, kept.includes(`\`${file}\``)]).toEqual([file, true])
   })
 })
 

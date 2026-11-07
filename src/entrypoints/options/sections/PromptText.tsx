@@ -4,7 +4,7 @@
 // the reader: React leaves alone the children it drew the same way
 import { Fragment, type Ref, useState } from 'react'
 import { PROMPT_TOKENS, type PromptToken, getTokenCellText } from '@/providers/prompt-library'
-import { O } from '@/ui/strings'
+import { O } from '@readarxiv/ui'
 
 const TOKEN = new RegExp(`\\{\\{(${PROMPT_TOKENS.join('|')})\\}\\}`, 'g')
 

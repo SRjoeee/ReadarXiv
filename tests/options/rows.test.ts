@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { Card, GroupHeading } from '@/entrypoints/options/ui/Card'
 import { IconButton, Row, Status, Value } from '@/entrypoints/options/ui/Row'
 import { SearchQuery } from '@/entrypoints/options/ui/search'
-import { Switch } from '@/ui/controls/Switch'
+import { Switch } from '@readarxiv/ui'
 import { mountElement } from '../ui/render-hook'
 
 const rows = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('[data-srow]')]

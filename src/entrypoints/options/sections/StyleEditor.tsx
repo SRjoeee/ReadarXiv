@@ -12,14 +12,9 @@ import { type ComponentProps, useEffect, useId, useRef, useState } from 'react'
 import { CSS_MAX, NAME_MAX, PALETTE, type StyleProfile, UNDERLINES } from '@/config/appearance'
 import { sanitizeCustomCss } from '@/core/renderer'
 import { styleSample } from '@/ui/style-sample'
-import { Button } from '@/ui/controls/Button'
-import { Field, TextInput, useField } from '@/ui/controls/Field'
-import { Icon } from '@/ui/controls/Icon'
-import { Reveal } from '@/ui/controls/Reveal'
-import { Segmented } from '@/ui/controls/Segmented'
-import { Switch } from '@/ui/controls/Switch'
+import { Button, Field, TextInput, useField, Icon, Reveal, Segmented, Switch, O, PREVIEW_LANG } from '@readarxiv/ui'
 import { drafts } from '@/ui/drafts'
-import { O, PREVIEW_LANG, profileName } from '@/ui/strings'
+import { profileName } from '@/ui/strings'
 import { ColourPick } from '../ui/ColourPick'
 import { segmentWidth } from '../ui/lists'
 
@@ -176,7 +171,7 @@ function CustomCss({ value, onChange }: { value: string; onChange: (css: string)
 /**
  * The declaration block's own field (fix round 1, item 5): a single-line `<input>` cannot hold what it is meant
  * to show — typing Enter adds no line break, and a stored multi-line block reads as one broken line — so this is
- * a plain three-row `<textarea>` on the same field wiring `TextInput` uses (`@/ui/controls/Field`'s `useField`),
+ * a plain three-row `<textarea>` on the same field wiring `TextInput` uses (the kit's `useField`, @readarxiv/ui),
  * carrying the same `.input` styling
  */
 function CssTextarea({ className, ...rest }: ComponentProps<'textarea'>) {

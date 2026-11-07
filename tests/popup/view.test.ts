@@ -4,7 +4,7 @@ import type { PopupActions } from '@/entrypoints/popup/data'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { PopupView } from '@/entrypoints/popup/PopupView'
 import { derivePopupView } from '@/entrypoints/popup/view-model'
-import { S, setLocale } from '@/ui/strings'
+import { S, setLocale } from '@readarxiv/ui'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { draw, drawInput, fixture, nameOf, wordsOf } from './draw'
 

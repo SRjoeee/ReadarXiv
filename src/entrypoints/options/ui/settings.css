@@ -1,5 +1,5 @@
 /* The settings page's own sheet (the redesign's design, §6): its frame, the row grammar and the controls only this page
-   has. Every colour a role of src/shared/tokens.ts and every measure settings-2's, the prototype the maintainer agreed.
+   has. Every colour a role of packages/ui/src/tokens.ts and every measure settings-2's, the prototype the maintainer agreed.
    Imported after ui.css; the component rules join its `components` layer, so that a rule here wins a tie with a shared
    control's. Later tasks append their blocks below this one */
 @layer components {

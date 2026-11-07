@@ -1,4 +1,4 @@
-// The highlight's wash blends into the page by its layer (engine/view/engine.css, entrypoints/pdf-reader/reader.css): the layer is
+// The highlight's wash blends into the page by its layer (engine/view/engine.css, the reader's sheet: packages/reader chrome/reader.css): the layer is
 // a stacking context (its z-index), an isolated group, so a band's own blend mode would mix with nothing but the layer's empty
 // ground and the wash would lie over the letters, greying them (docs/PDF-READER.md §17.3, measured 2026-10-31)
 import { readFileSync } from 'node:fs'
@@ -10,7 +10,7 @@ const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8').replace
 const rulesOf = (sheet: string, selector: string) => [...sheet.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(m => m[1]?.trim() === selector).map(m => m[2] ?? '').join(';')
 
 describe('the highlight wash blends by its layer', () => {
-  const engine = read('src/pdf-reader/engine/view/engine.css'), reader = read('src/entrypoints/pdf-reader/reader.css')
+  const engine = read('src/pdf-reader/engine/view/engine.css'), reader = read('packages/reader/src/chrome/reader.css')
   it('multiplied into a white page: the layer blends, its bands do not', () => {
     expect(rulesOf(engine, '.axt-hl-layer')).toMatch(/z-index:\s*3/)
     expect(rulesOf(engine, '.axt-hl-layer')).toMatch(/mix-blend-mode:\s*multiply/)

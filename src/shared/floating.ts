@@ -6,7 +6,7 @@
 // and writes none. The button's own state is saved by the background too, and its answer is what the page shows —
 // so a change that could not be saved does not look saved.
 import { FLOATING_CLASS, type DockPlacement, type FloatingButton, type FloatingButtonStrings, type MainAction, mountFloatingButton } from '@/core/floating/button'
-import { LOCALES, pickLocale, type Locale } from '@/locales'
+import { LOCALES, pickLocale, type Locale } from '@readarxiv/ui'
 import { type EntrySettings, type FloatingEntryState, watchEntrySettings } from '@/shared/entry-settings'
 import { vouchFor } from '@/shared/frame-owner'
 import { sendMessage } from '@/shared/messages'

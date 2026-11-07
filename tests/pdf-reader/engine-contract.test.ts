@@ -139,7 +139,8 @@ describe('what the translation, the rules and the browser load', () => {
 describe('the licence of what a reader loads', () => {
   const tracked: string[] = trackedFiles()
   const code = (f: string) => /\.(?:[cm]?[jt]sx?)$/.test(f) && !/\.d\.[cm]?ts$/.test(f)
-  const shared = ['src/pdf-reader/controller.ts', ...tracked.filter(f => /^(?:src\/pdf-reader\/ui|src\/ui\/controls)\//.test(f) && code(f))]
+  /** the shared interface: the reader's chrome (its controller's fold among it, model.ts) and the control kit */
+  const shared = tracked.filter(f => /^(?:packages\/reader\/src\/chrome|packages\/ui\/src)\//.test(f) && code(f))
 
   it('states no port anywhere in the closure of the five entries (the web\'s R21 detector)', () => {
     expect(portedInClosure(ENTRIES.map(entryFile))).toEqual([])
@@ -150,17 +151,19 @@ describe('the licence of what a reader loads', () => {
     for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain(`${ENGINE}/rules/latexml-args.mjs`)
     const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
     for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
-    expect(shared).toContain('src/ui/controls/Icon.tsx')
-    expect(shared).toContain('src/pdf-reader/ui/display-glyphs.ts')
+    expect(shared).toContain('packages/ui/src/controls/Icon.tsx')
+    expect(shared).toContain('packages/ui/src/controls/display-glyphs.ts')
+    expect(shared).toContain('packages/reader/src/chrome/model.ts')
   })
 
-  // The brief held the shared interface to an empty closure, and it is empty now: two GPL-ported files went in stage 4b
-  // (Microsoft's adapter and the request layer's retry policy, the package's own code now) and two in stage 7 (the prompt
-  // library and the language table, written anew, lane L10). The web imports controller.ts and the components through its
-  // pin, so a port in that closure would be in its bundle; this holds none comes back
-  it('keeps the closure of controller.ts, src/pdf-reader/ui/** and src/ui/controls/** free of ported files', () => {
+  // The brief held the shared interface to the same empty closure, and it holds now: the four GPL-ported files it reached (the
+  // language table, the configuration's prompt library and the providers' retry policy by the controller, Microsoft's by the
+  // service menu) went with the chrome's move into packages/reader, its words the host's (parts.tsx) and the service menu the
+  // extension's slot (src/pdf-reader/host/slots.tsx). The closure reaches nothing of the extension at all
+  it('keeps the closure of packages/reader/src/chrome/** and packages/ui/src/** free of any ported file, and of the extension', () => {
     expect(shared.length).toBeGreaterThan(30)
     expect(portedInClosure(shared)).toEqual([])
+    expect([...closureOf(shared)].filter((f: string) => f.startsWith('src/'))).toEqual([])
   })
 })
 

@@ -5,9 +5,10 @@
 // before any component runs. Every entry point awaits this, so nothing is ever half translated.
 import { browser } from 'wxt/browser'
 import { getConfig } from '@/config/storage'
-import { type LocaleCode, pickLocale } from '@/locales'
+import { type LocaleCode, pickLocale, S, setLocale } from '@readarxiv/ui'
 import { answeredBy, firstReadTime } from './first-read'
-import { S, setLocale } from './strings'
+// (for what it does as it loads: it hands the core its sentences, then again on every switch of the pack)
+import './strings'
 
 /**
  * What the browser is set to, most preferred first. `getUILanguage` is the browser's own interface

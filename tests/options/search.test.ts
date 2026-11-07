@@ -32,7 +32,7 @@ import { Reading } from '@/entrypoints/options/sections/Reading'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { Card } from '@/entrypoints/options/ui/Card'
 import { Row } from '@/entrypoints/options/ui/Row'
-import { O, R, setLocale } from '@/ui/strings'
+import { O, R, setLocale } from '@readarxiv/ui'
 
 // the reading section's floating-button switch reads its own store, and the translation section the refused-key record
 vi.mock('@/entrypoints/options/floating-entry', () => ({ useFloatingEntry: () => ({ enabled: true, setEnabled: () => {} }) }))

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ABS_LINK_CLASS, AUTO_TRANSLATE_HASH, injectBilingualLink, relabelBilingualLink, retargetBilingualLink, startsTranslation } from '@/core/abstract/link'
-import { LOCALES } from '@/locales'
+import { LOCALES } from '@readarxiv/ui'
 
 // The bilingual entry on the abstract page (issue #146). The fixture is a real arxiv.org/abs page: the insertion point relies on arXiv's own
 // markup, and only a test against the real markup says anything

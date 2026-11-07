@@ -100,8 +100,8 @@ One cool neutral ramp at hue 255 and one status hue, all oklch; light and dark v
 appearance is dark, or is the system's and the system is dark.
 
 **Shared since 2026-09-27** (the extension's redesign, its design §2.1): these tokens are the extension's now, held as
-data in `src/shared/tokens.ts`, from which `pnpm tokens` writes `src/styles/tokens.css`; the reader's sheet imports it,
-with the controls it shares (`src/styles/controls.css`, `src/ui/controls/`). The values below are unchanged, and the
+data in `packages/ui/src/tokens.ts`, from which `pnpm tokens` writes `packages/ui/src/tokens.css`; the reader's sheet imports it,
+with the controls it shares (`packages/ui/src/controls.css`, `packages/ui/src/controls/`). The values below are unchanged, and the
 reader was held to its pixels before and after the move (`lab/pdf/spikes/reader-pixels.mjs`). The
 extension adds roles the reader has no use for — the brand, success, the search mark, the page's and the popup's
 grounds — in the redesign's §2.1.
@@ -134,7 +134,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 ### 4.2 Type, icons, motion
 
 - Type: the system stack, the platform's Latin face and then the CJK face of the element's language (`FONT_STACKS` in
-  `src/shared/tokens.ts`: PingFang SC / TC / HK, Hiragino Sans, Apple SD Gothic Neo on macOS, and their Windows and Linux
+  `packages/ui/src/tokens.ts`: PingFang SC / TC / HK, Hiragino Sans, Apple SD Gothic Neo on macOS, and their Windows and Linux
   counterparts; UI.md §1, fonts; 2026-11-04, the one Simplified stack before), 13 px base; 12.5 px for controls, 12 px for secondary text, 11 px only for page numbers; 500 for control
   labels, 600 for the title and the current section; tabular figures wherever numbers change.
 - Icons: Lucide, 16 px, stroke 1.5 on the 24 grid (1 CSS px), `currentColor`; the display switch's own three (§6.2).
@@ -603,7 +603,7 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 The reader's menus are built on `Menu`, the shared component of `src/ui/` at the time, and its gaps are closed for every user of it (the popup, the
 settings page's drawers): the active item announced as the arrows move; Home and End; typing a letter jumps to it; focus
 back on the trigger when it closes; no buttons inside a listbox. (Retired with the redesign: the reader's menus are
-`MenuList`, `src/ui/controls/`, and `Menu` is gone.)
+`MenuList`, `packages/ui/src/controls/`, and `Menu` is gone.)
 
 ## 10. Engine changes, each measured
 
@@ -772,7 +772,7 @@ viewer's control does).
 
 ### 11.5 Styling
 
-Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`src/styles/tokens.css`
+Tailwind v4, as the popup and the settings page use it, with **the extension's token sheet** (`packages/ui/src/tokens.css`
 since the redesign; §4.1) through `@theme inline`, not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside
 the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for want of it).
 
@@ -1269,7 +1269,7 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   the pages before it, Enter follows one, and a screen reader names it by its record's `name`, the text drawn under it, set
   as an attribute's text (a name is the PDF's text and may hold control or bidirectional characters: never markup). A link
   with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by the view's placeholder:
-  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
+  the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/host/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
 - **Moved with the text they are over** (`layer-proto/links.mjs` `matchUnit`, `placeUnit`): an annotation over ink the layer
   redraws is matched to what the unit draws of it (a citation, a reference, a url, an `\href` pair, a footnote's mark) and laid
@@ -1536,7 +1536,7 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 
 The words as agreed, zh-CN with the English they stand for; `docs/UI.md` gives them `S-R` ids. Where the popup already says
 the same thing, its string is reused (marked). Traditional Chinese, Japanese and Korean (2026-11-04) say the same in their
-packs (`src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`), in their own register (UI.md §1): a page's name in Japanese and Korean
+packs (`packages/ui/src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`), in their own register (UI.md §1): a page's name in Japanese and Korean
 sets no space before its counter, and Korean names an unsupported language after a colon, where no particle meets it.
 
 | Where | zh-CN | English |
@@ -2618,18 +2618,14 @@ extension's compile client (`parked/extension-compile/`).
   `pipeline` entry's names leave the compile path out, but its closure still loads `cache`, `scripts` and `typeset/*` through
   `live.mjs`; PR 5 splits `live.mjs` into the paper's pipeline and the compile run before that path is parked.
 - **Licence.** No file in the closure of the five entries states that it is ported from a reference project or a scoped
-  package (the web's R21 detector, `portedInClosure`). The shared interface (`controller.ts`, `src/pdf-reader/ui/**`,
-  `src/ui/controls/**`) reaches two GPL-ported files today, by one import each: `src/config/languages.ts` (the language
-  table) and `src/providers/prompt-library.ts` (two more, Microsoft's ported adapter and the request layer's retry policy,
-  went in stage 4b). The
-  web imports `controller.ts` and `src/pdf-reader/ui/**` through its pin today and replaces modules by its own seams (an
-  importer-scoped alias: `@/config/languages` and `pdf-reader/ui/languages` are its own files), so it must carry none of them in its bundle: each is either replaced by a web seam or not imported, which the web's own R21 gate checks. That holds
-  until Task 7 cuts them from the shared interface's closure (the `ReaderHost` seams). The test pins them as a list
-  that may shrink and never grow.
+  package (the web's R21 detector, `portedInClosure`). The shared interface (the reader's chrome,
+  `packages/reader/src/chrome/**`, and `packages/ui/src/**`) reaches no GPL-ported file since the chrome moved into the
+  package (stage 5a): the language tables, the service menu and the keyed reasons that reached them are the extension's
+  host (`src/pdf-reader/host/`), given to the chrome as its slots and words. The test pins that list as empty.
 - **Notices.** What the web carries with the engine and the shared interface: the LaTeXML acknowledgement now
   (`rules/latexml-args.mjs` is in the closures of `pipeline` and `layer`; `docs/THIRD_PARTY.md` has its row), and Lucide (ISC)
-  and Noto Sans SC (OFL) with the shared interface (the icons of `src/ui/controls/Icon.tsx`, the glyphs of
-  `src/pdf-reader/ui/display-glyphs.ts`).
+  and Noto Sans SC (OFL) with the shared interface (the icons of `packages/ui/src/controls/Icon.tsx`, the glyphs of
+  `packages/ui/src/controls/display-glyphs.ts`).
 - **Reached.** Every module of the engine is reached by an entry, by the checker the layer gate names, or by a file under
   `src/` or `lab/` outside the engine (`unreached`: the shipped extension and every file of the lab, its bench and spikes, not
   only its kept gates); a module only a test or a script reaches is parked with its tests.
@@ -2681,8 +2677,7 @@ The web moves its imports to the five entries, once: its server takes `pipeline`
 `translate` and `rules`; its fork-session script and the copies of the session it makes go with the reading view that replaces
 them. The extension's own modules are not importable from the web, and a module the web needs that no entry exports is a
 request for an entry's change, made here with its test, not an import by path. The shared interface it imports besides
-(`controller.ts`, `src/pdf-reader/ui/**`) stays under the licence rule of section 19.3: the ported files it reaches are replaced by
-its seams or left out of its bundle until they are cut from it.
+(the reader's chrome and `packages/ui`) stays under the licence rule of section 19.3: it reaches no ported file.
 
 ### 19.6 The page pass
 

@@ -18,7 +18,7 @@ const look = (sheet: string, name: string, dim: boolean) => (dim ? value(rulesOf
 const reducedMotion = (sheet: string) => /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(sheet)?.[1] ?? ''
 
 describe('the translating look: Glint (the owner, 2026-11-01)', () => {
-  const engine = read('src/pdf-reader/engine/view/engine.css'), reader = read('src/entrypoints/pdf-reader/reader.css')
+  const engine = read('src/pdf-reader/engine/view/engine.css'), reader = read('packages/reader/src/chrome/reader.css')
 
   it('a light of the paper\'s colour over no ground, laid with no blend', () => {
     for (const dim of [false, true]) {

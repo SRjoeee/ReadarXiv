@@ -3,6 +3,11 @@ import { LETTER, collectText, squash } from '@/core/text'
 // Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in DESIGN §5.7.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
 
+/**
+ * The rules version's last value. No key reads it (DESIGN §9: no version number since stage 4b); kept for the website's
+ * tests (readarxiv-web, @vendor/core/rules/latexml) until its cut-over. See tests/contract/website-imports.test.ts.
+ */
+export const RULES_VERSION = '0.11.0'
 
 /** The LaTeXML class prefix, to tell whether an element belongs to the paper body */
 export const LTX_CLASS_PREFIX = 'ltx_'

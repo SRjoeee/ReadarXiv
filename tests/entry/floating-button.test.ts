@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DockPlacement, type FloatingButtonOptions, type FloatingButtonStrings, mountFloatingButton } from '@/core/floating/button'
 import { Settings as LucideSettings } from 'lucide'
 import { restore } from '@/core/renderer/page'
-import { tokenSheet } from '@/shared/tokens'
+import { tokenSheet } from '@readarxiv/ui'
 import { ruleOf, rules, sheet } from '../styles/css-rules'
 
 // The floating button on arXiv's pages (issue #169, DESIGN §4.0c, UI.md S-I-06): Read Frog's frame, resting and opening
@@ -665,7 +665,7 @@ describe('the floating button: its material (the redesign\'s design, §7)', () =
   /** the button's sheet as its shadow root holds it, comments out */
   const own = () => mount().root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, '')
   /** the shared controls' rules, each role named as a shadow root on arXiv's pages names it */
-  const shared = rules(sheet('../../src/styles/controls.css'))
+  const shared = rules(sheet('../../packages/ui/src/controls.css'))
   const C = ['@layer components']
   const axt = (d: Record<string, string>) => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.replaceAll('var(--', 'var(--axt-')]))
   const pick = (d: Record<string, string>, keys: string[]) => Object.fromEntries(keys.map(k => [k, d[k]]))

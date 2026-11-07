@@ -61,7 +61,7 @@ describe('the forms an import can take', () => {
     expect(forbidden("import { sendMessage } from '@/shared/messages'\n", 'src/cache/index.ts')).toEqual(['@/shared/messages'])
     expect(forbidden("import { configItem } from '@/config/storage'\n")).toEqual(['@/config/storage'])
     expect(forbidden("import { usePopupData } from '@/entrypoints/popup/data'\n")).toEqual(['@/entrypoints/popup/data'])
-    expect(forbidden("import { LOCALES } from '@/locales'\n")).toEqual(['@/locales'])
+    expect(forbidden("import { LOCALES } from '@readarxiv/ui'\n")).toEqual(['@readarxiv/ui'])
   })
 })
 
@@ -76,7 +76,7 @@ describe('what stays allowed', () => {
     expect(forbidden("import { setState } from './attrs'\n")).toEqual([])
   })
   it('counts a value import that merely marks some names as types: `import type { … }` says it better', () => {
-    expect(forbidden("import { type Locale, LOCALES } from '@/locales'\n")).toEqual(['@/locales'])
+    expect(forbidden("import { type Locale, LOCALES } from '@readarxiv/ui'\n")).toEqual(['@readarxiv/ui'])
   })
 })
 
