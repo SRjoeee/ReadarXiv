@@ -22,7 +22,7 @@ import { instrumentFromPlan } from '../../packages/engine/src/marks/instrument.t
 import { DRAFT_OPTION, NO_DRIVER_GROUP } from '../../packages/engine/src/marks/tex.ts'
 import { answersOf } from './answers-of.mjs'
 import { compiler, treeOf } from './today.mjs'
-import { compare, samePage } from './compare.mjs'
+import { compare, framedOf, samePage } from './compare.mjs'
 
 const L1 = '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/rb-prepare/'
 const im = f => import(pathToFileURL(L1 + f).href)
@@ -101,7 +101,7 @@ const todayPages = today.ink.pages, minePages = read.doc.pages
 const same = Array.from({ length: Math.max(todayPages.length, minePages.length) }, (_, p) => samePage(todayPages[p]?.glyphs ?? [], minePages[p]?.glyphs ?? []) && !!todayPages[p] && !!minePages[p])
 const chars = todayPages.map(pg => (pg?.glyphs ?? []).map(g => g.u))
 const guarded = made.guard?.unmarked ?? []
-const cmp = compare({ today, mine, same, chars, guarded })
+const cmp = compare({ today, mine, same, chars, guarded, frames: pages.map(framedOf) })
 // (--keep=<dir>: what replay.mjs needs to run the instrument again over the same B, no PDF read)
 if (arg('keep')) {
   mkdirSync(arg('keep'), { recursive: true })
