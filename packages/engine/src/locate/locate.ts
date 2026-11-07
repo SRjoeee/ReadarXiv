@@ -983,6 +983,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const g = gB(b),
         e = gB(n.bLast)
       if (Math.abs(g.y - e.y) > 0.5 || g.x0 < e.x1 - 0.05) continue
+      // (in its column: a left column's last line and the right column's first can share a baseline, the stream going on from
+      // the one to the other; the columns as columnsAndMeasures read them on A, a line over both (2) of either)
+      const nc = n.lines.at(-1)?.[1],
+        lc = led.lines[0]?.[1]
+      if (nc !== undefined && lc !== undefined && nc !== 2 && lc !== 2 && nc !== lc) continue
       n.leads = led.ord
       led.leader = n.ord
     }

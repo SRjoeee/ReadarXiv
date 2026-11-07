@@ -312,6 +312,36 @@ describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', (
         .find((m) => m.kind === 'name')!.bound,
     ).toBeUndefined()
   })
+  it('leads no unit in the other column, even on the name’s baseline: a left column’s last line and the right column’s first', () => {
+    // (local Codex on #624: a name at the left column's end, y 700, and the right column's first unit on that baseline, next in
+    // TeX's stream; same page, same baseline, to the right: bound across the columns before)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Left one', y: 724 },
+          { text: 'Left two', y: 712 },
+          { text: 'Abstract', y: 700 },
+          { text: 'Right one', x: 320, y: 700 },
+          { text: 'Right two', x: 320, y: 688 },
+          { text: 'Right three', x: 320, y: 676 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('para', 'Left one Left two'),
+      unitOf('para', 'Right one Right two Right three'),
+      { ...unitOf('name', 'Abstract'), name: 'abstract' },
+    ]
+    const ins = instrumentOf(
+      B,
+      units,
+      [[0, 0, 2, 1, 1, 1]],
+      [[ROLE.text, ROLE.text, ROLE.name, ROLE.text, ROLE.text, ROLE.text]],
+    )
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    expect(L.flows.find((f) => f.includes(name.ord))).toEqual([name.ord])
+  })
 })
 
 describe('eachBetweenPaired', () => {
