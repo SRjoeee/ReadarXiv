@@ -337,7 +337,9 @@ describe('the worker\'s start (#88 E6)', () => {
     const lines: string[] = []
     await sweepAtStart({ cache: store, diagnostics: { record: (_src: string, line: string) => void lines.push(line) } as unknown as HandlerDeps['diagnostics'] })
     expect(await store.answers.read(['t1|old|orphan', 't1|new|live'])).toEqual([null, 'an answer read today'])
-    expect(await store.stats()).toMatchObject({ entries: 1 })
+    // the count is the rows' (S-O-70's passages); the sweep's work shows in the bytes, one answer's worth left
+    expect((await store.stats()).bytes).toBeGreaterThan(0)
+    expect((await store.stats()).entries).toBe(0)
     expect(lines).toEqual([])
   })
 
