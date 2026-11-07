@@ -268,6 +268,209 @@ describe('the laid text layer (§11.11)', () => {
     const dritte = texts.find((x) => x.str === 'dritte') as { hasEOL?: boolean }
     expect(dritte.hasEOL).toBe(true)
   })
+  it("a run over two of its member's lines is the member's, though its middle falls between them (I8: a title in two lines)", () => {
+    // (lines at 700 from 50 to 300 and at 680 from 50 to 100, boxes 698-708 and 678-688; the run's items stand on both, its
+    // middle at x 175, y 690 on neither: 1706.03762v7 p. 4, 2609.26457v1, 2307.16209v1 and 2610.20030v1 p. 1)
+    const m = placed(1, [
+      [700, 50, 300],
+      [680, 50, 100],
+    ])
+    const content = contentOf([
+      item('Head', 50, 760, 30, 10, true),
+      OC,
+      item('Recursive self-improvement', 50, 700, 250),
+      item('agents', 50, 680, 40),
+      EMC,
+      item('Foot', 50, 100, 20),
+    ])
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        laid(1, [
+          [700, 50, 300, [{ s: 'Rekursive Selbstverbesserung', x: 50, face: 'sans', size: 10 }]],
+          [680, 50, 100, [{ s: 'Agenten', x: 50, face: 'sans', size: 10 }]],
+        ]),
+      ],
+    }
+    const r = laidText(content, page, new Map([[1, m]]), facesStub, measure)
+    const strs = (r.content.items as { str?: string }[]).filter((x) => typeof x.str === 'string').map((x) => x.str)
+    // (the original's run dropped, the translation read where it stood: before the page's foot, not after it)
+    expect(strs).toEqual(['Head', 'Rekursive Selbstverbesserung ', 'Agenten', 'Foot'])
+    expect(r.dropped).toBe(2)
+  })
+  it("a run carried to the next column's head is its member's, though its middle falls on the paragraph above (I8)", () => {
+    // (unit 1 from 700 to 664, unit 2 at 640 and 628 and on at the next column's head, 760; unit 2's run's middle at x 235, y 676:
+    // on unit 1's third line. 2610.20030v1 p. 5, its acknowledgements under the paragraph before them)
+    const one = placed(1, [
+      [700, 50, 300],
+      [688, 50, 300],
+      [676, 50, 300],
+      [664, 50, 300],
+    ])
+    const two = placed(2, [
+      [640, 50, 300],
+      [628, 50, 300],
+      [760, 320, 570],
+    ])
+    const content = contentOf([
+      OC,
+      item('one a', 50, 700, 250),
+      item('one b', 50, 688, 250),
+      item('one c', 50, 676, 250),
+      item('one d', 50, 664, 250),
+      EMC,
+      OC,
+      item('two a', 50, 640, 250),
+      item('two b', 50, 628, 250),
+      item('two c', 320, 760, 100),
+      EMC,
+      item('Foot', 50, 100, 20),
+    ])
+    const line = (y: number, x0: number, x1: number, s: string): Laid['lines'][number] => [
+      y,
+      x0,
+      x1,
+      [{ s, x: x0, face: 'sans', size: 10 }],
+    ]
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        laid(1, [line(700, 50, 300, 'eins')]),
+        laid(2, [line(640, 50, 300, 'zwei'), line(760, 320, 570, 'drei')]),
+      ],
+    }
+    const r = laidText(
+      content,
+      page,
+      new Map([
+        [1, one],
+        [2, two],
+      ]),
+      facesStub,
+      measure,
+    )
+    const strs = (r.content.items as { str?: string }[])
+      .filter((x) => typeof x.str === 'string')
+      .map((x) => x.str?.trim())
+    expect(strs).toEqual(['eins', 'zwei', 'drei', 'Foot'])
+    expect(r.dropped).toBe(7)
+  })
+  describe("which group a run is under (§19.9: a run of ours is one group's ink, closed at any marked content)", () => {
+    const strsOf = (r: ReturnType<typeof laidText>) =>
+      (r.content.items as { str?: string }[])
+        .filter((x) => typeof x.str === 'string' && x.str.trim())
+        .map((x) => (x.str as string).trim())
+    const one = (ord: number, y: number, x0: number, x1: number, s: string, off = 3): Laid => ({
+      ...laid(ord, [[y, x0, x1, [{ s, x: x0, face: 'sans', size: 10 }]]]),
+      off,
+    })
+    const pageOf = (...members: Laid[]): Page => ({ page: 1, wait: { rows: [], faces: [] }, links: [], members })
+    it("keeps the page's own optional content whole and reads each run of ours inside it on its own (1706.03762v7 pp. 13-15)", () => {
+      // (the paper's own `/OC` BDC around a figure, holding its words and our runs: its own words drawn whatever our groups do)
+      const m = placed(1, [[700, 50, 100]])
+      const content = contentOf([
+        OC,
+        item('Input', 200, 600, 30),
+        OC,
+        item('word', 50, 700, 40),
+        EMC,
+        item('Layer5', 200, 590, 30),
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const r = laidText(content, pageOf(one(1, 700, 50, 100, 'Wort')), new Map([[1, m]]), facesStub, measure)
+      expect(strsOf(r)).toEqual(['Input', 'Wort', 'Layer5', 'Foot'])
+      expect(r.dropped).toBe(1)
+    })
+    it("gives an element's run its element's group, inside its line (a unit keeping its elements: off 1)", () => {
+      const m = placed(1, [[700, 50, 300]], [['e1', [1, 150, 699, 180, 707, 700]]])
+      const content = contentOf([
+        OC,
+        item('text one', 50, 700, 90),
+        EMC,
+        OC,
+        item('x+y', 150, 700, 30),
+        EMC,
+        OC,
+        item('text two', 190, 700, 90),
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const r = laidText(content, pageOf(one(1, 700, 50, 300, 'eins', 1)), new Map([[1, m]]), facesStub, measure)
+      // (the element's ink is drawn: its text read with it; the text's runs dropped, the translation in their place)
+      expect(strsOf(r)).toEqual(['eins', 'x+y', 'Foot'])
+      expect(r.dropped).toBe(2)
+    })
+    it('places a turned item by the middle of its advance along its own direction (a figure word turned a quarter)', () => {
+      const m = { ...placed(1, []), lines: [[1, 0, 167, 176, 632, 648, 631, 167, 176, 0]] } as unknown as Placed
+      const content = contentOf([
+        item('Head', 50, 760, 30),
+        OC,
+        { ...item('spirit', 175, 632, 16), transform: [0, 8, -8, 0, 175, 632] },
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const r = laidText(content, pageOf(one(1, 640, 167, 176, 'Geist')), new Map([[1, m]]), facesStub, measure)
+      expect(strsOf(r)).toEqual(['Head', 'Geist', 'Foot'])
+      expect(r.dropped).toBe(1)
+    })
+    it("gives a run split evenly between a unit's element and its line to the element, whole: never split", () => {
+      // (2406.06525v1 p. 1: a mark "2∗", "2" on the element's ink, "∗" above it on the line alone; the unit keeps its elements)
+      const m = placed(1, [[700, 50, 300]], [['e1', [1, 150, 699, 155, 706, 700]]])
+      const content = contentOf([
+        OC,
+        item('words', 50, 700, 90),
+        EMC,
+        OC,
+        item('2', 150, 700, 5),
+        item('*', 156, 703, 5),
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const r = laidText(content, pageOf(one(1, 700, 50, 300, 'Wörter', 1)), new Map([[1, m]]), facesStub, measure)
+      expect(strsOf(r)).toEqual(['Wörter', '2', '*', 'Foot'])
+      expect(r.dropped).toBe(1)
+    })
+    it("keeps whole a run whose items stand on two units' boxes: no one unit's run to drop", () => {
+      const a = placed(1, [[700, 50, 100]]),
+        b = placed(2, [[700, 150, 200]])
+      const content = contentOf([OC, item('ab', 50, 700, 40), item('cd', 150, 700, 40), EMC, item('Foot', 50, 100, 20)])
+      const r = laidText(
+        content,
+        pageOf(one(1, 700, 50, 100, 'AB'), one(2, 700, 150, 200, 'CD')),
+        new Map([
+          [1, a],
+          [2, b],
+        ]),
+        facesStub,
+        measure,
+      )
+      // (its words read where they stand; the units' translations, found in no run, after the page's own)
+      expect(strsOf(r)).toEqual(['ab', 'cd', 'Foot', 'AB', 'CD'])
+      expect(r.dropped).toBe(0)
+    })
+    it('keeps a run of white space alone, and a run of one zero-width item is the unit it stands on', () => {
+      const m = placed(1, [[700, 50, 100]])
+      const content = contentOf([
+        OC,
+        item(' ', 50, 700, 3),
+        EMC,
+        item('Head', 50, 760, 30),
+        OC,
+        item('\u0301', 60, 700, 0),
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const r = laidText(content, pageOf(one(1, 700, 50, 100, 'Eins')), new Map([[1, m]]), facesStub, measure)
+      // (the blank run kept and no anchor of the unit's block; the zero-width accent the unit's, its block there)
+      expect(strsOf(r)).toEqual(['Head', 'Eins', 'Foot'])
+      expect(r.dropped).toBe(1)
+    })
+  })
   it('a crop with no text under its source carries its own plain text; rotated text is left out', () => {
     const m = placed(2, [[700, 50, 300]], [['e1', [1, 400, 400, 440, 420, 405]]])
     const content = contentOf([

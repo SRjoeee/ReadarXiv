@@ -545,16 +545,17 @@ for (const name of Object.keys(fixtures)) {
         ...ink,
         // (each member's runs of text, in order, in the layer's text: the translation read in reading order)
         textOk: text.runs.every((rs) => rs.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, '')))),
-        inOrder: (() => {
+        // (the first member whose translation the layer reads before the one before it, or not at all past it; none: in order)
+        outOfOrder: (() => {
           let at = 0
           const all = text.text.replace(/\s+/g, '')
-          for (const rs of text.runs)
+          for (const [k, rs] of text.runs.entries())
             for (const t of rs) {
               const i = all.indexOf(t.replace(/\s+/g, ''), at)
-              if (i < 0) return false
+              if (i < 0) return text.ords[k]
               at = i
             }
-          return true
+          return null
         })(),
         copied: text.copied.length,
       })
@@ -574,8 +575,8 @@ for (const name of Object.keys(fixtures)) {
       if (!lab) assert(x.crops === x.elements, `page ${x.n}: ${x.crops} crops for ${x.elements} elements`)
       // I8: the text layer reads each laid member's translation, in order; a selection of it copies it
       assert(
-        x.textOk && x.inOrder && x.copied > 0,
-        `page ${x.n}: the text layer reads ${x.textOk ? 'out of order' : 'not every translation'}`,
+        x.textOk && x.outOfOrder === null && x.copied > 0,
+        `page ${x.n}: the text layer reads ${x.textOk ? `member ${x.outOfOrder} out of order` : 'not every translation'}`,
       )
     }
     return {
@@ -626,7 +627,7 @@ await check(
   },
 )
 await check(
-  'compose: a language switch reuses the composed document, the parts and the place (s1-columns)',
+  'compose: a language switch reuses the composed document, the parts and the place; a unit not laid in the new language has its groups back on (s1-columns)',
   async () => {
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
@@ -635,14 +636,30 @@ await check(
     await page.evaluate(() => window.__h.panes.goToPage('right', 2))
     await laidShown(page, 2)
     await page.waitForTimeout(300)
+    // (page 2's units laid with their groups off; the first one whose text group is off is refused in the new language)
+    const was = await page.evaluate(() => window.__h.groupsOf(2))
+    const refused = was.find((m) => m.state === 'laid' && m.off & 1 && typeof m.id === 'string')
+    assert(refused, `no unit laid with its text off on page 2: ${JSON.stringify(was)}`)
+    assert(
+      was.every((m) => m.state !== 'laid' || [1, 2, 4].every((bit, i) => !(m.off & bit) || m.on[i] === false)),
+      `a laid unit's group on: ${JSON.stringify(was)}`,
+    )
     const asked = server.log.length
-    const r = await page.evaluate(() => window.__h.retarget('de', 's1-columns'))
+    const k = await page.evaluate(() => window.__h.marks.length)
+    const r = await page.evaluate(
+      (id) => window.__h.retarget('fr', 's1-columns', { rowsOf: 'de', refuse: [id] }),
+      refused.id,
+    )
+    // (page 2 laid again in the new language and in place)
     await waitFor(
       page,
-      () => window.__h.marks.filter((m) => m.what === 'shown' && String(m.key).startsWith('laid:')).length >= 3,
+      (k) =>
+        window.__h.marks.slice(k).some((m) => m.what === 'shown' && m.page === 2 && String(m.key).startsWith('laid:')),
+      k,
     )
     await page.waitForTimeout(300)
     const after = await page.evaluate(() => ({ place: window.__h.panes.reading(), probe: window.__h.composer.probe() }))
+    const now = await page.evaluate(() => window.__h.groupsOf(2))
     const newAsks = server.log
       .slice(asked)
       .map((l) => l.path)
@@ -655,7 +672,24 @@ await check(
       r.before.place?.page === after.place?.page && Math.abs(r.before.place.at - after.place.at) < 0.02,
       `the place moved: ${JSON.stringify([r.before.place, after.place])}`,
     )
-    return { place: after.place, laidPages: after.probe.laidPages, objectsAskedAgain: newAsks.length }
+    // (the refused unit the original's on its page: every group of it on in `laid`; the others laid again, theirs off)
+    const gone = now.find((m) => m.ord === refused.ord)
+    assert(
+      gone && gone.state !== 'laid' && gone.on.every((v) => v !== false),
+      `the refused unit: ${JSON.stringify(gone)}`,
+    )
+    for (const m of now)
+      if (m.state === 'laid')
+        assert(
+          [1, 2, 4].every((bit, i) => !(m.off & bit) || m.on[i] === false),
+          `unit ${m.ord} laid with a group on: ${JSON.stringify(m)}`,
+        )
+    return {
+      place: after.place,
+      laidPages: after.probe.laidPages,
+      objectsAskedAgain: newAsks.length,
+      refused: { ord: refused.ord, before: refused.on, after: gone.on },
+    }
   },
 )
 await check(
