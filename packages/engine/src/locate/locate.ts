@@ -30,6 +30,7 @@ import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
+import { regionsOf } from './today/today.types.ts'
 
 /** where a located unit stands on A against B */
 export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
@@ -209,6 +210,18 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       return { page: ap, x0: b[4 * ai]!, y0: b[4 * ai + 1]!, x1: b[4 * ai + 2]!, y1: b[4 * ai + 3]! }
     })
   const atB = (b: number) => ({ page: pageB[b] as number, g: gB(b) })
+  // (each B glyph's region by B's brackets, stream.mjs regionsOf's: a float's depth, a column's body or not; read once a page)
+  const regionsB = new Map<number, Int32Array>()
+  const regionB = (b: number): number => {
+    const p = (pageB[b] as number) - 1
+    let r = regionsB.get(p)
+    if (!r) {
+      const pg = B.pages[p]!
+      r = regionsOf({ glyphs: { n: pg.glyphs.length }, boxes: pg.boxes, points: pg.points }).glyph as Int32Array
+      regionsB.set(p, r)
+    }
+    return r[b - (m.offB[p] as number)] as number
+  }
 
   // each unit's B glyphs and boxes
   const glyphsOf = new Map<number, number[]>()
@@ -642,9 +655,18 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         )
       }
       const held: number[] = []
+      // (a float TeX set inside the paragraph, between two of its lines, is none of its held lines: a glyph in another float depth
+      // than the unit's text by B's brackets, or, where B brackets none, drawn inside a form XObject where its text is not (L1's
+      // second held-line fault, 2610.10492v1 ord 21: a float's glyphs no unit owns read as the paragraph's KEPT lines))
+      const firstText = mem.text.length ? (mem.text[0] as number) : -1
+      const textB = firstText >= 0 ? (m.aToB[firstText] as number) : -1
+      const depthOf = (b: number) => regionB(b) >> 1
+      const textDepth = textB >= 0 ? depthOf(textB) : 0
+      const textForm = firstText >= 0 && !!gA(firstText).form
       for (let a = own[0] as number; a <= (own.at(-1) as number); a++) {
         const b = m.aToB[a] as number
         if ((claimedA[a] as number) >= 0 || b < 0 || (unitB[b] as number) >= 0) continue
+        if (depthOf(b) !== textDepth || (!textForm && gA(a).form)) continue
         const g = gA(a)
         const q = box.get(pageA[a] as number)
         // (a glyph that stands on one of its own text lines (the line rule's band, within the line's extent) is none of a held

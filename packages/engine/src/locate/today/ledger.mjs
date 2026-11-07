@@ -249,17 +249,24 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (RELATION.test(x.u)) line.relation = true
     }
     close()
-    // (CHANGED: an orphan line between two of a formula's lines in TeX's stream — math or symbols, its glyphs and theirs one run
-    // of no unit's, in one region —, with fewer words than a formula's line holds (MATH_WORDS), is the formula's: an operator's
-    // name in a text face, 2610.21765v1 p10's "tr" between a fraction's denominator and a big bracket, was an orphan ink unit,
-    // translated "TR" over the formula)
+    // (CHANGED: an orphan line inside a formula is the formula's: between two of the formula's lines in TeX's stream — math or
+    // symbols, its glyphs and theirs one run of no unit's, in one region —, with fewer words than a formula's line holds
+    // (MATH_WORDS), and the formula's ink of that run standing left and right of it across its band. An operator's name in a
+    // text face, 2610.21765v1 p10's "tr" between a fraction and a big bracket, was an orphan ink unit translated "TR" over the
+    // formula; a line of text between two displays ("where", "Therefore,", 2610.21377v1), nothing of them beside it, is none)
     const FORMULA = new Set(['math', 'symbols'])
+    const joined = (a, b) => a.gs.at(-1) === b.gs[0] - 1 && a.region === b.region
     made.forEach(([l, rule], i) => {
       if (rule.cls !== 'orphan' || l.words >= MATH_WORDS) return
-      const before = made[i - 1]?.[0], after = made[i + 1]?.[0]
-      if (!before || !after || !FORMULA.has(made[i - 1][1].cls) || !FORMULA.has(made[i + 1][1].cls)) return
-      if (before.gs.at(-1) !== l.gs[0] - 1 || after.gs[0] !== l.gs.at(-1) + 1 || before.region !== l.region || after.region !== l.region) return
-      made[i][1] = RULES.find(r => r.cls === 'math')
+      const run = []
+      for (let j = i - 1; j >= 0 && FORMULA.has(made[j][1].cls) && joined(made[j][0], made[j + 1][0]); j--) run.push(made[j][0])
+      const left = run.length
+      for (let j = i + 1; j < made.length && FORMULA.has(made[j][1].cls) && joined(made[j - 1][0], made[j][0]); j++) run.push(made[j][0])
+      if (!left || run.length === left) return
+      let lo = Infinity, hi = -Infinity, x0 = Infinity, x1 = -Infinity
+      for (const g of l.gs) { const x = G[g]; lo = Math.min(lo, x.bottom); hi = Math.max(hi, x.top); x0 = Math.min(x0, x.x0); x1 = Math.max(x1, x.x1) }
+      const beside = side => run.some(r => r.gs.some(g => { const x = G[g]; return x.bottom < hi && x.top > lo && (side < 0 ? x.x1 <= x0 + 0.01 : x.x0 >= x1 - 0.01) }))
+      if (beside(-1) && beside(1)) made[i][1] = RULES.find(r => r.cls === 'math')
     })
     for (const [l, rule] of made) {
       for (const g of l.gs) out[g] = rule.code

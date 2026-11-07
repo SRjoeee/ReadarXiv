@@ -234,6 +234,8 @@ if (BASELINE) {
   const chars = p => [...(p.kind === 'text' ? p.s : p.kind === 'ph' ? p.src : '')].sort().join('')
   const howOf = (u, c) => {
     if (c.why?.startsWith('content difference')) return c.why
+    // (a running head's number of its phrase, which today's took for its folio: "5 of 21" for "of 21", ink-units.mjs phrased)
+    if (/^ink/.test(u.kind) && typeof c.text === 'string' && c.text !== u.text && c.text.replace(/^\d{1,4} | \d{1,4}$/, '') === u.text) return "its head's number in its phrase"
     const same = u.pieces.length === c.pieces.length && u.pieces.every((p, k) => p.kind === c.pieces[k].kind && chars(p) === chars(c.pieces[k]))
     return same ? 'its characters in another order' : 'another reading'
   }
@@ -242,9 +244,13 @@ if (BASELINE) {
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts: a source unit the candidate does
     // not make is the front half's, by its stage 1c class)
     const c = /^ink/.test(u.kind) ? standsFor(u) : null
+    // (none: a kept block of its kind at its place, no text of it sent: its lines the ledger reads as no unit's text, a formula's
+    // interior (ledger.mjs CHANGED))
+    const L0 = u.lines?.[0]
+    const kept = !c && /^ink/.test(u.kind) && L0 ? units.find(k => k.kind === u.kind && !k.pieces?.length && !k.replaced && k.lines?.some(l => meets(L0, l))) : null
     // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
     // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
-    const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : !FRONT ? null : /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : kept ? "kept on arXiv's page as the original's, no text of it sent" : !FRONT ? null : /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
     if (why === null) continue
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++

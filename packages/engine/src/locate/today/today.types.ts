@@ -82,3 +82,9 @@ export const UNIT_FLAG = deps.UNIT_FLAG as Readonly<
   Record<'CENTRED' | 'FLUSH_LEFT' | 'FLUSH_RIGHT' | 'JUSTIFIED', number>
 >
 export const classOf = deps.classOf as (piece: TodayPiece) => string | null
+/** each glyph's and box's region by the page's brackets (stream.mjs regionsOf): depth * 2 + 1 in a column's body */
+export const regionsOf = deps.regionsOf as (page: {
+  glyphs: { n: number }
+  boxes: ArrayLike<number>
+  points: readonly { name: string; glyph: number; box: number }[]
+}) => { glyph: Int32Array; box: Int32Array; at: Int32Array; bodies: boolean }

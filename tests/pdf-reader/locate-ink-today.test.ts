@@ -150,6 +150,11 @@ describe('today’s ink makers in the engine package', () => {
     })
     expect(heads(TODAY, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
     expect(heads(T as unknown as Impl, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
+    // (ACM's "2 • Names": the folio a word space from a mark of no letter or digit that sets it apart from the head's words, the
+    // page's own in both, the names one translation, 2610.37668v1)
+    const acm = [2, 4, 6].map((n) => at(`${n} • Ann Author, Bo Writer`, n, 72))
+    expect(heads(T as unknown as Impl, acm)).toEqual(heads(TODAY, acm))
+    expect(heads(TODAY, acm)[0]).toMatch(/^[^0-9].* Ann Author, Bo Writer$/)
   })
   it('class a word in a text face between a formula\'s lines a line of the formula, no unit (the checkpoint\'s "tr")', () => {
     // (2610.21765v1 p10's display (22): its "tr" in CMR10 a line of its own between the fraction's denominator, a formula's line,
@@ -157,9 +162,9 @@ describe('today’s ink makers in the engine package', () => {
     // formula's, the formula's lines kept as they stand)
     const pg = pageOf([
       { s: 'Body owned text', y: 700 },
-      { s: 'ab', x: 100, y: 640, font: 'ABCDEF+CMMI10' },
+      { s: 'ab', x: 100, y: 643, font: 'ABCDEF+CMMI10' },
       { s: 'tr', x: 112, y: 650 },
-      { s: '[', x: 122, y: 660, font: 'ABCDEF+CMEX10' },
+      { s: '[', x: 122, y: 657, font: 'ABCDEF+CMEX10' },
       { s: 'An orphan line of words after it here', y: 600 },
     ], { points: [['bs1', 0], ['be1', 57]] })
     const one = (I: Impl) => {
@@ -168,6 +173,20 @@ describe('today’s ink makers in the engine package', () => {
       const ink = I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 })
       return { lines: ledger.lines.map((l) => [l.cls, l.gs.map((g) => (pg.glyphs[g] as G).u).join('')]), ink: ink.map((u) => u.pieces.map((p) => (p as { s?: string }).s ?? '').join('')) }
     }
+    // (a line of text between two formulas, not inside one: no ink of the formulas left and right of it on its band, an orphan
+    // in both, 2610.21377v1's "where", "Therefore," between displays)
+    const between = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'ab', x: 100, y: 660, font: 'ABCDEF+CMMI10' },
+      { s: 'where', x: 72, y: 645 },
+      { s: 'cd', x: 100, y: 630, font: 'ABCDEF+CMMI10' },
+    ], { points: [['bs1', 0], ['be1', 24]] })
+    const cls = (I: Impl) => {
+      const own = { glyphs: [between.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
+      return (I.ledgerOf([between], own, { units: units.slice(0, 1) }) as { lines: { cls: string }[] }).lines.map((l) => l.cls)
+    }
+    expect(cls(T as unknown as Impl)).toEqual(cls(TODAY))
+    expect(cls(TODAY)).toEqual(['symbols', 'orphan', 'symbols'])
     expect(one(TODAY)).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
     expect(one(T as unknown as Impl)).toEqual({ lines: [['symbols', 'ab'], ['math', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['An orphan line of words after it here'] })
   })

@@ -334,6 +334,33 @@ describe('locate: the room under a unit', () => {
     expect(sub.lines.map((l) => l[2])).toEqual([300])
     expect(sub.labelAt).toBeUndefined()
   })
+  it("holds no float's glyphs as a line of a paragraph TeX set the float inside (L1's second held-line fault)", () => {
+    // (2610.10492v1 ord 21: a float set between two lines of a paragraph, its glyphs no unit's, read as the paragraph's held
+    // lines, KEPT; B's float brackets say they are the float's. A line the source does not write in the body stays held)
+    const lines = ['para line one', 'Figure stuff', 'para line two']
+    const B = docOf([{ lines: lines.map((text, i) => ({ text, x: i === 1 ? 80 : 72 })) }])
+    const n = (k: number) => B.pages[0]!.glyphs.filter((g) => g.n < k).length
+    const units = [unitOf('para', 'para line one para line two')]
+    const keptOf = (points: [string, number][]) => {
+      const d = docOf([{ lines: lines.map((text, i) => ({ text, x: i === 1 ? 80 : 72 })), points }])
+      return locate(instrumentOf(d, units, [[0, -1, 0]]), d, align(d, d)).members[0]!.lines.filter((l) => l[9] & 1)
+        .length
+    }
+    expect(
+      keptOf([
+        ['bs1', 0],
+        ['be1', n(3)],
+      ]),
+    ).toBe(1)
+    expect(
+      keptOf([
+        ['bs1', 0],
+        ['fs1', n(1)],
+        ['fe1', n(2)],
+        ['be1', n(3)],
+      ]),
+    ).toBe(0)
+  })
 })
 
 describe('review of #605', () => {

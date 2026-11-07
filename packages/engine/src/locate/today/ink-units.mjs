@@ -245,9 +245,9 @@ function gapBefore(G, w, v) {
 /** two gaps one glue of TeX's: within this share of their size of each other, the PDF's text unit (a TJ adjustment, a width: whole
  *  thousandths of the size) twice: amsart's head's word spaces 3.990 to 3.999 at 8.97, 2610.21884v1 */
 const SAME_GLUE = 0.002
-/** whether a head's line's number at its end (`b`) or its start (`a`) stands from the word beside it at the line's word space: as
- *  far as two of its other words stand from each other, or, the line holding no two others, a word's gap (CHANGED: a number of the
- *  head's phrase, "5 of 21", 2610.30875v1, is no folio) */
+/** whether a head's line's number at its end (`b`) or its start (`a`) stands from the word beside it, a word of letters or digits,
+ *  at the line's word space: as far as two of its other words stand from each other, or, the line holding no two others, a word's
+ *  gap (CHANGED: a number of the head's phrase, "5 of 21", 2610.30875v1, is no folio) */
 function phrased(G, words, side) {
   const n = words.length
   const gapOf = (w, v) => {
@@ -256,6 +256,8 @@ function phrased(G, words, side) {
     for (const g of v.gs) { l = Math.min(l, G[g].x0); size = Math.max(size, G[g].size) }
     return [l - r, size]
   }
+  // (a mark of no letter or digit beside it sets it apart from the head's words: ACM's "2 • Names", 2610.37668v1)
+  if (!/[\p{L}\p{N}]/u.test((side === 'b' ? words[n - 2] : words[1]).text)) return false
   const [gap, size] = side === 'b' ? gapOf(words[n - 2], words[n - 1]) : gapOf(words[0], words[1])
   const rest = side === 'b' ? words.slice(0, -1) : words.slice(1)
   let others = 0
