@@ -554,6 +554,52 @@ describe('an element’s text across a line TeX ended inside a word', () => {
     // (the first word after its space, a bracket before it as TeX skips: TeX's break, out)
     expect(textOf([...line('see (Col-', 200, 700), ...line('lobert and', 72, 688)])).toBe('see (Collobert and')
   })
+  it('decides by the source where it states the word: its hyphen kept where the source writes one, out where it joins', () => {
+    const line = (s: string, x: number, y: number) => [...s].map((c, i) => g(c, x + 6 * i, y))
+    const anti = [...line('an anti-', 200, 700), ...line('inflammatory drug', 72, 688)]
+    // (TeX's rules alone take this hyphen for TeX's; the element's source writes the compound with its own)
+    expect(textOf(anti, { source: '\\href{https://example.org/a}{an anti-inflammatory drug}' })).toBe(
+      'an anti-inflammatory drug',
+    )
+    expect(
+      fillRunsOf(
+        anti.map((x, i) => (i < 3 ? { ...x, fill: 0x80 } : x)),
+        { source: 'an anti-inflammatory drug' },
+      ),
+    ).toEqual([
+      ['an ', 0x80],
+      ['anti-inflammatory drug', 0],
+    ])
+    // (a capital after it is a compound's to TeX's rules alone; the source joins the word: TeX broke it, `\sys` TensorCast)
+    const tensor = [...line('of Tensor-', 200, 700), ...line('Cast is', 72, 688)]
+    expect(textOf(tensor)).toBe('of Tensor-Cast is')
+    expect(textOf(tensor, { source: 'we build TensorCast, a' })).toBe('of TensorCast is')
+    // (TeX's own discretionary hyphen written in the source, `\-`, is no hyphen of the word's)
+    expect(textOf(anti, { source: 'an anti\\-inflammatory drug' })).toBe('an antiinflammatory drug')
+    // (a source that does not state the word, a citation's key: TeX's rules decide, as before)
+    expect(textOf(tensor, { source: '\\cite{tensor-cast:2024}' })).toBe('of Tensor-Cast is')
+  })
+})
+
+describe('an element’s text across a line’s end, decided by its source through locate', () => {
+  // ("an anti-" ends the first line, "inflammatory" begins the second: the element's glyphs 4..23)
+  const B = docOf([{ lines: ['see an anti-', 'inflammatory here'] }])
+  const read = (el: Piece, around: Piece[] = [text('see '), el, text(' here')]) => {
+    const u: InstrumentUnit = { id: unitId('para', around), kind: 'para', content: around }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j <= 23 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    return locate(ins, B, align(B, B)).members[0]!.elements.find(([id]) => id === '1')?.[1]
+  }
+  it('keeps the hyphen the element’s own TeX writes, which TeX’s rules alone took for TeX’s', () => {
+    const el = read({ t: 'el', id: '1', kind: 'macro', src: '\\term{an anti-inflammatory}' })
+    expect(el?.text).toBe('an anti-inflammatory')
+  })
+  it('keeps the hyphen the unit’s text writes, where the element’s TeX does not state the word', () => {
+    const el: Piece = { t: 'el', id: '1', kind: 'macro', src: '\\term{x}' }
+    const said = read(el, [text('see '), el, text(' here, an anti-inflammatory one')])
+    expect(said?.text).toBe('an anti-inflammatory')
+    // (stated nowhere: TeX's rules, as before)
+    expect(read(el)?.text).toBe('an antiinflammatory')
+  })
 })
 
 describe('a unit set in capitals its source writes in lowercase (Style.upper, today’s smallCapsOf rule)', () => {

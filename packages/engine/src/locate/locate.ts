@@ -789,6 +789,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
     // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
+    const unitText = unit ? sourceText(unit.content) : ''
     for (const [id, p0] of pieces) {
       if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
@@ -849,17 +850,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // kind of text, a class drawn as the page's text (a citation, a reference, a macro: the instrument's), its own brackets
       // (U.brackets reads the text inside them), ink over lines (a formula broken over lines is drawn as text where its
       // segments make no crops))
+      // (a line's end inside a word of its text, facts.ts lineEnd: decided by the source where it states the word, its own TeX
+      // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
+      const lineEnds = {
+        literal: !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code',
+        source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
+      }
       const asText =
         TEXT_KINDS.has(p.kind) ||
         TEXT_CLASSES.has(classOf.get(id)?.cls ?? '') ||
         ink.length > 1 ||
         !!bracketsOf(gl.map(gA))
       if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
-        // (a URL's or a code mark's text TeX sets as written: a hyphen a line of it ends in is its own, facts.ts lineEnd)
-        const literal = !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code'
-        el.text = textOf(gl.map(gA), { literal })
+        el.text = textOf(gl.map(gA), lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
-        const runs = fillRunsOf(gl.map(gA), { literal })
+        const runs = fillRunsOf(gl.map(gA), lineEnds)
         if (runs) el.fills = runs
       }
       // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
@@ -874,7 +879,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           const a = m.bToA[b] as number
           if (unitB[b] === mem.unit && roleB[b] === ROLE.text && a >= 0 && mine.has(a)) between.push(a)
         }
-        if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA))
+        if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA), lineEnds)
       }
       // (a text macro whose span the instrument states with nothing in it: both its places stated and no glyph of B between them,
       // or TeX's probe said it sets none: TeX set none for it, its text '' (2610.19159v1's `\trajectoryMark{}`, whose argument

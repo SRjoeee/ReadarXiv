@@ -246,19 +246,39 @@ const LEFT_HYPHEN_MIN = 2
 const RIGHT_HYPHEN_MIN = 3
 /** whether glyph `b` stands apart from `a` before it, as PDF.js reads a space: past it by more than TRACKING_SPACE_FACTOR */
 const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_FACTOR * (a.along ?? a.size)
+/** what a reading of an element's text knows of its source: `literal` (a URL, a code mark: TeX sets its characters as written),
+ *  `source` (the TeX the element and its unit are written in, where the word a line's end breaks may be stated) */
+export interface LineEndOptions {
+  literal?: boolean
+  source?: string
+}
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** what a source says of the word a line's end breaks after `before` and before `after`: `hyphen` where it writes the word
+ *  with a hyphen there (`anti-inflammatory`), `joined` where it writes it whole (`TensorCast`; TeX's own discretionary `\-`
+ *  is no hyphen of the word's), null where it writes neither, or both */
+function stated(source: string, before: string, after: string): 'hyphen' | 'joined' | null {
+  if (!source) return null
+  const text = source.replace(/\\-/g, '').replace(/[{}]/g, '')
+  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'u').test(text)
+  const hyphen = has(`${before}-${after}`)
+  const joined = has(before + after)
+  return hyphen === joined ? null : hyphen ? 'hyphen' : 'joined'
+}
 /**
  * What a line's end before glyph q is, in an element's text: `space` (PDF.js's end of line), `join` where the line ends in a
  * hyphen right after a letter and the next begins with a letter (inside a word: `Lee-|Thorp` is "Lee-Thorp", no space), `drop`
  * where that hyphen is TeX's own break of a word, which TeX sets at a line's end and nowhere else (`Rad-|ford` is "Radford":
- * 1810.04805v2's citation, which staging drew as "Rad- ford" in the translation). TeX's rules for it (the TeXbook ch. 14,
- * tex.web §894-899): it hyphenates the first word after a space alone, non-letters before it skipped (`(Col-lobert`; not
+ * 1810.04805v2's citation, which staging drew as "Rad- ford" in the translation). The glyphs cannot tell a word's hyphen from
+ * TeX's; the source can, where it states the word (stated: the element's own TeX, its unit's text): its hyphen kept where the
+ * source writes one (`anti-|inflammatory`), out where it writes the word whole (`Tensor-|Cast`, where it writes TensorCast). Where
+ * it does not, TeX's rules for its hyphen decide (the TeXbook ch. 14, tex.web §894-899): it hyphenates the first word after a space alone, non-letters before it skipped (`(Col-lobert`; not
  * `arXiv:gr-|qc`, `imrn/article-|pdf`), and leaves at least \lefthyphenmin letters before its hyphen and \righthyphenmin after
  * it (not `[hep-|th]`), and no word an explicit hyphen follows before the next space (its discretionary stops it, §899:
  * not `extreme-|mass-ratio`); never in a typewriter face (LaTeX sets their \hyphenchar to −1) nor in text it sets as written
  * (`literal`: a URL, a code mark). And a change of case across the hyphen is a compound's own hyphen, TeX's falling inside a
  * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
  */
-function lineEnd(gs: readonly DocGlyph[], q: number, literal: boolean): 'space' | 'join' | 'drop' {
+function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
   if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'
@@ -295,8 +315,11 @@ function lineEnd(gs: readonly DocGlyph[], q: number, literal: boolean): 'space' 
     if (lineChange(g, b) || apart(gs[j - 1] as DocGlyph, b) || /\s/u.test(b.u)) break
     own = HYPHENS.has(b.u)
   }
+  // (the source decides where it states the word; TeX's rules where it does not)
+  const said = after ? stated(o.source ?? '', before, after) : null
+  if (said) return said === 'hyphen' ? 'join' : 'drop'
   const tex =
-    !literal &&
+    !o.literal &&
     first &&
     !own &&
     [...before].length >= LEFT_HYPHEN_MIN &&
@@ -309,14 +332,14 @@ function lineEnd(gs: readonly DocGlyph[], q: number, literal: boolean): 'space' 
 /** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
  *  characters inside its segments, a space of it between two of them, white space as one space, trimmed), but for a line
  *  TeX ended inside a word (lineEnd): its hyphen out where it is TeX's, and no space */
-export function textOf(gs: readonly DocGlyph[], o: { literal?: boolean } = {}): string {
+export function textOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): string {
   let out = ''
   gs.forEach((g, q) => {
     const p = gs[q - 1]
     if (p) {
       const size = p.along ?? p.size
       if (lineChange(p, g)) {
-        const end = lineEnd(gs, q, !!o.literal)
+        const end = lineEnd(gs, q, o)
         if (end === 'drop') out = out.slice(0, -p.u.length)
         else if (end === 'space') out += ' '
       } else if (g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size) out += ' '
@@ -327,7 +350,7 @@ export function textOf(gs: readonly DocGlyph[], o: { literal?: boolean } = {}): 
 }
 /** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
  *  before it), [text, fill] each, a line's end as textOf reads it; null where every glyph's fill is one (its style's) */
-export function fillRunsOf(gs: readonly DocGlyph[], o: { literal?: boolean } = {}): [string, number][] | null {
+export function fillRunsOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
   const runs: [string, number][] = []
   const push = (ch: string, f: number) => {
     const last = runs.at(-1)
@@ -339,7 +362,7 @@ export function fillRunsOf(gs: readonly DocGlyph[], o: { literal?: boolean } = {
     if (p) {
       const size = p.along ?? p.size
       if (lineChange(p, g)) {
-        const end = lineEnd(gs, q, !!o.literal)
+        const end = lineEnd(gs, q, o)
         if (end === 'drop') {
           const last = runs.at(-1) as [string, number]
           last[0] = last[0].slice(0, -p.u.length)
