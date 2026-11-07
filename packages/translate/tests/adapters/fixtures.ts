@@ -140,12 +140,17 @@ export const NESTED_DISPLAY: UnitIn[] = [
     span('g', 'link', [span('n', 'other', [el('d', 'display', '.')])], true),
     t(' Then we go on.'),
   ]),
+  // (a display, then another element, before the span's first word: the head's marker ends at the display)
+  unit('head-display-ref', [
+    t('We have'),
+    span('s', 'other', [el('d', 'display', '.'), t(' '), el('r', 'ref'), t(' Then we go on.')]),
+  ]),
 ]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
   /* 18 */ BERT_STRATEGIES,
-  /* 19, 20, 21 */ ...NESTED_DISPLAY,
+  /* 19, 20, 21, 22 */ ...NESTED_DISPLAY,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */

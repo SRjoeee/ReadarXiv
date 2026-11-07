@@ -93,6 +93,8 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       'We have @a#. Then we go on.',
       'We have @a# @b# that holds.',
       'We have @a#. Then we go on.',
+      // (a display then a reference in a head: each its own marker, the display's own stop after its, as on the base's wire)
+      'We have @a#. @b# Then we go on.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -215,12 +217,18 @@ describe('microsoft: a span on no wire keeps its head (1810.04805v2, as staging 
 
 describe("microsoft: a head's last element found through its groups (a display inside a group)", () => {
   it("reads the reply's stop after a head whose display stands inside a group, as after any display's own", () => {
-    const [stop, , must] = NESTED_DISPLAY as [never, never, never]
+    const [stop, , must, ref] = NESTED_DISPLAY as [never, never, never, never]
     const tail = { t: 'text', s: '然后我们继续。' }
     expect(readMicrosoft(stop, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
       { t: 'text', s: '我们有 ' },
       { t: 'span', id: 's', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
       tail,
+    ])
+    expect(readMicrosoft(ref, JSON.stringify({ text: '我们有 @a#。@b# 然后我们继续。' }))?.content).toEqual([
+      { t: 'text', s: '我们有 ' },
+      { t: 'span', id: 's', content: [{ t: 'el', id: 'd' }] },
+      { t: 'el', id: 'r' },
+      { t: 'text', s: ' 然后我们继续。' },
     ])
     expect(readMicrosoft(must, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
       { t: 'text', s: '我们有 ' },

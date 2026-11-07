@@ -57,7 +57,7 @@ export function textOf(content: readonly (Piece | OutPiece)[]): string {
   return out
 }
 /** whether a piece list holds an element, at any depth */
-const holdsEl = (content: readonly Piece[]): boolean =>
+export const holdsEl = (content: readonly Piece[]): boolean =>
   content.some((p) => p.t === 'el' || (p.t === 'span' && holdsEl(p.content)))
 /** A span's head: how many of its pieces stand before its first word, up to its last element there; 0 where no element does.
  *  Where TeX sets a declaration that holds for the rest of its group (`{\em all}`, `{\bf \bert}`): a span that goes on no wire

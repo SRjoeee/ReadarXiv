@@ -19,7 +19,7 @@
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
-import { asOut, headLength, textOf } from '../accept.ts'
+import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, SAYS } from './text.ts'
 
@@ -104,6 +104,24 @@ function lastEl(content: readonly Piece[]): El | undefined {
   return undefined
 }
 
+/** a display, or an element its host states alone: it ends a stretch of elements, and so a marker */
+const ends = (q: El | undefined): boolean => !!q && (q.kind === DISPLAY || q.alone === true)
+const holdsEnd = (content: readonly Piece[]): boolean =>
+  content.some((q) => (q.t === 'el' ? ends(q) : q.t === 'span' && holdsEnd(q.content)))
+/** how much of a head (its first `k` pieces) one marker takes: up to its last element before its first display (that
+ *  display included, where a piece ends with it), so that no marker holds a display before another element */
+function cutOf(content: readonly Piece[], k: number): number {
+  let cut = 0
+  for (let i = 0; i < k; i++) {
+    const q = content[i] as Piece
+    const last = q.t === 'el' ? q : q.t === 'span' ? lastEl(q.content) : undefined
+    if (q.t === 'span' && holdsEnd(q.content) && !ends(last)) break
+    if (q.t === 'el' || (q.t === 'span' && holdsEl(q.content))) cut = i + 1
+    if (ends(last)) break
+  }
+  return cut
+}
+
 function itemsOf(content: readonly Piece[], at0: number): Item[] {
   const items: Item[] = []
   const walk = (ps: readonly Piece[], at: number, depth: number): number => {
@@ -123,8 +141,11 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
         at += 1
       } else if (!p.must) {
         // a span on no wire: its head (the elements before its first word, where TeX sets a declaration that holds
-        // for the rest of the group) one marker in a copy of it, its words the sentence's, back unstyled
-        const k = headLength(p.content)
+        // for the rest of the group) one marker in a copy of it, its words the sentence's, back unstyled. The marker ends
+        // at the head's first display (or element alone), whose own stop and boundary are a marker's last element's: the
+        // head is cut after the piece that ends with one, or before a group holding one before its end (its own rule reads
+        // that group); what follows goes as elsewhere, each display its own marker as on the base's wire
+        const k = cutOf(p.content, headLength(p.content))
         if (k) {
           const head = p.content.slice(0, k)
           const len = projLength(head)
@@ -134,7 +155,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
             out: [{ t: 'span', id: p.id, content: asOut(head) }],
             at,
             len,
-            display: !!last && (last.kind === DISPLAY || last.alone === true),
+            display: ends(last),
             stop: last?.stop,
           })
           at += len
@@ -153,7 +174,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
           at,
           len,
-          display: !!last && (last.kind === DISPLAY || last.alone === true),
+          display: ends(last),
           stop: last?.stop,
         })
         at += len
