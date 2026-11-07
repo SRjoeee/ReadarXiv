@@ -268,6 +268,34 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(on(2)).toBeLessThan(10)
     expect(on(1)).toBe(on(2))
   })
+  it('never grows a tie’s member past the tie’s size by the page’s fill (a paragraph’s parts one size, the fill on)', () => {
+    // (the page's fill grows a page's body units to one larger size where all of them can take it; a member a size tie capped
+    // at another's size took the page's growth over its cap: 11 beside its tie's 8.5, the paragraph's two parts unequal again)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [[2, 0, 72, 120, 600, 607, 598, 72, 120, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const rows = rowsOf([row([{ t: 'text', s: 'kurz' }]), { ...row([{ t: 'text', s: 'abcdefghijk' }]), id: idB }])
+    const sizes = (page: number) => {
+      const pt: Part = { ...part(a), page, flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      return layPage(pt, rows, rules, metrics()).members.map((m) => m.fit?.size ?? null)
+    }
+    const [a2, b2] = sizes(2)
+    expect(b2).toBeLessThan(10)
+    expect(a2).toBe(b2)
+    expect(sizes(1)[0]).toBe(b2)
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)
