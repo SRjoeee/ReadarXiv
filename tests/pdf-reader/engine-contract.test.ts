@@ -154,17 +154,16 @@ describe('the licence of what a reader loads', () => {
     expect(shared).toContain('src/pdf-reader/ui/display-glyphs.ts')
   })
 
-  // The brief held the shared interface to the same empty closure. It reaches two GPL-ported files today, each by one import
+  // The brief held the shared interface to the same empty closure. It reaches one GPL-ported file today, by one import
   // (listed with the file that brings it); two more went in stage 4b (Microsoft's adapter and the request layer's retry
-  // policy, the package's own code now). The web imports controller.ts and the components through its pin and replaces
-  // modules by its own seams, so it must carry none of the four: each is replaced by a web seam or not imported, which the
-  // web's own R21 gate checks. The list is a ratchet — it may shrink, never grow — until Task 7 cuts the four from the closure
-  // (the ReaderHost seams)
-  it('keeps the closure of controller.ts, src/pdf-reader/ui/** and src/ui/controls/** to the two ported files it reaches today, and no more', () => {
+  // policy, the package's own code now) and one in stage 7 (the prompt library, written anew, lane L10). The web imports
+  // controller.ts and the components through its pin and replaces modules by its own seams, so it must carry none of them:
+  // each is replaced by a web seam or not imported, which the web's own R21 gate checks. The list is a ratchet — it may
+  // shrink, never grow — until the language table is written anew too
+  it('keeps the closure of controller.ts, src/pdf-reader/ui/** and src/ui/controls/** to the one ported file it reaches today, and no more', () => {
     expect(shared.length).toBeGreaterThan(30)
     expect(portedInClosure(shared)).toEqual([
       'src/config/languages.ts',          // controller.ts: the language table
-      'src/providers/prompt-library.ts',  // controller.ts, by src/config/schema.ts
     ])
   })
 })
