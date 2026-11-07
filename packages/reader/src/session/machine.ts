@@ -162,8 +162,15 @@ export type RowsRegion =
       retryAt: number | null
       timer: Ticket | null
     }
-/** arXiv's HTML version of the paper, asked once a visit: not yet, under way, or its address (null: arXiv has none) */
-export type HtmlRegion = { s: 'unknown' } | { s: 'asking'; t: Ticket } | { s: 'known'; url: string | null }
+/** arXiv's HTML version of the paper, asked once a visit and again where our server's word on it changes: not yet, under way
+ *  (the answer before kept meanwhile, where there was one), or its address (null: arXiv has none). `said`: our server's word the
+ *  ask was made on (its document's `prepare.html`; null where it said none), which the answer is taken from first */
+export type HtmlRegion =
+  | { s: 'unknown' }
+  | { s: 'asking'; t: Ticket; said: boolean | null; url?: string | null }
+  | { s: 'known'; url: string | null; said: boolean | null }
+/** our server's word on arXiv's HTML version of the paper, where its document gives one */
+const htmlSaid = (d: Doc | null): boolean | null => (typeof d?.prepare.html === 'boolean' ? d.prepare.html : null)
 
 export interface State {
   paper: PaperRef
@@ -617,7 +624,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       if (!s.title && x.title) s.title = x.title
       break
     case 'html.answered':
-      if (s.html.s === 'asking' && x.t === s.html.t) s.html = { s: 'known', url: x.url }
+      if (s.html.s === 'asking' && x.t === s.html.t) s.html = { s: 'known', url: x.url, said: s.html.said }
       break
     case 'panes.drawn':
       s.panes = { ...s.panes, drawn: true }
@@ -771,9 +778,13 @@ export function settle(s0: State): State {
   }
   if (s.rows.s === 'arriving' && (!s.engaged || !units.length || lasting)) s.rows = { s: 'none', target: s.rows.target }
   if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer) s.rows = { ...s.rows, timer: take('timer') }
-  // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit
+  // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit, and
+  // again where our server's word on it changes (a refusal for now that said nothing, then a lasting one saying arXiv has it)
+  const said = htmlSaid(s.doc)
   if (s.html.s === 'unknown' && s.engaged && (s.layer.s === 'refused' || s.link.s === 'stopped' || holdOf(s)))
-    s.html = { s: 'asking', t: take('html') }
+    s.html = { s: 'asking', t: take('html'), said }
+  else if (s.html.s !== 'unknown' && s.html.said !== said)
+    s.html = { s: 'asking', t: take('html'), said, ...(s.html.url !== undefined ? { url: s.html.url } : {}) }
   return s
 }
 

@@ -934,7 +934,7 @@ export function openReader(
         id: paper.id,
         version: paper.version ?? s.doc?.version ?? head?.paper.version ?? null,
         title: s.title,
-        html: s.html.s === 'known' ? s.html.url : null,
+        html: s.html.s === 'unknown' ? null : (s.html.url ?? null),
         pdf: originalPdfOf(ref),
       },
       prefs: s.prefs.value,

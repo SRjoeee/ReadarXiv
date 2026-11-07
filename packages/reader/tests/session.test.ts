@@ -627,7 +627,7 @@ describe('the session: the paper', () => {
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000 })
     const t = m.live('html')
     m.feed({ i: 'html.answered', t, url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
-    expect(m.s.html).toEqual({ s: 'known', url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
+    expect(m.s.html).toEqual({ s: 'known', url: 'https://arxiv.org/html/2600.00001v1#readarxiv', said: null })
     m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: 1000 })
     m.feed({ i: 'follow.lost', t: m.live('link'), why: 'network' })
     expect(m.has('html')).toBe(false)
@@ -636,7 +636,49 @@ describe('the session: the paper', () => {
     const none = machine()
     none.feed({ i: 'follow.lost', t: none.live('link'), why: 'not-found' })
     none.feed({ i: 'html.answered', t: none.live('html'), url: null })
-    expect(none.s.html).toEqual({ s: 'known', url: null })
+    expect(none.s.html).toEqual({ s: 'known', url: null, said: null })
+  })
+  it("arXiv's HTML version taken again where our server's word on it changes: a refusal for now, then a lasting one saying it has one (L11 third round, gap 7)", () => {
+    const said = (rev: number, state: 'none' | 'failed', html?: boolean) =>
+      doc(rev, {
+        prepare: {
+          state,
+          why: state === 'failed' ? 'cannot' : null,
+          retryAt: null,
+          stage: null,
+          units: [],
+          ...(html === undefined ? {} : { html }),
+        },
+      })
+    /** a 429 that names its wait, with the document our server answered beside it, then followed again at its time */
+    const refused = (m: ReturnType<typeof machine>, d: Doc, at: number) => {
+      m.feed({ i: 'follow.lost', t: m.live('link'), why: 'limit', afterMs: 1000, doc: d })
+      return () => m.feed({ i: 'time', t: (m.s.link as { timer: Ticket }).timer, now: at })
+    }
+    const m = machine()
+    // (a 429: our server says nothing of arXiv's HTML version, which the reader's own ask answers, none here)
+    const again = refused(m, said(1, 'none'), 1000)
+    const t1 = m.live('html')
+    m.feed({ i: 'html.answered', t: t1, url: null })
+    expect(m.s.html).toMatchObject({ s: 'known', url: null })
+    // (another 429, the same word in a newer document: nothing asked)
+    again()
+    refused(m, said(2, 'none'), 2000)()
+    expect(m.has('html')).toBe(false)
+    // (the prepare cannot be made, and our server says arXiv has the version: asked again, the answer the new word's)
+    m.feed({ i: 'paper', t: m.live('link'), doc: said(3, 'failed', true) })
+    const t2 = m.live('html')
+    expect(t2).not.toBe(t1)
+    m.feed({ i: 'html.answered', t: t2, url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
+    expect(m.s.html).toMatchObject({ s: 'known', url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
+    // (a word changed again: the answer it had kept while the new one is asked)
+    const k = machine()
+    refused(k, said(1, 'none', true), 1000)()
+    k.feed({ i: 'html.answered', t: k.live('html'), url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
+    refused(k, said(2, 'none', false), 2000)
+    expect(k.s.html).toMatchObject({ s: 'asking', url: 'https://arxiv.org/html/2600.00001v1#readarxiv' })
+    k.feed({ i: 'html.answered', t: k.live('html'), url: null })
+    expect(k.s.html).toMatchObject({ s: 'known', url: null })
   })
 })
 
