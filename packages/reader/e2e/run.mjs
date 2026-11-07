@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
-import { startServer } from './server.mjs'
+import { answerBytes, startServer } from './server.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = join(HERE, '../../..')
@@ -54,6 +54,10 @@ const docs = {},
   rowsObjects = new Map(),
   modes = {},
   v2log = []
+/** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
+ *  catalog, `recatalog`), its object by path */
+const twins = {},
+  twinObjects = new Map()
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
   const seg = `${head.paper.id.replace('.', '_')}v${head.paper.version}`
@@ -63,6 +67,12 @@ for (const [name, f] of Object.entries(fixtures)) {
   const headDigest = readdirSync(f.bundle)
     .find((x) => x.endsWith('.head'))
     .split('.')[0]
+  {
+    const bytes = Buffer.concat([readFileSync(join(f.bundle, `${headDigest}.head`)), Buffer.from('\n')])
+    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    twins[seg] = { path: `p/${seg}/fx/${sha256}`, sha256, bytes: bytes.length }
+    twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, bytes)
+  }
   indexOf[name] = {
     paper: `${head.paper.id}v${head.paper.version}`,
     seg,
@@ -190,6 +200,9 @@ const v2Route = {
           prepare: { ...d.prepare, state: 'running', stage: 'compiling' },
           targets: {},
         })
+      // (a newer catalog once the check says so: the same layer under the twin head)
+      if (m?.kind === 'recatalog' && m.switched)
+        return json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
@@ -222,6 +235,11 @@ const v2Route = {
         etag: `"${url.pathname.split('/').pop().slice(0, 16)}"`,
       })
       res.end(rows)
+      return true
+    }
+    const twin = twinObjects.get(url.pathname)
+    if (twin) {
+      answerBytes(req, res, twin)
       return true
     }
     return false
@@ -887,6 +905,60 @@ await check(
       early: { root: closedEarly.root, workers: closedEarly.probe.workers, live: closedEarly.probe.live },
       a: { workers: after.a.workers, live: after.a.live },
       b: { workers: after.b.workers, laidPages: b2.probe.laidPages },
+    }
+  },
+)
+
+await check(
+  "reader: each composed document keeps its own layout: a newer catalog's pages laid by its layout, the older one's late layout dropped",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'recatalog', switched: false }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', holdFirstLay: true }))
+      // (the first composed document's layout asked, and held; then the server names a newer catalog)
+      await waitFor(page, () => window.__h.marks.some((m) => m.what === 'lay-asked' && m.gen === 1), null, 25_000)
+      modes[seg].switched = true
+      await waitFor(
+        page,
+        () =>
+          window.__h.marks.some((m) => m.what === 'lay' && m.gen === 2) &&
+          window.__h.readers[0].reader.probe().laidPages > 0,
+        null,
+        25_000,
+      )
+      // (the first layout comes late; then every near page laid again, by what to translate changed)
+      const from = await page.evaluate(() => {
+        window.__h.releaseLay()
+        return window.__h.marks.length
+      })
+      await page.waitForTimeout(500)
+      await page.evaluate(() => {
+        const r = window.__h.readers[0].reader
+        const c = r.state().prefs.classes
+        r.do({ do: 'set', prefs: { classes: { ...c, heads: !c.heads } } })
+      })
+      await waitFor(page, (n) => window.__h.marks.slice(n).some((m) => m.what === 'lay'), from, 10_000)
+      await page.waitForTimeout(500)
+      const gens = await page.evaluate(
+        (n) =>
+          window.__h.marks
+            .slice(n)
+            .filter((m) => m.what === 'lay')
+            .map((m) => m.gen),
+        from,
+      )
+      const probe = await page.evaluate(() => window.__h.readers[0].reader.probe())
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      assert(
+        gens.length > 0 && gens.every((g) => g === 2),
+        `the pages laid after the first layout came, by generation: ${JSON.stringify(gens)}`,
+      )
+      return { laidAgain: gens.length, by: [...new Set(gens)], laidPages: probe.laidPages }
+    } finally {
+      delete modes[seg]
     }
   },
 )

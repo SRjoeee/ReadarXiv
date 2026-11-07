@@ -429,10 +429,10 @@ export function openReader(
   }
   // ---- the original's document, the composed one
   let original: { source: OriginalSource; doc: PDFDocumentProxy | null } | null = null
-  let composed: { doc: PDFDocumentProxy; groups: import('./compose/groups.ts').Groups } | null = null
-  /** the lay of the layer open: the engine's, made over its parts once its head is read; none lays nothing */
+  /** the composed document open, with its groups and its own lay: the engine's, made over its parts once its head is read (none
+   *  lays nothing). A generation: published whole, by the ticket that made it while it lives, and read only through it */
+  let composed: { doc: PDFDocumentProxy; groups: import('./compose/groups.ts').Groups; lay: Lay } | null = null
   const none: Lay = (part) => ({ page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] })
-  let current: Lay = none
   /** the paper's title: its PDF's Info Title (arXiv's margin stamp is none), else the abstract page's (one request a visit,
    *  asked again by the next open where it could not be read); the first known stays */
   const abstract = abstractPage(host.fetch, ref)
@@ -555,8 +555,8 @@ export function openReader(
         async ([C, F, H, k]) => {
           if (signal.aborted || !panes) return
           faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root })
-          // (the lay itself is made once the head is read: the composed document's open)
-          const lay: Lay = (part, rs) => current(part, rs)
+          // (the lay itself is made once the head is read: the composed document's open, whose own it is)
+          const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)
           composer = C.createComposer({
             stack: panes.right,
             kit: k,
@@ -620,6 +620,8 @@ export function openReader(
       })
       const src = composedSource(original.source, h.original.bytes, addOn, h.addOn.bytes)
       let task: ReturnType<typeof openRanged> | null = null
+      /** this ticket's generation, once published */
+      let mine: typeof composed = null
       void ready.then(async (k) => {
         // (let go before this turn: no document opened, no worker asked of the kit after its release)
         if (signal.aborted) return
@@ -629,9 +631,12 @@ export function openReader(
           const { groupsOf } = await import('./compose/groups.ts')
           const groups = groupsOf(doc)
           await groups.ready
-          current = o.engine?.lay ? await o.engine.lay(partOf, h.paper.pages) : none
+          // (the lay held here until the ticket is known to live: one made for a document let go, which may come after a
+          // newer catalog's, never reaches the composer)
+          const lay = o.engine?.lay ? await o.engine.lay(partOf, h.paper.pages) : none
           if (signal.aborted) return
-          composed = { doc, groups }
+          mine = { doc, groups, lay }
+          composed = mine
           asOriginal.clear()
           composer?.setDocuments({ original: original?.doc ?? null, composed: doc, groups })
           composer?.setLayer({ part: partOf, pages: h.paper.pages }, rowsSource())
@@ -643,8 +648,11 @@ export function openReader(
       })
       return async () => {
         src.abort()
-        composed = null
-        composer?.setDocuments({ original: original?.doc ?? null, composed: null, groups: null })
+        // (its own generation taken back; never another ticket's)
+        if (composed === mine) {
+          composed = null
+          composer?.setDocuments({ original: original?.doc ?? null, composed: null, groups: null })
+        }
         await task?.destroy()
         kit?.release('composed')
       }

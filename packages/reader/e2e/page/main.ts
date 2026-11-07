@@ -600,6 +600,8 @@ const h = {
     }
   },
   readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],
+  /** the held first layout let go (a reader opened with `holdFirstLay`) */
+  releaseLay: null as (() => void) | null,
   /**
    * A reader through openReader over fixture `name`, with a fake host: the website's (`web`: our copy of the original, our server's
    * rows) or the extension's (`ext`: arXiv's own PDF, rows made here by a translate that yields the fixture's rows). Every fetch
@@ -617,6 +619,8 @@ const h = {
       panes?: { root: HTMLElement; left: HTMLElement; right: HTMLElement }
       /** the reader closed in the task that opened it (before PDF.js is in) */
       closeAtOnce?: boolean
+      /** the first layout made (the first composed document's) held until `h.releaseLay()` */
+      holdFirstLay?: boolean
     } = {},
   ) {
     const index = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as { paper: string }
@@ -640,6 +644,8 @@ const h = {
       .then((x) => (fx = x))
     const target = o.target ?? 'de'
     const ext = o.host === 'ext'
+    // (each layout the engine makes is a generation: its making marked `lay-asked`, each page it lays marked `lay`)
+    let generations = 0
     const host = {
       fetch: (u: string, i?: RequestInit) => {
         asked.push({ url: u, at: performance.now() - t0 })
@@ -683,6 +689,12 @@ const h = {
         faces: faceTable(h.kit?.base ?? '/pdfjs/6.3.289/'),
         unlaid: o.unlaid ?? 'original',
         lay: async (partOf, pages) => {
+          const gen = ++generations
+          h.marks.push({ what: 'lay-asked', at: performance.now() - t0, gen })
+          if (o.holdFirstLay && gen === 1)
+            await new Promise<void>((go) => {
+              h.releaseLay = () => go()
+            })
           await fxReady
           const parts = new Map<number, Part>()
           for (let n = 1; n <= pages; n++) {
@@ -695,7 +707,7 @@ const h = {
             )
           ).json()) as ReaderDump
           const face = (fx as { face: string | null }).face
-          return fixtureLay(
+          const laid = fixtureLay(
             pagesOf(
               parts,
               dump,
@@ -703,6 +715,10 @@ const h = {
             ),
             parts,
           )
+          return (part, rows) => {
+            h.marks.push({ what: 'lay', at: performance.now() - t0, gen, page: part.page })
+            return laid(part, rows)
+          }
         },
       },
     })

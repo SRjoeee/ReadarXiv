@@ -634,10 +634,26 @@ describe('the session: preferences', () => {
 
 describe('the session: tickets', () => {
   it('drops a stale result of every kind by its ticket', () => {
-    const m = machine()
+    const m = composedNow()
     const link = m.live('link')
-    m.feed({ i: 'paper', t: link, doc: ready(1) }, { i: 'panes.drawn' })
-    const t = { original: m.live('original'), code: m.live('code'), rows: m.live('rows'), link }
+    const t = {
+      original: m.live('original'),
+      code: m.live('code'),
+      rows: m.live('rows'),
+      link,
+      composed: m.live('composed'),
+    }
+    // a newer catalog: the older one's composed document let go, the newer one's made over its head; the older one's result
+    // (its document and its layout, come late) dropped while the newer one is live, which it never opens
+    m.feed({ i: 'paper', t: link, doc: ready(2, ref('c')) }, { i: 'head', digest: ref('c').sha256, head: HEAD })
+    const newer = m.live('composed')
+    expect(newer).not.toBe(t.composed)
+    const live: State = m.s
+    const dropped = m.dropped
+    m.feed({ i: 'composed.opened', t: t.composed }, { i: 'composed.failed', t: t.composed })
+    expect(m.dropped - dropped).toBe(2)
+    expect(m.s).toBe(live)
+    expect(m.s.layer).toMatchObject({ s: 'ready', composed: newer, open: false })
     // every resource let go: a language switch, then a mismatch and a close
     m.feed({ i: 'cmd.set', prefs: { target: 'ja' } }, { i: 'original.mismatch', t: t.original })
     const held: State = m.s
@@ -654,6 +670,9 @@ describe('the session: tickets', () => {
       { i: 'code.failed', t: 'code#999' },
       { i: 'composed.opened', t: 'composed#999' },
       { i: 'composed.failed', t: 'composed#999' },
+      { i: 'composed.opened', t: t.composed },
+      { i: 'composed.opened', t: newer },
+      { i: 'composed.failed', t: newer },
       { i: 'open.answered', t: 'open#999', doc: null },
       { i: 'open.failed', t: 'open#999', why: 'x' },
       { i: 'html.answered', t: 'html#999', url: null },
