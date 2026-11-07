@@ -113,7 +113,8 @@ const h = {
   /**
    * The layer of fixture `name` over the original open: its head and parts read from our server's objects, the original's chunks
    * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
-   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from
+   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from; `pages`: the
+   * URL of the pages to lay instead of the dump's (page → Page: a typesetter's own, lab/typeset/checkpoint/entry-reader.mjs)
    */
   async layer(
     name: string,
@@ -123,6 +124,7 @@ const h = {
       target?: string
       classes?: Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean>
       ahead?: number
+      pages?: string
     } = {},
   ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
@@ -153,11 +155,15 @@ const h = {
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const pages = pagesOf(
-      parts,
-      dump,
-      (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
-    )
+    const pages = o.pages
+      ? new Map(
+          Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [Number(n), p]),
+        )
+      : pagesOf(
+          parts,
+          dump,
+          (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+        )
     h.pages = pages
     const given = new Map<string, Row>()
     const listeners = new Set<() => void>()

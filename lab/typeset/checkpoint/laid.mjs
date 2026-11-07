@@ -79,14 +79,16 @@ for (const { pair, pages } of asks) {
     })
   }
   // (--entry: the entry's own Page, design-a's, as the reader receives it: its members by the part's ord, their groups off by
-  // layPage's rule, their runs' raises kept)
+  // layPage's rule, their runs' raises kept; and its links (`links`), read by entry-reader.mjs)
   const entryPages = {}
+  const entryLinks = {}
   globalThis.__ckPage = (p, pg, page) => {
     if (p !== pair || !pages.has(pg)) return
     entryPages[pg] = page.members.filter((m) => m.page === pg)
+    entryLinks[pg] = page.links
   }
   gateL1Pair(pair, { metricsOf, reading: 'part', ...(ENTRY ? { entry: true } : {}) })
-  out[pair] = { pages: ENTRY ? entryPages : laid, dropped }
+  out[pair] = { pages: ENTRY ? entryPages : laid, ...(ENTRY ? { links: entryLinks } : {}), dropped }
   console.log(`${pair}: ${Object.entries(laid).map(([p, ms]) => `p${p} ${ms.length} laid`).join(', ')}; dropped rise ${dropped.rise}, track ${dropped.track}`)
 }
 writeFileSync(OUT, `${JSON.stringify(out)}\n`)
