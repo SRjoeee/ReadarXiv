@@ -664,14 +664,14 @@ describe("the run's chip that shows the translation, where the host words it (St
   })
 })
 
-describe("arXiv's HTML version as the host offers it (StateWords useHtml; L11's second round, gap 5)", () => {
+describe("arXiv's HTML version as the host offers it (StateWords htmlLink; L11's second round, gap 5)", () => {
   const html = 'https://arxiv.org/html/2608.02163v2#readarxiv'
   const link = (c: HTMLElement) => c.querySelector<HTMLAnchorElement>('.capsule a[data-action]')
   it("the host's address and words for the link; none where it offers none; the catalogue's where it gives no rule", async () => {
     const store = 'https://chromewebstore.google.com/detail/read-arxiv'
-    const useHtml = (href: string) => (href.includes('2608') ? { href: store, label: 'Install the extension' } : null)
+    const htmlLink = (href: string) => (href.includes('2608') ? { href: store, label: 'Install the extension' } : null)
     const lasting = fakeController({ phase: 'ready', available: false, htmlVersion: html })
-    const a = await mountElement(capsuleOf(lasting.controller, { words: { useHtml } }))
+    const a = await mountElement(capsuleOf(lasting.controller, { words: { htmlLink } }))
     expect([link(a.container)?.getAttribute('href'), link(a.container)?.textContent]).toEqual([
       store,
       'Install the extension',
@@ -682,7 +682,7 @@ describe("arXiv's HTML version as the host offers it (StateWords useHtml; L11's 
       unavailable: { why: 'unreachable', retryAt: null },
       htmlVersion: 'https://arxiv.org/html/2601.00001v1#readarxiv',
     })
-    const b = await mountElement(capsuleOf(passing.controller, { words: { useHtml } }))
+    const b = await mountElement(capsuleOf(passing.controller, { words: { htmlLink } }))
     expect([link(b.container), !!b.container.querySelector('.capsule button[data-action]')]).toEqual([null, true])
     document.body.innerHTML = ''
     const c = await mountElement(

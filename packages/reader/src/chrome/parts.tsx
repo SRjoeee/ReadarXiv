@@ -63,7 +63,7 @@ export interface StateWords {
    *  translates it: its address and its words (the website's: arXiv's HTML version where the extension is on the page, its
    *  store page, 安装扩展翻译 HTML, where it is not), or null for none (a phone, where the extension cannot be had); none:
    *  the HTML version, R.status.useHtml */
-  useHtml?: (href: string) => { href: string; label: string } | null
+  htmlLink?: (href: string) => { href: string; label: string } | null
   /** the paper too large to prepare (R.status.noPdf) */
   tooLarge?: string
   /** our server out of reach for now (R.status.notNow) */

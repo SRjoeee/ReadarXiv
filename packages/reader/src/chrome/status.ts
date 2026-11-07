@@ -10,7 +10,7 @@ import type { Languages, Parts, StateWords } from './parts.tsx'
 
 export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
-   *  closable. `label`: the link's words where the host gives its own (StateWords `useHtml`) */
+   *  closable. `label`: the link's words where the host gives its own (StateWords `htmlLink`) */
   | { kind: 'unavailable'; words: CapsuleWords; href?: string; label?: string }
   /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
    *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable.
@@ -81,10 +81,10 @@ function stageWords(stage: Stage, state: ReaderState, words: StateWords, chip: b
 
 /** the link beside a bilingual version not to be had: arXiv's HTML version, or where the host says (its address and words), or
  *  none where it offers none */
-function htmlLink(html: string | null, words: StateWords): { href: string; label?: string } | null {
+function linkOf(html: string | null, words: StateWords): { href: string; label?: string } | null {
   if (!html) return null
-  if (!words.useHtml) return { href: html }
-  const own = words.useHtml(html)
+  if (!words.htmlLink) return { href: html }
+  const own = words.htmlLink(html)
   return own ? { href: own.href, label: own.label } : null
 }
 
@@ -112,7 +112,7 @@ export function capsuleOf(
     const said = plain(
       (state.unavailable?.why === 'too-large' ? words.tooLarge : undefined) ?? words.noPdf ?? R.status.noPdf,
     )
-    const html = htmlLink(state.htmlVersion, words)
+    const html = linkOf(state.htmlVersion, words)
     return html ? { kind: 'unavailable', words: said, ...html } : { kind: 'unavailable', words: said }
   }
   if (!state.languageSupported && state.prefs) {
@@ -147,7 +147,7 @@ export function capsuleOf(
     const notNow = plain(text)
     // (its retry offered at once, or at its time where the host's rule says so: a retry before it asks nothing)
     const wait = withheld(state, rules) ? { wait: true as const } : {}
-    const html = htmlLink(state.htmlVersion, words)
+    const html = linkOf(state.htmlVersion, words)
     return html ? { kind: 'notNow', words: notNow, ...html, ...wait } : { kind: 'notNow', words: notNow, ...wait }
   }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
