@@ -151,6 +151,9 @@ export const El = z.object({
   same: z.string().optional(),
   colour: int.optional(),
   nested: flag.optional(),
+  // where a URL TeX set on one line may break, as its url package lets it: after a run of \UrlBreaks' and \UrlBigBreaks'
+  // characters, each the x between two of its glyphs on its ink's line and how many of its characters stand before it
+  breaks: z.array(z.tuple([num, int])).optional(),
 })
 /** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and
  *  star), the fill TeX set its run in */

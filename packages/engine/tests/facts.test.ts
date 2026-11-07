@@ -181,8 +181,21 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       { x0: 107.5, x1: 505.6, y0: 676.6, y1: 677 },
     ]
     const line = [L(302.56, 402.52, 678.91)]
-    expect(sideOf(line, () => glyphs, () => [107.5, 505.6])).toEqual([290.6, 429.01])
-    expect(sideOf(line, () => glyphs, () => [107.5, 505.6], () => walls)).toEqual([296.4, 409])
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+      ),
+    ).toEqual([290.6, 429.01])
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual([296.4, 409])
   })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [
@@ -217,7 +230,13 @@ describe('alignment where TeX did not tell (B3, E8)', () => {
     const mail = L(359.84, 427.82, 531.45)
     const rowAbove = L(321.7, 457.65, 581.45)
     const page = [rowAbove, name, place, mail, L(108, 504, 413.51), L(143.87, 469.79, 402.6)]
-    expect(alignOf([place], () => 10, () => [108, 504])).toBe('j')
+    expect(
+      alignOf(
+        [place],
+        () => 10,
+        () => [108, 504],
+      ),
+    ).toBe('j')
     expect(centredByBlock([place], page, 11.96)).toBe(true)
     expect(centredByBlock([name], page, 11.96)).toBe(true)
     // (a paragraph's short last line stays its own: its lines share their left edge; a lone line, nothing to read it by)
@@ -277,6 +296,28 @@ function instrument(
 }
 
 describe('locate states the facts on arXiv’s page', () => {
+  it('states where a URL TeX set on one line may break: after a run of url.sty’s break characters, between two glyphs', () => {
+    // (2303.11366v4 p1's abstract ends "datasets at https://github.com/noahshinn024/reflexion.", the URL whole on its last
+    // line: TeX's url package may break it after its . / : _ and the rest of \UrlBreaks and \UrlBigBreaks, never inside a run
+    // of them ("https:/" + "/…"); the typesetter breaks the URL's crop there as TeX would its text)
+    const B = docOf([{ lines: ['We release it at https://a.io/b_c.'] }])
+    const content: Piece[] = [
+      text('We release it at '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/b_c}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 17 && j < 33 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const M = locate(ins, B, align(B, B)).members[0]!
+    const el = new Map(M.elements).get('1')!
+    expect(el.ink.length).toBe(1)
+    expect(el.breaks).toEqual([
+      [222, 8],
+      [234, 10],
+      [252, 13],
+      [264, 15],
+    ])
+  })
   it('keeps a line inside a unit that no unit owns (a held line) as KEPT, in its place', () => {
     const pages: PageSpec[] = [{ lines: ['first line of it', 'a held line here', 'last line of it'] }]
     const B = docOf(pages)

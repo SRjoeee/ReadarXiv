@@ -904,6 +904,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
+      if (p.kind === 'url' && ink.length === 1) {
+        const breaks = urlBreaks(gl.map(gA))
+        if (breaks.length) el.breaks = breaks
+      }
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
       // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
@@ -1248,6 +1252,25 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
     const xs = [flat[i]!, flat[i + 2]!, flat[i + 4]!, flat[i + 6]!]
     const ys = [flat[i + 1]!, flat[i + 3]!, flat[i + 5]!, flat[i + 7]!]
     out.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)])
+  }
+  return out
+}
+
+/** the characters after which TeX's url package may break a URL (url.sty's \UrlBreaks and \UrlBigBreaks; a hyphen only under
+ *  its `hyphens` option) */
+const URL_BREAKS = new Set(".@\\/!_|;>]),?&'+=#:")
+/**
+ * Where a URL TeX set on one line may break (El.breaks): after a run of url.sty's break characters, never inside one (a
+ * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle between the run's last glyph
+ * and the next, with how many of its glyphs stand before it. Its glyphs in their order on the line
+ */
+export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
+  const line = gs.filter((g) => /\S/.test(g.u)).sort((a, b) => a.x0 - b.x0)
+  const out: [number, number][] = []
+  for (let k = 1; k < line.length; k++) {
+    const a = line[k - 1]!,
+      b = line[k]!
+    if (URL_BREAKS.has(a.u) && !URL_BREAKS.has(b.u)) out.push([r2((a.x1 + b.x0) / 2), k])
   }
   return out
 }

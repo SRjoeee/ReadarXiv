@@ -69,3 +69,66 @@ describe('a translation set in fewer lines than its original', () => {
     expect(laid.lines[0]![0]).toBeCloseTo(600, 2)
   })
 })
+
+describe('a URL TeX set whole on one line, its crop the original’s ink', () => {
+  // (2303.11366v4 p1's abstract: "… datasets at https://github.com/noahshinn024/reflexion." The translation's line before the URL
+  // was letter-spaced to its measure, the URL whole on the next; TeX's url package breaks it at its break points, El.breaks)
+  const url: Placed = {
+    ord: 2,
+    kind: 'para',
+    text: idOf(3),
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    lines: [
+      [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 296, 688, 695, 686, 72, 300, 0, 10],
+    ],
+    els: [
+      [
+        '1',
+        {
+          kind: 'other',
+          cmd: 'url',
+          literal: 1,
+          copy: 'https://a.io/abcdefgh/ij',
+          text: 'https://a.io/abcdefgh/ij',
+          style: { role: 'mono', size: 10, design: 'SFTT1000' },
+          ink: [[1, 72, 686, 292, 695, 688]],
+          breaks: [
+            [120, 8],
+            [174, 13],
+          ],
+        },
+      ],
+    ],
+    room: { below: 20, next: 24, side: [72, 300] },
+  }
+  const rows: Rows = {
+    get: (k) =>
+      k === idOf(3)
+        ? {
+            id: idOf(3),
+            ok: true,
+            by: 'test',
+            content: [
+              { t: 'text', s: 'Wir veroeffentlichen es unter ' },
+              { t: 'el', id: '1' },
+              { t: 'text', s: '.' },
+            ],
+          }
+        : undefined,
+    done: true,
+  }
+  it('breaks the URL at the last of its break points that fits the line, its crop cut between two glyphs there', () => {
+    const p = layPage(partOf([[url]]), rows, rules, metrics)
+    const laid = laidOf(p, 2)
+    expect(laid.state).toBe('laid')
+    const crops = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => (it as { src: number[] }).src))
+    // (its head ends the first line at 120, between "https://" and "a.io"; its tail opens the second)
+    expect(crops[0]!.length).toBe(1)
+    expect(crops[0]![0]![3]).toBeCloseTo(120, 5)
+    expect(crops[1]![0]![1]).toBeCloseTo(120, 5)
+    expect(crops[1]![0]![3]).toBeCloseTo(292.4, 5)
+  })
+})
