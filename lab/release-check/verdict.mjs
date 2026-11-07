@@ -69,8 +69,23 @@ export function verdictOf(tier, gates, results, invariants) {
     const r = results[g.id]
     if (r?.status !== 'pass') why.push(`${g.id}: ${r ? r.status : 'not run'}${r?.reason ? ` (${r.reason})` : ''}`)
   }
-  if (tier === 'release') for (const i of invariants) if (i.status !== 'GO') why.push(`${i.id}: ${i.status}`)
+  // (an invariant no gate holds is NO-GO until one exists, by design: the release verdict waits for its gate)
+  if (tier === 'release') for (const i of invariants) if (i.status !== 'GO') why.push(`${i.id}: ${i.status}${noGate(i) ? ' (no gate holds it yet: an invariant without a gate is NO-GO until one exists)' : ''}`)
   return { verdict: why.length ? 'NO-GO' : 'GO', why }
+}
+
+const noGate = i => i.status === 'NO-GO' && !i.gates?.length && i.why?.some(w => w.startsWith('no gate holds it'))
+
+/** a private gate's line from its entry in the private gates' file: its recorded result counts only where it was made for
+ *  the release candidate (`result.commit`, this repository's commit the private run was made against, a prefix of the
+ *  candidate's or the candidate's of it); a result of another commit is "stale", naming both; no result, "private" */
+export function privateResultOf(entry, candidate) {
+  const r = entry?.result
+  if (!r) return { status: 'private', reason: "the private repository's, not run here", command: entry?.command, note: entry?.last ? `last: ${entry.last}` : undefined }
+  const at = r.commit ? String(r.commit) : ''
+  const same = at.length >= 7 && (candidate.startsWith(at) || at.startsWith(candidate))
+  if (!same) return { status: 'stale', reason: `recorded at ${at || 'no commit'}; the release candidate is ${candidate}`, command: entry.command }
+  return { status: r.status === 'pass' ? 'pass' : 'fail', reason: `recorded by the private repository: ${r.date ?? ''} at ${at}${r.evidence ? `, ${r.evidence}` : ''}`, command: entry.command }
 }
 
 const cell = s => String(s ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ')
@@ -89,6 +104,9 @@ export function markdownOf(report) {
   const which = report.only ? `of this run (--only ${report.only.join(',')})` : `of tier ${report.tier}`
   L.push(`**Verdict: ${report.verdict}.** ${report.verdict === 'GO' ? `Every gate ${which} passed.` : `Not every gate ${which} passed:`}`)
   for (const w of report.why) L.push(`- ${w}`)
+  const without = report.invariants.filter(noGate).map(i => i.id)
+  if (report.tier === 'release' && without.length)
+    L.push('', `An invariant no gate holds (${without.join(', ')}) keeps the release verdict NO-GO on purpose: it is NO-GO until a gate holds it, whatever every other gate says. Not a fault of the runner.`)
   const held = report.invariants.filter(i => i.status === 'GO').length
   L.push('', `Invariants held whole in this tier: ${held} of ${report.invariants.length}${report.tier === 'release' ? '' : ' (the release tier\'s verdict needs every one)'}.`, '')
   L.push('## Gates', '', '| Gate | Stage | Holds | Result | Time | Numbers |', '|---|---|---|---|---|---|')

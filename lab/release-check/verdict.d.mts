@@ -9,3 +9,4 @@ export declare function invariantLine(inv: Invariant, gates: GateLike[], tier: s
 export declare function targetLines(results: Record<string, Result>): TargetLine[]
 export declare function verdictOf(tier: string, gates: GateLike[], results: Record<string, Result>, invariants: { id: string; status: string }[]): { verdict: 'GO' | 'NO-GO'; why: string[] }
 export declare function markdownOf(report: Record<string, unknown>): string
+export declare function privateResultOf(entry: { command?: string; last?: string; result?: { status: string; commit?: string; date?: string; evidence?: string } } | undefined, candidate: string): Result & { command?: string; note?: string }

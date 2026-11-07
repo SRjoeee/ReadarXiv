@@ -34,5 +34,5 @@ export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'u
 export declare function typesetOf(text: string): Record<string, number>
 export declare function corpusLogOf(file: string): { papers: number; made: number; failed: string[]; refused: string[]; missingCompile: string[]; proofs: { a: number; c: number; on: number; offOutside: number } }
 export declare function drawnOf(dir: string): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
-export declare function canvasOf(text: string): { papers: number; pages: number; over: string[] }
+export declare function canvasOf(text: string, ids?: string[]): { papers: number; pages: number; over: string[] }
 export declare function sameSum(made: string, recorded: string): boolean

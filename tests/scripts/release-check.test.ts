@@ -4,12 +4,12 @@
 // and none counted a breach, and nothing of it is left without a gate; the verdict is GO only when every gate of the tier
 // passed (a skipped gate and a private gate with no recorded result stop it), and at the release tier every invariant too.
 // And each gate's output is read as the gate itself states it.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canvasOf, checksOf, corpusLogOf, diffOf, GATES, type Gate, INVARIANTS, type Stage, sameSum, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
-import { gatesOf, invariantLine, markdownOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
+import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, sameSum, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -28,6 +28,23 @@ describe('the gate table', () => {
       // a gate of the private repository is named, never run: it has no steps; every other gate has them
       expect([g.id, Boolean(g.private)]).toEqual([g.id, !g.steps])
       for (const a of g.after ?? []) expect(ids.indexOf(a)).toBeLessThan(ids.indexOf(g.id))
+    }
+  })
+
+  it("makes no gate's command from a file its inputs do not name: a missing one is a skip, never a throw", () => {
+    for (const g of GATES.filter(x => x.steps)) {
+      const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
+      dirs.push(refactor)
+      const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: join(refactor, 'work'), online: true, minFree: 0 }
+      // (every input the gate names under the lab data made, a file where its name has an extension, else a directory)
+      for (const n of g.needs?.(ctx) ?? []) {
+        if (!n.path.startsWith(`${refactor}/`)) continue
+        if (/\.[a-z]+$/.test(n.path)) {
+          mkdirSync(join(n.path, '..'), { recursive: true })
+          writeFileSync(n.path, '{"id":"p"}\n')
+        } else mkdirSync(n.path, { recursive: true })
+      }
+      expect([g.id, (() => { try { g.steps!(ctx); return null } catch (e) { return String(e) } })()]).toEqual([g.id, null])
     }
   })
 
@@ -109,12 +126,63 @@ describe("a gate's output, read as the gate states it", () => {
     expect(corpusLogOf(join(d, 'log.tsv'))).toEqual({ papers: 7, made: 4, failed: ['e: exit 1: Error: x', 'g: no summary'], refused: ['d (11 GiB free)'], missingCompile: ['c'], proofs: { a: 2, c: 0, on: 0, offOutside: 1 } })
   })
 
+  it('reads a proof the prover refused as a failure of that paper, named, never as a count', () => {
+    const d = mkdtempSync(join(tmpdir(), 'release-check-'))
+    dirs.push(d)
+    const refused = JSON.stringify({ id: 'h', proofs: { a: 0, c: 0, offOutside: 'the catalog written is not of the fresh /OCProperties form' } })
+    writeFileSync(join(d, 'log.tsv'), [`h\t0\t${refused}`, `i\t0\t${JSON.stringify({ id: 'i', proofs: { a: 0, c: 0, on: 0, offOutside: { t: 0 } } })}`].join('\n'))
+    const log = corpusLogOf(join(d, 'log.tsv'))
+    expect(log.failed).toEqual(['h: a proof refused: offOutside: the catalog written is not of the fresh /OCProperties form'])
+    expect(log.proofs).toEqual({ a: 0, c: 0, on: 0, offOutside: 0 })
+  })
+
+  it("holds the canvas's papers to the bound its header names, a paper refused or missing failed by name", () => {
+    const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
+    const c = canvasOf([line({}), JSON.stringify({ id: 'q', refused: 'no add-on' })].join('\n'), ['p', 'q', 'r'])
+    expect(c.over).toEqual(['q: no add-on', 'r: no line (the canvas did not report it)'])
+  })
+
   it("holds the canvas's papers to the bound its header names, and the marks' sum to the owner's record but for its compiles", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
     const sum = (ms: number, same: number) => `${JSON.stringify({ papers: 87, glyphs: { compared: 9, same }, compiles: { made: 8, read: 80, ms } })}\n   12  1 p  glyph: a class`
     expect(sameSum(sum(1, 7), sum(177262, 7))).toBe(true)
     expect(sameSum(sum(1, 6), sum(177262, 7))).toBe(false)
+  })
+})
+
+describe('the speed check', () => {
+  const speed = GATES.find(g => g.id === 'speed')!
+  const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
+  const run = (exit: number, text = ''): StepRun => ({ cmd: ['x'], exit, ms: 0, log: '', text })
+
+  it("runs its zsh driver with zsh, then the analysis over the driver's logs", () => {
+    process.env.RELEASE_CHECK_BASE = '/base'
+    try {
+      const steps = speed.steps!(ctx)
+      expect(steps.map(s => s.cmd.slice(0, 2))).toEqual([['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh'], ['node', 'lab/pdf/spikes/layer-gate/speed.mjs']])
+      expect(steps[0]?.env?.SPEED_LOGS).toBe(steps[1]?.cmd[2])
+    } finally {
+      delete process.env.RELEASE_CHECK_BASE
+    }
+  })
+
+  it("passes on the analysis's verdict alone: FAIL and INCOMPARABLE fail, a measurement with no analysis is no pass", () => {
+    expect(speed.judge!(ctx, [run(0), run(0, 'PASS')]).pass).toBe(true)
+    expect(speed.judge!(ctx, [run(0), run(1, 'FAIL')])).toMatchObject({ pass: false, note: 'the analysis: FAIL' })
+    expect(speed.judge!(ctx, [run(0), run(2, 'INCOMPARABLE')])).toMatchObject({ pass: false, note: 'the analysis: INCOMPARABLE' })
+    expect(speed.judge!(ctx, [run(0)]).pass).toBe(false)
+  })
+})
+
+describe("the private repository's results", () => {
+  it('counts a recorded result only for the release candidate: one of another commit is stale, naming both', () => {
+    const entry = (commit?: string) => ({ command: 'pnpm ci:local', result: { status: 'pass', commit, date: '2026-11-07' } })
+    expect(privateResultOf(entry('2ef51f96c'), '2ef51f96c24bd013832814767b8cfdd4dc27c0fe')).toMatchObject({ status: 'pass' })
+    expect(privateResultOf(entry('13216ac44'), '2ef51f96c24bd013832814767b8cfdd4dc27c0fe')).toMatchObject({ status: 'stale', reason: 'recorded at 13216ac44; the release candidate is 2ef51f96c24bd013832814767b8cfdd4dc27c0fe' })
+    expect(privateResultOf(entry(undefined), '2ef51f96c')).toMatchObject({ status: 'stale', reason: 'recorded at no commit; the release candidate is 2ef51f96c' })
+    expect(privateResultOf({ command: 'x' }, '2ef51f96c')).toMatchObject({ status: 'private' })
+    expect(verdictOf('release', [{ id: 'p', tier: 'release', stage: 'box', holds: [] }], { p: privateResultOf(entry('13216ac44'), 'abc1234') }, []).verdict).toBe('NO-GO')
   })
 })
 
@@ -141,5 +209,13 @@ describe('the report', () => {
     expect(md).toContain('- build: fail (pnpm build … exit 1)')
     expect(md).toContain("the private repository's: `pnpm test:box-security`; not run here")
     expect(md).toContain('| **I9** the box refuses | NO-GO |  | private-box: private |')
+  })
+
+  it('says, at the release tier, that an invariant no gate holds keeps the verdict NO-GO on purpose', () => {
+    const invariants = [{ id: 'I7', says: 'the same boxes', status: 'NO-GO', gates: [], why: ['no gate holds it: none'] }]
+    const v = verdictOf('release', [], {}, invariants)
+    expect(v).toEqual({ verdict: 'NO-GO', why: ['I7: NO-GO (no gate holds it yet: an invariant without a gate is NO-GO until one exists)'] })
+    const md = markdownOf({ tier: 'release', verdict: v.verdict, why: v.why, commit: 'abc', dirty: false, started: 's', ended: 'e', machine: 'm', labData: null, work: '/w', gates: [], invariants, targets: [] })
+    expect(md).toContain('An invariant no gate holds (I7) keeps the release verdict NO-GO on purpose')
   })
 })

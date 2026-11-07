@@ -102,7 +102,8 @@ tier's report and does not run it.
 ## release: before a release (by hand, the same machine)
 
 - **Command**: `RELEASE_CHECK_BASE=<a worktree of the last release> pnpm release-check --tier release --online
-  --work=<external disk>`.
+  --work=<external disk>` (`PACK` the layer gate's fixture pack, else `lab/pdf/out/gate-pack`: the speed check's driver,
+  run with zsh, measures, and its verdict is `speed.mjs`'s over the driver's logs, PASS alone a pass).
 - **Adds to full**: the prepare's pixel proofs on every page of the 87 papers (poppler's `pdftoppm` and `pdftocairo`); the
   reader's canvas on spike S1c's papers (Chromium); the marks' equivalence and the rebuilt front half with TeX (Docker,
   `texlive/texlive` by the digests `lab/pdf/compile-images.json` pins); today's engine's speed check against the last
@@ -115,8 +116,12 @@ tier's report and does not run it.
   tier; the security suite of its compile jail on native amd64 (invariant I9); the corpus through its prepare, byte for
   byte the lab's (I6); its website's reader e2e (I8); the staging soak's measurements (design §7's prepare times and the
   rows' reuse) and the release sweep. A result of theirs for the release candidate is written into the private gates' file
-  (`--private`, `result: { status, commit, date, evidence }`); without it each stays NO-GO, so the release verdict can be
-  GO only with that repository's evidence beside this one's.
+  (`--private`, `result: { status, commit, date, evidence }`, `commit` being this repository's commit that run was made
+  against); without it each stays NO-GO, and a result recorded at another commit than the candidate's is stale, a NO-GO
+  naming both, so the release verdict can be GO only with that repository's evidence for this very commit.
+- **I7 keeps the release NO-GO until it has a gate.** An invariant no gate holds is NO-GO by design (no gate is weakened
+  and none is invented here), so with every gate passing the release tier still says NO-GO and its report says why: that
+  is the runner telling the truth, not a fault in it. Today I7 (a unit's boxes the same on both panes) has no gate.
 - **Minutes**: about 120 in all. Measured here: the full tier's 26; the pixel proofs 25 (pass: every page of the 87 papers,
   2,328, all groups on is arXiv's page under Splash and each kind off changes only its ink under Cairo); the canvas 2 (fail
   at `13216ac44`, as lane L1's own GPU run: 9 of 12 papers over the bound in the GPU canvas, 27 pages with pixels outside the

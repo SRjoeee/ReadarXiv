@@ -16,7 +16,8 @@
 //   --out       where the report goes (default lab/release-check/out/<tier>, git-ignored)
 //   --work      where the corpus gates write (default <out>/work): hundreds of MB a corpus run
 //   --private   the private repository's gates, their commands and any result recorded for the release candidate (default
-//               <lab data>/refactor-2026-11/lanes/L12/private-gates.json); a private gate is named, never run here
+//               <lab data>/refactor-2026-11/lanes/L12/private-gates.json); a private gate is named, never run here, and a
+//               result recorded at another commit than this checkout's is stale (NO-GO, both commits named)
 //   --min-free  a gate that writes corpus outputs is skipped under this many GiB free (default 12, the lab runners' own floor)
 // Environment: AXT_LAB_DATA the lab-data directory (default ~/Developer/readarxiv-lab-data); RELEASE_CHECK_BASE the base
 // worktree of the speed check.
@@ -26,7 +27,7 @@ import { arch, availableParallelism, homedir, platform, totalmem } from 'node:os
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GATES, INVARIANTS, TIERS } from './gates.mjs'
-import { gatesOf, invariantLine, markdownOf, targetLines, verdictOf } from './verdict.mjs'
+import { gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from './verdict.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const argv = process.argv.slice(2)
@@ -62,6 +63,8 @@ if (only) for (const id of only) if (!tierGates.some(g => g.id === id)) {
 
 const freeGiB = () => Math.floor((statfsSync(ROOT).bavail * statfsSync(ROOT).bsize) / 2 ** 30)
 const git = (...a) => execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' }).trim()
+/** the release candidate: this checkout's commit, which a private gate's recorded result must name */
+const candidate = git('rev-parse', 'HEAD')
 
 /** why a gate would not run on this machine now, before its steps: null where it runs */
 function skipOf(g, results) {
@@ -112,11 +115,7 @@ function runStep(step, log) {
 
 async function runGate(g, results) {
   const base = { id: g.id, title: g.title, tier: g.tier, stage: g.stage, holds: g.holds }
-  if (g.private) {
-    const p = privates[g.id] ?? {}
-    const r = p.result
-    return r ? { ...base, status: r.status === 'pass' ? 'pass' : 'fail', reason: `recorded by the private repository: ${r.date ?? ''} at ${r.commit ?? '?'}${r.evidence ? `, ${r.evidence}` : ''}`, command: p.command } : { ...base, status: 'private', reason: "the private repository's, not run here", command: p.command, note: p.last ? `last: ${p.last}` : undefined }
-  }
+  if (g.private) return { ...base, ...privateResultOf(privates[g.id], candidate) }
   if (only && !only.includes(g.id)) return { ...base, status: 'not run', reason: 'not in --only' }
   const skip = skipOf(g, results)
   if (skip) return { ...base, status: 'skipped', reason: skip }
@@ -172,7 +171,7 @@ const report = {
   only,
   verdict,
   why,
-  commit: git('rev-parse', 'HEAD'),
+  commit: candidate,
   dirty: git('status', '--porcelain', '--untracked-files=no') !== '',
   started,
   ended: new Date().toISOString(),

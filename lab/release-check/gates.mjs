@@ -150,6 +150,13 @@ export function corpusLogOf(file) {
     // (the summary is the paper's JSON, after its id where the runner prints one: lab/marks/front.sh, gate.sh)
     try { s = JSON.parse(summary.slice(summary.indexOf('{'))) } catch { out.failed.push(`${id}: no summary`); continue }
     const p = s.proofs ?? {}
+    // (a proof the prover refused is no count: run.mjs writes its reason where the count would be, `offOutside: '<why>'`, or
+    // `refused`; that paper fails, named, and adds nothing to the counts)
+    const refusals = Object.entries(p).filter(([k, v]) => k === 'refused' || typeof v === 'string' || (v && typeof v === 'object' && Object.values(v).some(x => typeof x !== 'number')))
+    if (refusals.length) {
+      out.failed.push(`${id}: a proof refused: ${refusals.map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('; ')}`)
+      continue
+    }
     out.proofs.a += p.a ?? 0
     out.proofs.c += p.c ?? 0
     out.proofs.on += p.on ?? 0
@@ -179,11 +186,17 @@ export function drawnOf(dir) {
 }
 
 /** canvas.mjs's line a paper, held to the bound its header names (the erasure's E4: at most 0.1 % of the split glyphs'
- *  pixels, max channel Δ 16; no pixel outside them) */
-export function canvasOf(text) {
-  const rows = text.split('\n').filter(l => l.startsWith('{"id"') && l.includes('"splitShows"')).map(l => JSON.parse(l))
+ *  pixels, max channel Δ 16; no pixel outside them); a paper it refused (`{ id, refused }`: no add-on) or did not report at
+ *  all, of the `ids` asked, is over, by name */
+export function canvasOf(text, ids = []) {
+  const rows = text.split('\n').filter(l => l.startsWith('{"id"') && (l.includes('"splitShows"') || l.includes('"refused"'))).map(l => JSON.parse(l))
   const over = rows.filter(r => r.refused || r.outsidePages?.length || r.shareMax > 0.001 || r.maxDelta > 16)
-  return { papers: rows.length, pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0), over: over.map(r => `${r.id}${r.refused ? `: ${r.refused}` : `: outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`) }
+  const seen = new Set(rows.map(r => r.id))
+  return {
+    papers: rows.length,
+    pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
+    over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
+  }
 }
 
 /** the marks' sum against the record the owner judged: every count and class but the compiles' (a replay compiles nothing) */
@@ -431,7 +444,7 @@ export const GATES = [
     stage: 'corpus',
     holds: ['I1', 'I2'],
     disk: true,
-    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
+    needs: ctx => [exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')), exists('the compile caches\' list', lab(ctx, 'lanes/L1-caches.txt')), exists('poppler (pdftoppm, pdftocairo)', which('pdftocairo'))],
     steps: ctx => [{ cmd: ['bash', 'lab/pdf/prepare-back/corpus.sh', lab(ctx, 'lanes/L1-papers87.tsv'), join(ctx.work, 'pixels'), readFileSync(lab(ctx, 'lanes/L1-caches.txt'), 'utf8').trim(), '2', '--prove', '--pixels', '--cairo'], slot: 'test', fresh: join(ctx.work, 'pixels') }],
     judge: ctx => corpusJudge(ctx, join(ctx.work, 'pixels'), ['a', 'c', 'on', 'offOutside']),
   },
@@ -442,10 +455,10 @@ export const GATES = [
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
-    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl'))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, 'lanes/L1-papers87.tsv'), ...readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)], slot: 'e2e' }],
+    needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv'))],
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, 'lanes/L1-papers87.tsv'), ...canvasIds(ctx)], slot: 'e2e' }],
     judge: (ctx, steps) => {
-      const c = canvasOf(steps[0].text)
+      const c = canvasOf(steps[0].text, canvasIds(ctx))
       return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
     },
   },
@@ -499,8 +512,19 @@ export const GATES = [
     tier: 'release',
     stage: 'corpus',
     holds: [],
-    needs: ctx => [exists('a base worktree (RELEASE_CHECK_BASE)', process.env.RELEASE_CHECK_BASE ?? ''), exists('the layer gate\'s fixture pack', join(ctx.root, 'lab/pdf/out/gate-pack'))],
-    steps: ctx => [{ cmd: ['bash', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, process.env.RELEASE_CHECK_BASE, '3'], slot: 'e2e' }],
+    // (the driver is a zsh script and only measures: its runs' logs go to the work directory, and the verdict is speed.mjs's
+    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass)
+    needs: ctx => [exists('a base worktree (RELEASE_CHECK_BASE)', process.env.RELEASE_CHECK_BASE ?? ''), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
+    steps: ctx => [
+      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, process.env.RELEASE_CHECK_BASE ?? '', '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
+      { cmd: ['node', 'lab/pdf/spikes/layer-gate/speed.mjs', join(ctx.work, 'speed')] },
+    ],
+    judge: (ctx, steps) => {
+      const analysis = steps[1]
+      if (!analysis) return { pass: false, note: 'no verdict: the analysis did not run' }
+      const verdict = analysis.exit === 0 ? 'PASS' : analysis.exit === 1 ? 'FAIL' : analysis.exit === 2 ? 'INCOMPARABLE' : `exit ${analysis.exit}`
+      return { pass: analysis.exit === 0, note: `the analysis: ${verdict}` }
+    },
   },
   // the online scripts: arXiv, the free engines and staging, under the project's User-Agent (tests/e2e/lib/online.mjs)
   { id: 'build-staging', title: 'the staging build the online scripts take (pnpm build:staging)', tier: 'release', stage: 'corpus', holds: [], network: 'live', steps: () => [pnpm('build:staging')] },
@@ -515,6 +539,11 @@ export const GATES = [
     ['e2e:placeholders', 'the live placeholder run: survival per sentence shape against a real engine'],
   ].map(([script, title]) => ({ ...e2e(script, title), tier: 'release', stage: 'corpus', network: 'live', after: ['build-staging'], steps: () => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_E2E_ONLINE: '1' } }] })),
 ]
+
+/** the canvas gate's papers: spike S1c's, as lane L1's canvas runs list them */
+const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)
+/** the layer gate's fixture pack: PACK, else where the rules gate restores it */
+const packOf = ctx => process.env.PACK ?? join(ctx.root, 'lab/pdf/out/gate-pack')
 
 const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1)?.slice(0, 200) ?? ''
 
