@@ -963,3 +963,115 @@ describe("the session's runtime", () => {
     expect(b.log.some((l) => l.startsWith('-'))).toBe(false)
   })
 })
+
+describe('the session put away and back (the back-forward cache: L11 third round, item 8)', () => {
+  it("away: our server not followed nor asked, no timer live; back: the document followed anew, a timer due meanwhile told at once, the original's kept", () => {
+    const m = machine()
+    const link1 = m.live('link')
+    // (a 429 that names its wait: the link stopped, its timer live)
+    m.feed({ i: 'follow.lost', t: link1, why: 'limit', afterMs: 1000 })
+    const timer = (m.s.link as { timer: Ticket }).timer
+    expect(m.has('timer')).toBe(true)
+    const original = m.live('original')
+    m.feed({ i: 'env.away', on: true })
+    expect(m.has('link')).toBe(false)
+    expect([...resources(m.s).values()].filter((x) => x.slot === 'timer')).toEqual([])
+    expect(m.released).toContain(timer)
+    // (the original's reading kept: its panes stay as they are)
+    expect(m.live('original')).toBe(original)
+    // (a timer's time, come while away, is no live ticket's: dropped)
+    const dropped = m.dropped
+    m.feed({ i: 'time', t: timer, now: 5000 })
+    expect([m.dropped - dropped, m.s.link.s]).toEqual([1, 'stopped'])
+    m.feed({ i: 'env.away', on: false })
+    // (back: the wait's timer live again, its time past: told, the link followed anew under a ticket of its own)
+    expect(m.timerAt(1000)).toBe(timer)
+    m.feed({ i: 'time', t: timer, now: 5000 })
+    const link2 = m.live('link')
+    expect(link2).not.toBe(link1)
+    m.feed({ i: 'paper', t: link2, doc: preparing(2) })
+    expect(m.s.layer.s).toBe('preparing')
+  })
+  it('a link heard while away is let go and followed again on return; an open under way asked again', () => {
+    const m = machine()
+    const link1 = m.live('link')
+    m.feed({ i: 'env.away', on: true })
+    expect(m.released).toContain(link1)
+    // (the follow's late word, its ticket let go: dropped)
+    const dropped = m.dropped
+    m.feed({ i: 'paper', t: link1, doc: ready(1) })
+    expect(m.dropped - dropped).toBe(1)
+    m.feed({ i: 'env.away', on: false })
+    expect(m.live('link')).not.toBe(link1)
+    // (the open asked as the follow says the paper is not opened, then put away under way: asked again on return)
+    const o = machine()
+    o.feed({ i: 'follow.lost', t: o.live('link'), why: 'not-opened' })
+    const open1 = o.live('open')
+    o.feed({ i: 'env.away', on: true })
+    expect([o.has('open'), o.released.includes(open1)]).toEqual([false, true])
+    o.feed({ i: 'env.away', on: false })
+    expect(o.live('open')).not.toBe(open1)
+  })
+  it('through the runtime, with fake timers and a fake fetch: nothing asked while away, however long; heard again once back', async () => {
+    vi.useFakeTimers()
+    try {
+      const asks: string[] = []
+      /** our server's follow: each acquisition one ask of the fake fetch, its document told; a stream held open until let go */
+      const fetch = (url: string, signal: AbortSignal) => {
+        asks.push(url)
+        return new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
+      }
+      const none = () => () => undefined
+      const handlers = {
+        original: none(),
+        code: none(),
+        composed: none(),
+        rows: none(),
+        html: none(),
+        open: none(),
+        link: (_s: unknown, t: Ticket, emit: (x: Input) => void, signal: AbortSignal) => {
+          void fetch(`/api/v2/papers/2600.00001v1?follow ${t}`, signal)
+          // (our server answers a 429 that names a wait of 2 s, then nothing until it is asked again)
+          setTimeout(() => {
+            if (!signal.aborted) emit({ i: 'follow.lost', t, why: 'limit', afterMs: 2000 })
+          }, 10)
+          return undefined
+        },
+        timer: (s: { at: number }, t: Ticket, emit: (x: Input) => void) => {
+          const id = setTimeout(() => emit({ i: 'time', t, now: Date.now() }), Math.max(0, s.at - Date.now()))
+          return () => clearTimeout(id)
+        },
+      } as unknown as Handlers
+      const rt = createRuntime({
+        state: init({
+          paper: { id: '2600.00001', version: 1 },
+          here: false,
+          defaults: PREFS,
+          now: Date.now(),
+          visible: true,
+          online: true,
+        }),
+        handlers,
+        effect() {},
+        crash(e) {
+          throw e
+        },
+        now: () => Date.now(),
+      })
+      await vi.advanceTimersByTimeAsync(20)
+      expect([asks.length, rt.state.link.s]).toEqual([1, 'stopped'])
+      rt.input({ i: 'env.away', on: true })
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(asks.length).toBe(1)
+      expect([...rt.live.values()].filter((x) => x === 'timer' || x === 'link')).toEqual([])
+      rt.input({ i: 'env.away', on: false })
+      // (the 429's wait was over while away: asked again at once)
+      await vi.advanceTimersByTimeAsync(5)
+      expect(asks.length).toBe(2)
+      expect(rt.state.link.s).toBe('on')
+      await rt.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

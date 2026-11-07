@@ -182,6 +182,9 @@ export interface State {
   now: number
   visible: boolean
   online: boolean
+  /** the page put away (a `pagehide` into the back-forward cache) until it is shown again: our server neither followed nor asked,
+   *  no timer live; the original's reading, the panes, the rows and the layer kept as they are */
+  away: boolean
   engaged: boolean
   gate: { open: boolean; timer: Ticket | null }
   prefs: {
@@ -218,6 +221,8 @@ export interface State {
 export type Input =
   | { i: 'env.visible'; on: boolean }
   | { i: 'env.online'; on: boolean }
+  /** the page put away into the back-forward cache, or shown from it again */
+  | { i: 'env.away'; on: boolean }
   | { i: 'time'; t: Ticket; now: number }
   | { i: 'prefs.read'; value: Prefs | null }
   | { i: 'prefs.landed'; value: Prefs }
@@ -316,6 +321,7 @@ export function init(o: Init): State {
     now: o.now,
     visible: o.visible,
     online: o.online,
+    away: false,
     engaged: false,
     gate: { open: false, timer: null },
     prefs: { s: 'reading', value: o.defaults, chosen: [], refused: 0, timer: null },
@@ -437,6 +443,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   switch (x.i) {
     case 'env.visible':
       s.visible = x.on
+      break
+    case 'env.away':
+      s.away = x.on
       break
     case 'env.online':
       s.online = x.on
@@ -714,7 +723,10 @@ export function settle(s0: State): State {
   const target = targetOf(s)
   const sets = supported(s, target)
   // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, no open under way, the look not
-  // stopped, and the layer still wanted of our server (rows made here: nothing more once the layer is ready)
+  // stopped, and the layer still wanted of our server (rows made here: nothing more once the layer is ready); none while the page is
+  // put away (the follow let go, an open under way given back, to be asked again once it is shown)
+  if (s.away && s.layer.s === 'none' && s.layer.asked && s.layer.asked !== 'want' && s.layer.asked !== 'done')
+    s.layer = { s: 'none', asked: 'want' }
   const opening = s.layer.s === 'none' && !!s.layer.asked && s.layer.asked !== 'done'
   // (offline with no layer: out of reach, as every ask of today's failed at once)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
@@ -723,6 +735,7 @@ export function settle(s0: State): State {
     s.engaged &&
     s.online &&
     s.visible &&
+    !s.away &&
     sets &&
     s.layer.s !== 'refused' &&
     !opening &&
@@ -741,6 +754,7 @@ export function settle(s0: State): State {
     s.engaged &&
     s.online &&
     s.visible &&
+    !s.away &&
     sets &&
     s.link.s !== 'stopped'
   )
@@ -831,6 +845,8 @@ export function resources(s: State): Map<Ticket, Spec> {
     out.set(s.rows.t, { slot: 'rows', target: s.rows.target, from: s.here ? 'here' : 'server', units: unitsOf(s) })
   if (s.rows.s === 'failed' && s.rows.timer) out.set(s.rows.timer, { slot: 'timer', at: s.rows.retryAt ?? s.now })
   if (s.html.s === 'asking') out.set(s.html.t, { slot: 'html' })
+  // (put away: no timer live; each comes back with the page, its time kept, one due meanwhile told at once)
+  if (s.away) for (const [t, x] of out) if (x.slot === 'timer') out.delete(t)
   return out
 }
 

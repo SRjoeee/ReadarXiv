@@ -912,6 +912,48 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   return { layer: [...seen] }
 })
 await check(
+  'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'not-opened', prepareMs: 120_000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web' }))
+      await waitFor(page, () => window.__h.readers[0].reader.state().layer.s === 'preparing', null, 20_000)
+      const follows = () => v2log.filter((x) => x.what === 'follow' && x.seg === seg).length
+      // (our server polled every 2 s while the paper is prepared)
+      const a = follows()
+      await page.waitForTimeout(4500)
+      const live = follows() - a
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })))
+      const b = follows()
+      await page.waitForTimeout(6000)
+      const away = follows() - b
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+      await page.waitForTimeout(1000)
+      const back = follows() - b - away
+      const drawn = await page.evaluate(() => document.querySelectorAll('canvas').length)
+      // (a reading, not a gate: a real visit away and back, restored from the cache or loaded again as the browser keeps the page;
+      // Playwright's Chromium loaded it again on the runs of 2026-11-07, so the events above are dispatched by hand)
+      await page.evaluate(() => {
+        window.__kept = true
+        addEventListener('pageshow', (e) => {
+          window.__persisted = e.persisted
+        })
+      })
+      await page.goto(`${server.origin}/chrome.html`)
+      await page.goBack()
+      const cached = await page.evaluate(() => ({ kept: !!window.__kept, persisted: window.__persisted ?? null }))
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(live >= 1 && away === 0 && back >= 1 && drawn > 0, JSON.stringify({ live, away, back, drawn }))
+      return { live, away, back, drawn, cached }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+await check(
   "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
   async () => {
     const from = v2log.length

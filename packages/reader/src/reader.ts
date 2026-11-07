@@ -912,9 +912,20 @@ export function openReader(
   const onVisible = () => rt.input({ i: 'env.visible', on: document.visibilityState !== 'hidden' })
   const onOnline = () => rt.input({ i: 'env.online', on: true }),
     onOffline = () => rt.input({ i: 'env.online', on: false })
+  // (the page put away into the back-forward cache, and shown from it again: the session put away meanwhile, our server neither
+  // followed nor asked, no timer live, and followed anew on return, the panes as they were (today's web session/job.ts putAway,
+  // shown). A pagehide that is not persisted is the host's to close the reader on)
+  const onHide = (e: PageTransitionEvent) => {
+    if (e.persisted) rt.input({ i: 'env.away', on: true })
+  }
+  const onShow = (e: PageTransitionEvent) => {
+    if (e.persisted) rt.input({ i: 'env.away', on: false })
+  }
   document.addEventListener('visibilitychange', onVisible)
   addEventListener('online', onOnline)
   addEventListener('offline', onOffline)
+  addEventListener('pagehide', onHide)
+  addEventListener('pageshow', onShow)
   // ---- what the host reads
   function tellSoon() {
     told = null
@@ -1062,6 +1073,8 @@ export function openReader(
       document.removeEventListener('visibilitychange', onVisible)
       removeEventListener('online', onOnline)
       removeEventListener('offline', onOffline)
+      removeEventListener('pagehide', onHide)
+      removeEventListener('pageshow', onShow)
       void rt.dispose().then(() => {
         panes?.dispose()
         scheduler.dispose()
