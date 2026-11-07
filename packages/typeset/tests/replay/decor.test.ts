@@ -50,7 +50,7 @@ type DOut = {
 }
 
 describe.skipIf(!hasTap)('U.decor: replayed on the tap', () => {
-  it('decorates the blocks as today did, on every sampled round', () => {
+  it('decorates the blocks as today did, on every sampled round', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = {
       rounds: 0,

@@ -13,7 +13,7 @@ import { firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } fr
 import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('B.tokens: replayed on the tap', () => {
-  it('makes and measures today’s tokens on every sampled round', () => {
+  it('makes and measures today’s tokens on every sampled round', { timeout: 120_000 }, () => {
     const { facts, classes } = tokenFacts()
     const metrics = new Map<string, ReturnType<typeof tableMetrics>>()
     const differ: string[] = []

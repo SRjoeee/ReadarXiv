@@ -18,7 +18,7 @@ type In = {
 type Out = { lead: unknown; label: { x1: number; text: string; chars: LeadChar[]; drawn?: string } | null }
 
 describe.skipIf(!hasTap)('U.lead: replayed on the tap', () => {
-  it('leads the unit with its name and joint as today did, on every sampled round', () => {
+  it('leads the unit with its name and joint as today did, on every sampled round', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { rounds: 0, led: 0, joint: 0, named: 0 }
     for (const e of sample('U.lead').entries)

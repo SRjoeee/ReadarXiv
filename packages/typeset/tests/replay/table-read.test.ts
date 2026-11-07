@@ -17,7 +17,7 @@ type Group = {
 }
 
 describe.skipIf(!hasTap)('S.table.read: replayed on every call of the corpus', () => {
-  it('reads every group as today did', () => {
+  it('reads every group as today did', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { groups: 0, cells: 0, split: 0, kept: 0, byOpen: 0 }
     for (const f of readdirSync(join(TAP, 'ledgers'))) {

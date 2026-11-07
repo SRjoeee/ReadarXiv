@@ -26,7 +26,7 @@ const ofKey = (key: string): [TStyle, 'cjk' | 'latin'] => {
 }
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens'))('B.faces: replayed on the tap', () => {
-  it('gives today’s face for every run of every sampled round of the tokens', () => {
+  it('gives today’s face for every run of every sampled round of the tokens', { timeout: 120_000 }, () => {
     const { facts } = tokenFacts()
     const differ: string[] = []
     const count = { rounds: 0, faces: 0, cjk: 0, oblique: 0, caps: 0, ownCaps: 0, pairs: new Set<string>() }

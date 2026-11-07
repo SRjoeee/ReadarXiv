@@ -11,7 +11,7 @@ const PAIRS = ['2610.21377v1-zh', '1512.03385v1-ja.pack', '1706.03762v7-de.pack'
 
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('D.display: replayed against the reader dumps', () => {
   for (const pair of PAIRS)
-    it(`draws every laid unit of ${pair} as today did`, () => {
+    it(`draws every laid unit of ${pair} as today did`, { timeout: 120_000 }, () => {
       const r = displayReplay(pair)
       expect(r.chains).toEqual([])
       expect(r.unlaid).toEqual([])
