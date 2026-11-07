@@ -1,73 +1,64 @@
-// Ported from reference/read-frog/src/entrypoints/host.content/translation-control/page-translation.ts@9b44f82 (GPL-3.0),
-// 2026-09-05, modified: only its document.title part, rewritten around this project's session and transport (DESIGN §10).
-// document.title is translated once at the start; an observer on <head> watches for the page changing the title to
-// “neither the original nor the value we wrote” and translates again; on stop the original is restored (§7.1: equal
-// node by node after restore, the <title> text included). arXiv pages are static and the observer almost never
-// fires, but it costs nothing, so it was ported as it was (CLAUDE.md's porting rule).
+// The tab's title translated with the page (DESIGN §10): the same service and cache as the paper's blocks, the title
+// being plain text. Translated once when the session starts; a title the page itself writes later is the original from
+// then on and is translated in its turn, while the translation this module writes is never taken for one. A result
+// that arrives after the session ended, after the title changed again or after stop() is dropped, and a failure leaves
+// the title as it is. stop() puts the original back, so that after a restore the document is what it was (§7.1).
 
 export interface TitleTranslator {
   stop(): void
 }
 
 export interface TitleOptions {
-  /** Translate a run of plain text; null when no translation could be had (the original title stays) */
+  /** The title's translation; null where there is none */
   translate: (text: string) => Promise<string | null>
-  /** Is the session still there: a result arriving after the session ended is dropped */
+  /** Whether the session that asked is still the page's */
   isCurrent: () => boolean
-  /** A failure, worded, besides the console: the session's trace (issue #156) */
+  /** A line for the console: what went wrong, without the page's text */
   warn?: (line: string) => void
 }
 
 export function translateTitle(doc: Document, options: TitleOptions): TitleTranslator {
-  let source: string | null = doc.title || ''
-  let applied: string | null = null
-  let version = 0
-  let observer: MutationObserver | null = null
+  /** The page's own title */
+  let original = doc.title
+  /** The translation on the tab now, null while the original is shown */
+  let shown: string | null = null
+  /** Which request is the latest: an answer to an earlier one is stale */
+  let asked = 0
+  let stopped = false
 
-  const sync = async (text: string) => {
-    if (!text.trim() || !options.isCurrent()) return
-    const request = ++version
-    try {
-      const translated = await options.translate(text)
-      if (!options.isCurrent() || request !== version) return
-      const next = translated || text
-      applied = next
-      if (doc.title !== next) doc.title = next
-    } catch (error) {
-      // A rejection after the session was cancelled is expected, not noise
-      if (request === version && options.isCurrent()) {
-        console.warn('[axt] title translation failed', error)
-        // Withheld from the log: the message may carry the endpoint's words on the title's text (Devin on #214)
-        options.warn?.(`title translation failed (${error instanceof Error ? error.name : typeof error}; message withheld)`)
-      }
-    }
+  const request = () => {
+    const text = original
+    if (!text.trim()) return
+    const ask = ++asked
+    options.translate(text).then(
+      translation => {
+        if (stopped || ask !== asked || !options.isCurrent() || translation === null || doc.title !== text) return
+        shown = translation
+        doc.title = translation
+      },
+      (e: unknown) => options.warn?.(`title: not translated (${e instanceof Error ? e.name : typeof e})`),
+    )
   }
 
-  const onMutation = () => {
-    if (!options.isCurrent()) return
-    const current = doc.title || ''
-    if (current === source || current === applied) return
-    source = current
-    void sync(current)
-  }
-
-  if (doc.head && typeof MutationObserver === 'function') {
-    observer = new MutationObserver(onMutation)
-    observer.observe(doc.head, { childList: true, subtree: true, characterData: true })
-  }
-  void sync(source)
+  // The page writing its own title: the title element replaced, or its text changed
+  const observer = new MutationObserver(() => {
+    const now = doc.title
+    if (now === shown || (shown === null && now === original)) return
+    original = now
+    shown = null
+    request()
+  })
+  const head = doc.head ?? doc.documentElement
+  if (head) observer.observe(head, { childList: true, subtree: true, characterData: true })
+  request()
 
   return {
     stop() {
-      // The page changed the title itself (not our write): restore to that
-      const current = doc.title || ''
-      if (current !== applied) source = current
-      observer?.disconnect()
-      observer = null
-      version++
-      if (source !== null && doc.title !== source) doc.title = source
-      source = null
-      applied = null
+      if (stopped) return
+      stopped = true
+      observer.disconnect()
+      if (shown !== null && doc.title === shown) doc.title = original
+      shown = null
     },
   }
 }
