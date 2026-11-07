@@ -16,10 +16,13 @@ export type Script = 'Hans' | 'Hant' | 'Jpan' | 'Kore' | 'Latn' | 'Cyrl'
  */
 export type FaceId = string
 
-/** the rows of one target: a row by unit id, and whether no other row will come (design-a §1.2) */
+/** the rows of one target: a row by unit id, and whether no other row will come (design-a §1.2); `kept`, a unit the paper
+ *  keeps as it is (format's Unit.kept: never sent to a translator), whose row never comes: none waited for, read as no row
+ *  (`none`) as once the rows have ended */
 export interface Rows {
   get(id: Id): Row | undefined
   readonly done: boolean
+  kept?(id: Id): boolean
 }
 
 /**

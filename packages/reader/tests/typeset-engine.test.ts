@@ -11,7 +11,7 @@ import { leftKinds } from '../src/compose/classes.ts'
 import type { Rows } from '../src/compose/page.ts'
 import { HYPH_WAIT } from '../src/compose/served.ts'
 import { TYPESET_TARGETS } from '../src/compose/targets.ts'
-import { ruleTag, typesetLay } from '../src/compose/typeset.ts'
+import { ruleTag, typesetLay, warmTypeset } from '../src/compose/typeset.ts'
 import { DEFAULTS } from '../src/prefs.ts'
 
 vi.mock('@readarxiv/typeset', async (load) => {
@@ -116,6 +116,29 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
     expect(lay(part, rowsOf(rows)).members.some((m) => m.state === 'laid')).toBe(true)
     target = 'xx'
     expect(lay(part, rowsOf(rows))).toMatchObject({ wait: { rows: [], faces: [] }, members: [] })
+  })
+  it("asks, as the code loads, the target's patterns and the tables of its CJK faces (its body's, its bold's), no slice", () => {
+    const hyph: string[][] = [],
+      warm: string[][] = []
+    const s = {
+      hyph: async (langs: readonly string[]) => {
+        hyph.push([...langs])
+        return {}
+      },
+      warm: async (fonts: readonly string[]) => {
+        warm.push([...fonts])
+      },
+    }
+    warmTypeset(s, 'zh-CN')
+    expect(hyph).toEqual([T.rulesFor('zh').patterns])
+    expect(warm).toEqual([['400 100px "axt-shs-sc"', '700 100px "axt-shs-sc"']])
+    warmTypeset(s, 'de')
+    expect(hyph.at(-1)).toEqual(T.rulesFor('de').patterns)
+    expect(warm.at(-1)).toEqual([])
+    // (a target the rule set has none for: the faces' index alone)
+    warmTypeset(s, 'tlh')
+    expect(hyph).toHaveLength(2)
+    expect(warm.at(-1)).toEqual([])
   })
   it("sets the rule set's languages, Chinese by its script too", () => {
     expect(TYPESET_TARGETS.filter((t) => Object.hasOwn(T.LANGUAGES, t)).sort()).toEqual(Object.keys(T.LANGUAGES).sort())

@@ -279,6 +279,9 @@ export function openReader(
   let rows = new Map<string, Row>()
   let rowsTarget = ''
   let rowsDone = false
+  /** the units the paper keeps as they are (format's Unit.kept), once the head's units are read: never translated, so no page
+   *  waits for a row of theirs */
+  let keptIds: ReadonlySet<string> = new Set()
   const rowsListeners = new Set<() => void>()
   const rowsSource = (): RowsSource => ({
     target: rowsTarget,
@@ -286,6 +289,7 @@ export function openReader(
     get done() {
       return rowsDone
     },
+    kept: (id) => keptIds.has(id),
     on(f) {
       rowsListeners.add(f)
       return () => rowsListeners.delete(f)
@@ -323,6 +327,15 @@ export function openReader(
         (l) => l.flat(),
       )
       unitsHeld = { key, units: p }
+      // (the kept units known: a page that waited for theirs alone is laid now)
+      p.then(
+        (units) => {
+          if (closed || unitsHeld?.units !== p) return
+          keptIds = new Set(units.filter((u) => u.kept).map((u) => u.id))
+          if (keptIds.size) for (const f of [...rowsListeners]) f()
+        },
+        () => {},
+      )
       p.catch(() => {
         if (unitsHeld?.units === p) unitsHeld = null
       })
@@ -595,8 +608,13 @@ export function openReader(
     },
     code(_spec, t, emit, signal) {
       // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s); the
-      // reader's own typesetter and its served faces with it, where the host gives no engine
+      // reader's own typesetter and its served faces with it, where the host gives no engine. What the composed document's open
+      // reads is asked with it, the code's load waiting for none of it: its groups, and the typesetter, whose patterns, faces'
+      // index and CJK tables are asked as it comes (staging, 2026-11-08: three round trips in a row before composedOpen)
       let faces: import('./compose/faces.ts').Faces | null = null
+      void import('./compose/groups.ts').catch(() => {})
+      const typesetCode = o.engine ? null : import('./compose/typeset.ts')
+      typesetCode?.catch(() => {})
       Promise.all([
         import('./compose/composer.ts'),
         import('./compose/faces.ts'),
@@ -614,6 +632,13 @@ export function openReader(
           if (S) {
             served = S.createServed({ fetch: host.fetch, root, lost })
             faces = served.faces
+            const s = served
+            void typesetCode?.then(
+              (TS) => {
+                if (!signal.aborted && served === s) TS.warmTypeset(s, rowsTarget || targetOf(rt.state))
+              },
+              () => {},
+            )
           } else faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root, lost })
           // (the lay itself is made once the head is read: the composed document's open, whose own it is)
           const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)

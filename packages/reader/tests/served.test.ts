@@ -364,6 +364,16 @@ describe('the served faces and the Metrics over them', () => {
     await late.s.faces.ready([[HYPH_WAIT, 'de']])
     expect(late.s.hyphNow('de')).not.toBeUndefined()
   })
+  it("reads ahead the tables a font string's faces need (the index, their groups'), no slice: a page's first slice then waits for no table", async () => {
+    const { s, asked } = site()
+    await s.warm(['400 100px "axt-shs-sc"'])
+    expect(asked).toEqual(['/static-fonts/index.json', '/static-fonts/shs-sc.json?fonts=6'])
+    await s.faces.ready([[FONT, '\u4e2d']])
+    expect(asked.slice(2)).toEqual(['/static-fonts/nimbus-roman.json?fonts=6', '/static-fonts/0000000000000003.woff2'])
+    const bare = site()
+    await bare.s.warm([])
+    expect(bare.asked).toEqual(['/static-fonts/index.json'])
+  })
   it("a language's patterns that do not come are none by the bound of an ask (REQUEST_MS, asked once more after RETRY_MS): the lay comes back", async () => {
     const timers = handTimers()
     const asked: string[] = []
