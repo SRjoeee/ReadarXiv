@@ -545,6 +545,7 @@ export function openReader(
     },
     code(_spec, t, emit, signal) {
       // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s)
+      let faces: import('./compose/faces.ts').Faces | null = null
       Promise.all([
         import('./compose/composer.ts'),
         import('./compose/faces.ts'),
@@ -553,7 +554,7 @@ export function openReader(
       ]).then(
         async ([C, F, H, k]) => {
           if (signal.aborted || !panes) return
-          const faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root })
+          faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root })
           // (the lay itself is made once the head is read: the composed document's open)
           const lay: Lay = (part, rs) => current(part, rs)
           composer = C.createComposer({
@@ -590,8 +591,11 @@ export function openReader(
       return () => {
         composer?.dispose()
         highlight?.dispose()
+        // (the faces out of the document with the code that added them: faces.ts's promise)
+        faces?.dispose()
         composer = null
         highlight = null
+        faces = null
       }
     },
     composed(spec, t, emit, signal) {

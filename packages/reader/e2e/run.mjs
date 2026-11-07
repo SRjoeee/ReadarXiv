@@ -838,6 +838,17 @@ await check(
     })
     await readerLaid(page, 0)
     await readerLaid(page, 1)
+    // (each reader's faces in the document, by the reader's number in their family: `axt-<reader>-<face>`)
+    const facesOf = () =>
+      page.evaluate(() => [
+        ...new Set(
+          [...document.fonts]
+            .map((f) => /^"?axt-(\d+)-/.exec(f.family)?.[1])
+            .filter(Boolean)
+            .sort(),
+        ),
+      ])
+    const facesBefore = await facesOf()
     await page.evaluate(() => window.__h.readers[0].reader.close())
     await page.waitForTimeout(500)
     const after = await page.evaluate(() => ({
@@ -846,6 +857,7 @@ await check(
       a: window.__h.readers[0].reader.probe(),
       b: window.__h.readers[1].reader.probe(),
     }))
+    const facesAfter = await facesOf()
     await page.evaluate(() => window.__h.readers[1].reader.do({ do: 'zoomBy', factor: 1.25 }))
     await page.waitForTimeout(700)
     const b2 = await page.evaluate(() => ({
@@ -861,6 +873,11 @@ await check(
     assert(
       after.a.workers === 0 && after.a.clockDue === 0 && after.a.live === 0,
       `left after close ${JSON.stringify(after.a)}`,
+    )
+    // (the closed reader's faces taken out of the document, the other's kept)
+    assert(
+      facesBefore.length === 2 && facesAfter.length === 1 && facesBefore.includes(facesAfter[0]),
+      `the readers' faces in the document: ${JSON.stringify(facesBefore)} before the close, ${JSON.stringify(facesAfter)} after`,
     )
     assert(
       after.b.workers === 2 && after.b.laidPages > 0 && b2.probe.laidPages > 0 && b2.state.view.scale > 0,
