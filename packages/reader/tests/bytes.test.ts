@@ -95,6 +95,23 @@ describe('the byte store and the ranged source', () => {
       expect([s.asks.length, refused.map((e) => e.kind)]).toEqual([1, ['missing']])
     }
   })
+  it("a 404 or a 410 once bytes of the object were read is the network's, asked again: a flaky answer mid-read recovers", async () => {
+    for (const status of [404, 410]) {
+      const timers = manualTimers()
+      let flaky = 1
+      const s = rangedServer(objects(), (a) =>
+        a.range[0] === CHUNK && flaky-- > 0 ? { kind: 'status', status } : null,
+      )
+      const refused: RangeRefusal[] = []
+      const src = own(s.fetch, { timers, refused: (e: RangeRefusal) => refused.push(e) })
+      expect(await src.read(0, CHUNK)).toEqual(A.slice(0, CHUNK))
+      const later = src.read(CHUNK, 2 * CHUNK)
+      await flush()
+      timers.advance(1000)
+      expect(await later).toEqual(A.slice(CHUNK, 2 * CHUNK))
+      expect([s.asks.length, refused.map((e) => e.kind), src.refusal]).toEqual([3, [], null])
+    }
+  })
   it("asks again a read the network failed, then refuses it as the network's", async () => {
     const timers = manualTimers()
     const s = rangedServer(objects(), () => ({ kind: 'status', status: 503 }))
