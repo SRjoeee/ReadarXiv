@@ -1,12 +1,10 @@
-// Writes src/config/language-table.ts: the target languages (a product decision: which, in what order), the BCP 47 tag
-// each is sent as, which are written right to left, and their names — in English for the prompt, in Simplified Chinese
-// for that interface and in their own language for the menus, all from Unicode CLDR through the running Node's Intl (as
-// scripts/language-names.ts reads the other interfaces' names), with ISO 639-3's reference name in English where CLDR
-// has none. The codes and the two-letter codes are SIL's (scripts/data/iso-639-3.tab and its notice). Where the product's documents or tests fix a word the sources do not give, that word is the
-// product's own and stands in OWN below, with the place that fixes it. A word fixed nowhere that differs from what the
-// table held until it was replaced waits in PENDING for the maintainer's ruling (lane L10, 2026-11-07), and the script
-// writes nothing while one waits. Run with `pnpm tsx scripts/languages.ts`; held to the old table's codes, tags, right-
-// to-left set and default by tests/contract/no-gpl.test.ts, and to its names by the tests the OWN entries cite.
+// Writes src/config/language-table.ts under the naming policy of UI.md §6 ("Language names: one policy"): the target
+// languages (which, in what order: a product decision), the BCP 47 tag each is sent as, which are written right to left,
+// and their names — in English (the menu's and the prompt's, one word), in Simplified Chinese, and in the language's own
+// (the native column). Names are Unicode CLDR's, read through the running Node's Intl; where CLDR has none or its word is
+// not the common form, the override table OWN gives the word with its public source. The codes and two-letter codes are
+// SIL's ISO 639-3 table (scripts/data/iso-639-3.tab and its notice). Run with `pnpm tsx scripts/languages.ts` and review
+// the diff; tests/contract/no-gpl.test.ts holds the codes, tags, right-to-left set and default to what they were.
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const OUT = 'src/config/language-table.ts'
@@ -44,35 +42,74 @@ const SCRIPT: Record<string, string> = { bos: 'Cyrl', srp: 'Cyrl', uzn: 'Cyrl', 
 const ISO1_ALSO: Record<string, string> = { yue: 'zh', ckb: 'ku' }
 
 type Table = 'en' | 'zh' | 'own'
-/** The product's own words, each with where it is fixed */
-const OWN: Record<Table, Record<string, [word: string, fixedBy: string]>> = {
+/**
+ * The override table: a word the policy takes from elsewhere than CLDR's plain word, each with its source. English:
+ * CLDR has no name for three (ISO 639-3's reference name) and Jawi Malay is named by its script's own name. Chinese:
+ * Jawi Malay likewise. Own names: where CLDR has no autonym (44 languages, and Dari, which CLDR files under Persian), the
+ * native name of the language's English Wikipedia article (fetched 2026-11-07), its spelling kept; three product words
+ * the reader's menu has always shown, sourced the same way. Spellings are the sources'; the first letter's capital is
+ * the menu's (ownCase below)
+ */
+const OWN: Record<Table, Record<string, [word: string, source: string]>> = {
   en: {
-    cmn: ['Simplified Mandarin Chinese', 'tests/config/languages.test.ts:22, tests/ui/language-names.test.ts:24, DESIGN §8.2'],
-    'cmn-Hant': ['Traditional Mandarin Chinese', 'tests/config/languages.test.ts:23'],
-    arb: ['Standard Arabic', 'tests/ui/language-names.test.ts:25'],
-    nso: ['Northern Sotho', 'UI.md §6 (directional words stay), tests/ui/language-names.test.ts:34'],
+    zlm: ['Malay (Jawi)', 'UI.md §6 (a script note names the writing; Jawi is Malay\'s name for its Arabic script), tests/ui/language-names.test.ts:36'],
+    skr: ['Saraiki', 'ISO 639-3 reference name (scripts/data/iso-639-3.tab); CLDR has no English name'],
+    hms: ['Southern Qiandong Miao', 'ISO 639-3 reference name (scripts/data/iso-639-3.tab); CLDR has no English name'],
+    wls: ['Wallisian', 'ISO 639-3 reference name (scripts/data/iso-639-3.tab); CLDR has no English name'],
   },
   zh: {
-    ckb: ['库尔德语（索拉尼）', 'UI.md §6 (the label 库尔德语（索拉尼、…）), tests/ui/language-names.test.ts:61'],
-    zlm: ['马来语（爪夷文）', 'tests/ui/language-names.test.ts:61'],
+    zlm: ['马来语（爪夷文）', 'UI.md §6 (the script note), tests/ui/language-names.test.ts:71'],
   },
   own: {
-    ind: ['Bahasa Indonesia', 'PDF-READER.md §6.7 (the reader\'s menu), tests/pdf-reader/ui/languages.test.ts:17'],
-    zsm: ['Bahasa Melayu', 'PDF-READER.md §6.7, tests/pdf-reader/ui/languages.test.ts:17'],
-    zlm: ['بهاس ملايو', 'tests/ui/language-names.test.ts:61'],
+    ind: ['bahasa Indonesia', 'https://en.wikipedia.org/wiki/Indonesian_language — its infobox\'s native name; CLDR\'s "Indonesia" names the country out of context (PDF-READER.md §6.7, tests/pdf-reader/ui/languages.test.ts:17)'],
+    zsm: ['bahasa Melayu', 'https://en.wikipedia.org/wiki/Malaysian_Malay — "Bahasa Melayu Malaysia", the name without the country, as the reader\'s menu has it (PDF-READER.md §6.7, tests/pdf-reader/ui/languages.test.ts:17)'],
+    zlm: ['بهاس ملايو', 'https://en.wikipedia.org/wiki/Malaysian_Malay — the same name in Jawi, "بهاس ملايو مليسيا" without the country (tests/ui/language-names.test.ts:63); CLDR has Malay only in Latin letters'],
+    prs: ['دری', "https://en.wikipedia.org/wiki/Dari — Dari is not Persian: CLDR's fa-AF names it فارسی"],
+    skr: ['سرائیکی', 'https://en.wikipedia.org/wiki/Saraiki_language'],
+    koi: ['перем коми кыв', "https://en.wikipedia.org/wiki/Komi-Permyak_language — the second of its two names, the one the language's own use gives (perem komi kyv)"],
+    mag: ['मगही', 'https://en.wikipedia.org/wiki/Magahi_language'],
+    hnj: ['lug Moob', 'https://en.wikipedia.org/wiki/Hmong_language — the Hmong Njua name ({{lang|hnj|…}}) of the article on Hmong'],
+    div: ['ދިވެހި', 'https://en.wikipedia.org/wiki/Maldivian_language'],
+    hif: ['फ़िजी हिंदी', 'https://en.wikipedia.org/wiki/Fiji_Hindi'],
+    qug: ['Quichua', 'https://en.wikipedia.org/wiki/Chimborazo_Highland_Quichua'],
+    mad: ['Bhâsa Madhurâ', 'https://en.wikipedia.org/wiki/Madurese_language'],
+    nya: ['Chicheŵa', 'https://en.wikipedia.org/wiki/Chewa_language'],
+    hms: ['hveb Hmub', 'https://en.wikipedia.org/wiki/Hmu_language'],
+    ilo: ['Ilóko', 'https://en.wikipedia.org/wiki/Ilocano_language'],
+    cos: ['corsu', 'https://en.wikipedia.org/wiki/Corsican_language'],
+    fij: ['Vosa Vaka-Viti', 'https://en.wikipedia.org/wiki/Fijian_language'],
+    grn: ['avañeʼẽ', "https://en.wikipedia.org/wiki/Guarani_language — the article on (Paraguayan) Guarani: the macrolanguage's article names a family; its apostrophe is the puso, U+02BC"],
+    hat: ['kreyòl ayisyen', 'https://en.wikipedia.org/wiki/Haitian_Creole'],
+    ido: ['Ido', 'https://en.wikipedia.org/wiki/Ido'],
+    lat: ['lingua Latina', 'https://en.wikipedia.org/wiki/Latin'],
+    smo: ['Gagana faʻa Sāmoa', 'https://en.wikipedia.org/wiki/Samoan_language'],
+    tah: ['reo Tahiti', 'https://en.wikipedia.org/wiki/Tahitian_language'],
+    vol: ['Volapük', 'https://en.wikipedia.org/wiki/Volapük'],
+    bis: ['Bislama', 'https://en.wikipedia.org/wiki/Bislama'],
+    ssw: ['siSwati', 'https://en.wikipedia.org/wiki/Swazi_language'],
+    ven: ['Tshivenḓa', 'https://en.wikipedia.org/wiki/Venda_language'],
+    war: ['Winaray', 'https://en.wikipedia.org/wiki/Waray_language'],
+    nbl: ['isiNdebele seSewula', 'https://en.wikipedia.org/wiki/Southern_Ndebele_language'],
+    pam: ['Amánung Kapangpángan', 'https://en.wikipedia.org/wiki/Kapampangan_language'],
+    hil: ['Hiniligaynon', 'https://en.wikipedia.org/wiki/Hiligaynon_language'],
+    bcl: ['Bikol Sentral', 'https://en.wikipedia.org/wiki/Central_Bikol'],
+    min: ['Bahaso Minangkabau', 'https://en.wikipedia.org/wiki/Minangkabau_language'],
+    ace: ['Bahsa Acèh', 'https://en.wikipedia.org/wiki/Acehnese_language'],
+    bug: ['Basa Ugi', 'https://en.wikipedia.org/wiki/Buginese_language'],
+    ban: ['Basa Bali', 'https://en.wikipedia.org/wiki/Balinese_language'],
+    bjn: ['Basa Banjar', 'https://en.wikipedia.org/wiki/Banjarese_language'],
+    mak: ['Basa Mangkasaraʼ', 'https://en.wikipedia.org/wiki/Makassarese_language'],
+    sas: ['Base Sasaq', 'https://en.wikipedia.org/wiki/Sasak_language'],
+    tet: ['Tetun', 'https://en.wikipedia.org/wiki/Tetun_language'],
+    cha: ['Finuʼ Chamorro', 'https://en.wikipedia.org/wiki/Chamorro_language'],
+    niu: ['vagahau Niuē', 'https://en.wikipedia.org/wiki/Niuean_language — "ko e vagahau Niuē", the name without its article'],
+    tvl: ['Te Ggana Tuuvalu', 'https://en.wikipedia.org/wiki/Tuvaluan_language'],
+    gil: ['Taetae ni Kiribati', 'https://en.wikipedia.org/wiki/Kiribati_language'],
+    mah: ['Kajin Ṃajeḷ', 'https://en.wikipedia.org/wiki/Marshallese_language'],
+    pau: ['a tekoi er a Belau', 'https://en.wikipedia.org/wiki/Palauan_language'],
+    wls: ['Fakaʻuvea', 'https://en.wikipedia.org/wiki/Wallisian_language'],
+    rar: ['Māori Kūki ʻĀirani', 'https://en.wikipedia.org/wiki/Cook_Islands_Māori'],
   },
-}
-
-/**
- * Words fixed by no document and no test that differ from the sources: the old table's word or the source's, the
- * maintainer's to rule (lane L10's record lists both for each). Empty, the script writes the table
- */
-const PENDING: Record<Table, string[]> = {
-  en: 'ben jav pes swh pan fuv uzn zsm zlm npi tgl azj ell plt zyb pbu mri ydd oss bcl tvl'.split(' '),
-  zh: 'ind kan skr tgl koi mag run plt qug nya kin hms hnj nno ina tir aka dzo bcl bjn wls hif'.split(' '),
-  own: `jav mya fuv yor ibo skr tgl azj koi mag plt qug mad nya zyb kin zul som hms ilo cos div fij grn hat hye khm lao
-    lat mri san smo tah tat tuk xho bam bod chv ssw ven war nbl pam hil bcl min ace bug ban bjn mak tet cha niu tvl gil
-    mah pau rar hif nde sna kat wls`.split(/\s+/),
 }
 
 const sil = new Map<string, { part1: string; name: string }>()
@@ -88,40 +125,51 @@ const row = (code: string) => {
   return found
 }
 const tagOf = (code: string) => TAG[code] ?? (row(code).part1 || code)
-/** The tag CLDR is asked for: Chinese by its script, a script note's language in that script */
+/** The entry as CLDR is asked for it: Chinese by its script, an entry with a script note in that script */
 const askOf = (code: string) => (code === 'cmn' ? 'zh-Hans' : code === 'cmn-Hant' ? 'zh-Hant' : SCRIPT[code] ? `${tagOf(code).split('-')[0]}-${SCRIPT[code]}` : tagOf(code))
-/** The language alone, the name CLDR gives it whatever the script (Chinese keeps its script: two entries) */
+/** The language alone (Chinese keeps its script: two entries) */
 const languageOf = (code: string) => (code.startsWith('cmn') ? askOf(code) : tagOf(code).split('-')[0]!)
 
-const scriptNames = new Intl.DisplayNames('en', { type: 'script' })
 const enNames = new Intl.DisplayNames('en', { type: 'language', fallback: 'none' })
 const zhNames = new Intl.DisplayNames('zh-Hans', { type: 'language', fallback: 'none' })
+/**
+ * CLDR's autonym, or nothing: asked of a locale CLDR has no data for, Intl answers in English and says so in its resolved
+ * locale. Where the product sends another code than CLDR's for the same language (tgl, run, plt, zyb, pbu), CLDR's own
+ * code (its alias data, Intl.getCanonicalLocales) is asked too
+ */
+function autonym(code: string): string | undefined {
+  for (const locale of new Set([askOf(code), Intl.getCanonicalLocales(askOf(code))[0]!])) {
+    const names = new Intl.DisplayNames(locale, { type: 'language', fallback: 'none' })
+    const language = code.startsWith('cmn') ? locale : locale.split('-')[0]!
+    if (names.resolvedOptions().locale.split('-')[0] === language.split('-')[0]) {
+      const name = names.of(language)
+      if (name) return name
+    }
+  }
+  return undefined
+}
+/** A menu entry's first letter is a capital (CLDR writes most autonyms in lower case: español), unless the name's own capitals start later (isiZulu, siSwati) */
+const ownCase = (name: string, locale: string) => (/^\p{Ll}+\p{Lu}/u.test(name) ? name : name.charAt(0).toLocaleUpperCase(locale) + name.slice(1))
+
 const source: Record<Table, (code: string) => string | undefined> = {
-  // CLDR's English name, ISO 639-3's reference name where CLDR has none; a script note after it
-  en: code => {
-    const name = enNames.of(languageOf(code)) ?? row(code).name
-    return SCRIPT[code] ? `${name} (${scriptNames.of(SCRIPT[code])})` : name
-  },
-  zh: code => zhNames.of(languageOf(code)),
-  // a name in a menu starts with a capital where its script has one (CLDR writes most in lower case: español)
-  own: code => {
-    const name = new Intl.DisplayNames(askOf(code), { type: 'language', fallback: 'none' }).of(languageOf(code))
-    return name && name.charAt(0).toLocaleUpperCase(askOf(code)) + name.slice(1)
-  },
+  // CLDR's English name of the entry as offered (a script note as CLDR writes it: Uzbek (Cyrillic))
+  en: code => enNames.of(askOf(code)),
+  // CLDR's Chinese name; where it has none, the English one, as an interface with no name for a language reads English
+  zh: code => zhNames.of(askOf(code)) ?? names.en[code],
+  own: code => autonym(code),
 }
 
-const waiting: string[] = []
+const missing: string[] = []
 const names: Record<Table, Record<string, string>> = { en: {}, zh: {}, own: {} }
 for (const table of ['en', 'zh', 'own'] as const) {
   for (const code of CODES) {
-    const own = OWN[table][code]
-    const word = own ? own[0] : PENDING[table].includes(code) ? undefined : source[table](code)
-    if (word === undefined) { waiting.push(`${table} ${code} (source: ${source[table](code) ?? 'none'})`); continue }
-    names[table][code] = word
+    const word = OWN[table][code]?.[0] ?? source[table](code)
+    if (word === undefined) { missing.push(`${table} ${code}`); continue }
+    names[table][code] = table === 'own' ? ownCase(word, askOf(code)) : word
   }
 }
-if (waiting.length) {
-  console.error(`${waiting.length} names wait for the maintainer's ruling, nothing written:\n  ${waiting.join('\n  ')}`)
+if (missing.length) {
+  console.error(`no word for: ${missing.join(', ')} — nothing written`)
   process.exit(1)
 }
 
