@@ -73,6 +73,25 @@ describe('adapt: a member set from its part’s facts', () => {
     expect(one([72, 300])).toBe(300)
     expect(one([72, 250])).toBe(245)
   })
+  it('widens a centred line whose label, drawn anew, moved its rectangle’s start', () => {
+    // (2608.04322v1 p5: "IV. Experiments", centred; the label's start begins the line, and the line is still its own)
+    const head = member({
+      kind: 'heading',
+      align: 'c',
+      lines: [[1, 0, 120, 200, 700, 707, 698, 72, 300, 0]],
+      room: { below: 20, side: [72, 300] },
+      label: {
+        kind: 'head',
+        ink: [1, 100, 698, 115, 707, 700],
+        style: { role: 'serif', size: 10 },
+        name: ['IV', [1, 100, 698, 112, 707, 700]],
+        punct: ['.', [1, 112, 698, 115, 707, 700]],
+      },
+    })
+    const got = adapt(input(head, { reading: { ...input(head).reading, labelDrawn: 'IV.' } }))
+    if (!('member' in got)) throw new Error(got.stop)
+    expect([got.member.blocks[0]!.x0, got.member.blocks[0]!.x1]).toEqual([72, 228])
+  })
   it('shares its last row with the member after it, and starts on the one before', () => {
     const after = member({ ord: 4, lines: [line(676, 300)], join: [4] })
     const got = adapt(input(member(), { after, afterOpen: true }))

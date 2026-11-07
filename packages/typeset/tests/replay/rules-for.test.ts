@@ -7,7 +7,7 @@ import { derived, firstDifference, hasDerived } from './tap.ts'
 type Want = { targets: Record<string, { params: unknown; patterns: string[]; labels: Record<string, string> }> }
 
 describe.skipIf(!hasDerived('rules'))('rulesFor: today’s resolveRules on every target of the tap', () => {
-  it('resolves each target’s params, patterns and labels as today', () => {
+  it('resolves each target’s params, patterns and labels as today', { timeout: 120_000 }, () => {
     const want = derived<Want>('rules').targets
     const differ: string[] = []
     for (const [t, w] of Object.entries(want)) {

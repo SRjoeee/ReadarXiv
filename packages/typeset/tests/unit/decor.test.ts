@@ -2,7 +2,7 @@
 // line widened to the nearer side, a cell's centring undefined).
 import { describe, expect, it } from 'vitest'
 import type { Block } from '../../src/unit/blocks.ts'
-import { carriedCrop, type DecorBlock, decorBefore, originalLines, widen } from '../../src/unit/decor.ts'
+import { carriedCrop, type DecorBlock, decorAfter, decorBefore, originalLines, widen } from '../../src/unit/decor.ts'
 
 const block = (o: Partial<Block> = {}): DecorBlock => ({
   page: 1,
@@ -42,6 +42,30 @@ describe('U.decor', () => {
     })
     widen(two, { column: [50, 400], left: [], right: [] })
     expect(two.x1).toBe(200)
+  })
+
+  it("widens a cell's single line as any single line (the checkpoint's \"Ours\": a column head set in its own ink's width wrapped)", () => {
+    // (1810.04805v2 p7's \multicolumn{5}{c}{Ours}: its ink 172.42..189.85, the room beside it 72..290.27; the cell laid in its ink's
+    // 17 pt, its translation wrapped to two lines where the original's one line had room on both sides)
+    const cell = block({ centred: true, rects: [[1, 172.42, 650, 189.85, 659]], x0: 172.42, x1: 189.85 })
+    const after = {
+      title: false,
+      front: false,
+      luFlush: null,
+      label: null,
+      firstX0: undefined,
+      s: 9,
+      relabels: false,
+      lead: false,
+      labelHides: false,
+      firstPage: 1,
+      firstX: 172.42,
+      kept: null,
+      shortSkips: [],
+      lineInfo: null,
+    } as const
+    decorAfter([cell], { ...after, kind: 'cell', side: () => ({ column: [72, 290.27], left: [], right: [] }) })
+    expect([cell.x0, cell.x1]).toEqual([72, 290.27])
   })
 
   it('sets a carried label by its line’s own characters’ baseline, else its block’s', () => {

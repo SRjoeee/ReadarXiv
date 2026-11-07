@@ -4,7 +4,7 @@
 import type { Placed } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { rectOf } from '../../src/lay/adapt.ts'
-import { paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
+import { measured, paperOf, readMember, type RowUnit, sourcePieces } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Metrics } from '../../src/types.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
@@ -27,8 +27,8 @@ const member = (o: Partial<Placed> = {}): Placed => ({
   room: { below: 0 },
   ...o,
 })
-const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
-  readMember({
+const read = (m: Placed, pieces: V0Piece[], kind = 'para') => {
+  const r = readMember({
     m,
     unit: { kind, state: 'whole', pieces } as RowUnit,
     rects: m.lines.map((l) => rectOf(l, m)),
@@ -42,11 +42,45 @@ const read = (m: Placed, pieces: V0Piece[], kind = 'para') =>
       names: null,
     },
     relabels: !!m.label,
-    metrics,
     shown: Number.POSITIVE_INFINITY,
   })
+  return { ...r, tokens: measured(r.tokens, metrics) }
+}
 
 describe('the reading from the part', () => {
+  it('keeps a display the unit ends with in place: no region of it is referenced, no token blocks to it', () => {
+    // (2307.16209v1 p58 ord 197: a paragraph ending with a display, whose rows the part states as KEPT lines after its last
+    // text line; today's layout file holds no line of it, the maker's inPlace)
+    const m = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 120, 250, 680, 688, 676, 72, 300, 1, 10],
+      ],
+      els: [['1', { kind: 'display', keep: 1, ink: [[1, 120, 676, 250, 688, 680]] }]],
+    })
+    const got = read(m, [{ t: 'text', tr: true, s: 'Satz' } as V0Piece, { t: 'ph', src: '{=1}', k: 1 } as V0Piece])
+    expect(got.resolutions.get(1)).toMatchObject({ mode: 'kept', inPlace: true })
+    expect((got.tokens as unknown as { blockTo?: number }[]).some((t) => t.blockTo !== undefined)).toBe(false)
+  })
+  it('draws a text macro whose glyphs are the unit’s text as its stated text; one with none unread, its unit unproven', () => {
+    // (1810.04805v2's \\bert{}: "BERT" set as the unit's own text, no ink of the element's; the marking probe's text stated)
+    const pieces = [{ t: 'ph', src: '\\bert', k: 0 } as V0Piece, { t: 'text', tr: true, s: ' ist' } as V0Piece]
+    const got = read(
+      member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [], text: 'BERT' }]] }),
+      pieces,
+    )
+    expect(got.resolutions.get(0)).toMatchObject({ mode: 'orig-text', text: 'BERT' })
+    expect((got.tokens as unknown as { s?: string }[])[0]!.s).toBe('BERT')
+    // (a paper's own macro the part states no ink and no text of: whether TeX set nothing for it or set its glyphs as the unit's
+    // text, the reading cannot tell, and drawn as nothing its glyphs were erased with the text group and never drawn again
+    // (2608.06007v1 p10's \\sys, "TensorCast", the checkpoint's free-17): the unit is unproven, left the original's whole)
+    const none = read(member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [] }]] }), pieces)
+    expect(none.unproven).toBe(0)
+    // (a macro a table renders, no ink stated: TeX set none for it, drawn as nothing, the unit read)
+    const known = read(member({ els: [['0', { kind: 'macro', ink: [] }]] }), pieces)
+    expect(known.resolutions.get(0)!.mode).toBe('none')
+    expect(known.unproven).toBe(-1)
+  })
   it('reads a unit’s tree of pieces back as today’s flat ones, a group an open and a close', () => {
     const got = sourcePieces([
       { t: 'text', s: 'a ' },

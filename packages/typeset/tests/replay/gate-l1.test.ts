@@ -11,14 +11,16 @@ import { hasDerived, hasTap, readGz, TAP } from './tap.ts'
 import { hasCache } from './today.ts'
 
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache || !hasL1)('the gate on L1’s parts', () => {
-  it('lays every page of 1706.03762v7-de.pack from its own L1 part', () => {
+  it('lays every page of 1706.03762v7-de.pack from its own L1 part', { timeout: 120_000 }, () => {
     const g = gateL1Pair('1706.03762v7-de.pack')
     expect(g.threw).toEqual([])
     expect(g.selfDiffer).toEqual([])
     expect(g.units.length).toBeGreaterThan(50)
     expect(g.setting.size).toBeGreaterThanOrEqual(g.units.length)
   })
-  it('holds I4 and the restated I5 on its lays, the reading from the part; I3 no worse than today’s on the pair', () => {
+  it('holds I4 and the restated I5 on its lays, the reading from the part; I3 no worse than today’s on the pair', {
+    timeout: 120_000,
+  }, () => {
     // (measured by the tap's table of today's measures: a measure today never made throws, that flow's members 'error')
     const g = gateL1Pair('1512.03385v1-de.pack', {
       reading: 'part',

@@ -19,7 +19,7 @@ import {
   type Unit,
   write,
 } from '@readarxiv/format'
-import type { Instrument, PieceClass } from '../instrument.ts'
+import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
@@ -82,13 +82,23 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
+  if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
+  if (c.cmd !== undefined) out.cmd = c.cmd
+  if (c.bare) out.bare = 1
+  if (c.brk) out.brk = 1
+  if (c.note !== undefined) out.note = c.note
+  if (c.same !== undefined) out.same = c.same
+  if (c.colour !== undefined) out.colour = c.colour
+  if (c.nested) out.nested = 1
+  // (a text macro's text, where its own glyphs gave it none: the probe's, what TeX sets for it)
+  if (c.text !== undefined && out.text === undefined && !out.ink.length) out.text = c.text
   return out
 }
 
 /** a member as its parts hold it */
-function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
-  const unit = mem.unit >= 0 ? ins.units[mem.unit] : undefined
-  const echo = unit?.echo !== undefined ? ins.units[unit.echo]?.id : undefined
+function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState): Placed {
+  const unit = mem.unit >= 0 ? units[mem.unit] : undefined
+  const echo = unit?.echo !== undefined ? units[unit.echo]?.id : undefined
   const p: Placed = {
     ord: mem.ord,
     kind: mem.kind === 'name' && mem.name !== undefined ? 'name' : mem.figure ? 'figure' : mem.kind,
@@ -107,6 +117,8 @@ function placedOf(mem: Member, ins: Instrument, st: MemberState): Placed {
     const cls = new Map(unit?.classes ?? [])
     p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
   }
+  // (each group's command and fill, as the instrument reads its source)
+  if (unit?.spans?.length) p.spans = unit.spans.map(([id, x]) => [id, { ...x }])
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
@@ -139,7 +151,9 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const { ins, located, addOn, original, paper } = input
   const members = located.members
   const states = members.map((m) => stateOf(m, addOn))
-  // ---- Units: every unit of the instrument but a babel name's word, and the units born on A
+  // ---- Units: every unit of the instrument's but a babel name's word, those locate made on A (its ink units, kept blocks and
+  // figure texts), and the units born on A
+  const all = located.units ?? ins.units
   const seen = new Set<string>()
   const units: Unit[] = []
   const add = (u: Unit) => {
@@ -147,7 +161,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     seen.add(u.id)
     units.push(u)
   }
-  for (const u of ins.units) {
+  for (const u of all) {
     if (u.name !== undefined) continue
     add({
       id: u.id,
@@ -166,7 +180,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   }
 
   // ---- parts
-  const placed = members.map((m, i) => placedOf(m, ins, states[i]!))
+  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
   const flowOf = new Map<number, number>()
   located.flows.forEach((f, i) => {
     for (const o of f) flowOf.set(o, i)

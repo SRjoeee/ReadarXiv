@@ -37,6 +37,8 @@ export interface Metrics {
 /** the reader's choices that change what is laid (design-a §1.2) */
 export type Choices = {
   captions?: { figure: 'target' | 'original'; table: 'target' | 'original' }
+  /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
+   *  `refnames`, `inkreferences`); layPage leaves a member of one the original's (`left`) */
   leave?: string[]
 }
 
@@ -115,7 +117,18 @@ export type Unlaid =
  * line's baseline, scaled by `k`; `s` its copy text, `piece` its element, 'label' or 'counter')
  */
 export type Item =
-  | { s: string; x: number; face: FaceId; size: number; fill?: number; skew?: 1; dx?: number[] }
+  | {
+      s: string
+      x: number
+      face: FaceId
+      size: number
+      fill?: number
+      skew?: 1
+      dx?: number[]
+      /** a superscript's raise over the line's baseline, PDF units (a footnote's mark, a symbol drawn raised: 0.36 of the line's
+       *  size, today's svgOfUnit); the page's drawing sets the run that much higher (the checkpoint's (10): drawn on the baseline) */
+      rise?: number
+    }
   | { s: string; x: number; src: Ink; k: number; piece: string }
 
 /** one member on one page, as laid (design-a §1.2) */

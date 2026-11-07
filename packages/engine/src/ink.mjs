@@ -364,7 +364,7 @@ export const PARA_END = /^qe\d+[cjlr]$/
  * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
@@ -915,7 +915,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
           const had = boxes.length
           addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt, turned ? Math.max(FILLS.has(op) ? fillAlpha() : 0, STROKES.has(op) ? strokeAlpha() : 0) : 1)
           // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
-          if (turned && boxes.length > had && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
+          // (`shapesAll`: every path's, where the page's figures are not told by its own forms and pictures: arXiv's page, whose
+          // pictures' points are B's and whose included figures its producer may have flattened)
+          if (turned && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
         if (s.pendingClip) {

@@ -67,7 +67,7 @@ export function gatePair(pair: string): GatePair {
     twoPages: 0,
     selfDiffer: [],
     ms: 0,
-    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map() },
+    inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map(), below: [] },
   }
   const t0 = performance.now()
   for (const pg of [...onPage.keys()].sort((a, b) => a - b)) {

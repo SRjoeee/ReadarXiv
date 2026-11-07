@@ -19,7 +19,7 @@ describe.skipIf(!hasTap || !hasToday)('U.rename: replayed on the tap', () => {
       ([k, x]) => [k, x] as [number, Rename[]],
     )
 
-  it('renames as today did on every sampled round', () => {
+  it('renames as today did on every sampled round', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { rounds: 0, renamed: 0 }
     for (const e of sample('U.rename').entries)
@@ -38,7 +38,9 @@ describe.skipIf(!hasTap || !hasToday)('U.rename: replayed on the tap', () => {
     expect(count).toEqual({ rounds: 6, renamed: 3 })
   })
 
-  it('equals the ledger’s U.rename slot on every sampled reading of a pair whose run’s names the tap captured', () => {
+  it('equals the ledger’s U.rename slot on every sampled reading of a pair whose run’s names the tap captured', {
+    timeout: 120_000,
+  }, () => {
     // (the run's inputs, by pair: U.rename:in and U.label:in hold the same run's target, babel names and own names)
     const runOf = new Map<string, In>()
     for (const rule of ['U.rename', 'U.label'])

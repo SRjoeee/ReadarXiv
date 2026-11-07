@@ -26,7 +26,7 @@ type Out = {
 const shown = (l: UnitLabel | undefined) => (l ? { ...l, chars: l.chars.map((c) => c.ch).join('') } : l)
 
 describe.skipIf(!hasTap || !hasToday)('U.label: replayed on the tap', () => {
-  it('names the label and the head as today did, on every sampled round', () => {
+  it('names the label and the head as today did, on every sampled round', { timeout: 120_000 }, () => {
     const NAMES = JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as {
       targets: Record<string, { heads: Record<string, string> }>
     }

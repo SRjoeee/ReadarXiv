@@ -13,7 +13,7 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
   'layPagePrepared: replayed against the reader dumps',
   () => {
     for (const pair of PAIRS)
-      it(`lays every page of ${pair} as today drew it`, () => {
+      it(`lays every page of ${pair} as today drew it`, { timeout: 120_000 }, () => {
         const got = gatePair(pair)
         const want = readerDump(pair).units
         const mine = new Map(got.units.map((u) => [u.ord, u]))

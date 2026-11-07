@@ -29,21 +29,66 @@ export type PreparedPage = {
   members: PageMember[]
   passes: { page: number; target: FillTarget | null }[]
   tables: { cells: number[]; why: string | null }[]
+  /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its size */
+  fits: [ord: number, size: number][]
 }
 
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 
+/** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
+ *  of TeX's the front end cut at a float, a figure's set) */
+export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'size'; ords: readonly number[] }
+
 /**
- * Page `page` laid from its part's flows (each member prepared), its ties (`cells`: a table group's members' ords), the rules:
- * design-b's L8-L11 and E1
+ * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
+ * size tie laid on the page at one size, the smallest any of them is laid at: each laid larger is capped there (its fit's states
+ * from that scale down, P.capScale) and the page laid once more (the checkpoint's free-9: a paragraph's first part at its size,
+ * its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even)
  */
 export function layPagePrepared(
   page: number,
   flows: readonly (readonly FlowMember[])[],
-  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  ties: readonly PageTie[],
   R: RuleParams,
   trace = false,
+): PreparedPage {
+  const cells = ties.filter((t): t is Extract<PageTie, { rule: 'cells' }> => t.rule === 'cells')
+  const first = layPageTied(page, flows, cells, R, trace)
+  const sizes = ties.filter((t): t is Extract<PageTie, { rule: 'size' }> => t.rule === 'size')
+  if (!sizes.length) return first
+  // (every tied member laid in the call, whether or not it has a line on this page: the part holds the tie's every flow, so each
+  // page a tie is laid for caps alike; read off the page's members alone, a member on pages 1-2 tied to one on page 2 was laid
+  // at its own size for page 1 and at the other's for page 2)
+  const fitOf = new Map(first.fits)
+  const cap = new Map<number, number>()
+  for (const t of sizes) {
+    const laid = t.ords.filter((o) => fitOf.has(o))
+    if (laid.length < 2) continue
+    const least = Math.min(...laid.map((o) => fitOf.get(o) as number))
+    for (const o of laid) if ((fitOf.get(o) as number) > least + 0.005) cap.set(o, Math.min(cap.get(o) ?? least, least))
+  }
+  if (!cap.size) return first
+  // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
+  // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not)
+  const floor = Number((R as unknown as { floor?: number }).floor ?? 0)
+  const capped = flows.map((f) =>
+    f.map((m) => {
+      const c = cap.get(m.ord)
+      return c === undefined
+        ? m
+        : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, Math.max(c / m.s, floor)) } }
+    }),
+  )
+  return layPageTied(page, capped, cells, R, trace)
+}
+
+function layPageTied(
+  page: number,
+  flows: readonly (readonly FlowMember[])[],
+  ties: readonly { rule: 'cells'; cells: readonly number[] }[],
+  R: RuleParams,
+  trace: boolean,
 ): PreparedPage {
   try {
     return layPageOnce(page, flows, ties, R, trace)
@@ -88,6 +133,7 @@ export function layPagePrepared(
           .map((m) => errorOf(m, why(x))),
         passes: [],
         tables: [],
+        fits: [],
       }
     }
     return out
@@ -206,5 +252,6 @@ function layPageOnce(
         slots,
       }
     })
-  return { page, members, passes, tables }
+  const fits = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.f] as [number, number]] : []))
+  return { page, members, passes, tables, fits }
 }

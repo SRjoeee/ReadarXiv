@@ -50,7 +50,8 @@ export interface DocPoint {
 
 /** a glyph set turned (pageInk's `turned`: a figure's y-axis title, arXiv's margin stamp), which no line of the page holds:
  *  its Unicode and code, its font's base name, its show and place there, the level glyphs before it in the stream (`at`), its
- *  baseline from its origin to its advance's end, its direction, size, and its font's band in em */
+ *  own box's index among the page's boxes (`box`, a kind -4; -1 where its clip left none), its baseline from its origin to its
+ *  advance's end, its direction, size, and its font's band in em */
 export interface DocTurned {
   u: string
   code: number
@@ -58,6 +59,7 @@ export interface DocTurned {
   n: number
   k: number
   at: number
+  box: number
   ox: number
   oy: number
   ex: number
@@ -68,6 +70,16 @@ export interface DocTurned {
   ascent: number
   descent: number
   form: boolean
+}
+
+/** the points pageInk keeps apart from the marks' (`points`): TeX's paragraphs' (`q<n>`) and their ends (`qe<n><code>`, with the
+ *  counts of the page's points and paragraph points before each), its regions (a code region's glyphs, regionsOfPoints) and its
+ *  pictures' (`zs`, `ze`): what today's ledger, ink units and figure texts read of a marked compile's page besides its points */
+export interface DocMarks {
+  paras: DocPoint[]
+  paraEnds: (DocPoint & { point: number; para: number })[]
+  regions: { kind: string; from: number; to: number }[]
+  pictures: DocPoint[]
 }
 
 export interface DocPage {
@@ -82,6 +94,8 @@ export interface DocPage {
   /** each glyph's boxes before it */
   boxAt: number[]
   points: DocPoint[]
+  /** the page's other points, where it has any (a marked compile's: B's) */
+  marks?: DocMarks
   view: [number, number, number, number]
   rotate: number
   /** why the page's ink is not read whole (rotated, capped, timedOut, degraded), null where it is */

@@ -1,6 +1,8 @@
 // The replay's access to the tap (baseline/tap/TAP.md §6): today's reader's recorded inputs and outputs of each rule, kept in
 // lab-data and never committed (they hold licensed papers' text). A replay test reads them by path and is skipped where the
 // path is absent (hosted CI, a fresh clone): AXT_LAB_DATA names the lab-data directory, else the maintainer's.
+// Every replay test states its own timeout, 120 s: the package's config sets none, so vitest's 5 s applied, and a replay that
+// takes 3 s alone (round.test.ts at load 40) passed it under the whole suite's workers.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'

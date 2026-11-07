@@ -23,7 +23,7 @@ const RULES = [
 ]
 
 describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at F2', () => {
-  it('lays every sampled unit’s every round as today did', () => {
+  it('lays every sampled unit’s every round as today did', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { units: 0, cases: 0, crops: 0, cut: 0, clipped: 0, shrunk: 0, borrowed: 0, opened: 0, lastLines: 0 }
     const seen = new Set<string>()

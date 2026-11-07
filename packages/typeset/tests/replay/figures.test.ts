@@ -10,7 +10,7 @@ const PAIRS = ['2610.21377v1-zh', '2608.06701v1-zh', '1706.03762v7-es', '2610.19
 
 describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('S.figures: replayed on the reader dumps', () => {
   for (const pair of PAIRS)
-    it(`draws or leaves every figure text of ${pair} as today did`, () => {
+    it(`draws or leaves every figure text of ${pair} as today did`, { timeout: 120_000 }, () => {
       const r = replayFigures(pair)
       expect([...r.differ, ...r.extra]).toEqual([])
       expect(r.equal).toBe(r.total)

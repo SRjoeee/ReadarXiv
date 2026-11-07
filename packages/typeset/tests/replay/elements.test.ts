@@ -46,7 +46,7 @@ const own = (r: Record<string, unknown>, gap: Gap | null | undefined) => {
 describe.skipIf(!hasTap || !hasDerived('U.elements') || !hasDerived('U.breaks'))(
   'U.elements: replayed on the tap',
   () => {
-    it('resolves every placeholder as today did, on every sampled reading', () => {
+    it('resolves every placeholder as today did, on every sampled reading', { timeout: 120_000 }, () => {
       const facts = derived<{ cases: Record<string, Case> }>('U.elements').cases
       const classes = derived<{ cases: Record<string, { cls2: (string | null)[] }> }>('U.breaks').cases
       const differ: string[] = []

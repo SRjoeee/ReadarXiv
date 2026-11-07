@@ -25,7 +25,7 @@ const blocksOf = (L: Ledger, ord: number): FitBlock[] | null => {
 }
 
 describe.skipIf(!hasTap)('S.rowStart: replayed on every call of the corpus', () => {
-  it('starts every unit on its shared row as today did', () => {
+  it('starts every unit on its shared row as today did', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { slots: 0, applied: 0, label: 0, startY: 0, onLead: 0, flowX: 0 }
     for (const f of readdirSync(join(TAP, 'ledgers'))) {
