@@ -1088,6 +1088,58 @@ await check(
   },
 )
 await check(
+  "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
+  async () => {
+    const look = (page) =>
+      page.evaluate(() => {
+        const w = window.__c.words('en')
+        const radio = (name) => document.querySelector(`.seg.display [role="radio"][aria-label="${name}"]`)
+        return {
+          bilingual: [
+            radio(w.bilingual)?.getAttribute('aria-checked'),
+            radio(w.bilingual)?.getAttribute('aria-disabled'),
+          ],
+          translation: radio(w.translation)?.getAttribute('aria-checked'),
+          narrow: !!document.querySelector('.capsule[data-kind="narrow"]:not([data-out])'),
+          right: !!window.__c.reader?.state().view.narrow,
+        }
+      })
+    const out = {}
+    for (const rule of ['told', 'shown']) {
+      const { page, context, errors } = await chromeLaid('s1-columns', rule === 'told' ? {} : { narrow: rule }, {
+        viewport: { width: 700, height: 900 },
+      })
+      await page.waitForTimeout(300)
+      const opened = await look(page)
+      await page.setViewportSize({ width: 1400, height: 900 })
+      await page.waitForTimeout(600)
+      await page.setViewportSize({ width: 700, height: 900 })
+      await page.waitForTimeout(600)
+      const narrowed = await look(page)
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      out[rule] = { opened, narrowed }
+    }
+    const { told, shown } = out
+    assert(
+      told.opened.right && told.opened.bilingual[0] === 'true' && told.opened.narrow,
+      `the extension's, opened narrow: ${JSON.stringify(told.opened)}`,
+    )
+    assert(
+      shown.opened.right &&
+        shown.opened.translation === 'true' &&
+        shown.opened.bilingual[1] === 'true' &&
+        !shown.opened.narrow,
+      `the website's, opened narrow: ${JSON.stringify(shown.opened)}`,
+    )
+    assert(
+      shown.narrowed.translation === 'true' && shown.narrowed.narrow,
+      `the website's, narrowed while reading: ${JSON.stringify(shown.narrowed)}`,
+    )
+    return out
+  },
+)
+await check(
   "reader: PDF.js's legacy build handed by the host: its modules and its worker, the pages drawn and laid as on the modern (L11 gap 3)",
   async () => {
     const from = server.log.length

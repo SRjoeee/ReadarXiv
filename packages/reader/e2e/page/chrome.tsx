@@ -35,6 +35,8 @@ interface Options {
   slots?: boolean
   /** a host's words for the capsule's and the cards' states (HOST_WORDS) */
   words?: boolean
+  /** the host's rule for the narrow window (none: the extension's) */
+  narrow?: 'told' | 'shown'
 }
 
 /** a host's words, each naming its state, as the website's table says its own */
@@ -75,6 +77,8 @@ const c = {
     contents: LOCALES[ui].R.contents,
     options: LOCALES[ui].R.options.name,
     dim: LOCALES[ui].R.options.dim,
+    bilingual: LOCALES[ui].R.display.bilingual,
+    translation: LOCALES[ui].R.display.translation,
   }),
   async open(name: string, o: Options = {}) {
     const fx = (await (await fetch(`/fixtures/${name}/index.json`)).json()) as Fixture
@@ -170,6 +174,7 @@ const c = {
       ...PARTS,
       ...(o.slots ? { slots: hostSlots(controller) } : {}),
       ...(o.words ? { words: HOST_WORDS } : {}),
+      ...(o.narrow ? { narrow: o.narrow } : {}),
     }
     mountChrome(document.getElementById('root') as HTMLElement, { controller, parts })
     return { paper: fx.paper }

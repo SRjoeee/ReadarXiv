@@ -35,8 +35,18 @@ export function StatusCapsule({
   // the refused writes closed: a new refusal is told again
   const [refusalsSeen, setRefusalsSeen] = useState(0)
   const parts = useParts()
+  // the host's rule for the narrow window (parts.tsx `narrow`): where the switch shows it (the website's), its words are owed
+  // only where a window that showed the paper side by side was narrowed while reading (narrowWatch)
+  const pane = useReader(controller, (s) => ({
+    narrow: s.narrow,
+    display: s.display,
+    pages: Math.max(s.sides.left.pages, s.sides.right.pages),
+  }))
+  const watch = useRef<NarrowWatch>({ readWide: false, narrowed: false })
+  watch.current = narrowWatch(watch.current, pane)
+  const owed = parts.narrow !== 'shown' || watch.current.narrowed
   const now = useReader(controller, (s) =>
-    capsuleOf(s, { noticeClosed, narrowShown, refusalsSeen }, parts.languages, parts.words),
+    capsuleOf(s, { noticeClosed, narrowShown: narrowShown || !owed, refusalsSeen }, parts.languages, parts.words),
   )
   // the card fills the translation's pane and takes no focus: its reason is said here, where it is announced
   const card = useReader(controller, (s) => cardOf(s, parts.reason, parts.words))
@@ -153,6 +163,23 @@ export function StatusCapsule({
 
 /** how long the narrow window's words are read before they leave (S-R-14; the maintainer, 2026-10-01) */
 export const NARROW_MS = 5000
+
+/** what the narrow window's words are owed by, where the switch shows the translation alone (the website's rule, its owner's of
+ *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
+ *  and was then narrowed while reading (`narrowed`) says that it shows the translation alone; a page opened in a narrow window
+ *  says nothing (its switch shows the translation chosen), and widened again it says nothing either. What it has seen only grows */
+export interface NarrowWatch {
+  readWide: boolean
+  narrowed: boolean
+}
+export function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: string; pages: number }): NarrowWatch {
+  if (!now.narrow) {
+    const readWide = was.readWide || (now.display === 'bilingual' && now.pages > 0)
+    return readWide === was.readWide ? was : { readWide, narrowed: was.narrowed }
+  }
+  const narrowed = was.narrowed || was.readWide
+  return narrowed === was.narrowed ? was : { readWide: was.readWide, narrowed }
+}
 
 /**
  * A capsule that leaves by itself after `ms` of being read: the time stands while the pointer is over it or it holds the

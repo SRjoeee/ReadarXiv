@@ -85,6 +85,12 @@ export interface Parts {
   languages: Languages
   /** the host's words for the capsule's and the cards' states; none: the catalogue's */
   words?: StateWords
+  /** the narrow window's rule, where side by side shows the translation alone (interfaces/host design-a §6, one of the
+   *  host-divergent behaviours): `told` (the extension's, the default) keeps side by side chosen on the display switch and
+   *  says so in the capsule (S-R-14); `shown` (the website's: its owner's rule of 2026-11-03) shows the translation chosen
+   *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
+   *  the paper side by side was narrowed while reading */
+  narrow?: 'told' | 'shown'
   /** a failure's reason as a sentence */
   reason(kind: ProviderErrorKind): string
   /** where the host's settings are, for the capsule's way there while they cannot be read (S-R-21); none: no link */

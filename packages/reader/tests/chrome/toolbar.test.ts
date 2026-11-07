@@ -248,3 +248,44 @@ describe("the toolbar (the reader's design, §6.1)", () => {
     })
   })
 })
+
+describe("the narrow window's rule, the host's (parts.tsx narrow; interfaces/host design-a §6)", () => {
+  const radios = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[role="radiogroup"].display [role="radio"]')].map((r) => [
+      r.getAttribute('aria-label'),
+      r.getAttribute('aria-checked'),
+      r.getAttribute('aria-disabled'),
+    ])
+  const narrowAt = (narrowRule?: 'told' | 'shown') => {
+    const fake = fakeController({ narrow: true, display: 'bilingual' })
+    return mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        ...(narrowRule ? { narrow: narrowRule } : {}),
+      }),
+    ).then((m) => ({ ...m, ...fake }))
+  }
+  it("the extension's, the default: side by side stays chosen in a narrow window (the capsule says it shows the translation alone)", async () => {
+    for (const rule of [undefined, 'told'] as const) {
+      const { container } = await narrowAt(rule)
+      expect(radios(container)).toEqual([
+        [R.display.original, 'false', null],
+        [R.display.bilingual, 'true', null],
+        [R.display.translation, 'false', null],
+      ])
+    }
+  })
+  it("the website's: the translation shown chosen and side by side greyed in a narrow window, the stored side by side kept for a wider one", async () => {
+    const { container, set, controller } = await narrowAt('shown')
+    expect(radios(container)).toEqual([
+      [R.display.original, 'false', null],
+      [R.display.bilingual, 'false', 'true'],
+      [R.display.translation, 'true', null],
+    ])
+    // (the translation chosen already: nothing written; side by side greyed: nothing either)
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.bilingual}"]`)!.click()
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.translation}"]`)!.click()
+    expect(controller.setDisplay).not.toHaveBeenCalled()
+    await act(async () => set({ narrow: false }))
+    expect(radios(container)[1]).toEqual([R.display.bilingual, 'true', null])
+  })
+})

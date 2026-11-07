@@ -471,3 +471,27 @@ describe("a run under way in a host's words (the website's stage and count)", ()
     ]).toEqual([null, R.status.translating])
   })
 })
+
+describe("the narrow window's words under the host's rule", () => {
+  const pages = { left: { page: 1, pages: 4 }, right: { page: 1, pages: 4 } }
+  const narrowCapsule = (c: HTMLElement) => c.querySelector('.capsule[data-kind="narrow"]:not([data-out])')
+  it("the extension's (the default): said as the window is narrow, a page opened narrow too", async () => {
+    const fake = fakeController({ phase: 'ready', display: 'bilingual', narrow: true, sides: pages })
+    const { container } = await mountElement(capsuleOf(fake.controller))
+    expect(narrowCapsule(container)).not.toBeNull()
+  })
+  it("the website's: nothing for a page opened narrow, nor widened; said once a window that showed both sides is narrowed while reading", async () => {
+    const opened = fakeController({ phase: 'ready', display: 'bilingual', narrow: true, sides: pages })
+    const a = await mountElement(capsuleOf(opened.controller, { narrow: 'shown' }))
+    expect(narrowCapsule(a.container)).toBeNull()
+    await act(async () => opened.set({ narrow: false }))
+    expect(narrowCapsule(a.container)).toBeNull()
+    await act(async () => opened.set({ narrow: true }))
+    expect(narrowCapsule(a.container)).not.toBeNull()
+    // (wide before any page was drawn: not read side by side, so nothing owed)
+    const early = fakeController({ phase: 'loading', display: 'bilingual', narrow: false })
+    const b = await mountElement(capsuleOf(early.controller, { narrow: 'shown' }))
+    await act(async () => early.set({ phase: 'ready', narrow: true, sides: pages }))
+    expect(narrowCapsule(b.container)).toBeNull()
+  })
+})

@@ -32,7 +32,7 @@ export function Toolbar({
   contents: boolean
   onContents: () => void
 }) {
-  const { slots } = useParts()
+  const { slots, narrow: narrowRule } = useParts()
   const state = useReader(controller, (s) => ({
     swapped: s.prefs?.swapped ?? false,
     display: s.display,
@@ -43,6 +43,7 @@ export function Toolbar({
     sync: s.sync,
   }))
   const sideBySide = state.display === 'bilingual' && !state.narrow
+  const shownAlone = narrowRule === 'shown' && state.narrow && state.display === 'bilingual'
   const lock = useSettingsLock(controller)
   return (
     <header className="chrome bar">
@@ -57,9 +58,13 @@ export function Toolbar({
         {slots.afterTitle}
       </div>
       <div data-zone="centre" className="flex items-center">
+        {/* a narrow window shows the translation alone in side by side: the host's rule says whether the switch shows it so,
+            the translation chosen and side by side greyed (the website's), or keeps side by side chosen and the capsule says it
+            (the extension's) */}
         <DisplaySwitch
-          value={state.display}
+          value={shownAlone ? 'translation' : state.display}
           translatable={state.available && state.languageSupported}
+          {...(narrowRule === 'shown' && state.narrow ? { off: ['bilingual'] as const } : {})}
           onChange={controller.setDisplay}
         />
       </div>
