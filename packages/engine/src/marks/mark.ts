@@ -398,6 +398,9 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
     let gapBefore = false
     const movedAt = new Map<number, Mark>()
     const verbatim: boolean[] = []
+    /** the paper's macros the unit sets with no mark of their own, by index (none TeX said sets no ink): those passed over that
+     *  nothing before them reads, and those glued to the word before them (marks.mjs layoutMarking) */
+    const bare = new Set<number>()
     const out = ps.map((p, k): MarkPiece[] => {
       if (backrefPiece(p))
         return own(i) && on.has('macro') ? [mark(`\\axtbrname{p${i}.${k}}`, `p${i}.${k}`, 'backref', k)] : []
@@ -424,13 +427,15 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
         !!after &&
         opened.has(after) &&
         (pairSaid.code === '0' || pairSaid.code === '1')
-      const cls =
-        passed &&
-        !passed.has(k) &&
-        !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead)
-          ? classOf(p)
-          : null
-      if (!cls || !on.has(cls) || (cls === 'macro' && none.has(srcOf(p)))) return [p]
+      // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
+      const reads =
+        LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead
+      const cls = passed && !passed.has(k) && !reads ? classOf(p) : null
+      if (!cls || !on.has(cls) || (cls === 'macro' && none.has(srcOf(p)))) {
+        if (!cls && passed?.has(k) && !reads && on.has('macro') && classOf(p) === 'macro' && !none.has(srcOf(p)))
+          bare.add(k)
+        return [p]
+      }
       const before = ps[prefixed ? k - 2 : k - 1]
       const next = ps[k + 1]
       if (
@@ -439,8 +444,10 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
         X.WORD_END.test(before.s) &&
         !parted.has(srcOf(p)) &&
         !(X.BOXY.test(srcOf(p)) && !prefixed)
-      )
+      ) {
+        bare.add(k)
         return [p]
+      }
       const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
       const nextFirst = next?.t === 'text' ? (next.s[0] ?? '') : ''
       const said =
@@ -520,6 +527,24 @@ function layoutMarking(units: readonly SourceUnit[], o: Required<Pick<MarkOption
         continue
       out[k - 1] = [ok[0] as MarkPiece, ...ob]
       out[k] = ok.slice(1)
+    }
+    // (a paper's macro with no mark of its own at the unit's head, before its start mark: \axthpk, its opening point, the start
+    // mark its closing one; one after the unit's last text, after its end mark: \axttg, a point after the group it stands in.
+    // Neither past a prefix, in a front unit, in a unit with no text, nor in a cell or a unit that holds an alignment's tab (a
+    // mark before \multicolumn's \omit; an entry's group end) (marks.mjs layoutMarking)
+    if (own(i) && bare.size && u.kind !== 'cell' && !ps.some((p) => p.t === 'ph' && p.src === '&')) {
+      const head = headEnd(ps, 0)
+      const lastText = ps.findLastIndex((p) => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+      for (const k of bare) {
+        const ok = out[k] as MarkPiece[]
+        const prev = ps[k - 1]
+        if (ok.length !== 1 || (k > 0 && prefixWord(prev?.t === 'ph' ? prev.src : null))) continue
+        // (both written before their piece, where its source begins)
+        if (k < head) out[k] = [mark(`${lead}\\axthpk{p${i}.${k}a}`, `p${i}.${k}a`, 'head', k, true), ...ok]
+        // (right after the last text alone: the end mark stands between the two, nothing of the paper's)
+        else if (!lead && k === lastText + 1)
+          out[k] = [mark(`\\axttg{p${i}.${k}g}`, `p${i}.${k}g`, 'after', k, true), ...ok]
+      }
     }
     return out.flat()
   })

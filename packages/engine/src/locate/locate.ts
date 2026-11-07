@@ -181,15 +181,18 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       pieceB[o0 + j] = ow.piece[j] as number
     }
   })
-  // (each placeholder's span on B between its two points (the marked compile's p<unit>.<piece>a and b), global, by unit and piece)
+  // (each placeholder's span on B between its two points (the marked compile's p<unit>.<piece>a and b), global, by unit and piece;
+  // NaN for a side the instrument does not state)
   const placeSpan = new Map<string, [number, number]>()
   for (const pl of ins.places ?? []) {
     const k = `${pl.unit}|${pl.piece}`
     const at = (m.offB[pl.page - 1] as number) + pl.glyph
     const was = placeSpan.get(k)
-    if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? at])
-    else placeSpan.set(k, [was?.[0] ?? at, at])
+    if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? Number.NaN])
+    else placeSpan.set(k, [was?.[0] ?? Number.NaN, at])
   }
+  // (the pieces TeX said set no ink: the instrument's `empty`)
+  const emptyPiece = new Set((ins.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
     for (let j = 0; j < pg.glyphs.length; j++) pageA[(m.offA[p] as number) + j] = p + 1
@@ -853,6 +856,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         }
         if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA))
       }
+      // (a text macro whose span the instrument states with nothing in it: both its places stated and no glyph of B between them,
+      // or TeX's probe said it sets none: TeX set none for it, its text '' (2610.19159v1's `\trajectoryMark{}`, whose argument
+      // is empty: its end point and the point after its group hold no glyph). The reading draws it as nothing, and may: no glyph of
+      // it is erased with any group)
+      const emptySpan = !!span && span[0] === span[1]
+      const macro = cls ?? p.kind
+      if (
+        !ink.length &&
+        el.text === undefined &&
+        (macro === 'macro' || macro === 'umacro') &&
+        (emptySpan || emptyPiece.has(`${mem.unit}|${id}`))
+      )
+        el.text = ''
       mem.elements.push([id, el])
     }
     // its label: the class's mark before it

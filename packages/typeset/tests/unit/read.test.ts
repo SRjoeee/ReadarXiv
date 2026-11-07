@@ -80,6 +80,22 @@ describe('the reading from the part', () => {
     expect(known.resolutions.get(0)!.mode).toBe('none')
     expect(known.unproven).toBe(-1)
   })
+  it('draws a paper’s own macro whose span the instrument states empty as nothing, its unit read', () => {
+    // (2610.19159v1's `\\trajectoryMark{}`, which sets nothing for an empty argument: the marked compile's two points around it hold
+    // no glyph, the part's El.text '' with no ink, TeX set none; texParts' inklessOf, drawn as nothing and proven, where an El of
+    // no ink and no text stated leaves the unit unproven)
+    const pieces = [
+      { t: 'text', tr: true, s: 'Werkzeug ' } as V0Piece,
+      { t: 'ph', src: '\\trajectoryMark{}', k: 1 } as V0Piece,
+    ]
+    const got = read(
+      member({ els: [['1', { kind: 'umacro', unknown: 1, cmd: 'trajectoryMark', ink: [], text: '' }]] }),
+      pieces,
+    )
+    expect(got.unproven).toBe(-1)
+    expect(got.resolutions.get(1)).toMatchObject({ mode: 'none', text: '', proof: true })
+    expect((got.tokens as unknown as { s?: string }[]).map((t) => t.s ?? '').join('')).toBe('Werkzeug')
+  })
   it('reads a unit’s tree of pieces back as today’s flat ones, a group an open and a close', () => {
     const got = sourcePieces([
       { t: 'text', s: 'a ' },

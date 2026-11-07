@@ -489,6 +489,40 @@ describe('the element classes the part states', () => {
     expect(mem.elements).toEqual([['0', { kind: 'other', ink: [], text: 'BERT', style: { role: 'serif', size: 10 } }]])
   })
 
+  it('states a paper macro’s span empty where its two places hold no glyph, or where TeX said it sets none', () => {
+    // (2610.19159v1's `Tool Output\trajectoryMark{}`: after the unit's end point, its point after the group it stands in, no glyph
+    // between: TeX set none for it, El.text ''. A span with one side unstated says nothing; nor does a macro whose two places
+    // hold a glyph that is not its own)
+    const B = docOf([{ lines: ['Tool Output'] }])
+    const content = [
+      text('Tool Output'),
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\trajectoryMark{}' },
+      { t: 'el' as const, id: '2', kind: 'macro', src: '\\x' },
+      { t: 'el' as const, id: '3', kind: 'macro', src: '\\y' },
+      { t: 'el' as const, id: '4', kind: 'macro', src: '\\z' },
+    ]
+    const units: InstrumentUnit[] = [
+      { id: unitId('para', content), kind: 'para', content, classes: [['1', { cls: 'umacro' }]] },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      places: [
+        { unit: 0, piece: '1', page: 1, glyph: 10, end: false },
+        { unit: 0, piece: '1', page: 1, glyph: 10, end: true },
+        { unit: 0, piece: '2', page: 1, glyph: 10, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 4, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 6, end: true },
+      ],
+      empty: [{ unit: 0, piece: '4' }],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('1')).toMatchObject({ ink: [], text: '' })
+    expect(els.get('2')!.text).toBeUndefined()
+    expect(els.get('3')!.text).not.toBe('')
+    expect(els.get('4')).toMatchObject({ ink: [], text: '' })
+  })
+
   it('writes each element with its source’s class, copy text, a symbol’s drawing and a footnote’s mark (the instrument’s)', () => {
     const B = docOf([{ lines: ['see the result'] }])
     const content = [text('see '), { t: 'el' as const, id: '1', kind: 'cite', src: '\\cite{a}' }, text(' the result')]

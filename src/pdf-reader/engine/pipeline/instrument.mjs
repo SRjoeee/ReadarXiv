@@ -22,6 +22,9 @@ import { textPieceOf } from '../rules/text-piece.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 
 const UTF8 = new TextDecoder('utf-8')
+/** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
+const START_POINT = /^[ht]?(\d+)s$/
+const END_POINT = /^[ht]?(\d+)e$/
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode; a string that is already wide as it is */
 export function unicodeOf(s) {
   if (typeof s !== 'string') return ''
@@ -250,14 +253,16 @@ export function classesOf(pieces, colours = null, texts = null) {
 }
 
 /** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it on its page,
- *  else the last one opened (spike S1's rule), by the glyphs' (or boxes') counts the points carry */
+ *  else the last one opened (spike S1's rule), by the glyphs' (or boxes') counts the points carry. A unit's start point closes
+ *  every point of its own opened before it: a head piece's (marks.mjs \\axthpk), whose ink ends where the unit's text begins */
 function piecesByPoints(points, count, groupAt, by) {
   const out = new Int32Array(count).fill(-1)
   const open = new Map(), last = new Map()
   let q = 0
   for (let j = 0; j <= count; j++) {
     while (q < points.length && points[q][by] <= j) {
-      const m = /^[pn](\d+)\.(\d+)([ab])$/.exec(points[q].name)
+      const m = /^[pn](\d+)\.(\d+)([ab])$/.exec(points[q].name), s = START_POINT.exec(points[q].name)
+      if (s) open.delete(Number(s[1]))
       if (m) {
         const u = Number(m[1]), k = Number(m[2])
         const st = open.get(u) ?? []
@@ -273,6 +278,47 @@ function piecesByPoints(points, count, groupAt, by) {
     out[j] = st?.length ? st.at(-1) : last.get(u) ?? -1
   }
   return out
+}
+
+/**
+ * Each element's places in B's stream, from the marked compile's points (Instrument `places`): a placeholder's two points
+ * `p<u>.<k>a` and `p<u>.<k>b` (u today's unit index, k its piece's); a paper's macro at a unit's head, its point \\axthpk's before
+ * the unit's start point, its span ending at the start point or at the next such point of the unit, whichever stands first on
+ * the page; one after the unit's end, its point \\axttg's `p<u>.<k>g` after the group it stands in, its span beginning at the
+ * unit's end point before it and holding whatever TeX set between, so that no glyph there states it set none. `pages` each
+ * with its `points` ({ name, glyph }), `count` the units'
+ */
+export function placesOf(pages, count) {
+  const places = []
+  pages.forEach((pg, i) => {
+    const pts = pg.points
+    // (each unit's start and end point on the page, and the names set there, by index)
+    const startAt = new Map(), endAt = new Map(), names = new Set(pts.map(x => x.name))
+    pts.forEach((pt, q) => {
+      const s = START_POINT.exec(pt.name), e = END_POINT.exec(pt.name)
+      if (s) startAt.set(Number(s[1]), q)
+      if (e) endAt.set(Number(e[1]), q)
+    })
+    pts.forEach((pt, q) => {
+      const m = /^p(\d+)\.(\d+)([abg])$/.exec(pt.name)
+      const u = m ? Number(m[1]) : -1
+      if (!m || u >= count) return
+      if (m[3] === 'g') {
+        const e = endAt.get(u) ?? -1
+        if (e >= 0 && e < q) places.push({ unit: u, piece: m[2], page: i + 1, glyph: pts[e].glyph, end: false }, { unit: u, piece: m[2], page: i + 1, glyph: pt.glyph, end: true })
+        return
+      }
+      places.push({ unit: u, piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' })
+      // (a point of its own before the start: a head piece's, closed by the start or by the next head piece's opening)
+      const r = startAt.get(u) ?? -1
+      if (m[3] !== 'a' || r <= q || names.has(`p${u}.${m[2]}b`)) return
+      const own = `p${u}.`
+      let n = q + 1
+      while (n < r && !(pts[n].name.startsWith(own) && pts[n].name.endsWith('a'))) n++
+      places.push({ unit: u, piece: m[2], page: i + 1, glyph: pts[n].glyph, end: true })
+    })
+  })
+  return places
 }
 
 /**
@@ -351,10 +397,13 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
-  const places = []
-  pages.forEach((pg, i) => { for (const pt of pg.points) { const m = /^p(\d+)\.(\d+)([ab])$/.exec(pt.name); if (m && Number(m[1]) < units.length) places.push({ unit: Number(m[1]), piece: m[2], page: i + 1, glyph: pt.glyph, end: m[3] === 'b' }) } })
+  const places = placesOf(pages, units.length)
+  // (the pieces TeX said set no ink (the probe's `inkless`): their span stated empty, by unit index and piece id)
+  const noInk = new Set(inkless ?? [])
+  const empty = []
+  units.forEach((u, i) => u.pieces.forEach((p, k) => { if (p.t === 'ph' && classOf(p) === 'macro' && noInk.has(p.src)) empty.push({ unit: i, piece: String(k) }) }))
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

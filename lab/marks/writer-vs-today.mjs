@@ -22,7 +22,7 @@ const only = arg('only')?.split(',')
 const ANSWERS = arg('answers') && arg('answers') !== 'none' ? JSON.parse(readFileSync(arg('answers'), 'utf8')) : {}
 const EXAMPLES = Number(arg('examples') ?? 3)
 /** our marks in a file's text, in order: the macro and its argument (a babel name's wrap by its key) */
-const MARK = /\\(axtmark|axtend|axthmark|axtpma|axtpmm|axtpm|axtcolour|axtlines|axtbrname|axtnma|axtnmb)\{([^{}]*)\}/g
+const MARK = /\\(axtmark|axtend|axthmark|axtpma|axtpmm|axtpm|axthpk|axttg|axtcolour|axtlines|axtbrname|axtnma|axtnmb)\{([^{}]*)\}/g
 const latin1 = b => Buffer.from(b).toString('latin1')
 /** a mark's name with its unit's index made the unit's id (8 hex), so that two readers' numberings compare */
 const named = (name, idOf) => name.replace(/^([thpnc]?)(\d+)(?=[se.]|$)/, (_, k, i) => `${k}${idOf[Number(i)]?.slice(0, 8) ?? `?${i}`}`)
@@ -42,7 +42,9 @@ function todayIds(units) {
   }
   return units.map(tag)
 }
-const tot = { papers: 0, files: 0, same: 0, differ: 0, marksToday: 0, marksMine: 0, units: { both: 0, same: 0, differ: 0 }, failed: [] }
+const tot = { papers: 0, files: 0, same: 0, differ: 0, marksToday: 0, marksMine: 0, units: { both: 0, same: 0, differ: 0 }, spans: { today: 0, mine: 0, units: 0, alike: 0, differ: [] }, failed: [] }
+/** a unit's span marks (a head macro's \\axthpk, a trailing macro's \\axttg), which the two writers must write alike */
+const spanMarks = list => list.filter(m => /^axt(?:hpk|tg)\{/.test(m))
 /** a file's marks by the unit they name (its id's 8 hex), in order */
 const byUnit = (seq, into) => { for (const m of seq) { const k = /\{[thpnc]?([0-9a-f]{8}|\?\d+)/.exec(m)?.[1]; if (k) (into.get(k) ?? into.set(k, []).get(k)).push(m) } return into }
 const unitDiffs = []
@@ -84,6 +86,14 @@ for (const p of papers) {
     tot.differ += differ
     for (const [k, list] of tU) {
       if (!mU.has(k)) continue
+      const st = spanMarks(list), sm = spanMarks(mU.get(k))
+      tot.spans.today += st.length
+      tot.spans.mine += sm.length
+      if (st.length || sm.length) {
+        tot.spans.units++
+        if (st.join(' ') === sm.join(' ')) tot.spans.alike++
+        else if (tot.spans.differ.length < 40) tot.spans.differ.push(`${p.id} ${k}: today ${st.join(' ')} | mine ${sm.join(' ')}`)
+      }
       tot.units.both++
       if (list.join(' ') === mU.get(k).join(' ')) tot.units.same++
       else { tot.units.differ++; if (unitDiffs.length < 40) unitDiffs.push({ id: p.id, unit: k, today: list.join(' ').slice(0, 300), mine: mU.get(k).join(' ').slice(0, 300) }) }

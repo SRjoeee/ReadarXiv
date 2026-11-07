@@ -40,6 +40,27 @@ describe('markSource: the marks written into the paper’s own bytes, and the pl
       source,
     )
   })
+  it('states a paper macro’s span where it has no mark of its own: at a unit’s head \\axthpk, after its last text \\axttg', () => {
+    // (as today's writer, marks.mjs layoutMarking: 1810.04805v2's `\\bert is conceptually simple`, 2610.19159v1's
+    // `Tool Output\\trajectoryMark{}}`; the plan names the head's point `head` and the one after the group `after`)
+    const { tree, doc } = paper(
+      '\\bert is conceptually simple.\n\n\\textbf{Tool Output\\mark{}}\n\nA Volume\\mark{}\\urldef\\tempurl\\url{x}',
+      '\\newcommand\\bert{BERT}\\newcommand\\mark[1]{}',
+    )
+    const { tree: marked, plan } = markSource(tree, doc)
+    const text = dec.decode(marked.files.get('main.tex'))
+    expect(text).toContain('\\axthpk{p0.0a}\\bert \\leavevmode\\axtmark{0s}is conceptually simple.')
+    expect(text).toContain('Tool Output\\axtend{1e}\\axttg{p1.2g}\\mark{}')
+    // (none between two of the paper's pieces where the first may read the second: `\\urldef\\tempurl`, 2608.25210v2's .bbl)
+    expect(text).toMatch(/\\urldef\\tempurl/)
+    expect(
+      plan.marks.filter((m) => m.kind === 'head' || m.kind === 'after').map((m) => [m.name, m.kind, m.pieceId]),
+    ).toEqual([
+      ['p0.0a', 'head', 'e0'],
+      ['p1.2g', 'after', 'e1'],
+      ['p2.1g', 'after', 'e0'],
+    ])
+  })
   it('marks a table’s cells with their own marks and a heading with its own', () => {
     const { tree, doc } = paper(
       '\\section{A heading here}\n\\begin{tabular}{ll}\nOne cell & Two cell \\\\\n\\end{tabular}',
