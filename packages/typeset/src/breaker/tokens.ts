@@ -155,8 +155,10 @@ export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
 const UNKNOWN = -1
-/** \href's, \hyperref's and \hyperlink's open (L2:2245) */
-const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
+/** a link group's open: \href's, \hyperref's and \hyperlink's (L2:2245), and \url's, which the prepare reads as a link group
+ *  too (locate/ink.ts SPAN_STYLES): its tokens tagged with the group, so that its annotation is paired with its drawing (#626's
+ *  review: a paragraph's \url beside its text lost its link) */
+const LINK_OPEN = /^\\(?:href|hyperref|hyperlink|url)(?![A-Za-z])/
 
 type Designs = TokensInput['designs']
 /** the style commands, each with what it sets (L2:2107 STYLE_CMDS) */

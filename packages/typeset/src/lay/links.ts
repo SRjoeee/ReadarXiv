@@ -8,12 +8,11 @@
 // - one over a piece of a laid member, moved with what is drawn of it on the page (placeUnit): over a crop of it by the crop's
 //   own map (placeCrop), over the characters it is drawn as (placeText: the whole of them, the part stating no annotation's
 //   characters under it; the annotations of one target over it one link); one over the member's text, over the translation of
-//   its \href's group (placePair, as matchUnit's order tier pairs them: the k-th annotation the k-th group of the member's drawn
-//   on the page where they are as many, else the k-th run of one target's annotations; one group takes them all where they are
-//   of one target), else, where the member has
-//   no such group drawn, over its whole drawing where one target's annotations hold every line of it on the page (matchUnit's
-//   whole tier, its every own character under them: each line's ink inside one of their boxes, its baseline between their
-//   edges);
+//   its \href's or \url's group (placePair, as matchUnit's order tier pairs them: the k-th annotation the k-th group of the
+//   member's drawn on the page where they are as many, else the k-th run of one target's annotations; one group takes them all
+//   where they are of one target), else, where the member has no such group drawn, over its whole drawing where one target's
+//   annotations hold every line of it on the page (matchUnit's whole tier, its every own character under them: each line's ink
+//   inside one of their boxes, its baseline between their edges);
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
 //   the translation's text over it, today's freezeLinks drops it alike).
 // An annotation of a member's other page (Link.page: the part holds those of its members on every page they have lines on) is
@@ -38,7 +37,8 @@ export type LinkOwner = {
   elOf: (k: number) => string | null
 }
 
-const LINK_CMD = /^(?:href|hyperref|hyperlink)$/
+/** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's */
+const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
 type Tok = {
   s?: string
   space?: boolean
