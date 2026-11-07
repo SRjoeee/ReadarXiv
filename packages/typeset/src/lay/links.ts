@@ -116,6 +116,7 @@ export function linksOf(
         i,
         ...('url' in l.to ? { url: l.to.url } : { dest: l.to.dest }),
         rect: [...l.box],
+        ...(l.text ? { ov: l.text } : {}),
         g2: { x: [], y: [], ch: [] },
       }
       return { q: page, a }
@@ -135,9 +136,15 @@ export function linksOf(
       if (crop !== undefined)
         groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })) })
       else if (k !== undefined) {
-        // (over the characters it is drawn as, their whole: the annotations of one target one link; of two or more, none of
-        // them told apart, the part stating no annotation's characters (today's placeText finds each by its own))
-        if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
+        // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
+        // (Link.text, PDF.js's overlaidText: today's placeText); where it does not (a part made before), the annotations of one
+        // target over their whole, those of two or more targets none, not told apart)
+        if (is.every((i) => !!list[i]!.text))
+          groups.push({
+            to: { k, draw: 'text', single: is.length === 1 },
+            annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })),
+          })
+        else if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
           groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: 'geometry' }] })
           for (const i of is.slice(1)) fate(i, 'text')
         } else for (const i of is) fate(i, 'targets')

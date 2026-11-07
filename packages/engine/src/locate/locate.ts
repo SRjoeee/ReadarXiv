@@ -103,7 +103,12 @@ export interface Located {
   ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
   links: Map<
     number,
-    { box: [number, number, number, number]; to: { url: string } | { dest: string }; owner?: [number, string] }[]
+    {
+      box: [number, number, number, number]
+      to: { url: string } | { dest: string }
+      owner?: [number, string]
+      text?: string
+    }[]
   >
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
@@ -589,6 +594,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.figure = !!x.unit.figure
       if (x.unit.figure?.dir) mem.dir = x.unit.figure.dir
       mem.align = x.unit.align ?? 'j'
+      // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain)
+      if (x.unit.figure) mem.plain = x.unit.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
         mem.cause = 'no ink'
@@ -1142,6 +1149,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       url?: string
       unsafeUrl?: string
       dest?: unknown
+      overlaidText?: unknown
     }[]) {
       if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) continue
       const to =
@@ -1184,7 +1192,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           if (owner) break
         }
       }
-      out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}) })
+      // (the characters under it as PDF.js reads them, its own glyph points' rule (its overlaidText): today's annotation's `ov`,
+      // which its match finds among a piece's drawn characters (links.mjs placeText))
+      const text = typeof an.overlaidText === 'string' ? an.overlaidText.replace(/\s+/gu, ' ').trim() : ''
+      out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}), ...(text ? { text } : {}) })
     }
     if (out.length) links.set(p + 1, out)
   })

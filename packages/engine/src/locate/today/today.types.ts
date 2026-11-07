@@ -42,6 +42,15 @@ export interface TodayFigureUnit {
   set?: number
   ux?: number
   uy?: number
+  /** its first glyph's origin, its box's length along its run, its anchor, its room before and after its box, the depth under
+   *  its baseline of the nearest stroke under its text (null: none) */
+  x?: number
+  y?: number
+  length?: number
+  anchor?: 'start' | 'centre' | 'end'
+  before?: number
+  after?: number
+  under?: number | null
 }
 export interface TodayFigures {
   units: TodayFigureUnit[]

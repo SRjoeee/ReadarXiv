@@ -37,8 +37,21 @@ export interface InstrumentUnit {
   align?: 'j' | 'l' | 'c' | 'r'
   /** a babel name's key (a unit of kind `name`: its occurrences are owned with ROLE.name) */
   name?: string
-  /** a figure text's set (the units the reader fits at one size), its direction where it is not along x */
-  figure?: { set: number; dir?: [number, number] }
+  /** a figure text's set (the units the reader fits at one size), its direction where it is not along x; and what today's figure
+   *  reading tells of where a translation of it may stand (layout/figure-text.mjs, S.figures' FitFigure): its first glyph's origin
+   *  along its run (`x`, `y`), its box's length along it, its anchor, its room before and after its box, the depth under its
+   *  baseline of the nearest stroke under its text (absent: none) */
+  figure?: {
+    set: number
+    dir?: [number, number]
+    x?: number
+    y?: number
+    length?: number
+    anchor?: 'start' | 'centre' | 'end'
+    before?: number
+    after?: number
+    under?: number
+  }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string
   /** what its source says of each element (by piece id), which the part states as the element's class, copy text, a symbol's

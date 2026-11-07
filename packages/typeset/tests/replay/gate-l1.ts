@@ -87,6 +87,8 @@ export type GateL1 = {
     /** what became of the parts' links (lay/links.ts LinkFate), and examples of the dropped */
     links: Map<string, number>
     linkEx: Map<string, string[]>
+    /** the figure texts (S.figures over the part): each figure member on its first page, by its turn and its state */
+    figures: Map<string, number>
     /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
     lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
   }
@@ -439,6 +441,7 @@ export function gateL1Pair(
             names: new Map(),
             links: new Map(),
             linkEx: new Map(),
+            figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
           },
         }
@@ -823,6 +826,12 @@ export function gateL1Pair(
         if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
           out.entry!.linkEx.set(f, [...ex, `${pair} p${pg} ord ${l.owner?.[0]} ${l.owner?.[1] || 'text'}`])
       })
+      for (const m of (part as Part).flows.flat())
+        if (m.kind === 'figure' && m.lines[0]?.[0] === pg) {
+          const st = page.members.find((x) => x.ord === m.ord)?.state ?? 'none'
+          const k = `${m.dir ? 'turned' : 'level'}: ${st}`
+          out.entry.figures.set(k, (out.entry.figures.get(k) ?? 0) + 1)
+        }
       for (const x of page.members) {
         if (x.state !== 'laid' || !x.lines.length) continue
         const lit = out.entry.lit

@@ -28,6 +28,8 @@ export type FigureRow = FitFigure & {
   descent: number
   fill: number
   font: string
+  /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`) */
+  cls?: { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean }
   set: string
 }
 /** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces */
@@ -149,7 +151,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       Object.assign(rec, { why: 'unhidden', text })
       continue
     }
-    const cf = fontClassOf(f.font)
+    const cf = f.cls ?? fontClassOf(f.font)
     const fam = cf.fam === 'math' ? 'serif' : cf.fam
     const st: TStyle = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: i.designs[fam] ?? i.designs.serif }
     const runs = figureRuns(text, (cls) => i.faceOf(st, cls), !!i.rules.cjkQuotes)

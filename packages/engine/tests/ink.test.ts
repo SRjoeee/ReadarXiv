@@ -135,9 +135,25 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const content = [text('Loss')]
-    expect(L.units[1]).toEqual({ id: unitId('inkfigures', content), kind: 'inkfigures', content, figure: { set: 0 } })
+    expect(L.units[1]).toMatchObject({
+      id: unitId('inkfigures', content),
+      kind: 'inkfigures',
+      content,
+      figure: { set: 0 },
+    })
     const fig = L.members[1]!
     expect(fig).toMatchObject({ located: true, figure: true, fixed: false })
+    // (where a translation of it may stand, as today's figure reading tells it, stated for S.figures: its origin and box along
+    // its run, its anchor as its alignment, its room before and after as its side, its own text)
+    const f = L.units[1]!.figure!
+    expect(f.anchor).toBe('centre')
+    expect(L.units[1]!.align).toBe('c')
+    expect(f.y).toBe(640)
+    expect([f.x, f.length, f.before, f.after].every((v) => typeof v === 'number' && Number.isFinite(v))).toBe(true)
+    expect(fig.align).toBe('c')
+    expect(fig.plain).toBe('Loss')
+    const r2 = (v: number) => Math.round(v * 100) / 100
+    expect(fig.room.side).toEqual([r2(f.x! - f.before!), r2(f.x! + f.length! + f.after!)])
     const at = 'a paragraph whose word'.length
     expect(fig.text).toEqual([at, at + 1, at + 2, at + 3])
     expect(L.figureGroups.has(`${fig.ord}.1.t`)).toBe(true)

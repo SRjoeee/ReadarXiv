@@ -179,6 +179,27 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b[0]).toBeGreaterThan(x0)
     expect(b[2] - b[0]).toBeGreaterThan(0)
   })
+  it('lays each target of a piece drawn as text over its own characters where the part states them (Link.text)', () => {
+    // (an author-year citation of two works drawn as the page's text: today's placeText finds each annotation's characters, its
+    // overlaidText, among the drawn ones; a part made before states none, and the two are not told apart)
+    const m = cite({ text: '[3, 4]', style: { role: 'serif', size: 10 } })
+    const a: Link = { box: [150, 697, 158, 708], to: { dest: '"cite.a"' }, owner: [0, '5'], text: '3' }
+    const b: Link = { box: [161, 697, 169, 708], to: { dest: '"cite.b"' }, owner: [0, '5'], text: '4' }
+    const p = layPage(part(m, [a, b]), rowsOf([r]), rules, metrics())
+    expect(p.links.map(([, to]) => to)).toEqual([a.to, b.to])
+    const [ba, bb] = p.links.map(([box]) => box) as unknown as [number[], number[]]
+    // ("3" from its own edge, a character into "[3, ", to the next run where the rest of its token holds no letter (today's
+    // spanOf); "4" from the start of its run "4] ")
+    const f = p.members[0]!.fit!.size
+    const items = p.members[0]!.lines.flatMap(([, , , it]) => it)
+    const at = (s: string) => items.find((it) => it.s.startsWith(s))!.x
+    expect(ba[0]).toBeCloseTo(at('[3') + 0.5 * f, 6)
+    expect(bb[0]).toBeCloseTo(at('4]'), 6)
+    expect(ba[2]!).toBeLessThanOrEqual(bb[0]!)
+    const { text: _a, ...a0 } = a
+    const { text: _b, ...b0 } = b
+    expect(layPage(part(m, [a0, b0]), rowsOf([r]), rules, metrics()).links).toEqual([])
+  })
   it('keeps at A’s box a link no member owns, and one whose owner is not laid', () => {
     const free = at([400, 600, 420, 610])
     expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([[free.box, free.to]])
@@ -261,5 +282,62 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b[0]).toBeCloseTo(laid.lines[0]![1], 6)
     const some: Link = { ...whole, box: [71, 696, 200, 709] }
     expect(layPage(part(entry, [some]), rowsOf([rr]), rules, metrics()).links).toEqual([])
+  })
+})
+
+describe('S.figures over the part: a figure text drawn in its translation where it fits', () => {
+  const idF = 'f'.repeat(64),
+    idG = 'e'.repeat(64)
+  // (a level label "Loss" at 140-160 on baseline 400, centred (its anchor), its room 20 either side; its set alone)
+  const label = (o: Partial<Placed> = {}): Placed =>
+    member({
+      ord: 0,
+      kind: 'figure',
+      text: idF,
+      align: 'c',
+      plain: 'Loss',
+      style: { role: 'sans', size: 8 },
+      lines: [[1, 0, 140, 160, 400, 406, 398, 108, 504, 0, 8]],
+      room: { below: 1, next: 9, side: [120, 180] },
+      ...o,
+    })
+  const rowF = (s: string, id = idF): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s }] })
+  it('draws a level one on its baseline about its anchor at its size, its text group off, lit on both panes', () => {
+    const p = layPage(part(label()), rowsOf([rowF('Verlust')]), rules, metrics())
+    const [m] = p.members
+    expect(m).toMatchObject({ state: 'laid', off: 1 })
+    const [y, x0, x1, items] = m!.lines[0]!
+    // ("Verlust", 7 characters of half a size at 8: 28 wide, centred on 150; inside its room 120-180)
+    expect(y).toBe(400)
+    expect(items.map((it) => it.s).join('')).toBe('Verlust')
+    expect(x0).toBeCloseTo(136, 6)
+    expect(x1).toBeCloseTo(164, 6)
+    expect(m!.lit.left).toEqual([[[140, 398, 160, 406]]])
+    expect(m!.lit.right[0]).toHaveLength(1)
+  })
+  it('shrinks a set to one size where one of it needs it, and leaves the original’s what says nothing else', () => {
+    // (two labels of one set: the second's translation, 16 characters at 8 (64 wide), centred in a free line of 50 (its box of 30
+    // and 10 either side), needs 0.78 of its size, over the last floor)
+    const a = label()
+    const b = label({
+      ord: 1,
+      text: idG,
+      plain: 'Accuracy',
+      lines: [[1, 0, 200, 230, 400, 406, 398, 108, 504, 0, 8]],
+      room: { below: 1, next: 9, side: [190, 240] },
+    })
+    const pt: Part = { ...part(a), flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
+    const p = layPage(pt, rowsOf([rowF('Verlust'), rowF('Genauigkeitswert', idG)]), rules, metrics())
+    const sizes = p.members.map((m) => (m.lines[0]?.[3][0] as { size?: number } | undefined)?.size)
+    expect(sizes[0]).toBeCloseTo(sizes[1]!, 9)
+    expect(sizes[0]!).toBeLessThan(8)
+    // (its translation the same as its source: the original's)
+    expect(layPage(part(label()), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!.state).toBe('none')
+  })
+  it('leaves the original’s a turned one (design-a’s Item has no turn) and one whose anchor the part does not state', () => {
+    const turned = layPage(part(label({ dir: [0, 1] })), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(turned).toMatchObject({ state: 'kind', off: 0, lines: [] })
+    const before = layPage(part(label({ align: 'j' })), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(before).toMatchObject({ state: 'kind', off: 0, lines: [] })
   })
 })

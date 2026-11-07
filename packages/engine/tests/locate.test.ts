@@ -743,6 +743,16 @@ describe('review of #605', () => {
     const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
     expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
   })
+  it('states the characters PDF.js reads under a link, white space collapsed (its overlaidText: today’s annotation’s own)', () => {
+    // (1810.04805v2 p1: "(Peters et al., 2018a; Radford et al., 2018)" holds five annotations of two targets, "Peters et al.",
+    // "2018a", "Rad-", "ford et al.", "2018"; the typesetter finds each among the characters the citation is drawn as)
+    const B = docOf([{ lines: [{ text: 'see Peters et al.', x: 72 }] }])
+    const units = [unitOf('para', 'see Peters et al.')]
+    const link = { annotationType: 2, rect: [90, 695, 160, 708], dest: 'cite.p', overlaidText: ' Peters\n et  al. ' }
+    const none = { annotationType: 2, rect: [300, 695, 310, 708], dest: 'cite.q', overlaidText: ' ' }
+    const L = locate(instrumentOf(B, units, [[0]]), B, align(B, B), { annotations: [[link, none]] })
+    expect(L.links.get(1)?.map((l) => l.text)).toEqual(['Peters et al.', undefined])
+  })
 })
 
 describe('the element classes the part states', () => {
