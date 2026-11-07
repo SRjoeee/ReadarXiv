@@ -259,6 +259,10 @@ describe('locate: the room under a unit', () => {
     const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
     expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
     expect(L.members[0]!.room.next).toBe(14)
+    // (the room below is the whole block's, not its short last line's: a translation's lines span the block's measure, so a
+    // line borrowed under it meets the right column's text 5 pt down, not the left column's 21 pt down: the checkpoint's free-11,
+    // borrowed lines run into a display)
+    expect(L.members[0]!.room.below).toBe(5)
   })
 })
 

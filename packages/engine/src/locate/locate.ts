@@ -1145,21 +1145,6 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
  *  bottom edge where there is none; and the distance to the next text line of its column, baseline to baseline */
 function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
   const last = mem.lines.at(-1)!
-  const [p, , x0, x1, , , bottom] = last
-  const pg = inkA.pages[p - 1]!
-  const foot = bottom - 0.5
-  let next = Number.NEGATIVE_INFINITY
-  for (const g of pg.glyphs) if (g.top < foot && g.x1 > x0 && g.x0 < x1 && g.top > next && /\S/.test(g.u)) next = g.top
-  const W = pg.view[2] - pg.view[0]
-  const H = pg.view[3] - pg.view[1]
-  for (let b = 0; b < pg.kinds.length; b++) {
-    const bx0 = pg.boxes[4 * b]!
-    const by0 = pg.boxes[4 * b + 1]!
-    const bx1 = pg.boxes[4 * b + 2]!
-    const by1 = pg.boxes[4 * b + 3]!
-    if (by1 < foot && bx1 > x0 && bx0 < x1 && by1 > next && !(bx1 - bx0 >= 0.9 * W && by1 - by0 >= 0.75 * H)) next = by1
-  }
-  const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
   // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
   // block — the lines of its own on that page stacked over it, each standing above the one under it and across it (a caption
   // whose short last line keeps to one column of a block across both), never a column of its before a column break — the
@@ -1183,6 +1168,26 @@ function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
     bx1 = Math.max(bx1, l[8], l[3])
     over = l[4]
   }
+  // (the room below: from its last line's bottom to the first ink under it across its last block (its lines' measures, as for
+  // the next line: a translation's lines span the block, so a line borrowed under a short last line meets what stands under
+  // the block's full lines, a display, the checkpoint's free-11), a page-sized box aside)
+  const [p, , lx0, lx1, , , bottom] = last
+  const x0 = p === tp ? Math.min(lx0, bx0) : lx0
+  const x1 = p === tp ? Math.max(lx1, bx1) : lx1
+  const pg = inkA.pages[p - 1]!
+  const foot = bottom - 0.5
+  let next = Number.NEGATIVE_INFINITY
+  for (const g of pg.glyphs) if (g.top < foot && g.x1 > x0 && g.x0 < x1 && g.top > next && /\S/.test(g.u)) next = g.top
+  const W = pg.view[2] - pg.view[0]
+  const H = pg.view[3] - pg.view[1]
+  for (let b = 0; b < pg.kinds.length; b++) {
+    const qx0 = pg.boxes[4 * b]!
+    const qy0 = pg.boxes[4 * b + 1]!
+    const qx1 = pg.boxes[4 * b + 2]!
+    const qy1 = pg.boxes[4 * b + 3]!
+    if (qy1 < foot && qx1 > x0 && qx0 < x1 && qy1 > next && !(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H)) next = qy1
+  }
+  const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
   const travels = new Set<number>([...mem.text, ...mem.label])
   for (const [id, l] of mem.els) if (!mem.elements.find(([k]) => k === id)?.[1].keep) for (const a of l) travels.add(a)
   const T = lastText[4] - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
