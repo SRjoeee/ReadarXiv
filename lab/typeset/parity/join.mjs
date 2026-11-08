@@ -7,16 +7,19 @@
 // note its source footnote's, an author block's names their author's), its kind its own; locate made it of the echoed
 // content (locate/ink.ts), so its own id is the format's unitId over its kind and that content, today's id of the ink unit.
 // Echoes are ink units' alone (inkUnitsOf's kinds, INK_KIND): a figure text's placement, of kind 'figure' over its unit of
-// kind 'inkfigures', names its own unit.
+// kind 'inkfigures', names its own unit; one whose glyphs set a run in another face holds a group of it, today's unit its text
+// alone, joined by that one's id (l1.ts todayUnitOf).
 import { INK_KIND } from '../../../packages/engine/src/locate/today/ink-units.mjs'
 import { unitId } from '../../../packages/format/src/ids.ts'
+import { todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
 
 const INK = new Set(Object.values(INK_KIND))
 /** a member's own unit id: its text, or the ink unit's where its text names the source unit it echoes (`units` by id) */
 function ownIdOf(m, units) {
   if (typeof m.text !== 'string') return null
   const named = units.get(m.text)
-  return named && INK.has(m.kind) && named.kind !== m.kind ? unitId(m.kind, named.content) : m.text
+  if (named && INK.has(m.kind) && named.kind !== m.kind) return unitId(m.kind, named.content)
+  return named ? todayUnitOf(named).id : m.text
 }
 
 /**

@@ -34,7 +34,7 @@ import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
-import { type L1Placed, l1Paper } from './l1.ts'
+import { type L1Placed, l1Paper, todayUnitOf } from './l1.ts'
 import { prepare } from './round.ts'
 import { derived, ledger } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
@@ -536,11 +536,17 @@ export function gateL1Pair(
   }
   const unitOf = new Map<number, (typeof L.units)[number]>()
   const seenId = new Map<string, number>()
+  // (by today's id of its unit: a figure text whose glyphs set a run in another face is today's text alone, todayUnitOf)
+  const todayIdOf = (id: string) => {
+    const u = bundle.units.get(id)
+    return u ? todayUnitOf(u).id : id
+  }
   for (const [ord, x] of [...byOrd].sort((a, b) => a[0] - b[0])) {
     if (typeof x.m.text !== 'string') continue
-    const k = seenId.get(x.m.text) ?? 0
-    seenId.set(x.m.text, k + 1)
-    const u = todayById.get(x.m.text)?.[k]
+    const tid = todayIdOf(x.m.text)
+    const k = seenId.get(tid) ?? 0
+    seenId.set(tid, k + 1)
+    const u = todayById.get(tid)?.[k]
     if (u) unitOf.set(ord, u)
   }
   // (the paper's own name units' door rows, by the ids the part states them by (Part.paper.names): what a head reads where the
@@ -781,7 +787,8 @@ export function gateL1Pair(
       const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined
       if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
       if (!(row[2] === 'whole' || row[2] === 'partial')) continue
-      const source = sourcePieces(src.content)
+      // (today's row names today's pieces: of a figure text whose runs L1's holds as groups, its one text)
+      const source = sourcePieces(todayUnitOf(src).content)
       const content = outOfDoor(row[1], source)
       // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
       const sentences = src.sentences ? doorSentences(row, source) : undefined

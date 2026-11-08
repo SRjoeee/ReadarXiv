@@ -97,6 +97,21 @@ describe('the run-in labels of a unit, stated must', () => {
       'the rest goes on to the end',
     ])
   })
+  it('reads a figure text’s run of another weight, a group of no source (locate/ink.ts), as a style group: by the same rules', () => {
+    // (2608.25210v2 p2's "Data Extraction Task: Extract all …", its lead-in set in its family's bold: a label at its head, its
+    // colon after it. A group of no source sets a style alone; a source's group with neither end is one that holds the unit)
+    const run = (s: string, style = 'bold'): Piece => ({ t: 'span', id: `r${n++}`, style, content: [t(s)] })
+    expect(kept([run('Data Extraction Task'), t(': Extract all the names of police officers involved?')])).toEqual([
+      'Data Extraction Task',
+    ])
+    expect(kept([run('Answer'), t(': Officer Anderson, Maya')])).toEqual(['Answer'])
+    // (a word inside its sentence: no label, sent on no wire as a source's styled word is)
+    expect(kept([t('Accuracy of '), run('ours', 'italic'), t(' and the baseline')])).toEqual([])
+    // (a source's group cut at the unit's start, no open: still read as before, never a style group)
+    expect(
+      kept([{ t: 'span', id: 'c', style: 'other', close: '}', content: [t('Setup')] }, t(': we use GPUs.')]),
+    ).toEqual([])
+  })
   it('reads groups nested past any recursion limit (its walks keep their own stacks)', () => {
     let inner: Piece[] = [t('Setup:')]
     for (let i = 0; i < 20_000; i++) inner = [bf(inner)]

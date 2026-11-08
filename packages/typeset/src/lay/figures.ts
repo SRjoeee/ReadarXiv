@@ -3,7 +3,8 @@
 // original's baseline from its anchor's edge into the free line beside its box, the original's where it does not fit. Its
 // facts are the part's, as the prepare states them from today's figure reading (layout/figure-text.mjs): its line (its box
 // along its run and its baseline), its anchor (Placed.align: l start, c centre, r end), its room before and after its box
-// (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant), its own text
+// (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant) and its groups' (a run of
+// its glyphs in another face: SpanAt.style, its translation inside the group drawn in it), its own text
 // (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along x, from its run's
 // origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn at its angle (its
 // items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs,
@@ -16,26 +17,31 @@
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { faceOf } from '../breaker/faces.ts'
 import { fontString } from '../breaker/measure.ts'
-import { shown, type TextPiece } from '../breaker/text.ts'
+import { shown } from '../breaker/text.ts'
 import type { TextItem } from '../emit/display.ts'
-import { type FigureRow, type FigureUnit, figures } from '../shared/figures.ts'
+import { type FigureClass, type FigureRow, type FigureUnit, figures } from '../shared/figures.ts'
 import type { FaceId, Laid, Metrics, RuleParams, Rows, Unlaid } from '../types.ts'
 import type { PaperReading } from './read.ts'
 
 const ANCHOR = { l: 'start', c: 'centre', r: 'end' } as const
 
-/** a figure text's row as S.figures reads it: its translation's text pieces (an element a space); none where it has none (a
- *  failed row's reason is the entry's, figuresOf) */
-function unitOf(row: Row | undefined): FigureUnit | undefined {
+/** a figure text's row as S.figures reads it: its translation's text pieces (an element a space), each inside a group of a run
+ *  of its in another face in that run's style, as its part states the group's (SpanAt.style: its family, weight and slant);
+ *  none where it has none (a failed row's reason is the entry's, figuresOf) */
+function unitOf(row: Row | undefined, m: Placed): FigureUnit | undefined {
   if (!row?.ok) return undefined
-  const pieces: TextPiece[] = []
-  const walk = (ps: typeof row.content) => {
+  const styles = new Map((m.spans ?? []).flatMap(([id, x]) => (x.style ? [[id, x.style] as const] : [])))
+  const pieces: NonNullable<FigureUnit['pieces']>[number][] = []
+  const walk = (ps: typeof row.content, cls: FigureClass | undefined) => {
     for (const p of ps)
-      if (p.t === 'text') pieces.push({ t: 'text', s: p.s, tr: true })
-      else if (p.t === 'el') pieces.push({ t: 'text', s: ' ' })
-      else walk(p.content)
+      if (p.t === 'text') pieces.push({ t: 'text', s: p.s, tr: true, ...(cls ? { cls } : {}) })
+      else if (p.t === 'el') pieces.push({ t: 'text', s: ' ', ...(cls ? { cls } : {}) })
+      else {
+        const st = styles.get(p.id)
+        walk(p.content, st ? { fam: st.role, bold: !!st.bold, italic: !!st.slant } : cls)
+      }
   }
-  walk(row.content)
+  walk(row.content, undefined)
   return { state: 'whole', pieces }
 }
 
@@ -111,7 +117,7 @@ export function figuresOf(
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
-      return unitOf(typeof t === 'string' ? rows.get(t) : undefined)
+      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!)
     },
     src: (id) =>
       shown({ t: 'text', s: byOrd.get(id)?.plain ?? '' })

@@ -5,7 +5,7 @@
 // `read` names the facts carried as read on A). Lab-data only: the bundles hold licensed papers' text.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Part, Placed, Unit } from '@readarxiv/format'
+import { type Part, type Piece, type Placed, type Unit, unitId } from '@readarxiv/format'
 import { LAB } from './tap.ts'
 
 export const L1_BUNDLES =
@@ -47,4 +47,19 @@ export function l1Paper(paper: string): L1Paper | null {
   }
   papers.set(paper, out)
   return out
+}
+
+/** a unit's text, its groups' with the rest */
+const textOf = (ps: readonly Piece[]): string =>
+  ps.map((p) => (p.t === 'text' ? p.s : p.t === 'span' ? textOf(p.content) : '')).join('')
+/**
+ * The unit today's prepare made where L1's bundle holds `u`, the two making it of other content: a figure text whose glyphs
+ * set a run in another face, a group of its own in L1's (packages/engine locate/ink.ts figureRuns), is one text in today's (its
+ * figure reading states no run), its id the format's unitId over its kind and that text. Else `u` itself. The parity's rows and
+ * joins are today's units', by today's ids
+ */
+export function todayUnitOf<U extends Pick<Unit, 'id' | 'kind' | 'content'>>(u: U): U {
+  if (u.kind !== 'inkfigures' || u.content.every((p) => p.t === 'text')) return u
+  const content: Piece[] = [{ t: 'text', s: textOf(u.content) }]
+  return { ...u, id: unitId(u.kind, content), content }
 }

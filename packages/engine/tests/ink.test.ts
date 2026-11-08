@@ -1,13 +1,15 @@
 // The units no source unit is, made by locate on arXiv's page by today's rule (src/locate/ink.ts): ink units, kept blocks and
 // figure texts from A's glyphs no source unit owns, B's marks carried onto A.
-import { unitId } from '@readarxiv/format'
+import { read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
+import { bundle } from '../src/bundle/bundle.ts'
 import type { Doc } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.types.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { carry, spansOf } from '../src/locate/ink.ts'
 import { locate } from '../src/locate/locate.ts'
+import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
@@ -193,6 +195,111 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (today's rule makes it: no unit is born of it)
     expect(L.born.size).toBe(0)
     expect(L.members[0]).toMatchObject({ located: true })
+  })
+
+  it('states a figure text’s style runs: a lead-in its glyphs set in its family’s bold a group, `must`, its style its glyphs’', () => {
+    // (2608.25210v2 p2's "Data Extraction Task: Extract all …": the lead-in in HelveticaNeue-Bold, the rest in HelveticaNeue, one
+    // run of today's figure reading (a family's faces); read as one style, the majority's, it was regular, the lead-in's weight
+    // lost, with no run of the figure text's to carry it through a translation)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'Task: list all the names', y: 640, form: true, font: 'ABCDEF+Helvetica' },
+          { text: 'continues on its last line', y: 600 },
+        ],
+      },
+    ])
+    const at = 'a paragraph whose word'.length
+    for (const g of A.pages[0]!.glyphs.slice(at, at + 4))
+      Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold' })
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    // (the group the translator is given, a run-in label at the figure text's head before its colon: `must` by the run-in rule,
+    // so that the markers wire brings its style back; no source, so neither `open` nor `close`)
+    const content = [
+      { t: 'span', id: '0', style: 'bold', must: 1, content: [text('Task')] },
+      text(': list all the names'),
+    ]
+    expect(L.units[1]!.content).toEqual(content)
+    expect(L.units[1]!.id).toBe(unitId('inkfigures', content as never))
+    const fig = L.members[1]!
+    // (its own style the majority's, regular; the run's its own glyphs', stated for the part's span)
+    expect(fig.style).toMatchObject({ role: 'sans', design: 'Helvetica' })
+    expect(fig.style.bold).toBeUndefined()
+    expect(fig.spanStyles).toEqual([['0', { role: 'sans', size: 10, bold: 1, design: 'Helvetica-Bold' }]])
+    expect(fig.plain).toBe('Task: list all the names')
+    // (the part states the run's style as its span's: SpanAt.style)
+    const addOn = {
+      bytes: new Uint8Array([1, 2, 3]),
+      pages: new Map([[1, { ok: true }]]),
+      groups: new Set(L.groups[0]!.glyphs.filter((g): g is string => g !== null)),
+      ocgs: new Map(),
+      lost: new Set(),
+      stats: {},
+    } as unknown as AddOn
+    const part = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn,
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const placed = read('part', part.bytes, part.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'figure')!
+    expect(placed.spans).toEqual([['0', { style: { role: 'sans', size: 10, bold: 1, design: 'Helvetica-Bold' } }]])
+    expect(placed.plain).toBe('Task: list all the names')
+  })
+
+  it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const figureOf = (fonts: string[]) => {
+      const A = docOf([
+        {
+          lines: [
+            'a paragraph whose word',
+            { text: 'Ab cd ef', y: 640, form: true, font: 'ABCDEF+Helvetica' },
+            { text: 'continues on its last line', y: 600 },
+          ],
+        },
+      ])
+      const at = 'a paragraph whose word'.length
+      A.pages[0]!.glyphs.slice(at, at + 8).forEach((g, j) => {
+        const f = fonts[j] || 'Helvetica'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f })
+      })
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return { content: L.units[1]!.content, member: L.members[1]! }
+    }
+    // (one face: one text, today's unit and id)
+    expect(figureOf([]).content).toEqual([text('Ab cd ef')])
+    // (an oblique word inside it, a space either side its own style's: its group the word alone, `italic`, inside a sentence no
+    // label, never `must`)
+    const mid = figureOf(['', '', '', 'Helvetica-Oblique', 'Helvetica-Oblique'])
+    expect(mid.content).toEqual([
+      text('Ab '),
+      { t: 'span', id: '1', style: 'italic', content: [text('cd')] },
+      text(' ef'),
+    ])
+    expect(mid.member.spanStyles).toEqual([['1', expect.objectContaining({ slant: 1, design: 'Helvetica-Oblique' })]])
+    // (most of it bold: its own style bold, its group the run set regular, `medium` (LaTeX's \textmd))
+    const bold = 'Helvetica-Bold'
+    const most = figureOf([bold, bold, bold, bold, bold, bold, 'Helvetica', 'Helvetica'])
+    expect(most.member.style.bold).toBe(1)
+    expect(most.content).toEqual([text('Ab cd '), { t: 'span', id: '1', style: 'medium', content: [text('ef')] }])
+    expect(most.member.spanStyles).toEqual([['1', expect.not.objectContaining({ bold: 1 })]])
+    // (as many glyphs either way: its own style the one its style's vote takes (styleOf, the first to the most), the other the
+    // group's: the text outside its groups always in its own style)
+    // ("Ab c" bold, "d ef" regular: three letters each, the bold first to three)
+    const tie = figureOf([bold, bold, '', bold])
+    expect(tie.member.style.bold).toBe(1)
+    expect(tie.content).toEqual([text('Ab c'), { t: 'span', id: '1', style: 'medium', content: [text('d ef')] }])
   })
 
   it('echoes a heading a contents line repeats: the heading’s pieces, its index the echo', () => {

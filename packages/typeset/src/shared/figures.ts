@@ -32,8 +32,14 @@ export type FigureRow = FitFigure & {
   cls?: { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean }
   set: string
 }
-/** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces */
-export type FigureUnit = { state: string; pieces?: readonly ({ t: string; s?: string; tr?: boolean } | TextPiece)[] }
+/** a figure text's family, weight and slant (FigureRow.cls) */
+export type FigureClass = NonNullable<FigureRow['cls']>
+/** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces, each in the style of its group's run on
+ *  A where it stands in one (`cls`: a figure text's run of glyphs in another face, the part's SpanAt.style), else the unit's */
+export type FigureUnit = {
+  state: string
+  pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
+}
 /** a run of a figure's translation in one face (figureRuns) */
 export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin' }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
@@ -92,17 +98,44 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
   return { fam, bold: BOLD.test(n), italic: ITALIC.test(n) }
 }
 
-/** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns) */
-export function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, quotes: boolean): FigureRun[] {
+/** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters
+ *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
+export function figureRuns(
+  text: string,
+  faceOf: (cls: 'cjk' | 'latin', st?: TStyle) => Face,
+  quotes: boolean,
+  at: readonly (TStyle | undefined)[] = [],
+): FigureRun[] {
   const cjkRe = cjkClassRe(quotes),
-    runs: { cls: 'cjk' | 'latin'; s: string }[] = []
+    runs: { cls: 'cjk' | 'latin'; s: string; st: TStyle | undefined }[] = []
+  let k = 0
   for (const ch of text) {
     const cls = cjkRe.test(ch) ? 'cjk' : 'latin',
+      st = at[k++],
       last = runs.at(-1)
-    if (last?.cls === cls) last.s += ch
-    else runs.push({ cls, s: ch })
+    if (last?.cls === cls && last.st === st) last.s += ch
+    else runs.push({ cls, s: ch, st })
   }
-  return runs.map((r) => ({ s: r.s, face: faceOf(r.cls), cls: r.cls }))
+  return runs.map((r) => ({ s: r.s, face: r.st ? faceOf(r.cls, r.st) : faceOf(r.cls), cls: r.cls }))
+}
+/** a translation's pieces as one text, as the figure is drawn (a piece that is no text a space, white space one space, trimmed),
+ *  and each of its characters' own style (by code point: its piece's, where it holds one; a space its white space's first) */
+function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string; at: (FigureClass | undefined)[] } {
+  const out: { c: string; cls: FigureClass | undefined }[] = []
+  let space = false
+  for (const p of pieces)
+    for (const c of p.t === 'text' ? shown(p as TextPiece) : ' ') {
+      if (/\s/.test(c)) {
+        if (!space) out.push({ c: ' ', cls: p.cls })
+        space = true
+        continue
+      }
+      out.push({ c, cls: p.cls })
+      space = false
+    }
+  while (out[0]?.c === ' ') out.shift()
+  while (out.at(-1)?.c === ' ') out.pop()
+  return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
 export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
@@ -138,11 +171,7 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'
       continue
     }
-    const text = u.pieces
-      .map((p) => (p.t === 'text' ? shown(p as TextPiece) : ' '))
-      .join('')
-      .replace(/\s+/g, ' ')
-      .trim()
+    const { text, at } = textOfPieces(u.pieces)
     if (!text || sameAsSource(text, i.src(f.id))) {
       Object.assign(rec, { why: 'same', text })
       continue
@@ -151,10 +180,15 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       Object.assign(rec, { why: 'unhidden', text })
       continue
     }
-    const cf = f.cls ?? fontClassOf(f.font)
-    const fam = cf.fam === 'math' ? 'serif' : cf.fam
-    const st: TStyle = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: i.designs[fam] ?? i.designs.serif }
-    const runs = figureRuns(text, (cls) => i.faceOf(st, cls), !!i.rules.cjkQuotes)
+    // (its style, and each of its groups' runs' where its translation holds them: a style a class, its faces the paper's design)
+    const styleOf = (cf: FigureClass): TStyle => {
+      const fam = cf.fam === 'math' ? 'serif' : cf.fam
+      return { fam, bold: cf.bold, italic: cf.italic, caps: false, design: i.designs[fam] ?? i.designs.serif }
+    }
+    const st = styleOf(f.cls ?? fontClassOf(f.font))
+    const own = new Map<FigureClass, TStyle>()
+    const stAt = at.map((c) => (c ? (own.get(c) ?? own.set(c, styleOf(c)).get(c)!) : undefined))
+    const runs = figureRuns(text, (cls, s) => i.faceOf(s ?? st, cls), !!i.rules.cjkQuotes, stAt)
     const covered = cover(
       runs.map((r) => ({ s: r.s, face: r.face }) as Token),
       i.metrics,

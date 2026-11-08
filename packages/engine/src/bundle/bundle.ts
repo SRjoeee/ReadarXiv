@@ -133,11 +133,13 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
   }
   // (each group's command and fill, as the instrument reads its source; the paragraph TeX opened at it, as locate read it)
-  if (unit?.spans?.length || mem.spanOpens?.size) {
+  // (and a figure text's runs in another face, each group's style read off its glyphs on A)
+  if (unit?.spans?.length || mem.spanOpens?.size || mem.spanStyles?.length) {
     const spans = new Map(
       (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
     )
     for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
+    for (const [id, style] of mem.spanStyles ?? []) spans.set(id, { ...spans.get(id), style })
     p.spans = [...spans]
   }
   // (a caption's label: its float's type, by which its name is drawn in the target's word)
