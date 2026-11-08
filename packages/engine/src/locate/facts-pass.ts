@@ -2,7 +2,7 @@
 // state, fill, the original's mark after a display or on a held line, a forced break's line and room, a paragraph TeX opened
 // at an element; its label's parts; the class's tail; its lines' PINNED and SHORTSKIP flags; the room beside its lines and a
 // cell's band; its alignment where TeX did not state it. Each fact read rather than stated by TeX is named in `read`.
-import type { El, Line, Piece } from '@readarxiv/format'
+import { type El, LINE_FLAG, type Line, type Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
@@ -19,6 +19,7 @@ import {
   type InkBox,
   labelParts,
   pinnedOf,
+  rightToLeft,
   shortSkipLines,
   sideOf,
   sourceEndMarks,
@@ -65,6 +66,9 @@ export interface FactsInput {
   pieceB: Int32Array
   /** the units the members are of: the instrument's, then those locate made on A (its ink units, kept blocks and figure texts) */
   units?: readonly InstrumentUnit[]
+  /** the A pages whose lines' measures are TeX's frame (locate's framesOnA): a measure there is the block's or its column's
+   *  even where a line fills it */
+  framed?: ReadonlySet<number>
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -101,6 +105,7 @@ export function factsOf({
   roleB,
   pieceB,
   units = ins.units,
+  framed = new Set<number>(),
 }: FactsInput): void {
   const gA = (a: number): DocGlyph => {
     const p = (pageA[a] as number) - 1
@@ -149,7 +154,8 @@ export function factsOf({
   // (each page's lines, every member's: a single line's stack, centredByBlock)
   const linesOn = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
-  // (each page's and column's block: its justified lines' measure where it has one, else all its lines' hull)
+  // (each page's and column's block: TeX's frame where it shipped the page's (framed); else its justified lines' measure where
+  // it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
   for (const mem of members)
     for (const l of mem.lines) {
@@ -160,7 +166,7 @@ export function factsOf({
       }
     }
   const blockOf = (l: Line): [number, number] => {
-    if (l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
+    if (framed.has(l[0]) || l[7] < l[2] - 0.01 || l[8] > l[3] + 0.01) return [l[7], l[8]]
     return hull.get(l[1] === 2 ? `${l[0]}|*` : `${l[0]}|${l[1]}`) ?? [l[2], l[3]]
   }
   // (B's paragraph ends, globally)
@@ -519,6 +525,10 @@ export function factsOf({
       if (band?.open) mem.room.bandOpen = band.open
     }
 
+    // -- its writing direction: its lines' characters set right to left where its text's paragraph direction is (UAX #9 P2-P3:
+    // Line.flags' RTL), which the order of its links along a line follows
+    if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
+
     // -- its alignment, where TeX did not state it: the maker's reading (MAKE:2121-2135); a single-line cell by its column
     if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
       const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
@@ -540,8 +550,11 @@ export function factsOf({
             linesOn.get(mem.lines[0]?.[0] ?? 0) ?? [],
             mem.lead,
           )
-        )
+        ) {
           a = 'c'
+          // (a single line's: read again over the TeX line it shares, once the flows are known, locate.ts rowAligns)
+          if (own.length === 1) mem.byBlock = true
+        }
       if (unit.align === undefined || a !== unit.align) mem.read.push('align')
       mem.align = a
     }

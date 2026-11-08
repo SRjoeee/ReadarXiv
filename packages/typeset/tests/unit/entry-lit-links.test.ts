@@ -486,6 +486,37 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b.left).toBeCloseTo(6 * 0.5 * b.f, 1)
     expect(b.right).toBeCloseTo(15 * 0.5 * b.f, 1)
   })
+  it('pairs a right-to-left line’s groups with its annotations in its own direction, the rightmost first (Codex on #634)', () => {
+    // (a Hebrew paragraph's two \href groups: TeX set the first group's text at the line's right; sorted left to right, the first
+    // group's translation took the second's address)
+    const rtl = (l: Placed['lines'][number]) => [...l.slice(0, 9), 8, ...l.slice(10)] as Placed['lines'][number]
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href' }],
+        ['3', { cmd: 'href' }],
+      ],
+    })
+    const first = { url: 'https://example.org/first' }
+    const second = { url: 'https://example.org/second' }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    const links: Link[] = [
+      { box: [100, 697, 130, 708], to: second, owner: [0, ''] },
+      { box: [160, 697, 190, 708], to: first, owner: [0, ''] },
+    ]
+    const p = layPage(part({ ...m, lines: m.lines.map(rtl) }, links), rowsOf([rr]), rules, metrics())
+    const [, x0] = p.members[0]!.lines[0]!
+    const f = p.members[0]!.fit!.size
+    const by = new Map(p.links.map(([b, to]) => ['url' in to ? to.url : '', b[0]] as const))
+    expect(p.links).toHaveLength(2)
+    expect(by.get(first.url)! - x0).toBeCloseTo(6 * 0.5 * f, 1)
+    expect(by.get(second.url)! - x0).toBeCloseTo(15 * 0.5 * f, 1)
+  })
   it('pairs a member’s link groups with its annotations by the target each group states where their counts differ', () => {
     // (an \href to one address and a \hyperlink to a destination, and between them a link over text that is no group's: three
     // annotations, two groups, which no rule of order pairs (every link was dropped). The part states each group's target

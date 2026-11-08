@@ -135,9 +135,20 @@ export interface Instrument {
     sentences?: { unit: number; page: number; glyph: number }[]
     /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
     colours?: { unit: number; piece: string | null; colour: string }[]
+    /** per B page, its text frame as TeX shipped it (marks/instrument.ts framesOf, LAYOUT_TEX's AXT-BODY at each body's
+     *  bracket): the text block's left and right edge (\textwidth from where TeX shipped the page's body) and its columns',
+     *  each \columnwidth at both edges of the block on a page TeX set in two columns, else the block; null where TeX stated
+     *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */
+    frames?: (TexFrame | null)[]
   }
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
+}
+
+/** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself) */
+export interface TexFrame {
+  block: [number, number]
+  columns: [number, number][]
 }
 
 /** the empty owners of a page of n glyphs */

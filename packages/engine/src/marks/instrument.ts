@@ -25,6 +25,7 @@
 import { type Piece, unitId } from '@readarxiv/format'
 import type { Doc } from '../doc.ts'
 import { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE } from '../instrument.ts'
+import { framesOf, readAlign, readLineskip } from './channels.ts'
 import type { SourceDoc } from '../source/read.ts'
 import { classOf, symbolText } from './classes.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
@@ -80,52 +81,8 @@ function regionsOf(pg: PageRead): Regions {
   return { glyph, box, at }
 }
 
-// ---------------------------------------------------------------- the log's channels (marks.mjs readAlign, readSkipProbe)
-/** the code of a paragraph's skips (marks.mjs alignCode): both sides stretching and \parfillskip none past them, centred;
- *  \rightskip alone flush left; \leftskip alone flush right; neither justified */
-const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, ps: number): 'j' | 'l' | 'c' | 'r' => {
-  const L = lo > 0 || ls > 0
-  const R = ro > 0 || rs > 0
-  const F = po > 0 || ps > 0
-  if (L && R) return !F || po < Math.min(lo, ro) ? 'c' : 'j'
-  return L ? 'r' : R ? 'l' : 'j'
-}
-/** each unit's alignment as its end mark states it (AXT-ALIGN, its 79-column wrap joined): none for one set in an \hbox, nor
- *  for one TeX set in two alignments (marks.mjs readAlign) */
-export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
-  const last = new Map<number, 'j' | 'l' | 'c' | 'r' | null>()
-  const told = new Map<number, 'j' | 'l' | 'c' | 'r' | false>()
-  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
-  for (const m of text.matchAll(
-    /^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm,
-  )) {
-    const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number) as [number, number, number, number, number, number]
-    if (!v.every(Number.isFinite)) continue
-    const id = Number(m[1])
-    const code = m[2] === 'h' ? null : alignCode(...v)
-    last.set(id, code)
-    if (code !== null) told.set(id, told.has(id) && told.get(id) !== code ? false : code)
-  }
-  const out = new Map<number, 'j' | 'l' | 'c' | 'r'>()
-  for (const [id, c] of [...last].sort((a, b) => a[0] - b[0])) {
-    const t = told.get(id)
-    if (c !== null && t !== false) out.set(id, c)
-  }
-  return out
-}
-const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
-const BP_PER_PT = 72 / 72.27
-/** the paper's \lineskip and \lineskiplimit in PDF units from the probe's row (marks.mjs readSkipProbe) */
-export function readLineskip(log: string): [number, number] | null {
-  const rows = [...log.matchAll(/^LAYOUT-PROBE (\d+) ([a-z][a-z0-9-]*)((?: [^ \n]+)*) *$/gm)]
-    .map((m) => ({ schema: Number(m[1]), tag: m[2], fields: (m[3] as string).trim().split(' ').filter(Boolean) }))
-    .filter((r) => r.schema === 1 && r.tag === 'lineskip')
-  if (rows.length !== 1 || rows[0]?.fields.length !== 2) return null
-  const pt = rows[0].fields.map((f) => Number(TEX_PT.exec(f)?.[1] ?? Number.NaN))
-  return pt.every((x) => Number.isFinite(x) && Math.abs(x) <= 16384)
-    ? (pt.map((x) => x * BP_PER_PT) as [number, number])
-    : null
-}
+// ---------------------------------------------------------------- the log's channels: marks/channels.ts
+export { readAlign, readLineskip } from './channels.ts'
 
 // ---------------------------------------------------------------- ownership
 /** the closing punctuation glued past a unit's end mark on its line that is the unit's text (own.mjs MR 4c, TAIL_PUNCT) */
@@ -859,6 +816,8 @@ export function instrumentFromPlan({
     if (state) states.push({ unit: m.unit, piece: m.kind === 'open' ? m.pieceId : null, state })
   }
   const lineskip = stated ?? readLineskip(log)
+  // ---- each page's text frame as TeX shipped it (AXT-BODY at each body's opening point)
+  const frames = framesOf(pages, log)
   return {
     ink,
     units,
@@ -869,6 +828,7 @@ export function instrumentFromPlan({
     tex: {
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),
+      ...(frames.some(Boolean) ? { frames } : {}),
       states,
       ...(sentences.length ? { sentences } : {}),
       ...(colours.length ? { colours } : {}),

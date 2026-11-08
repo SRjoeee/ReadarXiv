@@ -3,7 +3,7 @@
 // today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
 // reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
-// statements in the marked compile's log (the units' alignments, \lineskip). It writes nothing and wraps nothing: the back half
+// statements in the marked compile's log (the units' alignments, \lineskip, each page's text frame). It writes nothing and wraps nothing: the back half
 // carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (today's
 // ledger, ink-units.mjs, figure-text.mjs) are made by the back half's locate on arXiv's page, of the glyphs no source unit owns
 // there (packages/engine/src/locate/ink.ts), from B's marks the Doc carries (its points and DocPage.marks).
@@ -13,9 +13,10 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { linkTargetOf, ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, headEnd, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, ROLE, unitId } from '@readarxiv/engine'
+import { classOf, followsOf, headEnd, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
+import { lastTexLog } from '../source/latex-front.mjs'
 import { columnsAt } from '../layout/stream.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -504,7 +505,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
 
   // ---- the units
-  const align = new Map(readAlign(log))
+  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's, marks/instrument.ts)
+  const align = readAlign(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -556,6 +558,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const lineskip = options.lineskip ?? readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
+  // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
+  const frames = framesOf(pages, lastTexLog(log))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -572,7 +576,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   for (const [k, e] of ends) if (e === 3) known.add(k)
   empty.push(...besideEmpty(pages, own.glyphs, units, { classes: classesBy, known }))
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

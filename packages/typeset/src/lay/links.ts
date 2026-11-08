@@ -32,7 +32,7 @@
 // list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
 // Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
 // links back at A's boxes (composer.ts held()).
-import type { Line, Link, Part, Placed } from '@readarxiv/format'
+import { LINE_FLAG, type Line, type Link, type Part, type Placed } from '@readarxiv/format'
 import type { Face } from '../breaker/tokens.ts'
 import { lineRuns, runEdge, type TextRun } from '../emit/display.ts'
 import { type Annot, type Cand, placeUnit, type Target } from '../emit/links.ts'
@@ -456,9 +456,12 @@ export function linksOf(
  * A member's annotations in their order on A, the order TeX set them in: a paragraph's characters are set in the source's order
  * along its lines, its lines in the member's order over its pages (`lines`, Placed.lines). Each is at the member's line it lies
  * on (of those on its own page, Link.page or the part's, one its box overlaps across where any does, the one whose baseline is
- * nearest its box's middle), then at its box's start along that line; the PDF's annotation array, whose order the part's list
- * keeps, need not be TeX's (#626's review: two \href groups listed right to left). An annotation of no line of the member (none
- * on its page) comes after those that have one, by its page, then its place in the list.
+ * nearest its box's middle), then at its box's start along that line in the line's writing direction: its left edge, its right
+ * edge on a line the part states set right to left (LINE_FLAG.RTL, the unit's paragraph direction), whose first link is its
+ * rightmost (Codex on #634: sorted left to right, an Arabic or Hebrew line's two links of one address paired with its groups the
+ * other way round); the PDF's annotation array, whose order the part's list keeps, need not be TeX's (#626's review: two \href
+ * groups listed right to left). An annotation of no line of the member (none on its page) comes after those that have one, by its
+ * page, then its place in the list.
  */
 function inReading(ids: readonly number[], list: readonly Link[], lines: readonly Line[], page: number): number[] {
   const at = new Map<number, [number, number]>()
@@ -479,7 +482,7 @@ function inReading(ids: readonly number[], list: readonly Link[], lines: readonl
         line = j
       }
     })
-    at.set(i, line < 0 ? [lines.length, 0] : [line, x0])
+    at.set(i, line < 0 ? [lines.length, 0] : [line, lines[line]![9] & LINE_FLAG.RTL ? -x1 : x0])
   }
   const of = (i: number) => at.get(i)!
   return [...ids].sort((a, b) => of(a)[0] - of(b)[0] || of(a)[1] - of(b)[1] || pageOf(a) - pageOf(b) || a - b)
