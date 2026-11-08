@@ -755,7 +755,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // does not, 2610.21084v1's initials: a content difference, and the unit stays the original's, as a source unit does (no
       // fuzzy rescue), those glyphs A's ink (HELD), no unit born of them; a line-end hyphen A breaks at is none, nor an included
       // figure's glyph inside it)
-      const mine = [...x.text, ...x.ph].sort((p, q) => p - q)
+      const mine = [...x.text, ...(x.label ?? []), ...x.ph].sort((p, q) => p - q)
       const aOnly: number[] = []
       eachBetweenPaired(
         0,
@@ -777,6 +777,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.located = true
       mem.place = 'same'
       mem.text = x.text
+      // (its label, the mark its text does not say (an affiliation's raised number, a note's mark): a label as a source unit's,
+      // its group `.l`, stated with its ink and the line it stands on below)
+      mem.label = x.label ?? []
       if (x.phId !== null && x.ph.length)
         mem.els.set(
           x.phId,
@@ -785,7 +788,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.turned = x.turned
       mem.textBoxes = x.textBoxes
       if (x.phId !== null && x.elBoxes.length) mem.elBoxes.set(x.phId, x.elBoxes)
-      for (const a of [...x.text, ...x.ph]) {
+      for (const a of mine) {
         claimedA[a] = mem.ord
         const b = m.aToB[a] as number
         if (b < 0) continue

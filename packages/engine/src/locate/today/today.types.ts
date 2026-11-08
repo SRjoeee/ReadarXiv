@@ -31,7 +31,8 @@ export interface TodayInkUnit {
   echo: number | null
   kept?: true
   pieces: TodayPiece[]
-  glyphs: { text: [number, number][]; ph: [number, number][] }
+  /** its text's glyphs, its placeholders', and, of its text's, its label's where it has one (inkUnitsOf's, labelLength) */
+  glyphs: { text: [number, number][]; ph: [number, number][]; label?: [number, number][] }
   rows: { unit: [number, string, number, number, number] }
 }
 /** a figure's text (figureUnitsOf) */

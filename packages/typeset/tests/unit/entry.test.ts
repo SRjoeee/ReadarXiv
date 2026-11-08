@@ -113,6 +113,57 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const blue = inks(member({ style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu', fill: 0x0000cc } }))
     expect(new Set(blue.map(([, fill]) => fill))).toEqual(new Set([0x0000cc]))
   })
+  it('draws an ink unit’s colour group in the fill its span states, the rest of it in its own (2609.36054v2-zh p1’s grey e-mails)', () => {
+    const m = member({ kind: 'inknotes', spans: [['1', { cmd: 'textcolor', colour: 0x7a7f80 }]] })
+    const r = row([
+      { t: 'text', s: 'Briefe an ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'a.b@example.org' }] },
+      { t: 'text', s: ' bitte' },
+    ])
+    const runs = layPage(part(m), rowsOf([r]), rules, metrics())
+      .members[0]!.lines.flatMap((l) => l[3])
+      .flatMap((it) => ('src' in it || !it.s.trim() ? [] : [[it.s.trim(), it.fill]]))
+    expect(runs).toEqual([
+      ['Briefe', undefined],
+      ['an', undefined],
+      ['a.b@example.org', 0x7a7f80],
+      ['bitte', undefined],
+    ])
+  })
+  it('keeps an ink unit’s stated label where it stands, and carries it with a centred line as a crop (today’s `carried`)', () => {
+    // (2610.22065v1-zh p1: an affiliation's raised "2" the part states as the unit's label, its group `.l`: on a line laid from
+    // its start the label's group stays on and no crop is drawn; on a centred line it goes with the line, its ink a crop at the
+    // line's start, its group off, as today's reader carries an ink unit's label, layer-proto/run.mjs)
+    const label = {
+      kind: 'number' as const,
+      ink: [1, 66, 698.8, 70, 707, 703.5] as [number, number, number, number, number, number],
+      style: { role: 'serif' as const, size: 6 },
+      num: ['2', [1, 66, 698.8, 70, 707, 703.5]] as [string, number[]],
+      line: 0,
+    }
+    const r = row([{ t: 'text', s: 'Abteilung der Physik' }])
+    const at = (align: Placed['align']) =>
+      layPage(
+        part(
+          member({
+            kind: 'inknotes',
+            align,
+            label: label as Placed['label'],
+            lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]],
+          }),
+        ),
+        rowsOf([r]),
+        rules,
+        metrics(),
+      ).members[0]!
+    const crops = (m: ReturnType<typeof at>) => m.lines.flatMap((l) => l[3]).filter((it) => 'src' in it)
+    const left = at('j')
+    expect(left.off & 4).toBe(0)
+    expect(crops(left)).toEqual([])
+    const centred = at('c')
+    expect(centred.off & 4).toBe(4)
+    expect(crops(centred).map((it) => ('src' in it ? it.src[0] : null))).toEqual([1])
+  })
   it('turns its elements off where one is drawn as text, not kept where it stands (today’s hide.mjs: its placeholders hidden)', () => {
     // (a citation drawn as the page's text in the translation: its ink on A must go with the text, or it shows twice)
     const m = member({

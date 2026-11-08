@@ -233,6 +233,66 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['5', { cmd: 'emph' }],
     ])
   })
+  it('states an ink unit’s colour group’s fill, as a source unit’s colour group states the fill TeX set its run in', () => {
+    // (2609.36054v2 p1's note: its e-mails grey, in the groups rule 9 opens from their glyphs' fill; with no `colour` the
+    // typesetter drew them in the note's black. An ink unit has no log: its group's source names the fill in xcolor's HTML model)
+    expect(
+      spansOf([
+        { t: 'text', s: 'Correspondence to: ' },
+        { t: 'open', src: '\\textcolor[HTML]{7A7F80}{' },
+        { t: 'text', s: 'a.b@example.org' },
+        { t: 'close', src: '}' },
+        { t: 'open', src: '\\textbf{' },
+        { t: 'close', src: '}' },
+      ]),
+    ).toEqual([
+      ['1', { cmd: 'textcolor', colour: 0x7a7f80 }],
+      ['4', { cmd: 'textbf' }],
+    ])
+    // (made on A: the glyphs' own fill, the unit's group of it, its span's colour)
+    const { B, A } = pair({
+      lines: ['Body text here', 'Mail to alan at example now'],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 27],
+      ],
+    })
+    for (const g of A.pages[0]!.glyphs) if (g.n === 1 && g.k >= 14 + 8 && g.k < 14 + 12) g.fill = 0x7a7f80
+    const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1]]), A, align(B, A), {
+      pages: rawOf(A),
+    })
+    const note = L.units[L.members.find((m) => m.kind === 'inkorphan')!.unit]!
+    expect(note.spans).toEqual([['1', { cmd: 'textcolor', colour: 0x7a7f80 }]])
+  })
+  it('states an ink unit’s leading mark as its label, as a source unit’s: its glyphs the label’s group, none its text’s', () => {
+    // (2610.22065v1 p1: an affiliation the class prints from its own lists, no source unit's, its raised "2" read as the unit's
+    // label and left out of its text (today/ink-units.mjs labelLength), but its glyph left in the unit's text group: erased with
+    // the translated text, and drawn by nobody, the part stating no label)
+    const { B, A } = pair({
+      lines: [
+        'Body text here',
+        { text: '2', x: 72, y: 691.8, size: 6 },
+        { text: 'Department of Physics', x: 76, y: 688 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 1 + 21],
+      ],
+    })
+    const L = locate(instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1, -1]]), A, align(B, A), {
+      pages: rawOf(A),
+    })
+    const note = L.members.find((m) => m.kind === 'inkorphan')!
+    expect(L.units[note.unit]!.content).toEqual([text('Department of Physics')])
+    const mark = 14
+    expect(note.label).toEqual([mark])
+    expect(note.text).not.toContain(mark)
+    expect(L.groups[0]!.glyphs[mark]).toBe(`${note.ord}.1.l`)
+    expect(L.groups[0]!.glyphs[mark + 1]).toBe(`${note.ord}.1.t`)
+    // (its label's ink and the line it stands on, its text's line from the text on, as a source unit's label is stated)
+    expect(note.labelAt).toMatchObject({ kind: 'number', ink: [1, 72, 690.6, 75.6, 696, 691.8], line: 0 })
+    expect(note.lines[0]![2]).toBe(76)
+  })
 
   it('leaves a unit made on A the original’s where A sets text inside it our compile does not: a content difference', () => {
     // (2610.21084v1's e-mail block: arXiv's page sets the initials our compile does not; the unit made on A is A's text, and it

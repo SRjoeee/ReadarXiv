@@ -1,6 +1,6 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but two changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased): run
+// marked COPY, nothing else but three changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -314,8 +314,10 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
  * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
  * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
- * [[page, g]], ph: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the face's name at 7),
- * frames, erase, ph } }]
+ * [[page, g]], ph: [[page, g]], label?: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the face's
+ * name at 7), frames, erase, ph } }]: `label` the glyphs of its label (labelLength), among its text's, where it has one
+ * (CHANGED: today's states none, its reader reading the label off the unit's characters; locate states a member's label from
+ * the glyphs it is told, as a source unit's, 2610.22065v1 p1's "2" erased with the translated affiliation and drawn by nobody)
  */
 export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const fams = new Map(), faces = new Map()
@@ -416,7 +418,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     let cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
     // or colour than the unit's a group that sets it (rule 9)
-    const pieces = [], phs = []
+    const pieces = [], phs = [], labelled = []
     let text = '', plain = ''
     const flushText = () => { if (text) { pieces.push({ t: 'text', s: sourceView(text) }); plain += text; text = '' } }
     const style0 = baseStyleOf(lines, pages, faces), open = []
@@ -424,13 +426,15 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
       // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
-      // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand)
+      // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand;
+      // CHANGED: stated, `labelled`, as the glyphs of the unit's label)
       let label = li === 0 ? labelLength(pages[l.page - 1].glyphs, l.words) : 0, first = 0
       l.words.forEach((w, wi) => {
         let said = w.text
         if (label > 0) {
           const k = Math.min(label, w.gs.length)
           label -= k
+          for (const g of w.gs.slice(0, k)) labelled.push([l.page, g])
           if (k === w.gs.length) { first = wi + 1; return }
           said = w.ts.slice(k).join('')
         }
@@ -492,7 +496,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (e !== undefined && (cls === 'orphan' || cls === 'notes') && unitClass(units[e]) === 'names') cls = 'names'
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
     if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
-    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
+    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), ...(labelled.length ? { label: labelled } : {}) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
 }
