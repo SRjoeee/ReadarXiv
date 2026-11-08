@@ -14,7 +14,7 @@
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { classOf, followsOf, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -280,6 +280,63 @@ function piecesByPoints(points, count, groupAt, by) {
   return out
 }
 
+/** a glyph's text as own.mjs spells a lead by it (MR 5b's `norm`): NFKC, white space out */
+const leadNorm = t => t.normalize('NFKC').replace(/\s/gu, '')
+/** a unit's lead as own.mjs reads it (MR 5b's leadText): its pieces of ink before its first text, up to a footnote's call or a
+ *  piece with a point of its own, each with the text the probe showed it sets (a text symbol's, its character); null where one's
+ *  text is not known. Its macros alone, in order: own.mjs gives a text symbol's glyphs the unit's text */
+function leadParts(u, id, texts, names) {
+  const parts = []
+  const pieces = u?.pieces ?? []
+  for (let k = 0; k < pieces.length; k++) {
+    const piece = pieces[k]
+    if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
+    const c = classOf(piece)
+    if (!c) continue
+    if (c === 'footnote' || names.has(`p${id}.${k}a`) || names.has(`p${id}.${k}b`)) break
+    const sym = symbolText(piece.src), t = texts?.get(piece.src) ?? sym
+    if (typeof t !== 'string') return null
+    if (sym === null && leadNorm(t)) parts.push({ k, text: leadNorm(t) })
+  }
+  return parts
+}
+/**
+ * The piece of each of a page's glyphs its group names `.p` (the ownership's `row`, by glyph): by the points (piecesByPoints);
+ * and where no point of its unit opened before it, a lead's (own.mjs MR 5b: a cell that opens with a paper's macro, where no
+ * mark goes, 1810.04805v2's `\\bertbase (Single)`; its ink TeX set right before the start point, claimed by the text the probe
+ * showed the macro sets): its lead's pieces (leadParts) by their texts, nearest the start first, each glyph read against the
+ * text from its end (marks.mjs leadStep), as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
+ * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before
+ */
+export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set() } = {}) {
+  const out = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph')
+  const runs = new Map()
+  for (let j = 0; j < pg.glyphs.length; j++) {
+    const m = out[j] < 0 ? /^u(\d+)\.p$/.exec(row[j] ?? '') : null
+    if (m) (runs.get(Number(m[1])) ?? runs.set(Number(m[1]), []).get(Number(m[1]))).push(j)
+  }
+  for (const [u, run] of runs) {
+    const parts = leadParts(units[u], u, texts, names)
+    if (!parts?.length) continue
+    const got = new Map()
+    let n = run.length - 1
+    for (let q = parts.length - 1; q >= 0; q--) {
+      const { k, text } = parts[q]
+      let end = text.length
+      while (n >= 0 && end > 0) {
+        const e = leadStep(text, end, leadNorm(pg.glyphs[run[n]]?.u ?? ''))
+        if (e < 0) break
+        got.set(run[n--], k)
+        end = e
+      }
+      if (end !== 0) { got.clear(); break }
+    }
+    // (the texts spell the whole run, as own.mjs claimed it, or the run is not the lead's: none of it a piece's)
+    if (got.size && n < 0) for (const [j, k] of got) out[j] = k
+  }
+  return out
+}
+
 /**
  * Each element's places in B's stream, from the marked compile's points (Instrument `places`): a placeholder's two points
  * `p<u>.<k>a` and `p<u>.<k>b` (u today's unit index, k its piece's); a paper's macro at a unit's head, its point \\axthpk's before
@@ -324,6 +381,17 @@ export function placesOf(pages, count) {
   return places
 }
 
+/** the texts the marking's probe showed the paper's macros set, by source: as markedOfPaper's options hold them (readInkTexts'
+ *  [source, text] pairs: what the box and the lab hand in), as the marks file's `marking.texts` (flat [source, text, …]) or a
+ *  Map; null where none is given */
+export function textsOf(texts) {
+  if (texts instanceof Map) return texts
+  if (!Array.isArray(texts)) return null
+  const pairs = texts.length > 0 && texts.every(x => Array.isArray(x))
+  const list = pairs ? texts : Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])
+  return new Map(list.filter(x => x.length === 2 && typeof x[0] === 'string' && typeof x[1] === 'string'))
+}
+
 /**
  * The Instrument of today's marked compile. `paper` live.mjs openPaper's (its bibliography made); `finalPdf` our marked final
  * pass's bytes; `options` the marks file's (`texts`, `inkless`); `log` the marked compile's last pass's log; `pdfjs` { getDocument,
@@ -342,7 +410,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     return { regions: raw.regions, glyphs: raw.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.unseen ? { unseen: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: raw.turned, shapes: raw.shapes, pictures: raw.pictures, figures: raw.figures, unseen: raw.unseen, cut: raw.cut, boxes: raw.boxes, paths: raw.paths, points: raw.points.map(lower), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], boxAt: raw.boxAt, view: [...page.view] }
   })
   const texts = options.texts, inkless = options.inkless ?? null
-  const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
+  const shown = textsOf(texts)
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
@@ -378,7 +446,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   pages.forEach((pg, i) => {
     const G = ownersOf(pg.glyphs.length), X = ownersOf(pg.boxes.length / 4)
     const row = own.glyphs[i] ?? [], brow = own.boxes[i] ?? []
-    const pieceG = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph')
+    const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names })
     const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box')
     const set = (O, j, g, piece) => {
       let m = /^u(\d+)(\.[pl])?$/.exec(g ?? '')

@@ -7,8 +7,10 @@ import {
   classesOf,
   FORCED_BREAK,
   glueOf,
+  glyphPiecesOf,
   placesOf,
   spansOf,
+  textsOf,
 } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 const ph = (src: string) => ({ t: 'ph', src })
@@ -112,5 +114,60 @@ describe('the instrument adapter’s places', () => {
     const icon = [{ points: [{ name: 'p6.0a', glyph: 4, box: 2 }, { name: '6s', glyph: 4, box: 3 }, { name: '6e', glyph: 9, box: 3 }, { name: 'p6.3g', glyph: 9, box: 4 }] }]
     const got = placesOf(icon, 7)
     expect(got.map(x => [x.piece, x.end])).toEqual([['0', false]])
+  })
+})
+
+describe('the texts the marking’s probe showed, as the adapter reads them', () => {
+  // (the box and the lab hand the adapter markedOfPaper's options, whose texts are readInkTexts' [source, text] pairs; the marks
+  // file holds them flat. Read as flat, the pairs were an empty map: no macro's text reached the ownership, and a cell that opens
+  // with a paper's macro (1810.04805v2's `\bertbase (Single)`, MR 5b) kept its macro's ink in no group, its table the original's)
+  it('takes markedOfPaper’s pairs, the marks file’s flat list and a Map alike', () => {
+    const want = new Map([
+      ['\\bertbase', 'BERTBASE'],
+      ['\\natexlab{a}', 'a'],
+    ])
+    expect(textsOf([...want])).toEqual(want)
+    expect(textsOf([...want].flat())).toEqual(want)
+    expect(textsOf(want)).toBe(want)
+    expect(textsOf(undefined)).toBeNull()
+    expect(textsOf([])).toEqual(new Map())
+  })
+})
+
+describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`, before the start point, no point of its own)', () => {
+  // (a cell that opens with a paper's macro: no mark goes before it (a mark before \multicolumn's \omit is refused), so its ink
+  // stands before the cell's start point with no point of its unit open; own.mjs claims it `.p` by the text the probe showed the
+  // macro sets, and its piece is the lead piece that text spells: 1810.04805v2 p7 `\bertbase (Single)`, whose element had no ink)
+  const glyphs = (s: string) => [...s].map((u) => ({ u }))
+  const at = (n: number, end: number) => ({ points: [{ name: 't5s', glyph: n }, { name: 't5e', glyph: end }] })
+  const cell = (...pieces: unknown[]) => {
+    const units: unknown[] = []
+    units[5] = { kind: 'cell', pieces }
+    return units
+  }
+  const texts = new Map([
+    ['\\bertbase', 'BERTBASE'],
+    ['\\cmark', 'OK'],
+  ])
+  it('gives the lead piece the glyphs its text spells, nearest the start first', () => {
+    const units = cell(ph('\\bertbase'), { t: 'text', s: ' (Single)' })
+    const row = [...Array(8).fill('u5.p'), ...Array(8).fill('u5')]
+    const got = glyphPiecesOf({ ...at(8, 16), glyphs: glyphs('BERTBASE(Single)') }, row, { units, texts, names: new Set(['t5s', 't5e']) })
+    expect([...got]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
+  })
+  it('splits a lead of two macros by their texts, a text symbol between them the text’s', () => {
+    const units = cell(ph('\\cmark'), ph('\\#'), ph('\\bertbase'), { t: 'text', s: ' x' })
+    const row = ['u5.p', 'u5.p', 'u5', ...Array(8).fill('u5.p'), 'u5']
+    const got = glyphPiecesOf({ ...at(11, 12), glyphs: glyphs('OK#BERTBASEx') }, row, { units, texts, names: new Set(['t5s', 't5e']) })
+    expect([...got]).toEqual([0, 0, -1, ...Array(8).fill(2), -1])
+  })
+  it('gives none where the text does not spell the run, or the piece has a point of its own', () => {
+    const units = cell(ph('\\bertbase'), { t: 'text', s: ' (Single)' })
+    const row = [...Array(9).fill('u5.p'), 'u5']
+    const pg = { ...at(9, 10), glyphs: glyphs('BERTLARGEx') }
+    expect([...glyphPiecesOf(pg, row, { units, texts, names: new Set() })]).toEqual(Array(10).fill(-1))
+    const own = { points: [{ name: 'p5.0a', glyph: 0 }, ...at(8, 16).points], glyphs: glyphs('BERTBASE(Single)') }
+    const row2 = [...Array(8).fill('u5.p'), ...Array(8).fill('u5')]
+    expect([...glyphPiecesOf(own, row2, { units, texts, names: new Set(['p5.0a']) })]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
   })
 })
