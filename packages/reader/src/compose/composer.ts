@@ -417,7 +417,7 @@ export function createComposer(o: ComposerOptions): Composer {
     counts.lays++
     let page: Page
     try {
-      page = held(o.lay(part, rowsView))
+      page = held(o.lay(part, rowsView), part)
     } catch (e) {
       warnOnce('a page laid', e)
       failed(n)
@@ -445,17 +445,23 @@ export function createComposer(o: ComposerOptions): Composer {
     commit(n, page)
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
-   *  under its translation) */
-  function held(page: Page): Page {
+   *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
+   *  part's links it owns on this page; one moved with its translation would open over the original's text, Codex on #626) */
+  function held(page: Page, part: Part): Page {
     const g = groups
     if (!g?.size) return page
-    let changed = false
+    const unwrapped = new Set<number>()
     const out = page.members.map((m): Laid => {
       if (m.state !== 'laid' || !m.off || g.holds(m.ord, page.page, m.off)) return m
-      changed = true
+      unwrapped.add(m.ord)
       return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { left: m.lit.left, right: m.lit.left, own: [] } }
     })
-    return changed ? { ...page, members: out } : page
+    if (!unwrapped.size) return page
+    const links: Page['links'] = page.links.filter(([, , owner]) => owner === undefined || !unwrapped.has(owner))
+    for (const l of part.links ?? [])
+      if (l.owner && unwrapped.has(l.owner[0]) && (l.page ?? page.page) === page.page)
+        links.push([l.box, l.to, l.owner[0]])
+    return { ...page, members: out, links }
   }
   /** the faces the round's pages wait for, in one wave: the page in the middle of the view first */
   function flushWave() {
@@ -743,7 +749,7 @@ export function createComposer(o: ComposerOptions): Composer {
             askLay(m)
             return
           }
-          const page = part ? held(o.lay(part, rowsView)) : null
+          const page = part ? held(o.lay(part, rowsView), part) : null
           if (!page || !committed(page) || !page.members.some((x) => x.state === 'laid' && x.off)) {
             aheadNothing.add(m)
             continue

@@ -67,8 +67,8 @@ export interface Page {
   wait: { rows: string[]; faces: [FaceId, string][] }
   /** every member with ink on `page`, in ord order */
   members: Laid[]
-  /** the page's links as drawn: moved with their pieces, else at A's boxes */
-  links: [box: Box, to: { url: string } | { dest: string }][]
+  /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one */
+  links: [box: Box, to: { url: string } | { dest: string }, owner?: number][]
 }
 
 /** the rows a lay reads: a row by unit id, and whether no other row will come */

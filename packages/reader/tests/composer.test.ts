@@ -204,7 +204,18 @@ function standInLay(ready: Set<string> = new Set(['sans'])): Lay & { calls: numb
               lit: { left: [[box(y)]], right: [[box(y)]], own: [] },
             }
       }),
-      links: [],
+      // (each of the part's links with its owner: one of a member laid moved over its drawing, 20 points left of A's box, as a
+      // translation moves it; any other at A's box)
+      links: (part.links ?? []).map((l) => {
+        const ord = l.owner?.[0]
+        const laid = ord !== undefined && !!rows.get(`u${ord}`)?.ok
+        const [x0, y0, x1, y1] = l.box
+        return [
+          laid ? [x0 - 20, y0, x1 - 20, y1] : l.box,
+          l.to,
+          ...(ord !== undefined ? [ord] : []),
+        ] as Page['links'][number]
+      }),
     }
   }) as unknown as Lay & { calls: number }
   lay.calls = 0
@@ -398,6 +409,27 @@ describe("what stays the original's", () => {
     const p3 = w.composer.laid(3) as Page
     expect(p3.members.map((m) => m.state)).toEqual(['laid', 'unwrapped'])
     expect(w.settled()(3)).toBe(false)
+  })
+  it('a member left unwrapped keeps its links at A’s boxes, over the original’s text (Codex on #626)', async () => {
+    // (Page.links held the unwrapped member's links where its translation, now not drawn, had moved them: over the original's
+    // text, opening from words they are not on; the laid member's stay moved, a link of no member's at its box)
+    const links: NonNullable<Part['links']> = [
+      { box: [100, 698, 140, 708], to: { url: 'https://example.org/a' }, owner: [30, ''] },
+      { box: [100, 658, 140, 668], to: { url: 'https://example.org/b' }, owner: [31, ''] },
+      { box: [400, 600, 440, 610], to: { dest: 'sec.1' } },
+    ]
+    const part = { ...partOf(3, [member(30, 3, 0), member(31, 3, 1)]), links } as Part
+    const w = world({ pages: new Map([[3, part]]), holds: (ord) => ord !== 31 })
+    w.stack.setNear([3])
+    open(w, rowsOf('de', ['u30', 'u31'], true))
+    await settle()
+    const p3 = w.composer.laid(3) as Page
+    expect(p3.members.map((m) => m.state)).toEqual(['laid', 'unwrapped'])
+    expect(p3.links.map(([b, to]) => [b, to])).toEqual([
+      [[80, 698, 120, 708], { url: 'https://example.org/a' }],
+      [[400, 600, 440, 610], { dest: 'sec.1' }],
+      [[100, 658, 140, 668], { url: 'https://example.org/b' }],
+    ])
   })
 })
 
