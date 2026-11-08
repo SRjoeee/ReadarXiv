@@ -1095,6 +1095,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
+      b[2] - a[3] <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
@@ -1361,6 +1362,10 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** how far after a member's last line the next one's first may start on its baseline and continue its row, in the next one's
+ *  size: today's rowLeadOf SHARED_SEP (need.mjs, 3 em). Past it the two stand apart on one baseline (2609.36054v2 p1's footer
+ *  "page 1 of 14" 4.3 em after a footnote's last line) */
+const SHARED_SEP = 3
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */
