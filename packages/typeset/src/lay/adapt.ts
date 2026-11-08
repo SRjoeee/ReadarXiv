@@ -90,7 +90,8 @@ export const rectOf = (l: Line, m: Placed): Rect => [
   r2(l[3]),
   r2(l[4] + ABOVE * sizeOf(l, m)),
 ]
-/** the label as U.decor reads it: its parts' ink as its characters */
+/** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (today's
+ *  decor read every glyph of the label: a bracket before its name, "(a)", no part names, is its ink's all the same) */
 function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNullable<DecorLabel['chars']> }) | null {
   const lb = m.label
   if (!lb) return null
@@ -104,6 +105,13 @@ function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNul
     yb: ink[5]!,
     size,
   }))
+  const onInk = chars.filter((c) => c.page === lb.ink[0])
+  if (onInk.length) {
+    const first = onInk.reduce((a, c) => (c.x0 < a.x0 ? c : a)),
+      last = onInk.reduce((a, c) => (c.x1 > a.x1 ? c : a))
+    first.x0 = Math.min(first.x0, lb.ink[1])
+    last.x1 = Math.max(last.x1, lb.ink[3])
+  }
   return {
     x1: Math.max(...chars.map((c) => c.x1)),
     text: parts.map(([t]) => t).join(''),
