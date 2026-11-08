@@ -5,7 +5,9 @@
 // layer text (layer-proto/textlayer.mjs, view/text-layer.mjs at baf2083e0):
 //
 // - a crop's text is the original's text under its source, moved to where the crop is drawn (a formula's text where its ink is
-//   drawn); a crop with none under it carries its own plain text;
+//   drawn); a crop with none under it carries its own plain text. A crop cut between two glyphs (a URL the typesetter broke
+//   over lines) takes, in each part, the characters under that part's source, whatever items PDF.js gave the URL as: its text
+//   read once, whole, in order;
 // - a run laid along a direction (a figure text the original sets turned) is placed turned, its matrix its direction, where it
 //   is drawn (the original's own turned text stays out of the layer, as today's);
 // - a kept item the stream sets between two of one member's dropped items (a display the unit keeps, a float set inside its
@@ -125,28 +127,51 @@ function groupOf(run: TextItem[], at: (x: number, y: number) => [number, number]
   return best?.g ?? null
 }
 
-/** the items of a crop's source among the dropped items of its member (each item's middle inside the source's ink), moved by
- *  the crop's map to where it is drawn: x from the crop's place, the source's baseline on the line's */
-function movedOf(dropped: TextItem[], src: Ink, k: number, x: number, y: number): TextItem[] {
+/**
+ * The items of a crop's source among the dropped items of its member (each item's middle inside the source's ink), moved by
+ * the crop's map to where it is drawn: x from the crop's place, the source's baseline on the line's. A part of a crop cut
+ * between two glyphs (`cut`: 1 its left edge, 2 its right; a URL the typesetter broke over lines) takes each item's characters
+ * whose place stands in it, each at the middle of its share of the item's advance (equal advance across the item, as today's
+ * layer places a character: links.mjs pointsOf), with no margin at a cut edge: PDF.js may give the whole URL as one item, whose
+ * middle stands in one part alone, and every character is then one part's, in order
+ */
+function movedOf(dropped: TextItem[], src: Ink, k: number, x: number, y: number, cut = 0): TextItem[] {
   const [, x0, y0, x1, y1, base] = src
+  const lo = x0 - (cut & 1 ? 0 : PAD),
+    hi = x1 + (cut & 2 ? 0 : PAD)
   const out: TextItem[] = []
   for (const it of dropped) {
     if (!it.str.trim()) continue
     const [a, , , d, e, f] = it.transform as number[]
-    const cx = (e as number) + it.width / 2,
-      cy = (f as number) + 0.3 * sizeOf(it)
-    if (cx < x0 - PAD || cx > x1 + PAD || cy < y0 - PAD || cy > y1 + PAD) continue
+    const cy = (f as number) + 0.3 * sizeOf(it)
+    if (cy < y0 - PAD || cy > y1 + PAD) continue
+    let str = it.str,
+      left = e as number,
+      width = it.width
+    if (!cut) {
+      const cx = (e as number) + it.width / 2
+      if (cx < lo || cx > hi) continue
+    } else {
+      const chars = Array.from(it.str)
+      const step = it.width / chars.length
+      const inside = (i: number) => {
+        const c = (e as number) + step * (i + 0.5)
+        return c >= lo && (cut & 2 ? c < hi : c <= hi)
+      }
+      const i0 = chars.findIndex((_, i) => inside(i))
+      if (i0 < 0) continue
+      let i1 = i0 + 1
+      while (i1 < chars.length && inside(i1)) i1++
+      str = chars.slice(i0, i1).join('')
+      left = (e as number) + step * i0
+      width = step * (i1 - i0)
+      if (!str.trim()) continue
+    }
     out.push({
       ...it,
-      transform: [
-        (a as number) * k,
-        0,
-        0,
-        (d as number) * k,
-        x + ((e as number) - x0) * k,
-        y + ((f as number) - base) * k,
-      ],
-      width: it.width * k,
+      str,
+      transform: [(a as number) * k, 0, 0, (d as number) * k, x + (left - x0) * k, y + ((f as number) - base) * k],
+      width: width * k,
       height: it.height * k,
       hasEOL: false,
     })
@@ -214,16 +239,29 @@ export function laidText(
    *  or the original's text a crop moved there) */
   const translatedSet = new Set<TextItem>()
   const src = new Map<TextItem, number>()
+  /** the parts of a crop cut between two glyphs (a URL broken over lines) that open at the cut, and those that end at it */
+  const cutOpens = new Set<TextItem>(),
+    cutEnds = new Set<TextItem>()
   type Line = { y: number; x0: number; x1: number; items: TextItem[] }
   const linesOf = (m: Laid): Line[] => {
     const out: Line[] = []
     for (const [y, x0, x1, items] of m.lines) {
       const xs: TextItem[] = []
       items.forEach((it: Item) => {
+        // (a part of a crop cut between two glyphs, a URL broken over lines: the parts' text read as one, no space where the
+        // line breaks between them)
+        const cut = 'src' in it ? (it.cut ?? 0) : 0
+        const mark = (t: TextItem) => {
+          if (cut & 1) cutOpens.add(t)
+          if (cut & 2) cutEnds.add(t)
+        }
         if ('src' in it) {
-          const moved = it.src[0] === page.page ? movedOf(droppedOf.get(m.ord) ?? [], it.src, it.k, it.x, y) : []
+          const moved = it.src[0] === page.page ? movedOf(droppedOf.get(m.ord) ?? [], it.src, it.k, it.x, y, cut) : []
           if (moved.length) {
-            for (const t of moved) src.set(t, m.ord)
+            for (const t of moved) {
+              src.set(t, m.ord)
+              mark(t)
+            }
             xs.push(...moved)
             return
           }
@@ -257,15 +295,18 @@ export function laidText(
           hasEOL: false,
         }
         translatedSet.add(t)
+        mark(t)
         src.set(t, m.ord)
         xs.push(t)
       })
       if (xs.length) out.push({ y, x0, x1, items: xs })
     }
-    // (a translated paragraph's lines joined as one: a space at a line's end between two words of a script that spaces them)
+    // (a translated paragraph's lines joined as one: a space at a line's end between two words of a script that spaces them;
+    // none inside a crop cut over the two lines, read as one)
     for (let i = 0; i + 1 < out.length; i++) {
       const a = (out[i] as Line).items.at(-1) as TextItem,
         b = (out[i + 1] as Line).items[0] as TextItem
+      if (cutEnds.has(a) && cutOpens.has(b)) continue
       const ca = a.str.at(-1) ?? '',
         cb = b.str[0] ?? ''
       if (!/\s/.test(ca) && !/\s/.test(cb) && ca !== '-' && !noSpace(ca) && !noSpace(cb))

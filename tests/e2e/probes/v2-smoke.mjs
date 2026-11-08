@@ -1,6 +1,7 @@
 // The reader package in the extension (a build of AXT_READER=v2): the PDF page opens, the chrome is drawn, the original's
 // first page is drawn on the left by the package's panes, and the reader's state reaches the chrome; our server answers 503
-// (no v2 stand-in yet), so the layer is refused for a while and the capsule says so. Offline: the sample answered for arXiv,
+// (no v2 stand-in yet), so the layer is refused for a while and the capsule says so; each display shows its pane alone (the
+// reader on <body>, the chrome's sheet reading its marks there). Offline: the sample answered for arXiv,
 // one route table refusing any other request. A reading for the lane, not a gate.
 //   AXT_READER=v2 pnpm build && node tests/e2e/probes/v2-smoke.mjs [--shot <file.png>]
 import { join } from 'node:path'
@@ -55,6 +56,25 @@ const seen = await page.evaluate(() => ({
 }))
 const shot = arg('--shot')
 if (shot) await page.screenshot({ path: shot })
-console.log(JSON.stringify({ drawn, ...seen, errors, console: consoleErrors.slice(0, 6), asked: [...new Set(asked)].slice(0, 12) }, null, 1))
+// one pane alone where the display says so: the reader is opened on <body>, its marks of the view there, and the chrome's sheet
+// lays the panes out by them (L11 third round, gap 1); the original's pane out of the display at no width, so that PDF.js finds
+// it laid out (gap 2: no "offsetParent is not set" in the console)
+const panesIn = async display => {
+  await page.evaluate(d => window.__reader.reader.do({ do: 'set', prefs: { display: d } }), display)
+  const marked = await page.waitForFunction(d => document.body.getAttribute('data-axt-pdf-mode') === d, display, { timeout: 10_000 }).then(() => true, () => false)
+  await page.waitForTimeout(300)
+  const panes = await page.evaluate(() => Object.fromEntries(['left', 'right'].map(side => {
+    const el = document.querySelector(`.pane[data-side="${side}"]`), r = el.getBoundingClientRect(), cs = getComputedStyle(el)
+    return [side, { w: Math.round(r.width), shown: r.width > 0 && cs.visibility === 'visible' && cs.display !== 'none' }]
+  })))
+  return { marked, ...panes }
+}
+const alone = { original: await panesIn('original'), translation: await panesIn('translation'), bilingual: await panesIn('bilingual') }
+const doc = await page.evaluate(() => Math.round(document.querySelector('main.doc').getBoundingClientRect().width))
+const aloneOk = alone.original.marked && alone.original.left.w === doc && !alone.original.right.shown
+  && alone.translation.marked && alone.translation.right.w === doc && !alone.translation.left.shown
+  && alone.bilingual.left.shown && alone.bilingual.right.shown
+const scrollErrors = consoleErrors.filter(t => /offsetParent is not set/.test(t))
+console.log(JSON.stringify({ drawn, ...seen, alone, aloneOk, errors, console: consoleErrors.slice(0, 6), asked: [...new Set(asked)].slice(0, 12) }, null, 1))
 await context.close()
-process.exit(drawn && seen.bar && errors.length === 0 ? 0 : 1)
+process.exit(drawn && seen.bar && errors.length === 0 && aloneOk && scrollErrors.length === 0 ? 0 : 1)

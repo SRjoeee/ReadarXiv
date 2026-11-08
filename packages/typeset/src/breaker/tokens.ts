@@ -144,7 +144,7 @@ export type TokensInput = {
   base: TStyle
   designs: { serif: string; sans: string; mono: string }
   P: TokenRules
-  lead: { parts?: { text: string; st: TStyle }[]; gap?: number } | null
+  lead: { parts?: { text: string; st: TStyle; gap?: number }[]; gap?: number } | null
   faces: { of(st: TStyle, cls: 'cjk' | 'latin'): Face; ownSmallCaps(id: string): boolean }
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean
@@ -155,8 +155,10 @@ export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
 const UNKNOWN = -1
-/** \href's, \hyperref's and \hyperlink's open (L2:2245) */
-const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
+/** a link group's open: \href's, \hyperref's and \hyperlink's (L2:2245), and \url's, which the prepare reads as a link group
+ *  too (locate/ink.ts SPAN_STYLES): its tokens tagged with the group, so that its annotation is paired with its drawing (#626's
+ *  review: a paragraph's \url beside its text lost its link) */
+const LINK_OPEN = /^\\(?:href|hyperref|hyperlink|url)(?![A-Za-z])/
 
 type Designs = TokensInput['designs']
 /** the style commands, each with what it sets (L2:2107 STYLE_CMDS) */
@@ -539,7 +541,16 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   if (lead?.parts?.length) {
-    for (const part of lead.parts) pushText(part.text, { ...base, ...part.st }, { label: true })
+    for (const part of lead.parts) {
+      pushText(part.text, { ...base, ...part.st }, { label: true })
+      // (the glue TeX set after a part another follows on the line: the name's before its joint)
+      const t = tokens.at(-1)
+      if (t && part.gap !== undefined && part.gap > 0) {
+        t.leadGap = 100 * part.gap
+        t.kern = true
+        if (plain) t.kernEm = part.gap
+      }
+    }
     const st = { ...base, ...lead.parts.at(-1)!.st }
     if (lead.gap === undefined) pushText(' ', st)
     else if (tokens.length) {

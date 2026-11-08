@@ -55,8 +55,9 @@ export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
 /** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more): a change to them is a change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2'
+ *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts): a change to them is a
+ *  change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 

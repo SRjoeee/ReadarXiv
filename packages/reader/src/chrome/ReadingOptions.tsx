@@ -18,7 +18,10 @@ import { useReader } from './use-reader.ts'
 const APPEARANCES = ['system', 'light', 'dark'] as const
 const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
 
-export function ReadingOptions({ controller }: { controller: ReaderController }) {
+/** `bare`: the bar where neither side has anything to show (Toolbar.tsx BareBar): no row of a paper's (what leaves the bar in
+ *  a narrow window, the highlight and its colour, what to translate), the appearance, the dimming and the host's own last rows
+ *  kept (today's web ReadingOptions `lost`) */
+export function ReadingOptions({ controller, bare = false }: { controller: ReaderController; bare?: boolean }) {
   // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
   // its place, and the narrow window's download and way back in it are reachable at once
   const { slots, defaults } = useParts()
@@ -38,46 +41,51 @@ export function ReadingOptions({ controller }: { controller: ReaderController })
         <Icon node={SlidersHorizontal} />
       </ToolbarButton>
       <Popover {...pop.popover} role="dialog" label={R.options.name}>
-        {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26): the host's */}
-        {slots.afterOptions?.('options')}
-        {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
-        <div className="row narrow-only">
-          {S.rows.language}
-          <LanguageMenu controller={controller} name="options-language" />
-        </div>
-        {slots.beforeOptions?.('options')}
-        <div className="sep narrow-only" />
-        {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
-        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
-        <label className="row">
-          {S.rows.highlight}
-          <Switch
-            label={S.rows.highlight}
-            checked={prefs.highlight.on}
-            disabled={lock.locked}
-            why={lock.why}
-            onChange={(on) => controller.setPrefs({ highlight: { on } })}
-          />
-        </label>
-        <div className="row">
-          {R.options.color}
-          <span className="flex gap-2">
-            {prefs.bands.map((h) => (
-              <Swatch
-                key={h.id}
-                name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id}
-                color={h.colour || 'var(--axt-green)'}
-                chosen={h.id === prefs.highlight.band}
-                locked={lock.locked}
+        {/* a paper's rows: none in the bare bar's options */}
+        {!bare && (
+          <>
+            {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26): the host's */}
+            {slots.afterOptions?.('options')}
+            {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
+            <div className="row narrow-only">
+              {S.rows.language}
+              <LanguageMenu controller={controller} name="options-language" />
+            </div>
+            {slots.beforeOptions?.('options')}
+            <div className="sep narrow-only" />
+            {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+            <label className="row">
+              {S.rows.highlight}
+              <Switch
+                label={S.rows.highlight}
+                checked={prefs.highlight.on}
+                disabled={lock.locked}
                 why={lock.why}
-                onPick={() => controller.setPrefs({ highlight: { band: h.id } })}
+                onChange={(on) => controller.setPrefs({ highlight: { on } })}
               />
-            ))}
-          </span>
-        </div>
-        <div className="sep" />
-        <ClassToggles controller={controller} prefs={prefs} lock={lock} />
-        <div className="sep" />
+            </label>
+            <div className="row">
+              {R.options.color}
+              <span className="flex gap-2">
+                {prefs.bands.map((h) => (
+                  <Swatch
+                    key={h.id}
+                    name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id}
+                    color={h.colour || 'var(--axt-green)'}
+                    chosen={h.id === prefs.highlight.band}
+                    locked={lock.locked}
+                    why={lock.why}
+                    onPick={() => controller.setPrefs({ highlight: { band: h.id } })}
+                  />
+                ))}
+              </span>
+            </div>
+            <div className="sep" />
+            <ClassToggles controller={controller} prefs={prefs} lock={lock} />
+            <div className="sep" />
+          </>
+        )}
         <div className="row">
           {R.options.appearance}
           <div

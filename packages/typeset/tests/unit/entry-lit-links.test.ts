@@ -5,6 +5,7 @@
 import type { Link, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
+import type { LinkFate } from '../../src/lay/links.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Laid, Metrics, Page, Rows } from '../../src/types.ts'
 
@@ -228,6 +229,9 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(ba[0]).toBeCloseTo(runs.find((it) => it.s === '(Smith ')!.x + 0.5 * f, 6)
     expect(bb[0]).toBeCloseTo(runs.find((it) => it.s === 'Smith ')!.x, 6)
     expect(ba[2]!).toBeLessThanOrEqual(bb[0]!)
+    // (the PDF listing them the other way: searched in their order on A all the same, each over its own occurrence, #626's
+    // review)
+    expect(layPage(part(m, [b, a]), rowsOf([r]), rules, metrics()).links).toEqual(p.links)
   })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
@@ -315,6 +319,28 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
     expect(b[2]).toBeGreaterThan(b[0] + 8 * 0.5 * f)
   })
+  it('lays a link over the member’s text in a \\url group beside other text over that group’s drawing (#626 review)', () => {
+    // (the prepare reads \url as a link group, as \href: its tokens tagged with the group, the annotation paired with it; the
+    // whole tier takes no annotation over part of the paragraph)
+    const m = member({ spans: [['1', { cmd: 'url' }]] })
+    const link: Link = { box: [100, 697, 220, 708], to: { url: 'https://example.org/x' }, owner: [0, ''] }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'https://example.org/x' }] },
+      { t: 'text', s: ' dort, wo es weiter geht.' },
+    ])
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, [link]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    const laid = p.members[0]!
+    expect(laid.state).toBe('laid')
+    expect(fates).toEqual(['pair'])
+    const [b, to] = only(p)
+    expect(to).toEqual({ url: 'https://example.org/x' })
+    // (from the URL's run, after "Siehe ", to past its start)
+    const url = laid.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.startsWith('https'))!
+    expect(b[0]).toBeCloseTo(url.x, 6)
+    expect(b[2]).toBeGreaterThan(url.x)
+  })
   it('lays two \\href groups of one target each over its own translation, one annotation each (#626 review)', () => {
     // (two links to one address, one after the other: one run of one target, two groups drawn; each occurrence its group)
     const m = member({
@@ -369,6 +395,51 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(layPage(part({ ...m, spans: [] }, [link]), rowsOf([plain]), rules, metrics()).links).toEqual([])
     // (its owner not laid: nothing on page 1 either)
     expect(layPage(part(m, [link]), rowsOf([], true), rules, metrics()).links).toEqual([])
+  })
+  it('pairs a member’s \\href groups with its annotations in their order on A, whatever order the PDF lists them in (#626 review)', () => {
+    // (two groups of two addresses; the part keeps the PDF's annotation array's order, which need not be TeX's: listed right to
+    // left, the left group's translation opened the right one's address, Codex's case through layPage)
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href' }],
+        ['3', { cmd: 'href' }],
+      ],
+    })
+    const left = { url: 'https://example.org/left' }
+    const right = { url: 'https://example.org/right' }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    /** the start of each link, by its address */
+    const starts = (links: Link[]) => {
+      const p = layPage(part(m, links), rowsOf([rr]), rules, metrics())
+      const [, x0] = p.members[0]!.lines[0]!
+      const f = p.members[0]!.fit!.size
+      const by = new Map(p.links.map(([b, to]) => ['url' in to ? to.url : '', b[0]] as const))
+      // ("hier" six characters from the line's start, "dort" fifteen: half a size each)
+      return { left: by.get(left.url)! - x0, right: by.get(right.url)! - x0, f, n: p.links.length }
+    }
+    const a = starts([
+      { box: [160, 697, 190, 708], to: right, owner: [0, ''] },
+      { box: [100, 697, 130, 708], to: left, owner: [0, ''] },
+    ])
+    expect(a.n).toBe(2)
+    expect(a.left).toBeCloseTo(6 * 0.5 * a.f, 1)
+    expect(a.right).toBeCloseTo(15 * 0.5 * a.f, 1)
+    // (the left group's link TeX broke over A's two lines, its piece on the second line listed first and the right group's
+    // annotation before both: its two pieces one run of its target, in their order on A, the right group's its own)
+    const b = starts([
+      { box: [150, 685, 180, 696], to: right, owner: [0, ''] },
+      { box: [72, 685, 100, 696], to: left, owner: [0, ''] },
+      { box: [260, 697, 300, 708], to: left, owner: [0, ''] },
+    ])
+    expect(b.n).toBe(2)
+    expect(b.left).toBeCloseTo(6 * 0.5 * b.f, 1)
+    expect(b.right).toBeCloseTo(15 * 0.5 * b.f, 1)
   })
   it('lays a link that holds the member’s every line over its whole drawing (a contents entry), drops one over part of it', () => {
     const entry = member({ kind: 'inkcontents', lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]] })

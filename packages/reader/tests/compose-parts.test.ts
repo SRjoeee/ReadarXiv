@@ -9,7 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
-import { svgOf } from '../src/compose/paint.ts'
+import { CLIP_PAD, cropsOf, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -535,6 +535,98 @@ describe('the laid text layer (§11.11)', () => {
     const strs = (r.content.items as { str?: string }[]).filter((x) => typeof x.str === 'string').map((x) => x.str)
     expect(strs).toEqual(['eins', 'E = mc^2'])
   })
+  describe('a URL the typesetter cut over two lines (its crop in two parts, cut between two glyphs)', () => {
+    // (the original's line at 688 holds the URL from 200 to 320, PDF.js's items `url`; its parts' sources meet at `at`, the head
+    // ending the translation's first line, the tail opening its second)
+    const urlLayer = (url: ReturnType<typeof item>[], at: number, s: [string, string]) => {
+      const m = placed(
+        1,
+        [
+          [700, 50, 330],
+          [688, 50, 330],
+        ],
+        [['e1', [1, 200, 685, 320, 694, 688]]],
+      )
+      const content = contentOf([
+        OC,
+        item('We release the code', 50, 700, 120),
+        item('at', 50, 688, 12),
+        EMC,
+        ...(url.length ? [OC, ...url, EMC] : []),
+        OC,
+        item('.', 320, 688, 3),
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const page: Page = {
+        page: 1,
+        wait: { rows: [], faces: [] },
+        links: [],
+        members: [
+          laid(1, [
+            [
+              700,
+              50,
+              300,
+              [
+                { s: 'Wir veröffentlichen den Code unter ', x: 50, face: 'sans', size: 10 },
+                { s: s[0], x: 300 - (at - 200), src: [1, 200, 685, at, 694, 688], k: 1, piece: 'e1', cut: 2 },
+              ],
+            ],
+            [
+              688,
+              50,
+              300,
+              [
+                { s: s[1], x: 50, src: [1, at, 685, 320, 694, 688], k: 1, piece: 'e1', cut: 1 },
+                { s: '.', x: 50 + 320 - at, face: 'sans', size: 10 },
+              ],
+            ],
+          ]),
+        ],
+      }
+      const r = laidText(content, page, new Map([[1, m]]), facesStub, measure)
+      const texts = (r.content.items as { str?: string; transform?: number[] }[]).filter(
+        (x) => typeof x.str === 'string',
+      )
+      return { r, texts, strs: texts.map((x) => x.str) }
+    }
+    it('reads it once, whole and in order when PDF.js gives it as one item: each part its characters (Codex on #630)', () => {
+      // (the item's middle, 260, under the tail alone: the tail took it whole and the head read its own "https://" again,
+      // "https:// " + "https://example.org/path…")
+      const { r, texts, strs } = urlLayer([item('https://example.org/path/to/it', 200, 688, 120)], 232, [
+        'https://',
+        'example.org/path/to/it',
+      ])
+      expect(strs).toEqual(['Wir veröffentlichen den Code unter ', 'https://', 'example.org/path/to/it', '.', 'Foot'])
+      // (each part where its crop is drawn: the head at the first line's end, the tail at the second's start)
+      expect(texts[1]?.transform?.[4]).toBe(268)
+      expect(texts[2]?.transform?.[4]).toBe(50)
+      // (the URL's parts the original's text, as a whole crop's; the translation the target's)
+      expect(r.translated.map((i) => texts[i]?.str)).toEqual(['Wir veröffentlichen den Code unter ', '.'])
+    })
+    it("reads the page's own characters where its copy text is not the page's (a DOI the macro prefixes, _2 read as ₂)", () => {
+      // (2610.22197v1's \doi copies "10.…" under "https://doi.org/10.…"; 2609.26457v1's copy reads "…11871842₂9" for "_29")
+      const { strs } = urlLayer([item('https://doi.org/10.1007/x_29', 200, 688, 112)], 264, ['10.1007/x₂9', ''])
+      expect(strs).toEqual(['Wir veröffentlichen den Code unter ', 'https://doi.org/', '10.1007/x_29', '.', 'Foot'])
+    })
+    it('splits each of several items at the cut, and with none under it reads each part its own text, joined as one', () => {
+      const { strs } = urlLayer([item('https://exa', 200, 688, 44), item('mple.org/path/to/it', 244, 688, 76)], 232, [
+        'https://',
+        'example.org/path/to/it',
+      ])
+      expect(strs.join('')).toBe('Wir veröffentlichen den Code unter https://example.org/path/to/it.Foot')
+      expect(strs.slice(1, 4)).toEqual(['https://', 'exa', 'mple.org/path/to/it'])
+      const none = urlLayer([], 232, ['https://', 'example.org/path/to/it'])
+      expect(none.strs).toEqual([
+        'Wir veröffentlichen den Code unter ',
+        'https://',
+        'example.org/path/to/it',
+        '.',
+        'Foot',
+      ])
+    })
+  })
   it("merges the page's own abutting items on one baseline at one size, and holds at most TEXT_ITEMS_MAX", () => {
     const page: Page = { page: 1, wait: { rows: [], faces: [] }, links: [], members: [] }
     const r = laidText(
@@ -708,5 +800,35 @@ describe('the page drawn (svgOf)', () => {
     const c = Math.cos(Math.PI / 6),
       sn = Math.sin(Math.PI / 6)
     expect(draw([c, sn]).querySelector('text')!.getAttribute('transform')).toBe('translate(150 392) rotate(-30)')
+  })
+})
+
+describe('a crop cut from its element’s ink between two glyphs (a URL broken where TeX’s url package breaks it)', () => {
+  it('reaches past its ink by the antialiased margin on its own edges, and not at all on a cut one', () => {
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      members: [
+        {
+          ord: 2,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [
+            [700, 72, 120, [{ s: 'https://', x: 72, src: [1, 235, 225, 277.1, 235, 228], k: 1, piece: '9', cut: 2 }]],
+            [688, 72, 200, [{ s: 'github.com', x: 72, src: [1, 277.1, 225, 450, 235, 228], k: 1, piece: '9', cut: 1 }]],
+          ],
+          lit: { left: [], right: [], own: [] },
+        },
+      ],
+      links: [],
+    }
+    const [head, tail] = cropsOf(page)
+    expect(head!.src[0]).toBeCloseTo(235 - CLIP_PAD, 5)
+    expect(head!.src[2]).toBeCloseTo(277.1, 5)
+    expect(head!.at[2]).toBeCloseTo(72 + 277.1 - 235, 5)
+    expect(tail!.src[0]).toBeCloseTo(277.1, 5)
+    expect(tail!.at[0]).toBeCloseTo(72, 5)
+    expect(tail!.src[2]).toBeCloseTo(450 + CLIP_PAD, 5)
   })
 })

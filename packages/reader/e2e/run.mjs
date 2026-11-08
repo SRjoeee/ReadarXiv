@@ -4,6 +4,8 @@
 //
 //   node packages/reader/e2e/run.mjs [--only=<part of a name>|…] [--browser=chromium|webkit|firefox]
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
+//   AXT_LINK=<latency ms>,<KB/s> shapes every page's link in Chromium (the first laid page's measurements: the slices of a CJK
+//   target are its last wait); AXT_DELTA_MS the pace of a corpus paper's rows arriving (one delta of DELTAS a step, 1000 ms)
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -54,6 +56,9 @@ const docs = {},
   rowsObjects = new Map(),
   modes = {},
   v2log = []
+/** each corpus paper's rows in DELTAS objects (`modes[seg]` 'deltas') */
+const DELTAS = 10
+const deltasOf = {}
 /** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
  *  catalog, `recatalog`), its object by path */
 const twins = {},
@@ -98,6 +103,38 @@ for (const [name, f] of Object.entries(fixtures)) {
     const sha = createHash('sha256').update(bytes).digest('hex')
     rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, bytes)
     const n = JSON.parse(bytes.toString('utf8')).rows.length
+    // (a corpus paper: its rows as our server's run writes them, in the units' reading order, every unit but those the paper
+    // keeps (a unit the dump has no row of read as its own text), cut into DELTAS objects: `modes[seg]` 'deltas' gives them one
+    // at a time, a translation under way)
+    if (!rf) {
+      const dumpRows = new Map(JSON.parse(bytes.toString('utf8')).rows.map((r) => [r.id, r]))
+      const plain = (ps) => ps.map((x) => (x.t === 'text' ? x.s : x.content ? plain(x.content) : '')).join('')
+      const all = []
+      for (const u of head.units)
+        for (const x of JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+          if (!x.kept && !all.some((r) => r.id === x.id))
+            all.push(
+              dumpRows.get(x.id) ?? {
+                id: x.id,
+                ok: true,
+                content: [{ t: 'text', s: plain(x.content) || '·' }],
+                by: 'fx',
+              },
+            )
+      const list = []
+      for (let k = 0; k < DELTAS; k++) {
+        const b = Buffer.from(
+          JSON.stringify({
+            format: 1,
+            rows: all.slice(Math.floor((k * all.length) / DELTAS), Math.floor(((k + 1) * all.length) / DELTAS)),
+          }),
+        )
+        const sha = createHash('sha256').update(b).digest('hex')
+        rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, b)
+        list.push({ path: `r/${seg}/${t}/fx/${sha}`, sha256: sha, bytes: b.length })
+      }
+      deltasOf[seg] = { target: t, list, total: all.length }
+    }
     targets[t] = {
       attempt: 1,
       state: 'done',
@@ -219,9 +256,33 @@ const v2Route = {
           rev: 2,
           targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
-      // (a newer catalog once the check says so: the same layer under the twin head)
-      if (m?.kind === 'recatalog' && m.switched)
-        return json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+      // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
+      if (m?.kind === 'deltas') {
+        const ds = deltasOf[d.pv]
+        m.start ??= performance.now()
+        const k = Math.min(ds.list.length, 1 + Math.floor((performance.now() - m.start) / m.every))
+        m.told = Math.max(m.told ?? 0, k)
+        return json(200, {
+          ...d,
+          rev: 1 + k,
+          targets: {
+            [ds.target]: {
+              ...d.targets[ds.target],
+              state: k < ds.list.length ? 'running' : 'done',
+              rows: ds.list.slice(0, k),
+              done: Math.round((k * ds.total) / ds.list.length),
+              total: ds.total,
+            },
+          },
+        })
+      }
+      // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
+      // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
+      // which nothing runs is followed again a minute on, client.ts IDLE_MS)
+      if (m?.kind === 'recatalog')
+        return m.switched
+          ? json(200, { ...d, rev: 3, layer: { ...d.layer, catalog: twins[d.pv] } })
+          : json(200, { ...d, rev: 2, prepare: { ...d.prepare, state: 'running', stage: 'compiling' } })
       return json(200, { ...d, rev: 2 })
     }
     if (url.pathname === '/api/v2/open' && req.method === 'POST') {
@@ -264,11 +325,50 @@ const v2Route = {
     return false
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route] })
+/** our site's static files the reader's own typesetter reads (compose/served.ts): the faces' tables, their slices and the
+ *  hyphenation patterns, where this machine has them (the website's build's, read in place: licensed faces are never copied
+ *  here); none, the checks that need them say so and pass nothing */
+const SITE = {
+  tables:
+    process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static',
+  slices: (
+    process.env.AXT_FACE_SLICES ??
+    '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
+  ).split(':'),
+  hyph: process.env.AXT_HYPH ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
+}
+const siteHas = existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+const siteLog = []
+const siteRoute = {
+  prefix: '/',
+  handle(_req, res, url) {
+    const table = /^\/static-fonts\/([a-z0-9-]+)\.json$/.exec(url.pathname)?.[1]
+    const slice = /^\/static-fonts\/([0-9a-f]{16}\.woff2)$/.exec(url.pathname)?.[1]
+    const hyph = /^\/hyph\/([a-z-]+)\.json$/.exec(url.pathname)?.[1]
+    if (!table && !slice && !hyph) return false
+    siteLog.push(url.pathname + url.search)
+    const file = table
+      ? join(SITE.tables, `${table}.json`)
+      : slice
+        ? SITE.slices.map((d) => join(d, slice)).find((f) => existsSync(f))
+        : join(SITE.hyph, `${hyph}.json`)
+    if (!file || !existsSync(file)) {
+      res.writeHead(404)
+      return res.end()
+    }
+    res.writeHead(200, { 'content-type': slice ? 'font/woff2' : 'application/json' })
+    return res.end(readFileSync(file))
+  },
+}
+const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route, siteRoute] })
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
 const violations = []
+const LINK = (() => {
+  const m = /^(\d+),(\d+)$/.exec(process.env.AXT_LINK ?? '')
+  return m ? { latency: Number(m[1]), bytesPerS: Number(m[2]) * 1024 } : null
+})()
 async function newPage(o = {}) {
   const context = await browser.newContext({
     viewport: o.viewport ?? { width: 1400, height: 900 },
@@ -330,6 +430,16 @@ async function newPage(o = {}) {
     )
       errors.push(m.text())
   })
+  // (AXT_LINK=<latency ms>,<KB/s>: the link shaped by the browser, for the measurements of the first laid page)
+  if (LINK && browserName === 'chromium') {
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: LINK.latency,
+      downloadThroughput: LINK.bytesPerS,
+      uploadThroughput: LINK.bytesPerS,
+    })
+  }
   await page.goto(`${server.origin}/${o.path ?? ''}`)
   return { page, context, errors }
 }
@@ -627,6 +737,45 @@ await check(
   },
 )
 await check(
+  'compose: a crop the typesetter cut over two lines (a URL broken) read by the text layer and its copy once, whole, in order (s1-columns)',
+  async () => {
+    // (the formula "f(x)=x+1" is one item of PDF.js's text, as a URL may be; its crop cut after "f(x)=", the item's middle under
+    // the head, the parts given no copy text of their own (2610.21547v1's URLs have none): each part reads the page's characters
+    // under it, no space where the line breaks between them)
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns', { cut: { piece: '1', share: 5 / 8, text: ['', ''] } }))
+    await laidShown(page, 1)
+    await waitFor(page, () => !!window.__h.panes.right.page(1)?.querySelector('.axt-over .textLayer span'))
+    const text = await page.evaluate(() => window.__h.textOf(1))
+    const spans = await page.evaluate(() =>
+      [...window.__h.panes.right.page(1).querySelectorAll('.axt-over .textLayer span')].map((x) => x.textContent),
+    )
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const count = (s, t) => s.split(t).length - 1
+    const around = (s) => {
+      const i = s.indexOf('f(x)')
+      return i < 0 ? s.slice(0, 120) : s.slice(Math.max(0, i - 30), i + 40)
+    }
+    assert(
+      count(text.text, 'f(x)=') === 1 && count(text.text, 'x+1') === 1 && text.text.includes('f(x)=x+1'),
+      `the layer reads ${JSON.stringify(around(text.text))}`,
+    )
+    const at = spans.indexOf('f(x)=')
+    assert(
+      at >= 0 && spans[at + 1] === 'x+1',
+      `the parts' spans ${JSON.stringify(spans.slice(Math.max(0, at - 1), at + 3))}`,
+    )
+    const copied = text.copied
+    assert(
+      count(copied, 'f(x)=') === 1 && count(copied, 'x+1') === 1 && copied.includes('f(x)=x+1'),
+      `the copy reads ${JSON.stringify(around(text.copied))}`,
+    )
+    return { layer: around(text.text), copied: around(text.copied) }
+  },
+)
+await check(
   'compose: a language switch reuses the composed document, the parts and the place; a unit not laid in the new language has its groups back on (s1-columns)',
   async () => {
     const { page, context, errors } = await newPage()
@@ -912,6 +1061,344 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   return { layer: [...seen] }
 })
 await check(
+  'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'not-opened', prepareMs: 120_000 }
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s1-columns', { host: 'web' }))
+      await waitFor(page, () => window.__h.readers[0].reader.state().layer.s === 'preparing', null, 20_000)
+      const follows = () => v2log.filter((x) => x.what === 'follow' && x.seg === seg).length
+      // (our server polled every 2 s while the paper is prepared)
+      const a = follows()
+      await page.waitForTimeout(4500)
+      const live = follows() - a
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })))
+      const b = follows()
+      await page.waitForTimeout(6000)
+      const away = follows() - b
+      await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+      await page.waitForTimeout(1000)
+      const back = follows() - b - away
+      const drawn = await page.evaluate(() => document.querySelectorAll('canvas').length)
+      // (a reading, not a gate: a real visit away and back, restored from the cache or loaded again as the browser keeps the page;
+      // Playwright's Chromium loaded it again on the runs of 2026-11-07, so the events above are dispatched by hand)
+      await page.evaluate(() => {
+        window.__kept = true
+        addEventListener('pageshow', (e) => {
+          window.__persisted = e.persisted
+        })
+      })
+      await page.goto(`${server.origin}/chrome.html`)
+      await page.goBack()
+      const cached = await page.evaluate(() => ({ kept: !!window.__kept, persisted: window.__persisted ?? null }))
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(live >= 1 && away === 0 && back >= 1 && drawn > 0, JSON.stringify({ live, away, back, drawn }))
+      return { live, away, back, drawn, cached }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+/** a fixture opened with no engine (the reader's own typesetter), laid; what is drawn, the moments, the site's files asked */
+async function typesetLaid(name, target, o = {}) {
+  const from = siteLog.length
+  const { page, context, errors } = await newPage(o)
+  await page.evaluate(([n, t]) => window.__h.reader(n, { host: 'web', typeset: true, target: t }), [name, target])
+  await waitFor(page, () => (window.__h.readers[0].reader.probe().laidPages ?? 0) > 0, null, 60_000)
+  await waitFor(page, () => document.querySelectorAll('.axt-over > svg').length > 0, null, 10_000).catch(() => {})
+  const p = await probe(page)
+  const drawn = await page.evaluate(() => {
+    const svg = [...document.querySelectorAll('.axt-over > svg')]
+    return {
+      overlays: svg.length,
+      words: svg
+        .map((s) => s.textContent ?? '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200),
+      faces: [...document.fonts].filter((f) => f.family.replace(/"/g, '').startsWith('axt-') && f.status === 'loaded')
+        .length,
+    }
+  })
+  return { page, context, errors, p, drawn, asked: () => siteLog.slice(from) }
+}
+await check(
+  "reader: no engine given, the reader's own typesetter: the fixture's pages laid by layPage over our site's faces and patterns, the translation drawn; a toggle lays them again (the coordinator's priority of 2026-11-07)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const { page, context, errors, p, drawn, asked } = await typesetLaid('s1-columns', 'de')
+    // (a toggle: the pages laid again, under the rules that leave what it leaves)
+    const laysBefore = Number(p.lays ?? 0)
+    await page.evaluate(() =>
+      window.__h.readers[0].reader.do({
+        do: 'set',
+        prefs: { classes: { figures: false, tables: true, heads: true, references: true, names: false } },
+      }),
+    )
+    await page.waitForTimeout(1500)
+    const after = await probe(page)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(drawn.overlays > 0 && /[a-zäöüß]{4}/i.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+    assert(
+      asked().includes('/static-fonts/index.json') && asked().some((u) => u.startsWith('/hyph/de')),
+      JSON.stringify(asked()),
+    )
+    assert(
+      Number(after.lays) > laysBefore && Number(after.laidPages) > 0,
+      `the toggle: ${laysBefore} → ${JSON.stringify(after)}`,
+    )
+    return {
+      firstLaidMs: p['at.firstLaid'],
+      leftDrawnMs: p['at.leftDrawn'],
+      laidPages: p.laidPages,
+      faces: drawn.faces,
+      asked: asked().length,
+      lays: [laysBefore, after.lays],
+      words: drawn.words.slice(0, 80),
+    }
+  },
+)
+for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))) {
+  await check(
+    `reader: no engine given, the reader's own typesetter on a corpus paper (${name}, zh): laid, drawn`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const { context, errors, p, drawn, asked } = await typesetLaid(name, 'zh')
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      assert(drawn.overlays > 0 && /\p{Script=Han}/u.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
+      return {
+        firstLaidMs: p['at.firstLaid'],
+        composedOpenMs: p['at.composedOpen'],
+        codeMs: p['at.code'],
+        leftDrawnMs: p['at.leftDrawn'],
+        laidPages: p.laidPages,
+        faces: drawn.faces,
+        asked: asked().length,
+        slicesAsked: asked().filter((u) => u.endsWith('.woff2')).length,
+        words: drawn.words.slice(0, 40),
+      }
+    },
+  )
+  await check(
+    `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const seg = indexOf[name].seg
+      const every = Number(process.env.AXT_DELTA_MS ?? 1000)
+      modes[seg] = { kind: 'deltas', every }
+      const from = siteLog.length
+      const { page, context, errors } = await newPage()
+      try {
+        await page.evaluate(([n]) => window.__h.reader(n, { host: 'web', typeset: true, target: 'zh' }), [name])
+        // (the reader's own moments, and when its rows were complete, read each 50 ms)
+        let rowsAt = null,
+          slicesAtLaid = null
+        for (const until = Date.now() + 120_000; Date.now() < until; ) {
+          const p = await probe(page)
+          if (rowsAt === null && p.rows === 'complete')
+            rowsAt = Math.round(await page.evaluate(() => performance.now()))
+          if (p.laidPages > 0 && slicesAtLaid === null)
+            slicesAtLaid = siteLog.slice(from).filter((u) => u.endsWith('.woff2')).length
+          if (p.laidPages > 0 && rowsAt !== null) break
+          await page.waitForTimeout(50)
+        }
+        const p = await probe(page)
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(p.laidPages > 0, JSON.stringify(p))
+        // (the rows ended and the first page laid before: a page laid only once the run is over is what this holds against.
+        // Not on a shaped link (AXT_LINK), a measurement: there the composed document itself opens about as the rows end,
+        // the harness's PDF.js worker read twice, no-store, at the shaped rate)
+        assert(rowsAt !== null, `the rows never ended: ${JSON.stringify(p)}`)
+        const open = p['at.open']
+        assert(
+          LINK || p['at.firstLaid'] < rowsAt - open,
+          `the first page laid at ${p['at.firstLaid']} ms, once the rows had ended (${rowsAt - open} ms)`,
+        )
+        return {
+          firstLaidMs: p['at.firstLaid'],
+          rowsCompleteMs: rowsAt - open,
+          composedOpenMs: p['at.composedOpen'],
+          slicesAtLaid,
+          deltasTold: modes[seg].told,
+        }
+      } finally {
+        await context.close()
+        delete modes[seg]
+      }
+    },
+  )
+}
+/** the ink of a region of the page as shown: the sum over its device pixels of 1 - luma (Rec. 709), its screenshot decoded in
+ *  the page */
+async function inkIn(page, clip) {
+  const buf = await page.screenshot({ clip })
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const c = new OffscreenCanvas(bmp.width, bmp.height)
+    const x = c.getContext('2d')
+    x.drawImage(bmp, 0, 0)
+    const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+    let ink = 0
+    for (let i = 0; i < d.length; i += 4) ink += 1 - (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255
+    return ink
+  }, buf.toString('base64'))
+}
+/** the ink of laid page 1's overlay lines as drawn, each against the same runs drawn by a canvas's fillText (as PDF.js draws a
+ *  page's text) in their computed faces, sizes and fills at their places: a line's own ink, what the page shows with it alone
+ *  of the overlay's text less what it shows with none. `lines`: the regular expressions of the lines measured (the first line
+ *  each matches), else the six longest lines of eight characters or more drawn upright in no small capitals */
+async function linesInk(page, lines = null) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))
+  })
+  const chosen = await page.evaluate((res) => {
+    const texts = [...document.querySelector('.axt-over > svg').querySelectorAll('text')]
+    const plain = (t) =>
+      !t.hasAttribute('transform') &&
+      [...t.querySelectorAll('tspan')].every((s) => getComputedStyle(s).fontVariantCaps === 'normal')
+    const chars = (t) => [...t.textContent].filter((c) => /\S/u.test(c)).length
+    if (res) return res.map((r) => texts.findIndex((t) => new RegExp(r, 'u').test(t.textContent))).filter((k) => k >= 0)
+    return texts
+      .map((t, k) => [k, chars(t)])
+      .filter(([k, n]) => n >= 8 && plain(texts[k]))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k]) => k)
+  }, lines)
+  const out = []
+  for (const k of chosen) {
+    const clip = await page.evaluate(async (k) => {
+      const t = document.querySelector('.axt-over > svg').querySelectorAll('text')[k]
+      t.scrollIntoView({ block: 'center' })
+      await new Promise((ok) => setTimeout(ok, 300))
+      const r = t.getBoundingClientRect()
+      return {
+        x: Math.floor(r.left) - 2,
+        y: Math.floor(r.top) - 2,
+        width: Math.ceil(r.width) + 4,
+        height: Math.ceil(r.height) + 4,
+      }
+    }, k)
+    // (the overlay's lines shown: none (-1), line k alone, or all again (null))
+    const show = (only) =>
+      page.evaluate((only) => {
+        const texts = document.querySelector('.axt-over > svg').querySelectorAll('text')
+        texts.forEach((t, i) => {
+          t.style.visibility = only === null ? '' : i === only ? 'visible' : 'hidden'
+        })
+      }, only)
+    await show(-1)
+    const none = await inkIn(page, clip)
+    await show(k)
+    const svg = await inkIn(page, clip)
+    await show(null)
+    const canvas = await page.evaluate(
+      ([k, clip]) => {
+        const svg = document.querySelector('.axt-over > svg')
+        const t = svg.querySelectorAll('text')[k]
+        const box = svg.getBoundingClientRect(),
+          u = box.width / svg.viewBox.baseVal.width,
+          d = devicePixelRatio
+        const c = document.createElement('canvas')
+        c.width = Math.round(clip.width * d)
+        c.height = Math.round(clip.height * d)
+        const x = c.getContext('2d', { alpha: false })
+        x.fillStyle = '#fff'
+        x.fillRect(0, 0, c.width, c.height)
+        for (const s of t.querySelectorAll('tspan')) {
+          const cs = getComputedStyle(s)
+          x.font = `${cs.fontStyle} ${cs.fontWeight} ${Number(s.getAttribute('font-size')) * u * d}px ${cs.fontFamily}`
+          x.fillStyle = cs.fill
+          const xs = (s.getAttribute('x') ?? '0').trim().split(/\s+/).map(Number),
+            y = (box.top + Number(s.getAttribute('y')) * u - clip.y) * d
+          const at = (v) => (box.left + v * u - clip.x) * d
+          if (xs.length > 1)
+            for (const [i, ch] of [...s.textContent].entries()) x.fillText(ch, at(xs[i] ?? xs.at(-1)), y)
+          else x.fillText(s.textContent, at(xs[0]), y)
+        }
+        const px = x.getImageData(0, 0, c.width, c.height).data
+        let ink = 0
+        for (let i = 0; i < px.length; i += 4)
+          ink += 1 - (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255
+        return { ink, text: t.textContent.trim().slice(0, 24), fill: getComputedStyle(t.querySelector('tspan')).fill }
+      },
+      [k, clip],
+    )
+    out.push({ text: canvas.text, fill: canvas.fill, svg: Math.round(svg - none), canvas: Math.round(canvas.ink) })
+  }
+  const state = await page.evaluate(() => ({
+    decided: document.querySelector('.axt-reader').getAttribute('data-axt-layer-text'),
+    rendering: getComputedStyle(document.querySelector('.axt-over > svg')).textRendering,
+  }))
+  const sum = (f) => out.reduce((a, l) => a + l[f], 0)
+  return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
+}
+await check(
+  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink: geometricPrecision, or auto where the first laid page's words lay out alike under both (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const out = {}
+    const corpus = Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))
+    for (const [name, target] of [['s1-columns', 'de'], ...corpus.map((n) => [n, 'zh'])]) {
+      const { page, context, errors } = await typesetLaid(name, target, {
+        dpr: 2,
+        viewport: { width: 1600, height: 1000 },
+      })
+      const lines = process.env.AXT_INK_LINES && corpus.includes(name) ? process.env.AXT_INK_LINES.split('|') : null
+      const got = await linesInk(page, lines)
+      if (process.env.AXT_SHOTS) {
+        const clip = await page.evaluate(() => {
+          const svg = document.querySelector('.axt-over > svg')
+          svg.scrollIntoView({ block: 'start' })
+          const r = svg.getBoundingClientRect()
+          return {
+            x: r.x,
+            y: Math.max(0, r.y),
+            width: r.width,
+            height: Math.min(r.height, innerHeight - Math.max(0, r.y)),
+          }
+        })
+        await page.screenshot({ clip, path: join(HERE, '.shots', `${name}-ink-p1.png`) })
+      }
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      out[name] = got
+    }
+    if (process.env.AXT_INK_OUT)
+      (await import('node:fs')).writeFileSync(process.env.AXT_INK_OUT, `${JSON.stringify(out, null, 1)}\n`)
+    for (const [name, got] of Object.entries(out)) {
+      assert(got.lines.length > 0, `${name}: no line measured`)
+      // (the rendering the root says is the one the overlay draws in: auto under the attribute, geometricPrecision without)
+      assert(
+        (got.decided === 'auto') === (got.rendering === 'auto') && /^(auto|geometricprecision)$/.test(got.rendering),
+        `${name}: decided ${got.decided}, drawn in ${got.rendering}`,
+      )
+      // (the canvas's weight: macOS's geometricPrecision drew 0.80 of it; Chromium on Linux within 4 % under either)
+      assert(
+        Math.abs(got.ratio - 1) <= 0.06,
+        `${name}: the overlay's ink ${got.ratio} of the canvas's ${JSON.stringify(got.lines)}`,
+      )
+      assert(
+        got.lines.every((l) => l.fill !== 'rgb(0, 0, 0)'),
+        `${name}: a run of no fill of its own drawn in ${got.lines.map((l) => l.fill)}`,
+      )
+    }
+    return Object.fromEntries(
+      Object.entries(out).map(([n, g]) => [
+        n,
+        { decided: g.decided, rendering: g.rendering, ratio: g.ratio, lines: g.lines.length },
+      ]),
+    )
+  },
+)
+await check(
   "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
   async () => {
     const from = v2log.length
@@ -1141,6 +1628,94 @@ await check(
   },
 )
 await check(
+  'chrome: one pane alone where the display says so, the reader opened on <body> (its marks on its root, none on <html>): the original alone, the translation alone, swapped, a narrow window the translation alone; the pane out of the display laid out still (PDF.js scrolls it), no page error (L11 third round, gaps 1 and 2)',
+  async () => {
+    const { page, context, errors } = await chromeLaid('s1-columns')
+    const look = () =>
+      page.evaluate(
+        () =>
+          new Promise((done) =>
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                const doc = document.querySelector('main.doc').getBoundingClientRect()
+                const pane = (side) => {
+                  const el = document.querySelector(`.pane[data-side="${side}"]`)
+                  const r = el.getBoundingClientRect()
+                  const cs = getComputedStyle(el)
+                  return {
+                    x: Math.round(r.left - doc.left),
+                    w: Math.round(r.width),
+                    shown: r.width > 0 && cs.visibility === 'visible' && cs.display !== 'none',
+                    // (a page of PDF.js's viewer placed: what its scrolls need)
+                    placed: !!el.querySelector('.pdfViewer .page')?.offsetParent,
+                  }
+                }
+                done({
+                  doc: Math.round(doc.width),
+                  html: document.documentElement.getAttribute('data-axt-pdf-mode'),
+                  root: document.body.getAttribute('data-axt-pdf-mode'),
+                  left: pane('left'),
+                  right: pane('right'),
+                })
+              }),
+            ),
+          ),
+      )
+    const shown = (display) =>
+      waitFor(page, (d) => document.body.getAttribute('data-axt-pdf-mode') === d, display).then(look, () => {
+        throw new Error(`never shown: ${display}`)
+      })
+    const both = await look()
+    await page.evaluate(() => window.__c.controller.setDisplay('original'))
+    const original = await shown('original')
+    await page.evaluate(() => window.__c.controller.setDisplay('translation'))
+    const translation = await shown('translation')
+    // (the reader scrolls both of its panes to a page: the one out of the display too)
+    await page.evaluate(() => window.__c.controller.goToPage('right', 2))
+    await page.waitForTimeout(400)
+    await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
+    await shown('bilingual')
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: true }))
+    await waitFor(page, () => document.body.hasAttribute('data-axt-swapped')).catch(() => {
+      throw new Error('never swapped')
+    })
+    const swapped = await look()
+    await page.evaluate(() => window.__c.controller.setPrefs({ swapped: false }))
+    await page.setViewportSize({ width: 700, height: 900 })
+    await waitFor(page, () => document.body.hasAttribute('data-axt-narrow')).catch(() => {
+      throw new Error('never narrow')
+    })
+    const narrow = await look()
+    await page.evaluate(() => window.__c.controller.goToPage('right', 3))
+    await page.waitForTimeout(400)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const half = (p, at, doc) => p.shown && Math.abs(p.w - (doc - 8) / 2) <= 1 && Math.abs(p.x - at) <= 1
+    const whole = (p, doc) => p.shown && Math.abs(p.w - doc) <= 1 && p.x === 0
+    assert(
+      both.html === null &&
+        both.root === 'bilingual' &&
+        half(both.left, 0, both.doc) &&
+        half(both.right, both.doc / 2 + 4, both.doc),
+      `side by side: ${JSON.stringify(both)}`,
+    )
+    assert(whole(original.left, original.doc) && !original.right.shown, `the original: ${JSON.stringify(original)}`)
+    assert(
+      whole(translation.right, translation.doc) &&
+        !translation.left.shown &&
+        translation.left.w === 0 &&
+        translation.left.placed,
+      `the translation: ${JSON.stringify(translation)}`,
+    )
+    assert(swapped.right.x === 0 && swapped.left.x > swapped.right.x, `swapped: ${JSON.stringify(swapped)}`)
+    assert(
+      whole(narrow.right, narrow.doc) && !narrow.left.shown && narrow.left.placed,
+      `a narrow window: ${JSON.stringify(narrow)}`,
+    )
+    return { original: original.left.w, translation: translation.right.w, narrow: narrow.right.w }
+  },
+)
+await check(
   "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
   async () => {
     const look = (page) =>
@@ -1353,6 +1928,75 @@ await check(
       `the extension's: ${JSON.stringify(own.seen)}`,
     )
     return { site: site.seen, own: own.seen }
+  },
+)
+await check(
+  "chrome: the original lost and the translation not to be had now, by the website's rules: its page's bare bar (its way home and the reading options alone), the capsule telling the refusal beside the original's own card; the extension's whole bar, its card, no capsule (L11 third round, gaps 4 and 5)",
+  async () => {
+    const seg = indexOf['s1-columns'].seg
+    modes[seg] = { kind: 'refused' }
+    const look = async (x) => {
+      const { page, context, errors } = await newPage({ path: 'chrome.html' })
+      await page.evaluate((o) => window.__c.open('s1-columns', o), x)
+      await waitFor(
+        page,
+        () => {
+          const s = window.__c.reader?.state()
+          return s?.original.s === 'failed' && s.layer.s === 'refused'
+        },
+        null,
+        20_000,
+      )
+      await page.waitForTimeout(600)
+      const seen = await page.evaluate(() => {
+        const zones = Object.fromEntries(
+          [...document.querySelectorAll('header.bar > [data-zone]')].map((z) => [
+            z.dataset.zone,
+            [...z.querySelectorAll('[data-host], button, [role="radiogroup"]')]
+              .filter((el) => !el.closest('[popover]'))
+              .map((el) => el.dataset.host ?? el.getAttribute('aria-label')),
+          ]),
+        )
+        const capsule = document.querySelector('.capsule:not([data-out])')
+        return {
+          zones,
+          line: !!document.querySelector('.progress-line'),
+          capsule: capsule && {
+            kind: capsule.getAttribute('data-kind'),
+            said: capsule.querySelector('.sr-only')?.textContent ?? capsule.textContent,
+          },
+          left: !!document.querySelector('.pane[data-side="left"] .card a'),
+          right: !!document.querySelector('.pane[data-side="right"] .card button'),
+        }
+      })
+      await context.close()
+      return { seen, errors: errors.filter((e) => !/status of (503|429)/.test(e)) }
+    }
+    try {
+      const site = await look({ site: true, slots: true, original: 'broken' })
+      const own = await look({ words: true, slots: true, original: 'broken' })
+      assert(!site.errors.length && !own.errors.length, [...site.errors, ...own.errors].join('; '))
+      const en = { options: 'Reading options', zoom: 'Zoom in' }
+      assert(
+        JSON.stringify(site.seen.zones) === JSON.stringify({ lead: ['home'], centre: [], trail: [en.options] }) &&
+          !site.seen.line &&
+          site.seen.left &&
+          site.seen.capsule?.kind === 'notNow' &&
+          /^Busy/.test(site.seen.capsule.said),
+        `the website's: ${JSON.stringify(site.seen)}`,
+      )
+      assert(
+        own.seen.zones.lead?.includes('home') &&
+          own.seen.zones.trail?.includes(en.zoom) &&
+          own.seen.line &&
+          own.seen.right &&
+          own.seen.capsule === null,
+        `the extension's: ${JSON.stringify(own.seen)}`,
+      )
+      return { site: site.seen, own: { capsule: own.seen.capsule, trail: own.seen.zones.trail?.length } }
+    } finally {
+      delete modes[seg]
+    }
   },
 )
 await check(
@@ -2679,23 +3323,29 @@ await check(
 )
 
 await check(
-  "port: a laid page's text layer paints nothing, one copy for find and assistive technology, the paper's language with the translation's spans the target's, its cost; its commit writes nothing on the root (B-386, B-398, B-400, B-407, A-333, B-023)",
+  "port: a laid page's text layer paints nothing, one copy for find and assistive technology, the paper's language with the translation's spans the target's, its cost; its commit writes nothing on the root but the overlay's text rendering, once, before any drawing is in place (B-386, B-398, B-400, B-407, A-333, B-023)",
   async () => {
     const { page, context, errors } = await newPage({ dpr: 2 })
     await page.evaluate((u) => window.__h.open(u), S1)
     await page.evaluate(() => {
       window.__h.rootWrites = 0
-      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.getElementById('root'), {
-        attributes: true,
-      })
-      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.documentElement, {
-        attributes: true,
-      })
+      // (the text rendering's decision, compose/text-rendering.ts: each write, whether an overlay was in place when it was made;
+      // a write after one would restyle a page laid out already, B-023)
+      window.__h.textWrites = []
+      const seen = (rs) => {
+        for (const r of rs)
+          if (r.attributeName === 'data-axt-layer-text')
+            window.__h.textWrites.push(!!document.querySelector('.axt-pane.right .axt-over'))
+          else window.__h.rootWrites++
+      }
+      new MutationObserver(seen).observe(document.getElementById('root'), { attributes: true })
+      new MutationObserver(seen).observe(document.documentElement, { attributes: true })
       return 0
     })
     await page.evaluate(() => window.__h.layer('s1-columns'))
     await laidShown(page, 1)
     const writes = await page.evaluate(() => window.__h.rootWrites)
+    const textWrites = await page.evaluate(() => window.__h.textWrites)
     await page.waitForTimeout(400)
     const slot = page.locator('.axt-pane.right .axt-slot[data-page-number="1"] > .axt-slot-view')
     const a = await slot.screenshot({ animations: 'disabled' })
@@ -2731,13 +3381,17 @@ await check(
     await context.close()
     assert(!errors.length, errors.join('; '))
     assert(writes === 0, `the commit wrote ${writes} attributes on the root`)
+    assert(
+      textWrites.length <= 1 && textWrites.every((placed) => !placed),
+      `the text rendering written ${JSON.stringify(textWrites)} (true: with a drawing in place)`,
+    )
     assert(a.equals(b), 'the text layer changed the paint')
     assert(r.lang === 'en' && r.translated > 0, `langs ${JSON.stringify(r)}`)
     assert(r.svgHidden === 'true' && r.svgSelect === 'none' && r.found && r.at, `one copy ${JSON.stringify(r)}`)
     const times = tree.split(r.word).length - 1
     assert(times === 1, `the word "${r.word}" ${times} times in the accessibility tree`)
     assert(r.nodes <= 2000, `nodes ${r.nodes}`)
-    return { nodes: r.nodes, textMs: Math.round(r.textMs * 10) / 10 }
+    return { nodes: r.nodes, textMs: Math.round(r.textMs * 10) / 10, textWrites: textWrites.length }
   },
 )
 

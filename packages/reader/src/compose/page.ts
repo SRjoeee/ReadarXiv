@@ -23,8 +23,9 @@ export type Item =
       rise?: number
       dir?: [ux: number, uy: number]
     }
-  /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter') */
-  | { s: string; x: number; src: Ink; k: number; piece: string }
+  /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter'); `cut`
+   *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
 
 export type Why =
   | 'unlocated'
@@ -71,10 +72,12 @@ export interface Page {
   links: [box: Box, to: { url: string } | { dest: string }][]
 }
 
-/** the rows a lay reads: a row by unit id, and whether no other row will come */
+/** the rows a lay reads: a row by unit id, and whether no other row will come; `kept`, a unit the paper keeps as it is, whose
+ *  row never comes (none waited for) */
 export interface Rows {
   get(id: string): Row | undefined
   readonly done: boolean
+  kept?(id: string): boolean
 }
 
 /** the call that lays a page (the typesetter's layPage with its rules and metrics bound) */

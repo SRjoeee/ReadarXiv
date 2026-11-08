@@ -37,8 +37,9 @@ interface Options {
   words?: boolean
   /** the host's rule for the narrow window (none: the extension's) */
   narrow?: 'told' | 'shown'
-  /** the website's rules for the states (L11's second round): its signs, its retry at its time, the original alone over a
-   *  refusal for now, the sync greyed until the sides can scroll together (none: the extension's) */
+  /** the website's rules for the states (L11's second and third rounds): its signs, its retry at its time, the original alone over
+   *  a refusal for now, the sync greyed until the sides can scroll together, the bare bar where neither side has anything to show
+   *  (none: the extension's) */
   site?: boolean
   /** where the original is read: our copy (the default), or an address our server answers 503 (the original lost) */
   original?: 'ours' | 'broken'
@@ -232,6 +233,8 @@ const c = {
             retry: 'when-due' as const,
             refusal: 'original' as const,
             sync: 'located' as const,
+            // (its page's bar where neither side has anything to show)
+            bar: 'bare' as const,
             // (its store page's origin, which its HTML link leads to)
             linkOrigins: ['https://example.org'],
           }

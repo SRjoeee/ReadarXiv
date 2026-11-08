@@ -116,9 +116,12 @@ export function cropsOf(
         if (!isCrop(it)) continue
         const [, x0, y0, x1, y1, base] = it.src
         const p = CLIP_PAD
+        // (an edge cut between two glyphs of its element, a URL broken: no margin, the next glyph's ink a fraction of a point off)
+        const pl = (it.cut ?? 0) & 1 ? 0 : p,
+          pr = (it.cut ?? 0) & 2 ? 0 : p
         out.push({
-          src: [x0 - p, y0 - p, x1 + p, y1 + p],
-          at: [it.x - p * it.k, y - (base - y0 + p) * it.k, it.x + (x1 - x0 + p) * it.k, y + (y1 - base + p) * it.k],
+          src: [x0 - pl, y0 - p, x1 + pr, y1 + p],
+          at: [it.x - pl * it.k, y - (base - y0 + p) * it.k, it.x + (x1 - x0 + pr) * it.k, y + (y1 - base + p) * it.k],
           piece: it.piece,
           ord: m.ord,
         })

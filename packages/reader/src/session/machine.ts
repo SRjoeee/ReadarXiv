@@ -129,7 +129,8 @@ export type OriginalRegion =
 export type StopWhy = 'busy' | 'limit' | 'unreachable'
 export type LinkRegion =
   | { s: 'off' }
-  /** `lost`: its stream ended or broke and is asked again, nothing heard since (the website's "reconnecting") */
+  /** `lost`: its stream broke, fell silent or ended while work runs, and is asked again, nothing heard since (the website's
+   *  "reconnecting"); a stream our server ended after a document in which nothing runs is not lost (client.ts follow) */
   | { s: 'on'; t: Ticket; target: string | null; heard: boolean; lost?: boolean }
   /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
@@ -162,8 +163,15 @@ export type RowsRegion =
       retryAt: number | null
       timer: Ticket | null
     }
-/** arXiv's HTML version of the paper, asked once a visit: not yet, under way, or its address (null: arXiv has none) */
-export type HtmlRegion = { s: 'unknown' } | { s: 'asking'; t: Ticket } | { s: 'known'; url: string | null }
+/** arXiv's HTML version of the paper, asked once a visit and again where our server's word on it changes: not yet, under way
+ *  (the answer before kept meanwhile, where there was one), or its address (null: arXiv has none). `said`: our server's word the
+ *  ask was made on (its document's `prepare.html`; null where it said none), which the answer is taken from first */
+export type HtmlRegion =
+  | { s: 'unknown' }
+  | { s: 'asking'; t: Ticket; said: boolean | null; url?: string | null }
+  | { s: 'known'; url: string | null; said: boolean | null }
+/** our server's word on arXiv's HTML version of the paper, where its document gives one */
+const htmlSaid = (d: Doc | null): boolean | null => (typeof d?.prepare.html === 'boolean' ? d.prepare.html : null)
 
 export interface State {
   paper: PaperRef
@@ -175,6 +183,9 @@ export interface State {
   now: number
   visible: boolean
   online: boolean
+  /** the page put away (a `pagehide` into the back-forward cache) until it is shown again: our server neither followed nor asked,
+   *  no timer live; the original's reading, the panes, the rows and the layer kept as they are */
+  away: boolean
   engaged: boolean
   gate: { open: boolean; timer: Ticket | null }
   prefs: {
@@ -211,6 +222,8 @@ export interface State {
 export type Input =
   | { i: 'env.visible'; on: boolean }
   | { i: 'env.online'; on: boolean }
+  /** the page put away into the back-forward cache, or shown from it again */
+  | { i: 'env.away'; on: boolean }
   | { i: 'time'; t: Ticket; now: number }
   | { i: 'prefs.read'; value: Prefs | null }
   | { i: 'prefs.landed'; value: Prefs }
@@ -294,6 +307,9 @@ export function holdOf(s: State): 'paper' | 'target' | null {
 }
 /** the display shown: the one chosen, the original where it is held (the paper's, the language's, or the host's for now) */
 export const displayOf = (s: State): Display => (holdOf(s) || s.held ? 'original' : chosenOf(s))
+/** whether a composed translation is to be shown: the display shows the translation and the reader sets the target (what is
+ *  read ahead for laying it waits on this: a visit that shows the original asks none of it) */
+export const translationShown = (s: State): boolean => displayOf(s) !== 'original' && supported(s, targetOf(s))
 /** a 429's wait as the reader waits it: our server's, at least a second, at most ten minutes */
 export const waitOf = (ms: number | null | undefined): number =>
   Math.min(WAIT_MAX_MS, Math.max(WAIT_MIN_MS, typeof ms === 'number' && Number.isFinite(ms) ? ms : WAIT_MIN_MS))
@@ -309,6 +325,7 @@ export function init(o: Init): State {
     now: o.now,
     visible: o.visible,
     online: o.online,
+    away: false,
     engaged: false,
     gate: { open: false, timer: null },
     prefs: { s: 'reading', value: o.defaults, chosen: [], refused: 0, timer: null },
@@ -430,6 +447,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
   switch (x.i) {
     case 'env.visible':
       s.visible = x.on
+      break
+    case 'env.away':
+      s.away = x.on
       break
     case 'env.online':
       s.online = x.on
@@ -617,7 +637,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       if (!s.title && x.title) s.title = x.title
       break
     case 'html.answered':
-      if (s.html.s === 'asking' && x.t === s.html.t) s.html = { s: 'known', url: x.url }
+      if (s.html.s === 'asking' && x.t === s.html.t) s.html = { s: 'known', url: x.url, said: s.html.said }
       break
     case 'panes.drawn':
       s.panes = { ...s.panes, drawn: true }
@@ -707,7 +727,10 @@ export function settle(s0: State): State {
   const target = targetOf(s)
   const sets = supported(s, target)
   // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, no open under way, the look not
-  // stopped, and the layer still wanted of our server (rows made here: nothing more once the layer is ready)
+  // stopped, and the layer still wanted of our server (rows made here: nothing more once the layer is ready); none while the page is
+  // put away (the follow let go, an open under way given back, to be asked again once it is shown)
+  if (s.away && s.layer.s === 'none' && s.layer.asked && s.layer.asked !== 'want' && s.layer.asked !== 'done')
+    s.layer = { s: 'none', asked: 'want' }
   const opening = s.layer.s === 'none' && !!s.layer.asked && s.layer.asked !== 'done'
   // (offline with no layer: out of reach, as every ask of today's failed at once)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
@@ -716,6 +739,7 @@ export function settle(s0: State): State {
     s.engaged &&
     s.online &&
     s.visible &&
+    !s.away &&
     sets &&
     s.layer.s !== 'refused' &&
     !opening &&
@@ -734,6 +758,7 @@ export function settle(s0: State): State {
     s.engaged &&
     s.online &&
     s.visible &&
+    !s.away &&
     sets &&
     s.link.s !== 'stopped'
   )
@@ -771,9 +796,13 @@ export function settle(s0: State): State {
   }
   if (s.rows.s === 'arriving' && (!s.engaged || !units.length || lasting)) s.rows = { s: 'none', target: s.rows.target }
   if (s.rows.s === 'failed' && s.rows.retryAt !== null && !s.rows.timer) s.rows = { ...s.rows, timer: take('timer') }
-  // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit
+  // 8. arXiv's HTML version, once the bilingual one cannot be had (now or for the paper, or in the language): once a visit, and
+  // again where our server's word on it changes (a refusal for now that said nothing, then a lasting one saying arXiv has it)
+  const said = htmlSaid(s.doc)
   if (s.html.s === 'unknown' && s.engaged && (s.layer.s === 'refused' || s.link.s === 'stopped' || holdOf(s)))
-    s.html = { s: 'asking', t: take('html') }
+    s.html = { s: 'asking', t: take('html'), said }
+  else if (s.html.s !== 'unknown' && s.html.said !== said)
+    s.html = { s: 'asking', t: take('html'), said, ...(s.html.url !== undefined ? { url: s.html.url } : {}) }
   return s
 }
 
@@ -820,6 +849,8 @@ export function resources(s: State): Map<Ticket, Spec> {
     out.set(s.rows.t, { slot: 'rows', target: s.rows.target, from: s.here ? 'here' : 'server', units: unitsOf(s) })
   if (s.rows.s === 'failed' && s.rows.timer) out.set(s.rows.timer, { slot: 'timer', at: s.rows.retryAt ?? s.now })
   if (s.html.s === 'asking') out.set(s.html.t, { slot: 'html' })
+  // (put away: no timer live; each comes back with the page, its time kept, one due meanwhile told at once)
+  if (s.away) for (const [t, x] of out) if (x.slot === 'timer') out.delete(t)
   return out
 }
 

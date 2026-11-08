@@ -4,14 +4,17 @@
 // out at the length it reached. Decorative: the capsule says in words what is under way, in the status region
 import { useRef } from 'react'
 import type { ReaderController } from './model.ts'
-import { lineOf } from './status.ts'
+import { useParts } from './parts.tsx'
+import { heldOf, lineOf } from './status.ts'
 import { useReader } from './use-reader.ts'
 
 /** a stage just begun still shows, as a sliver */
 const START = 0.02
 
 export function ProgressLine({ controller }: { controller: ReaderController }) {
-  const line = useReader(controller, lineOf)
+  // (the original held by the host's rules while the paper is made: its load, as the website's page draws it)
+  const { narrow, refusal } = useParts()
+  const line = useReader(controller, (s) => lineOf(s, heldOf(s, { narrow, refusal })))
   // the length it leaves at: the longest it had while on, so that it never runs back within a process (a run again
   // counts its paragraphs from what it has); a process begun after the line had left — a translation asked for once the
   // original was read — is a line of its own (key), from its start, rather than the last one shrinking back

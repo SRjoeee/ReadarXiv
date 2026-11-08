@@ -297,7 +297,10 @@ function readingsOf(
       ? { fam: el.style.role, bold: !!el.style.bold, italic: !!el.style.slant }
       : null
     const literal = !!el?.literal
-    const drawn = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
+    const drawn =
+      drawn0?.mode === 'crop' && !drawn0.parts && el?.breaks?.length ? { ...drawn0, breaks: el.breaks } : drawn0
     // (its rendering without its own brackets, where it stands in them with a letter or a digit inside: unbracketed L2:1365)
     let inner: ElementReading['inner'] = null
     if (

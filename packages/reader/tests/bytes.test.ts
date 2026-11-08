@@ -76,6 +76,70 @@ describe('the byte store and the ranged source', () => {
     expect(most).toBeLessThanOrEqual(CHUNKS_IN_FLIGHT)
     // (40 chunks digested and a task's turn an ask: about a second alone, past vitest's 5 s in a whole run on a loaded machine)
   }, 30_000)
+  it("joins the reads made before the object's length is known on the first one's ask: a file shorter than a chunk, a paper longer (L11 third round, gap 6)", async () => {
+    // (the reader's own first read and PDF.js's, both out before the first answer: the website's gateway grants 16 file requests a
+    // 33.6 s window, and a file shorter than one chunk was refused as other bytes than asked)
+    const SMALL = bytesOf(1800, 5)
+    for (const bytes of [SMALL, A]) {
+      for (const store of [chunkStore(), null]) {
+        const s = rangedServer(new Map([['/api/v2/o/arxiv/x.pdf', { bytes, etag: '"a1"' }]]))
+        const refused: string[] = []
+        const src = own(s.fetch, { store, refused: (e: RangeRefusal) => refused.push(e.kind) })
+        const [a, b] = await Promise.all([src.read(0, CHUNK), src.read(0, CHUNK)])
+        const head = bytes.slice(0, Math.min(CHUNK, bytes.length))
+        expect([a, b]).toEqual([head, head])
+        expect([s.asks.length, refused, src.refusal]).toEqual([1, [], null])
+      }
+    }
+    // (a read made once the first answer's head told the length, its body still coming: joined too)
+    let send: () => void = () => {}
+    const sent = new Promise<void>((r) => {
+      send = r
+    })
+    const base = rangedServer(objects())
+    const streaming: typeof base.fetch = async (u, i) => {
+      const r = await base.fetch(u, i)
+      const body = new Uint8Array(await r.arrayBuffer())
+      const stream = new ReadableStream<Uint8Array>({
+        async start(c) {
+          await sent
+          c.enqueue(body)
+          c.close()
+        },
+      })
+      return new Response(stream, { status: r.status, headers: r.headers })
+    }
+    const mid = own(streaming)
+    const one = mid.read(0, CHUNK)
+    await flush()
+    expect(mid.bound?.total).toBe(A.length)
+    const two = mid.read(0, CHUNK)
+    send()
+    expect([await one, await two, base.asks.length]).toEqual([A.slice(0, CHUNK), A.slice(0, CHUNK), 1])
+    // (another range read before the length is known: asked once it is, as any other)
+    const s = rangedServer(objects())
+    const src = own(s.fetch)
+    const [a, b] = await Promise.all([src.read(0, CHUNK), src.read(CHUNK, 2 * CHUNK)])
+    expect([a, b]).toEqual([A.slice(0, CHUNK), A.slice(CHUNK, 2 * CHUNK)])
+    expect(s.asks.map((x) => x.range[0] / CHUNK)).toEqual([0, 1])
+  })
+  it("holds every answer of a read made before the object's length was known to that length: its first answer stalled after its head, asked again", async () => {
+    // (the head of the first answer told the length; the read asked again past the end of a file shorter than a chunk, and its
+    // answer, the whole file, was refused as other bytes than asked)
+    const SMALL = bytesOf(1800, 5)
+    const timers = manualTimers()
+    let n = 0
+    const s = rangedServer(new Map([['/api/v2/o/arxiv/x.pdf', { bytes: SMALL, etag: '"a1"' }]]), () =>
+      n++ === 0 ? { kind: 'silent' } : null,
+    )
+    const src = own(s.fetch, { timers })
+    const read = src.read(0, CHUNK)
+    await flush()
+    await flush()
+    timers.advance(STALL_MS)
+    expect(await read).toEqual(SMALL)
+    expect([s.asks.length, src.refusal]).toEqual([2, null])
+  })
   it('lets the least recently read chunks go past its bound', async () => {
     const store = chunkStore(2 * CHUNK)
     const s = rangedServer(objects())

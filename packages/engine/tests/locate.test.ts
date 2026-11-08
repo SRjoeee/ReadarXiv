@@ -107,6 +107,60 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
+    // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two
+    // columns, the head's line in the left half, its paragraph's first line over both; the columns as the names' binding
+    // reads them, a line over both of either)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Acknowledgements', x: 108, y: 700 },
+          { text: 'We are grateful to Nal Kalchbrenner and Stephan', x: 214, y: 700 },
+          { text: 'Gouws for their fruitful comments and corrections and', x: 108, y: 688 },
+          { text: 'inspiration.', x: 108, y: 676 },
+          ...cells,
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('heading', 'Acknowledgements'),
+      unitOf(
+        'para',
+        'We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments and corrections and inspiration.',
+      ),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const own = [0, 1, 1, 1, ...cells.map((_, k) => 2 + k)]
+    const L = locate(instrumentOf(B2, units2, [own]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows[0]).toEqual([0, 1])
+    expect(L.members[1]!.join?.[0]).toBeCloseTo(214 - (108 + 16 * 6), 5)
+  })
+  it('keeps apart two members a tabular row sets side by side, one of them over the page middle (1706.03762v7 p1)', () => {
+    // (the author block's three columns of names on one baseline, the middle one over the page's middle: no run-in head, two
+    // boxes TeX set in one row, each its own flow)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [{ text: 'Ashish Vaswani', x: 120, y: 700 }, { text: 'Noam Shazeer', x: 280, y: 700 }, ...cells],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Ashish Vaswani'),
+      unitOf('author', 'Noam Shazeer'),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 1, ...cells.map((_, k) => 2 + k)]]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
@@ -252,6 +306,23 @@ describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', (
     ].find((x) => x.kind === 'part')!
     return read('part', o.bytes, o.digest)
   }
+  it('states the paper’s title and its front matter on the part, from the source’s units', () => {
+    // (2303.11366v4 p1's title, a heading-kind unit: the typesetter keeps it at its top, where a section heading set in
+    // fewer lines stands on its last lines, X.lastLines)
+    const B2 = docOf([{ lines: ['Reflexion: Language Agents', 'Noah Shinn', '1 Introduction'] }])
+    const units2 = [
+      { ...unitOf('heading', 'Reflexion: Language Agents'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Noah Shinn'), front: true as const },
+      unitOf('heading', '1 Introduction'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 1, 2]])
+    const flat = partOf(ins2, locate(ins2, B2, align(B2, B2))).flows.flat()
+    expect(flat.map((m) => [m.title ?? 0, m.front ?? 0])).toEqual([
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ])
+  })
   it('states the unit a name TeX set right before on its line leads: the name bound, before it in its flow', () => {
     // (amsthm's "Proof." on its paragraph's first row: the name, the paragraph's label "." (the joint), its text; the part stated
     // no relation, so the entry read one off any member to the right on the baseline)
@@ -284,6 +355,45 @@ describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', (
     // (the name's glyphs its lead's, not ink beside its first line: no PINNED by them, its room beside not stopped at them)
     expect(flow[1]!.lines[0]![9] & 2).toBe(0)
     expect(flow[1]!.room.side?.[0] ?? 0).toBeLessThan(72.01)
+  })
+  it('binds a name that shares its line with another name, the other kept in its own flow (Devin on #624)', () => {
+    // (two names on one line, "Appendix" and "Proof", the second leading its theorem: binding it spliced out the whole flow
+    // it was in, and the first was in no flow of the part. Every member stands in one flow, once)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Appendix', y: 700 },
+          { text: 'Proof', x: 126, y: 700 },
+          { text: '.', x: 156, y: 700 },
+          { text: 'The claim holds', x: 166, y: 700 },
+          { text: 'on the next line', y: 688 },
+        ],
+      },
+    ])
+    const units = [
+      { ...unitOf('name', 'Appendix'), name: 'appendix' },
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+      unitOf('theorem', '. The claim holds on the next line'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 2, 2]], [[ROLE.name, ROLE.name, ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const proof = L.members.find((m) => m.kind === 'name' && m.name === 'proof')!
+    const appendix = L.members.find((m) => m.kind === 'name' && m.name === 'appendix')!
+    const para = L.members.find((m) => m.kind === 'theorem')!
+    const all = L.flows.flat()
+    expect(all.filter((o) => o === appendix.ord).length).toBe(1)
+    expect(all.filter((o) => o === proof.ord).length).toBe(1)
+    expect(all.length).toBe(new Set(all).size)
+    const flow = L.flows.find((f) => f.includes(para.ord))!
+    expect(flow.slice(flow.indexOf(proof.ord))).toEqual([proof.ord, para.ord])
+    // (no size tie names a member twice, nor the bound name with the members it left)
+    for (const t of L.ties) if (t.rule === 'size') expect(t.ords.length).toBe(new Set(t.ords).size)
+    expect(
+      partOf(ins, L)
+        .flows.flat()
+        .map((m) => m.ord)
+        .sort(),
+    ).toEqual(L.members.map((m) => m.ord).sort())
   })
   it('leads no unit across the columns: a name whose next glyph in the stream is its column’s next line', () => {
     // (Devin on #623: a left column's "Abstract" at 72-120 and the right column's paragraph on its baseline, 700: the entry took
