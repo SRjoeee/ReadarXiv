@@ -69,7 +69,17 @@ const upright = (it: TextItem, c: TextContent) => {
   const style = (c.styles as Record<string, { vertical?: boolean }>)[it.fontName]
   return b === 0 && cc === 0 && (a as number) > 0 && (d as number) > 0 && !style?.vertical
 }
-const sizeOf = (it: TextItem) => Math.abs((it.transform[3] as number) || (it.transform[0] as number)) || 1
+/** an item's size: the height of its matrix, across its own direction (a turned item's too: [0, s, −s, 0] is of size s) */
+const sizeOf = (it: TextItem) => {
+  const [a, b, c, d] = it.transform as number[]
+  return Math.hypot(c as number, d as number) || Math.hypot(a as number, b as number) || 1
+}
+/** an item's direction on the page: its matrix's first column, a unit vector */
+const dirOf = (it: TextItem): [number, number] => {
+  const [a, b] = it.transform as number[]
+  const s = Math.hypot(a as number, b as number) || 1
+  return [(a as number) / s, (b as number) / s]
+}
 /** the band of the page's height an index of its boxes is cut in, PDF units */
 const BAND = 16
 /** where an item stands: the middle of its advance along its own direction, on its baseline (a turned figure word's too) */
@@ -406,7 +416,10 @@ function withStr(
   return t
 }
 /** between two sources (the original's and a translation's), a line's end where they stand on two lines, a space where they
- *  stand apart on one; within a source its own (PDF.js's hasEOL; a translated paragraph's lines joined as one) */
+ *  stand apart on one; within a source its own (PDF.js's hasEOL; a translated paragraph's lines joined as one). Read in the
+ *  first's own direction (a turned figure word's: Codex on #632, two quarter-turned labels whose origins share a page y read
+ *  as one line, no space between): the second across it off its baseline is another line, along it past its advance (its
+ *  `width`, along its direction) apart on one; two of different directions stand on two lines */
 function breaks(entries: Entry[], translated: Set<TextItem>, src: Map<TextItem, number>): Entry[] {
   const out = entries.slice()
   let prev = -1
@@ -419,8 +432,15 @@ function breaks(entries: Entry[], translated: Set<TextItem>, src: Map<TextItem, 
         const [, , , , ae, af] = a.transform as number[]
         const [, , , , be, bf] = e.transform as number[]
         const sz = Math.max(sizeOf(a), sizeOf(e))
-        if (Math.abs((af as number) - (bf as number)) > 0.5 * sz) out[prev] = withStr(a, a.str, translated, src, true)
-        else if ((be as number) - ((ae as number) + a.width) > 0.15 * sz && !/\s$/.test(a.str) && !/^\s/.test(e.str))
+        const [ux, uy] = dirOf(a),
+          [vx, vy] = dirOf(e)
+        const dx = (be as number) - (ae as number),
+          dy = (bf as number) - (af as number)
+        const along = dx * ux + dy * uy,
+          across = dy * ux - dx * uy
+        if (Math.abs(ux * vy - uy * vx) > 0.01 || ux * vx + uy * vy < 0 || Math.abs(across) > 0.5 * sz)
+          out[prev] = withStr(a, a.str, translated, src, true)
+        else if (along - a.width > 0.15 * sz && !/\s$/.test(a.str) && !/^\s/.test(e.str))
           out[prev] = withStr(a, `${a.str} `, translated, src)
       }
     }
