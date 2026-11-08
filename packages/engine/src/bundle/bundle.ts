@@ -13,6 +13,7 @@ import {
   type Head,
   ORIGINAL_CHUNK,
   type Part,
+  type Piece,
   type Placed,
   type PrepWhy,
   sha256Hex,
@@ -99,6 +100,10 @@ export function classed(el: El, c: PieceClass | undefined): El {
   return out
 }
 
+/** a unit's text as its source writes it: its text pieces, a group's opened, an element or a nested unit a space */
+const textOfPieces = (ps: readonly Piece[]): string =>
+  ps.map((q) => (q.t === 'text' ? q.s : q.t === 'span' ? textOfPieces(q.content) : ' ')).join('')
+
 /** a member as its parts hold it */
 function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState): Placed {
   const unit = mem.unit >= 0 ? units[mem.unit] : undefined
@@ -139,6 +144,13 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   if (mem.dir) p.dir = mem.dir
   if (mem.run) p.run = mem.run
   if (mem.plain !== undefined) p.plain = mem.plain
+  // (a table cell: its place in TeX's grid and its own text as its source writes it, which a table's groups are decided by:
+  // the header, each column, the cells spanning the same columns; a column of names, its cells come back as they went)
+  if (unit?.cell) {
+    const c = unit.cell
+    p.cell = [c.row, c.col, c.span ?? 1, c.head ? 1 : 0]
+    if (mem.plain === undefined) p.plain = textOfPieces(unit.content)
+  }
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
   return p

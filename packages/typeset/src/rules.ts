@@ -579,6 +579,24 @@ const SPECS: readonly RuleSpec[] = [
     state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz tables', cases: 2059 },
   },
   {
+    id: 'S.table.groups',
+    home: 'shared',
+    step: 'L2',
+    owns: ['3.4:decide'],
+    ports: ['groups.mjs:37-93 groupOf, decideGroups, NAMES_SHARE, unchanged', 'rows.mjs:265-292 layerRows'],
+    how: 'ported',
+    ruling: "2026-11-08 a table's cells translated or kept by group, the way the production site judges them",
+    reads: ['NAMES_SHARE'],
+    file: 'shared/table-groups.ts',
+    state: {
+      is: 'changed',
+      why: "decided in the entry over each member's own row and TeX's grid places (Placed.cell), not over the rows the door gives a unit id; a member the prepare leaves the original's (its why) tells nothing, where today counted its row",
+      replay:
+        'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
+      cases: 7,
+    },
+  },
+  {
     id: 'S.names',
     home: 'shared',
     step: 'L3',

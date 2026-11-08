@@ -230,6 +230,8 @@ export const Placed = z.object({
   room: Room,
   cuts: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
+  // its own text, where a rule tells a translation by it: a babel name's on A, a figure text's and a table cell's as its source
+  // writes them (its text pieces, an element a space): a translation that says nothing else came back as it went
   plain: z.string().optional(),
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
   // origin, its box's length along `dir` and its room before and after its box along it (its lines are its box on the page,
@@ -240,6 +242,10 @@ export const Placed = z.object({
   // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
   title: flag.optional(),
   front: flag.optional(),
+  // a table cell's place in TeX's grid, as the source's tabular sets it: its row, its first column, the columns it spans
+  // (\multicolumn), and 1 where it is a header's (the rows above the table's first full rule), else 0. The cells of one table
+  // are its `cells` tie's; what a reader decides of them together (a header, a column) is read from these
+  cell: z.tuple([int, int, int, z.union([z.literal(0), z.literal(1)])]).optional(),
   // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),

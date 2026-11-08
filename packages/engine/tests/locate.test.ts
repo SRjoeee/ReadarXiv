@@ -1234,6 +1234,62 @@ describe('review of #605', () => {
     // (the paragraphs' measures are their columns' as before)
     expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([46, 286])
   })
+  it('states each cell’s grid place and its own text in the part, what a table’s groups are decided by (S.table.groups)', () => {
+    // (1706.03762v7 p9's Table 3: today's groups follow TeX's tabular, the header, each column, a \multicolumn row of its own,
+    // and a column of names is told by its cells' own text against their rows; the tie's cells were sorted by row and column
+    // and the place dropped, so the typesetter could tell no group)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Model', x: 72, y: 700 },
+          { text: 'BLEU', x: 200, y: 700 },
+          { text: 'ByteNet', x: 72, y: 688 },
+          { text: '23.75', x: 200, y: 688 },
+          { text: 'positional embedding', x: 72, y: 676 },
+        ],
+      },
+    ])
+    const bold = (s: string) => {
+      const content = [{ t: 'span' as const, id: '0', style: 'bold', content: [text(s)] }, text(' ')]
+      return { id: unitId('cell', content), kind: 'cell', content }
+    }
+    const units: InstrumentUnit[] = [
+      { ...bold('Model'), cell: { table: 0, row: 0, col: 0, head: true } },
+      { ...bold('BLEU'), cell: { table: 0, row: 0, col: 1, head: true } },
+      unitOf('cell', 'ByteNet', { cell: { table: 0, row: 1, col: 0 } }),
+      unitOf('cell', '23.75', { cell: { table: 0, row: 1, col: 1 } }),
+      unitOf('cell', 'positional embedding', { cell: { table: 0, row: 2, col: 0, span: 2 } }),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3, 4]]), B, align(B, B))
+    const original = new Uint8Array(70000).map((_, i) => i & 255)
+    const objs = [
+      ...bundle({
+        ins: instrumentOf(B, units, [[0, 1, 2, 3, 4]]),
+        located: L,
+        addOn: addOnOf(L, 1),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = read(
+      'part',
+      (objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>).bytes,
+    )
+    const ms = part.flows.flat().sort((a, b) => a.ord - b.ord)
+    expect(ms.map((m) => m.cell)).toEqual([
+      [0, 0, 1, 1],
+      [0, 1, 1, 1],
+      [1, 0, 1, 0],
+      [1, 1, 1, 0],
+      [2, 0, 2, 0],
+    ])
+    // (its text pieces, a group's opened, as its source writes them)
+    expect(ms.map((m) => m.plain)).toEqual(['Model ', 'BLEU ', 'ByteNet', '23.75', 'positional embedding'])
+    expect(part.ties?.filter((t) => t.rule === 'cells')).toEqual([
+      { rule: 'cells', cells: [[0], [1], [2], [3], [4]], head: 1 },
+    ])
+  })
   it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
     // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine,
     // every one of the second's: a link round its whole text)
