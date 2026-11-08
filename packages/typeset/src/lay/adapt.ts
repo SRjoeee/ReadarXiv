@@ -239,6 +239,20 @@ export function adapt(i: AdaptInput): Adapted {
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]
+  // (the room each block may borrow under it (today's freeFor RUN:1677, which RUN:2193 gives every block but a cell's), from TeX's
+  // facts alone (the owner's ruling of 2026-11-08): a block that ends a run of its text lines the part states the room under
+  // (Room.runs) takes the lines down to TeX's text block bottom, the next ink staying TeX's paragraph separation (Room.sep,
+  // \baselineskip and \parskip) under the lowest one's baseline. A part that states no run or no separation, nothing: no tuned
+  // clearance and no reading of the page's pixels stand in for TeX's)
+  const runs = m.room.runs
+  const sep = m.room.sep
+  if (runs && sep !== undefined && kind !== 'cell')
+    for (const b of blocks) {
+      const r = b.rects.at(-1) as Rect
+      const j = (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
+      const e = j === undefined ? undefined : runs.find((x) => x[0] === j)
+      if (e) b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
+    }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
   // lines' bands over 0.894 (RUN:2088). In a CJK target smaller where its base is set in small capitals: the tokens' base
   // (baseOf over the row's groups), else its style's (its face's, or today's vote, Style.caps), as unitSizeOf reads it)

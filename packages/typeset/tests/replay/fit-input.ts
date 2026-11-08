@@ -207,8 +207,7 @@ export function layoutOf(l: Raw | null) {
       track: fin(st.track),
       trackLatin: fin(st.trackLatin),
       compress: fin(st.compress),
-      // (today's state that borrowed lines, which the port's never does: tap.ts `ruled`)
-      ...(st.borrow !== undefined ? { borrow: fin(st.borrow) } : {}),
+      borrow: fin(st.borrow),
       knob: st.knob ?? null,
       ...(st.box ? { box: true } : {}),
       ...(st.next !== undefined ? { next: fin(st.next) } : {}),

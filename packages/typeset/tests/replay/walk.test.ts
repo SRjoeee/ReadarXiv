@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { layoutCut } from '../../src/fit/cut.ts'
 import type { FitBlock, FitParams, Tokens } from '../../src/fit/types.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
-import { borrowed, firstDifference, hasDerived, hasTap, ledger, sample } from './tap.ts'
+import { firstDifference, hasDerived, hasTap, ledger, sample } from './tap.ts'
 
 const RULES = [
   'U.admit',
@@ -25,7 +25,7 @@ const RULES = [
 describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at F2', () => {
   it('lays every sampled unit’s every round as today did', { timeout: 120_000 }, () => {
     const differ: string[] = []
-    const count = { units: 0, cases: 0, ruled: 0, crops: 0, cut: 0, clipped: 0, shrunk: 0, opened: 0, lastLines: 0 }
+    const count = { units: 0, cases: 0, crops: 0, cut: 0, clipped: 0, shrunk: 0, borrowed: 0, opened: 0, lastLines: 0 }
     const seen = new Set<string>()
     for (const rule of RULES)
       for (const e of sample(rule).entries) {
@@ -37,17 +37,13 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at
         for (const r of new Set((u?.slots ?? []).filter((s) => s.by === 'X.cut').map((s) => s.round))) {
           const c = walkCase(e.pair, e.ord, r)
           if (typeof c === 'string') continue
-          // (a round today laid borrowing lines: the owner's ruling of 2026-11-08 removed the borrow, tap.ts `ruled`)
-          if (borrowed(c.want.layout)) {
-            count.ruled++
-            continue
-          }
           count.cases++
           if (c.crops) count.crops++
           const got = layoutCut(c.tokens as Tokens, c.blocks as FitBlock[], c.s, c.P as FitParams)
           if (got.tokens.length !== c.tokens.length) count.cut++
           if (got.layout.clipped) count.clipped++
           if (got.layout.scale < 1) count.shrunk++
+          if (got.layout.state.borrow) count.borrowed++
           if (got.layout.opened) count.opened++
           if (c.P.lastLines) count.lastLines++
           const d =
@@ -59,16 +55,16 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at
         }
       }
     expect(differ).toEqual([])
-    // (the walk's branches among them: frame cuts, a clipped fit, a shrunk one, a line TeX's rule opened, a heading on its last
-    // lines, crops' extents; and the rounds today laid with a borrowed line, the ruling's)
+    // (the walk's branches among them: frame cuts, a clipped fit, a shrunk one, a borrowed line, a line TeX's rule opened, a
+    // heading on its last lines, crops' extents)
     expect(count).toEqual({
       units: 188,
-      cases: 145,
-      ruled: 19,
-      crops: 44,
+      cases: 164,
+      crops: 52,
       cut: 3,
       clipped: 6,
-      shrunk: 45,
+      shrunk: 47,
+      borrowed: 19,
       opened: 1,
       lastLines: 11,
     })

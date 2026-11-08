@@ -16,8 +16,9 @@ const SET = JSON.parse(readFileSync(`${TODAY}/src/pdf-reader/engine/rules/layout
 const NAMES = JSON.parse(readFileSync(`${TODAY}/src/pdf-reader/engine/rules/tex-names.json`, 'utf8'))
 const check = process.argv.includes('--check')
 // (the fields the port no longer has, each by the owner's ruling that removed its rule: today's set holds them, the port's
-// does not. 2026-11-08: no borrowing, a translation keeps to its own lines (`borrow`, `borrowGap`, the walk's 'borrow' knob))
-const RULED_OUT = ['borrow', 'borrowGap']
+// does not. 2026-11-08, borrowing bounded by TeX's facts: a borrowed line's clearance over the next ink is TeX's paragraph
+// separation (Room.sep), no share of a pitch (`borrowGap`); the walk's 'borrow' knob and its switch are today's)
+const RULED_OUT = ['borrowGap']
 const ruled = (fields) => {
   const out = { ...fields }
   for (const k of RULED_OUT) delete out[k]

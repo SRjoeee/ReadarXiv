@@ -731,11 +731,12 @@ export function gateL1Pair(
     // block's h and pitch the walk sets on today's, and noOver unset against false, are no input)
     if (setting === 'equal') {
       // (nor the fields of a shared row no rule reads: the follower's row is read by its page and baseline, S.share's by its
-      // page, baseline and size; today's rows carry the lead's id and extent beside them. Nor today's borrow room under a block,
-      // `free`, which the port has not: no translation borrows a line, the owner's ruling of 2026-11-08)
+      // page, baseline and size; today's rows carry the lead's id and extent beside them. Nor a block's borrow room, `free`:
+      // today's its page's pixel map's and a share of a pitch, the port's TeX's (Room.runs, Room.sep: the owner's ruling of
+      // 2026-11-08))
       const rest = differences(mem, td).filter(
         (d) =>
-          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.free: undefined against/.test(
+          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.free: /.test(
             d,
           ),
       )
