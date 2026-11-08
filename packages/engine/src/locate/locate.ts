@@ -24,7 +24,7 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
-import { symbolText } from '../marks/classes.ts'
+import { TEXT_SYMBOLS } from '../source/tables.ts'
 import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
@@ -174,6 +174,12 @@ function piecesOf(content: readonly Piece[], out = new Map<string, Piece>()): Ma
 /** the letters of a text, a modifier letter aside (a spacing accent TeX sets as a glyph of its own: ˇ, ˆ), a decomposed character's
  *  marks aside (č is one letter, as its source's \\v{c} is) */
 const lettersIn = (t: string): number => (t.normalize('NFKD').match(/[\p{Lu}\p{Ll}\p{Lt}\p{Lo}]/gu) ?? []).length
+/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the source reader's table: marks/classes.ts symbolText's
+ *  reading, read here so that the back half needs nothing of the front half but the table */
+const symbolText = (src: string): string | null => {
+  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
+  return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
+}
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
