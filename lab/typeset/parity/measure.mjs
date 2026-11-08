@@ -14,7 +14,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
-import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
+import { LAB, ledger, ruledIn } from '../../../packages/typeset/tests/replay/tap.ts'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
@@ -89,8 +89,11 @@ for (const [pair, raw] of drawn) {
   const frame = frameOf(v2.facts)
   const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
+  // (today's units laid with a borrowed line, by its own record: the owner's ruling 1 makes v2's line-budget differences on them
+  // the ruling's)
+  const ruled = ruledIn(pair).borrowed
   const mine = []
-  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], ruled }))
   // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
   labelsPass(
     mine.filter((p) => !p.error),

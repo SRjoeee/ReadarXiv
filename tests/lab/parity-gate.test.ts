@@ -26,7 +26,7 @@ const v2Of = (o: { members?: object[]; facts?: object[]; today?: Record<number, 
   facts: { [N]: { members: o.facts ?? [], links: 0 } },
   today: o.today ?? {},
 })
-type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number> }
+type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number> }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
   measurePage(x.pair ?? 'p-zh', v2, r, {
     prepByOrd: new Map((x.prep ?? []).map((u) => [u.ord, u])),
@@ -38,6 +38,7 @@ const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extr
     groups: x.groups ?? [],
     keptByGroup: x.keptByGroup ?? new Set(),
     folios: x.folios ?? new Set(),
+    ruled: x.ruled ?? new Set(),
   })
 const of = (flag: string) => (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === flag)
 const laid = (ord: number, lit: object = {}) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } })
@@ -314,5 +315,41 @@ describe("lead: a paragraph set tighter than the original's leading while its bl
     // (4 lines on each side: v2's at 11 apart end at 667, within a line of the original's last)
     const four = (pitch: number) => [0, 1, 2, 3].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))
     expect(of('lead')(measure(f, sides(140, four(12), four(11))))).toEqual([])
+  })
+})
+
+describe("the no-borrowing ruling over a unit today laid with a borrowed line (today's ledger: the tap's ruledIn)", () => {
+  // (a paragraph of 4 lines on A, 700 to 664 at 10 pt; today, its ledger says, laid it with a borrowed line (in a round of its
+  // page's fill, the line elsewhere on the page) in 4 lines at full size on the original's baselines; v2 keeps its block, 4
+  // lines at 9.4 pt from 2 pt under the original's first baseline)
+  const f = one(26, 'para', [700, 688, 676, 664].map((y) => factLine(72, 300, y)))
+  const t = [700, 688, 676, 664].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10)),
+    v = [698, 686.7, 675.4, 664.1].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
+  const ruledOf = (p: { diffs: { flag: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.nearer === 'ruling').map((d) => d.flag)
+  it("v2's smaller size and its other anchor on such a unit are the ruling's, not worse, where its drawn lines borrow nothing on A", () => {
+    const before = measure(f, sides(26, t, v))
+    expect(before.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['size', 'anchor']))
+    const p = measure(f, sides(26, t, v), { ruled: new Set([26]) })
+    expect(p.diffs.filter((d: { worse: boolean }) => d.worse)).toEqual([])
+    expect(ruledOf(p)).toEqual(expect.arrayContaining(['size', 'anchor']))
+  })
+  it('its line count and its follower gap too', () => {
+    // (v2 lays it in 3 lines where today lays 4, the original's 4)
+    const v3 = [698, 686.7, 675.4].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
+    const p = measure(f, sides(26, t, v3), { ruled: new Set([26]) })
+    expect(p.diffs.filter((d: { worse: boolean }) => d.worse)).toEqual([])
+    expect(ruledOf(p)).toEqual(expect.arrayContaining(['size', 'line-count']))
+  })
+  it('unless v2 itself breaks the original\'s block: a line under its last stays worse', () => {
+    const vb = [698, 686.7, 675.4, 664.1, 652.8].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
+    const p = measure(f, sides(26, t, vb), { ruled: new Set([26]) })
+    expect(p.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['block', 'size']))
+  })
+  it('unless v2 crosses a rule of the page the original does not: its differences stay worse', () => {
+    // (a column rule at x 315, right of the original's lines (72–300); v2's lines run to 330, across it)
+    const rules = { rules: [[315, 640, 315.8, 720]] }
+    const vr = [698, 686.7, 675.4, 664.1].map((y) => drawnLine(72, 330, y, 'x'.repeat(20), 9.4))
+    const p = measure(f, sides(26, t, vr, { px: rules }), { ruled: new Set([26]) })
+    expect(p.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['size', 'anchor']))
   })
 })
