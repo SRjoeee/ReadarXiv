@@ -28,6 +28,22 @@ export function ruledParams<T>(params: T): T {
   delete o.borrowGap
   return o as T
 }
+/** today's blocks (the tap's walked blocks) as today's walk offered their room: its borrow knob offered a block's room only
+ *  where a block of the unit held a whole line of it at the original's pitch (statesOf's `most`), so a room under a line borrowed
+ *  nothing. The owner's ruling of 2026-11-08 (borrowing bounded by TeX's facts, before shrinking) offers that room too (fit/
+ *  walk.ts: a line TeX's \lineskip rule sets lower takes a fraction of a line): a unit whose every block's room is under a line
+ *  is replayed with none, today's walk's states */
+export function ruledRoom<B extends { free?: unknown; pitch0?: unknown }>(blocks: B[], s: number): B[] {
+  return underALine(blocks, s)
+    ? blocks.map((b) => (typeof b.free === 'number' && b.free > 0 ? { ...b, free: 0 } : b))
+    : blocks
+}
+/** a walk's blocks have room and none of it holds a whole line at its pitch (statesOf's `most` 0): today's walk offered none */
+function underALine(blocks: readonly { free?: unknown; pitch0?: unknown }[], s: number): boolean {
+  const room = (b: { free?: unknown }) => (typeof b.free === 'number' ? b.free : 0)
+  const pitch = (b: { pitch0?: unknown }) => (typeof b.pitch0 === 'number' ? b.pitch0 : 1.2 * s)
+  return blocks.some((b) => room(b) > 0) && !blocks.some((b) => Math.floor(room(b) / pitch(b) + 1e-6) > 0)
+}
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:
@@ -55,6 +71,52 @@ export function flooredIn(pair: string): { floored: Set<number>; pages: Set<numb
   const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
   const out = { floored, pages, units }
   flooredOf.set(pair, out)
+  return out
+}
+
+const roomUnderOf = new Map<string, { runs: Set<number>; pages: Set<number>; units: Set<number> }>()
+/**
+ * What the room ruling (fit/walk.ts: a room under a whole line offered too) changes of a pair's record that ruledRoom cannot
+ * restate: a unit laid in runs (X.runs, its walked blocks cut at its displays) walks each run alone, so a run whose blocks' room
+ * is above 0 and under a line at their pitch, where another run's holds a whole line (ruledRoom leaves the unit's room as it
+ * is), was offered none of it by today's walk and is now; where that run went on past the borrow knob (its state's knob 'lead'
+ * or 'shrink': it did not fit before it), its lay is the ruling's (`runs`: those units). The pages those stand on (`pages`), and
+ * every unit with a line on one of them (`units`: a pass's size reads every body unit it fills). A replay of a page or of a fill
+ * that differs there is the ruling's
+ */
+export function roomUnderIn(pair: string): { runs: Set<number>; pages: Set<number>; units: Set<number> } {
+  const got = roomUnderOf.get(pair)
+  if (got) return got
+  const L = ledger(pair)
+  type Block = { free?: number; pitch0?: number }
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const runs = new Set<number>(),
+    pages = new Set<number>()
+  for (const u of L.units)
+    for (const r of u.slots.filter((s) => s.by === 'X.runs')) {
+      const at = (by: string) =>
+        u.slots.find((s) => s.by === by && s.round === r.round)?.value as Record<string, unknown>
+      const s = (at('U.params')?.s as number | undefined) ?? 10
+      const walked = ruledRoom((at('X.cut')?.walkedBlocks ?? []) as Block[], s)
+      const laid = (r.value as { laidRuns?: { runs?: unknown[] } | null }).laidRuns
+      for (const run of (laid?.runs ?? []) as {
+        bi0: number
+        blocks: number
+        layout?: { state?: { knob?: string } }
+      }[]) {
+        const own = walked.slice(run.bi0, run.bi0 + run.blocks)
+        const knob = run.layout?.state?.knob
+        if (underALine(own, s) && (knob === 'lead' || knob === 'shrink')) {
+          runs.add(u.ord)
+          for (const p of pagesOf(u)) pages.add(p)
+        }
+      }
+    }
+  const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
+  const out = { runs, pages, units }
+  roomUnderOf.set(pair, out)
   return out
 }
 

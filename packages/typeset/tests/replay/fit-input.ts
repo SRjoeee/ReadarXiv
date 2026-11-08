@@ -11,7 +11,7 @@ import type { Face, Token, TStyle } from '../../src/breaker/tokens.ts'
 import { fitMeasure } from '../../src/breaker/measure.ts'
 import { hyphenationOf, type Patterns } from '../../src/breaker/hyph.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
-import { derived, LAB, ledger, readGz, TAP } from './tap.ts'
+import { derived, LAB, ledger, readGz, ruledRoom, TAP } from './tap.ts'
 
 type Raw = Record<string, unknown>
 /** the tap's numbers back: a non-finite one is written as its string */
@@ -156,7 +156,8 @@ export function walkCase(pair: string, ord: number, round: number): WalkCase | s
   }
   // (the tap's blockOf, mapped over the blocks, took a block's index for its `deep`: the first block's flowX lost its lead
   // block. S.rowStart's: the unit before's block that holds the row, from its last round, the F1 slot naming it)
-  const blocks = (f2.walkedBlocks as Raw[]).map(blockOfTap)
+  // (today's room as today's walk offered it, tap.ts ruledRoom: the owner's ruling of 2026-11-08 offers a room under a line)
+  const blocks = ruledRoom((f2.walkedBlocks as Raw[]).map(blockOfTap), up.s as number)
   const fx = blocks[0]?.flowX as { y: number; lead: Raw | null } | undefined
   if (fx && !fx.lead) {
     const f1 = slot('S.rowStart', 'flowX')

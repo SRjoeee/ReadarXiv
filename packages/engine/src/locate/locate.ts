@@ -967,8 +967,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // 1b states it). A figure text set turned has its glyphs in `turned` alone: their font, size and fill are its style, as
     // today's figure texts take their turned glyphs' font (layout/figure-text.mjs); read off its level glyphs alone, a bold
     // axis title was the default serif (35 lines on 11 pages of the parity's pairs)
-    // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
-    // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
+    // (its size today's reader's: the median of its text glyphs' sizes, up the line (TeX's, its font expansion aside), math
+    // fonts aside, facts.ts unitSize; where it has none, the most common size of its glyphs, `read` 'size:lines': today then
+    // reads it off its lines' bands)
     const own: StyleGlyph[] = [
       ...mem.text.map(gA),
       ...mem.turned.map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!)),

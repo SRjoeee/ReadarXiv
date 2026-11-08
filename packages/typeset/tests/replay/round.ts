@@ -14,11 +14,12 @@ import type { FillLaid } from '../../src/shared/fill-page.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { cellBands } from '../../src/unit/params.ts'
 import { blockOfTap, num, type WalkCase } from './fit-input.ts'
-import { firstDifference, ledger } from './tap.ts'
+import { firstDifference, ledger, ruledRoom } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
-export type Chain = { at: string; d: string | null; stopped?: string; steps: string[]; lay?: FillLaid }
+/** `own`: the port's own lay of the round, where it laid it, whatever step differed (what a ruling's unit is filled from) */
+export type Chain = { at: string; d: string | null; stopped?: string; steps: string[]; lay?: FillLaid; own?: FillLaid }
 
 /** the shared row the follower is laid from, as its F1 slot holds it (the follower's last round that has one) */
 const rowOf = (pair: string, follower: number) => {
@@ -81,7 +82,10 @@ export function prepare(c: WalkCase): Prepared {
             first: line?.length ? { page: line[0]!, x1: line[2]! } : null,
           },
     shareRow,
-    wide: (further?.furtherLayout as Raw | null)?.knob === 'widen' && wb ? (wb.map(blockOfTap) as FitBlock[]) : null,
+    wide:
+      (further?.furtherLayout as Raw | null)?.knob === 'widen' && wb
+        ? (ruledRoom(wb.map(blockOfTap), c.s) as FitBlock[])
+        : null,
     noOver: !!f5?.noOver,
   }
 }
@@ -97,6 +101,17 @@ export function chain(c: WalkCase): Chain {
   if (p.noOver) return { at: 'F5', d: null, stopped: 'S.relay (noOver)', steps }
   const trace = new Trace(c.round)
   const got = layMember(p, c.rules as unknown as RuleParams, trace)
+  const r = stepsAfter(c, p, got, trace, steps)
+  return got.state === 'laid' ? { ...r, own: got.lay } : r
+}
+/** the chain's steps after layMember, each against its slot: the first that differs, or where the round ends */
+function stepsAfter(
+  c: WalkCase,
+  p: ReturnType<typeof prepare>,
+  got: ReturnType<typeof layMember>,
+  trace: Trace,
+  steps: string[],
+): Chain {
   const mine = (step: string, by: string) => trace.slots.find((s) => s.step === step && s.by === by)?.value as Raw
   const pick = (v: Raw | undefined, keys: string[]) => (v ? Object.fromEntries(keys.map((k) => [k, v[k]])) : v)
   /** a step's answer against its slot, by the fields the tap summarizes; whether it ran on both sides */

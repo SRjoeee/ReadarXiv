@@ -71,20 +71,33 @@ function fillLeadsOf(p, P) {
   const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
   const found = K > 0 ? closerLead(K, k => at(p, { ...bx, lead: L(k) }), guessCloser(p, K, L, lead => footFloorOf(p.blocks, { ...bx, lead }, p.P, p.s))) : null
   p.fillLead = found ? L(found.k) : lo
+  // (and each frame of a unit over a page or column break its own there too (frameLeadsOf): the gap under its last frame taking
+  // the unit's leading closer is no reason to hold its other frames to it. 1810.04805v2 p6/p7 t119, its fit four lines over p6's
+  // five and two on p7, the second in p7's room: the gap under it at the fit's leading kept the original's skip, the closer
+  // leading the original's pitch held five lines on p6 and left one of two characters on p7)
+  const own = found ? frameLeadsOf(p, bx, p.fillLead, p.fillTop, found.l) : null
+  if (own) {
+    p.fillLeads = own.leads
+    p.lastLead = own.last
+  }
 }
-/** each block's frame, a page's or a column's: consecutive blocks on one page that overlap across (pageCutsOf's frames) */
+/** each block's frame, a page's or a column's: consecutive blocks on one page that overlap across (pageCutsOf's frames); and
+ *  each paragraph TeX states inside the unit (a block that opens one, `opens`: SpanAt.opens, El.opens), whose leading is its
+ *  own (the owner's ruling of 2026-11-08, (a)) */
 function framesOf(blocks) {
   const of = []
   blocks.forEach((b, bi) => {
     const a = blocks[bi - 1]
-    of.push(!a ? 0 : a.page === b.page && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) ? of[bi - 1] : of[bi - 1] + 1)
+    of.push(!a ? 0 : !b.opens && a.page === b.page && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) ? of[bi - 1] : of[bi - 1] + 1)
   })
   return of
 }
 /**
  * Each frame of a unit over a page or column break filled over its own block (the owner on staging, 2026-11-08: 1810.04805v2
  * p6's last paragraph of a column, going on to the next page, held to the original's pitch with its frame's last line empty:
- * its two lines on the next page filled their two, and one leading a unit held the four here, in five, to theirs). From the
+ * its two lines on the next page filled their two, and one leading a unit held the four here, in five, to theirs), and each
+ * paragraph TeX states inside it (framesOf; the owner's comment #9 on 2608.25210v2 p3: a prompt held to the pitch its item's
+ * run-in line needed), whichever way the unit's fill leading was found (fillLeadsOf, its closer search's too). From the
  * unit's fill leading `lo` (its every frame's), each frame in turn, the earlier ones first, the loosest leading up to `hi` at
  * which the unit is still set whole and keeps its pages (no line on a later page than its fit set it: keepsPages), the others
  * at theirs. A frame of one block first tried where its lines at `lo` (`laid`) would end on its last baseline, arithmetic, and

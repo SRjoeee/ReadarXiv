@@ -25,6 +25,7 @@ import {
   shortSkipLines,
   sideOf,
   sourceEndMarks,
+  staysOf,
   styleOf,
   tailOf,
 } from './facts.ts'
@@ -156,6 +157,22 @@ export function factsOf({
   }
   const boxCache = new Map<number, ReturnType<typeof boxesOn>>()
   const boxes = (p: number) => boxCache.get(p) ?? boxCache.set(p, boxesOn(p)).get(p)!
+  // (a page's ink no member owns: a glyph no unit claims (free, or held as A's ink of a unit that stays), shown; a painted box
+  // no member's text or element holds: what stays whatever a translation lays, Room.stays)
+  const staysCache = new Map<number, InkBox[]>()
+  const staysOn = (p: number): InkBox[] => {
+    const got = staysCache.get(p)
+    if (got) return got
+    const o = m.offA[p - 1] as number
+    const out: InkBox[] = []
+    inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
+      if (/\S/.test(g.u) && !g.unseen && (claimedA[o + j] as number) < 0)
+        out.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
+    })
+    for (const b of boxes(p)) if (!ownedBox.has(`${p}|${b.j}`)) out.push(b)
+    staysCache.set(p, out)
+    return out
+  }
   // (each page's lines, every member's: a single line's stack, centredByBlock)
   const linesOn = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
@@ -600,6 +617,12 @@ export function factsOf({
       mem.room.side = side.side
       // (a cell's sides that stop at its walls: X.further widens it a quarter of its size off a rule, half way to a glyph)
       if (unit?.cell && side.wall) mem.room.wall = side.wall
+    }
+    // (the ink that stays beside its text lines, no member's, facts.ts staysOf: a cell's room is its walls', a figure text's
+    // its figure reading's)
+    if (!unit?.cell && !unit?.figure) {
+      const stays = staysOf(mem.lines, staysOn, blockOf)
+      if (stays) mem.room.stays = stays
     }
     // (a figure text's room as today's figure reading tells it (layout/figure-text.mjs roomOf, its set's cut): along a level run,
     // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching

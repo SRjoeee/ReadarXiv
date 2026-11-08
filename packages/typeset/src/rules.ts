@@ -379,11 +379,11 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     ruling: "2026-11-08 the gap under a paragraph its own leading's alone",
-    reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3'],
+    reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3', 'Room.stays'],
     file: 'breaker/slots.mjs',
     state: {
       is: 'changed',
-      why: "the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The walk's states carry no `next`: its replay is unchanged",
+      why: "a slot whose reach (SHORT_SKIP under its baseline to an em over it) meets ink that stays beside the unit's lines, no member's (Room.stays: amsthm's QED box after a proof's last words, 2610.40645v1-ja p12 t80 and p31 t260), keeps half an em off it, borrowed or not; today's slots ran across the block's hull and a ragged last line missed such ink by its shortness alone. And the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The same floor under each paragraph TeX states inside a unit (paraFloorAt: a block whose next opens a paragraph in its column), at that paragraph's own leading (the owner's comment #9 on 2608.25210v2 p3: each paragraph of a unit filled at its own, S.fill.leads); today's held the unit's last alone. The walk's states carry no `next` and no `box`: its replay is unchanged",
       replay:
         "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rulings of 2026-11-08)",
       cases: 164,
@@ -461,10 +461,12 @@ const SPECS: readonly RuleSpec[] = [
       'fit.step',
     ],
     file: 'fit/walk.ts',
+    ruling: "2026-11-08 borrowing bounded by TeX's facts, before shrinking: a room under a whole line offered too",
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the borrow knob offers the whole of TeX's room wherever a block has any, where today's offered it only where a block's room held a whole line at its pitch: a line TeX's \\lineskip rule sets lower takes a fraction of a line, which the room holds (2602.23285v2-ja p5 t32: 1.25 pt of 10.82, a pitch 10.96, shrunk to 9.71 where today kept 9.96), and a state after it (a looser leading) lays into it too. The replays read today's room as today's walk offered it (tests/replay/tap.ts ruledRoom, roomUnderIn)",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record), today's room as its walk offered it",
       cases: 164,
     },
   },
@@ -777,7 +779,7 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/fill-leads.mjs',
     state: {
       is: 'changed',
-      why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five). The unit's fill leading, top and line count, its L9 slot, as today's",
+      why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five); and each paragraph TeX states inside a unit (a block that opens one: SpanAt.opens, El.opens) a frame of its own, its leading its own (the owner's comment #9 on 2608.25210v2 p3: a prompt box's text held to the original's pitch by its unit's run-in line, which needed both its lines, beside a box whose run-in line took one and whose text spread; the ruling of 2026-11-08, (a)); the frames filled where the gap under the unit takes its fill leading closer than its fit's too (1810.04805v2 p6/p7 t119: five lines on p6 at the original's pitch and one of two characters alone on p7, its fit's four and two). The unit's fill leading, top and line count, its L9 slot, as today's",
       replay:
         "chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out); the frames' own leadings in the page replays where they differ",
       cases: 31612,
@@ -939,7 +941,9 @@ const SPECS: readonly RuleSpec[] = [
     // (today's freeFor, RUN:1677-1687, the room a block borrowed under it: its rule ported, its room TeX's (the owner's ruling of
     // 2026-11-08): the engine states the depth under each run's last baseline of the next ink's baseline and of TeX's text
     // block bottom, and the paragraph's \baselineskip and \parskip (Room.runs, Room.sep, the marked compile's AXT-BODY and
-    // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap))
+    // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap). And
+    // the ink that stays beside its lines, no member's, which today never read (Room.stays: a rule or a glyph no unit owns, a QED
+    // box), on the block of the line it stood beside)
     ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],

@@ -237,6 +237,11 @@ export const Room = z.object({
   under: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
   sep: num.optional(),
+  // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
+  // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
+  // line's index, x0, y0, x1, y1]. TeX set it on the line (amsthm's QED box after a proof's last words) and no translation
+  // replaces it: a translation's line laid over it, borrowed or not, keeps off it)
+  stays: z.array(z.tuple([int, num, num, num, num])).optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({

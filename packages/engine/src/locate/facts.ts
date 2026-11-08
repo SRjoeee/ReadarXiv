@@ -131,16 +131,20 @@ export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: st
 }
 
 /**
- * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796, its characters'
- * sizes by pageChars2 L2:188): the median (the upper one of an even count) of its own text glyphs' sizes along the line, the
- * size PDF.js's text content gives their items (an expanded font's wider than its size up the line), its math fonts' glyphs
- * aside; undefined where it has none (today then reads the size off its lines' bands). Faked small capitals, which today
- * leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b: TeX's font state)
+ * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796): the median (the
+ * upper one of an even count) of its own text glyphs' sizes, its math fonts' glyphs aside; undefined where it has none (today
+ * then reads the size off its lines' bands). Each glyph's size up the line, the size TeX was asked for: pdfTeX's font expansion
+ * (microtype) scales a justified line's glyphs along it alone, by up to 2 % either way, to justify that line, and today's
+ * pageChars2 (L2:188) read the size along it (PDF.js's item transform, Math.hypot(a, b)): a paragraph whose lines TeX stretched
+ * read larger than its font, one it shrank smaller (2610.40645v1 p12: \normalsize paragraphs at 10.69 to 11.13, every glyph
+ * 10.91 up its line), which a lay that keeps its size (borrowing before shrinking) then drew larger than the original. Faked
+ * small capitals, which today leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b:
+ * TeX's font state)
  */
 export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
   const sizes = gs
     .filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
-    .map((g) => g.along ?? g.size)
+    .map((g) => g.size)
     .sort((a, b) => a - b)
   // (as the page states it, not on the coordinates' 1/100 grid: a size is a font's scale, which the lay multiplies every width
   // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 set a 240 pt line 0.06 pt short of today's)
@@ -831,6 +835,42 @@ export function sideOf(
   }
   if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) return undefined
   return { side: [r2(lo), r2(hi)], wall: ((loWall ? 1 : 0) | (hiWall ? 2 : 0)) as 0 | 1 | 2 | 3 }
+}
+/**
+ * The ink that stays beside a member's text lines (Room.stays): on each of its lines (its kept rows aside), the ink no member
+ * owns (`stays`: a glyph no unit claims, a rule or an image no member's) standing on its band (a glyph by its baseline, within
+ * 0.4 of the line's size, as sideOf and pinnedOf read the band; a painted box by its height meeting that band, as sideOf reads
+ * a cell's walls) within its text block (`block`, as sideOf), wholly before the line's start or after its end (by half a
+ * point, pinnedOf's): on each side, the box of those pieces, [the line's index, x0, y0, x1, y1]. TeX set that ink on the line
+ * (amsthm's QED box after a proof's last words, \hfill'd to the measure's end: four rules, no glyph; a mark no unit holds), and
+ * no translation replaces it: whatever line a translation lays there, borrowed or not, keeps off it. Undefined where none
+ */
+export function staysOf(
+  lines: readonly Line[],
+  stays: (page: number) => readonly InkBox[],
+  block: (l: Line) => [number, number],
+): [number, number, number, number, number][] | undefined {
+  const out: [number, number, number, number, number][] = []
+  lines.forEach((l, j) => {
+    if (l[9] & 1) return
+    const [b0, b1] = block(l)
+    const c0 = Math.min(b0, l[2]),
+      c1 = Math.max(b1, l[3])
+    const band = 0.4 * (l[10] ?? l[5] - l[6])
+    const sides: (InkBox | null)[] = [null, null]
+    for (const k of stays(l[0])) {
+      const on = k.y !== undefined ? Math.abs(k.y - l[4]) < band : k.y0 < l[4] + band && k.y1 > l[4] - band
+      if (!on || k.x1 <= c0 || k.x0 >= c1) continue
+      const at = k.x1 <= l[2] - 0.5 ? 0 : k.x0 >= l[3] + 0.5 ? 1 : -1
+      if (at < 0) continue
+      const s = sides[at]
+      sides[at] = s
+        ? { x0: Math.min(s.x0, k.x0), x1: Math.max(s.x1, k.x1), y0: Math.min(s.y0, k.y0), y1: Math.max(s.y1, k.y1) }
+        : { x0: k.x0, x1: k.x1, y0: k.y0, y1: k.y1 }
+    }
+    for (const s of sides) if (s) out.push([j, r2(s.x0), r2(s.y0), r2(s.x1), r2(s.y1)])
+  })
+  return out.length ? out : undefined
 }
 /**
  * A cell's clear band between the rules over and under its lines (Room.band; today's cellBands L2:352): over, the lowest

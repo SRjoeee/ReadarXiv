@@ -171,6 +171,20 @@ describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11
     const q = measure(f, sides(26, lines(10, 652, 640, 628), lines(9.5, 652, 640, 628)))
     expect(of('size')(q)).toMatchObject([{ worse: true }])
   })
+  it("judges TeX's room to the precision its facts are stated at, not a visible step: a line 1 pt past the bottom is past it", () => {
+    // (2602.23285v2 p9 t90, 2608.16117v1 p28 t99: today's last line 1.0 and 1.05 pt under the original's, which stands on TeX's
+    // text block bottom (depth 0); v2 keeps the bottom, a size smaller. The bottom and the baselines are written to the
+    // hundredth, and the stated bottom sits on the lines TeX set on it within 0.05 pt: a point past it is past it)
+    const f = para([[3, 60, 0]])
+    const t = [700, 688, 676, 663].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10))
+    const p = measure(f, sides(26, t, lines(9.5)))
+    expect(of('block')(p)).toMatchObject([{ worse: false, nearer: 'v2', today: { value: 1 }, v2: { value: 0 } }])
+    expect(p.faults.block.todaySays[0]).toMatch(/1 pt past TeX's text block bottom/)
+    expect(of('size')(p)).toMatchObject([{ worse: false, nearer: 'v2' }])
+    // (a line on the bottom to the lay's own precision, 0.03 under it, is on it)
+    const on = [700, 688, 676, 663.97].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10))
+    expect(of('block')(measure(f, sides(26, on, lines(9.5))))).toEqual([])
+  })
   it('a line over the unit’s own lower lines in its column is not judged: no borrowing under its last line', () => {
     // (2608.16117v1 p17 t57: its first line a row's tail at 700, its other lines under a figure from 600; a translation laid on
     // from the unit before over the rows it left draws lines between the two, 30 pt under the tail, by more than the room the

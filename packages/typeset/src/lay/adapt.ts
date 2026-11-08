@@ -11,7 +11,7 @@
 import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.types.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
-import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
+import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
 import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
@@ -253,6 +253,25 @@ export function adapt(i: AdaptInput): Adapted {
       const e = j === undefined ? undefined : runs.find((x) => x[0] === j)
       if (e) b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
     }
+  // (the ink that stays beside its lines, no member's (Room.stays: a QED box after a proof's last words): on the block that holds
+  // the line it stood beside, on that line's side of it, which every slot of the block reaching it keeps off (B.slots), a line
+  // borrowed under it too. Not a cell's: its room is its walls')
+  const stays = kind === 'cell' ? [] : (m.room.stays ?? [])
+  const stayOf = (j: number) =>
+    stays
+      .filter((k) => k[0] === j)
+      .map((k): Stay => {
+        const right = k[1] >= lines[j]![3]
+        return { right, x0: k[1], y0: k[2], x1: k[3], y1: k[4], gap: right ? k[1] - lines[j]![3] : lines[j]![2] - k[3] }
+      })
+  if (stays.length)
+    for (const b of blocks) {
+      const own = b.rects.flatMap((r) => {
+        const j = (lineInfo.get(rectKey(r as Rect)) ?? lineInfo.get(rectKeyNoX0(r as Rect)))?.j
+        return j === undefined ? [] : stayOf(j)
+      })
+      if (own.length) b.stays = own
+    }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
   // lines' bands over 0.894 (RUN:2088). In a CJK target smaller where its base is set in small capitals: the tokens' base
   // (baseOf over the row's groups), else its style's (its face's, or today's vote, Style.caps), as unitSizeOf reads it)
@@ -294,10 +313,20 @@ export function adapt(i: AdaptInput): Adapted {
     // (the paper it shares with a member beside it: its half, as today's paperTo widened a cell half way to another unit's text
     // (RUN:1717))
     const [sl, sr] = i.shared ?? [Number.NaN, Number.NaN]
+    // (and the ink that stays beside it, a rule or an image too (Room.stays), which Room.side, the glyphs', does not stop at)
+    const st = stayOf(j!)
     return {
       column: [l[7], l[8]],
-      left: [...(side[0] > l[7] + 0.01 ? [side[0] + half] : []), ...(Number.isFinite(sl) ? [sl] : [])],
-      right: [...(side[1] < l[8] - 0.01 ? [side[1] - half] : []), ...(Number.isFinite(sr) ? [sr] : [])],
+      left: [
+        ...(side[0] > l[7] + 0.01 ? [side[0] + half] : []),
+        ...(Number.isFinite(sl) ? [sl] : []),
+        ...st.filter((k) => !k.right).map((k) => k.x1 + Math.min(half, k.gap)),
+      ],
+      right: [
+        ...(side[1] < l[8] - 0.01 ? [side[1] - half] : []),
+        ...(Number.isFinite(sr) ? [sr] : []),
+        ...st.filter((k) => k.right).map((k) => k.x0 - Math.min(half, k.gap)),
+      ],
     }
   }
   const firstX0 = m.label ? lines[0]![2] : undefined
