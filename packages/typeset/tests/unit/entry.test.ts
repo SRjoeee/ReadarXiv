@@ -554,6 +554,64 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.map(([y]) => y)).toEqual([700, 688])
   })
+  it('fills each frame at its own leading where the gap under the paragraph takes its leading closer than its fit’s too', () => {
+    // (1810.04805v2 p6/p7 t119, five and two original lines: with the room under its last line on the next page offered (TeX's,
+    // Room.runs, 10 of 22 there), its fit lays it at its own leading, four lines here and two there, the second in that room.
+    // The gap under it at its own leading keeps the original's skip, so the page fill set it at a closer leading, the
+    // original's pitch, where this frame holds five: five lines here and one of two characters alone on the next page, the
+    // frame left unfilled. Each frame its own leading on that path too: four here over the frame, two there)
+    const zh = rulesFor('zh')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idB] = ['b'.repeat(64), 'c'.repeat(64)]
+    const a = member({
+      ord: 0,
+      text: idA,
+      lines: [700, 688, 676, 664].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [640, 628, 616, 604].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const m = member({
+      ord: 2,
+      lines: [...[580, 568, 556, 544, 532].map((y) => lineAt(1, y)), lineAt(2, 700), lineAt(2, 688)],
+      room: {
+        below: 20,
+        next: 22,
+        runs: [
+          [4, 10, 40],
+          [6, 22, 300],
+        ],
+        sep: 12,
+      },
+    })
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(250) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idB },
+    ])
+    const laid = (page: number) =>
+      layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
+    const [p1, p2] = [laid(1), laid(2)]
+    expect([p1.state, p2.state, p1.fit?.size, p2.fit?.size]).toEqual(['laid', 'laid', 10, 10])
+    expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
+    expect(p2.lines.length).toBe(2)
+  })
   it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
     // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
     // between two that take 2 of 4. The 2026-10-17 gap rule held the gap under it to the next paragraph's leading too and pulled
