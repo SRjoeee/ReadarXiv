@@ -236,23 +236,135 @@ export function sourceText(content: readonly Piece[]): string {
  *  starts past the one before's end by more than TRACKING_SPACE_FACTOR of the font's size along the line, or on another
  *  line (its baseline moved by more than half the size: an end of line), is a space after it in the text layer */
 export const TRACKING_SPACE_FACTOR = 0.102
+/** whether glyph `g` is set on another line than `p`, the one before it: its baseline moved by more than half the size */
+const lineChange = (p: DocGlyph, g: DocGlyph) => Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size)
+/** the hyphens a line may end in, TeX's own and a word's */
+const HYPHENS = new Set(['-', '\u2010', '\u00ad'])
+const LETTERS = /^\p{L}+$/u
+/** the fewest letters TeX leaves before its hyphen and after it: \lefthyphenmin, \righthyphenmin (LaTeX's, English's) */
+const LEFT_HYPHEN_MIN = 2
+const RIGHT_HYPHEN_MIN = 3
+/** whether glyph `b` stands apart from `a` before it, as PDF.js reads a space: past it by more than TRACKING_SPACE_FACTOR */
+const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_FACTOR * (a.along ?? a.size)
+/** what a reading of an element's text knows of its source: `literal` (a URL, a code mark: TeX sets its characters as written),
+ *  `source` (the TeX the element and its unit are written in, where the word a line's end breaks may be stated) */
+export interface LineEndOptions {
+  literal?: boolean
+  source?: string
+}
+const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** what a source says of the word a line's end breaks after `before` and before `after`: `hyphen` where it writes the word
+ *  with a hyphen there (`anti-inflammatory`), `joined` where it writes it whole (`TensorCast`; TeX's own discretionary `\-`
+ *  is no hyphen of the word's), null where it writes neither, or both */
+function stated(source: string, before: string, after: string): 'hyphen' | 'joined' | null {
+  if (!source) return null
+  const text = source.replace(/\\-/g, '').replace(/[{}]/g, '')
+  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'u').test(text)
+  const hyphen = has(`${before}-${after}`)
+  const joined = has(before + after)
+  return hyphen === joined ? null : hyphen ? 'hyphen' : 'joined'
+}
+/**
+ * What a line's end before glyph q is, in an element's text: `space` (PDF.js's end of line), `join` where the line ends in a
+ * hyphen right after a letter and the next begins with a letter (inside a word: `Lee-|Thorp` is "Lee-Thorp", no space), `drop`
+ * where that hyphen is TeX's own break of a word, which TeX sets at a line's end and nowhere else (`Rad-|ford` is "Radford":
+ * 1810.04805v2's citation, which staging drew as "Rad- ford" in the translation). The glyphs cannot tell a word's hyphen from
+ * TeX's; the source can, where it states the word (stated: the element's own TeX, its unit's text): its hyphen kept where the
+ * source writes one (`anti-|inflammatory`), out where it writes the word whole (`Tensor-|Cast`, where it writes TensorCast). Where
+ * it does not, TeX's rules for its hyphen decide (the TeXbook ch. 14, tex.web §894-899): it hyphenates the first word after a space alone, non-letters before it skipped (`(Col-lobert`; not
+ * `arXiv:gr-|qc`, `imrn/article-|pdf`), and leaves at least \lefthyphenmin letters before its hyphen and \righthyphenmin after
+ * it (not `[hep-|th]`), and no word an explicit hyphen follows before the next space (its discretionary stops it, §899:
+ * not `extreme-|mass-ratio`); never in a typewriter face (LaTeX sets their \hyphenchar to −1) nor in text it sets as written
+ * (`literal`: a URL, a code mark). And a change of case across the hyphen is a compound's own hyphen, TeX's falling inside a
+ * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
+ */
+function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
+  const h = gs[q - 1] as DocGlyph
+  const g = gs[q] as DocGlyph
+  if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'
+  // (the word before it on its line, and whether it is the first after a space: only non-letters between them)
+  let before = ''
+  let k = q - 2
+  for (; k >= 0; k--) {
+    const a = gs[k] as DocGlyph
+    if (!LETTERS.test(a.u) || lineChange(a, h) || apart(a, gs[k + 1] as DocGlyph)) break
+    before = a.u + before
+  }
+  if (!before) return 'space'
+  let first = true
+  for (; k >= 0; k--) {
+    const a = gs[k] as DocGlyph
+    const b = gs[k + 1] as DocGlyph
+    if (lineChange(a, b) || apart(a, b) || /\s/u.test(a.u)) break
+    if (/\p{L}|\p{N}/u.test(a.u)) {
+      first = false
+      break
+    }
+  }
+  // (the word after it, on the next line, and whether a hyphen of its own follows it before a space)
+  let after = ''
+  let j = q
+  for (; j < gs.length; j++) {
+    const b = gs[j] as DocGlyph
+    if (!LETTERS.test(b.u) || lineChange(g, b) || (j > q && apart(gs[j - 1] as DocGlyph, b))) break
+    after += b.u
+  }
+  let own = false
+  for (; j < gs.length && !own; j++) {
+    const b = gs[j] as DocGlyph
+    if (lineChange(g, b) || apart(gs[j - 1] as DocGlyph, b) || /\s/u.test(b.u)) break
+    own = HYPHENS.has(b.u)
+  }
+  // (the source decides where it states the word; TeX's rules where it does not)
+  const said = after ? stated(o.source ?? '', before, after) : null
+  if (said) return said === 'hyphen' ? 'join' : 'drop'
+  const tex =
+    !o.literal &&
+    first &&
+    !own &&
+    [...before].length >= LEFT_HYPHEN_MIN &&
+    [...after].length >= RIGHT_HYPHEN_MIN &&
+    /^\p{Ll}/u.test(after) &&
+    before !== before.toUpperCase() &&
+    classifyFont(h.base).fam !== 'mono'
+  return tex ? 'drop' : 'join'
+}
 /** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
- *  characters inside its segments, a space of it between two of them, white space as one space, trimmed) */
-export function textOf(gs: readonly DocGlyph[]): string {
+ *  characters inside its segments, a space of it between two of them, white space as one space, trimmed), but for a line
+ *  TeX ended inside a word (lineEnd): its hyphen out where it is TeX's, and no space */
+export function textOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): string {
   let out = ''
   gs.forEach((g, q) => {
     const p = gs[q - 1]
     if (p) {
       const size = p.along ?? p.size
-      if (Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size) || g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size) out += ' '
+      if (lineChange(p, g)) {
+        const end = lineEnd(gs, q, o)
+        if (end === 'drop') out = out.slice(0, -p.u.length)
+        else if (end === 'space') out += ' '
+      } else if (g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size) out += ' '
     }
     out += g.u
   })
   return out.replace(/\s+/g, ' ').trim()
 }
+/** a URL's copy text, its glyphs' text as textOf reads it but for a line's end: TeX's url package breaks a URL after one of its
+ *  characters with no space, and sets no hyphen of its own (a hyphen at a line's end is the URL's, 9 of the corpus's 343 URLs
+ *  over lines), so a line change adds nothing and drops nothing. A gap between two glyphs on one line stays a space: it is a
+ *  rule TeX drew for an underscore, or the space of a macro's text (an eprint's "id [cs.SE]"), which the glyphs cannot tell
+ *  apart and a space does not lose */
+export function urlCopyOf(gs: readonly DocGlyph[]): string {
+  let out = ''
+  gs.forEach((g, q) => {
+    const p = gs[q - 1]
+    if (p && !lineChange(p, g) && apart(p, g)) out += ' '
+    out += g.u
+  })
+  return out.replace(/\s+/g, ' ').trim()
+}
 /** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
- *  before it), [text, fill] each; null where every glyph's fill is one (its style's) */
-export function fillRunsOf(gs: readonly DocGlyph[]): [string, number][] | null {
+ *  before it), [text, fill] each, a line's end as textOf reads it; null where every glyph's fill is one (its style's) */
+export function fillRunsOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
   const runs: [string, number][] = []
   const push = (ch: string, f: number) => {
     const last = runs.at(-1)
@@ -263,8 +375,14 @@ export function fillRunsOf(gs: readonly DocGlyph[]): [string, number][] | null {
     const p = gs[q - 1]
     if (p) {
       const size = p.along ?? p.size
-      if (Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size) || g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size)
-        push(' ', p.fill)
+      if (lineChange(p, g)) {
+        const end = lineEnd(gs, q, o)
+        if (end === 'drop') {
+          const last = runs.at(-1) as [string, number]
+          last[0] = last[0].slice(0, -p.u.length)
+          if (!last[0]) runs.pop()
+        } else if (end === 'space') push(' ', p.fill)
+      } else if (g.x0 - p.x1 > TRACKING_SPACE_FACTOR * size) push(' ', p.fill)
     }
     for (const ch of g.u) /\s/.test(ch) ? push(' ', g.fill) : push(ch, g.fill)
   })
@@ -529,12 +647,16 @@ export interface InkBox {
  * and no rule or image) to the left and to the right, within the text block `block` (its column's extent on the page), the
  * narrowest over its lines. Today's widen keeps clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
  * which stood for the unit's own glyphs past its rectangle: ownership says which are its own (a named correction where
- * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's
+ * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's.
+ * A table's cell, which today's never widened (its rectangle was its cell's), is also walled by `walls`, the painted boxes
+ * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (the
+ * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column)
  */
 export function sideOf(
   lines: readonly Line[],
   foreign: (page: number) => readonly InkBox[],
   block: (l: Line) => [number, number],
+  walls?: (page: number) => readonly InkBox[],
 ): [number, number] | undefined {
   let lo = Number.NEGATIVE_INFINITY
   let hi = Number.POSITIVE_INFINITY
@@ -546,6 +668,13 @@ export function sideOf(
     const band = 0.4 * (l[10] ?? l[5] - l[6])
     for (const k of foreign(l[0])) {
       if (k.y === undefined || Math.abs(k.y - l[4]) >= band) continue
+      if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
+      else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
+    }
+    // (a cell's walls: the painted boxes beside its line whose height meets its band, its column's rules and its neighbours'
+    // fills; one across the line is none)
+    for (const k of walls?.(l[0]) ?? []) {
+      if (k.y0 >= l[4] + band || k.y1 <= l[4] - band) continue
       if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
       else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
     }
@@ -634,6 +763,31 @@ export function alignOf(
   })
   if (told === 'j') return centred && inset ? 'c' : 'j'
   return centred && short ? 'c' : 'j'
+}
+/**
+ * Whether a unit nothing tells the alignment of, and its column does not centre, is centred by its own block: its lines share
+ * a middle and not their edges (cellCentred's reading), a single line by the lines stacked on it, the nearest over it and under
+ * it that meet its extent within its leading `lead` (a tabular's centred column: an author block's name, place and e-mail).
+ * A line the original centres stands on its own middle, never the page's or the column's (the maintainer, 2026-11-08:
+ * 2303.11366v4 p1's "Massachusetts Institute of Technology", centred under its name at 393.8, was read justified by the
+ * column's middle at 306 and its translation set from its left edge); a paragraph's short last line shares its left edge
+ * with the lines over it and stays its own
+ */
+export function centredByBlock(own: readonly Line[], page: readonly Line[], lead: number): boolean {
+  if (own.length > 1) return cellCentred(own.map((l) => [l[2], l[3]])) === true
+  const l = own[0]
+  if (!l) return false
+  let over: Line | null = null
+  let under: Line | null = null
+  for (const k of page) {
+    if (k === l || k[0] !== l[0] || k[9] & 1 || k[3] <= l[2] || k[2] >= l[3]) continue
+    const d = k[4] - l[4]
+    if (d > 0.05 && d <= lead + 0.05) {
+      if (!over || k[4] < over[4]) over = k
+    } else if (d < -0.05 && -d <= lead + 0.05 && (!under || k[4] > under[4])) under = k
+  }
+  const stack = [l, ...(over ? [over] : []), ...(under ? [under] : [])]
+  return cellCentred(stack.map((x) => [x[2], x[3]])) === true
 }
 /** a single-line cell's centring by its table column's cells on its page (E8, today's cellCentred RUN:1508, its column by
  *  table, column and span; the tabular preamble's l/c/r is stage 1b's): every middle

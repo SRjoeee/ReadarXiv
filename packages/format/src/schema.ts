@@ -116,9 +116,10 @@ export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
 /** an element on A. `kind` the class it is drawn by (today's placeholder class, layer2.mjs placeholdersOf's phClassProven,
  *  stated so that no rule of the typesetter reads a source: cite, num, display, other, symbol, macro, umacro, space, zero),
  *  `unknown` a paper's own macro no table renders, `copy` its source's plain text (a crop's copy text, its drawing from the
- *  source where no ink is found), `sym` a symbol's drawn text and whether it is drawn raised where the source reads as a symbol
- *  (phClass2's: the tokens' class; a formula of symbols alone is `other` with a `sym`), `mark` a footnote's mark (drawn raised
- *  whatever its rendering), `literal` a text piece (TeX sets its characters as written: a code or URL mark; no formula) */
+ *  source where no ink is found; a URL's, its glyphs' text on A where it has one, El.text), `sym` a symbol's drawn text and
+ *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
+ *  `other` with a `sym`), `mark` a footnote's mark (drawn raised whatever its rendering), `literal` a text piece (TeX sets its
+ *  characters as written: a code or URL mark; no formula) */
 export const El = z.object({
   kind: ElKind,
   unknown: flag.optional(),
@@ -151,6 +152,11 @@ export const El = z.object({
   same: z.string().optional(),
   colour: int.optional(),
   nested: flag.optional(),
+  // where a URL TeX set on one line may break, as its url package lets it: after a run of \UrlBreaks' and \UrlBigBreaks'
+  // characters, each the x between two of its glyphs on its ink's line and how much of its copy text stands before it, in UTF-16
+  // code units (as the text holds them: a space between two glyphs, a ligature's letters, an astral character's two): the unit
+  // the typesetter slices `copy` in
+  breaks: z.array(z.tuple([num, int])).optional(),
 })
 /** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and
  *  star), the fill TeX set its run in */
@@ -202,6 +208,9 @@ export const Placed = z.object({
   fixed: int.optional(),
   plain: z.string().optional(),
   dir: z.tuple([num, num]).optional(),
+  // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
+  title: flag.optional(),
+  front: flag.optional(),
   // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),

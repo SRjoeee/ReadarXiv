@@ -14,8 +14,9 @@
 //   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
 //   from Part.paper.faces (today's page-1 tally and familyOfFonts);
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
-// What the part does not state yet is passed as today does without it, each named where it is read: a name leading the unit
-// (U.lead), U.rename's names, a rendering's runs of one fill and its faked small capitals, a colour piece's run.
+// A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
+// state yet is passed as today does without it, each named where it is read: U.rename's names, a rendering's runs of one fill
+// and its faked small capitals, a colour piece's run.
 import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
@@ -296,7 +297,10 @@ function readingsOf(
       ? { fam: el.style.role, bold: !!el.style.bold, italic: !!el.style.slant }
       : null
     const literal = !!el?.literal
-    const drawn = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
+    const drawn =
+      drawn0?.mode === 'crop' && !drawn0.parts && el?.breaks?.length ? { ...drawn0, breaks: el.breaks } : drawn0
     // (its rendering without its own brackets, where it stands in them with a letter or a digit inside: unbracketed L2:1365)
     let inner: ElementReading['inner'] = null
     if (
@@ -367,7 +371,7 @@ function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undef
   return { x1: Math.max(...chars.map((c) => c.x1)), text: chars.map((c) => c.ch).join(' '), chars }
 }
 
-/** what the tokens set before the translation (RUN:2196): a name's lead (U.lead: not stated yet), else the label drawn anew,
+/** what the tokens set before the translation (RUN:2196): a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,
  *  its parts in their styles, or its words in its first glyph's (an opening bracket at its end glued: gap 0) */
 function leadOf(lb: UnitLabel | undefined): { parts: { text: string; st: TStyle }[]; gap?: number } | null {
   if (lb?.parts)
@@ -397,6 +401,9 @@ export type ReadInput = {
   labels: Pick<LabelInput, 'words' | 'captions' | 'heads' | 'names'> | null
   /** the reader draws the member's label anew (its label group can be turned off) */
   relabels: boolean
+  /** a babel name's lead (lay/lead.ts ledBy: U.lead, the name the part binds to the member): set before the translation, its
+   *  label the name's word and the joint drawn anew, in place of the label U.label draws */
+  lead?: { parts: { text: string; st: TStyle }[]; gap?: number; drawn: string } | null
   /** the last page shown */
   shown: number
 }
@@ -535,7 +542,9 @@ export function readMember(i: ReadInput): ReadOut {
     base: given,
     designs: paper.designs,
     P: i.P,
-    lead: leadOf(lab.label),
+    lead: i.lead
+      ? { parts: i.lead.parts, ...(i.lead.gap !== undefined ? { gap: i.lead.gap } : {}) }
+      : leadOf(lab.label),
     faces,
     tagWords: true,
   })
@@ -547,8 +556,8 @@ export function readMember(i: ReadInput): ReadOut {
   void cjkAdvance
   return {
     tokens: toks,
-    labelDrawn: lab.label?.drawn ?? null,
-    lead: false,
+    labelDrawn: i.lead ? i.lead.drawn : (lab.label?.drawn ?? null),
+    lead: !!i.lead,
     cjkSize,
     referenced: br.referenced,
     unproven: el.unproven,

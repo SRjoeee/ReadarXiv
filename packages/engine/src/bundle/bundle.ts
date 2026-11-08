@@ -78,7 +78,8 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (!c) return el
   const out: El = { ...el, kind: c.cls }
   if (c.unknown) out.unknown = 1
-  if (c.copy) out.copy = c.copy
+  // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
+  if (c.copy && out.copy === undefined) out.copy = c.copy
   if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
@@ -102,7 +103,8 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   const p: Placed = {
     ord: mem.ord,
     kind: mem.kind === 'name' && mem.name !== undefined ? 'name' : mem.figure ? 'figure' : mem.kind,
-    text: mem.name !== undefined ? { name: mem.name } : (echo ?? mem.id),
+    text:
+      mem.name !== undefined ? { name: mem.name, ...(mem.counter ? { counter: mem.counter } : {}) } : (echo ?? mem.id),
     lead: mem.lead,
     style: mem.style,
     align: mem.align,
@@ -111,6 +113,10 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   }
   if (st.why) p.why = st.why
   if (mem.join) p.join = mem.join
+  if (mem.leads !== undefined) p.bound = 1
+  // (the paper's title and its front matter: no section heading's rules for them, X.lastLines)
+  if (unit?.title) p.title = 1
+  if (unit?.front) p.front = 1
   if (mem.elements.length) {
     // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
     // states them so that no rule of the typesetter reads a source)

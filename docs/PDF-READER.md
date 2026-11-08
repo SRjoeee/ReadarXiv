@@ -1028,6 +1028,14 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
   WebKit takes `auto`, its places the same to the pixel. Not yet seen by eye: Chrome on Windows, a Linux desktop, Safari on
   iOS (which has no smoothing to restore).
+  The reader package (`packages/reader`) decides the same, once a reader, from its first overlay's runs of one place laid
+  out again in their own classes (`compose/text-rendering.ts`), written on the reader's root (`.axt-reader`, its sheet
+  `styles.ts`), and draws a run that names no fill of its own in the layer's ink, `#141414` (today's `layer-proto/run.mjs`
+  `SVG_RULES`). Without the two (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
+  translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
+  4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check
+  (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): every measured line's ink within 6 % of the same runs
+  drawn by a canvas's `fillText`, 0.80 before, 1.00 after.
 - **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
   before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be

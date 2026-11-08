@@ -93,11 +93,15 @@ export const READER_CSS = `
 /* over a dimmed page the band is screened, as it is multiplied over a white one (by its layer: a band's own blend mode mixes
    inside the layer alone) */
 .axt-reader[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
-/* the composed page's overlay over the page view: its frame the page's size at its scale (--axt-frame-w, -h), never the floored box */
+/* the composed page's overlay over the page view: its frame the page's size at its scale (--axt-frame-w, -h), never the floored box.
+   Its text at the weight the page's canvas draws its own (docs/PDF-READER.md §11.8): the browser's own smoothing, and
+   geometricPrecision unless the reader's first laid page said auto (text-rendering.ts, written on the root by the composer;
+   Chromium on macOS draws geometricPrecision without the smoothing: 80 % of the ink); in the layer's ink, #141414, where a run
+   names no fill of its own (today's layer, layer-proto/run.mjs SVG_RULES; typeset's display.ts the same ink for a named colour) */
 .axt-reader .axt-over { position: absolute; inset: 0; }
 .axt-reader .axt-over > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; -webkit-user-select: none; user-select: none; pointer-events: none; }
 .axt-reader[data-axt-layer-text="auto"] .axt-over > svg { text-rendering: auto; }
-.axt-reader .axt-over > svg text { white-space: pre; }
+.axt-reader .axt-over > svg text { white-space: pre; fill: #141414; }
 /* the elements' and labels' crops, cut from the page's crop render: darkened into the page, so that paint order cannot change a pixel;
    in the page view's own frame and box (the frame floored to its rounding, as PDF.js floors the page box; a turned page's
    turned, never by CSS), so that its pixels are the page view's and the device's (paint.ts cropGrid) */

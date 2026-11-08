@@ -4,7 +4,7 @@ import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { locate } from '../src/locate/locate.ts'
+import { eachBetweenPaired, locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -107,6 +107,60 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
+    // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two
+    // columns, the head's line in the left half, its paragraph's first line over both; the columns as the names' binding
+    // reads them, a line over both of either)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Acknowledgements', x: 108, y: 700 },
+          { text: 'We are grateful to Nal Kalchbrenner and Stephan', x: 214, y: 700 },
+          { text: 'Gouws for their fruitful comments and corrections and', x: 108, y: 688 },
+          { text: 'inspiration.', x: 108, y: 676 },
+          ...cells,
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('heading', 'Acknowledgements'),
+      unitOf(
+        'para',
+        'We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments and corrections and inspiration.',
+      ),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const own = [0, 1, 1, 1, ...cells.map((_, k) => 2 + k)]
+    const L = locate(instrumentOf(B2, units2, [own]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows[0]).toEqual([0, 1])
+    expect(L.members[1]!.join?.[0]).toBeCloseTo(214 - (108 + 16 * 6), 5)
+  })
+  it('keeps apart two members a tabular row sets side by side, one of them over the page middle (1706.03762v7 p1)', () => {
+    // (the author block's three columns of names on one baseline, the middle one over the page's middle: no run-in head, two
+    // boxes TeX set in one row, each its own flow)
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const B2 = docOf([
+      {
+        lines: [{ text: 'Ashish Vaswani', x: 120, y: 700 }, { text: 'Noam Shazeer', x: 280, y: 700 }, ...cells],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Ashish Vaswani'),
+      unitOf('author', 'Noam Shazeer'),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 1, ...cells.map((_, k) => 2 + k)]]), B2, align(B2, B2))
+    expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
+    expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
@@ -201,6 +255,257 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     expect(L.members[0]).toMatchObject({ located: false, cause: expect.stringMatching(/^content difference: /) })
     const glyphs = A.pages[0]!.glyphs.length + B.pages[0]!.glyphs.length
     expect(reads).toBeLessThan(20 * glyphs)
+  })
+})
+
+describe('a babel name’s counter', () => {
+  it('states the counter TeX set after a name that leads no unit (Word.counter), its own text the word alone', () => {
+    // (IEEEtran's "APPENDIX A" over its title: the wrap gives the counter the name's group (own.mjs); the part stated the name's
+    // text "APPENDIX A" and no counter, so S.names drew "ANHANG" over both and the counter was erased)
+    const B = docOf([
+      {
+        lines: ['APPENDIX A', 'Body text here'],
+        points: [
+          ['n1.appendix.s', 0],
+          ['n1.appendix.e', 8],
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'Body text here'), { ...unitOf('name', 'Appendix'), name: 'appendix' }]
+    const ins = instrumentOf(B, units, [[1, 0]], [[ROLE.name, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const name = read('part', o.bytes, o.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'name')!
+    expect(name.plain).toBe('APPENDIX')
+    expect(name.text).toEqual({ name: 'appendix', counter: ['A', [1, 126, 698, 132, 707, 700]] })
+  })
+})
+
+describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', () => {
+  const partOf = (ins: Instrument, L: ReturnType<typeof locate>) => {
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    return read('part', o.bytes, o.digest)
+  }
+  it('states the paper’s title and its front matter on the part, from the source’s units', () => {
+    // (2303.11366v4 p1's title, a heading-kind unit: the typesetter keeps it at its top, where a section heading set in
+    // fewer lines stands on its last lines, X.lastLines)
+    const B2 = docOf([{ lines: ['Reflexion: Language Agents', 'Noah Shinn', '1 Introduction'] }])
+    const units2 = [
+      { ...unitOf('heading', 'Reflexion: Language Agents'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Noah Shinn'), front: true as const },
+      unitOf('heading', '1 Introduction'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 1, 2]])
+    const flat = partOf(ins2, locate(ins2, B2, align(B2, B2))).flows.flat()
+    expect(flat.map((m) => [m.title ?? 0, m.front ?? 0])).toEqual([
+      [1, 1],
+      [0, 1],
+      [0, 0],
+    ])
+  })
+  it('states the unit a name TeX set right before on its line leads: the name bound, before it in its flow', () => {
+    // (amsthm's "Proof." on its paragraph's first row: the name, the paragraph's label "." (the joint), its text; the part stated
+    // no relation, so the entry read one off any member to the right on the baseline)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Proof', y: 700 },
+          { text: '.', x: 102, y: 700 },
+          { text: 'The claim holds', x: 112, y: 700 },
+          { text: 'on the next line', y: 688 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('theorem', '. The claim holds on the next line'),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+    ]
+    const ins = instrumentOf(B, units, [[1, 0, 0, 0]], [[ROLE.name, ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    const para = L.members.find((m) => m.kind === 'theorem')!
+    expect(L.flows.find((f) => f.includes(para.ord))).toEqual([name.ord, para.ord])
+    const flow = partOf(ins, L).flows.find((f) => f.some((m) => m.ord === para.ord))!
+    expect(flow.map((m) => [m.kind, m.bound ?? 0])).toEqual([
+      ['name', 1],
+      ['theorem', 0],
+    ])
+    // (TeX's separation from the name to its text, the joint standing between: kept)
+    expect(flow[1]!.join).toEqual([10, 1])
+    // (the name's glyphs its lead's, not ink beside its first line: no PINNED by them, its room beside not stopped at them)
+    expect(flow[1]!.lines[0]![9] & 2).toBe(0)
+    expect(flow[1]!.room.side?.[0] ?? 0).toBeLessThan(72.01)
+  })
+  it('binds a name that shares its line with another name, the other kept in its own flow (Devin on #624)', () => {
+    // (two names on one line, "Appendix" and "Proof", the second leading its theorem: binding it spliced out the whole flow
+    // it was in, and the first was in no flow of the part. Every member stands in one flow, once)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Appendix', y: 700 },
+          { text: 'Proof', x: 126, y: 700 },
+          { text: '.', x: 156, y: 700 },
+          { text: 'The claim holds', x: 166, y: 700 },
+          { text: 'on the next line', y: 688 },
+        ],
+      },
+    ])
+    const units = [
+      { ...unitOf('name', 'Appendix'), name: 'appendix' },
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+      unitOf('theorem', '. The claim holds on the next line'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 2, 2]], [[ROLE.name, ROLE.name, ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const proof = L.members.find((m) => m.kind === 'name' && m.name === 'proof')!
+    const appendix = L.members.find((m) => m.kind === 'name' && m.name === 'appendix')!
+    const para = L.members.find((m) => m.kind === 'theorem')!
+    const all = L.flows.flat()
+    expect(all.filter((o) => o === appendix.ord).length).toBe(1)
+    expect(all.filter((o) => o === proof.ord).length).toBe(1)
+    expect(all.length).toBe(new Set(all).size)
+    const flow = L.flows.find((f) => f.includes(para.ord))!
+    expect(flow.slice(flow.indexOf(proof.ord))).toEqual([proof.ord, para.ord])
+    // (no size tie names a member twice, nor the bound name with the members it left)
+    for (const t of L.ties) if (t.rule === 'size') expect(t.ords.length).toBe(new Set(t.ords).size)
+    expect(
+      partOf(ins, L)
+        .flows.flat()
+        .map((m) => m.ord)
+        .sort(),
+    ).toEqual(L.members.map((m) => m.ord).sort())
+  })
+  it('leads no unit across the columns: a name whose next glyph in the stream is its column’s next line', () => {
+    // (Devin on #623: a left column's "Abstract" at 72-120 and the right column's paragraph on its baseline, 700: the entry took
+    // the right column for the name's run-in follower and left the name the original's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Abstract', y: 700 },
+          { text: 'The abstract text', y: 688 },
+          { text: 'A right column paragraph', x: 320, y: 700 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('abstract', 'The abstract text'),
+      unitOf('para', 'A right column paragraph'),
+      { ...unitOf('name', 'Abstract'), name: 'abstract' },
+    ]
+    const ins = instrumentOf(B, units, [[2, 0, 1]], [[ROLE.name, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    expect(L.flows.find((f) => f.includes(name.ord))).toEqual([name.ord])
+    expect(
+      partOf(ins, L)
+        .flows.flat()
+        .find((m) => m.kind === 'name')!.bound,
+    ).toBeUndefined()
+  })
+  it('leads no unit in the other column, even on the name’s baseline: a left column’s last line and the right column’s first', () => {
+    // (local Codex on #624: a name at the left column's end, y 700, and the right column's first unit on that baseline, next in
+    // TeX's stream; same page, same baseline, to the right: bound across the columns before)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Left one', y: 724 },
+          { text: 'Left two', y: 712 },
+          { text: 'Abstract', y: 700 },
+          { text: 'Right one', x: 320, y: 700 },
+          { text: 'Right two', x: 320, y: 688 },
+          { text: 'Right three', x: 320, y: 676 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('para', 'Left one Left two'),
+      unitOf('para', 'Right one Right two Right three'),
+      { ...unitOf('name', 'Abstract'), name: 'abstract' },
+    ]
+    const ins = instrumentOf(
+      B,
+      units,
+      [[0, 0, 2, 1, 1, 1]],
+      [[ROLE.text, ROLE.text, ROLE.name, ROLE.text, ROLE.text, ROLE.text]],
+    )
+    const L = locate(ins, B, align(B, B))
+    const name = L.members.find((m) => m.kind === 'name')!
+    expect(L.flows.find((f) => f.includes(name.ord))).toEqual([name.ord])
+  })
+})
+
+describe('eachBetweenPaired', () => {
+  // (the walk of a unit made on A's glyphs for those B never printed between two it did: each looked for its paired neighbours by
+  // walking its run back and forth, k² reads in a run of k; the sixth owner's finding after PR #620's, the class of its finding 1)
+  const naive = (paired: boolean[]) => {
+    const out: [number, number, number][] = []
+    for (let i = 0; i < paired.length; i++) {
+      if (paired[i]) continue
+      const pv = paired.lastIndexOf(true, i)
+      const nx = paired.indexOf(true, i)
+      if (pv >= 0 && nx >= 0) out.push([i, pv, nx])
+    }
+    return out
+  }
+  const walk = (paired: boolean[], lo = 0, hi = paired.length - 1) => {
+    let reads = 0
+    const out: [number, number, number][] = []
+    eachBetweenPaired(
+      lo,
+      hi,
+      (i) => {
+        reads++
+        return paired[i] === true
+      },
+      (i, pv, nx) => out.push([i, pv, nx]),
+    )
+    return { out, reads }
+  }
+  it('gives each unpaired index between two paired ones with the two, none before the first or after the last', () => {
+    const p = [false, true, false, false, true, true, false, true, false]
+    expect(walk(p).out).toEqual([
+      [2, 1, 4],
+      [3, 1, 4],
+      [6, 5, 7],
+    ])
+    expect(walk([false, false]).out).toEqual([])
+    expect(walk([]).out).toEqual([])
+    let seed = 7
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31
+      return seed / 2 ** 31
+    }
+    for (let t = 0; t < 200; t++) {
+      const q = Array.from({ length: 1 + Math.floor(rnd() * 40) }, () => rnd() < 0.4)
+      expect(walk(q).out).toEqual(naive(q))
+    }
+  })
+  it('reads each index a bounded number of times: linear in a run of unpaired ones', () => {
+    const k = 5000
+    const p = [true, ...Array.from({ length: k }, () => false), true]
+    const { out, reads } = walk(p)
+    expect(out.length).toBe(k)
+    expect(reads).toBeLessThan(3 * p.length)
   })
 })
 

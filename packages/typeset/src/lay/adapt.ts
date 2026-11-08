@@ -38,9 +38,6 @@ export type Reading = {
   labelDrawn: string | null
   /** a name leads the member (U.lead) */
   lead: boolean
-  /** the paper's title, front matter (today's unit flags) */
-  title: boolean
-  front: boolean
   /** the CJK body face's size correction (B.faces), U.params' trackStart reads it */
   cjkSize: number | undefined
   /** the kept regions (runs of KEPT lines, in order) the translation passes (U.breaks' referenced): what its tokens block to */
@@ -244,8 +241,9 @@ export function adapt(i: AdaptInput): Adapted {
   const firstX0 = m.label ? lines[0]![2] : undefined
   const decor = decorAfter(blocks, {
     kind,
-    title: i.reading.title,
-    front: i.reading.front,
+    // (the paper's title and its front matter, the part's: no section heading's rules)
+    title: !!m.title,
+    front: !!m.front,
     luFlush: m.align === 'l' ? 'left' : m.align === 'r' ? 'right' : null,
     label,
     firstX0,

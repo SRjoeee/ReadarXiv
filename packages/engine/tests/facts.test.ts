@@ -14,13 +14,15 @@ import {
   pinnedOf,
   shortSkipLines,
   sideOf,
+  centredByBlock,
   sourceEndMarks,
   styleOf,
   fillRunsOf,
   tailOf,
   textOf,
+  urlCopyOf,
 } from '../src/locate/facts.ts'
-import { locate } from '../src/locate/locate.ts'
+import { locate, urlBreaks } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -166,6 +168,36 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       ),
     ).toEqual([50, 500])
   })
+  it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
+    // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
+    // 290.6 and 429; a rule across the line's band above it and the table's horizontal rule under it are no wall)
+    const glyphs = [
+      { x0: 280, x1: 290.6, y0: 676, y1: 685, y: 678.91 },
+      { x0: 429.01, x1: 440, y0: 676, y1: 685, y: 678.91 },
+    ]
+    const walls = [
+      { x0: 296, x1: 296.4, y0: 555.6, y1: 686.6 },
+      { x0: 409, x1: 409.4, y0: 555.6, y1: 686.6 },
+      { x0: 107.5, x1: 505.6, y0: 686.5, y1: 686.9 },
+      { x0: 107.5, x1: 505.6, y0: 676.6, y1: 677 },
+    ]
+    const line = [L(302.56, 402.52, 678.91)]
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+      ),
+    ).toEqual([290.6, 429.01])
+    expect(
+      sideOf(
+        line,
+        () => glyphs,
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual([296.4, 409])
+  })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [
       { x0: 50, x1: 400, y0: 712, y1: 712.4 },
@@ -190,6 +222,29 @@ describe('alignment where TeX did not tell (B3, E8)', () => {
     // (TeX's justified one-line paragraph, centred by its own glue, off both edges by more than 2 em)
     expect(alignOf([L(200, 412, 700)], () => 10, edges, 'j')).toBe('c')
     expect(alignOf([L(80, 532, 700)], () => 10, edges, 'j')).toBe('j')
+  })
+  it('reads a unit centred on its own block’s middle, off its column’s: its lines, or a single line’s stack, share a middle and not their edges', () => {
+    // (2303.11366v4 p1's author block, NeurIPS's centred tabulars on a one-column page: "Ashwin Gopinath" over "Massachusetts
+    // Institute of Technology" over "agopi@mit.edu", their middles at 393.83, the column's at 306; the row above 28 pt off)
+    const name = L(356.32, 431.34, 553.27)
+    const place = L(317.4, 470.27, 542.36)
+    const mail = L(359.84, 427.82, 531.45)
+    const rowAbove = L(321.7, 457.65, 581.45)
+    const page = [rowAbove, name, place, mail, L(108, 504, 413.51), L(143.87, 469.79, 402.6)]
+    expect(
+      alignOf(
+        [place],
+        () => 10,
+        () => [108, 504],
+      ),
+    ).toBe('j')
+    expect(centredByBlock([place], page, 11.96)).toBe(true)
+    expect(centredByBlock([name], page, 11.96)).toBe(true)
+    // (a paragraph's short last line stays its own: its lines share their left edge; a lone line, nothing to read it by)
+    expect(centredByBlock([L(108, 504, 413.51), L(108, 300, 402.6)], page, 10.91)).toBe(false)
+    expect(centredByBlock([L(108, 300, 300)], page, 10.91)).toBe(false)
+    // (two lines of one unit centred off the column: a centred block of its own)
+    expect(centredByBlock([L(320, 470, 600), L(345, 445, 588)], page, 12)).toBe(true)
   })
   it('centres a single-line cell by its column’s cells: middles within 2 pt, widths spread over 4', () => {
     expect(
@@ -242,6 +297,116 @@ function instrument(
 }
 
 describe('locate states the facts on arXiv’s page', () => {
+  it('states where a URL TeX set on one line may break: after a run of url.sty’s break characters, between two glyphs', () => {
+    // (2303.11366v4 p1's abstract ends "datasets at https://github.com/noahshinn024/reflexion.", the URL whole on its last
+    // line: TeX's url package may break it after its . / : _ and the rest of \UrlBreaks and \UrlBigBreaks, never inside a run
+    // of them ("https:/" + "/…"); the typesetter breaks the URL's crop there as TeX would its text)
+    const B = docOf([{ lines: ['We release it at https://a.io/b_c.'] }])
+    const content: Piece[] = [
+      text('We release it at '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/b_c}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 17 && j < 33 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const M = locate(ins, B, align(B, B)).members[0]!
+    const el = new Map(M.elements).get('1')!
+    expect(el.ink.length).toBe(1)
+    expect(el.breaks).toEqual([
+      [222, 8],
+      [234, 10],
+      [252, 13],
+      [264, 15],
+    ])
+  })
+  it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
+    // (the typesetter cuts the crop's copy text with String.slice: a count of glyphs put every cut after "𠮷" (U+20BB7, two
+    // code units) or "ﬁ" (one glyph, two letters in a copy that holds its letters) a character early)
+    const copy = 'https://𠮷.io/profile/x'
+    const glyphs = run('https://𠮷.io/proﬁle/x')
+    const asLetters = glyphs.map((x) => (x.u === 'ﬁ' ? { ...x, u: 'fi' } : x))
+    const want = [
+      [120, 8],
+      [132, 11],
+      [150, 14],
+      [192, 22],
+    ]
+    expect(urlBreaks(glyphs, copy)).toEqual(want)
+    expect(urlBreaks(asLetters, copy)).toEqual(want)
+    // (and the page's own text, which holds the ligature as PDF.js gives it: its one code unit)
+    expect(urlBreaks(glyphs, textOf(glyphs)).map(([, n]) => textOf(glyphs).slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/proﬁle/',
+    ])
+    expect(want.map(([, n]) => copy.slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/profile/',
+    ])
+  })
+  it('counts a URL’s break offsets in the copy text it states, a space the glyphs stand apart by counted (Devin on #630)', () => {
+    // (2610.22197v1's DOI and the eprint after it, one crop: a gap on a line stays a space in the copy (urlCopyOf), a rule TeX
+    // drew for an underscore or a macro's own space. A count of the glyphs alone put every cut after the space a character
+    // early; an astral character's two code units and both separators after it, before and after the space)
+    const glyphs = [...run('https://𠮷.io/a'), ...run('b/c', 72 + 0.6 * 10 * 15 + 4)]
+    const copy = urlCopyOf(glyphs)
+    expect(copy).toBe('https://𠮷.io/a b/c')
+    const breaks = urlBreaks(glyphs, copy)
+    expect(breaks.map(([, n]) => copy.slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/a b/',
+    ])
+    // (a copy the glyphs are not, the source's reading of the URL: no break point stated, rather than one cutting elsewhere)
+    expect(urlBreaks(glyphs, 'https://𠮷.io/a₁b/c')).toEqual([])
+  })
+  it('states a URL TeX set over two lines as one word, no space at the line’s end (#633 review)', () => {
+    // (\url{https://a.io/lo/ng/path} broken after its "/": textOf reads the end of a line as PDF.js does, a space, which the
+    // copy of a URL cannot hold. A break after a url.sty break character leaves no hyphen of TeX's: the url package sets
+    // its characters as written)
+    const B = docOf([{ lines: ['See https://a.io/lo/', 'ng/path ok.'] }])
+    const content: Piece[] = [
+      text('See '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/lo/ng/path}' },
+      text(' ok.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 27 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('https://a.io/lo/ ng/path')
+    expect(el.copy).toBe('https://a.io/lo/ng/path')
+    expect(el.copy).not.toMatch(/\s/)
+  })
+  it('states a URL’s copy text as its glyphs on the page, not the source’s reading of it (#630’s 30 URLs: "_1" read as a subscript)', () => {
+    // (2609.26457v1's "…/3-540-44668-0_13": the instrument's copy, texToText2 over \url{…}, read "_1" as the subscript "₁"; the
+    // crop shows the page's glyphs and copies them, its breaks cut that text after its separators)
+    const B = docOf([{ lines: ['See https://a.io/x_13.'] }])
+    const content: Piece[] = [
+      text('See '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/x_13}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', copy: 'https://a.io/x₁3' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 21 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.copy).toBe('https://a.io/x_13')
+    expect(el.breaks!.map(([, n]) => el.copy!.slice(0, n))).toEqual([
+      'https://',
+      'https://a.',
+      'https://a.io/',
+      'https://a.io/x_',
+    ])
+  })
   it('keeps a line inside a unit that no unit owns (a held line) as KEPT, in its place', () => {
     const pages: PageSpec[] = [{ lines: ['first line of it', 'a held line here', 'last line of it'] }]
     const B = docOf(pages)
@@ -472,6 +637,133 @@ describe('an element’s text as the page’s text layer reads it (PDF.js’s sp
     expect(textOf([g('a', 72, 700, { along: 12 }), g('b', 79.1)])).toBe('ab')
     // the next line's first glyph, left of the last one's end
     expect(textOf([g('a', 300), g('b', 72, 688)])).toBe('a b')
+  })
+})
+
+describe('an element’s text across a line TeX ended inside a word', () => {
+  // 1810.04805v2 p1, arXiv's PDF as the engine reads it: the citation "(Peters et al., 2018a; Rad- ford et al., 2018)", whose
+  // "Rad-" ends the abstract's fifth line and "ford" begins the sixth; staging drew "Rad- ford" in the translation
+  const nimbus = (u: string, x0: number, x1: number, y: number, fill = 128): DocGlyph => ({
+    ...g(u, x0, y, { base: 'NimbusRomNo9L-Regu', size: 9.96, fill }),
+    x1,
+    ix1: x1,
+  })
+  const radford = [
+    nimbus('a', 242.37, 246.8, 540.69),
+    nimbus(';', 246.8, 249.57, 540.69, 0),
+    nimbus('R', 253.89, 260.53, 540.69),
+    nimbus('a', 260.53, 264.96, 540.69),
+    nimbus('d', 264.96, 269.94, 540.69),
+    nimbus('-', 269.94, 273.26, 540.69),
+    nimbus('f', 89.01, 92.33, 528.74),
+    nimbus('o', 92.33, 97.31, 528.74),
+    nimbus('r', 97.31, 100.62, 528.74),
+    nimbus('d', 100.62, 105.61, 528.74),
+    nimbus('e', 109.54, 113.96, 528.74),
+    nimbus('t', 113.96, 116.73, 528.74),
+  ]
+  it('takes out the hyphen TeX set to break a word at a line’s end, and the line’s end with it', () => {
+    expect(textOf(radford)).toBe('a; Radford et')
+    expect(fillRunsOf(radford)).toEqual([
+      ['a', 128],
+      ['; ', 0],
+      ['Radford et', 128],
+    ])
+  })
+  it('keeps a word’s own hyphen, joined across the line’s end: before a capital, in a typewriter face, in a URL', () => {
+    const word = (s: string, x: number, y: number, o: Partial<DocGlyph> = {}) =>
+      [...s].map((c, i) => g(c, x + 6 * i, y, o))
+    // (Lee-Thorp: a capital after it starts the name's own part)
+    expect(textOf([...word('Lee-', 270, 700), ...word('Thorp', 72, 688)])).toBe('Lee-Thorp')
+    // (a typewriter face's \hyphenchar is −1 under LaTeX: TeX sets no hyphen of its own in it)
+    const tt = { base: 'CMTT10' }
+    expect(textOf([...word('google-', 270, 700, tt), ...word('research', 72, 688, tt)])).toBe('google-research')
+    // (a URL or a code mark: TeX sets its characters as written)
+    expect(textOf([...word('google-', 270, 700), ...word('research', 72, 688)], { literal: true })).toBe(
+      'google-research',
+    )
+    // (one letter before it: under \lefthyphenmin, no break of TeX's)
+    expect(textOf([...word('e-', 270, 700), ...word('mail', 72, 688)])).toBe('e-mail')
+    // (a hyphen after no letter is no word's: the line's end a space, as before)
+    expect(textOf([...word('3 -', 270, 700), ...word('x', 72, 688)])).toBe('3 - x')
+  })
+  it('keeps the hyphens the corpus showed are a word’s own: TeX hyphenates the first word after a space alone, to its minimums', () => {
+    // (the stage 1a corpus, the parts' element texts: 2307.16209v1 p138 "arXiv:gr- qc/0511111", p140 "[hep- th]", p146
+    // "imrn/article- pdf/2015/18/", 2608.06701v1 p5 "SWE- bench Pro"; each was taken for TeX's break and joined)
+    const line = (s: string, x: number, y: number) => {
+      const out: DocGlyph[] = []
+      let at = x
+      for (const c of s) {
+        if (c === ' ') at += 3.3
+        else {
+          out.push(g(c, at, y))
+          at += 6
+        }
+      }
+      return out
+    }
+    // (not the first word after its space: TeX hyphenates no other)
+    expect(textOf([...line('see arXiv:gr-', 200, 700), ...line('qc/0511111', 72, 688)])).toBe('see arXiv:gr-qc/0511111')
+    expect(textOf([...line('url imrn/article-', 200, 700), ...line('pdf/2015', 72, 688)])).toBe(
+      'url imrn/article-pdf/2015',
+    )
+    // (fewer letters after it than \righthyphenmin, LaTeX's 3)
+    expect(textOf([...line('see [hep-', 200, 700), ...line('th].', 72, 688)])).toBe('see [hep-th].')
+    // (a hyphen of its own after the word on the next line, before a space: TeX hyphenates no word an explicit hyphen's
+    // discretionary follows, tex.web §899; 2610.20451v1's "extreme- mass-ratio")
+    expect(textOf([...line('the extreme-', 200, 700), ...line('mass-ratio limit', 72, 688)])).toBe(
+      'the extreme-mass-ratio limit',
+    )
+    // (capitals alone before it, a small letter after: an acronym's compound, SWE-bench, BERT-based)
+    expect(textOf([...line('on SWE-', 200, 700), ...line('bench Pro', 72, 688)])).toBe('on SWE-bench Pro')
+    // (the first word after its space, a bracket before it as TeX skips: TeX's break, out)
+    expect(textOf([...line('see (Col-', 200, 700), ...line('lobert and', 72, 688)])).toBe('see (Collobert and')
+  })
+  it('decides by the source where it states the word: its hyphen kept where the source writes one, out where it joins', () => {
+    const line = (s: string, x: number, y: number) => [...s].map((c, i) => g(c, x + 6 * i, y))
+    const anti = [...line('an anti-', 200, 700), ...line('inflammatory drug', 72, 688)]
+    // (TeX's rules alone take this hyphen for TeX's; the element's source writes the compound with its own)
+    expect(textOf(anti, { source: '\\href{https://example.org/a}{an anti-inflammatory drug}' })).toBe(
+      'an anti-inflammatory drug',
+    )
+    expect(
+      fillRunsOf(
+        anti.map((x, i) => (i < 3 ? { ...x, fill: 0x80 } : x)),
+        { source: 'an anti-inflammatory drug' },
+      ),
+    ).toEqual([
+      ['an ', 0x80],
+      ['anti-inflammatory drug', 0],
+    ])
+    // (a capital after it is a compound's to TeX's rules alone; the source joins the word: TeX broke it, `\sys` TensorCast)
+    const tensor = [...line('of Tensor-', 200, 700), ...line('Cast is', 72, 688)]
+    expect(textOf(tensor)).toBe('of Tensor-Cast is')
+    expect(textOf(tensor, { source: 'we build TensorCast, a' })).toBe('of TensorCast is')
+    // (TeX's own discretionary hyphen written in the source, `\-`, is no hyphen of the word's)
+    expect(textOf(anti, { source: 'an anti\\-inflammatory drug' })).toBe('an antiinflammatory drug')
+    // (a source that does not state the word, a citation's key: TeX's rules decide, as before)
+    expect(textOf(tensor, { source: '\\cite{tensor-cast:2024}' })).toBe('of Tensor-Cast is')
+  })
+})
+
+describe('an element’s text across a line’s end, decided by its source through locate', () => {
+  // ("an anti-" ends the first line, "inflammatory" begins the second: the element's glyphs 4..23)
+  const B = docOf([{ lines: ['see an anti-', 'inflammatory here'] }])
+  const read = (el: Piece, around: Piece[] = [text('see '), el, text(' here')]) => {
+    const u: InstrumentUnit = { id: unitId('para', around), kind: 'para', content: around }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j <= 23 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    return locate(ins, B, align(B, B)).members[0]!.elements.find(([id]) => id === '1')?.[1]
+  }
+  it('keeps the hyphen the element’s own TeX writes, which TeX’s rules alone took for TeX’s', () => {
+    const el = read({ t: 'el', id: '1', kind: 'macro', src: '\\term{an anti-inflammatory}' })
+    expect(el?.text).toBe('an anti-inflammatory')
+  })
+  it('keeps the hyphen the unit’s text writes, where the element’s TeX does not state the word', () => {
+    const el: Piece = { t: 'el', id: '1', kind: 'macro', src: '\\term{x}' }
+    const said = read(el, [text('see '), el, text(' here, an anti-inflammatory one')])
+    expect(said?.text).toBe('an anti-inflammatory')
+    // (stated nowhere: TeX's rules, as before)
+    expect(read(el)?.text).toBe('an antiinflammatory')
   })
 })
 

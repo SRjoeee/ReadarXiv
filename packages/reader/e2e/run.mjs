@@ -4,6 +4,8 @@
 //
 //   node packages/reader/e2e/run.mjs [--only=<part of a name>|…] [--browser=chromium|webkit|firefox]
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
+//   AXT_LINK=<latency ms>,<KB/s> shapes every page's link in Chromium (the first laid page's measurements: the slices of a CJK
+//   target are its last wait); AXT_DELTA_MS the pace of a corpus paper's rows arriving (one delta of DELTAS a step, 1000 ms)
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -54,6 +56,9 @@ const docs = {},
   rowsObjects = new Map(),
   modes = {},
   v2log = []
+/** each corpus paper's rows in DELTAS objects (`modes[seg]` 'deltas') */
+const DELTAS = 10
+const deltasOf = {}
 /** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
  *  catalog, `recatalog`), its object by path */
 const twins = {},
@@ -98,6 +103,38 @@ for (const [name, f] of Object.entries(fixtures)) {
     const sha = createHash('sha256').update(bytes).digest('hex')
     rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, bytes)
     const n = JSON.parse(bytes.toString('utf8')).rows.length
+    // (a corpus paper: its rows as our server's run writes them, in the units' reading order, every unit but those the paper
+    // keeps (a unit the dump has no row of read as its own text), cut into DELTAS objects: `modes[seg]` 'deltas' gives them one
+    // at a time, a translation under way)
+    if (!rf) {
+      const dumpRows = new Map(JSON.parse(bytes.toString('utf8')).rows.map((r) => [r.id, r]))
+      const plain = (ps) => ps.map((x) => (x.t === 'text' ? x.s : x.content ? plain(x.content) : '')).join('')
+      const all = []
+      for (const u of head.units)
+        for (const x of JSON.parse(readFileSync(join(f.bundle, `${u}.units`), 'utf8')).units)
+          if (!x.kept && !all.some((r) => r.id === x.id))
+            all.push(
+              dumpRows.get(x.id) ?? {
+                id: x.id,
+                ok: true,
+                content: [{ t: 'text', s: plain(x.content) || '·' }],
+                by: 'fx',
+              },
+            )
+      const list = []
+      for (let k = 0; k < DELTAS; k++) {
+        const b = Buffer.from(
+          JSON.stringify({
+            format: 1,
+            rows: all.slice(Math.floor((k * all.length) / DELTAS), Math.floor(((k + 1) * all.length) / DELTAS)),
+          }),
+        )
+        const sha = createHash('sha256').update(b).digest('hex')
+        rowsObjects.set(`/api/v2/o/r/${seg}/${t}/fx/${sha}`, b)
+        list.push({ path: `r/${seg}/${t}/fx/${sha}`, sha256: sha, bytes: b.length })
+      }
+      deltasOf[seg] = { target: t, list, total: all.length }
+    }
     targets[t] = {
       attempt: 1,
       state: 'done',
@@ -219,6 +256,26 @@ const v2Route = {
           rev: 2,
           targets: Object.fromEntries(Object.entries(d.targets).map(([t, x]) => [t, { ...x, state: 'running' }])),
         })
+      // (the target's rows arriving: one delta more each `every` ms from the first follow, the run done with the last)
+      if (m?.kind === 'deltas') {
+        const ds = deltasOf[d.pv]
+        m.start ??= performance.now()
+        const k = Math.min(ds.list.length, 1 + Math.floor((performance.now() - m.start) / m.every))
+        m.told = Math.max(m.told ?? 0, k)
+        return json(200, {
+          ...d,
+          rev: 1 + k,
+          targets: {
+            [ds.target]: {
+              ...d.targets[ds.target],
+              state: k < ds.list.length ? 'running' : 'done',
+              rows: ds.list.slice(0, k),
+              done: Math.round((k * ds.total) / ds.list.length),
+              total: ds.total,
+            },
+          },
+        })
+      }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
       // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
       // which nothing runs is followed again a minute on, client.ts IDLE_MS)
@@ -308,6 +365,10 @@ const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fi
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
 const violations = []
+const LINK = (() => {
+  const m = /^(\d+),(\d+)$/.exec(process.env.AXT_LINK ?? '')
+  return m ? { latency: Number(m[1]), bytesPerS: Number(m[2]) * 1024 } : null
+})()
 async function newPage(o = {}) {
   const context = await browser.newContext({
     viewport: o.viewport ?? { width: 1400, height: 900 },
@@ -369,6 +430,16 @@ async function newPage(o = {}) {
     )
       errors.push(m.text())
   })
+  // (AXT_LINK=<latency ms>,<KB/s>: the link shaped by the browser, for the measurements of the first laid page)
+  if (LINK && browserName === 'chromium') {
+    const cdp = await context.newCDPSession(page)
+    await cdp.send('Network.emulateNetworkConditions', {
+      offline: false,
+      latency: LINK.latency,
+      downloadThroughput: LINK.bytesPerS,
+      uploadThroughput: LINK.bytesPerS,
+    })
+  }
   await page.goto(`${server.origin}/${o.path ?? ''}`)
   return { page, context, errors }
 }
@@ -709,6 +780,45 @@ await check(
   },
 )
 await check(
+  'compose: a crop the typesetter cut over two lines (a URL broken) read by the text layer and its copy once, whole, in order (s1-columns)',
+  async () => {
+    // (the formula "f(x)=x+1" is one item of PDF.js's text, as a URL may be; its crop cut after "f(x)=", the item's middle under
+    // the head, the parts given no copy text of their own (2610.21547v1's URLs have none): each part reads the page's characters
+    // under it, no space where the line breaks between them)
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns', { cut: { piece: '1', share: 5 / 8, text: ['', ''] } }))
+    await laidShown(page, 1)
+    await waitFor(page, () => !!window.__h.panes.right.page(1)?.querySelector('.axt-over .textLayer span'))
+    const text = await page.evaluate(() => window.__h.textOf(1))
+    const spans = await page.evaluate(() =>
+      [...window.__h.panes.right.page(1).querySelectorAll('.axt-over .textLayer span')].map((x) => x.textContent),
+    )
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    const count = (s, t) => s.split(t).length - 1
+    const around = (s) => {
+      const i = s.indexOf('f(x)')
+      return i < 0 ? s.slice(0, 120) : s.slice(Math.max(0, i - 30), i + 40)
+    }
+    assert(
+      count(text.text, 'f(x)=') === 1 && count(text.text, 'x+1') === 1 && text.text.includes('f(x)=x+1'),
+      `the layer reads ${JSON.stringify(around(text.text))}`,
+    )
+    const at = spans.indexOf('f(x)=')
+    assert(
+      at >= 0 && spans[at + 1] === 'x+1',
+      `the parts' spans ${JSON.stringify(spans.slice(Math.max(0, at - 1), at + 3))}`,
+    )
+    const copied = text.copied
+    assert(
+      count(copied, 'f(x)=') === 1 && count(copied, 'x+1') === 1 && copied.includes('f(x)=x+1'),
+      `the copy reads ${JSON.stringify(around(text.copied))}`,
+    )
+    return { layer: around(text.text), copied: around(text.copied) }
+  },
+)
+await check(
   'compose: a language switch reuses the composed document, the parts and the place; a unit not laid in the new language has its groups back on (s1-columns)',
   async () => {
     const { page, context, errors } = await newPage()
@@ -1036,9 +1146,9 @@ await check(
   },
 )
 /** a fixture opened with no engine (the reader's own typesetter), laid; what is drawn, the moments, the site's files asked */
-async function typesetLaid(name, target) {
+async function typesetLaid(name, target, o = {}) {
   const from = siteLog.length
-  const { page, context, errors } = await newPage()
+  const { page, context, errors } = await newPage(o)
   await page.evaluate(([n, t]) => window.__h.reader(n, { host: 'web', typeset: true, target: t }), [name, target])
   await waitFor(page, () => (window.__h.readers[0].reader.probe().laidPages ?? 0) > 0, null, 60_000)
   await waitFor(page, () => document.querySelectorAll('.axt-over > svg').length > 0, null, 10_000).catch(() => {})
@@ -1106,15 +1216,231 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
       assert(drawn.overlays > 0 && /\p{Script=Han}/u.test(drawn.words) && drawn.faces > 0, JSON.stringify(drawn))
       return {
         firstLaidMs: p['at.firstLaid'],
+        composedOpenMs: p['at.composedOpen'],
+        codeMs: p['at.code'],
         leftDrawnMs: p['at.leftDrawn'],
         laidPages: p.laidPages,
         faces: drawn.faces,
         asked: asked().length,
+        slicesAsked: asked().filter((u) => u.endsWith('.woff2')).length,
         words: drawn.words.slice(0, 40),
       }
     },
   )
+  await check(
+    `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
+    async () => {
+      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      const seg = indexOf[name].seg
+      const every = Number(process.env.AXT_DELTA_MS ?? 1000)
+      modes[seg] = { kind: 'deltas', every }
+      const from = siteLog.length
+      const { page, context, errors } = await newPage()
+      try {
+        await page.evaluate(([n]) => window.__h.reader(n, { host: 'web', typeset: true, target: 'zh' }), [name])
+        // (the reader's own moments, and when its rows were complete, read each 50 ms)
+        let rowsAt = null,
+          slicesAtLaid = null
+        for (const until = Date.now() + 120_000; Date.now() < until; ) {
+          const p = await probe(page)
+          if (rowsAt === null && p.rows === 'complete')
+            rowsAt = Math.round(await page.evaluate(() => performance.now()))
+          if (p.laidPages > 0 && slicesAtLaid === null)
+            slicesAtLaid = siteLog.slice(from).filter((u) => u.endsWith('.woff2')).length
+          if (p.laidPages > 0 && rowsAt !== null) break
+          await page.waitForTimeout(50)
+        }
+        const p = await probe(page)
+        assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+        assert(p.laidPages > 0, JSON.stringify(p))
+        // (the rows ended and the first page laid before: a page laid only once the run is over is what this holds against.
+        // Not on a shaped link (AXT_LINK), a measurement: there the composed document itself opens about as the rows end,
+        // the harness's PDF.js worker read twice, no-store, at the shaped rate)
+        assert(rowsAt !== null, `the rows never ended: ${JSON.stringify(p)}`)
+        const open = p['at.open']
+        assert(
+          LINK || p['at.firstLaid'] < rowsAt - open,
+          `the first page laid at ${p['at.firstLaid']} ms, once the rows had ended (${rowsAt - open} ms)`,
+        )
+        return {
+          firstLaidMs: p['at.firstLaid'],
+          rowsCompleteMs: rowsAt - open,
+          composedOpenMs: p['at.composedOpen'],
+          slicesAtLaid,
+          deltasTold: modes[seg].told,
+        }
+      } finally {
+        await context.close()
+        delete modes[seg]
+      }
+    },
+  )
 }
+/** the ink of a region of the page as shown: the sum over its device pixels of 1 - luma (Rec. 709), its screenshot decoded in
+ *  the page */
+async function inkIn(page, clip) {
+  const buf = await page.screenshot({ clip })
+  return page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/png' }))
+    const c = new OffscreenCanvas(bmp.width, bmp.height)
+    const x = c.getContext('2d')
+    x.drawImage(bmp, 0, 0)
+    const d = x.getImageData(0, 0, bmp.width, bmp.height).data
+    let ink = 0
+    for (let i = 0; i < d.length; i += 4) ink += 1 - (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255
+    return ink
+  }, buf.toString('base64'))
+}
+/** the ink of laid page 1's overlay lines as drawn, each against the same runs drawn by a canvas's fillText (as PDF.js draws a
+ *  page's text) in their computed faces, sizes and fills at their places: a line's own ink, what the page shows with it alone
+ *  of the overlay's text less what it shows with none. `lines`: the regular expressions of the lines measured (the first line
+ *  each matches), else the six longest lines of eight characters or more drawn upright in no small capitals */
+async function linesInk(page, lines = null) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))
+  })
+  const chosen = await page.evaluate((res) => {
+    const texts = [...document.querySelector('.axt-over > svg').querySelectorAll('text')]
+    const plain = (t) =>
+      !t.hasAttribute('transform') &&
+      [...t.querySelectorAll('tspan')].every((s) => getComputedStyle(s).fontVariantCaps === 'normal')
+    const chars = (t) => [...t.textContent].filter((c) => /\S/u.test(c)).length
+    if (res) return res.map((r) => texts.findIndex((t) => new RegExp(r, 'u').test(t.textContent))).filter((k) => k >= 0)
+    return texts
+      .map((t, k) => [k, chars(t)])
+      .filter(([k, n]) => n >= 8 && plain(texts[k]))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k]) => k)
+  }, lines)
+  const out = []
+  for (const k of chosen) {
+    const clip = await page.evaluate(async (k) => {
+      const t = document.querySelector('.axt-over > svg').querySelectorAll('text')[k]
+      t.scrollIntoView({ block: 'center' })
+      await new Promise((ok) => setTimeout(ok, 300))
+      const r = t.getBoundingClientRect()
+      return {
+        x: Math.floor(r.left) - 2,
+        y: Math.floor(r.top) - 2,
+        width: Math.ceil(r.width) + 4,
+        height: Math.ceil(r.height) + 4,
+      }
+    }, k)
+    // (the overlay's lines shown: none (-1), line k alone, or all again (null))
+    const show = (only) =>
+      page.evaluate((only) => {
+        const texts = document.querySelector('.axt-over > svg').querySelectorAll('text')
+        texts.forEach((t, i) => {
+          t.style.visibility = only === null ? '' : i === only ? 'visible' : 'hidden'
+        })
+      }, only)
+    await show(-1)
+    const none = await inkIn(page, clip)
+    await show(k)
+    const svg = await inkIn(page, clip)
+    await show(null)
+    const canvas = await page.evaluate(
+      ([k, clip]) => {
+        const svg = document.querySelector('.axt-over > svg')
+        const t = svg.querySelectorAll('text')[k]
+        const box = svg.getBoundingClientRect(),
+          u = box.width / svg.viewBox.baseVal.width,
+          d = devicePixelRatio
+        const c = document.createElement('canvas')
+        c.width = Math.round(clip.width * d)
+        c.height = Math.round(clip.height * d)
+        const x = c.getContext('2d', { alpha: false })
+        x.fillStyle = '#fff'
+        x.fillRect(0, 0, c.width, c.height)
+        for (const s of t.querySelectorAll('tspan')) {
+          const cs = getComputedStyle(s)
+          x.font = `${cs.fontStyle} ${cs.fontWeight} ${Number(s.getAttribute('font-size')) * u * d}px ${cs.fontFamily}`
+          x.fillStyle = cs.fill
+          const xs = (s.getAttribute('x') ?? '0').trim().split(/\s+/).map(Number),
+            y = (box.top + Number(s.getAttribute('y')) * u - clip.y) * d
+          const at = (v) => (box.left + v * u - clip.x) * d
+          if (xs.length > 1)
+            for (const [i, ch] of [...s.textContent].entries()) x.fillText(ch, at(xs[i] ?? xs.at(-1)), y)
+          else x.fillText(s.textContent, at(xs[0]), y)
+        }
+        const px = x.getImageData(0, 0, c.width, c.height).data
+        let ink = 0
+        for (let i = 0; i < px.length; i += 4)
+          ink += 1 - (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255
+        return { ink, text: t.textContent.trim().slice(0, 24), fill: getComputedStyle(t.querySelector('tspan')).fill }
+      },
+      [k, clip],
+    )
+    out.push({ text: canvas.text, fill: canvas.fill, svg: Math.round(svg - none), canvas: Math.round(canvas.ink) })
+  }
+  const state = await page.evaluate(() => ({
+    decided: document.querySelector('.axt-reader').getAttribute('data-axt-layer-text'),
+    rendering: getComputedStyle(document.querySelector('.axt-over > svg')).textRendering,
+  }))
+  const sum = (f) => out.reduce((a, l) => a + l[f], 0)
+  return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
+}
+await check(
+  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink: geometricPrecision, or auto where the first laid page's words lay out alike under both (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
+  async () => {
+    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    const out = {}
+    const corpus = Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))
+    for (const [name, target] of [['s1-columns', 'de'], ...corpus.map((n) => [n, 'zh'])]) {
+      const { page, context, errors } = await typesetLaid(name, target, {
+        dpr: 2,
+        viewport: { width: 1600, height: 1000 },
+      })
+      const lines = process.env.AXT_INK_LINES && corpus.includes(name) ? process.env.AXT_INK_LINES.split('|') : null
+      const got = await linesInk(page, lines)
+      if (process.env.AXT_SHOTS) {
+        const clip = await page.evaluate(() => {
+          const svg = document.querySelector('.axt-over > svg')
+          svg.scrollIntoView({ block: 'start' })
+          const r = svg.getBoundingClientRect()
+          return {
+            x: r.x,
+            y: Math.max(0, r.y),
+            width: r.width,
+            height: Math.min(r.height, innerHeight - Math.max(0, r.y)),
+          }
+        })
+        await page.screenshot({ clip, path: join(HERE, '.shots', `${name}-ink-p1.png`) })
+      }
+      await context.close()
+      assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
+      out[name] = got
+    }
+    if (process.env.AXT_INK_OUT)
+      (await import('node:fs')).writeFileSync(process.env.AXT_INK_OUT, `${JSON.stringify(out, null, 1)}\n`)
+    for (const [name, got] of Object.entries(out)) {
+      assert(got.lines.length > 0, `${name}: no line measured`)
+      // (the rendering the root says is the one the overlay draws in: auto under the attribute, geometricPrecision without)
+      assert(
+        (got.decided === 'auto') === (got.rendering === 'auto') && /^(auto|geometricprecision)$/.test(got.rendering),
+        `${name}: decided ${got.decided}, drawn in ${got.rendering}`,
+      )
+      // (the canvas's weight: macOS's geometricPrecision drew 0.80 of it; Chromium on Linux within 4 % under either)
+      assert(
+        Math.abs(got.ratio - 1) <= 0.06,
+        `${name}: the overlay's ink ${got.ratio} of the canvas's ${JSON.stringify(got.lines)}`,
+      )
+      assert(
+        got.lines.every((l) => l.fill !== 'rgb(0, 0, 0)'),
+        `${name}: a run of no fill of its own drawn in ${got.lines.map((l) => l.fill)}`,
+      )
+    }
+    return Object.fromEntries(
+      Object.entries(out).map(([n, g]) => [
+        n,
+        { decided: g.decided, rendering: g.rendering, ratio: g.ratio, lines: g.lines.length },
+      ]),
+    )
+  },
+)
 await check(
   "reader: the extension's host: arXiv's own PDF, rows made here, no target named to our server",
   async () => {
@@ -3040,23 +3366,29 @@ await check(
 )
 
 await check(
-  "port: a laid page's text layer paints nothing, one copy for find and assistive technology, the paper's language with the translation's spans the target's, its cost; its commit writes nothing on the root (B-386, B-398, B-400, B-407, A-333, B-023)",
+  "port: a laid page's text layer paints nothing, one copy for find and assistive technology, the paper's language with the translation's spans the target's, its cost; its commit writes nothing on the root but the overlay's text rendering, once, before any drawing is in place (B-386, B-398, B-400, B-407, A-333, B-023)",
   async () => {
     const { page, context, errors } = await newPage({ dpr: 2 })
     await page.evaluate((u) => window.__h.open(u), S1)
     await page.evaluate(() => {
       window.__h.rootWrites = 0
-      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.getElementById('root'), {
-        attributes: true,
-      })
-      new MutationObserver((rs) => (window.__h.rootWrites += rs.length)).observe(document.documentElement, {
-        attributes: true,
-      })
+      // (the text rendering's decision, compose/text-rendering.ts: each write, whether an overlay was in place when it was made;
+      // a write after one would restyle a page laid out already, B-023)
+      window.__h.textWrites = []
+      const seen = (rs) => {
+        for (const r of rs)
+          if (r.attributeName === 'data-axt-layer-text')
+            window.__h.textWrites.push(!!document.querySelector('.axt-pane.right .axt-over'))
+          else window.__h.rootWrites++
+      }
+      new MutationObserver(seen).observe(document.getElementById('root'), { attributes: true })
+      new MutationObserver(seen).observe(document.documentElement, { attributes: true })
       return 0
     })
     await page.evaluate(() => window.__h.layer('s1-columns'))
     await laidShown(page, 1)
     const writes = await page.evaluate(() => window.__h.rootWrites)
+    const textWrites = await page.evaluate(() => window.__h.textWrites)
     await page.waitForTimeout(400)
     const slot = page.locator('.axt-pane.right .axt-slot[data-page-number="1"] > .axt-slot-view')
     const a = await slot.screenshot({ animations: 'disabled' })
@@ -3092,13 +3424,17 @@ await check(
     await context.close()
     assert(!errors.length, errors.join('; '))
     assert(writes === 0, `the commit wrote ${writes} attributes on the root`)
+    assert(
+      textWrites.length <= 1 && textWrites.every((placed) => !placed),
+      `the text rendering written ${JSON.stringify(textWrites)} (true: with a drawing in place)`,
+    )
     assert(a.equals(b), 'the text layer changed the paint')
     assert(r.lang === 'en' && r.translated > 0, `langs ${JSON.stringify(r)}`)
     assert(r.svgHidden === 'true' && r.svgSelect === 'none' && r.found && r.at, `one copy ${JSON.stringify(r)}`)
     const times = tree.split(r.word).length - 1
     assert(times === 1, `the word "${r.word}" ${times} times in the accessibility tree`)
     assert(r.nodes <= 2000, `nodes ${r.nodes}`)
-    return { nodes: r.nodes, textMs: Math.round(r.textMs * 10) / 10 }
+    return { nodes: r.nodes, textMs: Math.round(r.textMs * 10) / 10, textWrites: textWrites.length }
   },
 )
 

@@ -317,13 +317,129 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // (its word the original's already: left)
     const same = layPage(part({ ...name, plain: 'Zusammenfassung' }), rowsOf([], true), rules, metrics()).members[0]
     expect(same).toMatchObject({ state: 'name', off: 0 })
-    // (amsthm's "Proof." on its paragraph's first row: the paragraph's lead, U.lead's, not drawn by itself)
+  })
+  it('lays a name the part binds to the member after it as that member’s lead (amsthm’s "Proof." on its first row)', () => {
+    // (today's RUN_IN: the name's word, the joint TeX set after it (the member's label "."), its glue, then the translation, the
+    // line from the name's start; the name's text off with its member, both the original's where its member is not laid)
     const idB = 'b'.repeat(64)
-    const proof = { ...name, text: { name: 'proof' }, plain: 'Proof', align: 'j' as const }
-    const para = member({ ord: 1, text: idB, lines: [[1, 0, 190, 300, 700, 707, 698, 72, 300, 2, 10]] })
-    const pt: Part = { ...part(proof), flows: [[proof], [para]] }
-    const both = layPage(pt, rowsOf([{ ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }], true), rules, metrics())
-    expect(both.members[0]).toMatchObject({ state: 'name', off: 0 })
+    const proof = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'proof' },
+      plain: 'Proof',
+      bound: 1,
+      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 100] },
+    })
+    const para = member({
+      ord: 1,
+      kind: 'theorem',
+      text: idB,
+      join: [10, 1],
+      label: {
+        kind: 'head',
+        ink: [1, 100, 698, 103, 707, 700],
+        style: { role: 'serif', size: 10, slant: 1 },
+        punct: ['.', [1, 100, 698, 103, 707, 700]],
+      },
+      lines: [
+        [1, 0, 110, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(proof), flows: [[proof, para]] }
+    const rows = rowsOf([{ ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }], true)
+    const both = layPage(pt, rows, rules, metrics())
+    expect(both.members[0]).toMatchObject({ state: 'laid', off: 1, lines: [] })
+    const led = both.members[1]!
+    expect(led).toMatchObject({ state: 'laid' })
+    expect(led.off & 5).toBe(5)
+    const first = led.lines[0]!
+    expect(first[1]).toBe(72)
+    expect(first[3].map((it) => it.s).join('')).toMatch(/^Beweis\.\s*ein Satz/)
+    // (its member not laid: the name the original's with it)
+    const none = layPage(pt, rowsOf([], true), rules, metrics())
+    expect(none.members.map((m) => [m.state, m.off])).toEqual([
+      ['bound', 0],
+      ['none', 0],
+    ])
+  })
+  it('sets a name on its own where the part binds it to none, whatever stands on its baseline in the other column', () => {
+    // (Devin on #623: nameOf took any member to the right on the name's page and baseline for its run-in follower; a left
+    // column's "Abstract" at 72-120 and the right column's paragraph at 320 on baseline 700 left the name the original's)
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      lines: [[1, 0, 72, 120, 700, 707, 698, 72, 290, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 290] },
+    })
+    const right = member({ ord: 1, text: 'b'.repeat(64), lines: [[1, 1, 320, 540, 700, 707, 698, 320, 540, 0, 10]] })
+    const pt: Part = { ...part(name), flows: [[name], [right]] }
+    const [laid] = layPage(pt, rowsOf([], true), rules, metrics()).members
+    expect(laid).toMatchObject({ state: 'laid', off: 1 })
+    expect(laid!.lines[0]![3].map((it) => it.s)).toEqual(['Zusammenfassung'])
+  })
+  it('sets the counter TeX set after a name after the target’s word (Word.counter)', () => {
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'appendix', counter: ['A', [1, 126, 698, 132, 707, 700]] },
+      plain: 'APPENDIX',
+      align: 'c',
+      style: { role: 'serif', size: 10, upper: 1, design: 'NimbusRomNo9L-Regu' },
+      lines: [[1, 0, 72, 132, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+    const [laid] = layPage(part(name), rowsOf([], true), rules, metrics()).members
+    expect(laid!.lines[0]![3].map((it) => it.s).join('')).toBe('ANHANG A')
+  })
+  it('sets a name in capitals where its style is the text’s capitals (Style.upper), none where they are faked small capitals', () => {
+    // (cloud Codex on #623: the bundle states a name's case in Style.upper, the entry read Word.caps alone: "ABSTRACT" laid as
+    // "Zusammenfassung")
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'abstract' },
+      plain: 'ABSTRACT',
+      align: 'c',
+      style: { role: 'serif', size: 10, upper: 1, design: 'NimbusRomNo9L-Regu' },
+      lines: [[1, 0, 140, 190, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+    const words = (m: Placed) =>
+      layPage(part(m), rowsOf([], true), rules, metrics()).members[0]!.lines[0]?.[3].map((it) => [
+        it.s,
+        'size' in it ? it.size : 0,
+      ])
+    expect(words(name)).toEqual([['ZUSAMMENFASSUNG', 10]])
+    // (in faked small capitals: its word in its own case, its lowercase drawn as small capitals)
+    expect(words({ ...name, plain: 'Abstract', style: { ...name.style, upper: undefined, sc: 0.8 } })).toEqual([
+      ['Z', 10],
+      ['USAMMENFASSUNG', 8],
+    ])
+  })
+  it('carries an italic name’s synthetic slant in a CJK target (its face oblique: the item skewed, as D.display’s)', () => {
+    // (cloud Codex on #623: faceOf states the slant as face.oblique, the name's items dropped it: the Japanese word upright)
+    const ja = rulesFor('ja')
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+      align: 'c',
+      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      lines: [[1, 0, 140, 190, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+    const [laid] = layPage(part(name), rowsOf([], true), ja, metrics()).members
+    expect(laid).toMatchObject({ state: 'laid' })
+    const items = laid!.lines[0]![3] as (Item & { skew?: 1 })[]
+    expect(items.map((it) => it.s).join('')).toBe(ja.labels!.abstract)
+    expect(items.every((it) => it.skew === 1)).toBe(true)
   })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's

@@ -42,6 +42,11 @@ describe('what a page waits for', () => {
     expect(waitOf(part, rowsOf([], true))).toEqual([])
     expect(waitOf(part, rowsOf([id('a'), id('b'), id('f')]))).not.toContain(id('c'))
   })
+  it('never waits for a unit the paper keeps as it is (no row of it comes), while the rows go on', () => {
+    const kept = { ...rowsOf([id('b')]), kept: (i: string) => i === id('a') }
+    expect(waitOf(part, kept)).toEqual([])
+    expect(waitOf(part, { ...rowsOf([]), kept: (i: string) => i === id('a') })).toEqual([id('b')])
+  })
 })
 
 describe('a flow whose lay throws', () => {

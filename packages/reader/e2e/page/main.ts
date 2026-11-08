@@ -10,7 +10,7 @@ import { type Composer, createComposer, type RowsSource } from '../../src/compos
 import { createFaces, type Faces } from '../../src/compose/faces.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
-import type { Page } from '../../src/compose/page.ts'
+import type { Ink, Item, Page } from '../../src/compose/page.ts'
 import { fixtureLay, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { createStack, type Stack } from '../../src/stack/stack.ts'
@@ -35,6 +35,46 @@ const faceTable = (base: string) => ({
   sans: { src: `${base}standard_fonts/LiberationSans-Regular.ttf`, fallback: 'sans-serif' },
   cjk: { local: 'Songti SC', fallback: '"STSong", "Noto Serif CJK SC", serif' },
 })
+/**
+ * A check's crop cut in two between its glyphs over two lines, as the typesetter cuts a URL (its `cut` edges): element
+ * `piece`'s first crop cut at `share` of its width, its head ending its line with the text `text[0]`, its tail opening the next
+ * line with `text[1]`, the items after the head on its line carried after the tail, the next line's own after them. Whether
+ * one was cut
+ */
+function cutCrop(pages: Map<number, Page>, o: { piece: string; share: number; text: [string, string] }): boolean {
+  for (const p of pages.values())
+    for (const m of p.members)
+      for (let i = 0; i + 1 < m.lines.length; i++) {
+        const [y, x0, x1, items] = m.lines[i]!
+        const j = items.findIndex((it) => 'src' in it && it.piece === o.piece)
+        if (j < 0) continue
+        const it = items[j] as Extract<Item, { src: Ink }>
+        const [pg, a, b, c, d, base] = it.src
+        const at = a + (c - a) * o.share
+        const [ny, nx0, nx1, next] = m.lines[i + 1]!
+        const tailW = (c - at) * it.k
+        // (the items after the crop keep their place after its end, now the tail's, the last a space after it where it ended its
+        // line with none; the next line's own move past them)
+        const dx = nx0 + tailW - (it.x + (c - a) * it.k)
+        const moved = (list: Item[], by: number) => list.map((x) => ({ ...x, x: x.x + by }))
+        const after = moved(items.slice(j + 1), dx)
+        const last = after.at(-1)
+        if (last && !/\s$/.test(last.s)) after[after.length - 1] = { ...last, s: `${last.s} ` }
+        m.lines[i] = [y, x0, x1, [...items.slice(0, j), { ...it, s: o.text[0], src: [pg, a, b, at, d, base], cut: 2 }]]
+        m.lines[i + 1] = [
+          ny,
+          nx0,
+          nx1,
+          [
+            { ...it, s: o.text[1], x: nx0, src: [pg, at, b, c, d, base], cut: 1 },
+            ...after,
+            ...moved(next, x1 - it.x - (c - a) * it.k + tailW),
+          ],
+        ]
+        return true
+      }
+  return false
+}
 const h = {
   panes: null as Panes | null,
   kit: null as Awaited<ReturnType<typeof loadKit>> | null,
@@ -113,7 +153,8 @@ const h = {
   /**
    * The layer of fixture `name` over the original open: its head and parts read from our server's objects, the original's chunks
    * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
-   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from
+   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from; `pages`: the
+   * URL of the pages to lay instead of the dump's (page → Page: a typesetter's own, lab/typeset/checkpoint/entry-reader.mjs)
    */
   async layer(
     name: string,
@@ -123,6 +164,9 @@ const h = {
       target?: string
       classes?: Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean>
       ahead?: number
+      pages?: string
+      /** an element's crop cut over two lines, as the typesetter cuts a URL (cutCrop) */
+      cut?: { piece: string; share: number; text: [string, string] }
     } = {},
   ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
@@ -153,12 +197,17 @@ const h = {
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const pages = pagesOf(
-      parts,
-      dump,
-      (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
-    )
+    const pages = o.pages
+      ? new Map(
+          Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [Number(n), p]),
+        )
+      : pagesOf(
+          parts,
+          dump,
+          (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+        )
     h.pages = pages
+    if (o.cut && !cutCrop(pages, o.cut)) throw new Error(`no crop of ${o.cut.piece} to cut`)
     const given = new Map<string, Row>()
     const listeners = new Set<() => void>()
     const rows = {

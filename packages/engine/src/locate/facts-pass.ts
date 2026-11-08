@@ -13,6 +13,7 @@ import {
   bracketsOf,
   breakEnd,
   cellCentred,
+  centredByBlock,
   FORCED_BREAK,
   fillOfGlyphs,
   type InkBox,
@@ -124,6 +125,9 @@ export function factsOf({
   }
   const boxCache = new Map<number, ReturnType<typeof boxesOn>>()
   const boxes = (p: number) => boxCache.get(p) ?? boxCache.set(p, boxesOn(p)).get(p)!
+  // (each page's lines, every member's: a single line's stack, centredByBlock)
+  const linesOn = new Map<number, Line[]>()
+  for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
   // (each page's and column's block: its justified lines' measure where it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
   for (const mem of members)
@@ -329,6 +333,9 @@ export function factsOf({
     // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
     // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
     const label = new Set(mem.label)
+    // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), as today's line starts at the name)
+    const leader = mem.leader !== undefined ? members[mem.leader] : undefined
+    for (const a of leader?.text ?? []) label.add(a)
     // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
     // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
     const spans: [number, number][] = []
@@ -370,14 +377,20 @@ export function factsOf({
       // (a glyph nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink beside it: 1706.03762v7 p13's
       // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-        if (/\S/.test(g.u) && !g.unseen && (claimedA[o + j] as number) !== mem.ord)
+        const c = claimedA[o + j] as number
+        if (/\S/.test(g.u) && !g.unseen && c !== mem.ord && c !== mem.leader)
           f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)
       foreignCache.set(p, f)
       return f
     }
-    const side = sideOf(mem.lines, foreign, blockOf)
+    const side = sideOf(
+      mem.lines,
+      foreign,
+      blockOf,
+      unit?.cell ? (p) => boxes(p).filter((b) => !mine.has(`${p}|${b.j}`)) : undefined,
+    )
     if (side) mem.room.side = side
     if (unit?.cell) {
       // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a
@@ -400,6 +413,16 @@ export function factsOf({
         )
         if (cellCentred(spans) === true) a = 'c'
       }
+      // (nothing tells it and its column does not centre it: centred by its own block's lines, a single line's stack)
+      if (a === 'j' && unit.align === undefined && !unit.cell)
+        if (
+          centredByBlock(
+            own.map(([l]) => l),
+            linesOn.get(mem.lines[0]?.[0] ?? 0) ?? [],
+            mem.lead,
+          )
+        )
+          a = 'c'
       if (unit.align === undefined || a !== unit.align) mem.read.push('align')
       mem.align = a
     }

@@ -307,6 +307,9 @@ export function holdOf(s: State): 'paper' | 'target' | null {
 }
 /** the display shown: the one chosen, the original where it is held (the paper's, the language's, or the host's for now) */
 export const displayOf = (s: State): Display => (holdOf(s) || s.held ? 'original' : chosenOf(s))
+/** whether a composed translation is to be shown: the display shows the translation and the reader sets the target (what is
+ *  read ahead for laying it waits on this: a visit that shows the original asks none of it) */
+export const translationShown = (s: State): boolean => displayOf(s) !== 'original' && supported(s, targetOf(s))
 /** a 429's wait as the reader waits it: our server's, at least a second, at most ten minutes */
 export const waitOf = (ms: number | null | undefined): number =>
   Math.min(WAIT_MAX_MS, Math.max(WAIT_MIN_MS, typeof ms === 'number' && Number.isFinite(ms) ? ms : WAIT_MIN_MS))
