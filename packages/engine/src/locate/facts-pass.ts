@@ -291,11 +291,12 @@ export function factsOf({
     //   them), and its line the one TeX ended there, as a placed break's: at the unit's end its last line, which has no line
     //   after it to state;
     // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
-    //   and a group one of its own, so where the window's lines end there as often as it holds groups (a paragraph's end TeX
-    //   set there aside), TeX ended each at one of them, in order; else where as many of those lines end short of their
-    //   column's right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none over a held
-    //   line, they are the groups', in order, the lines read; else no break of the window is stated. A window's count is its
-    //   own: another's, or a break at the unit's end, leaves it as it is)
+    //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
+    //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
+    //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else where as many of those lines end
+    //   short of their column's right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none
+    //   over a held line, they are the groups', in order, the lines read; else no break of the window is stated. A window's
+    //   count is its own: another's, or a break at the unit's end, leaves it as it is)
     if (unplaced.length && unit && mem.bFirst >= 0) {
       const seq = flatOf(unit.content)
       const classes = new Map(unit.classes ?? [])
@@ -362,13 +363,7 @@ export function factsOf({
           if (j !== undefined && j !== seen.at(-1)) seen.push(j)
         }
         if (seen.some((j, q) => q > 0 && j < (seen[q - 1] as number))) continue
-        const paragraph = new Set<number>()
-        for (const e of ends)
-          if (e > w.lo && e < w.hi && (unitB[e - 1] as number) === mem.unit) {
-            const j = lineBefore(e)
-            if (j !== undefined) paragraph.add(j)
-          }
-        const lineEnds = seen.slice(0, -1).filter((j) => !paragraph.has(j))
+        const lineEnds = seen.slice(0, -1)
         // (a line of its own text, the next one too: no held line's)
         const textual = (j: number) => !((mem.lines[j] as Line)[9] & 1) && !((mem.lines[j + 1] as Line)[9] & 1)
         let lines: number[] | null = null

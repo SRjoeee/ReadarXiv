@@ -807,6 +807,20 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
     expect(M.read).not.toContain('breaks')
   })
+  it('takes a paragraph’s end TeX states at the break for the break’s own line end (a centred `\\\\`, \\@centercr)', () => {
+    // (2610.30034v1 p1's title: in a centred block LaTeX's `\\` is \@centercr, which ends a paragraph, so TeX's paragraph end
+    // stands at the break; 2608.25210v2 t8's second `\\`, after \raggedright, the same)
+    const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
+    const content: Piece[] = [
+      text('A Much Longer First Title Line'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('Second'),
+    ]
+    const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
+    const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[30]] } }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
+  })
   it('reads short ends between two points only, where the breaks there are as many: one window’s count is not another’s', () => {
     // (a paragraph with a natural line end and a break, text on both sides of it, between the unit's start and a formula's
     // point, then a break at the unit's end: the window holds two line ends and one break, read by the short one; the break at
