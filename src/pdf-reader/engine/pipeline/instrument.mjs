@@ -387,6 +387,25 @@ export function placesOf(pages, count) {
   return places
 }
 
+/** The pieces whose span the instrument states empty, TeX setting no ink for them where they stand, by unit index and piece
+ *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and a text
+ *  macro (classesOf's macro or umacro) the marking never marks, its rendering never ink by the marking's own reading (marks.mjs
+ *  classOf null: INVISIBLE, STRUCTURE, textless; a .bbl's \newblock, \ttfamily, \sloppy), whose places therefore no compile
+ *  states. Today's reader drew such a piece as nothing, proven (tex.mjs inklessOf: a text macro the file holds no row for sets
+ *  no ink, and the file holds a row for each marked piece alone); stated nothing, the typesetter leaves its unit unproven (a
+ *  paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` today's, `classes` each
+ *  unit's classesOf by piece id */
+export function inklessPieces(units, { classes, inkless = null }) {
+  const noInk = new Set(inkless ?? [])
+  const out = []
+  units.forEach((u, i) => (u?.pieces ?? []).forEach((p, k) => {
+    if (p.t !== 'ph') return
+    const marked = classOf(p), cls = classes[i]?.get(String(k))?.cls
+    if ((marked === 'macro' && noInk.has(p.src)) || (marked === null && (cls === 'macro' || cls === 'umacro'))) out.push({ unit: i, piece: String(k) })
+  }))
+  return out
+}
+
 /** a glyph beside a unit's mark is of the run there within this many of its own size of the run's edge (today's maker's
  *  LABEL_EM, make.mjs besideMarks) */
 const BESIDE_EM = 2
@@ -559,10 +578,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
-  // (the pieces TeX said set no ink (the probe's `inkless`): their span stated empty, by unit index and piece id)
-  const noInk = new Set(inkless ?? [])
-  const empty = []
-  units.forEach((u, i) => u.pieces.forEach((p, k) => { if (p.t === 'ph' && classOf(p) === 'macro' && noInk.has(p.src)) empty.push({ unit: i, piece: String(k) }) }))
+  // (the pieces TeX sets no ink for (inklessPieces): their span stated empty, by unit index and piece id)
+  const empty = inklessPieces(units, { classes: classesBy, inkless })
   // (and a head or tail macro that sets nothing on its unit's line, by the line beside the unit's mark (besideEmpty): those whose
   // ink, span or no ink the instrument states already passed over)
   const known = new Set(empty.map(x => `${x.unit}|${x.piece}`))
