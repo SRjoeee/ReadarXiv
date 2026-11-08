@@ -9,11 +9,17 @@ import {
   BERT_ABSTRACT_REPLY,
   BERT_STRATEGIES,
   BERT_STRATEGIES_REPLY,
+  INSIDE_WORDS,
+  LABEL_AFTER_BREAK,
   MICROSOFT_REPLIES,
   MICROSOFT_UNITS,
   NESTED_DISPLAY,
+  SILENT,
+  SILENT_AROUND,
+  SILENT_LABEL,
   UNITS,
 } from './fixtures.ts'
+import { quiet, t, unit } from '../pieces.ts'
 
 /** the endpoint giving each text back as its translation, with sentence lengths cut after each full stop and a space */
 export const microsoftEcho = (_url: string, init: FetchInit) => {
@@ -95,6 +101,15 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       'We have @a#. Then we go on.',
       // (a display then a reference in a head: each its own marker, the display's own stop after its, as on the base's wire)
       'We have @a#. @b# Then we go on.',
+      // (a run-in label after a forced break that ends no sentence: the line end the break states, after its stretch's marker)
+      'We compare two settings as follows: @a#\n@b# No XYZ @c#: A model trained without the XYZ task. @d#@e# Only XYZ @f#: A model trained with it alone.',
+      // (an element between two letters is the word's: no space of ours beside it; a tie, TeX's space, keeps them)
+      'The column str@a#s holds Ni@b#B, by Jane @c# Doe.',
+      // (elements that set nothing: on no wire, the word a discretionary hyphen stands in whole; one beside a citation in its
+      // marker; a span around the rest goes around the translation, the element beside it no matter)
+      'We train an example model @a# on every word, then stop.',
+      '@a# Setup:@b# we train it.',
+      'Method',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -170,6 +185,59 @@ describe('microsoft: reading', () => {
   })
 })
 
+// Elements that set nothing (`silent`): today's wire put them on no wire (mt.mjs INKLESS, TRANSLATE_VERSION 3 and 10:
+// 2610.19159's `\textcolor{…}{\bfseries w}` round every word went out as a marker a word, Microsoft's word salad), v2 sent each
+// as a marker; read back, each stands at the front of its innermost kept group where nothing went out before it, else at its end
+describe('microsoft: an element that sets nothing goes on no wire', () => {
+  it("reads each back at its group's front or end, one beside a citation in its marker, a head of them in a copy of its span", () => {
+    const r = readMicrosoft(SILENT, JSON.stringify({ text: '我们训练一个示例模型 @a# 在每个词上，然后停止。' }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'lab' },
+      { t: 'text', s: '我们训练一个示例模型 ' },
+      { t: 'el', id: 'c' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: ' 在每个词上，然后停止。' },
+      { t: 'el', id: 'hy' },
+      { t: 'span', id: 'g', content: [{ t: 'el', id: 'bf' }] },
+      { t: 'el', id: 'n' },
+    ])
+    expect(accept(SILENT, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it("a kept span's head that sets nothing comes back after its open", () => {
+    const r = readMicrosoft(SILENT_LABEL, JSON.stringify({ text: '@a#设置：@b# 我们训练它。' }))
+    expect(r?.content[0]).toEqual({
+      t: 'span',
+      id: 'h',
+      content: [
+        { t: 'el', id: 'bm' },
+        { t: 'text', s: '设置：' },
+      ],
+    })
+    expect(accept(SILENT_LABEL, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it('a span around all the rest goes around the translation, the element that sets nothing outside it', () => {
+    const r = readMicrosoft(SILENT_AROUND, JSON.stringify({ text: '方法' }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'hl' },
+      { t: 'span', id: 'm', content: [{ t: 'text', s: '方法' }] },
+    ])
+    expect(accept(SILENT_AROUND, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it("Microsoft's sentence lengths read with them off the wire: the offsets each projection's own", () => {
+    const u = unit('two', [quiet('a'), t('One sentence here. Then'), quiet('b'), t(' another one.')], true)
+    expect(microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      'One sentence here. Then another one.',
+    )
+    const r = readMicrosoft(u, JSON.stringify({ text: '这里一句话。然后另一句。', src: [19, 17], tr: [6, 6] }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'a' },
+      { t: 'text', s: '这里一句话。然后另一句。' },
+      { t: 'el', id: 'b' },
+    ])
+    expect(r?.sentences).toEqual({ src: [20], tr: [7] })
+  })
+})
+
 // 1810.04805v2 on staging (2026-11-08): `{\em all}` came back as `\em` loose before "所有预训练参数…", and the typesetter held
 // it to the unit's end (everything after it italic); `{\bf \bert}` came back as `\bf` loose, everything after BERT bold. A span
 // that is not `must` goes on no wire, but the elements it holds did, and came back out of it
@@ -234,6 +302,81 @@ describe("microsoft: a head's last element found through its groups (a display i
       { t: 'text', s: '我们有 ' },
       { t: 'span', id: 'g', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
       tail,
+    ])
+  })
+})
+
+// 1810.04805v2 p8 on staging (2026-11-09): "\\ \noindent \textbf{No NSP}: A bidirectional model ..." came back 「无：」, the term
+// lost. Microsoft's sentence ran on from "... as BERT_BASE:" across the forced break's marker (its own lengths: one sentence of
+// 348 characters through the label and its body), so the label's words stood between two hard boundaries inside another
+// sentence. With a line break after the break's marker Microsoft cut its sentence there and gave 「无 NSP」 (lane must-term)
+describe('microsoft: a run-in label after a forced break begins its sentence', () => {
+  it("writes the line end the break states after its stretch's marker, and takes it back on reading", () => {
+    const r = readMicrosoft(
+      LABEL_AFTER_BREAK,
+      JSON.stringify({
+        text: '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      }),
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '我们比较以下两种设置：' },
+      { t: 'el', id: 'v' },
+      { t: 'text', s: '\n' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: '\n' },
+      { t: 'el', id: 'n' },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 无 XYZ ' }] },
+      { t: 'text', s: '：一个未经 XYZ 任务训练的模型。' },
+      { t: 'el', id: 'b2' },
+      { t: 'text', s: '\n' },
+      { t: 'el', id: 'n2' },
+      { t: 'span', id: 'h2', content: [{ t: 'text', s: ' 仅 XYZ ' }] },
+      { t: 'text', s: '：一个仅用它训练的模型。' },
+    ])
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it('a reply that dropped the line end reads the same', () => {
+    const r = readMicrosoft(
+      LABEL_AFTER_BREAK,
+      JSON.stringify({
+        text: '我们比较以下两种设置：@a#@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      }),
+    )
+    expect(r?.content.slice(5, 7)).toEqual([
+      { t: 'el', id: 'n' },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 无 XYZ ' }] },
+    ])
+  })
+  it("the endpoint's sentences begin at the label, in both projections", () => {
+    const u = LABEL_AFTER_BREAK
+    const wire = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(u, 'zh-Hans')
+    const text =
+      '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。'
+    const at = (s: string, x: string) => s.indexOf(x)
+    const src = [at(wire, '@b#'), at(wire, '@d#') - at(wire, '@b#'), wire.length - at(wire, '@d#')]
+    const tr = [at(text, '@b#'), at(text, '@d#') - at(text, '@b#'), text.length - at(text, '@d#')]
+    const r = readMicrosoft(u, JSON.stringify({ text, src, tr }))
+    // (each at the label's first word: the source's "No XYZ", the translation's 「无 XYZ」 past the space before it)
+    expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n￼'.length)
+    expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：￼\n￼\n￼ '.length)
+  })
+})
+
+// 2608.25210v2 p5 (the owner's #46, 2026-11-09): the header cells `str\_s` and `llm\_s` came back "STR_" and "LLM _s" on both
+// readers. The escaped underscore is an element, and the wire set a space of its own on each side of its marker, so one
+// identifier went out as two words: Microsoft gave `str @a# s` back as `STR @a#` and `LLM @a# bottom @b# up` as
+// `LLM @a# 底部@b# 向上`; unspaced, `str@a#s`, `llm@a#s`, `LLM@a#bottom@b#up` and `LLM@a#adaptive@b#SEQ` came back as they went
+describe('microsoft: an element inside a word', () => {
+  it('reads a word that holds an element back whole', () => {
+    const r = readMicrosoft(INSIDE_WORDS, JSON.stringify({ text: '列 str@a#s 包含 Ni@b#B，作者 Jane @c# Doe。' }))
+    expect(r?.content).toEqual([
+      { t: 'text', s: '列 str' },
+      { t: 'el', id: 'u' },
+      { t: 'text', s: 's 包含 Ni' },
+      { t: 'el', id: 'f' },
+      { t: 'text', s: 'B，作者 Jane ' },
+      { t: 'el', id: 'tie' },
+      { t: 'text', s: ' Doe。' },
     ])
   })
 })

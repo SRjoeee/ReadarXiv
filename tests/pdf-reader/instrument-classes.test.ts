@@ -3,9 +3,11 @@
 import { describe, expect, it } from 'vitest'
 import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
 import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
+import { displayStop, isInkless } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import {
   boundedEmpty,
   classesOf,
+  contentOf,
   FORCED_BREAK,
   glueOf,
   glyphPiecesOf,
@@ -506,5 +508,53 @@ describe('the pieces TeX sets no ink for, as the instrument states them (Instrum
       { unit: 3, piece: '5' },
       { unit: 3, piece: '7' },
     ])
+  })
+})
+
+describe('the instrument adapter’s wire facts of an element (what today’s wire reads of its source)', () => {
+  type El = { t: 'el'; id: string; src: string; stop?: string; silent?: 1 }
+  const elsOf = (content: unknown[]): El[] =>
+    (content as { t: string; content?: unknown[] }[]).flatMap((p) => (p.t === 'el' ? [p as El] : p.t === 'span' ? elsOf(p.content ?? []) : []))
+  it('states a display’s own stop and an element that sets nothing (`silent`), and nothing of a space, a break or a skip', () => {
+    const content = contentOf([
+      { t: 'text', s: 'We have' },
+      ph('\\begin{equation} x = y. \\label{e}\\end{equation}'),
+      { t: 'text', s: ' Then ' },
+      ph('\\label{sec:a}'),
+      ph('\\noindent'),
+      { t: 'text', s: ' an exam' },
+      ph('\\-'),
+      { t: 'text', s: 'ple by Jane' },
+      ph('~'),
+      { t: 'text', s: 'Doe' },
+      ph('\\\\'),
+      ph('\\vspace{1em}'),
+      { t: 'open', id: 'g', src: '\\textcolor{red}{' },
+      ph('\\bfseries'),
+      { t: 'text', s: ' word' },
+      { t: 'close', id: 'g', src: '}' },
+      ph('\\[ a = b \\]'),
+      { t: 'text', s: ' and' },
+    ])
+    const facts = elsOf(content).map((e) => [e.src, e.stop ?? null, e.silent ?? null])
+    expect(facts).toEqual([
+      ['\\begin{equation} x = y. \\label{e}\\end{equation}', '.', null],
+      ['\\label{sec:a}', null, 1],
+      ['\\noindent', null, 1],
+      ['\\-', null, 1],
+      ['~', null, null],
+      ['\\\\', null, null],
+      ['\\vspace{1em}', null, null],
+      ['\\bfseries', null, 1],
+      ['\\[ a = b \\]', null, null],
+    ])
+  })
+  it('holds each fact equal to today’s wire: `stop` its displayStop, `silent` its isInkless (on no wire)', () => {
+    const srcs = ['\\[ x = 1, \\]', '$$ y. $$', '\\begin{align} a &= b; \\nonumber \\end{align}', '\\begin{equation} z \\end{equation}', '\\begin{equation}\\text{.}\\end{equation}', '$x.$', '\\label{x}', '\\index{y}', '\\noindent', '\\-', '\\@', '\\/', '\\bf', '\\em', '\\small', '\\color{red}', '\\penalty-100', '\\nobreak', '\\allowbreak{}', '\\midrule', '\\cmidrule(lr){2-3}', '\\hline', '\\centering', '\\strut', '~', '\\,', '\\quad', '\\\\', '\\newline', '\\item', '\\vspace{2mm}', '\\hfill', '\\cite{a}', '\\ref{b}', '\\bert{}', '\\&']
+    const content = contentOf(srcs.flatMap((s) => [ph(s), { t: 'text', s: ' w ' }]))
+    const got = elsOf(content).map((e) => [e.src, e.stop ?? null, !!e.silent])
+    expect(got).toEqual(srcs.map((s) => [s, displayStop(s), isInkless(ph(s))]))
+    expect(got.filter(([, stop]) => stop).length).toBe(4)
+    expect(got.filter(([, , silent]) => silent).length).toBe(18)
   })
 })

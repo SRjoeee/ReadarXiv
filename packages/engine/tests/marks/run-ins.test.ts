@@ -112,6 +112,42 @@ describe('the run-in labels of a unit, stated must', () => {
       kept([{ t: 'span', id: 'c', style: 'other', close: '}', content: [t('Setup')] }, t(': we use GPUs.')]),
     ).toEqual([])
   })
+  // (1810.04805v2 p8 on staging, 2026-11-09: the first label sat inside Microsoft's sentence, which ran on from "as BERT_BASE:"
+  // across the forced break's marker, and came back without its term; the second, after "task.", began a sentence and
+  // kept it. Microsoft cut its sentence at a line break written after the break's marker and gave the label back whole)
+  it('the forced break a label follows, no sentence ending before it, states the line it ends (its stop a line end)', () => {
+    const first = el('\\\\')
+    const second = el('\\\\')
+    const content = [
+      t('We compare two settings as follows:\n'),
+      el('\\vspace{0.3cm}'),
+      t('\n'),
+      first,
+      t('\n'),
+      el('\\noindent'),
+      bf('No XYZ'),
+      t(': A model trained without the XYZ task.'),
+      second,
+      t('\n'),
+      el('\\noindent'),
+      bf('Only XYZ'),
+      t(': A model trained with it alone.\n'),
+    ]
+    expect(kept(content)).toEqual(['No XYZ', 'Only XYZ'])
+    expect(first).toMatchObject({ stop: '\n' })
+    // (after a full stop the endpoint's sentence ends already: the break states nothing)
+    expect(second).not.toHaveProperty('stop')
+  })
+  it('no line end for a break no label follows: a title broken over lines, a group kept by the boundary rule', () => {
+    const title = el('\\\\')
+    kept([t('Deep Bidirectional Transformers for '), title, t(' Language Understanding')])
+    expect(title).not.toHaveProperty('stop')
+    // (an affiliation's lines, each group kept by the boundary rule: a phrase broken over lines, no sentence's end)
+    const line = el('\\\\')
+    const content = [t('College of Information Science'), line, em('and Electronic Engineering,')]
+    expect(kept(content)).toEqual(['and Electronic Engineering,'])
+    expect(line).not.toHaveProperty('stop')
+  })
   it('reads groups nested past any recursion limit (its walks keep their own stacks)', () => {
     let inner: Piece[] = [t('Setup:')]
     for (let i = 0; i < 20_000; i++) inner = [bf(inner)]

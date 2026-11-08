@@ -28,3 +28,17 @@ export const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
 /** what a translation of words holds: a letter, or a digit (two is 2) */
 export const SAYS = /[\p{L}\p{N}]/u
 export const LETTER = /\p{L}/u
+
+/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a citation or a
+ *  note's mark belongs to the sentence before it, a reference is a number, a formula a word, a break a space */
+export function standInOf(kind: string): 'annotation' | string | undefined {
+  if (kind === 'cite' || kind === 'note-mark' || kind === 'footnote') return 'annotation'
+  if (kind === 'ref' || kind === 'eqref') return '1'
+  if (kind === 'math') return 'x'
+  if (kind === 'break' || kind === 'space') return ' '
+  return undefined
+}
+
+/** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows), which the
+ *  markers wire writes where Microsoft cuts its sentence; never punctuation of the element's own */
+export const LINE_END = /^\s+$/
