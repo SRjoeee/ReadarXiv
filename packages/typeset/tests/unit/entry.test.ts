@@ -377,6 +377,41 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(h).toBeLessThan(9)
     expect(p).toBeCloseTo((10 * h!) / 9, 6)
   })
+  it('lays a size tie’s members at one scale where capping the one laid larger frees the other on the row they share', () => {
+    // (2608.16117v1-de p19 t57 and t59, a paragraph TeX's float cut in two, the second starting on the first's last row: the
+    // first laid at its 0.9, the second at 0.875; the first capped, its last line ended sooner, and the second, laid again
+    // uncapped on the row it then had, came out at 0.975: one paragraph at two sizes)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 250, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      join: [6],
+      lines: [[1, 0, 256, 300, 688, 695, 686, 72, 300, 2, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const words = (n: number) =>
+      'wort '
+        .repeat(Math.ceil(n / 5))
+        .slice(0, n)
+        .trim()
+    const rows = rowsOf([row([{ t: 'text', s: words(82) }]), { ...row([{ t: 'text', s: words(12) }]), id: idB }])
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const sizes = (ties: Part['ties']) =>
+      layPage({ ...part(a), flows: [[a, b]], ties }, rows, still, metrics()).members.map((m) => m.fit?.size)
+    // (apart: the first at its size, the second shrunk on the row the first leaves it)
+    const [fa, fb] = sizes([])
+    expect(fa).toBe(10)
+    expect(fb).toBeLessThan(10)
+    // (tied: one size, the smaller)
+    expect(sizes([{ rule: 'size', ords: [0, 1] }])).toEqual([fb, fb])
+  })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
     const name = member({

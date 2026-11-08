@@ -46,7 +46,7 @@ export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'siz
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
  * size tie laid on the page at one scale of their own sizes, the smallest any of them is laid at: each laid larger is capped there
- * (its fit's states from that scale down, P.capScale) and the page laid once more (the checkpoint's free-9: a paragraph's first
+ * (its fit's states from that scale down, P.capScale) and the page laid again (the checkpoint's free-9: a paragraph's first
  * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
  * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
  * for being of another size (the coordinator's decision under that ruling, 2026-11-08: 2610.30034v1 p2's head at 8.97 capped its
@@ -66,25 +66,39 @@ export function layPagePrepared(
   // (every tied member laid in the call, whether or not it has a line on this page: the part holds the tie's every flow, so each
   // page a tie is laid for caps alike; read off the page's members alone, a member on pages 1-2 tied to one on page 2 was laid
   // at its own size for page 1 and at the other's for page 2)
-  const fitOf = new Map(first.fits)
-  const cap = new Map<number, number>()
-  for (const t of sizes) {
-    const laid = t.ords.filter((o) => fitOf.has(o))
-    if (laid.length < 2) continue
-    const least = Math.min(...laid.map((o) => fitOf.get(o) as number))
-    for (const o of laid) if ((fitOf.get(o) as number) > least + SAME) cap.set(o, Math.min(cap.get(o) ?? least, least))
-  }
-  if (!cap.size) return first
   // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
   // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not)
   const floor = Number((R as unknown as { floor?: number }).floor ?? 0)
-  const capped = flows.map((f) =>
-    f.map((m) => {
-      const c = cap.get(m.ord)
-      return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, Math.max(c, floor)) } }
-    }),
-  )
-  return layPageTied(page, capped, cells, R, trace)
+  // (each laid larger capped at the least and the page laid again, until none is: the members of one paragraph share a row, and
+  // one laid at the least the first time, laid again beside one capped (its last line ending sooner), can come out larger
+  // (2608.16117v1-de p19: t57 capped at t59's 0.875, t59 then 0.975). A member laid at the least is not capped: capped at its
+  // own scale its walk sets it otherwise (t115 p38, 15 lines borrowed at 0.875, 14 capped there). Each round lowers a cap, never
+  // under the floor: it ends)
+  const cap = new Map<number, number>()
+  let laid = first
+  for (;;) {
+    const fitOf = new Map(laid.fits)
+    let lowered = false
+    for (const t of sizes) {
+      const on = t.ords.filter((o) => fitOf.has(o))
+      if (on.length < 2) continue
+      const least = Math.min(...on.map((o) => fitOf.get(o) as number))
+      const c = Math.max(least, floor)
+      for (const o of on)
+        if ((fitOf.get(o) as number) > least + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
+          cap.set(o, c)
+          lowered = true
+        }
+    }
+    if (!lowered) return laid
+    const capped = flows.map((f) =>
+      f.map((m) => {
+        const c = cap.get(m.ord)
+        return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, c) } }
+      }),
+    )
+    laid = layPageTied(page, capped, cells, R, trace)
+  }
 }
 
 function layPageTied(
