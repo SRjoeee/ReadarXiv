@@ -190,6 +190,15 @@ describe('locate', () => {
     expect(at(102 + 30).members[1]!.join).toEqual([30])
     expect(at(102 + 31).flows).toEqual([[0], [1]])
     expect(at(102 + 31).members[1]!.join).toBeUndefined()
+    // (the separation the bound reads is the one the join states, from the leader's ink end: today's rows are ink, 2307.16209v1's
+    // contents entries 36.18-36.78 pt after their numbers' ink at 11.96 pt type, no shared line of today's)
+    const B2 = docOf([
+      { lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x: 132, y: 700 }, 'and on'] },
+    ])
+    const stop = B2.pages[0]!.glyphs[4]!
+    stop.ix1 = stop.x1 - 0.85
+    const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+    expect(locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2)).flows).toEqual([[0], [1]])
   })
   it('states a shared row kept where a character of the page stays on it between the two (today’s keptBetween)', () => {
     // (2608.25210v2 p17's notes made on A: "… Mao." ends one, "2024" (no unit's) stays, ". Be…" begins the next on the row; the

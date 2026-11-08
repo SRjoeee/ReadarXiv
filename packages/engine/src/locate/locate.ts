@@ -1075,10 +1075,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return Number.isFinite(x) ? x : a[3]
   }
+  const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))
   const joinOf = (lead: Member, b: Line, size: number): [number] | [number, 1] => {
-    const a = lead.lines.at(-1)!
-    const sep = r2(b[2] - inkEnd(lead, a))
-    return keptOn(a, b, size) ? [sep, 1] : [sep]
+    const sep = sepOf(lead, b)
+    return keptOn(lead.lines.at(-1)!, b, size) ? [sep, 1] : [sep]
   }
   // (the stream: the instrument's members in its order, and each member made on A (ink.ts, born.ts) where TeX set its text in
   // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
@@ -1152,7 +1152,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
-      b[2] - a[3] <= SHARED_SEP * (b[10] ?? mem.style.size) &&
+      sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
