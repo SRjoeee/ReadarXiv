@@ -992,7 +992,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  columnsAndMeasures(members, inkA, gA)
+  columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined))
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
   // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
@@ -1047,6 +1047,23 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // no insert's, and the paragraph ends inside those inserts (their own paragraphs: a caption's, a footnote's) are none of
   // its. 2608.06701v1 p6: a run-in head, a table and a footnote in the stream, then the head's paragraph on its row)
   const insert = (x: Member) => ownBox(x) || x.kind === 'caption' || x.kind === 'footnote'
+  // (whether something of the page stays on a shared row between the member before's end there and the next one's first text:
+  // a shown glyph of A whose advance's middle stands between the two, on the row (its baseline within ON_ROW of the row's size of
+  // the row's): today's keptBetween (RUN:1592, over the page's characters), the next member's own label among them, which goes
+  // with it (ownLabelOnRow, RUN:1623). Placed.join's kept: the next member is not laid from the first one's end, where something
+  // else stays there, and the first one's text on the row ends where TeX's did (keptAfter, RUN:1596))
+  const keptOn = (a: Line, b: Line, size: number) => {
+    const pg = inkA.pages[a[0] - 1]
+    if (!pg || b[0] !== a[0]) return false
+    for (const g of pg.glyphs) {
+      if (g.blank || g.unseen || !/\S/.test(g.u)) continue
+      const mid = (g.x0 + g.x1) / 2
+      if (mid > a[3] && mid < b[2] && Math.abs(g.y - a[4]) < ON_ROW * size) return true
+    }
+    return false
+  }
+  const joinOf = (a: Line, b: Line, size: number): [number] | [number, 1] =>
+    keptOn(a, b, size) ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
   let body: number | null = null
@@ -1083,7 +1100,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
     const into = shares ? flowOf.get(prev.ord) : undefined
     if (into) {
-      mem.join = mem.labelAt && mem.labelAt.ink[0] === b![0] ? [r2(b![2] - a![3]), 1] : [r2(b![2] - a![3])]
+      mem.join = joinOf(a!, b!, a![10] ?? prev!.style.size)
       into.push(mem.ord)
       flowOf.set(mem.ord, into)
     } else {
@@ -1157,10 +1174,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     const k = flow.indexOf(led.ord)
     const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
-    if (prev && led.join) n.join = [r2(l[2] - prev[3])]
+    if (prev && led.join) n.join = joinOf(prev, l, prev[10] ?? members[flow[k - 1] as number]!.style.size)
     flow.splice(k, 0, n.ord)
     flowOf.set(n.ord, flow)
-    led.join = led.labelAt && led.labelAt.ink[0] === f[0] ? [r2(f[2] - l[3]), 1] : [r2(f[2] - l[3])]
+    led.join = joinOf(l, f, l[10] ?? n.style.size)
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
@@ -1341,10 +1358,18 @@ export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, numbe
  *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
 const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 
+/** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
+ *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
+const ON_ROW = 0.4
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */
-function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => DocGlyph): void {
+function columnsAndMeasures(
+  members: Member[],
+  inkA: Doc,
+  gA: (a: number) => DocGlyph,
+  tableOf: (mem: Member) => number | undefined,
+): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
   for (const [p, lines] of byPage) {
@@ -1406,9 +1431,33 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
   for (const mem of members)
     for (const l of mem.lines) {
       const lb = mem.labelAt?.ink
-      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < 0.4 * (l[10] ?? mem.style.size) && lb[1] < l[2]
+      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * (l[10] ?? mem.style.size) && lb[1] < l[2]
       measures.set(l, columnOf(l, on ? lb[1] : l[2]))
     }
+  // (a table's cell: its line's room is its table's extent on the page where the table reaches past its text column, a float set
+  // across both columns of a two-column page (2610.17024v1 p15's cell, whose room ended at the left column's edge, short of the
+  // next cell's ink; today's widen ran on to it, its block's middle over the gutter giving it the page's text area): the hull of
+  // the table's cells' lines there, the column's measure widened to it. A table inside one column keeps its column's measure)
+  const tables = new Map<string, [number, number]>()
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      if (l[9] & 1) continue
+      const k = `${t}|${l[0]}`
+      const h = tables.get(k)
+      tables.set(k, h ? [Math.min(h[0], l[2]), Math.max(h[1], l[3])] : [l[2], l[3]])
+    }
+  }
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      const h = tables.get(`${t}|${l[0]}`)
+      const own = measures.get(l)
+      if (h && own) measures.set(l, [Math.min(own[0], h[0]), Math.max(own[1], h[1])])
+    }
+  }
   for (const [l, [m0, m1]] of measures) {
     l[7] = r2(m0)
     l[8] = r2(m1)

@@ -98,7 +98,12 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     // fa6e1c089: an item's second line, x 85, baseline 688, beside an inline formula down to 680, read with the first))
     const band = L ? (L.bands.get(r2(L.y0)) ?? [L.top, L.bottom]) : null
     const crosses = L !== null && band !== null && !toStart && g.bottom < band[0] && g.top > band[1]
-    const off = L !== null && !crosses && Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size)
+    // (back at the line's start, a glyph whose ink stands wholly over or under the line's own text is off it wherever its
+    // origin is: a big operator TeX's math extension sets with its origin at its top, opening the next row of a formula broken
+    // after its "=" (2610.21504v1 p4: the summation sign's origin 4.5 pt under the row above, within its band, its ink all under
+    // that row's text), as `crosses` keeps one whose ink reaches across the line wherever its origin is)
+    const apart = toStart && band !== null && (g.top < band[1] || g.bottom > band[0])
+    const off = L !== null && !crosses && (apart || Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size))
     const jump =
       L !== null &&
       prev !== null &&

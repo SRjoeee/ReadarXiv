@@ -31,5 +31,13 @@ export declare function placesOf(
   pages: readonly { points: readonly { name: string; glyph: number; box?: number }[] }[],
   count: number,
 ): NonNullable<Instrument['places']>
+/** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known) */
+export declare function glyphPiecesOf(
+  pg: { points: readonly { name: string; glyph: number; box?: number }[]; glyphs: readonly { u?: string }[] },
+  row: readonly (string | null | undefined)[],
+  o?: { units?: readonly unknown[]; texts?: ReadonlyMap<string, string> | null; names?: ReadonlySet<string> },
+): Int32Array
+/** the texts the marking's probe showed the paper's macros set, by source (null where none is given) */
+export declare function textsOf(texts: unknown): ReadonlyMap<string, string> | null
 /** the Instrument of today's marked compile */
 export declare function instrumentOf(o: Record<string, unknown>): Promise<{ instrument: Instrument; today: unknown }>
