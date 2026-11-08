@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
 import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
 import {
-  besideEmpty,
+  boundedEmpty,
   classesOf,
   FORCED_BREAK,
   glueOf,
@@ -261,70 +261,117 @@ describe('the piece of a glyph a page after its opening point (TeX’s stream ru
   })
 })
 
-describe('a head or tail macro that sets nothing on its unit’s line (today’s maker, make.mjs besideMarks)', () => {
-  // (the marking gives a paper's macro at a unit's head no point, and one after its last word an opening point alone where its
-  // closing one would follow a control word: TeX set its ink, if any, before the start mark or after the end mark, never on the
-  // unit's own lines; where no glyph of no unit's stands beside the mark on its line, nothing of it is there, EMPTY. 2610.21880v1
-  // p2 u23 `...overhead.\endgroup`, 2609.20976v1 p12 u65 `\acknowledgments` (its heading on the line above), 2610.10069v1 p5
-  // u29 `\begingroup`: their units stayed English, unproven)
-  type G = { u: string; x0: number; x1: number; y: number; size: number }
-  const line = (s: string, x: number, y: number, size = 10): G[] => [...s].map((u, i) => ({ u, x0: x + 5 * i, x1: x + 5 * i + 5, y, size }))
-  const pt = (name: string, glyph: number) => ({ name, glyph })
-  const unitsOf = (pieces: unknown[]) => {
+describe('a piece with no point of its own, between the nearest points TeX shipped around it (Instrument `empty`)', () => {
+  // (TeX's points bound what TeX set: every piece of a unit lies between the nearest two in its unit's source order, a piece's
+  // own, the unit's start and end, else the page's stream's; nothing of the unit's or of no unit's between them, the pieces
+  // between set nothing. 2402.10294v1's ACM references: `\urldef\tempurl` after `\showISBNx`, a macro that may read ahead, have
+  // no point; the end point and `\showDOI`'s opening one hold nothing between them, wherever TeX broke the line before the DOI,
+  // which a reading of the line beside the end mark took for the entry's ink: 19 of its 86 references English)
+  type G = { u: string }
+  const glyphs = (s: string): G[] => [...s].map((u) => ({ u }))
+  const pt = (name: string, glyph: number, box = 0) => ({ name, glyph, box })
+  const owners = (row: (string | null)[]) => {
+    const O = { unit: new Int32Array(row.length).fill(-1), role: new Uint8Array(row.length), piece: new Int32Array(row.length).fill(-1) }
+    row.forEach((g, j) => {
+      const m = /^u(\d+)(?:\.(\d+))?$/.exec(g ?? '')
+      if (!m) return
+      O.unit[j] = Number(m[1])
+      O.role[j] = m[2] === undefined ? 1 : 2
+      if (m[2] !== undefined) O.piece[j] = Number(m[2])
+    })
+    return O
+  }
+  const unitsOf = (pieces: unknown[], at = 5) => {
     const units: unknown[] = []
-    units[5] = { kind: 'para', pieces }
+    units[at] = { kind: 'reference', pieces }
     return units
   }
-  const classes = (units: unknown[]) => units.map((u) => (u ? new Map(classesOf((u as { pieces: never[] }).pieces)) : null))
-  const run = (pages: unknown[], rows: (string | null)[][], units: unknown[], known = new Set<string>()) =>
-    besideEmpty(pages as never, rows, units as never, { classes: classes(units) as never, known })
-  const para = [{ t: 'text', s: 'a word.' }, ph('\\endgroup')]
-  const tail = (after: G[], afterRow: (string | null)[]) => ({
-    pages: [{ glyphs: [...line('aword.', 72, 700), ...after], points: [pt('5s', 0), pt('5e', 6), pt('p5.1a', 6)], view: [0, 0, 612, 792] }],
-    rows: [[...Array(6).fill('u5'), ...afterRow]],
+  const run = (pages: { glyphs: G[]; boxes?: number[]; points: unknown[] }[], rows: (string | null)[][], units: unknown[]) =>
+    boundedEmpty(
+      pages.map((pg) => ({ boxes: [], ...pg })) as never,
+      units as never,
+      { glyphs: rows.map(owners), boxes: pages.map(() => owners([])) } as never,
+    )
+  // (the entry's last text, then its tail: \newblock, \showISBNx, \urldef, \tempurl and \url with no point, \showDOI's opening point)
+  const entry = [
+    { t: 'text', s: 'A. Author. 2021. A title. ACM, 14 pages.\n' },
+    ph('\\newblock'),
+    { t: 'text', s: '\n' },
+    ph('\\showISBNx{9781450380966}'),
+    { t: 'text', s: '\n' },
+    ph('\\urldef'),
+    ph('\\tempurl'),
+    ph('\\url{https://doi.org/10.1145/1}'),
+    { t: 'text', s: '\n' },
+    ph('\\showDOI{\\tempurl}'),
+  ]
+  it('states every piece between the end point and the next piece’s opening point empty where nothing stands between them', () => {
+    // (the DOI starts on the line of the entry's last words: its glyphs the unit's, after the opening point)
+    const pages = [{ glyphs: glyphs('pages.https://doi.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.9a', 6), pt('6s', 21)] }]
+    const rows = [[...Array(6).fill('u5'), ...Array(15).fill('u5.9')]]
+    expect(run(pages, rows, unitsOf(entry))).toEqual(['1', '3', '5', '6', '7'].map((piece) => ({ unit: 5, piece })))
   })
-  it('states a tail macro empty where nothing of no unit’s stands right of the end mark on its line', () => {
-    // (the next unit's glyphs on the next line; a glyph of no unit's far right, past two of its em)
-    const { pages, rows } = tail([...line('Next', 72, 688), ...line('x', 140, 700)], [...Array(4).fill('u6'), null])
-    expect(run(pages, rows, unitsOf(para))).toEqual([{ unit: 5, piece: '1' }])
+  it('bounds a piece with its opening point alone by that point and the next one', () => {
+    // (`\urldef` after `\newblock`, which reads nothing ahead: its opening point, no closing one, nothing between it and
+    // `\showURL`'s opening point; one with its own glyphs there has ink, not stated, and what the pieces after it set is in it)
+    const pages = [{ glyphs: glyphs('pages.https://x.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.5a', 6), pt('p5.9a', 6)] }]
+    const rows = [[...Array(6).fill('u5'), ...Array(13).fill('u5.9')]]
+    expect(run(pages, rows, unitsOf(entry))).toEqual(['1', '3', '5', '6', '7'].map((piece) => ({ unit: 5, piece })))
+    const inked = [{ glyphs: glyphs('pages.Xhttps://x.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.5a', 6), pt('p5.9a', 7)] }]
+    const rows2 = [[...Array(6).fill('u5'), 'u5.5', ...Array(13).fill('u5.9')]]
+    expect(run(inked, rows2, unitsOf(entry))).toEqual(['1', '3', '6', '7'].map((piece) => ({ unit: 5, piece })))
   })
-  it('states none where a glyph of no unit’s stands right of it within two of its em, or the unit took glyphs past its end mark', () => {
-    const near = tail(line('xy', 106, 700), [null, null])
-    expect(run(near.pages, near.rows, unitsOf(para))).toEqual([])
-    // (closing punctuation TeX set after the end mark, the unit's own (MR 4c): the tail is not looked at)
-    const past = tail(line(')', 102, 700), ['u5'])
-    expect(run(past.pages, past.rows, unitsOf(para))).toEqual([])
+  it('states none where a glyph of the unit’s or of no unit’s stands between the two, or the unit’s text does', () => {
+    const pages = [{ glyphs: glyphs('pages.ISBNhttps://doi.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.9a', 10), pt('6s', 25)] }]
+    expect(run(pages, [[...Array(6).fill('u5'), ...Array(4).fill(null), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
+    expect(run(pages, [[...Array(10).fill('u5'), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
+    // (a paper's macro inside the unit's text, its glyphs the text's: between its two nearest points stands text, unknown)
+    const sys = unitsOf([{ t: 'text', s: 'We use ' }, ph('\\sys'), { t: 'text', s: ' here.' }])
+    const p2 = [{ glyphs: glyphs('WeuseTensorCasthere.'), points: [pt('5s', 0), pt('5e', 20)] }]
+    expect(run(p2, [Array(20).fill('u5')], sys)).toEqual([])
+    // (a painted box of no unit's between them: TeX set something, an icon)
+    const p3 = [{ glyphs: glyphs('pages.https://doi.org'), boxes: [0, 0, 1, 1], points: [pt('5s', 0, 0), pt('5e', 6, 0), pt('p5.9a', 6, 1), pt('6s', 21, 1)] }]
+    expect(run(p3, [[...Array(6).fill('u5'), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
   })
-  it('reads only the end mark’s column on a page of two', () => {
-    // (2610.21880v1 p2: a column's last line ends near the column's edge; the glyphs of no unit's beside it, within two em, are
-    // the other column's, past the page's middle)
-    const two = tail(line('seq', 312, 700), [null, null, null])
-    two.pages[0]!.glyphs = [...line('aword.', 272, 700), ...line('seq', 312, 700)]
-    expect(run(two.pages, two.rows, unitsOf(para))).toEqual([])
-    two.pages[0]!.points.push(pt('c2-1', 0))
-    expect(run(two.pages, two.rows, unitsOf(para))).toEqual([{ unit: 5, piece: '1' }])
+  it('bounds a tail piece after the unit’s last point by the stream’s next point, of whatever it is, over a page break', () => {
+    const tail = unitsOf([{ t: 'text', s: 'a word.' }, ph('\\endgroup')])
+    // (the next unit's start point next: nothing between)
+    expect(run([{ glyphs: glyphs('aword.Next'), points: [pt('5s', 0), pt('5e', 6), pt('6s', 6)] }], [[...Array(6).fill('u5'), ...Array(4).fill('u6')]], tail)).toEqual([{ unit: 5, piece: '1' }])
+    // (a glyph of another unit's between: the ownership may have given it the piece's ink, as 2608.06701v1 p6's run-in heading
+    // `Comparison Against \sage` lost its "SAGE" to the next paragraph's label: unknown)
+    expect(run([{ glyphs: glyphs('aword.3Next'), points: [pt('5s', 0), pt('5e', 6), pt('h6s', 7)] }], [[...Array(6).fill('u5'), ...Array(5).fill('u6')]], tail)).toEqual([])
+    // (a glyph of no unit's there: unknown)
+    expect(run([{ glyphs: glyphs('aword.*Next'), points: [pt('5s', 0), pt('5e', 6), pt('6s', 7)] }], [[...Array(6).fill('u5'), null, ...Array(4).fill('u6')]], tail)).toEqual([])
+    // (the end point a page's last, the next point the next page's first, its running head's glyph between)
+    const two = [{ glyphs: glyphs('aword.'), points: [pt('5s', 0), pt('5e', 6)] }, { glyphs: glyphs('7Next'), points: [pt('6s', 1)] }]
+    expect(run(two, [Array(6).fill('u5'), [null, ...Array(4).fill('u6')]], tail)).toEqual([])
+    two[1]!.points = [pt('6s', 0)]
+    two[1]!.glyphs = glyphs('Next')
+    expect(run(two, [Array(6).fill('u5'), Array(4).fill('u6')], tail)).toEqual([{ unit: 5, piece: '1' }])
   })
-  it('states a head macro empty where nothing of no unit’s stands left of the start mark on its line', () => {
-    // (\acknowledgments, its heading of no unit's on the line above; \sloppy, which the marking gives no class at all)
-    const units = unitsOf([ph('\\acknowledgments'), ph('\\sloppy'), { t: 'text', s: '\nWe thank.' }])
-    const pages = [{ glyphs: [...line('Acknowledgments', 72, 724, 12), ...line('Wethank.', 72, 700)], points: [pt('5s', 15), pt('5e', 23)], view: [0, 0, 612, 792] }]
-    const rows = [[...Array(15).fill(null), ...Array(8).fill('u5')]]
-    expect(run(pages, rows, units)).toEqual([{ unit: 5, piece: '1' }, { unit: 5, piece: '0' }])
-    // (glyphs of no unit's right before the start: TeX set the macro's text there, which its probe did not spell: not known)
-    const sys = [{ glyphs: [...line('TensorCast', 22, 700), ...line('Wethank.', 72, 700)], points: [pt('5s', 10), pt('5e', 18)], view: [0, 0, 612, 792] }]
-    expect(run(sys, [[...Array(10).fill(null), ...Array(8).fill('u5')]], units)).toEqual([])
+  it('bounds a head piece before the unit’s start point by the stream’s point before it', () => {
+    // (\begingroup and \sloppy before the start, the unit before's end point the stream's last before it)
+    const head = unitsOf([ph('\\begingroup'), ph('\\sloppy'), { t: 'text', s: ' We thank.' }])
+    expect(run([{ glyphs: glyphs('end.Wethank.'), points: [pt('4s', 0), pt('4e', 4), pt('5s', 4), pt('5e', 12)] }], [[...Array(4).fill('u4'), ...Array(8).fill('u5')]], head)).toEqual([{ unit: 5, piece: '0' }, { unit: 5, piece: '1' }])
+    // (\acknowledgments's heading of no unit's between: unknown)
+    const ack = unitsOf([ph('\\acknowledgments'), { t: 'text', s: ' We thank.' }])
+    const pages = [{ glyphs: glyphs('end.AcknowledgmentsWethank.'), points: [pt('4e', 4), pt('5s', 19), pt('5e', 27)] }]
+    expect(run(pages, [[...Array(4).fill('u4'), ...Array(15).fill(null), ...Array(8).fill('u5')]], ack)).toEqual([])
   })
-  it('passes over pieces whose ink or text is known, and stops at inline code or a footnote’s call', () => {
-    const pages = [{ glyphs: line('Wethank.', 72, 700), points: [pt('5s', 0), pt('5e', 8)], view: [0, 0, 612, 792] }]
-    const rows = [Array(8).fill('u5')]
-    const units = unitsOf([ph('\\begingroup'), ph('\\texttt{x}'), ph('\\sloppy'), { t: 'text', s: ' We thank.' }])
-    // (nearest the mark first: \sloppy, then the code, which ends the look)
-    expect(run(pages, rows, units)).toEqual([{ unit: 5, piece: '2' }])
-    expect(run(pages, rows, units, new Set(['5|2']))).toEqual([])
-    const probed = unitsOf([ph('\\sys'), { t: 'text', s: ' We thank.' }])
-    const cs = classes(probed)
-    ;(cs[5] as Map<string, { text?: string }>).get('0')!.text = 'TensorCast'
-    expect(besideEmpty(pages as never, rows, probed as never, { classes: cs as never, known: new Set() })).toEqual([])
+  it('puts what the pieces after an opening point TeX gave no closing one set in that piece’s ink', () => {
+    // (`\cite{a}~\cite{b}`: the first citation's opening point alone (a macro that may read ahead follows it), its glyphs and the
+    // tie's between it and the next one's opening point, all the citation's by the ownership)
+    const cites = unitsOf([{ t: 'text', s: 'see ' }, ph('\\cite{a}'), ph('\\foo'), ph('\\cite{b}'), { t: 'text', s: ' too.' }])
+    const pages = [{ glyphs: glyphs('see[1][2]too.'), points: [pt('5s', 0), pt('p5.1a', 3), pt('p5.3a', 6), pt('p5.3b', 9), pt('5e', 13)] }]
+    const rows = [[...Array(3).fill('u5'), ...Array(3).fill('u5.1'), ...Array(3).fill('u5.3'), ...Array(4).fill('u5')]]
+    expect(run(pages, rows, cites)).toEqual([{ unit: 5, piece: '2' }])
+    // (one of them the unit's text: what \\foo set may be it, unknown)
+    rows[0]![5] = 'u5'
+    expect(run(pages, rows, cites)).toEqual([])
+  })
+  it('reads no unit whose points TeX set more than once', () => {
+    const pages = [{ glyphs: glyphs('pages.https://doi.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.9a', 6), pt('5e', 21)] }]
+    expect(run(pages, [[...Array(6).fill('u5'), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
   })
 })
 

@@ -14,10 +14,9 @@
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, ROLE, runIns, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, headEnd, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
-import { lastTexLog } from '../source/latex-front.mjs'
-import { columnsAt } from '../layout/stream.mjs'
+import { lastTexLog, startOf } from '../source/latex-front.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
@@ -414,84 +413,116 @@ export function inklessPieces(units, { classes, inkless = null }) {
   return out
 }
 
-/** a glyph beside a unit's mark is of the run there within this many of its own size of the run's edge (today's maker's
- *  LABEL_EM, make.mjs besideMarks) */
-const BESIDE_EM = 2
+/** a piece's own point: a placeholder's opening and closing (`p<u>.<k>a`, `b`; a footnote's call's `n…`; a head macro's \\axthpk
+ *  opening), a trailing macro's point after its group (`g`) */
+const OWN_POINT = /^[pn](\d+)\.(\d+)([abg])$/
+/** a glyph that is ink: a character TeX set, no blank and no space */
+const inked = g => /\S/.test(g?.u ?? '') && !g?.blank
 /**
- * The paper's macros at a unit's head and after its last text that set nothing on the unit's lines, by today's maker's rule
- * (make.mjs besideMarks), as Instrument `empty` pieces: TeX set a head piece's ink, if any, before the unit's start mark and a
- * tail piece's after its end mark, so never on the unit's own lines, which begin at the one mark and end at the other; where no
- * glyph of no unit's stands beside the mark on its line, in its column, the nearest within BESIDE_EM of its size, nothing of it
- * is there: the reading draws it as nothing, and its ink, wherever TeX set it, stays the original's. Today's marking gives
- * such a piece no point to bound it (a head piece none, a tail one its opening point alone where its closing one would follow a
- * control word), so the compile's evidence is the line beside the mark: 2610.21880v1 p2 u23's `\\endgroup` after its last word,
- * 2609.20976v1 p12 u65's `\\acknowledgments` (its heading on the line above), 2610.10069v1 p5 u29's `\\begingroup`, units
- * left unproven before. The mark's place is the unit's own glyph TeX set right after its start point (before its end point).
- * A tail is looked at only where the unit took nothing past its end mark on that line (its closing punctuation, own.mjs MR
- * 4c), as today's. The pieces are the reading's text macros (`classes`' macro and umacro, which the probe showed no text of),
- * nearest the mark first; one whose ink or span is stated (`known`, `unit|piece`) is passed over; inline code (at the head)
- * and a footnote's call always set ink, and end the look. `pages` the adapter's (glyphs, points, view), `rows` the ownership's
- * group names by glyph, `units` today's, `classes` each unit's classesOf by piece id
+ * The pieces TeX's points prove set nothing of their own, as Instrument `empty` pieces (rootcause/lave.md §1). TeX's points
+ * bound what TeX set: every piece of a unit lies between the two nearest points TeX shipped around it in the unit's source
+ * order, the points of the pieces before and after it (OWN_POINT), the unit's start point before the piece patch sets it before
+ * (latex-front.mjs startOf) and its end point after its last text; where the unit has none on a side (a head piece before its
+ * first, a tail piece after its last), the page's stream's nearest, of whatever it is the point. A piece with no closing point
+ * of its own (none, or its opening one alone, which is then its lower) whose two hold between them in B's stream no glyph and
+ * no painted box, and no text of the unit's between them in its source, set nothing (nor did any piece between them): 2402.10294v1's ACM references, whose `\\urldef\\tempurl` after `\\showISBNx`, a macro that may read
+ * ahead, the marking gives no point, between the end point and `\\showDOI`'s opening one, where nothing stands wherever TeX
+ * broke the line before the DOI; a `\\endgroup` after the last word, the next unit's start point next. Where the lower of the
+ * two is the opening point of a piece TeX gave no closing one, and everything between them is that piece's by the ownership,
+ * what the pieces after it set is in that piece's ink. This replaces a reading of the line beside the unit's mark (today's
+ * maker's besideMarks), which line breaking decided: 19 of 2402.10294v1's 86 references were English where its DOI began
+ * mid-line. A unit whose points TeX set more than once is not read. `pages` the adapter's (glyphs, boxes, points), `owners` the
+ * instrument's glyphs' and boxes' owners by page
  */
-export function besideEmpty(pages, rows, units, { classes, known = new Set() }) {
-  // (each unit's start and end point, page and glyph count; a unit whose marks TeX set more than once is not looked at)
-  const S = new Map(), E = new Map(), twice = new Set()
-  pages.forEach((pg, p) => (pg.points ?? []).forEach(pt => {
-    const s = START_POINT.exec(pt.name), e = s ? null : END_POINT.exec(pt.name), m = s ?? e
+export function boundedEmpty(pages, units, { glyphs = [], boxes = [] } = {}) {
+  // (every unit's point by name, [page, index among the page's points]; the units whose points TeX set more than once)
+  const at = new Map(), twice = new Set()
+  pages.forEach((pg, p) => (pg.points ?? []).forEach((pt, q) => {
+    const m = START_POINT.exec(pt.name) ?? END_POINT.exec(pt.name) ?? OWN_POINT.exec(pt.name)
     if (!m) return
-    const i = Number(m[1]), M = s ? S : E
-    if (M.has(i)) twice.add(i)
-    else M.set(i, [p, pt.glyph])
+    if (at.has(pt.name)) twice.add(Number(m[1]))
+    at.set(pt.name, [p, q])
   }))
-  /** whether nothing of no unit's stands beside unit i's mark `at` (its start's, else its end's) on the mark's line */
-  const nothingBeside = (i, at, tail) => {
-    const [p, n] = at, pg = pages[p], row = rows[p] ?? [], G = pg?.glyphs ?? [], j = tail ? n - 1 : n, M = G[j]
-    const mine = `u${i}`, own = g => row[g] === mine || row[g] === `${mine}.p` || row[g] === `${mine}.l`
-    if (!M || !own(j)) return false
-    const mx = tail ? M.x1 : M.x0, my = M.y
-    const v = pg.view ?? [0, 0, 0, 0], mid = (v[0] + v[2]) / 2, col = columnsAt(pg), c = col(mx, mx), two = col(v[2], v[2]) === 1
-    const [cx0, cx1] = !two || c === 2 ? [v[0], v[2]] : c === 1 ? [mid, v[2]] : [v[0], mid]
-    const onBand = g => G[g].y > my - 0.35 * G[g].size && G[g].y < my + 0.75 * Math.max(G[g].size, 6)
-    const beside = g => (tail ? G[g].x0 >= mx - 0.05 && G[g].x1 <= cx1 + 1 : G[g].x1 <= mx + 0.05 && G[g].x0 >= cx0 - 1)
-    const real = g => /\S/.test(G[g].u ?? '') && !G[g].blank
-    // (what the unit took past its end mark on its line: its closing punctuation, which ends the look)
-    if (tail && G.some((_, g) => g >= n && own(g) && real(g) && onBand(g) && (G[g].x0 + G[g].x1) / 2 > mx + 0.05 && G[g].x1 <= cx1 + 1)) return false
-    // (the run outwards from the mark, nearest first: the glyphs of no unit's, and the unit's own pieces' a head found (MR 5b))
-    const cand = []
-    for (let g = 0; g < G.length; g++) if (g !== j && (row[g] == null || row[g] === `${mine}.p`) && real(g) && onBand(g) && beside(g)) cand.push(g)
-    cand.sort((a, b) => (tail ? G[a].x0 - G[b].x0 : G[b].x1 - G[a].x1) || a - b)
-    let edge = mx
-    for (const g of cand) {
-      if ((tail ? G[g].x0 - edge : edge - G[g].x1) > BESIDE_EM * G[g].size) break
-      if (row[g] == null) return false
-      edge = tail ? Math.max(edge, G[g].x1) : Math.min(edge, G[g].x0)
-    }
-    return true
+  const point = ([p, q]) => pages[p].points[q]
+  const before = (x, y) => x[0] < y[0] || (x[0] === y[0] && x[1] < y[1])
+  /** the stream's point after one, and before one, over pages */
+  const next = ([p, q]) => {
+    if (q + 1 < pages[p].points.length) return [p, q + 1]
+    for (let i = p + 1; i < pages.length; i++) if (pages[i].points?.length) return [i, 0]
+    return null
   }
-  const out = []
-  units.forEach((u, i) => {
-    const pieces = u?.pieces ?? []
-    if (twice.has(i) || !pieces.length) return
-    const last = pieces.findLastIndex(q => q.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : ''))
-    if (last < 0) return
-    const cs = classes[i]
-    for (const tail of [false, true]) {
-      const at = (tail ? E : S).get(i)
-      if (!at) continue
-      const ks = []
-      if (tail) for (let k = last + 1; k < pieces.length; k++) ks.push(k)
-      else for (let k = headEnd(pieces, 0) - 1; k >= 0; k--) ks.push(k)
-      let looked = null
-      for (const k of ks) {
-        const c = classOf(pieces[k])
-        if (c === 'footnote' || (!tail && c === 'code')) break
-        const x = cs?.get(String(k))
-        if (!x || (x.cls !== 'macro' && x.cls !== 'umacro') || x.text !== undefined || known.has(`${i}|${k}`)) continue
-        looked ??= nothingBeside(i, at, tail)
-        if (!looked) break
-        out.push({ unit: i, piece: String(k) })
-      }
+  const prev = ([p, q]) => {
+    if (q > 0) return [p, q - 1]
+    for (let i = p - 1; i >= 0; i--) if (pages[i].points?.length) return [i, pages[i].points.length - 1]
+    return null
+  }
+  /** whether B's stream from `lo` to `hi` holds a glyph or a painted box TeX set but `opener`'s, the piece whose opening point
+   *  `lo` is (its element's, by the ownership). Another unit's is not passed over: the ownership may have given it the piece's
+   *  ink (2608.06701v1 p6's run-in heading `Comparison Against \\sage`, its "SAGE" the next paragraph's label) */
+  const holds = (u, lo, hi, opener) => {
+    const others = (O, j) => opener !== null && O?.unit[j] === u && O.role[j] === ROLE.element && O.piece[j] === opener
+    for (let p = lo[0]; p <= hi[0]; p++) {
+      const pg = pages[p]
+      const g0 = p === lo[0] ? point(lo).glyph : 0, g1 = p === hi[0] ? point(hi).glyph : pg.glyphs.length
+      for (let j = g0; j < g1; j++) if (inked(pg.glyphs[j]) && !others(glyphs[p], j)) return true
+      const b0 = p === lo[0] ? (point(lo).box ?? 0) : 0, b1 = p === hi[0] ? (point(hi).box ?? 0) : (pg.boxes?.length ?? 0) / 4
+      for (let j = b0; j < b1; j++) if (!others(boxes[p], j)) return true
     }
+    return false
+  }
+  const real = q => q?.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : '')
+  const out = []
+  units.forEach((unit, u) => {
+    const P = unit?.pieces ?? []
+    if (!P.length || twice.has(u)) return
+    const S = at.get(`${u}s`) ?? at.get(`h${u}s`) ?? at.get(`t${u}s`) ?? null
+    const E = at.get(`${u}e`) ?? at.get(`h${u}e`) ?? at.get(`t${u}e`) ?? null
+    const own = k => {
+      const a = at.get(`p${u}.${k}a`) ?? at.get(`n${u}.${k}a`) ?? null, b = at.get(`p${u}.${k}b`) ?? at.get(`n${u}.${k}b`) ?? null, g = at.get(`p${u}.${k}g`) ?? null
+      return a || b || g ? { a, b, g } : null
+    }
+    // (the start point's piece as patch finds it, over the source's text as patch writes it)
+    const start = S ? startOf(P.map(q => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0] : -1
+    const last = P.findLastIndex(real)
+    const seen = new Map()
+    P.forEach((piece, k) => {
+      // (a piece's own two points bound it already (placesOf), as a trailing macro's point after its group does with the end point;
+      // one with its opening point alone is bounded by it and the next)
+      const mine = own(k)
+      if (piece.t !== 'ph' || (mine && ((mine.a && mine.b) || mine.g))) return
+      // (the nearest point before it: a piece's (its closing, else its opening one, whose piece's ink then runs on), the start
+      // point where the walk passes it, the end point after the last text; none of the unit's, the stream's; text first, or a
+      // trailing macro's point after its group alone (which may stand after this piece), no bound)
+      let lo = mine?.a ?? null, hi = mine?.b ?? null, opener = null
+      if (!lo) for (let j = k - 1; ; j--) {
+        if (S && k >= start && j === start - 1) { lo = S; break }
+        if (E && k > last && j === last) { lo = E; break }
+        if (j < 0) { lo = 'stream'; break }
+        const o = own(j)
+        if (o) {
+          lo = o.b ?? o.a
+          if (!o.b && o.a) opener = j
+          break
+        }
+        if (real(P[j])) break
+      }
+      if (!lo) return
+      if (!hi) for (let j = k + 1; ; j++) {
+        if (S && k < start && j === start) { hi = S; break }
+        if (j >= P.length) { hi = 'stream'; break }
+        const o = own(j)
+        if (o) { hi = o.a ?? o.b; break }
+        if (real(P[j])) break
+      }
+      if (!hi || (lo === 'stream' && hi === 'stream')) return
+      if (lo === 'stream') lo = prev(hi)
+      if (hi === 'stream') hi = next(lo)
+      if (!lo || !hi || before(hi, lo)) return
+      // (the pieces of one interval read it once)
+      const key = `${lo}|${hi}|${opener}`
+      if (!seen.has(key)) seen.set(key, holds(u, lo, hi, opener))
+      if (!seen.get(key)) out.push({ unit: u, piece: String(k) })
+    })
   })
   return out
 }
@@ -606,16 +637,11 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
-  // (the pieces TeX sets no ink for (inklessPieces): their span stated empty, by unit index and piece id)
+  // (the pieces TeX sets no ink for (inklessPieces), and those TeX's points prove set nothing of their own (boundedEmpty): their
+  // span stated empty, by unit index and piece id)
   const empty = inklessPieces(units, { classes: classesBy, inkless })
-  // (and a head or tail macro that sets nothing on its unit's line, by the line beside the unit's mark (besideEmpty): those whose
-  // ink, span or no ink the instrument states already passed over)
-  const known = new Set(empty.map(x => `${x.unit}|${x.piece}`))
-  for (const O of [...glyphs, ...boxes]) for (let j = 0; j < O.unit.length; j++) if (O.role[j] === ROLE.element && O.piece[j] >= 0) known.add(`${O.unit[j]}|${O.piece[j]}`)
-  const ends = new Map()
-  for (const x of places) { const k = `${x.unit}|${x.piece}`; ends.set(k, (ends.get(k) ?? 0) | (x.end ? 2 : 1)) }
-  for (const [k, e] of ends) if (e === 3) known.add(k)
-  empty.push(...besideEmpty(pages, own.glyphs, units, { classes: classesBy, known }))
+  const stated = new Set(empty.map(x => `${x.unit}|${x.piece}`))
+  for (const x of boundedEmpty(pages, units, { glyphs, boxes })) if (!stated.has(`${x.unit}|${x.piece}`)) empty.push(x)
   return {
     instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },

@@ -122,9 +122,10 @@ export interface Instrument {
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point), those the marking never marks,
    *  their rendering never ink by its own reading (a text macro of today's marks.mjs classOf null: a .bbl's \newblock; the
-   *  adapter's inklessPieces), and those a front whose marking gives a head or tail macro no point to bound it finds set nothing
-   *  on the unit's lines (no glyph of no unit's beside the unit's mark on its line: today's maker's besideMarks, the adapter's):
-   *  their span stated empty, by unit index and piece id */
+   *  adapter's inklessPieces), and those TeX's points prove set nothing of their own: a piece with no point of its own whose two
+   *  nearest points around it in its unit's source order (a piece's, the unit's start and end, else the stream's) hold no glyph
+   *  and no painted box between them, nor text of the unit's (the adapter's boundedEmpty): their span stated empty, by
+   *  unit index and piece id */
   empty?: { unit: number; piece: string }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
