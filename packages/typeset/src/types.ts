@@ -144,8 +144,10 @@ export type Item =
       dir?: [ux: number, uy: number]
     }
   /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
-   *  url package breaks it), which the reader draws with no antialiased margin */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
+   *  url package breaks it), which the reader draws with no antialiased margin; `clip`, where another piece's ink stands in its
+   *  source, the rectangles of its source it is drawn through (its own ink's boxes and the rest clear of the others' ink, its
+   *  page's PDF units: lay/clips.ts) */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; clip?: Box[] }
 
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {

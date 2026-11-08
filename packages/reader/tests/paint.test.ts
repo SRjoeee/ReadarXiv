@@ -85,7 +85,68 @@ describe("a laid page's crops", () => {
       ['14', '3'],
       ['15', '4'],
     ])
-    expect(drawn[0]![3]).toBeCloseTo((800 - 80.13 - 0.6) * 2)
-    expect(drawn[1]![3]).toBeCloseTo((792 - 707 - 0.6) * 2)
+    // (each cut as the typesetter states its source: its ink with the antialiased margin round it, nothing more)
+    expect(drawn[0]![3]).toBeCloseTo((800 - 80.13) * 2)
+    expect(drawn[1]![3]).toBeCloseTo((792 - 707) * 2)
+  })
+  it('draws a crop through the rectangles it states, so that another piece’s ink in its rectangle stays behind', async () => {
+    // (2610.21312v1-zh p5 t58: line 1's formula, its source reaching 0.3 pt under its ink into line 2's glyph tops, drawn in
+    // place; its clip its own ink's box and the rest of its source clear of line 2's)
+    const src: [number, number, number, number, number, number] = [5, 72.8, 160.27, 279.09, 174.74, 165.97]
+    const clip: [number, number, number, number][] = [
+      [73.2, 160.57, 278.69, 174.44],
+      [116.39, 160.27, 279.09, 174.74],
+      [72.8, 160.63, 116.39, 174.74],
+    ]
+    const page: Page = {
+      page: 5,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 58,
+          page: 5,
+          state: 'laid',
+          off: 3,
+          lit: { left: [], right: [], own: [] },
+          lines: [[165.97, 73.2, 290, [{ s: 'tr', x: 72.8, src, k: 1, piece: '0', clip }]]],
+        },
+      ],
+    }
+    const [c] = cropsOf(page)
+    const near = (a: readonly number[] | undefined, b: readonly number[]) => {
+      expect(a?.length).toBe(b.length)
+      for (const [i, v] of b.entries()) expect(a![i]).toBeCloseTo(v, 9)
+    }
+    near(c!.src, [72.8, 160.27, 279.09, 174.74])
+    // (drawn in place: its line's baseline its source's, at its source's x)
+    near(c!.at, [72.8, 160.27, 279.09, 174.74])
+    expect(c!.clip?.length).toBe(clip.length)
+    for (const [i, r] of clip.entries()) near(c!.clip![i], r)
+    const calls: string[] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () =>
+        ({
+          save: () => calls.push('save'),
+          restore: () => calls.push('restore'),
+          beginPath: () => calls.push('path'),
+          rect: (x: number, y: number, w: number, h: number) =>
+            calls.push(`rect ${[x, y, w, h].map((v) => Math.round(v * 100) / 100).join(' ')}`),
+          clip: () => calls.push('clip'),
+          drawImage: () => calls.push('draw'),
+        }) as never,
+    )
+    const pdfPage = {
+      getViewport: () => viewportOf(792, 2),
+      render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+    }
+    await cropsFor(page, async () => pdfPage as never, viewportOf(792, 2) as never, Promise.resolve({} as never), {
+      sx: 1,
+      sy: 1,
+    })
+    // (the clip's rectangles where the crop is drawn, device px of this page's frame: y down from its top)
+    const dev = ([x0, y0, x1, y1]: [number, number, number, number]) =>
+      `rect ${[x0 * 2, (792 - y1) * 2, (x1 - x0) * 2, (y1 - y0) * 2].map((v) => Math.round(v * 100) / 100).join(' ')}`
+    expect(calls).toEqual(['save', 'path', ...clip.map(dev), 'clip', 'draw', 'restore'])
   })
 })
