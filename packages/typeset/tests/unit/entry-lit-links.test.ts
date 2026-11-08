@@ -229,6 +229,9 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(ba[0]).toBeCloseTo(runs.find((it) => it.s === '(Smith ')!.x + 0.5 * f, 6)
     expect(bb[0]).toBeCloseTo(runs.find((it) => it.s === 'Smith ')!.x, 6)
     expect(ba[2]!).toBeLessThanOrEqual(bb[0]!)
+    // (the PDF listing them the other way: searched in their order on A all the same, each over its own occurrence, #626's
+    // review)
+    expect(layPage(part(m, [b, a]), rowsOf([r]), rules, metrics()).links).toEqual(p.links)
   })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the

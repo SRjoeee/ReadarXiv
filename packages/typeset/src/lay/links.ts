@@ -102,6 +102,7 @@ export function linksOf(
   for (const [ord, owned] of byOwner) {
     const { m, layout: L, off, kept, elOf } = laid.get(ord)!
     const ids = inReading(owned, list, m.lines, page)
+    const rank = new Map(ids.map((i, n) => [i, n]))
     const lines = L.lines.filter((line) => line.page === page).map((line) => ({ line, runs: lineRuns(line, L) }))
     // (each element drawn on the page as a crop or as text, by its id: the first piece of its drawn there)
     const crops = new Map<string, number>(),
@@ -127,6 +128,7 @@ export function linksOf(
       const l = list[i]!
       const a: Annot = {
         i,
+        at: rank.get(i)!,
         ...('url' in l.to ? { url: l.to.url } : { dest: l.to.dest }),
         rect: [...l.box],
         ...(l.text ? { ov: l.text } : {}),
