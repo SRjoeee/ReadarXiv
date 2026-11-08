@@ -519,6 +519,33 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
     expect(laid[0]!.fit!.size).toBe(10)
   })
+  it('reads no rule of a CJK cell where a band edge reaches into its line’s own glyphs, as today’s pageRules (triage-1 S1)', () => {
+    // (2610.21880v1-zh p2 t15, a tightly set table: the \hline over the cell's line has its bottom edge at 698.67, 0.01 under
+    // its glyphs' top 698.68; today's pageRules (cell-rules.mjs) took a rule through a line's own glyphs' band for none of its
+    // own, cap 1; read as the rule over it, the band capped the cell at 0.817. Clear of the glyphs, it is the cell's rule)
+    const zh = rulesFor('zh')
+    const cellWith = (room: Placed['room']) =>
+      member({
+        kind: 'cell',
+        align: 'l',
+        lines: [[1, 0, 72, 100, 700, 707, 698, 72, 100, 0, 10]],
+        room: { next: 300, ...room },
+      })
+    const sizeOf = (room: Placed['room']) => {
+      const laid = layPage(part(cellWith(room)), rowsOf([row([{ t: 'text', s: '\u6a21\u578b' }])]), zh, metrics())
+        .members[0]!
+      expect(laid.state).toBe('laid')
+      return laid.fit!.size
+    }
+    // (the rule over it into its glyphs' top, the rule under it clear of their bottom: the one under alone)
+    expect(sizeOf({ below: 0, band: [697.6, 706.99] })).toBe(10)
+    // (the rule over it clear of its glyphs: the band between the two caps it)
+    expect(sizeOf({ below: 0, band: [697.6, 707.2] })).toBeLessThan(10)
+    // (a band edge Room.bandOpen states no rule stands on is none: fx-facts' bandOpen, 1 under, 2 over)
+    expect(sizeOf({ below: 0, band: [697.6, 707.2], bandOpen: 2 })).toBe(10)
+    expect(sizeOf({ below: 0, band: [697.9, 708.8] })).toBeLessThan(10)
+    expect(sizeOf({ below: 0, band: [697.9, 708.8], bandOpen: 1 })).toBe(10)
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

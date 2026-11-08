@@ -177,6 +177,9 @@ export const Room = z.object({
   next: num.optional(),
   side: z.tuple([num, num]).optional(),
   band: z.tuple([num, num]).optional(),
+  // (the side of `band` no rule stands on, where one stands on the other: 1 under, 2 over. The band states the cell's line's own
+  // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
+  bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
   under: num.optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */

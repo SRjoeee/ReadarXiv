@@ -15,7 +15,7 @@
 // made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
 // off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides
 // each page's own: a member laid across a page break turns off on the other page none of the groups of this one.
-import type { OutPiece, Part, Placed } from '@readarxiv/format'
+import { LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
@@ -74,19 +74,32 @@ function cutsOf(L: Layout | undefined): { page: number; el: boolean }[] {
   return out
 }
 
-/** a CJK cell's rules as U.params' cellBands reads them, [x0, y0, x1, y1] each, on the page of its first line: the rule over its
- *  lines and the rule under them, which its own Room.band states (the clear band between them), across its lines. Its own
- *  alone: a cell's single line widened into its row (U.decor's widen) spans its neighbours, whose bands' edges stand over and
- *  under no line of its (triage-1 S1: 1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at
- *  0.615). Today's cellBands (L2:352) read the page's rules over the cell's own rectangle, never widened (RUN:2116) */
+/**
+ * A CJK cell's rules as U.params' cellBands reads them, [x0, y0, x1, y1] each, on the page of its first line: the rule over its
+ * lines and the rule under them, which its own Room.band states (the clear band between them), across its lines. Its own alone:
+ * a cell's single line widened into its row (U.decor's widen) spans its neighbours, whose bands' edges stand over and under no
+ * line of its (triage-1 S1: 1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at 0.615).
+ * A band edge is no rule of its where no rule stands on that side (Room.bandOpen: 1 under, 2 over; the band states the line's
+ * own bottom or top there) or where the rule reaches into its line's own glyphs: the edge over its first line under their top,
+ * the edge under its last line over their bottom, both as the part states them (Line's top and bottom: the PDF's ink, as the
+ * rule's edges are). Today's rule: cell-rules.mjs pageRules took a rule through a line's own glyphs' band for none of its
+ * own (the same top and bottom: 2610.21880v1 p2's tightly set table, its \hline 0.01 under t15's glyphs' top, cap 1 where the
+ * band read as its rules gave 0.817; t22's under its glyphs' bottom, 0.897 where the band gave 0.827). Today's cellBands
+ * (L2:352) then read those rules over the cell's own rectangle, never widened (RUN:2116)
+ */
 function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
   const band = m.room.band
-  const l0 = m.lines[0]
-  if (!band || !l0) return () => undefined
-  const x0 = Math.min(...m.lines.map((l) => l[2])),
-    x1 = Math.max(...m.lines.map((l) => l[3]))
-  const rules = [x0, band[1], x1, band[1], x0, band[0], x1, band[0]]
-  return (pg) => (pg === l0[0] ? rules : undefined)
+  // (its own lines, those whose ink is not kept: the band's, Room.band's bandOf)
+  const own = m.lines.filter((l) => !(l[9] & LINE_FLAG.KEPT))
+  const first = own[0],
+    last = own.at(-1)
+  if (!band || !first || !last) return () => undefined
+  const x0 = Math.min(...own.map((l) => l[2])),
+    x1 = Math.max(...own.map((l) => l[3]))
+  const rules: number[] = []
+  if (m.room.bandOpen !== 2 && band[1] >= first[5]) rules.push(x0, band[1], x1, band[1])
+  if (m.room.bandOpen !== 1 && band[0] <= last[6]) rules.push(x0, band[0], x1, band[0])
+  return (pg) => (pg === first[0] && rules.length ? rules : undefined)
 }
 
 /** the page's lowest unit line, as today's pageBottom (RUN:911: a line's band bottom and 0.24 of its height, the lowest of the
