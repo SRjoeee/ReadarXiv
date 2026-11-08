@@ -118,6 +118,9 @@ export interface Member {
   /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
    *  line */
   spanOpens?: Map<string, number>
+  /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
+   *  (ink.ts figureRuns; SpanAt.style) */
+  spanStyles?: [string, Style][]
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
@@ -744,8 +747,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.figure = !!x.unit.figure
       if (x.unit.figure?.dir) mem.dir = x.unit.figure.dir
       mem.align = x.unit.align ?? 'j'
-      // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain)
-      if (x.unit.figure) mem.plain = x.unit.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+      // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain; its groups'
+      // text with the rest. Its runs in another face, each group's style its glyphs': the part's SpanAt.style)
+      if (x.unit.figure) mem.plain = sourceText(x.unit.content)
+      if (x.spanStyles) mem.spanStyles = x.spanStyles
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
         mem.cause = 'no ink'

@@ -8,7 +8,8 @@
 // it is, an element that sets no ink nothing (the marking's INVISIBLE: a switch, a skip, a label), one that breaks the text (a
 // forced break, an item, a display) or any other one character; a group with no text nothing, or one character where it holds
 // an element that sets ink. Not ported: today's merge of same-style neighbours, and its keeping of a pair that sets more than a
-// style (a box, a paper's macro of prose), which the translate lane's wire sends on no wire by its own decision.
+// style (a box, a paper's macro of prose), which the translate lane's wire sends on no wire by its own decision. A figure text's
+// run of glyphs in another face (locate/ink.ts figureRuns: a group of no source) is a style group read by the same rules.
 import type { Piece } from '@readarxiv/format'
 import { ABBR } from '@readarxiv/text'
 import { INVISIBLE, STRUCTURE } from './tex.ts'
@@ -156,7 +157,9 @@ export function runIns(content: Piece[]): Piece[] {
       edges.push(a, b)
       continue
     }
-    if (s.open === undefined || !STYLE_OPEN.test(s.open)) continue
+    // (a group of no source, neither end's: a figure text's run of glyphs in another face (locate/ink.ts figureRuns), a style
+    // and nothing else. A source's group with neither end is one that holds the whole unit, above)
+    if (s.open === undefined ? s.close !== undefined : !STYLE_OPEN.test(s.open)) continue
     const head = a <= word
     const tail = b >= lastWord
     const inside = flat.slice(Math.max(a, b - WINDOW), b).trimEnd()

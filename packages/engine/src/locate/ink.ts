@@ -8,12 +8,13 @@
 // instrument states is source units alone: these are made here, each a unit of today's shape (its id format's unitId over its
 // kind and content, today's id; an ink unit's echo, its alignment as TeX set its paragraph, a figure text's set and direction,
 // a kept block fixed) with its ink on A.
-import { type Piece, unitId } from '@readarxiv/format'
+import { type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocPoint } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
+import { faceKeyOf, type StyleGlyph, styleKeyOf, styleOf as glyphStyleOf, turnedStyleGlyph, unitSize } from './facts.ts'
 import {
   classOf,
   claimInk,
@@ -41,6 +42,8 @@ export interface Made {
   turned: [number, number][]
   textBoxes: [number, number][]
   elBoxes: [number, number][]
+  /** a figure text's groups of its runs in another face (figureRuns): each one's style, its glyphs', by its piece id */
+  spanStyles?: [string, Style][]
 }
 
 export interface InkInput {
@@ -214,10 +217,22 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
   const figOrder = [...fig.units.keys()].sort(
     (a, b) => (fig.units[a]!.why ? 1 : 0) - (fig.units[b]!.why ? 1 : 0) || a - b,
   )
-  const figAt = new Map(figOrder.map((k, q) => [k, made.length + q]))
+  // (each figure text's glyphs: its level ones (global, stream order) and its turned ones ([page, index]), in today's reading's
+  // order of them)
+  const figText = new Map<number, number[]>()
+  const figTurned = new Map<number, [number, number][]>()
+  fig.glyphs.forEach((mp, i) => {
+    for (const [g, k] of mp) (figText.get(k) ?? figText.set(k, []).get(k)!).push(global(i + 1, g))
+  })
+  fig.turned.forEach((mp, i) => {
+    for (const [j, k] of mp) (figTurned.get(k) ?? figTurned.set(k, []).get(k)!).push([i + 1, j])
+  })
   for (const k of figOrder) {
     const f = fig.units[k]!
-    const content: Piece[] = [{ t: 'text', s: f.text ?? '' }]
+    const text = (figText.get(k) ?? []).sort((a, b) => a - b)
+    const turned = figTurned.get(k) ?? []
+    // (its text in the runs its glyphs set in another face than its own: each a group of its own, its style its glyphs')
+    const { content, styles } = figureRuns(f.text ?? '', streamOfFigure(text, turned, pages, inkA, m, o.pageA))
     const ux = f.ux ?? 1
     const uy = f.uy ?? 0
     const dir: [number, number] | undefined =
@@ -243,20 +258,15 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...(f.why ? { why: `figure: ${f.why}`, fixed: true as const } : {}),
       },
-      text: [],
+      text,
       ph: [],
       phId: null,
-      turned: [],
+      turned,
       textBoxes: [],
       elBoxes: [],
+      ...(styles.length ? { spanStyles: styles } : {}),
     })
   }
-  fig.glyphs.forEach((mp, i) => {
-    for (const [g, k] of mp) made[figAt.get(k)!]!.text.push(global(i + 1, g))
-  })
-  fig.turned.forEach((mp, i) => {
-    for (const [j, k] of mp) made[figAt.get(k)!]!.turned.push([i + 1, j])
-  })
   for (const x of made) x.text.sort((a, b) => a - b)
   return {
     made,
@@ -267,6 +277,112 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       glyphs: made.reduce((n, x) => n + x.text.length + x.ph.length, 0),
     },
   }
+}
+
+// ---------------------------------------------------------------- a figure text's style runs
+/** a figure text's glyph in its run's order: what today's figure reading read its text off (its Unicode, blank), and its style */
+type FigureGlyph = { u: string; blank: boolean; style: StyleGlyph }
+/** a figure text's glyphs, level and turned, in the order today's figure reading strings its text (figure-text.mjs streamOf: by
+ *  show and place in it), each as it read it (the page it was given) with its style as locate reads one (A's glyph: its font's
+ *  base name, size and fill); and its own glyphs as locate's style reads them, its level ones then its turned ones */
+function streamOfFigure(
+  text: readonly number[],
+  turned: readonly [number, number][],
+  pages: readonly TodayPage[],
+  inkA: Doc,
+  m: Mapping,
+  pageA: Int32Array,
+): { stream: FigureGlyph[]; own: StyleGlyph[] } {
+  type Read = { u?: string; blank?: boolean; n: number; k: number }
+  const at: (FigureGlyph & { n: number; k: number })[] = []
+  const own: StyleGlyph[] = []
+  const read = (x: Read, style: StyleGlyph) => {
+    at.push({ u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), style, n: x.n, k: x.k })
+    own.push(style)
+  }
+  for (const a of text) {
+    const p = (pageA[a] as number) - 1
+    const g = a - (m.offA[p] as number)
+    read((pages[p]!.glyphs as Read[])[g]!, inkA.pages[p]!.glyphs[g]!)
+  }
+  for (const [p, j] of turned)
+    read((pages[p - 1]!.turned as Read[])[j]!, turnedStyleGlyph(inkA.pages[p - 1]!.turned![j]!))
+  at.sort((x, y) => x.n - y.n || x.k - y.k)
+  return { stream: at, own }
+}
+
+/**
+ * A figure text's content, its text (today's figure reading's: its glyphs' Unicode in its run's order, NFKC, a space where
+ * they stand apart, white space collapsed) in the runs its glyphs set in another face than its own: each a group of its own,
+ * the style its glyphs state on A, by its piece id. Its own style is locate's (facts.ts styleOf over its glyphs: the face of most of
+ * them, the first to the most where two tie); the text outside its groups is in it. Each character is its glyph's, the k-th
+ * that is no white space the k-th of its glyphs' text; a space between two characters of one run is that run's, any other its
+ * own. A group is named for what its face changes (LaTeX's names: `bold` or `medium`, `italic` or `upright`, the role), has no
+ * source (neither `open` nor `close`), and is a label (`must`) where the run-in rule makes one (runIns): today's figure reading
+ * names one face for a run of one family's faces, its first glyph's (2608.25210v2 p2: "Data Extraction Task" in
+ * HelveticaNeue-Bold, ": Extract all …" in HelveticaNeue, all drawn bold), and one style read off all of them is the face of
+ * most of them (all drawn regular). One face: one text, today's unit
+ */
+function figureRuns(
+  s: string,
+  { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
+): { content: Piece[]; styles: [string, Style][] } {
+  const base = styleKeyOf(glyphStyleOf(own))
+  const chars = [...s]
+  const SPACE = /\s/u
+  // (each character's glyph: its glyphs' text, white space aside, as today's textOf strings it)
+  const glyphOf: (number | null)[] = []
+  let q = 0
+  let left = 0
+  const textOf = (x: FigureGlyph) => (x.blank ? 0 : [...x.u.normalize('NFKC')].filter((c) => !SPACE.test(c)).length)
+  for (const c of chars) {
+    if (SPACE.test(c)) {
+      glyphOf.push(null)
+      continue
+    }
+    while (left === 0 && q < stream.length) left = textOf(stream[q++]!)
+    glyphOf.push(left > 0 ? q - 1 : null)
+    left--
+  }
+  const keyOf = glyphOf.map((g) => (g === null ? null : faceKeyOf(stream[g]!.style.base)))
+  if (!keyOf.some((x) => x !== null && x !== base)) return { content: [{ t: 'text', s }], styles: [] }
+  // (a space the run's on both sides of it, else its own style's)
+  const key = keyOf.map((x, i) => {
+    if (x !== null) return x
+    let a = i - 1
+    while (a >= 0 && keyOf[a] === null) a--
+    let b = i + 1
+    while (b < keyOf.length && keyOf[b] === null) b++
+    return a >= 0 && b < keyOf.length && keyOf[a] === keyOf[b] ? (keyOf[a] as string) : base
+  })
+  const content: Piece[] = []
+  const styles: [string, Style][] = []
+  for (let i = 0; i < chars.length; ) {
+    let j = i
+    while (j < chars.length && key[j] === key[i]) j++
+    const run = chars.slice(i, j).join('')
+    if (key[i] === base) content.push({ t: 'text', s: run })
+    else {
+      const id = String(content.length)
+      content.push({ t: 'span', id, style: changeOf(key[i] as string, base), content: [{ t: 'text', s: run }] })
+      // (its style its own glyphs', at their size as locate reads a unit's: the median along the line)
+      const gs = [...new Set(glyphOf.slice(i, j).filter((g): g is number => g !== null))].map((g) => stream[g]!.style)
+      const { upper: _upper, ...st } = glyphStyleOf(gs)
+      void _upper
+      styles.push([id, { ...st, size: unitSize(gs) ?? st.size }])
+    }
+    i = j
+  }
+  return { content: runIns(content), styles }
+}
+/** what a run's face changes of its text's own (`role|b|i` each), in LaTeX's names: the role, `bold` or `medium`, `italic` or
+ *  `upright`, joined by `-` */
+function changeOf(key: string, base: string): string {
+  const [r, b, i] = key.split('|')
+  const [R, B, I] = base.split('|')
+  return [r !== R ? r : '', b !== B ? (b ? 'bold' : 'medium') : '', i !== I ? (i ? 'italic' : 'upright') : '']
+    .filter(Boolean)
+    .join('-')
 }
 
 // ---------------------------------------------------------------- B's marks on A

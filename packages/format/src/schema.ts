@@ -51,7 +51,9 @@ export type Piece =
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
  * identity only (`stop` not in the id: it is part of `src`). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
- * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). `unit`: a unit
+ * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). A figure text's
+ * run of glyphs in another face than its own is a group of no source, neither end, its style what the face changes (`bold`,
+ * `medium`, `italic`, `upright`, a role) and its face the part's (SpanAt.style). `unit`: a unit
  * nested in this one (a footnote set inside a paragraph), by its id, with the source around it (`pre`, `post`)
  */
 export const Piece: z.ZodType<Piece> = z.lazy(() =>
@@ -166,7 +168,8 @@ export const El = z.object({
 })
 /** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
 export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])
-/** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and
+/** a group of the source on A: its style (a figure text's run's, read off its glyphs: what the typesetter draws its
+ *  translation in), the paragraph TeX opened at it; the command its open begins with (its name and
  *  star), the fill TeX set its run in; a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
  *  its name): what the typesetter pairs the group's translation with its annotations by */

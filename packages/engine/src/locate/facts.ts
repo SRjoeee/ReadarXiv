@@ -83,6 +83,16 @@ export const turnedStyleGlyph = (t: { u: string; base: string; size: number; fil
   fill: t.fill ?? -1,
 })
 
+/** the font class a style is voted by (styleOf): a glyph's role (a math font's the serif's), weight and slant, by its font's
+ *  base name, as `role|b|i` */
+export function faceKeyOf(base: string): string {
+  const c = classifyFont(base)
+  return `${c.fam === 'math' ? 'serif' : c.fam}|${c.bold ? 'b' : ''}|${c.italic ? 'i' : ''}`
+}
+/** a style's font class, as faceKeyOf writes a glyph's */
+export const styleKeyOf = (st: Pick<Style, 'role' | 'bold' | 'slant'>): string =>
+  `${st.role}|${st.bold ? 'b' : ''}|${st.slant ? 'i' : ''}`
+
 /**
  * The style a run of glyphs is set in, as today's reader reads it off the page (C5 `originalStyle` L2:765: the majority font
  * class by character, math glyphs aside, its size the most common one; C5's `upper` L2:1099: most letters that can tell are
@@ -93,12 +103,7 @@ export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: st
   const txt = gs.filter(real)
   const text = txt.filter((g) => classifyFont(g.base).fam !== 'math')
   const by = text.length ? text : txt
-  const key = mostOf(
-    by.map((g) => {
-      const c = classifyFont(g.base)
-      return `${c.fam === 'math' ? 'serif' : c.fam}|${c.bold ? 'b' : ''}|${c.italic ? 'i' : ''}`
-    }),
-  )
+  const key = mostOf(by.map((g) => faceKeyOf(g.base)))
   const [role, b, i] = (key ?? 'serif||').split('|') as [Style['role'], string, string]
   const size = mostOf(by.map((g) => r2(g.size))) ?? fallbackSize
   const fill = mostOf(by.map((g) => g.fill))
