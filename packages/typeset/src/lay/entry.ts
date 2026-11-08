@@ -258,8 +258,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const faces: [string, string][] = []
   const prepared = new Map<number, FlowMember>()
   const relabelled = new Set<number>()
-  // (the members whose elements on this page are drawn otherwise than kept where they stand: a crop or text in the translation)
-  const moved = new Set<number>()
+  // (the pages on which each member's elements are drawn otherwise than kept where they stand, a crop or text in the translation:
+  // an element's, its ink's pages; this page's turns its elements' group off here, another's says where a link of an element the
+  // translation moves across the page break stays, lay/links.ts)
+  const movedOn = new Map<number, Set<number>>()
   // (the elements each member's reading keeps where they stand (U.elements' kept, in place): their ink and their links stay)
   const keptIn = new Map<number, Set<string>>()
   // (each member read, its faces asked and only then measured: the reading takes no width, B.cover asks Metrics' readiness
@@ -432,7 +434,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       const e = p?.t === 'ph' || p?.t === 'nested' ? els.get(String(p.k)) : undefined
       if (e && (res.mode === 'kept' || res.inPlace)) inPlace.add(String(p!.k))
       if (!e || e.keep || e.kind === 'display' || res.mode === 'kept' || res.inPlace) continue
-      if (e.ink.some((x) => x[0] === page)) moved.add(m.ord)
+      for (const x of e.ink) movedOn.set(m.ord, (movedOn.get(m.ord) ?? new Set<number>()).add(x[0]))
     }
     keptIn.set(m.ord, inPlace)
     prepared.set(m.ord, got.member)
@@ -548,19 +550,25 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const lines = (x?.lines ?? []).map(
       ([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number],
     )
-    // (its groups turned off, each only where it has it on this page (groupsOn): its text where laid, its elements where one with
-    // ink here is drawn otherwise than kept where it stands (a crop cut from this page, on a line of either page, or text in the
-    // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop)
+    // (its groups turned off, each only where it has it on a page (groupsOn): its text where laid, its elements where one with
+    // ink there is drawn otherwise than kept where it stands (a crop cut from that page, on a line of either page, or text in the
+    // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what
+    // its links of that page read)
     const layout = x?.lay?.layout
-    const cuts = cutsOf(layout).filter((c) => c.page === page)
-    const off =
-      (st !== 'laid'
-        ? 0
-        : 1 |
-          (moved.has(m.ord) || cuts.some((c) => c.el) ? 2 : 0) |
-          (relabelled.has(m.ord) || cuts.some((c) => !c.el) ? LABEL_KEPT : 0)) &
-      groupsOn(m, page) &
-      ~(m.fixed ?? 0)
+    const allCuts = cutsOf(layout)
+    const offOn = (q: number) => {
+      const cuts = allCuts.filter((c) => c.page === q)
+      return (
+        (st !== 'laid'
+          ? 0
+          : 1 |
+            (movedOn.get(m.ord)?.has(q) || cuts.some((c) => c.el) ? 2 : 0) |
+            (relabelled.has(m.ord) || cuts.some((c) => !c.el) ? LABEL_KEPT : 0)) &
+        groupsOn(m, q) &
+        ~(m.fixed ?? 0)
+      )
+    }
+    const off = offOn(page)
     const kept = keptIn.get(m.ord) ?? new Set<string>()
     const pieces = read.get(m.ord)?.pieces
     if (st === 'laid' && layout && pieces)
@@ -568,6 +576,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         m,
         layout,
         off,
+        offOn,
         kept,
         elOf: (k) => {
           const p = pieces[k] as { t: string; k?: number } | undefined
