@@ -130,7 +130,7 @@ export const SAYS = {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, ruled }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -526,20 +526,27 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     band,
     NEAR,
   }
-  const { borrowed } = measureFidelity(fc)
+  const { borrowed, past } = measureFidelity(fc)
   judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
   judgeJoined(fc, joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band), new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
-  // (the owner's ruling 1, no borrowing: where today lays a unit's lines in space the original leaves empty and v2 keeps its
-  // block, v2's smaller size or fewer lines there are the ruling's, not v2's fault)
-  for (const d of out.diffs) {
-    if (!d.worse || (d.flag !== 'size' && d.flag !== 'line-count') || !d.unit) continue
-    const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
-    if (keys.some((k) => (borrowed.today.get(k) ?? 0) > 0) && !keys.some((k) => (borrowed.v2.get(k) ?? 0) > 0)) {
-      d.worse = false
-      d.nearer = 'ruling'
-      d.ruling = "no borrowing (the owner's ruling 1): today lays lines in space the original leaves empty, v2 keeps the block"
-    }
-  }
+  // (the owner's ruling 1, no borrowing: a unit today laid with a borrowed line, by today's own record (`ruled`, its ledger: a
+  // fit state that borrowed lines, in any round of its page's fill), or whose drawn lines today stand in space the original
+  // leaves empty (`block`'s reading). v2's differences on it in the measures the line budget decides, its size and its line
+  // count, and their knock-ons on the same unit (its first line's anchor, its gap after its head, its block) are the ruling's,
+  // not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its column or text block) or
+  // crosses a rule of the page the original's lines do not. Every other measure on it is judged as anywhere: the highlight's
+  // cover, the erasure, the elements, the style are no line budget's. The one exception within the highlight: its sentences'
+  // page placement (sentences.mjs: a sentence lit as drawn on this page by one side and not the other), which a reflow moves
+  // (the coordinator's call, 2026-11-08); the sentences' granularity stays judged: a difference holding any other finding
+  // (lit whole, other counts, a sentence meeting another of today's on arXiv's page) stays worse)
+  const RULED = new Set(['size', 'line-count', 'anchor', 'gap', 'block'])
+  const PLACED = /^sentence \d+ (lit|not lit) as drawn on this page, (lit|not) by today$/
+  const placement = (d) =>
+    d.flag === 'highlight' && /sentences paired one by one/.test(d.what) && String(d.v2?.value ?? '').split('; ').every((x) => PLACED.test(x))
+  const borrowedToday = (k) => (borrowed.today.get(k) ?? 0) > 0 || (k.startsWith('t') && !!ruled?.has(Number(k.slice(1))))
+  const posOf = (k) => Math.max(NEAR.positionMin, NEAR.position * (orig.get(k)?.size || 10))
+  const v2Breaks = (k) =>
+    (borrowed.v2.get(k) ?? 0) > 0 || (past.v2.get(k) ?? 0) > posOf(k) || (events.v2.get(k) ?? []).some((w) => w.includes('across the rule'))
 
   // ------------------------------------------------ page measures: links, the highlight, darkness, pixels
   const px = rec.px ?? {}
@@ -667,6 +674,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const a = faults.today[f] ?? [],
       b = faults.v2[f] ?? []
     if (a.length || b.length) out.faults[f] = { today: a.length, v2: b.length, todaySays: a.slice(0, 6), v2Says: b.slice(0, 6) }
+  }
+  // (the no-borrowing ruling over the page's differences, every measure's made: RULED's and the sentences' placement above)
+  for (const d of out.diffs) {
+    if (!d.worse || !(RULED.has(d.flag) || placement(d)) || !d.unit) continue
+    const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
+    if (keys.some(borrowedToday) && !keys.some(v2Breaks)) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = "no borrowing (the owner's ruling 1): today laid this unit with a borrowed line, v2 keeps the original's block"
+    }
   }
   recount(out)
   out.units = units

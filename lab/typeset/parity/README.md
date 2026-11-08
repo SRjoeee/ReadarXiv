@@ -150,8 +150,15 @@ is lit as that sentence's shape, the unit whole, alike on both; a drawing of bef
 The gate judges by them where they and today's output differ; a difference the ruling decides is recorded as `ruling` on the
 sheet (not worse, not nearer).
 1. **No borrowing.** A translation never takes lines in space the original leaves empty; the whole paragraph shrinks
-   instead. A v2 line under the original's last is a fault (`block`); where today lays lines there and v2 keeps the block, v2's
-   smaller size or fewer lines on that unit are the ruling's, not v2's fault (`size`, `line-count`: `ruling`).
+   instead. A v2 line under the original's last is a fault (`block`). On a unit today laid with a borrowed line (today's own
+   record: its ledger's fit state that borrowed lines in any round of its page's fill, the tap's `ruledIn`; or its drawn lines
+   under the original's last), v2's differences in the measures the line budget decides, `size` (a size tie holding it too)
+   and `line-count`, and their knock-ons on the same unit, `anchor`, `gap` (its start after its head) and `block`, are the
+   ruling's (`ruling`), not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its
+   column or text block, `frame`) or crosses a rule of the page the original's lines do not (`cross`). So is the highlight's
+   sentence placement on it (a sentence lit as drawn on this page by one side and not the other: a reflow moves it; the
+   coordinator's call); the sentences' granularity stays judged. Every other measure on such a unit is judged as anywhere
+   (the highlight's cover, the erasure, the elements, the style, the weight).
 2. **Body growth** (corrected the same day): body text may grow as today grows it (up to about 1.1×); the effect, by a simpler
    method. A size above the original's is no fault: `size` judges it against the original's as before, v2 nearer today's
    grown size or the original's passing.
