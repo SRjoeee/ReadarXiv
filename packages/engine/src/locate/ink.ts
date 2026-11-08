@@ -31,11 +31,13 @@ import {
 /** a figure text's anchor as an alignment: its start's, its centre's, its end's (Placed.align) */
 const ALIGN_OF = { start: 'l', centre: 'c', end: 'r' } as const
 
-/** a unit made on A and its ink there: its text glyphs (global, stream order), its placeholders' glyphs (the element `ph`), its
- *  turned glyphs ([page, index]) and its boxes ([page, index]) */
+/** a unit made on A and its ink there: its text glyphs (global, stream order), its label's (an ink unit's leading mark, which its
+ *  text does not say), its placeholders' glyphs (the element `ph`), its turned glyphs ([page, index]) and its boxes ([page,
+ *  index]) */
 export interface Made {
   unit: InstrumentUnit
   text: number[]
+  label?: number[]
   ph: number[]
   phId: string | null
   turned: [number, number][]
@@ -178,7 +180,13 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
     // them apart: the adapter's rule, pipeline/instrument.mjs:375-379)
     const first = firstEl(content)
     const x: Made = { unit, text: [], ph: [], phId: first, turned: [], textBoxes: [], elBoxes: [] }
-    for (const [p, g] of u.glyphs.text) if (own.glyphs[p - 1]?.[g] === `u${u.id}`) x.text.push(global(p, g))
+    // (its label's glyphs, which its claim gave its text's group: a source unit's label is a role of its own, its group `.l`,
+    // kept where it stands, carried with a line set otherwise or drawn anew, never erased with the text it is no word of)
+    const labelled = new Set((u.glyphs.label ?? []).map(([p, g]) => global(p, g)))
+    const label: number[] = []
+    for (const [p, g] of u.glyphs.text)
+      if (own.glyphs[p - 1]?.[g] === `u${u.id}`) (labelled.has(global(p, g)) ? label : x.text).push(global(p, g))
+    if (label.length) x.label = label
     for (const [p, g] of u.glyphs.ph) {
       const w = own.glyphs[p - 1]?.[g]
       if (w === `u${u.id}.p`) (first !== null ? x.ph : x.text).push(global(p, g))
@@ -576,15 +584,26 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   // (its run-in labels `must`, as the source units': marks/run-ins.ts)
   return runIns(stack.length ? stack[0]!.outer : level)
 }
-/** each group's command and a link group's target by its open piece's id (pipeline/instrument.mjs:187-219 commandOf, spansOf,
- *  ported; an ink unit's groups carry no colour of the log's) */
+/** an ink unit's colour group's open as its rule writes it (today/ink-units.mjs groupsOf: the fill its glyphs hold), in xcolor's
+ *  HTML model, which names a colour by its red, green and blue, two hexadecimal digits each */
+const HTML_COLOUR = /^\\textcolor\[HTML\]\{([0-9A-Fa-f]{6})\}\{$/
+/** each group's command, the fill its colour group's run is set in, and a link group's target, by its open piece's id
+ *  (pipeline/instrument.mjs:187-219 commandOf, spansOf, ported). A source unit's colour group states the fill TeX set its run in,
+ *  read off the marked compile's log; an ink unit has no log, and its colour group's source names that fill itself, the one its
+ *  glyphs hold on A: stated so, as a source unit's (2609.36054v2 p1's grey e-mails, drawn in their note's black with none) */
 export function spansOf(pieces: readonly TodayPiece[]): [string, SpanClass][] {
   const out: [string, SpanClass][] = []
   pieces.forEach((p, k) => {
     if (p.t !== 'open') return
-    const m = /^\\([A-Za-z]+\*?)/.exec(unicodeOf(p.src))
+    const src = unicodeOf(p.src)
+    const m = /^\\([A-Za-z]+\*?)/.exec(src)
     const to = linkTargetOf(pieces, k)
-    if (m) out.push([String(k), { cmd: m[1]!, ...(to ? { to } : {}) }])
+    const rgb = HTML_COLOUR.exec(src)?.[1]
+    if (m)
+      out.push([
+        String(k),
+        { cmd: m[1]!, ...(rgb !== undefined ? { colour: Number.parseInt(rgb, 16) } : {}), ...(to ? { to } : {}) },
+      ])
   })
   return out
 }
