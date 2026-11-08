@@ -162,6 +162,21 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
     const texts = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => it.s))
     expect(texts).toEqual([['https://𠮷.io/profile/'], ['ij']])
   })
+  it('keeps the URL whole on the next line where TeX set its unit flush left or centred, no line of it stretched', () => {
+    // (2608.25210v2 p1's VLDB footnote, \raggedright: TeX's \rightskip stretch costs a short line nothing, and TeX breaks before
+    // the URL, not inside it at its url package's penalty. The cut is for a justified line, which the URL whole on the next
+    // would leave letter-spaced to its measure)
+    for (const align of ['l', 'c'] as const) {
+      const laid = laidOf(layPage(partOf([[{ ...url, align }]]), rows, rules, metrics), 2)
+      expect(laid.state).toBe('laid')
+      const crops = laid.lines.map((l) => l[3].filter((it) => 'src' in it).map((it) => (it as { src: number[] }).src))
+      expect(crops[0]!.length).toBe(0)
+      expect(crops[1]!.length).toBe(1)
+      // (the whole crop, uncut: its antialiased margin on both edges)
+      expect(crops[1]![0]![1]).toBeCloseTo(71.6, 5)
+      expect(crops[1]![0]![3]).toBeCloseTo(292.4, 5)
+    }
+  })
 })
 
 describe('a head or a name and its follower on one line: each the original’s separation after the one before it', () => {
