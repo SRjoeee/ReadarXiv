@@ -294,7 +294,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
-  // (the free paper two members share on one baseline, each its half: two cells of a row)
+  // (the free paper two members share on one baseline, each its half: two authors side by side; a cell widens by its own side)
   const shared = sharedPaper(part.flows, page)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER

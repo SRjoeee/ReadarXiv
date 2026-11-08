@@ -240,14 +240,14 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => ink,
         () => [50, 500],
       ),
-    ).toEqual([60, 400])
+    ).toEqual({ side: [60, 400], wall: 0 })
     expect(
       sideOf(
         [L(100, 200, 700)],
         () => [],
         () => [50, 500],
       ),
-    ).toEqual([50, 500])
+    ).toEqual({ side: [50, 500], wall: 0 })
   })
   it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
     // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
@@ -269,7 +269,9 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => glyphs,
         () => [107.5, 505.6],
       ),
-    ).toEqual([290.6, 429.01])
+    ).toEqual({ side: [290.6, 429.01], wall: 0 })
+    // (and says which sides stop at a wall, not a glyph: today's further widening keeps a quarter of its size off a rule and
+    // goes half way to another's text (run.mjs paperTo), so the typesetter must tell them apart)
     expect(
       sideOf(
         line,
@@ -277,7 +279,15 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => [107.5, 505.6],
         () => walls,
       ),
-    ).toEqual([296.4, 409])
+    ).toEqual({ side: [296.4, 409], wall: 3 })
+    expect(
+      sideOf(
+        line,
+        () => [{ x0: 380, x1: 392, y0: 676, y1: 685, y: 678.91 }].map((g) => ({ ...g, x0: 404, x1: 408 })),
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual({ side: [296.4, 404], wall: 1 })
   })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [

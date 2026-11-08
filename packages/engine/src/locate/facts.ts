@@ -708,21 +708,27 @@ export interface InkBox {
  * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's.
  * A table's cell, which today's never widened (its rectangle was its cell's), is also walled by `walls`, the painted boxes
  * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (the
- * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column)
+ * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column). `wall`
+ * says which of its sides stop at a wall, not a glyph (1 the left, 2 the right): today's further widening of a cell goes half
+ * way to another's text and keeps a quarter of its size off any other ink (run.mjs paperTo)
  */
 export function sideOf(
   lines: readonly Line[],
   foreign: (page: number) => readonly InkBox[],
   block: (l: Line) => [number, number],
   walls?: (page: number) => readonly InkBox[],
-): [number, number] | undefined {
+): { side: [number, number]; wall: 0 | 1 | 2 | 3 } | undefined {
   let lo = Number.NEGATIVE_INFINITY
   let hi = Number.POSITIVE_INFINITY
+  let loWall = false,
+    hiWall = false
   for (const l of lines) {
     if (l[9] & 1) continue
     const [b0, b1] = block(l)
     let left = Math.min(b0, l[2])
     let right = Math.max(b1, l[3])
+    let leftWall = false,
+      rightWall = false
     const band = 0.4 * (l[10] ?? l[5] - l[6])
     for (const k of foreign(l[0])) {
       if (k.y === undefined || Math.abs(k.y - l[4]) >= band) continue
@@ -733,13 +739,22 @@ export function sideOf(
     // fills; one across the line is none)
     for (const k of walls?.(l[0]) ?? []) {
       if (k.y0 >= l[4] + band || k.y1 <= l[4] - band) continue
-      if (k.x1 <= l[2] + 0.01 && k.x1 > left) left = k.x1
-      else if (k.x0 >= l[3] - 0.01 && k.x0 < right) right = k.x0
+      if (k.x1 <= l[2] + 0.01 && k.x1 > left) {
+        left = k.x1
+        leftWall = true
+      } else if (k.x0 >= l[3] - 0.01 && k.x0 < right) {
+        right = k.x0
+        rightWall = true
+      }
     }
-    lo = Math.max(lo, left)
-    hi = Math.min(hi, right)
+    // (the narrowest over its lines, a side of which a wall stops on any line that stops it there)
+    if (left > lo) [lo, loWall] = [left, leftWall]
+    else if (left === lo) loWall ||= leftWall
+    if (right < hi) [hi, hiWall] = [right, rightWall]
+    else if (right === hi) hiWall ||= rightWall
   }
-  return Number.isFinite(lo) && Number.isFinite(hi) && hi > lo ? [r2(lo), r2(hi)] : undefined
+  if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) return undefined
+  return { side: [r2(lo), r2(hi)], wall: ((loWall ? 1 : 0) | (hiWall ? 2 : 0)) as 0 | 1 | 2 | 3 }
 }
 /**
  * A cell's clear band between the rules over and under its lines (Room.band; today's cellBands L2:352): over, the lowest

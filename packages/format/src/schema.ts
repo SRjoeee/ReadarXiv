@@ -207,6 +207,10 @@ export const Room = z.object({
   // (the side of `band` no rule stands on, where one stands on the other: 1 under, 2 over. The band states the cell's line's own
   // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
   bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
+  // (a table cell's sides of `side` that stop at a painted box, its column's rule or a neighbour's fill, not at a glyph: 1 the
+  // left, 2 the right. A cell widened past its own ink keeps a quarter of its size off a wall and goes half way to a glyph,
+  // today's paperTo; a part made before states none, every side a glyph's)
+  wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   under: num.optional(),
   ends: z.array(z.tuple([int, num, num])).optional(),
 })

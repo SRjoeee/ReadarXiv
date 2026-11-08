@@ -59,6 +59,27 @@ describe('a table cell in its own room (today’s cells: run.mjs:2116, fitFurthe
     expect(m!.lines[0]![2]).toBeLessThanOrEqual(147 + 1e-9)
     expect(m!.fit!.size).toBeGreaterThan(8)
   })
+  it('widens a cell a quarter of its size off a wall and half way to a glyph, as today’s paperTo', () => {
+    // (1706.03762v7-zh p10's Table 4, "WSJ only, discriminative" between its column's rules at 296.78 and 408.3: today's widening
+    // kept a quarter of the size off each rule and set the translation at its floor, 7.97; half the size off them, v2's room was
+    // 5 pt narrower and the cell fell under the floor, 7.47)
+    const between = cell(0, 302.56, {
+      align: 'c',
+      lines: [[1, 0, 302.56, 402.52, 700, 707, 698, 107.53, 505.66, 0, 10]],
+      room: { below: 0, next: 300, side: [296.78, 408.3], wall: 3 },
+    })
+    const [w] = laidOf([between], rowsOf({ 0: 'x'.repeat(26) }))
+    expect(w!.state).toBe('laid')
+    expect(w!.fit!.size).toBeCloseTo(8, 5)
+    // (beside a glyph no member's, a number of the next column: half way to it, never nearer, as today's)
+    const [g] = laidOf(
+      [cell(0, 100, { room: { below: 0, next: 300, side: [80, 200] } })],
+      rowsOf({ 0: 'x'.repeat(17) }),
+    )
+    expect(g!.state).toBe('laid')
+    expect(g!.lines[0]![2]).toBeGreaterThan(160)
+    expect(g!.lines[0]![2]).toBeLessThanOrEqual(180 + 1e-9)
+  })
   it('keeps a centred cell centred on its own middle, widened or not (v2’s centring of header cells, endorsed)', () => {
     // (2608.25210v2-zh p14's header cells, centred in their column: the owner's "v2's automatic centring is surely right")
     const [short] = laidOf([cell(0, 72, { align: 'c' })], rowsOf({ 0: 'x'.repeat(6) }))
