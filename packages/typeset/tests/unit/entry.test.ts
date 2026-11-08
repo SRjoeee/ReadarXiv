@@ -415,7 +415,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p2.lines.map(([y]) => y)).toEqual([700, 688])
   })
   it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
-    // (the page fill's one size, today's effect (the owner, 2026-11-08: "效果看起来跟主站差不多就行"), found with the fewest lays:
+    // (the page fill's one size, today's effect (the owner, 2026-11-08: it should look about as today's does), found with the fewest lays:
     // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph
     // of two lines at the original's pitch is short of its frame; with room on its lines it grows (to 1.075), and filling them it
     // holds no step: tried at the first alone, whatever the cap (each try lays it: its lines' extents read, Metrics.ink, once
