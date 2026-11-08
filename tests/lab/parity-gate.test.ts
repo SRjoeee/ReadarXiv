@@ -152,6 +152,17 @@ describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11
     expect(of('size')(p)).toMatchObject([{ worse: true }])
     expect(p.diffs.filter((d: { nearer: string }) => d.nearer === 'ruling')).toEqual([])
   })
+  it('a line over the unit’s own lower lines in its column is not judged: no borrowing under its last line', () => {
+    // (2608.16117v1 p17 t57: its first line a row's tail at 700, its other lines under a figure from 600; a translation laid on
+    // from the unit before over the rows it left draws lines between the two, 30 pt under the tail, by more than the room the
+    // part states under the tail (the figure's top 12 pt down): those are no line under its last, which the measure judges)
+    const f = one(26, 'para', [factLine(72, 300, 700), ...[600, 588, 576].map((y) => factLine(72, 300, y))], {
+      room: { runs: [[0, 12, 600], [3, 60, 24]], sep: 12 },
+    })
+    const v = [700, 670, 600, 588, 576].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10))
+    expect(of('block')(measure(f, sides(26, v, v)))).toEqual([])
+    expect(measure(f, sides(26, v, v)).faults.block).toBeUndefined()
+  })
   it('a part that states no room under the run: no line is judged', () => {
     const f = one(26, 'para', ys.map((y) => factLine(72, 300, y)))
     expect(of('block')(measure(f, sides(26, lines(10), lines(10, 652, 640, 628))))).toEqual([])

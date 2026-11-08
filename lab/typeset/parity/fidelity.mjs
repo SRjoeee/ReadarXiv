@@ -214,10 +214,11 @@ export function measureFidelity(c) {
   // space under a run of its lines, never past TeX's text block bottom in its column, nor bringing the next ink nearer than
   // TeX's paragraph separation): each side's drawn lines under a run's last original line on the page, the part's room under
   // it (Room.runs: the depth of the next ink's baseline, of TeX's text block bottom; Room.sep, \baselineskip and \parskip),
-  // a line under the lowest baseline that room allows by more than `pos` a fault. A drawn line stands under the original's
-  // line of its unit nearest over it whose column (TeX's measure) it meets: a run's end, or a line inside a block (no
-  // borrowing). A run the part states no room under, no judgement (no TeX fact to judge by); one with no separation stated,
-  // its bottom alone
+  // a line under the lowest baseline that room allows by more than `pos` a fault. A drawn line is judged where it stands under
+  // the unit's lowest original line on the page whose column (TeX's measure) it meets, the space below its own last line
+  // there: a line over another of its own original lines in its column (laid on from the unit before over the rows it left,
+  // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
+  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
   const borrowed = { today: new Map(), v2: new Map() }
   const roomOf = (key) => {
     const o = orig.get(key)
@@ -232,7 +233,8 @@ export function measureFidelity(c) {
       if (!r?.runs.size) continue
       let k = 0
       for (const l of flat(ls)) {
-        const over = r.lines.filter((o) => o.y > l.y + pos(key) && o.m1 > l.x0 && o.m0 < l.x1).sort((a, b) => a.y - b.y)[0]
+        const column = r.lines.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
+        const over = column.length && column.every((o) => o.y > l.y + pos(key)) ? column.sort((a, b) => a.y - b.y)[0] : null
         const run = over && r.runs.get(over.j)
         if (!run) continue
         const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
