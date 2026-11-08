@@ -255,13 +255,18 @@ export const Tie = z.discriminatedUnion('rule', [
 ])
 /** one of A's link annotations: its rectangle, where it goes, the member and the piece that hold it (an element's id, '' its
  *  text), the characters of the glyphs under it (their glyph points', PDF.js's rule, in their order, white space aside: what
- *  today's link match finds among the characters a piece is drawn as; absent where it holds none), and its page where it is not
- *  the part's (an annotation of a member of the page on another of its pages, which a translation may draw on this one) */
+ *  today's link match finds among the characters a piece is drawn as; absent where it holds none), whether those of its text's
+ *  are its label's (more than half of its glyphs: the label's group, which stays on where the label is not drawn anew), whether
+ *  its owner's annotations of its target on its page hold, together, every glyph of its owner's text and elements there (by
+ *  glyph point: a link round the member's whole text, a contents entry's), and its page where it is not the part's (an
+ *  annotation of a member of the page on another of its pages, which a translation may draw on this one) */
 export const Link = z.object({
   box: Box,
   to: LinkTo,
   owner: z.tuple([int, z.string()]).optional(),
   text: z.string().optional(),
+  label: flag.optional(),
+  whole: flag.optional(),
   page: page.optional(),
 })
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:

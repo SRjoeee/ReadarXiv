@@ -1152,7 +1152,8 @@ describe('review of #605', () => {
     expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([46, 286])
   })
   it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
-    // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine)
+    // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine,
+    // every one of the second's: a link round its whole text)
     const B = docOf([
       {
         lines: [
@@ -1165,7 +1166,52 @@ describe('review of #605', () => {
     const link = { annotationType: 2, rect: [89, 695, 151, 708], dest: 'figure.12' }
     const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
     expect(L.links.get(1)).toEqual([
-      { box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''], text: 'Figure12' },
+      { box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''], text: 'Figure12', whole: 1 },
+    ])
+  })
+  it('states the links of one target that hold, together, every glyph of their member on the page (today’s whole tier)', () => {
+    // (2610.37668v1 p15: a contents entry's link round its title, whose last glyph's ink ends past the link's box: the
+    // typesetter's test of each line's ink inside a box dropped every entry. By glyph point, as today's whole tier: the title's
+    // two lines each under one annotation of the target, together every glyph; one glyph past them, none of them)
+    const B = docOf([{ lines: [{ text: 'Hexel', x: 72, y: 700 }, { text: 'Model', x: 72, y: 688 }, 'next'] }])
+    const units = [unitOf('inkcontents', 'Hexel Model'), unitOf('para', 'next')]
+    const ins = instrumentOf(B, units, [[0, 0, 1]])
+    // (glyphs 6 pt wide from 72: the five of a line from 72 to 102, their centres 75 to 99)
+    const one = { annotationType: 2, rect: [71, 695, 101.5, 708], dest: 'appendix.A' }
+    const two = { annotationType: 2, rect: [71, 683, 101.5, 696], dest: 'appendix.A' }
+    const L = locate(ins, B, align(B, B), { annotations: [[one, two]] })
+    expect(L.links.get(1)?.map((l) => [l.owner, l.whole])).toEqual([
+      [[0, ''], 1],
+      [[0, ''], 1],
+    ])
+    const short = { ...two, rect: [71, 683, 95, 696] }
+    const M = locate(ins, B, align(B, B), { annotations: [[one, short]] })
+    expect(M.links.get(1)?.map((l) => l.whole)).toEqual([undefined, undefined])
+  })
+  it('states a link whose glyphs are its member’s label’s, more than half of them (an endnote’s back-reference)', () => {
+    // (2609.36054v2 p14: enotez sets each endnote's number before its text, a link back to its mark; the add-on wraps the label in
+    // a group of its own, which stays on where the label is not drawn anew, so its link is the label's, not the text's)
+    const B = docOf([
+      {
+        lines: [
+          { text: '3', x: 56, y: 700 },
+          { text: 'a note that', x: 72, y: 700 },
+          { text: 'runs on', y: 688 },
+        ],
+      },
+    ])
+    const units = [unitOf('footnote', 'a note that runs on')]
+    const back = { annotationType: 2, rect: [55, 695, 63, 708], dest: 'enz.3.backref' }
+    const text = { annotationType: 2, rect: [71, 695, 85, 708], dest: 'x' }
+    const L = locate(
+      instrumentOf(B, units, [[0, 0, 0]], [[ROLE.label, ROLE.text, ROLE.text]]),
+      B,
+      align(B, B),
+      { annotations: [[back, text]] },
+    )
+    expect(L.links.get(1)).toEqual([
+      { box: [55, 695, 63, 708], to: { dest: '"enz.3.backref"' }, owner: [0, ''], text: '3', label: 1 },
+      { box: [71, 695, 85, 708], to: { dest: '"x"' }, owner: [0, ''], text: 'a' },
     ])
   })
   it('states the characters of the glyphs under a link, in their order (today’s annotation’s own, its g2)', () => {

@@ -114,6 +114,8 @@ export interface Located {
       to: { url: string } | { dest: string }
       owner?: [number, string]
       text?: string
+      label?: 1
+      whole?: 1
       page?: number
     }[]
   >
@@ -1182,15 +1184,22 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
   // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
-  // them), and within it by the element that owns more than half of them, else its text. A glyph point is a glyph's advance
-  // centre on its baseline strictly inside the annotation's rectangle or one of its quads (PDF.js's overlaidText rule, today's
-  // pointsOf). A link over no glyph: the member one of whose lines or elements holds its rectangle's centre
+  // them), and within it by the element that owns more than half of them, else its text; where its label's glyphs are more than
+  // half of them, its text's stated as the label's (`label`: the add-on wraps the label in a group of its own, which stays on
+  // where the label is not drawn anew, as its link may: today's freeze keeps a link no match took whose glyphs no operation of
+  // the page erased). A glyph point is a glyph's advance centre on its baseline strictly inside the annotation's rectangle or one
+  // of its quads (PDF.js's overlaidText rule, today's pointsOf). A link over no glyph: the member one of whose lines or elements
+  // holds its rectangle's centre. The annotations of one target a member owns on a page that hold, together, every glyph of its
+  // text's and its elements' there are stated so (`whole`: today's whole tier, links.mjs:426, every own character of the unit's
+  // the drawing replaces under them, by glyph point; a line's ink is no measure of it, its last glyph's ink past the link's box)
   const links: Located['links'] = new Map()
   ;(o.annotations ?? []).forEach((list, p) => {
     if (!list?.length) return
     const out: NonNullable<ReturnType<typeof links.get>> = []
     const pg = inkA.pages[p]!
     const off = m.offA[p] as number
+    // (each annotation's glyph points and the member that owns it, by its place in `out`)
+    const under: { pts: number[]; mem: Member | undefined }[] = []
     for (const an of list as {
       annotationType?: number
       rect?: number[]
@@ -1217,6 +1226,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         if (/\S/.test(g.u) && inside((g.x0 + g.x1) / 2, g.y)) pts.push(off + j)
       })
       let owner: [number, string] | undefined
+      let label = false
+      let owning: Member | undefined
       if (pts.length) {
         const by = new Map<number, number>()
         for (const a of pts)
@@ -1224,9 +1235,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const top = [...by].find(([, n]) => 2 * n > pts.length)
         if (top) {
           const mem = members[top[0]]!
+          owning = mem
           const els = [...mem.els].map(([id, l]) => [id, pts.filter((a) => l.includes(a)).length] as const)
           const el = els.find(([, n]) => 2 * n > pts.length)
           owner = [mem.ord, el ? el[0] : '']
+          label = !el && 2 * pts.filter((a) => mem.label.includes(a)).length > pts.length
         }
       } else {
         const cx = (x0 + x1) / 2
@@ -1237,14 +1250,39 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           const el = mem.elements.find(([, e]) => e.ink.some((k) => k[0] === p + 1 && holds(k[1], k[2], k[3], k[4])))
           if (el) owner = [mem.ord, el[0]]
           else if (mem.lines.some((l) => l[0] === p + 1 && holds(l[2], l[6], l[3], l[5]))) owner = [mem.ord, '']
-          if (owner) break
+          if (owner) {
+            owning = mem
+            break
+          }
         }
       }
       // (the characters of the glyphs under it, its glyph points' in their order: today's annotation's own (links.mjs g2.ch, which
       // its placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server's reading
       // skips it, pdf-lite.mjs's text guard)
       const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
-      out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}), ...(text ? { text } : {}) })
+      out.push({
+        box: [x0, y0, x1, y1],
+        to,
+        ...(owner ? { owner } : {}),
+        ...(text ? { text } : {}),
+        ...(label ? { label: 1 as const } : {}),
+      })
+      under.push({ pts, mem: owning })
+    }
+    const byTarget = new Map<string, number[]>()
+    out.forEach((l, k) => {
+      if (!l.owner) return
+      const key = `${l.owner[0]}|${JSON.stringify(l.to)}`
+      byTarget.set(key, [...(byTarget.get(key) ?? []), k])
+    })
+    for (const ks of byTarget.values()) {
+      const mem = under[ks[0]!]!.mem
+      if (!mem) continue
+      const held = new Set(ks.flatMap((k) => under[k]!.pts))
+      const own = [...mem.text, ...[...mem.els.values()].flat()].filter(
+        (a) => pageA[a] === p + 1 && /\S/.test(pg.glyphs[a - off]!.u),
+      )
+      if (own.length && own.every((a) => held.has(a))) for (const k of ks) out[k]!.whole = 1
     }
     if (out.length) links.set(p + 1, out)
   })
