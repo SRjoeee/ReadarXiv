@@ -133,6 +133,29 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
       [654.89, 72, 5],
     ])
   })
+  it('starts a line back at its start where a glyph’s ink stands wholly off the line’s text, whatever its origin', () => {
+    // (2610.21504v1 p4: a formula broken after its "=" at a row's end (baseline 109.26), the next row opening with a summation
+    // sign whose origin TeX's math extension sets at its top, 104.78, within half a size of the row above, its ink 94.82 to
+    // 104.78, all under that row's text; then the row's text on 97.31, 12 pt under: two lines, the unit's and its formula's
+    // alike, not one across both rows, which one crop then took a whole line for)
+    const sum = g('∑', 72, 104.78, 10, { bottom: 94.82, top: 104.78 })
+    const row = [...'text r='].map((u, i) => g(u, 72 + 5 * i, 109.26, 10))
+    const next = [...'rj(s,a). Each'].map((u, i) => g(u, 82 + 5 * i, 97.31, 10))
+    const cut = (gs: DocGlyph[]) =>
+      cutLines(
+        gs.map((_, i) => i),
+        (i) => ({ page: 1, g: gs[i]! }),
+      ).map((l) => [l.base, l.x0, l.gs.length])
+    expect(cut([...row, sum, ...next])).toEqual([
+      [109.26, 72, 6],
+      [97.31, 72, 13],
+    ])
+    // (the formula's own glyphs: its end on the row, its start back at the column's start)
+    expect(cut([...row.slice(5), sum, ...next.slice(0, 2)])).toEqual([
+      [109.26, 97, 2],
+      [97.31, 72, 3],
+    ])
+  })
 })
 
 describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pageChars2)', () => {
