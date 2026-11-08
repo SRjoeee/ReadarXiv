@@ -49,6 +49,12 @@ export const NEAR = {
   /** positions (anchor, alignment, separation): a tenth of the size, a point at least */
   position: 0.1,
   positionMin: 1,
+  /** a drawn baseline against a bound TeX states (`block`: its text block bottom, its paragraph separation), points: no step a
+   *  reader compares two layouts by, but the precision both are stated at, the hundredth, as the lay tests a line against its
+   *  foot (breaker/break.mjs: a line under its foot by more than 0.05 fails). The stated bottom sits on the lines TeX set on it
+   *  to that precision: of s88's 1,987 paragraph runs ending within 3 pt of it, 1,751 within 0.05 (0.00 on 1,696), the rest
+   *  0.16 pt or more off (room TeX left, or a line TeX set past it) (lanes/borrow-ink.md) */
+  room: 0.05,
   /** the text's darkness: a share of the original text's own darkness */
   weight: 0.05,
   /** a size: a share of the original's, half the fit's step of 0.025 (a step is a size a reader sees; two steps, the floor

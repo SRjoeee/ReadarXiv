@@ -214,7 +214,8 @@ export function measureFidelity(c) {
   // space under a run of its lines, never past TeX's text block bottom in its column, nor bringing the next ink nearer than
   // TeX's paragraph separation): each side's drawn lines under a run's last original line on the page, the part's room under
   // it (Room.runs: the depth of the next ink's baseline, of TeX's text block bottom; Room.sep, \baselineskip and \parskip),
-  // a line under the lowest baseline that room allows by more than `pos` a fault. A drawn line is judged where it stands under
+  // a line under the lowest baseline that room allows by more than NEAR.room a fault (the precision the bound and the baselines
+  // are stated at: a bound is no position two layouts are compared by, `pos`). A drawn line is judged where it stands under
   // the unit's lowest original line on the page whose column (TeX's measure) it meets, the space below its own last line
   // there: a line over another of its own original lines in its column (laid on from the unit before over the rows it left,
   // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
@@ -234,12 +235,12 @@ export function measureFidelity(c) {
       let k = 0
       for (const l of flat(ls)) {
         const column = r.lines.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
-        const over = column.length && column.every((o) => o.y > l.y + pos(key)) ? column.sort((a, b) => a.y - b.y)[0] : null
+        const over = column.length && column.every((o) => o.y > l.y + NEAR.room) ? column.sort((a, b) => a.y - b.y)[0] : null
         const run = over && r.runs.get(over.j)
         if (!run) continue
         const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
         const past = over.y - Math.max(0, free) - l.y
-        if (!(past > pos(key))) continue
+        if (!(past > NEAR.room)) continue
         k++
         fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
