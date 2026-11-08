@@ -146,6 +146,10 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   return p
 }
 
+/** whether a member has ink on page `p`: a line, an element's or its label's */
+const inkOn = (x: Placed, p: number) =>
+  x.lines.some((l) => l[0] === p) || !!x.els?.some(([, e]) => e.ink.some((k) => k[0] === p)) || x.label?.ink[0] === p
+
 /** Units windows: each distinct unit once, at its first occurrence, cut under the Units bound */
 function unitWindows(units: Unit[]): Unit[][] {
   const out: Unit[][] = []
@@ -275,7 +279,16 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
         ...(ins.tex.lineskip ? { lineskip: ins.tex.lineskip } : {}),
         ...(names.length ? { names } : {}),
       },
-      flows: take.map((i) => located.flows[i]!.map((o) => placed[o]!)),
+      // (a member's words where it has ink on the page, a line, an element's or its label's: one carried for another page's sake,
+      // in a flow or a tie it shares, lights there, not here)
+      flows: take.map((i) =>
+        located.flows[i]!.map((o) => {
+          const x = placed[o]!
+          if (!x.words || inkOn(x, p)) return x
+          const { words: _, ...rest } = x
+          return rest
+        }),
+      ),
       ...(ties.length ? { ties } : {}),
       ...(links.length ? { links } : {}),
     }

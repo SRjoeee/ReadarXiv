@@ -162,3 +162,4 @@ packages/translate/tests/adapters/microsoft.test.ts 30  # 2026-11-08: +3, a Chin
 lab/translate/equivalence-2026-11-07.md 1  # 2026-11-07: the accepted class's evidence, a Chinese reply of tests/protector/markers.test.ts quoted as the equivalence tool reads it
 
 packages/reader/tests/chrome/parts.ts 4  # 2026-11-07: the host's own target names in the chrome's tests' parts (the extension's tables' words, as the menu shows them)
+packages/typeset/tests/unit/lit-sentences.test.ts 2  # 2026-11-08: a Chinese translation of three sentences and its starts, the CJK target's test input (lane hl-sentence: a translation set with no spaces cut at its sentences' first characters)

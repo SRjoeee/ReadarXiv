@@ -1553,6 +1553,26 @@ describe('the places on A where a sentence may begin (Placed.words, Unit.sentenc
     expect(us.find((u) => u.kind === 'para')!.sentences).toBe(true)
     expect(us.find((u) => u.kind === 'heading')!.sentences).toBeUndefined()
   })
+  it('states a member’s words in the parts of the pages it has ink on, not in one that carries it for another page', () => {
+    // (page 2's part carries page 1's flows, its second paragraph's first line being there: the first paragraph lights on page 1
+    // alone, the second on both)
+    const B = docOf([{ lines: ['First para here.', 'Second one runs'] }, { lines: ['on to page two.'] }])
+    const units = [unitOf('para', 'First para here.'), unitOf('para', 'Second one runs on to page two.')]
+    const ins = instrumentOf(B, units, [[0, 1], [1]])
+    const L = locate(ins, B, align(B, B))
+    const parts = partsOf(ins, L, 2)
+      .filter((o) => o.kind === 'part')
+      .map((o) => read('part', (o as { bytes: Uint8Array }).bytes))
+    const wordsIn = (p: number) => parts[p - 1]!.flows.flat().map((m) => [m.ord, m.words?.length ?? 0])
+    expect(wordsIn(1)).toEqual([
+      [0, 3],
+      [1, 7],
+    ])
+    expect(wordsIn(2)).toEqual([
+      [0, 0],
+      [1, 7],
+    ])
+  })
   it('places a word where its letters are the page’s in order, a macro’s text beside it none of its; one TeX never set at -1', () => {
     // (a text macro set as "BERT" before the unit's own "-based": the word "based" at its own "b", never at BERT's; and "two",
     // which the compile never printed, not placed)

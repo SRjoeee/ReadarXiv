@@ -211,7 +211,8 @@ window.today = {
    * our page, the left's on arXiv's. Where the unit lights by sentence (view/lighting.mjs startsOf: its starts on both panes,
    * as many, each pane's shapes holding its words by them; made as view/layer-side.mjs startsFor makes them), every sentence's
    * rectangles (shapes.sentence), else its runs' blocks (shapes.block: lit whole); as the reader paints them at `scale` CSS px a
-   * point (lighting.mjs paint: padded PAD beside, the rows' half leading above and below their own)
+   * point (lighting.mjs paint: padded PAD beside, the rows' half leading above and below their own); where by sentence, also
+   * `rightBy` and `leftBy`, the same boxes sentence by sentence (an entry a sentence, empty where it has none on the page)
    */
   async litBoxes(n, scale) {
     const out = {}
@@ -229,7 +230,16 @@ window.today = {
           .filter((r) => r.page === n)
           .flatMap((r) => (by ? Array.from({ length: starts.length + 1 }, (_, s) => side.shapes.sentence(r, starts, s, PAD / scale)).flat() : [side.shapes.block(r, PAD / scale)]))
           .map((b) => [b.x0, b.y0, b.x1, b.y1])
-      out[id] = { right: boxesOf(hlRight, rs), left: boxesOf(hlLeft, ls), by }
+      // (and where it lights by sentence, each sentence's own on each pane, in order: the granularity's, sentences.mjs)
+      const perSentence = (side, starts) =>
+        Array.from({ length: starts.length + 1 }, (_, s) =>
+          side.shapes
+            .runs(id)
+            .filter((r) => r.page === n)
+            .flatMap((r) => side.shapes.sentence(r, starts, s, PAD / scale))
+            .map((b) => [b.x0, b.y0, b.x1, b.y1]),
+        )
+      out[id] = { right: boxesOf(hlRight, rs), left: boxesOf(hlLeft, ls), by, ...(by ? { rightBy: perSentence(hlRight, rs), leftBy: perSentence(hlLeft, ls) } : {}) }
     }
     return out
   },

@@ -4,6 +4,8 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
+import { sentencesPaired } from './sentences.mjs'
+
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
 /** the stand-in of a crop in a drawn line's text (measure-dom.mjs: a transparent run, the canvas draws its ink) */
 const OBJ = '\ufffc'
@@ -517,6 +519,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     fault('v2', 'highlight', `${name}: ${m.r} of ${m.of} drawn lines, ${m.l} of ${m.ofL} original lines outside its sentence boxes`)
     diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: says(m), off: null }, true, 'today')
   }
+  // (the highlight's granularity, apart from its coverage: a unit today pairs sentence by sentence paired so by v2, judged on
+  // its boxes per sentence, sentences.mjs)
+  const paired = sentencesPaired(todays, (key) => rec.today.litBoxes[key.slice(1)], (key) => laidV2.get(ordOfKey.get(key))?.lit)
+  for (const u of paired.units) {
+    if (!u.worse) continue
+    const name = `${u.key} ${facts.get(ordOfKey.get(u.key))?.kind ?? orig.get(u.key)?.kind ?? ''}`.trim()
+    fault('v2', 'highlight', `${name}: ${u.says}`)
+    diff('highlight', name, 'its sentences paired one by one on both panes (today: by sentence)', u.sentences, { value: `${u.sentences} sentences`, off: 0 }, { value: u.says, off: null }, true, 'today')
+  }
   const dk = px.darkness
   const ref = dk?.originalText?.mean ?? dk?.original?.mean ?? null
   if (T.size && V.size && ref && dk?.today?.mean && dk?.v2?.mean && dk.today.pixels >= NEAR.weightPixels && dk.v2.pixels >= NEAR.weightPixels)
@@ -529,6 +540,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   out.measures = {
     links: { ...L, todayLaid: rec.today.links, v2Laid: rec.v2.links },
     highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length, ...hl },
+    sentences: { today: paired.today, paired: paired.paired, whole: paired.whole, apart: paired.apart, unread: paired.unread },
     darkness: dk ?? null,
     diff: px.diff ?? null,
     rules: rules.length,

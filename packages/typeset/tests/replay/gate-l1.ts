@@ -26,7 +26,7 @@ import { fontString } from '../../src/breaker/measure.ts'
 import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
-import { doorRows } from './rows.ts'
+import { doorRows, doorSentences } from './rows.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
@@ -800,8 +800,12 @@ export function gateL1Pair(
       const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined
       if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
       if (!(row[2] === 'whole' || row[2] === 'partial')) continue
-      const content = outOfDoor(row[1], sourcePieces(src.content))
-      if (content) byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), content })
+      const source = sourcePieces(src.content)
+      const content = outOfDoor(row[1], source)
+      // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
+      const sentences = src.sentences ? doorSentences(row, source) : undefined
+      if (content)
+        byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), content, ...(sentences ? { sentences } : {}) })
     }
     entryRows = { get: (k) => byId.get(k), done: true }
   }
