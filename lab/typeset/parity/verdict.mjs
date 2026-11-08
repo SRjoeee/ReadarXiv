@@ -80,9 +80,9 @@ export const SAYS = {
  * One page measured: `v2` v2.mjs's file of the pair (its Pages, the part's facts, the join of part members to today's units),
  * `rec` render.mjs's record of the page (what each side drew, read back, and its pixels), `prepByOrd` today's prepare dump's
  * units by ord (the original's lines of today's units), `todayOf` part ord → today's ord, `turned` the part's members set
- * turned on A. A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
+ * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -130,22 +130,23 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     const lines = (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, size: l.size }))
     orig.set(key, { kind: u.kind, align: null, style: null, lines, first: u.lines?.[0]?.page === n, part: null, size: lines[0]?.size ?? null })
   }
-  // (the pairs a line of the original sets one after the other: a head (a run-in heading, a name, a label of its own) and the
-  // unit it leads, in one measure of TeX's (the part's m0..m1: one column); a table's cells and a figure's texts are set apart
-  // by their columns, not by a separation of the text's)
+  // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
+  // (Placed.join: the two share that one's last line, TeX's separation between them), and the member a bound name leads
+  // (lay/lead.ts); each judged where its first line on this page is the leader's last. Two units set on one line otherwise
+  // (an author's address in a column of its own beside another's, a table's cells, a figure's texts) are no run-in: each
+  // stands where TeX set it, judged by anchor and align)
   const APART = new Set(['cell', 'figure', 'inkfigures'])
-  const onA = [...orig.entries()].filter(([, o]) => o.lines.length && o.part !== null && !APART.has(o.kind))
   const runIns = []
-  for (const [hk, h] of onA) {
+  for (const [fk, f] of orig) {
+    const lead = f.part === null || !f.first || APART.has(f.kind) ? undefined : led?.get(f.part)
+    if (lead === undefined || !f.lines.length) continue
+    const hk = keyOfPart(lead),
+      h = orig.get(hk)
+    if (!h?.lines.length || APART.has(h.kind)) continue
     const hl = [...h.lines].sort((a, b) => a.y - b.y)[0]
-    for (const [fk, f] of onA) {
-      if (fk === hk || !f.first) continue
-      const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
-      const sz = fl.size || f.size || 10
-      const sep = fl.x0 - hl.x1
-      if (Math.abs(fl.m0 - hl.m0) > 1 || Math.abs(fl.m1 - hl.m1) > 1 || Math.abs(fl.y - hl.y) > 0.5 || sep < -0.5 || sep > 3 * sz) continue
-      runIns.push({ hk, h, hl, fk, f, fl, sz, sep })
-    }
+    const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
+    if (Math.abs(fl.y - hl.y) > 0.5) continue
+    runIns.push({ hk, h, hl, fk, f, fl, sz: fl.size || f.size || 10, sep: fl.x0 - hl.x1 })
   }
   const followers = new Set(runIns.map((r) => r.fk))
   const faults = { today: {}, v2: {} }
@@ -296,6 +297,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     const g = {}
     for (const [side, M] of [['today', T], ['v2', V]]) {
       const flat = (k) => M.get(k)?.filter((l) => !l.rot)
+      // (a head v2 lays with no line of its own stands in its follower's first line, a bound name set as its lead: the two are
+      // one drawn line there, no separation between units to read)
+      if (side === 'v2' && !flat(hk)?.length && stateOf.get(h.part) === 'laid') continue
       const fd = flat(fk)?.length ? [...flat(fk)].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
       const hd = flat(hk)?.length ? flat(hk).find((l) => Math.abs(l.y - fd.y) <= 0.5) : Math.abs(hl.y - fd.y) <= 0.5 ? hl : null
       if (!hd || (!flat(fk)?.length && !flat(hk)?.length)) continue

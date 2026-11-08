@@ -25,8 +25,15 @@ const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; toda
   today: o.today ?? {},
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
-const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = []) =>
-  measurePage('p-zh', v2, r, { prepByOrd: new Map(prep.map((u) => [u.ord, u])), todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])), turned: new Set() })
+/** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
+ *  member a bound name leads: measure.mjs reads them off the part) */
+const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = [], led: Record<number, number> = {}) =>
+  measurePage('p-zh', v2, r, {
+    prepByOrd: new Map(prep.map((u) => [u.ord, u])),
+    todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
+    turned: new Set(),
+    led: new Map(Object.entries(led).map(([f, h]) => [Number(f), h])),
+  })
 const worse = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.worse).map((d) => d.flag)
 
 describe('a page measured from what each side drew', () => {
@@ -261,6 +268,63 @@ describe("a size tie (one paragraph's text is even) judged as one paragraph", ()
   })
   it('members no tie holds are judged one by one, as before', () => {
     expect(sizes(page([9, 10], [9, 9]))).toMatchObject([{ unit: 't59 para', worse: true }])
+  })
+})
+
+describe('gap: a follower the part states as run in after its leader, nothing else set on one line', () => {
+  const gaps = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'gap')
+  const laid = (ords: number[]) => ords.map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }))
+  // (two units on one line in one measure: e-mail addresses in two author columns, 2610.21313 p1; or a run-in head and its
+  // paragraph)
+  const pair = (kinds: [string, string]) =>
+    v2Of({
+      members: laid([10, 11]),
+      facts: [
+        { ord: 10, kind: kinds[0], align: 'l', style: { size: 10 }, lines: [factLine(72, 150, 700)] },
+        { ord: 11, kind: kinds[1], align: 'l', style: { size: 10 }, lines: [factLine(160, 250, 700)] },
+      ],
+      today: { 10: { today: 10 }, 11: { today: 11 } },
+    })
+  const page = (f: ReturnType<typeof v2Of>, todayAt: number, v2At: number, led: Record<number, number> = {}) =>
+    measure(
+      f,
+      rec({
+        today: { units: [{ id: 10, lines: [drawnLine(72, 150, 700, 'x'.repeat(12))] }, { id: 11, lines: [drawnLine(todayAt, todayAt + 90, 700, 'x'.repeat(12))] }] },
+        v2: { units: [{ id: 10, lines: [drawnLine(72, 150, 700, 'x'.repeat(12))] }, { id: 11, lines: [drawnLine(v2At, v2At + 90, 700, 'x'.repeat(12))] }] },
+      }),
+      [],
+      led,
+    )
+
+  it('two units the part joins in no flow are no run-in: judged by their alignment, not by a gap', () => {
+    const p = page(pair(['author', 'author']), 156.2, 160)
+    expect(gaps(p)).toEqual([])
+    expect(p.diffs.filter((d) => d.flag === 'align')).toMatchObject([{ unit: 't11 author', nearer: 'v2' }])
+  })
+  it('a follower the part joins to its leader is judged by its gap', () => {
+    expect(gaps(page(pair(['heading', 'para']), 160, 152, { 11: 10 }))).toMatchObject([{ unit: 't11 para after t10 heading', worse: true }])
+  })
+  it("a bound name v2 lays as its follower's lead (drawn in the follower's own line) has no gap of v2's to judge", () => {
+    // (2608.16117 p37: the name "Appendix" 79.4–136.8 bound to the heading after it, 161.4–442.2; today keeps the name the
+    // original's and draws the heading from 161.42; v2 draws "Anhang C. Einaxiale …" from 79.37, the name its lead)
+    const f = v2Of({
+      members: laid([236, 108]),
+      facts: [
+        { ord: 236, kind: 'name', align: 'j', style: { size: 11.96 }, lines: [factLine(79.4, 136.8, 739.5, 11.96)] },
+        { ord: 108, kind: 'heading', align: 'j', style: { size: 11.96, bold: 1 }, lines: [factLine(161.4, 442.2, 739.5, 11.96)] },
+      ],
+      today: { 108: { today: 108 } },
+    })
+    const p = measure(
+      f,
+      rec({
+        today: { units: [{ id: 108, lines: [drawnLine(161.42, 511.47, 739.48, 'Einaxiale Zugkraft', 11.96)] }] },
+        v2: { units: [{ id: 108, lines: [drawnLine(79.37, 501.19, 739.48, 'AnhangC.Einaxiale Zugkraft', 11.96)] }] },
+      }),
+      [],
+      { 108: 236 },
+    )
+    expect(gaps(p)).toEqual([])
   })
 })
 

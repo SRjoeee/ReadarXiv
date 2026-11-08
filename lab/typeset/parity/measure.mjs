@@ -52,11 +52,19 @@ for (const [pair, raw] of drawn) {
   const prepByOrd = new Map(prep.units.map((u) => [u.ord, u]))
   // (part ord -> today's ord)
   const todayOf = new Map(Object.entries(v2.today).map(([o, t]) => [Number(o), t.today]))
-  // (the part's members set turned on A (a figure's rotated text: Placed.dir), whose lines are no horizontal band)
+  // (the part's members set turned on A (a figure's rotated text: Placed.dir), whose lines are no horizontal band; and its
+  // run-ins, follower -> leader: a member it joins to the one before it in its flow (Placed.join), the member a bound name
+  // leads (Placed.bound, the next in its flow))
   const turned = new Set()
+  const led = new Map()
   for (const part of l1Paper(raw.paper)?.parts.values() ?? [])
-    for (const f of part.flows) for (const m of f) if (m.dir && (Math.abs(m.dir[1]) > 1e-3 || m.dir[0] < 0)) turned.add(m.ord)
-  for (const rec of raw.pages) pages.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }))
+    for (const f of part.flows)
+      f.forEach((m, k) => {
+        if (m.dir && (Math.abs(m.dir[1]) > 1e-3 || m.dir[0] < 0)) turned.add(m.ord)
+        const b = f[k - 1]
+        if (b && (m.join || (b.kind === 'name' && b.bound)) && !led.has(m.ord)) led.set(m.ord, b.ord)
+      })
+  for (const rec of raw.pages) pages.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }))
 }
 const incomplete = coverageOf(run, { asked: asked.length ? asked : null, notMeasured, drawn, pages })
 const verdict = verdictOf(incomplete, pages)
