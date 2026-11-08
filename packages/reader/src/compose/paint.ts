@@ -110,11 +110,36 @@ export function cropsOf(
   return out
 }
 
+/** a page view's box rounding, CSS px (PDF.js's --scale-round-x and -y on its page box: the denominator of its output scale's
+ *  fraction, 1 at an integral pixel ratio) */
+export type Rounding = { x: number; y: number }
+
 /**
- * The page's crops drawn on a canvas over its frame: the page rendered once in the crop configuration (`crops`: every unit's text
- * group off) at the page view's own resolution, each crop's source cut from it and drawn at its place. Null where the page has
- * none. `scale`: device pixels per CSS px (the page view's output scale). `vp`: the frame drawn in (a turned page's upright
- * viewport, `uprightOf`: the canvas is turned with the page)
+ * The crops' canvas on the page view's own pixel grid: the page view's viewport (its turn and all) floored to its rounding, as
+ * PDF.js floors a page view's box (setLayerDimensions' `round(down, …, var(--scale-round-x))`), its pixels that box at the
+ * output scale, as the page view's canvas's are (PDFPageView's floorToDivide). Shown in that box (`.axt-crops`, the same
+ * `round(down, …)` of the frame) it maps pixel for pixel onto the device from the page's top-left corner, as the page view's
+ * canvas does. A canvas shown in the frame itself, a fraction of a CSS px wider, is resampled by the compositor to the whole px
+ * it snaps the box to (1587 device px shown in 1588 at a ratio of 2: the crops 0.063 % large against the page under them, a
+ * device px at its right); one drawn upright and turned about its own box stands the frame's fraction of a px off the page
+ * view, which is cut at its box from its own top-left corner
+ */
+export function cropGrid(
+  vp: Pick<PageViewport, 'width' | 'height'>,
+  scale: { sx: number; sy: number },
+  round: Rounding = { x: 1, y: 1 },
+): { css: [number, number]; px: [number, number] } {
+  const css: [number, number] = [vp.width - (vp.width % round.x), vp.height - (vp.height % round.y)]
+  return { css, px: [Math.max(1, Math.round(css[0] * scale.sx)), Math.max(1, Math.round(css[1] * scale.sy))] }
+}
+
+/**
+ * The page's crops drawn on a canvas over its page view: the page rendered once in the crop configuration (`crops`: every unit's
+ * text group off) at the page view's own resolution, each crop's source cut from it and drawn at its place, on the page view's
+ * pixel grid (`cropGrid`, `round` the page view's rounding). Null where the page has none. `scale`: device pixels per CSS px (the
+ * page view's output scale). `vp`: the page view's own viewport, a turned page's turned: the crops are ink of the page's own,
+ * drawn where the page view draws that ink, so they are made in its frame and never turned by CSS (the SVG's text is made
+ * upright and turned: B-408)
  */
 export async function cropsFor(
   page: Page,
@@ -123,11 +148,11 @@ export async function cropsFor(
   crops: Promise<OptionalContentConfig>,
   scale: { sx: number; sy: number },
   signal?: AbortSignal,
+  round: Rounding = { x: 1, y: 1 },
 ): Promise<HTMLCanvasElement | null> {
   const list = cropsOf(page)
   if (!list.length || signal?.aborted) return null
-  const w = Math.max(1, Math.floor(vp.width * scale.sx)),
-    h = Math.max(1, Math.floor(vp.height * scale.sy))
+  const [w, h] = cropGrid(vp, scale, round).px
   const source = document.createElement('canvas')
   source.width = w
   source.height = h
@@ -157,6 +182,16 @@ export async function cropsFor(
   out.className = 'axt-crops'
   out.width = w
   out.height = h
+  // (its box the page view's: the frame, across where the page is turned a quarter, floored to the page view's rounding)
+  const quarter = turnOf(vp) % 180 !== 0
+  out.style.setProperty(
+    '--axt-crops-w',
+    `round(down, var(${quarter ? '--axt-frame-h' : '--axt-frame-w'}, 100%), ${round.x}px)`,
+  )
+  out.style.setProperty(
+    '--axt-crops-h',
+    `round(down, var(${quarter ? '--axt-frame-w' : '--axt-frame-h'}, 100%), ${round.y}px)`,
+  )
   out.setAttribute('aria-hidden', 'true')
   const ctx = out.getContext('2d') as CanvasRenderingContext2D
   const dev = ([x0, y0, x1, y1]: [number, number, number, number]) => {

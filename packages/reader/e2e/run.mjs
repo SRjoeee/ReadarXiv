@@ -576,6 +576,23 @@ for (const name of Object.keys(fixtures)) {
           ...(process.env.AXT_SHOTS ? { path: join(HERE, '.shots', `${name}-p${n}.png`) } : {}),
         })
       const ink = await page.evaluate(([n, png]) => window.__h.overlayInk(n, png), [n, shot.toString('base64')])
+      // (the page view's canvas and the crops' canvas: their pixels, the CSS box each is laid out in (before a turn), the turn)
+      const grid = await page.evaluate((n) => {
+        const slot = document.querySelector(`.axt-pane.right .axt-slot[data-page-number="${n}"]`)
+        const of = (c) => {
+          if (!c) return null
+          const st = getComputedStyle(c)
+          return {
+            px: [c.width, c.height],
+            css: [Number.parseFloat(st.width), Number.parseFloat(st.height)],
+            turn: Number(c.dataset.axtTurn ?? 0),
+          }
+        }
+        return {
+          view: of(slot?.querySelector('.canvasWrapper > canvas')),
+          crops: of(slot?.querySelector('.axt-over > canvas.axt-crops')),
+        }
+      }, n)
       const text = await page.evaluate((n) => window.__h.textOf(n), n)
       if (process.env.AXT_DEBUG)
         console.log(JSON.stringify({ n, text: text.text.slice(0, 600), laid: text.laid.map((t) => t.slice(0, 40)) }))
@@ -597,6 +614,7 @@ for (const name of Object.keys(fixtures)) {
           return null
         })(),
         copied: text.copied.length,
+        grid,
       })
     }
     await context.close()
@@ -612,6 +630,24 @@ for (const name of Object.keys(fixtures)) {
         )
       // I4: every element of a laid member an item (none kept in these fixtures but displays)
       if (!lab) assert(x.crops === x.elements, `page ${x.n}: ${x.crops} crops for ${x.elements} elements`)
+      // the page view and the crops on one pixel grid, the page's exact scale from its top-left corner: each canvas shown pixel for
+      // pixel (its CSS box whole px, its pixels that box at the ratio: a box of a fraction of a px is resampled to the whole px
+      // the compositor snaps it to, 1587 px shown in 1588 at the page's right edge), the crops' the page view's
+      for (const [k, c] of Object.entries(x.grid).filter(([, c]) => c))
+        assert(
+          c.css.every((v, i) => Number.isInteger(v) && v * 2 === c.px[i]),
+          `page ${x.n}: the ${k} canvas, ${c.px.join('×')} px in ${c.css.join('×')} CSS px at a ratio of 2`,
+        )
+      // (the crops in the page view's own frame, a turned page's too: its pixels and its box the page view's, nothing turned by
+      // CSS, so that a crop's ink stands on the page view's pixel for its place: a canvas drawn upright and turned about its
+      // own box stands its frame's fraction of a px off where the page view, cut at its box, puts the same point)
+      if (x.grid.crops)
+        assert(
+          !x.grid.crops.turn &&
+            x.grid.crops.px.every((v, i) => v === x.grid.view?.px[i]) &&
+            x.grid.crops.css.every((v, i) => v === x.grid.view?.css[i]),
+          `page ${x.n}: the crops' canvas ${x.grid.crops.px.join('×')} px in ${x.grid.crops.css.join('×')}${x.grid.crops.turn ? `, turned ${x.grid.crops.turn}` : ''}; the page view's ${x.grid.view?.px.join('×')} in ${x.grid.view?.css.join('×')}`,
+        )
       // I8: the text layer reads each laid member's translation, in order; a selection of it copies it
       assert(
         x.textOk && x.outOfOrder === null && x.copied > 0,
@@ -621,7 +657,14 @@ for (const name of Object.keys(fixtures)) {
     return {
       originalPage1Ms: Math.round(firstOriginal.at),
       layer,
-      pages: per.map((x) => ({ n: x.n, ink: x.ink, outside: x.outside, onInk: x.onInk, crops: x.crops })),
+      pages: per.map((x) => ({
+        n: x.n,
+        ink: x.ink,
+        outside: x.outside,
+        onInk: x.onInk,
+        crops: x.crops,
+        cropsGrid: x.grid.crops?.px ?? null,
+      })),
     }
   })
 }
