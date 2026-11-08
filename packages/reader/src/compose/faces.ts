@@ -35,6 +35,10 @@ export interface Faces {
    *  demand of the page that asks (none: always): a load still waiting for its slot when its slot comes is let go, not asked,
    *  where no ready() that asked it wants it any more (a page scrolled away, a generation before); a later ask asks it again */
   ready(ids: Iterable<FaceId | readonly [FaceId, string]>, wanted?: () => boolean): Promise<void>
+  /** the face the overlay's text rendering is probed in, once a reader (text-rendering.ts decideOnce), loaded for `text`: a
+   *  Latin face the reader draws from web font bytes it reads (a face the system holds is laid out with fractional advances
+   *  under both renderings on every platform, and tells nothing); null where there is none, or it cannot be had */
+  probeFace(text: string): Promise<FaceId | null>
   /** the faces asked of the network, and the most read at once (the probe's) */
   readonly asked: number
   readonly most: number
@@ -63,6 +67,8 @@ export function createFaces(o: {
   const failed = new Set<FaceId>(),
     told = new Set<FaceId>()
   const added: FontFace[] = []
+  /** the faces added to the document */
+  const had = new Set<FaceId>()
   /** let go: a face whose read ends after is not added (it would outlive the reader in the document) */
   let gone = false
   /** the reads waiting for a slot, and the slots taken */
@@ -110,9 +116,16 @@ export function createFaces(o: {
     )
     return c
   }
-  return {
+  const faces: Faces = {
     classOf,
     familyOf,
+    // (the table's first face read from a file: a host's own, the e2e's Liberation Sans)
+    async probeFace() {
+      const id = Object.keys(o.table).find((k) => o.table[k]?.src)
+      if (id === undefined) return null
+      await faces.ready([id])
+      return had.has(id) ? id : null
+    },
     ready(ids, wanted = always) {
       const waits: Promise<void>[] = []
       for (const item of ids) {
@@ -145,6 +158,7 @@ export function createFaces(o: {
               if (gone) return
               document.fonts.add(face)
               added.push(face)
+              had.add(id)
             } finally {
               free()
             }
@@ -178,4 +192,5 @@ export function createFaces(o: {
       sheet.remove()
     },
   }
+  return faces
 }

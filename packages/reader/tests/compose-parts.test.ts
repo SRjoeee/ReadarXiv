@@ -181,6 +181,7 @@ const facesStub = {
   classOf: () => 'f',
   familyOf: () => 'sans-serif',
   ready: async () => {},
+  probeFace: async () => null,
   dispose: () => {},
   asked: 0,
   most: 0,

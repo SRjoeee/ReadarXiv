@@ -250,6 +250,7 @@ function docPageOf(
       ascent: t.ascent,
       descent: t.descent,
       form: !!t.form,
+      fill: t.fill ?? -1,
     })
   }
   const page: DocPage = {

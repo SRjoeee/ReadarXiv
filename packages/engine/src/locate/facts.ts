@@ -7,6 +7,9 @@
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
 import { r2 } from './lines.ts'
+// @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
+// back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
+import * as accents from './today/accents.mjs'
 
 // ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
 /** the PostScript name without its subset tag */
@@ -67,7 +70,18 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
-const real = (g: DocGlyph) => /\S/.test(g.u)
+const real = (g: { u: string }) => /\S/.test(g.u)
+/** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
+ *  and its fill. A glyph set level is one (DocGlyph); so is one set turned (DocTurned, a figure's turned text), whose font, size
+ *  and fill are as much the PDF's as a level one's */
+export type StyleGlyph = Pick<DocGlyph, 'u' | 'base' | 'size' | 'fill'> & { along?: number | undefined }
+/** a turned glyph as a style reads it */
+export const turnedStyleGlyph = (t: { u: string; base: string; size: number; fill?: number }): StyleGlyph => ({
+  u: t.u,
+  base: t.base,
+  size: t.size,
+  fill: t.fill ?? -1,
+})
 
 /**
  * The style a run of glyphs is set in, as today's reader reads it off the page (C5 `originalStyle` L2:765: the majority font
@@ -75,7 +89,7 @@ const real = (g: DocGlyph) => /\S/.test(g.u)
  * capitals): role, bold, slant from the fonts' names, size, fill (0xRRGGBB where not black), the design (the dominant font's
  * base name). TeX's own font state is stage 1b's: this is the value read, not stated
  */
-export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10, source: string | null = null): Style {
+export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: string | null = null): Style {
   const txt = gs.filter(real)
   const text = txt.filter((g) => classifyFont(g.base).fam !== 'math')
   const by = text.length ? text : txt
@@ -118,7 +132,7 @@ export function styleOf(gs: readonly DocGlyph[], fallbackSize = 10, source: stri
  * aside; undefined where it has none (today then reads the size off its lines' bands). Faked small capitals, which today
  * leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b: TeX's font state)
  */
-export function unitSize(gs: readonly DocGlyph[]): number | undefined {
+export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
   const sizes = gs
     .filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
     .map((g) => g.along ?? g.size)
@@ -142,8 +156,10 @@ const medianOf = (xs: readonly number[]) => {
  * A walked in order against its source's letters (each glyph's letter the source's next one of the same letter, case aside);
  * a capital whose source letter is lowercase and whose size is at most SMALL_CAPS_SHARE of the size its letters of the
  * source's own case are set at is a faked small capital; `ratio` their median size over that, to the hundredth (Style.sc, the
- * share the typesetter fakes its own at). An ink unit, whose source is the page's own text: where every cased glyph is a
- * capital, those at most SMALL_CAPS_SHARE of its full letters' size (the letters past SMALL_CAPS_SHARE of its largest). A
+ * share the typesetter fakes its own at). A unit whose source is its own case (an ink unit, whose source is the page's own
+ * text) or none told (a babel name, whose key is no text of it: IEEEtran's \refname "REFERENCES", R at 9.96 and EFERENCES at
+ * 7.97, where \scshape changes the letters' forms and not the size TeX was asked for): where every cased glyph is a capital,
+ * those at most SMALL_CAPS_SHARE of its full letters' size (the letters past SMALL_CAPS_SHARE of its largest). A
  * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (today's shortcut).
  * `upper`, in the text's capitals: the capitals the source writes lowercase set at their full size, more than half of its
  * letters that can tell (today's L2:1099); where no letter is of the source's own case, every one set as a capital, there is
@@ -156,12 +172,12 @@ const medianOf = (xs: readonly number[]) => {
  * nothing, a tie against; an ink unit's faked ones alone can tell, so it is set in them (Style.caps: its Latin translation is
  * drawn in small capitals, Style.sc the share it is drawn at)
  */
-export function fakedCaps(
-  gs: readonly DocGlyph[],
+export function fakedCaps<G extends StyleGlyph>(
+  gs: readonly G[],
   source: string | null,
   ink = false,
-): { small: Set<DocGlyph>; ratio?: number; upper?: true; caps?: true } {
-  const none = { small: new Set<DocGlyph>() }
+): { small: Set<G>; ratio?: number; upper?: true; caps?: true } {
+  const none = { small: new Set<G>() }
   const t = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math' && g.size > 0)
   if (!t.length) return none
   let big = 0
@@ -172,7 +188,7 @@ export function fakedCaps(
     const cased = t.filter((g) => casedChar(g.u))
     const capitals = cased.every((g) => g.u === g.u.toUpperCase())
     const upper = capitals && cased.length > 1 ? { upper: true as const } : {}
-    if (!ink || !capitals) return { ...none, ...upper }
+    if (!capitals) return none
     const ref = medianOf(t.filter((g) => g.size > SMALL_CAPS_SHARE * big).map((g) => g.size))
     const small = new Set(cased.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
     return small.size
@@ -185,10 +201,10 @@ export function fakedCaps(
   const src = [...source]
   if (!anySmall && 2 * lows >= src.filter(isLow).length) return none
   // (each glyph's letter the source's next one that spells it, case aside: the walk today makes over a word's characters)
-  const changed: DocGlyph[] = []
+  const changed: G[] = []
   const same: number[] = []
   // (each glyph the walk read, and whether its source letter is a lowercase one: the letters today's vote reads)
-  const walked: [DocGlyph, boolean][] = []
+  const walked: [G, boolean][] = []
   let lower = 0
   let at = 0
   for (const g of t) {
@@ -360,10 +376,48 @@ function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space'
     classifyFont(h.base).fam !== 'mono'
   return tex ? 'drop' : 'join'
 }
+/** a glyph as accents.mjs reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
+type AccentGlyph = Pick<DocGlyph, 'u' | 'font' | 'size' | 'x0' | 'x1' | 'y' | 'top'>
+/** each spacing accent's combining mark (accents.mjs COMBINING) */
+const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
+/** whether spacing accent `a` is set over letter `l` by TeX's \accent: the letter's accented form (NFC), or null */
+const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
+/**
+ * A run of glyphs (in stream order) with each spacing accent TeX set over its letter joined to that letter: one glyph, the
+ * letter's, its text the accented letter. In Unicode an accent set over a letter is one character with it (NFC); TeX's
+ * \accent (OT1's, every Computer Modern text font's) sets the accent, moves back over it and sets the letter (or the letter,
+ * then the accent over it), so the glyphs read the two apart: "Kl¨otergens" for Klötergens (2602.23285v2 p2's citation; 44
+ * element texts of 11 papers of the corpus). The rule is today's, one for every reading of text off a page's glyphs
+ * (today/accents.mjs accentOver: one font, the accent's advance centred on the letter's, its baseline the letter's or raised
+ * over it by at most its height; the reader's joinAccents on the page's text items, the prepare's on its ink units' and
+ * figures' words), each glyph joined once, the accent's letter the glyph after it, else the one before
+ */
+export function joinAccents(gs: readonly DocGlyph[]): readonly DocGlyph[] {
+  const joined = new Map<number, string>()
+  gs.forEach((a, i) => {
+    if (!COMBINING.has(a.u) || joined.has(i)) return
+    for (const l of [i + 1, i - 1]) {
+      const letter = gs[l]
+      if (!letter || joined.has(l)) continue
+      const ch = accentOver(a, letter)
+      if (ch === null) continue
+      joined.set(i, '')
+      joined.set(l, ch)
+      return
+    }
+  })
+  if (!joined.size) return gs
+  return gs.flatMap((g, i) => {
+    const t = joined.get(i)
+    return t === undefined ? [g] : t ? [{ ...g, u: t }] : []
+  })
+}
 /** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
  *  characters inside its segments, a space of it between two of them, white space as one space, trimmed), but for a line
- *  TeX ended inside a word (lineEnd): its hyphen out where it is TeX's, and no space */
-export function textOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): string {
+ *  TeX ended inside a word (lineEnd): its hyphen out where it is TeX's, and no space; each accent TeX set over its letter
+ *  joined to it (joinAccents) */
+export function textOf(glyphs: readonly DocGlyph[], o: LineEndOptions = {}): string {
+  const gs = joinAccents(glyphs)
   let out = ''
   gs.forEach((g, q) => {
     const p = gs[q - 1]
@@ -394,8 +448,10 @@ export function urlCopyOf(gs: readonly DocGlyph[]): string {
   return out.replace(/\s+/g, ' ').trim()
 }
 /** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
- *  before it), [text, fill] each, a line's end as textOf reads it; null where every glyph's fill is one (its style's) */
-export function fillRunsOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
+ *  before it), [text, fill] each, a line's end and an accent as textOf reads them; null where every glyph's fill is one (its
+ *  style's) */
+export function fillRunsOf(glyphs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
+  const gs = joinAccents(glyphs)
   const runs: [string, number][] = []
   const push = (ch: string, f: number) => {
     const last = runs.at(-1)

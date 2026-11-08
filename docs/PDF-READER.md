@@ -1028,10 +1028,18 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
   WebKit takes `auto`, its places the same to the pixel. Not yet seen by eye: Chrome on Windows, a Linux desktop, Safari on
   iOS (which has no smoothing to restore).
-  The reader package (`packages/reader`) decides the same, once a reader, from its first overlay's runs of one place laid
-  out again in their own classes (`compose/text-rendering.ts`), written on the reader's root (`.axt-reader`, its sheet
-  `styles.ts`), and draws a run that names no fill of its own in the layer's ink, `#141414` (today's `layer-proto/run.mjs`
-  `SVG_RULES`). Without the two (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
+  The reader package (`packages/reader`) decides by the same test, once a reader and before its first overlay is drawn, from
+  a fixed probe rather than a page's words (`compose/text-rendering.ts`): a pangram at 9, 10 and 12 points, laid out again
+  under each rendering in a served Latin face loaded for it (Computer Modern's serif, `axt-cmun-serif`; a host's own faces,
+  the table's first face read from a file), asked as the pages are first to be laid and awaited by every overlay; written on
+  the reader's root (`.axt-reader`, its sheet `styles.ts`); where the face cannot be had, geometricPrecision. Decided by the
+  first page that told, a page of few Latin words told nothing (2610.40645v1's page 1 in Japanese: 10 such runs, 12
+  advances), so that page was drawn at 80 % of its ink until a later page told and then every page flipped, and the weight a
+  page was shot at hung on the order the pages were laid (the owner's question of 2026-11-08).
+  It draws a run that names no fill of its own in the layer's ink, the PDF's own black (the owner's ruling of 2026-11-08:
+  today's `layer-proto/run.mjs` `SVG_RULES` draws `#141414`, the approved prototype's ink, whose darkest pixel is 92 % of
+  black's, so that the translation stood lighter than the original's text on every page; a run's own fill is kept).
+  Without the smoothing and `auto` (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
   translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
   4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check
   (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): every measured line's ink within 6 % of the same runs

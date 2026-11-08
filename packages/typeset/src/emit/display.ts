@@ -162,9 +162,12 @@ export type CropItem = Extract<Item, { src: unknown }> & { w: number }
 export type DisplayItem = TextItem | CropItem
 export type DisplayLine = [y: number, x0: number, x1: number, items: DisplayItem[]]
 
-/** a fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is, any other colour the drawing's ink, #141414) */
+/** the layer's ink: the PDF's own black, TeX's default colour (the owner's ruling of 2026-11-08; today's svgOfUnit fillAttr drew
+ *  #141414, the prototype's ink, 8 % short of black at full coverage) */
+export const LAYER_INK = 0x000000
+/** a fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is, any other colour the layer's ink) */
 const fillOf = (c: string | undefined) =>
-  c === undefined ? undefined : /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : 0x141414
+  c === undefined ? undefined : /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : LAYER_INK
 
 /**
  * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used, as

@@ -1950,3 +1950,105 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(L.members[1]).toMatchObject({ located: true })
   })
 })
+
+describe('a member’s style read off all of its glyphs, as TeX set them', () => {
+  it('reads a figure text set turned off its turned glyphs: their weight, design, fill and size (an axis title in bold)', () => {
+    // (2608.04322v1 p8's y-axis title "Refusal Rate (XSTest)", set a quarter turned in TimesNewRomanPS-BoldMT: its glyphs are the
+    // member's turned ones, none upright, and it read as the default serif at its first glyph's size)
+    const withTurned = () => {
+      const d = docOf([{ lines: ['a caption under it'] }])
+      d.pages[0]!.turned = [...'Rate'].map(
+        (u, j): DocTurned => ({
+          u,
+          code: u.codePointAt(0) as number,
+          base: 'TimesNewRomanPS-BoldMT',
+          n: 1,
+          k: j,
+          at: 18,
+          box: -1,
+          ox: 60,
+          oy: 400 + 6 * j,
+          ex: 60,
+          ey: 406 + 6 * j,
+          ux: 0,
+          uy: 1,
+          size: j ? 5.11 : 6,
+          ascent: 0.7,
+          descent: -0.2,
+          form: false,
+          fill: 0x1f77b4,
+        }),
+      )
+      return d
+    }
+    const B = withTurned()
+    const A = withTurned()
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Rate', { figure: { set: 0, dir: [0, 1] } }),
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const fig = locate(ins, A, align(B, A)).members[1]!
+    expect(fig.style).toMatchObject({
+      role: 'serif',
+      bold: 1,
+      design: 'TimesNewRomanPS-BoldMT',
+      fill: 0x1f77b4,
+      size: 5.11,
+    })
+    // (its size the median of its glyphs', as an upright text's: no size read off its band)
+    expect(fig.read).not.toContain('size:lines')
+  })
+
+  it('sets a babel name in faked small capitals at its capitals’ size: its key is no text of it (IEEE’s REFERENCES)', () => {
+    // (2610.21880v1 p5: \refname set as IEEEtran's faked small capitals, "R" at 9.96 and "EFERENCES" at 7.97; the name's source is
+    // babel's key `ref`, not the text TeX printed for it, and the name read as capitals at the small capitals' 7.97)
+    const B = docOf([
+      {
+        lines: ['REFERENCES', 'Body text here'],
+        points: [
+          ['n1.ref.s', 0],
+          ['n1.ref.e', 10],
+        ],
+      },
+    ])
+    B.pages[0]!.glyphs.forEach((x, j) => {
+      if (j < 10) x.size = j ? 7.97 : 9.96
+    })
+    const units = [unitOf('para', 'Body text here'), { ...unitOf('name', 'ref'), name: 'ref' }]
+    const ins = instrumentOf(B, units, [[1, 0]], [[ROLE.name, ROLE.text]])
+    const name = locate(ins, B, align(B, B)).members.find((m) => m.name === 'ref')!
+    expect(name.style).toMatchObject({ size: 9.96, sc: 0.8, caps: 1 })
+    expect(name.style.upper).toBeUndefined()
+    // (true capitals keep their size, and are in the text's capitals: no glyph smaller than the others)
+    const C = docOf([
+      {
+        lines: ['ABSTRACT', 'Body text here'],
+        points: [
+          ['n1.abstract.s', 0],
+          ['n1.abstract.e', 8],
+        ],
+      },
+    ])
+    C.pages[0]!.glyphs.forEach((x, j) => {
+      if (j < 8) x.size = 9.96
+    })
+    const caps = locate(
+      instrumentOf(
+        C,
+        [unitOf('para', 'Body text here'), { ...unitOf('name', 'abstract'), name: 'abstract' }],
+        [[1, 0]],
+        [[ROLE.name, ROLE.text]],
+      ),
+      C,
+      align(C, C),
+    ).members.find((m) => m.name === 'abstract')!
+    expect(caps.style).toMatchObject({ size: 9.96, upper: 1 })
+    expect(caps.style.sc).toBeUndefined()
+  })
+})

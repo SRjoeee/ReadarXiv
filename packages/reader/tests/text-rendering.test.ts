@@ -1,19 +1,19 @@
 // How the overlay's SVG text is rendered (compose/text-rendering.ts, docs/PDF-READER.md §11.8): `auto` where the browser lays
-// the overlay's own words out alike under geometricPrecision and under `auto`, else geometricPrecision. The decision on two
-// layouts of the same words; the words a laid page offers (its runs of one place); the probe over a document that lays them
-// out (a fake one: the places each rendering gives); the decision written on the reader's root; and the sheet.
+// a served face's words out alike under geometricPrecision and under `auto`, else geometricPrecision. The decision on two
+// layouts of the same words; the probe over a document that lays them out (a fake one: the places each rendering gives); the
+// decision made once a reader from a fixed probe in the faces' probe face, written on the reader's root; and the sheet.
 import { describe, expect, it } from 'vitest'
-import type { Item, Page } from '../src/compose/page.ts'
+import type { Faces } from '../src/compose/faces.ts'
 import {
   ADVANCE_TOLERANCE,
   ATTRIBUTE,
   decideLayerText,
-  decideOn,
+  decideOnce,
   MIN_EVIDENCE,
-  PROBE_RUNS,
+  PROBE_SIZES,
+  PROBE_TEXT,
   type ProbeWord,
   probeWords,
-  wordsOf,
 } from '../src/compose/text-rendering.ts'
 import { READER_CSS } from '../src/styles.ts'
 
@@ -30,8 +30,6 @@ const WORDS = [0, 1, 2, 3].map((s) => word(12, s))
 const laid = (words: number[][], f: (a: number) => number = (a) => a) => words.map((w) => startsOf(w.map(f)))
 /** CSS px a PDF unit at 100 % */
 const U = 4 / 3
-/** three Han characters (a CJK run's text) */
-const HAN = String.fromCodePoint(0x4e2d, 0x6587, 0x5b57)
 
 describe('decideLayerText: the decision on two layouts of the same words', () => {
   it("is auto where they are laid out alike, and with macOS's differences: a 64th of a pixel at two sizes", () => {
@@ -82,46 +80,6 @@ describe('decideLayerText: the decision on two layouts of the same words', () =>
     expect(decideLayerText(null, laid(WORDS))).toBeNull()
     expect(decideLayerText(laid(WORDS), laid(WORDS).slice(1))).toBeNull()
     expect(decideLayerText(laid(WORDS), laid(WORDS), 0)).toBeNull()
-  })
-})
-
-/** a laid page of one member whose one line holds `items`; a faces' class a face */
-const pageOf = (items: Item[], state: 'laid' | 'waiting' = 'laid'): Page => ({
-  page: 1,
-  wait: { rows: [], faces: [] },
-  members: [{ ord: 0, page: 1, state, off: 1, lines: [[700, 72, 540, items]], lit: { left: [], right: [], own: [] } }],
-  links: [],
-})
-const faces = { classOf: (id: string) => `c-${id.length}` }
-const run = (s: string, o: Partial<Extract<Item, { face: string }>> = {}): Item => ({
-  s,
-  x: 72,
-  face: '400 100px "axt-nimbus-roman"',
-  size: 10,
-  ...o,
-})
-
-describe('wordsOf: the words a laid page offers, its runs of one place', () => {
-  it('takes a run of one x and two characters or more, in its class and size', () => {
-    expect(wordsOf(pageOf([run('Transformer ', { size: 9.96 })]), faces)).toEqual([
-      { text: 'Transformer ', cls: faces.classOf('400 100px "axt-nimbus-roman"'), size: 9.96 },
-    ])
-  })
-
-  it('leaves out a CJK run (an x a character, which no rendering moves), a single character, a crop, a member not laid', () => {
-    const items: Item[] = [
-      run(HAN, { dx: [0, 10, 20] }),
-      run('a'),
-      { s: 'x^2', x: 90, src: [1, 90, 690, 100, 710, 700], k: 1, piece: '3' },
-      run('Boyce'),
-    ]
-    expect(wordsOf(pageOf(items), faces).map((w) => w.text)).toEqual(['Boyce'])
-    expect(wordsOf(pageOf([run('Boyce')], 'waiting'), faces)).toEqual([])
-  })
-
-  it('takes PROBE_RUNS words at most', () => {
-    const many = Array.from({ length: PROBE_RUNS + 10 }, (_, i) => run(`word${i}`))
-    expect(wordsOf(pageOf(many), faces)).toHaveLength(PROBE_RUNS)
   })
 })
 
@@ -208,38 +166,69 @@ describe('probeWords: the words laid out again under both renderings, off the vi
   })
 })
 
-describe("decideOn: a laid page's words decide, written on the reader's root", () => {
-  const page = pageOf(['Homogenisierungsproblems ', 'Transformer ', 'quasinormal ', 'Tutwiler'].map((s) => run(s)))
-  it('writes data-axt-layer-text="auto" where the words say auto, takes it away where they say precise', () => {
+/** faces whose probe face is `face` once its load ends (`gate`), and what they were asked */
+function probeFaces(face: string | null, gate: Promise<void> = Promise.resolve()) {
+  const asked: string[] = []
+  const faces: Pick<Faces, 'classOf' | 'probeFace'> = {
+    classOf: (id) => `c-${id.length}`,
+    probeFace: async (text) => {
+      asked.push(text)
+      await gate
+      return face
+    },
+  }
+  return { faces, asked }
+}
+
+describe("decideOnce: decided once a reader from a fixed probe in a served face, never from a page's own words", () => {
+  it('lays the fixed probe out in the probe face, loaded for it, at its sizes, and writes auto where it says auto', async () => {
     const mac = fakeHost(linear)
-    expect(decideOn(mac.host, page, faces)).toBe('auto')
+    const f = probeFaces('400 100px "axt-cmun-serif"')
+    expect(await decideOnce(mac.host, f.faces)).toBe('auto')
+    expect(f.asked).toEqual([PROBE_TEXT])
     expect(mac.attributes.get(ATTRIBUTE)).toBe('auto')
-    const linux = fakeHost(rounded)
-    linux.attributes.set(ATTRIBUTE, 'auto')
-    expect(decideOn(linux.host, page, faces)).toBe('precise')
-    expect(linux.attributes.has(ATTRIBUTE)).toBe(false)
+    // (its words the probe's alone, whatever a page holds: the probe text at each size, in the face's class)
+    const cls = f.faces.classOf('400 100px "axt-cmun-serif"')
+    expect(new Set(mac.state.seen)).toEqual(
+      new Set(['geometricPrecision', 'auto'].map((r) => `${r}|${PROBE_TEXT}|${cls}`)),
+    )
+    expect(mac.state.seen.filter((x) => x.startsWith('auto|')).length).toBe(PROBE_SIZES.length * [...PROBE_TEXT].length)
   })
 
-  it('leaves a page that tells nothing (no runs of one place, a layout that throws) undecided, the root untouched', () => {
-    const f = fakeHost(linear)
-    expect(decideOn(f.host, pageOf([run(HAN.slice(0, 2), { dx: [0, 10] })]), faces)).toBeNull()
-    expect(f.state.probes).toBe(0)
-    const broken = fakeHost(() => null)
-    expect(decideOn(broken.host, page, faces)).toBeNull()
-    expect(f.attributes.size + broken.attributes.size).toBe(0)
+  it('tells evidence enough on its own: a page of few Latin words (2610.40645v1 p1 in Japanese) no longer decides', () => {
+    // (the probe's advances, fractional under geometricPrecision, at least MIN_EVIDENCE: it never waits for a page that tells)
+    const words: ProbeWord[] = PROBE_SIZES.map((size) => ({ text: PROBE_TEXT, cls: 'c', size }))
+    expect(probeWords(fakeHost(linear).host, words)).toBe('auto')
+    expect(PROBE_SIZES.length * ([...PROBE_TEXT].length - 1)).toBeGreaterThanOrEqual(MIN_EVIDENCE)
+  })
+
+  it('keeps geometricPrecision where auto rounds the advances (Linux), and where no served face can be had', async () => {
+    const linux = fakeHost(rounded)
+    linux.attributes.set(ATTRIBUTE, 'auto')
+    expect(await decideOnce(linux.host, probeFaces('400 100px "axt-cmun-serif"').faces)).toBe('precise')
+    expect(linux.attributes.has(ATTRIBUTE)).toBe(false)
+    const none = fakeHost(linear)
+    expect(await decideOnce(none.host, probeFaces(null).faces)).toBeNull()
+    expect(none.state.probes).toBe(0)
+    expect(none.attributes.has(ATTRIBUTE)).toBe(false)
+    // (a reader closed while its face loads lays nothing out and writes nothing)
+    const closed = fakeHost(linear)
+    expect(await decideOnce(closed.host, probeFaces('400 100px "axt-cmun-serif"').faces, () => false)).toBeNull()
+    expect([closed.state.probes, closed.attributes.size]).toEqual([0, 0])
   })
 })
 
-describe("the sheet: the overlay's text in the browser's smoothing and the layer's ink, geometricPrecision unless a page said auto", () => {
+describe("the sheet: the overlay's text in the browser's smoothing and the PDF's black, geometricPrecision unless the probe said auto", () => {
   const sheet = READER_CSS.replace(/\/\*[\s\S]*?\*\//g, '')
   const rule = (selector: string) => {
     const at = sheet.indexOf(`${selector} {`)
     return at < 0 ? null : sheet.slice(at, sheet.indexOf('}', at) + 1)
   }
-  it('sets the smoothing and geometricPrecision on every overlay, auto under the decision, #141414 where a run names no fill', () => {
+  it("sets the smoothing and geometricPrecision on every overlay, auto under the decision, the PDF's black where a run names no fill", () => {
     expect(rule('.axt-reader .axt-over > svg')).toMatch(/text-rendering: geometricPrecision;/)
     expect(rule('.axt-reader .axt-over > svg')).toMatch(/-webkit-font-smoothing: auto;/)
     expect(rule(`.axt-reader[${ATTRIBUTE}="auto"] .axt-over > svg`)).toMatch(/text-rendering: auto;/)
-    expect(rule('.axt-reader .axt-over > svg text')).toMatch(/fill: #141414;/)
+    // (the owner's ruling of 2026-11-08: the layer's ink is the PDF's own black, TeX's default colour, no longer #141414)
+    expect(rule('.axt-reader .axt-over > svg text')).toMatch(/fill: #000;/)
   })
 })

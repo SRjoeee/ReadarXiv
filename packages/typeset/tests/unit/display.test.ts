@@ -116,6 +116,28 @@ describe('D.display: items and the harness\u2019s reading', () => {
     const [x] = lines[2]![3]
     expect(x && !('src' in x) && [x.s, x.size, x.rise, x.skew, x.slant]).toEqual(['x ', 6.2, 10 * 0.36, 1, 12])
   })
+  it("draws a run's own fill as it is, a colour of no fill the layer's ink: the PDF's black (the owner's ruling of 2026-11-08)", () => {
+    const red = { color: '#c00000' },
+      named = { color: 'teal' }
+    const lines = displayLines(
+      layoutOf([
+        {
+          baseline: 700,
+          items: [
+            item({ s: 'a', cls: 'latin', face: SERIF, st: red }, 72),
+            item({ s: 'b', cls: 'latin', face: SERIF, st: named, brk: true }, 80),
+            item({ s: 'c', cls: 'latin', face: SERIF, brk: true }, 88),
+          ],
+        },
+      ]),
+      1,
+    )
+    expect(lines[0]![3].map((i) => ('src' in i ? null : [i.s.trim(), i.fill]))).toEqual([
+      ['a', 0xc00000],
+      ['b', 0],
+      ['c', undefined],
+    ])
+  })
   it('reads two lines on one baseline as one, a crop with no copy text as none, a slanted superscript off its line', () => {
     const view = [10, 20, 622, 812]
     const d = dumpUnit({ layout: L } as never, () => view)
