@@ -299,7 +299,7 @@ describe('gap: a follower the part states as run in after its leader, nothing el
   it('two units the part joins in no flow are no run-in: judged by their alignment, not by a gap', () => {
     const p = page(pair(['author', 'author']), 156.2, 160)
     expect(gaps(p)).toEqual([])
-    expect(p.diffs.filter((d) => d.flag === 'align')).toMatchObject([{ unit: 't11 author', nearer: 'v2' }])
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'align')).toMatchObject([{ unit: 't11 author', nearer: 'v2' }])
   })
   it('a follower the part joins to its leader is judged by its gap', () => {
     expect(gaps(page(pair(['heading', 'para']), 160, 152, { 11: 10 }))).toMatchObject([{ unit: 't11 para after t10 heading', worse: true }])
