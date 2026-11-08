@@ -115,7 +115,7 @@ export const SAYS = {
   block: "lines borrowed past TeX's room: under its text block bottom, or the next ink nearer than its paragraph separation (the owner's ruling 1)",
   elements: "an element drawn otherwise than the original sets it: pieces TeX set on one line drawn apart, its scripts set flat as text, drawn as nothing where TeX set ink",
   erased: "the original's glyphs a side shows in part inside its translated units' regions (an erasure's sliver)",
-  groups: "a table's grid group translated or kept whole as today decides (the owner's ruling 3); a group v2 is handed already decided",
+  groups: "a table's grid group translated or kept whole as today decides (the owner's ruling 3); a group v2 is handed already decided is not exercised, apart",
   labels: "a paper's labels in one form, the target word everywhere (the owner's ruling 4)",
   folio: "a page number at its size, right-aligned (the owner's ruling 6)",
   lead: "a text's leading tighter than the original's while its block has room: its pitch over its size against the original's",

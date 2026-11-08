@@ -433,12 +433,15 @@ export function measureFidelity(c) {
       v = groupState('v2', V, cells)
     if (t === 'mixed') fault('today', 'groups', `${g.group}: its cells part translated, part the original's`)
     if (v === 'mixed') fault('v2', 'groups', `${g.group}: its cells part translated, part the original's`)
+    // (a group both sides draw the same, kept on both or translated on both, is no difference; one drawn otherwise than today
+    // decides is worse)
     if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today')
-    // (a group today's decision kept whole reaches v2 as no rows: what v2 draws there is today's decision, not v2's, which has
-    // none yet; the translator's answers for its cells are not stored, so the product's drawing cannot be shown)
+    // (a group today's decision kept whole reaches v2 as no rows: the stored rows hold no translation of its cells, so v2's own
+    // decision is not exercised there and what v2 draws is today's decision. Recorded apart, as the ruling's are: never worse,
+    // never nearer; a run over rows that hold the translator's answers for those cells exercises it)
     const inherited = cells.filter(({ id }) => c.keptByGroup?.has(id))
-    if (inherited.length && v !== 'mixed' && t === v)
-      diff('groups', `group ${g.group}`, "kept whole by today's group decision, handed to v2 as rows already decided: v2 has no group decision of its own", 'whole', { value: 'decided', off: 0 }, { value: `${inherited.length} cells undecided`, off: 1 }, true, 'today')
+    if (inherited.length && t === v)
+      diff('groups', `group ${g.group}`, "kept whole by today's group decision, handed to v2 as rows already decided: v2's own group decision not exercised", 'whole', { value: 'decided', off: null }, { value: `${inherited.length} cells undecided`, off: null }, false, 'unexercised')
   }
 
   // ---------------- page numbers: their size kept, set right-aligned (the owner's ruling 6)

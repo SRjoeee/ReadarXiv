@@ -258,10 +258,20 @@ describe("groups: a table's grid group translated or kept whole as today decides
     const r = rec({ v2: { units: [{ id: 118, lines: [drawnLine(370, 380, 653, '\u5217\u8f66', 9.96)] }, { id: 121, lines: [drawnLine(480, 490, 653, '\u53c2\u6570', 9.96)] }] } })
     expect(of('groups')(measure(v2, r, { prep, groups }))).toMatchObject([{ unit: 'group 3:h', worse: true, v2: { value: 'mixed' }, today: { value: 'original' } }])
   })
-  it("a group today's decision kept whole, handed to v2 already decided: v2 has no decision of its own", () => {
+  it("a group today's decision kept whole, handed to v2 as rows already decided and drawn the same: not exercised, never worse", () => {
+    // (the stored rows hold no translation for a group today kept, so v2's own decision cannot be exercised on it: recorded
+    // apart, as the ruling's are)
     const r = rec({})
     const p = measure(v2Of({ members: [], facts: [] }), r, { prep, groups, keptByGroup: new Set([118, 121]) })
-    expect(of('groups')(p)).toMatchObject([{ unit: 'group 3:h', worse: true, v2: { value: '2 cells undecided' } }])
+    expect(of('groups')(p)).toMatchObject([{ unit: 'group 3:h', worse: false, nearer: 'unexercised', v2: { value: '2 cells undecided' } }])
+    expect(p.worse).toBe(0)
+  })
+  it('a group both sides draw the same, kept on both or translated on both, is no difference', () => {
+    const cells = (s: string) => [118, 119, 120, 121].map((id, i) => ({ id, lines: [drawnLine(370 + 35 * i, 390 + 35 * i, 653, s, 9.96)] }))
+    const v2 = v2Of({ members: [118, 119, 120, 121].map((o) => laid(o)), facts: [], today: Object.fromEntries([118, 119, 120, 121].map((o) => [o, { today: o }])) })
+    const both = rec({ today: { units: cells('\u8bad\u7ec3') }, v2: { units: cells('\u8bad\u7ec3') } })
+    expect(of('groups')(measure(v2, both, { prep, groups }))).toEqual([])
+    expect(of('groups')(measure(v2Of({ members: [], facts: [] }), rec({}), { prep, groups }))).toEqual([])
   })
 })
 
