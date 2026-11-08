@@ -2,7 +2,7 @@
 // The display gate's verdict (lab/typeset/parity/verdict.mjs, #629's review): a page is judged from what each side drew, and the
 // gate passes only over the whole of what the run asked. Synthetic pages: one unit or figure text or link drawn or not, a
 // unit's sentence boxes where today highlights it, where today draws it without, and where only v2 translates it, a head's
-// label relabelled or kept.
+// label relabelled or kept, a size tie laid at one scale.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
@@ -19,9 +19,9 @@ const rec = (o: { today?: object; v2?: object; original?: number } = {}) => ({
   px: {},
 })
 /** v2.mjs's file of a pair: the page's members (Page) and the part's facts, the join to today's ords */
-const v2Of = (o: { members?: object[]; facts?: object[]; today?: Record<number, { today: number }> } = {}) => ({
+const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; today?: Record<number, { today: number }> } = {}) => ({
   pages: { [N]: { members: o.members ?? [], links: [] } },
-  facts: { [N]: { members: o.facts ?? [], links: 0 } },
+  facts: { [N]: { members: o.facts ?? [], links: 0, ...(o.ties ? { ties: o.ties } : {}) } },
   today: o.today ?? {},
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
@@ -154,6 +154,41 @@ describe("a label in a translated unit: today's relabelled against v2's kept as 
   })
   it('v2 relabels a label today keeps: never judged worse', () => {
     expect(labels(page(kept, relabelled))).toEqual([])
+  })
+})
+
+describe("a size tie (one paragraph's text is even) judged as one paragraph", () => {
+  // (a run-in head, member 57, and its paragraph, member 59, set at 10 pt on A, which v2 ties to one scale; today lays them
+  // independently)
+  const v2 = (ties?: number[][]) =>
+    v2Of({
+      members: [57, 59].map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } })),
+      facts: [
+        { ord: 57, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 120, 500)] },
+        { ord: 59, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(130, 300, 500), factLine(72, 300, 488)] },
+      ],
+      today: { 57: { today: 57 }, 59: { today: 59 } },
+      ...(ties ? { ties } : {}),
+    })
+  const at = (size: number, x0: number, x1: number, y: number) => ({ ...drawnLine(x0, x1, y, 'x'.repeat(12), size) })
+  const page = (t: [number, number], v: [number, number], ties?: number[][]) =>
+    measure(
+      v2(ties),
+      rec({
+        today: { units: [{ id: 57, lines: [at(t[0], 72, 120, 500)] }, { id: 59, lines: [at(t[1], 130, 300, 500), at(t[1], 72, 300, 488)] }], lit: [57, 59] },
+        v2: { units: [{ id: 57, lines: [at(v[0], 72, 120, 500)] }, { id: 59, lines: [at(v[1], 130, 300, 500), at(v[1], 72, 300, 488)] }], lit: [57, 59] },
+      }),
+    )
+  const sizes = (p: { diffs: { flag: string; unit: string | null; worse: boolean }[] }) => p.diffs.filter((d) => d.flag === 'size')
+
+  it("today 0.9/1.0, v2's tie 0.9/0.9: its smallest member's size equal to today's smallest, no difference", () => {
+    expect(sizes(page([9, 10], [9, 9], [[57, 59]]))).toEqual([])
+  })
+  it("a tie whose size is under today's smallest is worse, as one paragraph", () => {
+    expect(sizes(page([9, 10], [8.5, 8.5], [[57, 59]]))).toMatchObject([{ unit: 'tie t57, t59', worse: true }])
+  })
+  it('members no tie holds are judged one by one, as before', () => {
+    expect(sizes(page([9, 10], [9, 9]))).toMatchObject([{ unit: 't59 para', worse: true }])
   })
 })
 

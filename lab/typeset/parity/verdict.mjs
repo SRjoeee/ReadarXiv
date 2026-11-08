@@ -69,7 +69,7 @@ export const SAYS = {
   style: "a unit's share of bold and of slanted characters against the original's style (its TeX font state)",
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
-  size: "a unit's size against the original's",
+  size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
   highlight: "the units today highlights: v2 without sentence boxes there; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
@@ -154,6 +154,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
     const nearer = v.d < t.d ? 'v2' : 'today'
     diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, nearer === 'today', nearer)
+  }
+
+  // (v2's size ties on the page, the part's (one paragraph's text is even, the owner's ruling: a run-in head with its
+  // paragraph, a paragraph a display splits, laid at one scale): each tie of two members or more both sides draw here is
+  // judged as one paragraph below, its members' sizes not one by one)
+  const tieOf = new Map()
+  const ties = []
+  for (const ords of v2.facts[n]?.ties ?? []) {
+    const keys = [...new Set(ords.map(keyOfPart))].filter((k) => T.has(k) && V.has(k))
+    if (keys.length < 2) continue
+    for (const k of keys) tieOf.set(k, ties.length)
+    ties.push(keys)
   }
 
   // ------------------------------------------------ per unit, each side's distances from the original
@@ -242,9 +254,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
       if (t.align && v.align)
         judge('align', name, `${v.align.how} off the original's`, { c: 'centred', l: 'left', j: 'justified', r: 'right' }[o?.align] ?? null, { value: null, d: t.align.off }, { value: null, d: v.align.off }, eps)
       if (os) {
-        const dt = Math.abs(t.size - os) / os,
-          dv = Math.abs(v.size - os) / os
-        judge('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: dt }, { value: r2(v.size), d: dv }, NEAR.size)
+        t.share = t.size / os
+        v.share = v.size / os
+        if (!tieOf.has(key)) judge('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
         judge('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
@@ -262,6 +274,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
       if (t.over > 0 || v.over > 0) judge('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
     }
     units.push(u)
+  }
+
+  // ------------------------------------------------ size of a tie: one paragraph, its smallest member's share of the original's
+  // size on each side (today's members laid one by one, its smallest over the same members): a tie member under today's
+  // smallest is worse, the tie's members at today's smallest equal
+  for (const keys of ties) {
+    const side = (k) => keys.map((key) => units.find((u) => u.key === key)?.sides[k]?.share).filter(Number.isFinite)
+    const t = side('today'),
+      v = side('v2')
+    if (t.length !== keys.length || v.length !== keys.length) continue
+    const st = Math.min(...t),
+      sv = Math.min(...v)
+    judge('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
   }
 
   // ------------------------------------------------ gap: each run-in pair, on each side

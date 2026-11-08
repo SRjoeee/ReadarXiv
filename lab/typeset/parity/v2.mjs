@@ -7,7 +7,7 @@
 // items-hook.mjs hands each page over), on whole pages: `<dir>/<pair>.json` holds each page's `Page` whole (its members and
 // its links), the join of each part member to today's unit (today's ord, by content id and rank: the baseline's rule), and
 // the facts of the part's members the measures read (kind, the TeX-stated alignment, the lines on A, the style, the text's
-// id). Lab-data only: the pages hold licensed papers' text. Heavy: run through heavy-slot.sh test.
+// id) and the page's size ties. Lab-data only: the pages hold licensed papers' text. Heavy: run through heavy-slot.sh test.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { register } from 'node:module'
 import { join } from 'node:path'
@@ -92,7 +92,9 @@ for (const pair of pairs) {
           ...(m.label ? { label: m.label } : {}),
         })
       }
-    facts[pg] = { members: list, links: part.links?.length ?? 0 }
+    // (and the page's size ties, each the part ords of one paragraph's members laid at one scale)
+    const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
+    facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
   const out = { pair, paper: paperOf(pair), pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
