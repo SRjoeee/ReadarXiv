@@ -13,6 +13,7 @@ import type { Mapping } from '../align/align.ts'
 import type { Doc, DocPoint } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
+import { runIns } from '../marks/run-ins.ts'
 import {
   classOf,
   claimInk,
@@ -532,7 +533,7 @@ const SPAN_STYLES: [RegExp, string][] = [
 ]
 const styleOf = (src: string) => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 /** today's flat pieces ([open … close] pairs) as the format's nested ones (pipeline/instrument.mjs:56-82 contentOf, ported; an ink
- *  unit's pieces hold no nested unit): an element's kind today's classOf's, `other` for none */
+ *  unit's pieces hold no nested unit): an element's kind today's classOf's, `other` for none; its run-in labels `must` */
 export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   let level: Piece[] = []
   const stack: { outer: Piece[]; span: Extract<Piece, { t: 'span' }> }[] = []
@@ -572,7 +573,8 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
         throw new Error(`a piece an ink unit does not make (${String(p.t).slice(0, 20)})`)
     }
   })
-  return stack.length ? stack[0]!.outer : level
+  // (its run-in labels `must`, as the source units': marks/run-ins.ts)
+  return runIns(stack.length ? stack[0]!.outer : level)
 }
 /** each group's command and a link group's target by its open piece's id (pipeline/instrument.mjs:187-219 commandOf, spansOf,
  *  ported; an ink unit's groups carry no colour of the log's) */

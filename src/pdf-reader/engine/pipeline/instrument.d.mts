@@ -31,6 +31,12 @@ export declare function placesOf(
   pages: readonly { points: readonly { name: string; glyph: number; box?: number }[] }[],
   count: number,
 ): NonNullable<Instrument['places']>
+/** the pieces TeX sets no ink for where they stand, as Instrument `empty` pieces: a paper's macro the probe said sets none
+ *  (`inkless`), and a text macro the marking never marks (marks.mjs classOf null: its rendering is never ink) */
+export declare function inklessPieces(
+  units: readonly ({ pieces?: readonly { t: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; inkless?: readonly string[] | null },
+): NonNullable<Instrument['empty']>
 /** the paper's macros at a unit's head and after its last text that set nothing on the unit's lines (today's maker's
  *  besideMarks): no glyph of no unit's beside the unit's mark on its line, in its column; as Instrument `empty` pieces */
 export declare function besideEmpty(

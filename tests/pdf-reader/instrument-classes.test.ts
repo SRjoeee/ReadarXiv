@@ -9,6 +9,7 @@ import {
   FORCED_BREAK,
   glueOf,
   glyphPiecesOf,
+  inklessPieces,
   placesOf,
   spansOf,
   textsOf,
@@ -324,5 +325,43 @@ describe('a head or tail macro that sets nothing on its unit’s line (today’s
     const cs = classes(probed)
     ;(cs[5] as Map<string, { text?: string }>).get('0')!.text = 'TensorCast'
     expect(besideEmpty(pages as never, rows, probed as never, { classes: cs as never, known: new Set() })).toEqual([])
+  })
+})
+
+describe('the pieces TeX sets no ink for, as the instrument states them (Instrument `empty`)', () => {
+  const units: unknown[] = []
+  units[3] = {
+    kind: 'reference',
+    pieces: [
+      { t: 'text', s: '\nA. Author and B. Author.\n' },
+      ph('\\newblock'),
+      { t: 'text', s: ' A title.\n' },
+      ph('\\newblock'),
+      { t: 'text', s: ' In ' },
+      ph('\\sys'),
+      ph('~'),
+      ph('\\ttfamily'),
+      { t: 'text', s: ', 2019.' },
+    ],
+  }
+  const classes = units.map((u) => (u ? new Map(classesOf((u as { pieces: never[] }).pieces)) : null))
+  it('states a text macro the marking never marks, its rendering never ink (marks.mjs classOf null), as today’s reader drew it', () => {
+    // (a .bbl's \newblock, a declaration: today's file held no row of it and its reader drew it as nothing, proven (tex.mjs
+    // inklessOf); stated nothing, the typesetter left every BibTeX entry unproven, English: 2010.11929v2 p10, 20 of 20)
+    expect(classes[3]!.get('1')).toMatchObject({ cls: 'umacro', unknown: true })
+    expect(inklessPieces(units as never, { classes: classes as never })).toEqual([
+      { unit: 3, piece: '1' },
+      { unit: 3, piece: '3' },
+      { unit: 3, piece: '7' },
+    ])
+  })
+  it('states a paper’s macro the marking marks only where its probe said it sets none; a space never', () => {
+    // (\sys is marked: TeX may set its glyphs as the unit's text, which only the probe tells)
+    expect(inklessPieces(units as never, { classes: classes as never, inkless: ['\\sys'] })).toEqual([
+      { unit: 3, piece: '1' },
+      { unit: 3, piece: '3' },
+      { unit: 3, piece: '5' },
+      { unit: 3, piece: '7' },
+    ])
   })
 })

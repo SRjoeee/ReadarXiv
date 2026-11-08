@@ -28,6 +28,7 @@ import { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE } fro
 import { framesOf, readAlign, readLineskip } from './channels.ts'
 import type { SourceDoc } from '../source/read.ts'
 import { classOf, symbolText } from './classes.ts'
+import { runIns } from './run-ins.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
 import { type Plan, pieceIdsOf } from './mark.ts'
 import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
@@ -173,10 +174,11 @@ export function instrumentFromPlan({
   const at = ([p, q]: At) => (regions[p] as Regions).at[q] as number
   const glyphs = pages.map((pg) => ownersOf(pg.glyphs.length))
   const boxes = pages.map((pg) => ownersOf(Math.floor(pg.boxes.length / 4)))
+  // (each unit's run-in labels `must`, as the source reader states them for the translators: marks/run-ins.ts)
   const units: InstrumentUnit[] = doc.units.map((u) => ({
     id: u.id,
     kind: u.kind,
-    content: u.content,
+    content: runIns(u.content),
     ...(u.depth !== undefined ? { depth: u.depth } : {}),
     ...(u.title ? { title: true as const } : {}),
     ...(u.front ? { front: true as const } : {}),
