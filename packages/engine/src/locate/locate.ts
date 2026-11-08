@@ -1064,18 +1064,51 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   const joinOf = (a: Line, b: Line, size: number): [number] | [number, 1] =>
     keptOn(a, b, size) ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
+  // (the stream: the instrument's members in its order, and each member made on A (ink.ts, born.ts) where TeX set its text in
+  // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
+  // after its last, as a name leads the unit after it (above). amsthm's head no source unit owns, made on A, and its theorem's
+  // text after it on the row (2608.25210v2 p4 "Definition 2. Minimal Provenance."): one flow, as a run-in head's and its
+  // paragraph's, today's shared line over every unit of the page (need.mjs rowLeadOf). One B never printed, or after which no
+  // member begins on its page, stands after the instrument's, as made. Which box TeX set a member made on A in the instrument
+  // does not say: none is the body an insert is passed over to)
+  const madeOnA = (x: Member) => x.unit < 0 || x.unit >= ins.units.length
+  const madeB = new Set<number>()
+  const firstAt = new Map<number, number>()
+  for (const x of members) {
+    if (x.bFirst >= 0) firstAt.set(x.bFirst, x.ord)
+    if (!madeOnA(x)) continue
+    for (const a of x.text) if ((m.aToB[a] as number) >= 0) madeB.add(m.aToB[a] as number)
+    for (const l of x.els.values()) for (const a of l) if ((m.aToB[a] as number) >= 0) madeB.add(m.aToB[a] as number)
+  }
+  const standsBefore = new Map<number, number[]>()
+  const standing = new Set<number>()
+  for (const x of members) {
+    if (!madeOnA(x) || x.bLast < 0) continue
+    let b = x.bLast + 1
+    while (b < NB && pageB[b] === pageB[x.bLast] && (unitB[b] as number) < 0 && !madeB.has(b)) b++
+    const next = b < NB && pageB[b] === pageB[x.bLast] ? firstAt.get(b) : undefined
+    if (next === undefined || next === x.ord) continue
+    ;(standsBefore.get(next) ?? standsBefore.set(next, []).get(next)!).push(x.ord)
+    standing.add(x.ord)
+  }
+  const seq: Member[] = []
+  const put = (o: number) => {
+    for (const x of standsBefore.get(o) ?? []) put(x)
+    seq.push(members[o]!)
+  }
+  for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
   let body: number | null = null
-  for (let q = 0; q < members.length; q++) {
-    const mem = members[q]!
+  for (let q = 0; q < seq.length; q++) {
+    const mem = seq[q]!
     let k = q - 1
-    if (!insert(mem) && k >= 0 && insert(members[k]!) && body !== null) k = body
-    const prev = k >= 0 ? members[k]! : null
+    if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
+    const prev = k >= 0 ? seq[k]! : null
     // (the paragraph ends between the two that are not inside the inserts between them)
     const insideInsert = (e: number) => {
       for (let j = k + 1; j < q; j++) {
-        const x = members[j]!
+        const x = seq[j]!
         if (x.bFirst >= 0 && e > x.bFirst && e <= x.bLast + 1) return true
       }
       return false
@@ -1089,6 +1122,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       !!b &&
       !!prev?.located &&
       mem.located &&
+      // (a member born on A, of glyphs B never printed, has no place in TeX's stream to tell its paragraph by)
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
@@ -1108,8 +1142,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (!insert(mem)) body = q
+    if (!insert(mem) && !madeOnA(mem)) body = q
   }
+  // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
+  flows.sort((f, g) => Math.min(...f) - Math.min(...g))
 
   // ---- ties: a table's cells, laid together; a figure's set, at one size; a flow's members, at one size
   const ties: Located['ties'] = []

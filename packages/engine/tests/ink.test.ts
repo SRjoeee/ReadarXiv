@@ -224,6 +224,62 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.born.size).toBe(0)
   })
 
+  it('flows a source unit on from the unit made on A that TeX set before it on its first line (a theorem head no unit owns)', () => {
+    // (2608.25210v2 p4: amsthm's head "Definition 2. Minimal Provenance." no source unit owns, made on A an orphan, and the
+    // theorem's text after it on the row: one flow, the theorem's join its separation from the head, as for two source units)
+    const { B, A } = pair({
+      lines: [
+        'Body text here',
+        { text: 'Definition 2.', x: 72, y: 688 },
+        { text: 'A thing is so', x: 155, y: 688 },
+        { text: 'and runs on', y: 676 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 13 + 13 + 11],
+      ],
+    })
+    const ins = instrumentOf(
+      B,
+      [unitOf('para', 'Body text here'), unitOf('theorem', 'A thing is so and runs on')],
+      [[0, -1, 1, 1]],
+    )
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const head = L.members.find((m) => m.kind === 'inkorphan')!
+    expect(L.units[head.unit]!.content).toEqual([text('Definition 2.')])
+    const thm = L.members[1]!
+    expect(L.flows.find((f) => f.includes(thm.ord))).toEqual([head.ord, thm.ord])
+    expect(thm.join).toEqual([155 - (72 + 13 * 6)])
+    // (the flows in the members' order, each at its first member's: the source units' as before, the head's with its theorem's)
+    expect(L.flows).toEqual([[0], [head.ord, thm.ord]])
+  })
+  it('flows no unit made on A into the next where a paragraph end of TeX’s stands between them, nor one on another row', () => {
+    const spec = (y: number) => ({
+      lines: [
+        'Body text here',
+        { text: 'Definition 2.', x: 72, y: 688 },
+        { text: 'A thing is so', x: 155, y },
+        { text: 'and runs on', y: y - 12 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 13 + 13 + 11],
+      ] as [string, number][],
+    })
+    const own = [[0, -1, 1, 1]]
+    const units2 = [unitOf('para', 'Body text here'), unitOf('theorem', 'A thing is so and runs on')]
+    const below = pair(spec(676))
+    const L = locate(instrumentOf(below.B, units2, own), below.A, align(below.B, below.A), { pages: rawOf(below.A) })
+    expect(L.members[1]!.join).toBeUndefined()
+    expect(L.flows.find((f) => f.includes(1))).toEqual([1])
+    const row = pair(spec(688))
+    const ins2 = instrumentOf(row.B, units2, own)
+    ins2.tex = { paragraphEnds: [[14 + 13]] }
+    const E = locate(ins2, row.A, align(row.B, row.A), { pages: rawOf(row.A) })
+    expect(E.members[1]!.join).toBeUndefined()
+    expect(E.flows.find((f) => f.includes(1))).toEqual([1])
+  })
+
   it('reads a glyph as an included figure’s where its partner on B is one, A’s form flattened', () => {
     const B = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640, form: true }] }])
     const A = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640 }] }])
