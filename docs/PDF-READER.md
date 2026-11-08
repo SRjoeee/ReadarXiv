@@ -5087,7 +5087,14 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   italic inside a label (matplotlib's mathtext "α" of "jury, α = 8" in DejaVuSans-Oblique), and a theorem box or a prompt card
   its bold lead before its text ("Proposition 1.2.1.", "Data Extraction Task:"); cut there, a label was a fragment ("jury,", its
   room ending at the letter: drawn at 0.66 in 2610.21085v1's Figure 4), and the translator got the fragment. The joined label is
-  drawn in its first glyph's style (a bold lead's label all bold, the "α" upright in the label's face). What stays apart: TeX's
+  drawn in its first glyph's style (a bold lead's label all bold, the "α" upright in the label's face). The rebuilt engine
+  keeps the join and the weight of each run (`packages/engine` `locate/ink.ts` figureRuns, the owner's comment of 2026-11-09 on
+  2608.25210v2 p2, where today drew "Data Extraction Task: Extract all …" all bold and the first v2 all regular): each run of
+  the label's glyphs in another face than its own (the face of most of them, locate's style) is a group of its own in its unit,
+  of no source, named for what its face changes (`bold`, `medium`, `italic`, `upright`), `must` where the run-in rule makes it
+  a label (`marks/run-ins.ts`, so that the markers wire brings it back), its face read off its glyphs into the part
+  (`SpanAt.style`); S.figures draws the group's translation in it, the rest in the label's own. A reply that drops the group
+  draws the whole in the label's own face. What stays apart: TeX's
   math faces (CMMI, CMSY, MSBM: families of their own, and math), so "rate p" in TeX keeps "rate"; a subscript or superscript
   (another size); a coloured word (another fill); two columns of a legend (past `RUN_GAP`); two panels. No list of style
   words: the diagnosis's what-if, which had one, missed TeX's Times (NimbusRomNo9L-Regu and -Medi). Measured over the sweep's

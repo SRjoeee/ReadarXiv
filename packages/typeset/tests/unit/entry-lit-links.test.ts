@@ -943,6 +943,31 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(m!.lit.left).toEqual([[[140, 398, 160, 406]]])
     expect(m!.lit.right[0]).toHaveLength(1)
   })
+  it('draws a translated run in the style its group’s glyphs state on A, the rest in the figure text’s own (#50)', () => {
+    // (2608.25210v2 p2's "Data Extraction Task: Extract all …": its lead-in a group of its own, set in its family's bold on A
+    // (the part's SpanAt.style), the rest regular, the figure text's own style. Drawn in one style, the lead-in lost its weight)
+    const lead = label({
+      plain: 'Task: all names',
+      spans: [['0', { style: { role: 'sans', size: 8, bold: 1, design: 'Helvetica-Bold' } }]],
+    })
+    const content: OutPiece[] = [
+      { t: 'span', id: '0', content: [{ t: 'text', s: 'Aufgabe' }] },
+      { t: 'text', s: ': alle' },
+    ]
+    const m = layPage(part(lead), rowsOf([{ id: idF, ok: true, by: 'test', content }]), rules, metrics()).members[0]!
+    expect(m).toMatchObject({ state: 'laid', off: 1 })
+    const [, x0, x1, items] = m.lines[0]!
+    const bold = (it: Item) => 'face' in it && /^700 /.test(it.face)
+    expect(items.map((it) => [it.s, bold(it), it.x])).toEqual([
+      ['Aufgabe', true, x0],
+      [': alle', false, x0 + 28],
+    ])
+    // (the whole drawn as one line of its runs, centred on its anchor as before: 13 characters of half a size at 8)
+    expect([x0, x1]).toEqual([124, 176])
+    // (a reply that brings no group back, its words outside it: all in the figure text's own style)
+    const flat = layPage(part(lead), rowsOf([rowF('Aufgabe: alle')]), rules, metrics()).members[0]!
+    expect(flat.lines[0]![3].map((it) => [it.s, bold(it)])).toEqual([['Aufgabe: alle', false]])
+  })
   it('shrinks a set to one size where one of it needs it, and leaves the original’s what says nothing else', () => {
     // (two labels of one set: the second's translation, 16 characters at 8 (64 wide), centred in a free line of 50 (its box of 30
     // and 10 either side), needs 0.78 of its size, over the last floor)
