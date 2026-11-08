@@ -503,6 +503,49 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     // (its translation the same as its source: the original's)
     expect(layPage(part(label()), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!.state).toBe('none')
   })
+  it('draws a turned one at its angle along its run about its anchor, its runs along it, lit by its turned box', () => {
+    // (a y-axis title "Loss" set a quarter turned: its run from (150, 380) up for 20, centred, its room 20 before and after along
+    // it (Placed.run's own: Room.side keeps its meaning, the side of its box across the page, the label's 120-180, which an
+    // older typesetter reads as before); its line on A its box on the page)
+    const quarter = label({
+      dir: [0, 1],
+      run: [150, 380, 20, 20, 20],
+      lines: [[1, 0, 144, 152, 380, 400, 380, 144, 152, 0, 8]],
+    })
+    const m = layPage(part(quarter), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(m).toMatchObject({ state: 'laid', off: 1 })
+    // ("Verlust", 28 along at 8, centred on its run's middle (390): from 376 up; its line from its origin (150, 376) along (0, 1),
+    // its runs' places along it from x0)
+    const [y, x0, x1, items] = m.lines[0]!
+    expect([y, x0, x1]).toEqual([376, 150, 178])
+    expect(items).toEqual([expect.objectContaining({ s: 'Verlust', x: 150, size: 8, dir: [0, 1] })])
+    expect(m.lit.left).toEqual([[[144, 380, 152, 400]]])
+    // (its box as drawn: along the run 376 to 404, across it its band at 8 on the run's left, the turned page's up)
+    const [b] = m.lit.right[0]!
+    expect(b![1]).toBeCloseTo(376, 6)
+    expect(b![3]).toBeCloseTo(404, 6)
+    expect(b![0]).toBeLessThan(150)
+    expect(b![2]).toBeGreaterThan(150)
+    expect(b![2] - b![0]).toBeLessThan(10)
+    // (its room along its run is the run's: 4 before and after leave 28 to "Verluste", 32 at 8: its set at 7)
+    const tight = label({ ...quarter, run: [150, 380, 20, 4, 4] })
+    const t = layPage(part(tight), rowsOf([rowF('Verluste')]), rules, metrics()).members[0]!
+    expect(t.state).toBe('laid')
+    expect((t.lines[0]![3][0] as { size: number }).size).toBeCloseTo(7, 9)
+    // (any angle the original states: one turned 30 degrees, set from its start, its room after it along its run)
+    const [ux, uy] = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)]
+    const slant = label({
+      align: 'l',
+      dir: [ux, uy],
+      run: [100, 300, 20, 0, 60],
+      lines: [[1, 0, 96, 121, 300, 316, 296, 96, 121, 0, 8]],
+    })
+    const s = layPage(part(slant), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
+    expect(s.state).toBe('laid')
+    const [sy, sx0, sx1, sitems] = s.lines[0]!
+    expect([sy, sx0, sx1]).toEqual([300, 100, 128])
+    expect(sitems[0]).toMatchObject({ x: 100, dir: [ux, uy] })
+  })
   it('lays no translation over a figure text whose ink stays: the part’s why, the original’s (#631 review)', () => {
     // (a label today's figure reading leaves where it stands, crowded: no group of it, the part states it unwrapped)
     const p = layPage(part(label({ why: 'unwrapped' })), rowsOf([rowF('Verlust')]), rules, metrics())
@@ -527,7 +570,7 @@ describe('S.figures over the part: a figure text drawn in its translation where 
       [400, 124, 158, [['Loss ', 142]]],
     ])
   })
-  it('leaves the original’s a turned one (design-a’s Item has no turn) and one whose anchor the part does not state', () => {
+  it('leaves the original’s a turned one whose run the part does not state, and one whose anchor it does not state', () => {
     const turned = layPage(part(label({ dir: [0, 1] })), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
     expect(turned).toMatchObject({ state: 'kind', off: 0, lines: [] })
     const before = layPage(part(label({ align: 'j' })), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!

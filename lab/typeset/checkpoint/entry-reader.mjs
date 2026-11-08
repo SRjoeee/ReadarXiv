@@ -6,7 +6,11 @@
 //   reader's compose/highlight.ts from `lit`, what is painted is what is hit);
 // - the links: every link the entry lays on a page is an anchor of the right's link layer over the page; a citation's link
 //   moved with its piece, clicked, takes the right pane to the page its destination names (the original's annotation's own
-//   destination, resolved by the original document as PDF.js resolves the left's), and lies where the entry drew its piece.
+//   destination, resolved by the original document as PDF.js resolves the left's), and lies where the entry drew its piece;
+// - the turned runs (a figure text the original sets turned): drawn turned, each one's span of the right's text layer turned
+//   and over its drawing, and a drag along it (eight a page) selecting its characters alone; `--turned=<page>:<runs>,…` the
+//   count each named page is to hold (none laid there fails, never passes empty).
+// Usage: … entry-reader.mjs --laid=<file> --pair=1706.03762v7-zh --turned=13:46,14:84
 // Licensed papers are read in place from lab-data (the PDF, lane L7's bundles); nothing of them is written but the report's
 // numbers. Served on the loopback; Playwright's Chromium behind a route table that refuses every other request. Run from the
 // worktree's root through heavy-slot.sh e2e: npx tsx lab/typeset/checkpoint/entry-reader.mjs …
@@ -20,6 +24,14 @@ const ROOT = join(import.meta.dirname, '..', '..', '..')
 // (the lab's data, the paper catalogue and the bundles: AXT_LAB, AXT_PAPERS, AXT_L1_BUNDLES, each defaulting to this machine's)
 const LAB = process.env.AXT_LAB ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
 const PAIR = arg('pair')
+// (--turned=<page>:<runs>[,…]: the turned runs each named page is to hold, so that a page meant to exercise them fails where the
+// entry lays none there, rather than passing with nothing checked)
+const TURNED = new Map(
+  (arg('turned', '') || '')
+    .split(',')
+    .filter(Boolean)
+    .map((x) => x.split(':').map(Number)),
+)
 const LAID = JSON.parse(readFileSync(arg('laid'), 'utf8'))[PAIR]
 if (!LAID?.links) throw new Error(`${PAIR}: no entry pages with links in ${arg('laid')} (laid.mjs --entry)`)
 const OUT = arg('out', join(ROOT, 'packages/reader/e2e/.entry-out'))
@@ -135,6 +147,7 @@ await page.evaluate(([n, t]) => window.__h.layer(n, { pages: `/entry/${n}.json`,
 const wait = (fn, a, ms = 30_000) => page.waitForFunction(fn, a, { timeout: ms, polling: 50 })
 const failures = []
 const report = []
+for (const k of TURNED.keys()) if (!pages[k]) failures.push(`p${k}: named by --turned, not among the entry's pages`)
 for (const n of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
   await page.evaluate((k) => window.__h.panes.goToPage('right', k), n)
   await wait(
@@ -194,7 +207,88 @@ for (const n of Object.keys(pages).map(Number).sort((a, b) => a - b)) {
         `p${n}: ${a.href.slice(0, 60)} went to ${await page.evaluate(() => window.__h.panes.pageOf('right'))}, not ${want}`,
       )
   }
-  const line = { page: n, members: ords.length, hovers, lit, links: given.length, anchors: anchors.length, inner: inner.length, followed }
+  // the turned runs (a figure text the original sets turned, its items' `dir`): drawn turned, and in the text layer turned over
+  // where they are drawn, so that a drag along one selects it (its characters and none of another's)
+  await page.evaluate((k) => window.__h.panes.goToPage('right', k), n)
+  await page.waitForTimeout(300)
+  const runs = await page.evaluate((k) => {
+    const h = window.__h
+    const over = h.panes.right.page(k)?.querySelector('.axt-over')
+    const el = h.panes.pageElement('right', k)
+    const r = el?.getBoundingClientRect()
+    const at = (x, y) => {
+      const q = h.panes.boxOf('right', k, [x, y, x, y])
+      return [r.left + el.clientLeft + q.left, r.top + el.clientTop + q.top]
+    }
+    const spans = [...(over?.querySelectorAll('.textLayer span') ?? [])]
+    const out = []
+    for (const m of h.composer.laid(k)?.members ?? []) {
+      if (m.state !== 'laid') continue
+      const g = over?.querySelector(`g[data-axt-ord="${m.ord}"]`)
+      const gr = g?.getBoundingClientRect()
+      for (const [y, x0, x1, items] of m.lines)
+        items.forEach((it, i) => {
+          if (!it.dir || !it.s?.trim()) return
+          const [ux, uy] = it.dir
+          // (its span: of those holding its text, one over its drawing where any is: a figure's words repeat, the attention
+          // pictures' rows the same words)
+          const onIt = (x) => {
+            const sr = x.getBoundingClientRect()
+            return !!gr && sr.left < gr.right && gr.left < sr.right && sr.top < gr.bottom && gr.top < sr.bottom
+          }
+          const same = spans.filter((x) => x.textContent?.trim() === it.s.trim())
+          const span = same.find(onIt) ?? same[0]
+          const tr = span ? getComputedStyle(span).transform : ''
+          const mt = /matrix\(([^)]+)\)/.exec(tr)?.[1].split(',').map(Number) ?? [1, 0, 0, 1]
+          const meets = !!span && onIt(span)
+          // (a drag along its run, a tenth in from each end, half way across its band)
+          const s0 = it.x - x0,
+            s1 = (items[i + 1]?.x ?? x1) - x0
+          const P = (s) => at(x0 + ux * s - uy * 0.35 * it.size, y + uy * s + ux * 0.35 * it.size)
+          out.push({
+            ord: m.ord,
+            s: it.s,
+            drawn: /rotate\(/.test(g?.querySelector('text')?.getAttribute('transform') ?? ''),
+            span: !!span,
+            turned: Math.abs(mt[1]) > 1e-3 || Math.abs(mt[2]) > 1e-3,
+            meets,
+            from: P(s0 + 0.1 * (s1 - s0)),
+            to: P(s1 - 0.1 * (s1 - s0)),
+          })
+        })
+    }
+    return out
+  }, n)
+  let dragged = 0
+  for (const t of runs.slice(0, 8)) {
+    await page.evaluate(() => getSelection()?.removeAllRanges())
+    await page.mouse.move(...t.from)
+    await page.mouse.down()
+    await page.mouse.move(...t.to, { steps: 6 })
+    await page.mouse.up()
+    const got = (await page.evaluate(() => String(getSelection() ?? ''))).replace(/\s+/g, '')
+    if (got && t.s.replace(/\s+/g, '').includes(got) && got.length * 2 >= [...t.s.trim()].length) dragged++
+    else failures.push(`p${n} ord ${t.ord}: a drag along "${t.s}" selected "${got.slice(0, 40)}"`)
+  }
+  await page.evaluate(() => getSelection()?.removeAllRanges())
+  if (TURNED.has(n) && runs.length !== TURNED.get(n))
+    failures.push(`p${n}: ${runs.length} turned runs laid, ${TURNED.get(n)} expected (--turned)`)
+  for (const t of runs)
+    if (!(t.drawn && t.span && t.turned && t.meets))
+      failures.push(`p${n} ord ${t.ord} "${t.s}": drawn turned ${t.drawn}, span ${t.span}, turned ${t.turned}, over it ${t.meets}`)
+  const line = {
+    page: n,
+    members: ords.length,
+    hovers,
+    lit,
+    links: given.length,
+    anchors: anchors.length,
+    inner: inner.length,
+    followed,
+    turned: runs.length,
+    turnedOk: runs.filter((t) => t.drawn && t.span && t.turned && t.meets).length,
+    dragged,
+  }
   report.push(line)
   console.log(JSON.stringify(line))
 }

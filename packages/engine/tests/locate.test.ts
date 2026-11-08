@@ -814,6 +814,72 @@ describe('review of #605', () => {
         .map((x) => x.ord),
     ).toEqual([0, 1])
   })
+  it('states a turned figure text’s run and its room along it (S.figures draws its translation at its angle)', () => {
+    // (1706.03762v7 p13's attention words, each set a quarter turned: today's figure reading gives the run's first glyph's origin,
+    // its box's length along its direction and its room before and after; the part states them, its line its box on the page)
+    const withTurned = () => {
+      const d = docOf([{ lines: ['a caption under it'] }])
+      d.pages[0]!.turned = [...'Loss'].map(
+        (u, j): DocTurned => ({
+          u,
+          code: u.codePointAt(0) as number,
+          base: 'CMR10',
+          n: 1,
+          k: j,
+          at: 18,
+          box: -1,
+          ox: 60,
+          oy: 400 + 6 * j,
+          ex: 60,
+          ey: 406 + 6 * j,
+          ux: 0,
+          uy: 1,
+          size: 10,
+          ascent: 0.7,
+          descent: -0.2,
+          form: false,
+        }),
+      )
+      return d
+    }
+    const B = withTurned()
+    const A = withTurned()
+    const figure = { set: 0, dir: [0, 1] as [number, number], x: 60, y: 400, length: 24, anchor: 'start' as const }
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Loss', { figure: { ...figure, before: 5, after: 30 }, align: 'l' }),
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const L = locate(ins, A, align(B, A))
+    const fig = L.members[1]!
+    expect(fig.dir).toEqual([0, 1])
+    // (its run: the origin and length along (0, 1) and its room before and after along it. Room.side keeps its meaning, the side
+    // of its box across the page, as for a turned text of a part made before: an older typesetter reads the same fields alike)
+    expect(fig.run).toEqual([60, 400, 24, 5, 30])
+    const plain = locate(
+      { ...ins, units: [units[0]!, unitOf('inkfigures', 'Loss', { figure: { set: 0, dir: [0, 1] }, align: 'l' })] },
+      A,
+      align(B, A),
+    ).members[1]!
+    expect(plain.room).toEqual(fig.room)
+    const addOn = {
+      ...addOnOf(L, 1),
+      groups: new Set([...L.groups[0]!.glyphs, ...L.groups[0]!.turned].filter((g): g is string => g !== null)),
+    }
+    const objs = [
+      ...bundle({ ins, located: L, addOn, original, paper: { id: '2501.00001', version: 1, pages: 1 }, made: 't' }),
+    ]
+    const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
+    const placed = read('part', part.bytes).flows.flat()[1]!
+    expect(placed).toMatchObject({ dir: [0, 1], run: [60, 400, 24, 5, 30], room: fig.room, align: 'l' })
+    // (one today's reading tells no room of states no run: S.figures leaves such a turned text the original's)
+    expect(plain.run).toBeUndefined()
+  })
   it('says a figure text whose ink stays is unwrapped: no group of it, so no translation is laid over it (#631 review)', () => {
     // (today's figure reading leaves a crowded label's ink where it stands (ink.ts: `fixed`, no group made of it); the part states
     // why, as for a member whose group the wrap did not make. A kept block holds no text a translation could stand for: as before)

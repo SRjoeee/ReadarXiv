@@ -11,8 +11,8 @@
 // member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: lit
 // whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
-// fits; a turned one, which design-a's Item cannot draw, the original's), one of a part that states no text of its own
-// (Placed.plain: a part made before) read as before. A CJK cell's bands are read over the rules its Room.band states.
+// fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
+// made before) read as before. A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -539,7 +539,8 @@ const boxOfA = (l: Placed['lines'][number]): [number, number, number, number] =>
   const k = inkOfLine(l)
   return [k[1], k[2], k[3], k[4]]
 }
-/** a name's drawn line as a box: its runs across, each run's band at its size (D.sentences' tokenBand: a CJK run's em box) */
+/** a name's or a figure text's drawn line as a box: its runs across, each run's band at its size (D.sentences' tokenBand: a CJK
+ *  run's em box); a turned line's (its items' `dir`) the page box of that band turned about its origin */
 const nameBox = ([y, x0, x1, items]: Laid['lines'][number]): [number, number, number, number] => {
   let bottom = y,
     top = y
@@ -549,5 +550,11 @@ const nameBox = ([y, x0, x1, items]: Laid['lines'][number]): [number, number, nu
     bottom = Math.min(bottom, b.bottom)
     top = Math.max(top, b.top)
   }
-  return [x0, bottom, x1, top]
+  const dir = items[0] && 'dir' in items[0] ? items[0].dir : undefined
+  if (!dir) return [x0, bottom, x1, top]
+  const [ux, uy] = dir
+  const pts = [0, x1 - x0].flatMap((s) => [bottom - y, top - y].map((t) => [x0 + ux * s - uy * t, y + uy * s + ux * t]))
+  const xs = pts.map((p) => p[0]!),
+    ys = pts.map((p) => p[1]!)
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
 }

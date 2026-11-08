@@ -174,9 +174,10 @@ export const Label = z.object({
   num: z.tuple([z.string(), Ink]).optional(),
   punct: z.tuple([z.string(), Ink]).optional(),
 })
-/** the room about a placement: below its last line, to the next ink under it, beside its lines (a figure text's: the free line
- *  along its run today's figure reading gives it), a cell's clear band; `under` a figure text's depth under its baseline of the
- *  nearest stroke under its text (S.figures: a translation that reaches it is crowded) */
+/** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
+ *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
+ *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
+ *  crowded) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -211,7 +212,12 @@ export const Placed = z.object({
   cuts: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
   plain: z.string().optional(),
+  // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
+  // origin, its box's length along `dir` and its room before and after its box along it (its lines are its box on the page,
+  // which tells none of them). A field of its own, the fields a typesetter of before reads keeping their meaning: that one
+  // leaves a turned figure text the original's or reads it as it did, and FORMAT stays (design-a §1.6, "a changed meaning")
   dir: z.tuple([num, num]).optional(),
+  run: z.tuple([num, num, num, num, num]).optional(),
   // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
   title: flag.optional(),
   front: flag.optional(),

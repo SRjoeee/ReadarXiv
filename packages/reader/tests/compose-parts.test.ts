@@ -419,6 +419,39 @@ describe('the laid text layer (§11.11)', () => {
       expect(strsOf(r)).toEqual(['Head', 'Geist', 'Foot'])
       expect(r.dropped).toBe(1)
     })
+    it('places a turned translation turned along its run, so that it is selected and copied as it is drawn (a figure word)', () => {
+      // (the attention word "spirit" turned a quarter, its translation laid along (0, 1) from (171, 632): its runs one after
+      // another along it, each one's place along it from the line's x0; a raise is not the layer's, as a level run's is not)
+      const m = { ...placed(1, []), lines: [[1, 0, 167, 176, 632, 648, 631, 167, 176, 0]] } as unknown as Placed
+      const content = contentOf([
+        item('Head', 50, 760, 30),
+        OC,
+        { ...item('spirit', 175, 632, 16), transform: [0, 8, -8, 0, 175, 632] },
+        EMC,
+        item('Foot', 50, 100, 20),
+      ])
+      const turned: Laid = laid(1, [
+        [
+          632,
+          171,
+          195,
+          [
+            { s: 'Ge', x: 171, face: 'sans', size: 8, dir: [0, 1] },
+            { s: 'KI', x: 187, face: 'sans', size: 8, dir: [0, 1], rise: 2 },
+          ],
+        ],
+      ])
+      const r = laidText(content, pageOf({ ...turned, off: 1 }), new Map([[1, m]]), facesStub, measure)
+      expect(strsOf(r)).toEqual(['Head', 'Ge', 'KI', 'Foot'])
+      const at = (s: string) =>
+        (r.content.items as { str?: string; transform?: number[]; width?: number }[]).find((x) => x.str === s)!
+      // (its own direction in its matrix: PDF.js's text layer turns the span by it; its width its advance along the run)
+      expect(at('Ge').transform).toEqual([0, 8, -8, 0, 171, 632])
+      expect(at('Ge').width).toBe(8)
+      // (16 along the run from the origin)
+      expect(at('KI').transform).toEqual([0, 8, -8, 0, 171, 648])
+      expect(r.translated).toHaveLength(2)
+    })
     it("gives a run split evenly between a unit's element and its line to the element, whole: never split", () => {
       // (2406.06525v1 p. 1: a mark "2∗", "2" on the element's ink, "∗" above it on the line alone; the unit keeps its elements)
       const m = placed(1, [[700, 50, 300]], [['e1', [1, 150, 699, 155, 706, 700]]])
@@ -722,6 +755,51 @@ describe('the page drawn (svgOf)', () => {
       { classOf: () => 'f' } as unknown as Faces,
     )
     expect([...svg.querySelectorAll('tspan')].map((t) => t.getAttribute('y'))).toEqual(['92', '88.4'])
+  })
+  it('draws a turned line at its angle about its origin, its runs along it from there (a figure text the original sets turned)', () => {
+    const line = (dir: [number, number]) =>
+      ({
+        page: 1,
+        wait: { rows: [], faces: [] },
+        links: [],
+        members: [
+          {
+            ord: 3,
+            page: 1,
+            state: 'laid',
+            off: 1,
+            lines: [
+              [
+                400,
+                150,
+                178,
+                [
+                  { s: 'Ve', x: 150, face: 'f', size: 8, dir },
+                  { s: 'L', x: 166, face: 'f', size: 8, dir, rise: 2, dx: [0, 3] },
+                ],
+              ],
+            ],
+            lit: { left: [], right: [], own: [] },
+          },
+        ],
+      }) as unknown as Page
+    const draw = (dir: [number, number]) =>
+      svgOf(line(dir), { viewBox: [0, 0, 612, 792], rotation: 0 } as never, { classOf: () => 'f' } as unknown as Faces)
+    // (a quarter turn, the page's up: one <text> at its origin (150, 400) turned by -90 in the SVG's y-down frame; its runs at
+    // their distance along it, a raise above its baseline)
+    const svg = draw([0, 1])
+    const texts = [...svg.querySelectorAll('text')]
+    expect(texts).toHaveLength(1)
+    expect(texts[0]!.getAttribute('transform')).toBe('translate(150 392) rotate(-90)')
+    const spans = [...svg.querySelectorAll('tspan')]
+    expect(spans.map((t) => [t.getAttribute('x'), t.getAttribute('y')])).toEqual([
+      ['0', '0'],
+      ['16 19', '-2'],
+    ])
+    // (any angle: 30 degrees up)
+    const c = Math.cos(Math.PI / 6),
+      sn = Math.sin(Math.PI / 6)
+    expect(draw([c, sn]).querySelector('text')!.getAttribute('transform')).toBe('translate(150 392) rotate(-30)')
   })
 })
 

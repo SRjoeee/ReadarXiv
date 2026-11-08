@@ -394,17 +394,14 @@ export function factsOf({
     if (side) mem.room.side = side
     // (a figure text's room as today's figure reading tells it (layout/figure-text.mjs roomOf, its set's cut): along a level run,
     // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching
-    // it is crowded by. A turned one's room is along its run, no side of a line's)
+    // it is crowded by. A turned one's is stated with its run (Placed.run: its first glyph's origin, its box's length along its
+    // direction, its room before and after along it; its line is its box on the page, which tells none of them), its side the
+    // side of its box as before: a new name for the new fact, so that a typesetter of before reads the fields it knows alike)
     const fig = unit?.figure
-    if (
-      fig &&
-      !fig.dir &&
-      fig.x !== undefined &&
-      fig.length !== undefined &&
-      fig.before !== undefined &&
-      fig.after !== undefined
-    )
-      mem.room.side = [r2(fig.x - fig.before), r2(fig.x + fig.length + fig.after)]
+    if (fig && fig.x !== undefined && fig.length !== undefined && fig.before !== undefined && fig.after !== undefined) {
+      if (!fig.dir) mem.room.side = [r2(fig.x - fig.before), r2(fig.x + fig.length + fig.after)]
+      else if (fig.y !== undefined) mem.run = [r2(fig.x), r2(fig.y), r2(fig.length), r2(fig.before), r2(fig.after)]
+    }
     if (fig?.under !== undefined) mem.room.under = r2(fig.under)
     if (unit?.cell) {
       // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a
