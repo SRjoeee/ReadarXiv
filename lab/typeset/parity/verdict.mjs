@@ -71,7 +71,7 @@ export const SAYS = {
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
-  highlight: "the units today highlights: v2 without sentence boxes there; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
+  highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
 }
 
@@ -85,7 +85,9 @@ export const SAYS = {
 export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
-  const error = rec.error ?? (!rec.today ? "today's side not drawn" : !rec.v2 ? "v2's side not drawn" : rec.today.error ? `today's page not laid: ${rec.today.error}` : null)
+  const error =
+    rec.error ??
+    (!rec.today ? "today's side not drawn" : !rec.v2 ? "v2's side not drawn" : rec.today.error ? `today's page not laid: ${rec.today.error}` : rec.today.lit.length && !rec.today.litBoxes ? "today's sentence boxes not read (a drawing of before they were)" : null)
   if (error) {
     out.error = error
     return out
@@ -400,19 +402,44 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   // Each side's links as its layout gave them kept beside, for diagnosis)
   const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
-  // (the highlight is a feature of today's for the units today highlights: there v2 must have its sentence boxes too, judged
-  // against today's. Elsewhere v2 is judged only on not drawing a wrong one: on a unit today draws without boxes (a figure
-  // text both translate among them, matched by its original's box), none is equal, boxes that cover it better; on a unit only
-  // v2 translates, none or covering boxes pass. Boxes that do not cover it are v2's fault and worse: they must cover its drawn
-  // lines on the right and its original's lines on arXiv's page on the left, every edge within a point)
-  const litT = new Set(rec.today.lit.map((id) => `t${id}`)),
-    litV = new Set(rec.v2.lit.map(keyOfPart))
+  // (the highlight is a feature of today's for the units today highlights: there each side's sentence boxes are judged by the
+  // lines they leave uncovered, its drawn lines on the right and its original's lines on arXiv's page on the left, and v2 is
+  // worse where it leaves more of them than today does (today's own misses are not held against v2), nearer where fewer.
+  // Elsewhere v2 is judged only on not drawing a wrong one: on a unit today draws without boxes (a figure text both translate
+  // among them, matched by its original's box), none is equal, boxes that cover it better; on a unit only v2 translates, none
+  // or covering boxes pass. Boxes that do not cover it are v2's fault and worse. Covering, everywhere: a line's box within the
+  // boxes' union, every edge within a point)
+  const litT = new Set(rec.today.lit.map((id) => `t${id}`))
   const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
+  const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
+  /** how many of a unit's drawn lines (`ls`) and original lines (`left`) a side's boxes (`rb` right, `lb` left) leave uncovered */
+  const missOf = (ls, left, rb, lb) => ({ r: ls.map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
+  const says = (m) => `${m.r} of ${m.of} drawn, ${m.l} of ${m.ofL} original lines not covered`
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
-  const noV = todays.filter((k) => !litV.has(k)).length
-  judge('highlight', null, 'units today highlights and v2 draws, with no sentence boxes', 0, { value: `boxes on ${todays.length} of ${todays.length}`, d: 0 }, { value: `boxes on ${todays.length - noV} of ${todays.length}`, d: noV }, 0.5)
-  const hl = { todays: todays.length, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
+  const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
+  for (const key of todays) {
+    const ord = ordOfKey.get(key)
+    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    const left = origBoxes(ord)
+    const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
+    const vb = laidV2.get(ord)?.lit ?? { left: [], right: [] }
+    const t = missOf(T.get(key), left, tb.right, tb.left),
+      v = missOf(V.get(key), left, vb.right.flat(), vb.left.flat())
+    const dt = t.r + t.l,
+      dv = v.r + v.l
+    if (dt) {
+      hl.todayMissed++
+      fault('today', 'highlight', `${name}: ${says(t)}`)
+    }
+    if (dv) {
+      hl.v2Missed++
+      fault('v2', 'highlight', `${name}: ${says(v)}`)
+    }
+    if (dv !== dt)
+      diff('highlight', name, "lines its sentence boxes leave uncovered: its drawn lines (right), its original's (left)", 0, { value: says(t), off: dt }, { value: says(v), off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
+  }
   for (const [key, ls] of V) {
     const ord = ordOfKey.get(key)
     const fig = figBoth.get(ord)
@@ -425,12 +452,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     const rb = lit.right.flat(),
       lb = lit.left.flat()
     if (!rb.length && !lb.length) continue
-    const right = ls.map(band),
-      left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
-    const r = right.filter((b) => !covered(b, rb)).length,
-      lf = left.filter((b) => !covered(b, lb)).length
+    const m = missOf(ls, origBoxes(ord), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    if (!r && !lf) {
+    if (!m.r && !m.l) {
       if (both) {
         hl.better++
         diff('highlight', name, "sentence boxes over its drawn lines (right) and its original's (left) where today draws none", 'covered', { value: 'none', off: 1 }, { value: 'covered', off: 0 }, false, 'v2')
@@ -438,8 +462,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
       continue
     }
     hl.wrong++
-    fault('v2', 'highlight', `${name}: ${r} of ${right.length} drawn lines, ${lf} of ${left.length} original lines outside its sentence boxes`)
-    diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: `${r} of ${right.length} drawn, ${lf} of ${left.length} original lines not covered`, off: null }, true, 'today')
+    fault('v2', 'highlight', `${name}: ${m.r} of ${m.of} drawn lines, ${m.l} of ${m.ofL} original lines outside its sentence boxes`)
+    diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: says(m), off: null }, true, 'today')
   }
   const dk = px.darkness
   const ref = dk?.originalText?.mean ?? dk?.original?.mean ?? null

@@ -14,7 +14,7 @@ const N = 3
 const rec = (o: { today?: object; v2?: object; original?: number } = {}) => ({
   page: N,
   original: { links: o.original ?? 0 },
-  today: { units: [], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], ...o.today },
+  today: { units: [], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {}, ...o.today },
   v2: { committed: true, units: [], crops: [], links: 0, linksDrawn: 0, lit: [], ...o.v2 },
   px: {},
 })
@@ -60,6 +60,8 @@ describe('a page measured from what each side drew', () => {
   })
   it('a page either side did not draw is an error, not a page judged', () => {
     expect(measure(v2Of(), { ...rec(), error: 'screenshot failed' } as never).error).toBe('screenshot failed')
+    // (a drawing of before today's sentence boxes were read: today's highlight cannot be judged on its cover)
+    expect(measure(v2Of(), rec({ today: { lit: [7], litBoxes: undefined } })).error).toMatch(/sentence boxes not read/)
     expect(measure(v2Of(), rec({ today: { error: 'lay threw' } })).error).toBe("today's page not laid: lay threw")
     const { v2: _gone, ...noV2 } = rec()
     expect(measure(v2Of(), noV2 as never).error).toBe("v2's side not drawn")
@@ -114,10 +116,12 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
   describe('a unit both sides draw', () => {
     const v2 = (lit: object = {}) =>
       v2Of({ members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }], facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 400)] }], today: { 11: { today: 7 } } })
-    const page = (todayLit: number[], v2Lit: number[]) => rec({ today: { units: [{ id: 7, lines: [line(400)] }], lit: todayLit }, v2: { units: [{ id: 11, lines: [line(400)] }], lit: v2Lit } })
+    // (today's sentence boxes as its page painted them, by its unit: render.mjs reads them off today's own shapes)
+    const todayBoxes = { 7: { right: [[71, 397, 301, 409]], left: [[71, 397, 301, 409]] } }
+    const page = (todayLit: number[], v2Lit: number[]) => rec({ today: { units: [{ id: 7, lines: [line(400)] }], lit: todayLit, litBoxes: todayBoxes }, v2: { units: [{ id: 11, lines: [line(400)] }], lit: v2Lit } })
     const its = { right: [[[71, 397, 301, 409]]], left: [[[71, 397, 301, 409]]] }
     it('today highlights it, v2 does not: worse (the highlight is a feature of today\'s there)', () => {
-      expect(highlights(measure(v2(), page([7], [])))).toMatchObject([{ unit: null, worse: true }])
+      expect(highlights(measure(v2(), page([7], [])))).toMatchObject([{ unit: 't7 para', worse: true }])
       expect(highlights(measure(v2(its), page([7], [11])))).toEqual([])
     })
     it('today does not highlight it: v2 none is equal, v2 covering it better, v2 missing it worse', () => {
@@ -125,6 +129,41 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(measure(v2(its), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: false, nearer: 'v2' }])
       expect(highlights(measure(v2({ right: [[[71, 397, 150, 409]]], left: its.left }), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: true }])
     })
+  })
+})
+
+describe("a unit both sides draw that today highlights: judged on the lines each side's sentence boxes leave uncovered", () => {
+  // (1810.04805 p8 t140's geometry: 13 drawn lines at 10.91 pt on 72–290.3, five of them reaching 295.7 and the fourth ending
+  // at 126.5, a crop's ink past the text; v2's one sentence's boxes end at 290.3 and 121.1, so 6 of the 13 drawn lines stand
+  // past them; its 18 original lines on A, which v2's boxes cover on the left)
+  const ys = [523.5, 505.1, 486.6, 468.2, 438.2, 419.8, 401.4, 383, 364.5, 346.1, 327.7, 309.2, 290.8]
+  const ends = [290.3, 290.3, 290.2, 126.5, 295.7, 272, 290.3, 295.7, 290.3, 295.7, 290.3, 290.3, 295.6]
+  const boxEnds = [290.3, 290.3, 290.3, 121.1, 290.3, 266.6, 290.3, 290.3, 290.3, 290.3, 290.3, 290.3, 290.2]
+  const drawn = ys.map((y, i) => drawnLine(72, ends[i], y, 'x'.repeat(20), 10.91))
+  const orig = Array.from({ length: 18 }, (_, i) => factLine(72, 290, 700 - 12 * i, 10))
+  const leftAll = [[71, 480, 291, 710]]
+  const box = (x1: number, y: number) => [72, y - 1.3, x1, y + 9.6]
+  const v2Boxes = (x1s: number[]) => ({ right: [ys.map((y, i) => box(x1s[i]!, y))], left: [leftAll] })
+  const v2 = (lit: object) =>
+    v2Of({ members: [{ ord: 140, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }], facts: [{ ord: 140, kind: 'para', align: 'j', style: { size: 10 }, lines: orig }], today: { 140: { today: 140 } } })
+  const page = (f: ReturnType<typeof v2Of>, todayRight: number[][]) =>
+    measure(f, rec({ today: { units: [{ id: 140, lines: drawn }], lit: [140], litBoxes: { 140: { right: todayRight, left: leftAll } } }, v2: { units: [{ id: 140, lines: drawn }], lit: [140] } }))
+  const highlights = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'highlight')
+  const todayCovers = ys.map((y, i) => box(ends[i]! + 2.25, y))
+
+  it('v2 leaving 6 of 13 drawn lines uncovered where today covers them all is worse', () => {
+    expect(highlights(page(v2(v2Boxes(boxEnds)), todayCovers))).toMatchObject([
+      { unit: 't140 para', worse: true, v2: { value: '6 of 13 drawn, 0 of 18 original lines not covered' }, today: { value: '0 of 13 drawn, 0 of 18 original lines not covered' } },
+    ])
+  })
+  it("today's own misses are not held against v2: as many lines uncovered on each side is no difference", () => {
+    expect(highlights(page(v2(v2Boxes(boxEnds)), ys.map((y, i) => box(boxEnds[i]!, y))))).toEqual([])
+  })
+  it('v2 covering lines today leaves uncovered is nearer, never worse', () => {
+    expect(highlights(page(v2(v2Boxes(ends.map((x) => x + 2.25))), ys.map((y, i) => box(boxEnds[i]!, y))))).toMatchObject([{ unit: 't140 para', worse: false, nearer: 'v2' }])
+  })
+  it('v2 with no sentence boxes leaves every line uncovered: worse', () => {
+    expect(highlights(page(v2({}), todayCovers))).toMatchObject([{ unit: 't140 para', worse: true, v2: { value: '13 of 13 drawn, 18 of 18 original lines not covered' } }])
   })
 })
 

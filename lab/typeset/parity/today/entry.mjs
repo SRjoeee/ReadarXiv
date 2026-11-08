@@ -21,6 +21,7 @@ import { indexOf, readHead, readPart, readUnitsChunk } from '@today/layer-proto/
 import { openLayer, PDF_OPTIONS } from '@today/layer-proto/reader.mjs'
 import { pagesOf } from '@today/layout/delta-wire.mjs'
 import { linkLayer } from '@today/view/links.mjs'
+import { createShapes, layerShapes } from '@today/view/shapes.mjs'
 import { applyLayerText } from '@today/view/text-rendering.mjs'
 import { linesOfSvg } from '../measure-dom.mjs'
 
@@ -28,6 +29,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 const ASSETS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 /** the door's scale (reader.mjs SCALE): its SVG's user units a PDF unit, its audit's device pixels a PDF unit (dpr 1) */
 const DOOR = 2.5
+/** the highlight's pad beside a run's block, CSS px (view/lighting.mjs PAD), a point's share of it at the page's scale */
+const PAD = 3
 const bytes = async (url) => {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`${url}: ${r.status}`)
@@ -44,7 +47,10 @@ let layer = null,
   doc = null,
   orig = null,
   target = null,
-  head = null
+  head = null,
+  /** today's highlight shapes of the two panes, made as the reading view makes them (view/layer-side.mjs catchUp) */
+  hlLeft = null,
+  hlRight = null
 const faceSources = faceSourcesOf(INDEX, groupsAt(tableUrlsOf(INDEX)))
 const stage = () => document.getElementById('stage')
 /** a page view's box at a viewport: its CSS px, whole (PDF.js floors them to a multiple of its pixel fraction's denominator, 1
@@ -84,6 +90,11 @@ window.today = {
       leftPart: (_page, ref) => obj(ref),
       onRetired: () => {},
     })
+    // (the highlight's shapes as the reading view makes them: the left's of the parts and each page's left part, the right's of
+    // each laid page's words: view/layer-side.mjs catchUp, leftFor, rLay)
+    hlLeft = createShapes({ kindOf: (id) => index.kinds[id] ?? undefined, warn: () => {} })
+    hlRight = layerShapes(hlLeft)
+    hlLeft.addParts(parts)
     const rows = await (await fetch(desc.rows)).json()
     layer.take(rows)
     layer.end()
@@ -122,7 +133,7 @@ window.today = {
     // (a page the layer draws nothing of its own on shows arXiv's page: layer-side commit's shownOriginal)
     if (laid.hides === 0) {
       await window.today.original(n, scale)
-      return { page: n, committed: true, shownOriginal: true, view, hides: 0, units: [], figures: [], names: [], crops: [], recs: [], links: 0, linksDrawn: 0, lit: [], original: laid.words.original }
+      return { page: n, committed: true, shownOriginal: true, view, hides: 0, units: [], figures: [], names: [], crops: [], recs: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {}, original: laid.words.original }
     }
     const dpr = window.devicePixelRatio
     const k = scale * dpr
@@ -164,6 +175,19 @@ window.today = {
     const names = linesOfSvg(laid.svg, 'data-n', view, k2)
     const recs = (run?.stats ?? []).filter((r) => (r.pages ?? []).includes(n)).map((r) => ({ id: r.id, s: r.s ?? null, lead: r.lead ?? null }))
     const spans = laid.words.spans.filter(([, ranges]) => ranges.some((v, i) => i % 2 === 1 && v > 0)).map(([id]) => id)
+    // (each unit's sentence boxes on both panes, PDF units [x0, y0, x1, y1] y up, the right's on our page, the left's on arXiv's:
+    // its runs' blocks there, as the reading view paints a unit lit whole (view/lighting.mjs paint: shapes.block, padded PAD);
+    // lit by sentence, its sentences' shapes tile each run's rows between the block's edges (highlight.mjs shapeOf), so the
+    // lines its runs hold are covered by both alike)
+    if (!hlLeft.has(n)) hlLeft.addPage(await layer.leftPageOf(n))
+    hlRight.lay(n, laid.words)
+    const boxesOf = (side, id) =>
+      side.shapes
+        .runs(id)
+        .filter((r) => r.page === n)
+        .map((r) => side.shapes.block(r, PAD / scale))
+        .map((b) => [b.x0, b.y0, b.x1, b.y1])
+    const litBoxes = Object.fromEntries(spans.map((id) => [id, { right: boxesOf(hlRight, id), left: boxesOf(hlLeft, id) }]))
     return {
       page: n,
       committed: true,
@@ -177,6 +201,7 @@ window.today = {
       links: laid.links.length,
       linksDrawn: links ? links.querySelectorAll('a').length : 0,
       lit: spans,
+      litBoxes,
       original: laid.words.original,
     }
   },
@@ -186,6 +211,8 @@ window.today = {
     return true
   },
   dispose() {
+    hlRight?.dispose()
+    hlLeft = hlRight = null
     layer?.dispose()
     layer = null
     // (the composed document is the layer's to let go; arXiv's own is ours)
