@@ -65,6 +65,9 @@ export type Rules = Readonly<{
   set: RuleParams
   /** the float labels and babel's names in the target (A5) */
   labels: Readonly<Record<string, string>>
+  /** a theorem-like head's names in the target (translator's dictionaries, ctex's: the rule set's heads.ts, from
+   *  rules/tex-names.json), English → the target's; empty where its packages name none, null for a target the file names not */
+  heads: Readonly<Record<string, string>> | null
   /** the languages whose hyphenation patterns it reads: English's for every Latin word, the target's own Latin and Cyrillic */
   patterns: readonly string[]
   /** each of those languages' patterns, as the host loaded them (hyph.ts hyphenationOf); a language absent has none */

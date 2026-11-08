@@ -2,8 +2,10 @@
 // fields beneath its own) and the reader's choices. Ported from engine 065c1d973 rules/layout.mjs resolveRules
 // (layout.mjs:346-372) and rules/script.mjs scriptOf: the script's fields with the language's over them, field by field (an
 // object field replaced whole, never merged), `cjk` from the script, babel's hyphenation minimums; the patterns to read:
-// English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`.
+// English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`;
+// the target's head names (data/rules/heads.ts, today's rules/tex-names.json heads that tex-names.mjs headName reads).
 // Each call answers fresh objects: a caller may change its own.
+import { HEADS } from './data/rules/heads.ts'
 import { HYPHENATION, LANGUAGES, SCRIPTS, VERSION } from './data/rules/index.ts'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { Choices, Lang, RuleParams, Rules, Script } from './types.ts'
@@ -92,6 +94,7 @@ export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Rec
     script: r.script as Script,
     set: r.params,
     labels: r.labels,
+    heads: Object.hasOwn(HEADS, target) ? { ...HEADS[target] } : null,
     patterns: r.patterns,
     hyph,
     cjkFaces: r.cjkFaces,

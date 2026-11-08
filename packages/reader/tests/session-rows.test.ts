@@ -37,6 +37,13 @@ describe('the rows made here', () => {
     expect(anchorOf(UNITS, new Set(), 1, 4)).toBe(0)
     expect(at(ranked(UNITS, new Set(), 0))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
   })
+  it("asks the paper's own names first, so that the first page laid has its heads' words (PDF-READER §19.14, today's namesFirst)", () => {
+    // (the bundle holds them after the source's units: asked by their distance, they came last, and every page laid before
+    // their rows kept its theorem heads English in a target whose packages name none, ja)
+    const units = [...UNITS.slice(0, 8), u(8, 'name', 'Theorem'), u(9, 'name', 'Definition')]
+    const near = new Set([units[2]?.id as string])
+    expect(ranked(units, near, 2).map((x) => units.indexOf(x))).toEqual([8, 9, 2, 3, 1, 4, 5, 0, 6, 7])
+  })
   it("gives the paper's title and its abstract, cut at a word, as the context", () => {
     const long = `${'word '.repeat(400)}end`
     const units = [u(0, 'heading', 'Title'), u(1, 'abstract', 'First part.'), u(2, 'abstract', long), u(3)]

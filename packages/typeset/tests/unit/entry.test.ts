@@ -466,6 +466,54 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
 })
 
+describe('a theorem-like head in the target, laid as the reader lays a page (PDF-READER §19.14: no options)', () => {
+  // (today's headOf: translator's or ctex's word for the head (the rule set's heads), else the paper's own name unit's
+  // translation (its row, through the part's paper.names); triage-1 S4: the reader called layPage with neither, every head
+  // English. Its number and punctuation the original's)
+  const idName = 'n'.repeat(64)
+  const theorem = member({
+    kind: 'theorem',
+    label: {
+      kind: 'head',
+      ink: [1, 72, 698, 130, 707, 700],
+      style: { role: 'serif', size: 10, bold: 1 },
+      name: ['Theorem', [1, 72, 698, 110, 707, 700]],
+      num: ['1.1', [1, 112, 698, 126, 707, 700]],
+      punct: ['.', [1, 126, 698, 130, 707, 700]],
+    },
+    lines: [
+      [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+    ],
+  })
+  const headOf = (to: string, names: Part['paper']['names'], list: Row[]) => {
+    const pt: Part = { ...part(theorem), paper: { ...part(theorem).paper, ...(names ? { names } : {}) } }
+    const p = layPage(pt, rowsOf([row([{ t: 'text', s: 'x' }]), ...list], true), rulesFor(to), metrics())
+    const m = p.members[0]!
+    return [
+      m.state,
+      m.off & 4,
+      m.lines[0]?.[3]
+        .map((it) => it.s)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ]
+  }
+  const nameRow = (s: string): Row => ({ id: idName, ok: true, by: 'test', content: [{ t: 'text', s }] })
+  // (the head's word: U+5B9A U+7406, "theorem" in both targets)
+  const word = '\u5b9a\u7406'
+  it("relabels it in zh by ctex's word, its number and stop kept", () => {
+    expect(headOf('zh', undefined, [])).toEqual(['laid', 4, `${word} 1.1. x`])
+  })
+  it("relabels it in ja, whose packages name no head, by the paper's own name unit's row", () => {
+    // (the row's own full stop dropped, as today's nameOfRow)
+    expect(headOf('ja', [['Theorem', idName]], [nameRow(`${word}\u3002`)])).toEqual(['laid', 4, `${word} 1.1. x`])
+    // (no row of the name unit: the head the original's, the member laid after it)
+    expect(headOf('ja', [['Theorem', idName]], [])).toEqual(['laid', 0, 'x'])
+  })
+})
+
 describe('a row’s pieces from the member’s facts (rowPieces): each test a rule makes of a source answers as on the source', () => {
   it('makes a glue, a declaration, a forced break, a citation’s note, an identity and a group of what El and SpanAt state', () => {
     expect(srcOfEl('3', { kind: 'space', ink: [], glue: [1 / 6, 'em'] })).toBe('\\kern 0.16666666666666666em')
