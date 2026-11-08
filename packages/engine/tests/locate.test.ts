@@ -317,6 +317,149 @@ describe('locate', () => {
   })
 })
 
+describe('locate: a line’s measure is TeX’s text frame (Instrument.tex.frames), never a hull of the page’s ink', () => {
+  // (a title page: too few paragraph lines for a column of them, and arXiv's stamp, ink no compile of the source sets, turned up
+  // the left margin at x 24: today's hull of the page's members took it in, 2610.40645v1 p1 and 2610.10069v1 p1)
+  const withFrames = (ins: Instrument, frames: NonNullable<Instrument['tex']['frames']>): Instrument => ({
+    ...ins,
+    tex: { ...ins.tex, frames },
+  })
+  const stamp = { text: 'arXiv:2610.00000v1', x: 24, y: 400 }
+  it('measures a one-column page’s line by the text block and reads a name centred on the block’s middle', () => {
+    const lines = [
+      { text: 'Abstract', x: 282, y: 690 },
+      { text: 'x'.repeat(78), x: 72, y: 650 },
+      { text: 'a shorter last line.', x: 72, y: 638 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('heading', 'Abstract'), unitOf('para', `${'x'.repeat(78)} a shorter last line.`)]
+    const ins = withFrames(instrumentOf(B, units, [[0, 1, 1]]), [{ block: [72, 540], columns: [[72, 540]] }])
+    const A = docOf([{ lines: [...lines, stamp] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
+    expect(L.members[0]!.align).toBe('c')
+    // (TeX's, no longer read off A)
+    expect(L.members[0]!.read).not.toContain('measure')
+    expect(locate(instrumentOf(B, units, [[0, 1, 1]]), A, align(B, A)).members[0]!.read).toContain('measure')
+    expect(L.members[1]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+    // (A set 8 pt to the right of B, every partner moved alike: TeX's frame moved with them)
+    const A8 = docOf([{ lines: [...lines.map((l) => ({ ...l, x: l.x + 8 })), stamp] }])
+    const L8 = locate(ins, A8, align(B, A8))
+    expect(L8.members[0]!.lines[0]!.slice(7, 9)).toEqual([80, 548])
+    expect(L8.members[0]!.align).toBe('c')
+    // (lines TeX set apart on A, each its own way, no shift most of the page's partners share (2610.19274v1 p67, a list of
+    // figures: a median of 1.9 pt moved the frame that far): the frame where TeX put it)
+    const three = [
+      { text: 'Abstract', x: 282, y: 690 },
+      { text: 'a'.repeat(30), x: 72, y: 650 },
+      { text: 'b'.repeat(30), x: 72, y: 638 },
+      { text: 'c'.repeat(30), x: 72, y: 626 },
+    ]
+    const B3 = docOf([{ lines: three }])
+    const units3 = [
+      unitOf('heading', 'Abstract'),
+      unitOf('para', `${'a'.repeat(30)} ${'b'.repeat(30)} ${'c'.repeat(30)}`),
+    ]
+    const ins3 = withFrames(instrumentOf(B3, units3, [[0, 1, 1, 1]]), [{ block: [72, 540], columns: [[72, 540]] }])
+    const A3 = docOf([{ lines: [three[0]!, three[1]!, { ...three[2]!, x: 75 }, { ...three[3]!, x: 77 }, stamp] }])
+    expect(locate(ins3, A3, align(B3, A3)).members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
+  })
+  it('measures a two-column page’s line by its column, never past it into the gutter', () => {
+    // (2610.22065v1 p1: the ACM reference format's line ends at its column's edge; its measure ran to the right column's end)
+    const lines = [
+      { text: 'L'.repeat(40), x: 54, y: 600 },
+      { text: 'left last.', x: 54, y: 588 },
+      { text: 'R'.repeat(40), x: 318, y: 600 },
+      { text: 'right last.', x: 318, y: 588 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('para', `${'L'.repeat(40)} left last.`), unitOf('para', `${'R'.repeat(40)} right last.`)]
+    const frame = {
+      block: [54, 558] as [number, number],
+      columns: [
+        [54, 294],
+        [318, 558],
+      ] as [number, number][],
+    }
+    const ins = withFrames(instrumentOf(B, units, [[0, 0, 1, 1]]), [frame])
+    const A = docOf([{ lines: [...lines, stamp] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [54, 294],
+      [54, 294],
+    ])
+    expect(L.members[1]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [318, 558],
+      [318, 558],
+    ])
+  })
+})
+
+describe('locate: a line’s writing direction (LINE_FLAG.RTL)', () => {
+  it('flags the lines of a unit whose paragraph runs right to left, its first strong letter’s (UAX #9 P2-P3)', () => {
+    const B = docOf([{ lines: ['abc', 'def', '(1) xyz'] }])
+    const units = [
+      unitOf('para', 'שלום עולם'),
+      {
+        ...unitOf('para', 'x'),
+        content: [
+          { t: 'text' as const, s: '(1) ' },
+          { t: 'text' as const, s: 'مرحبا' },
+        ],
+      },
+      unitOf('para', '(1) xyz'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2]]), B, align(B, B))
+    expect(L.members.map((m) => m.lines.map((l) => l[9] & 8))).toEqual([[8], [8], [0]])
+  })
+})
+
+describe('locate: a single line’s alignment is its TeX line’s, the row it shares read whole', () => {
+  it('reads a run-in theorem head justified whose fragment’s middle is the column’s, its label and text on its row', () => {
+    // (2610.30034v1 p5: "Lemma 3 (Bellman-objective decomposition): Let …", the note's middle at the column's by the note's
+    // length; between full justified lines its own extent's stack read it centred, and its translation was set from the
+    // fragment's middle, 36 pt into the column. Its row, label to text, is a justified line)
+    const note = 'n'.repeat(60)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: 'Lemma 3 (', x: 72, y: 688 },
+      { text: note, x: 126, y: 688 },
+      { text: 'Let A be', x: 492, y: 688 },
+      { text: 'y'.repeat(78), x: 72, y: 676 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('heading', note),
+      unitOf('para', `Let A be ${'y'.repeat(78)}`),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 1, 2, 2]], [[ROLE.text, ROLE.label, ROLE.text, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]!.labelAt?.ink[1]).toBe(72)
+    expect(L.flows).toContainEqual([1, 2])
+    expect(L.members[1]!.align).toBe('j')
+  })
+  it('keeps a line its block centres where it stands alone on its row', () => {
+    // (an author block's name, place and e-mail, each centred under the one over it: 2303.11366v4 p1)
+    const lines = [
+      { text: 'Ada Lovelace', x: 270, y: 700 },
+      { text: 'Institute of Technology', x: 237, y: 688 },
+      { text: 'ada@example.org', x: 261, y: 676 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('author', 'Ada Lovelace'),
+      unitOf('author', 'Institute of Technology'),
+      unitOf('author', 'ada@example.org'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2]]), B, align(B, B))
+    expect(L.members.map((m) => m.align)).toEqual(['c', 'c', 'c'])
+  })
+})
+
 describe('locate: the glyphs of A with no partner on B inside a unit', () => {
   const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
   const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

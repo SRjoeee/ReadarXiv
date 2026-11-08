@@ -109,11 +109,12 @@ export const Style = z.object({
 })
 
 /** a line on A: page, column, x0, x1 (its ink), baseline, top, bottom (its fonts' boxes), m0, m1 (TeX's measure for it),
- *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored), and
+ *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; 8 RTL: its characters run right
+ *  to left, its unit's paragraph direction (UAX #9 P2-P3); unknown bits ignored), and
  *  its size (the median of its main glyphs' sizes, the glyphs within 0.85 of its largest where they set a quarter of its
  *  characters: today's line size, MAKE:382-401, by which the typesetter draws the line's band; absent: the member's size) */
 export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int, num.optional()])
-export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
+export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 8 })
 
 /** an element on A. `kind` the class it is drawn by (today's placeholder class, layer2.mjs placeholdersOf's phClassProven,
  *  stated so that no rule of the typesetter reads a source: cite, num, display, other, symbol, macro, umacro, space, zero),

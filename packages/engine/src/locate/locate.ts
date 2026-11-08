@@ -23,9 +23,19 @@ import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
-import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
+import { type Instrument, type InstrumentUnit, ROLE, type TexFrame } from '../instrument.ts'
 import { TEXT_SYMBOLS } from '../source/tables.ts'
-import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
+import {
+  bracketsOf,
+  centredByBlock,
+  fakedCaps,
+  fillRunsOf,
+  sourceText,
+  styleOf,
+  textOf,
+  unitSize,
+  urlCopyOf,
+} from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
@@ -97,6 +107,9 @@ export interface Member {
   spanOpens?: Map<string, number>
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
+  /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
+   *  the flows say which members share it (the row's) */
+  byBlock?: true
   /** each line's glyphs on A (global), by line, for the facts read after the lines */
   lineGlyphs: number[][]
 }
@@ -1217,7 +1230,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined))
+  // (each A page's text frame as TeX shipped it, B's carried onto A by its partners)
+  const framesA = framesOnA(ins.tex.frames, B, m, pageA, gA, gB)
+  columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
   const floors = floorsOf(members)
   const under = inkUnder(inkA)
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA, floors, under)
@@ -1248,7 +1263,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   }
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
-  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
+  factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units, framed: new Set(framesA.keys()) })
 
   // ---- flows: a member whose first line is the one before's last line, on its baseline after its end (SHARED_SEP of its size at
   // most, today's rowLeadOf), in one paragraph of TeX's (no paragraph end of B's between the one's last glyph and the other's
@@ -1469,6 +1484,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     led.join = joinOf(n, f, l[10] ?? n.style.size)
   }
 
+  // ---- a single line read centred by its block, on a row it shares with the members its flow joins to it there (a run-in
+  // theorem head between its label and its text, 2610.30034v1 p5's "Lemma 3 (Bellman-objective decomposition): Let"): its
+  // alignment is TeX's line's, never a fragment's, read again over the row, its label's start to the last member's end on it;
+  // its fragment's middle at the column's was a coincidence of the note's length, and its translation was set from the
+  // fragment's middle, 36 pt into the column (today's maker reads the line with its label: MAKE:2121-2135)
+  rowAligns(members, flows)
+
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
   // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
   // them), and within it by the element that owns more than half of them, else its text; where its label's glyphs are more than
@@ -1622,6 +1644,52 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   return { units, members, born, flows, ties, links, groups, figureGroups, stats }
 }
 
+/** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the
+ *  row from its label's start (or the first member's start the flow joins before it on that row) to the last member's end the
+ *  flow joins after it there; justified where the row's stack does not centre it (centredByBlock over the row, the row's own
+ *  lines out of the stack) */
+function rowAligns(members: Member[], flows: readonly number[][]): void {
+  const linesOn = new Map<number, Line[]>()
+  for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
+  const onRow = (l: Line, k: Line, size: number) => k[0] === l[0] && Math.abs(k[4] - l[4]) < ON_ROW * size
+  for (const flow of flows) {
+    flow.forEach((o, k) => {
+      const mem = members[o]!
+      const own = mem.lines.filter((l) => !(l[9] & 1))
+      if (!mem.byBlock || own.length !== 1) return
+      const l = own[0]!
+      const size = l[10] ?? mem.style.size
+      const row = new Set<Line>([l])
+      let x0 = l[2]
+      let x1 = l[3]
+      const lb = mem.labelAt?.ink
+      if (lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * size) x0 = Math.min(x0, lb[1])
+      // (back: each member joined to the next on this row, its last line there; on while that line is its only one)
+      for (let j = k; j > 0 && members[flow[j]!]!.join; j--) {
+        const p = members[flow[j - 1]!]!
+        const e = p.lines.at(-1)
+        if (!e || !onRow(l, e, size)) break
+        row.add(e)
+        x0 = Math.min(x0, e[2])
+        if (p.lines.length > 1) break
+      }
+      // (on: each member the flow joins after it on this row, its first line there)
+      for (let j = k + 1; j < flow.length && members[flow[j]!]!.join; j++) {
+        const n = members[flow[j]!]!
+        const f = n.lines[0]
+        if (!f || !onRow(l, f, size)) break
+        row.add(f)
+        x1 = Math.max(x1, f[3])
+        if (n.lines.length > 1) break
+      }
+      if (row.size === 1 && x0 === l[2]) return
+      const line = [...l.slice(0, 2), x0, x1, ...l.slice(4)] as Line
+      const stack = (linesOn.get(l[0]) ?? []).filter((k) => !row.has(k))
+      if (!centredByBlock([line], stack, mem.lead)) mem.align = 'j'
+    })
+  }
+}
+
 /** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed
  *  (today's links.mjs quadBoxes) */
 function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, number, number][] | null {
@@ -1692,14 +1760,63 @@ const ON_ROW = 0.4
  *  running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after a footnote's
  *  last line), not one line of a paragraph */
 const SHARED_SEP = 3
+/**
+ * Each A page's text frame as TeX shipped it (Instrument.tex.frames, B's pages), by A page: a B page's frame on the A page its
+ * glyphs' partners stand on most, moved by the shift along x most of them share (the page set elsewhere as a whole; none where
+ * A and B share their geometry, arXiv's compile of the same source, nor on a page TeX set its lines apart on A and B: a list
+ * of figures whose entries' numbers differ in width moved most of its words by 3 pt and its numbers by none, 2610.19274v1
+ * p67, a median of them 1.9 pt), the B page with the most partners there where two land on one
+ */
+function framesOnA(
+  frames: readonly (TexFrame | null)[] | undefined,
+  B: Doc,
+  m: Mapping,
+  pageA: Int32Array,
+  gA: (a: number) => DocGlyph,
+  gB: (b: number) => DocGlyph,
+): Map<number, TexFrame> {
+  const out = new Map<number, TexFrame>()
+  const most = new Map<number, number>()
+  if (!frames?.length) return out
+  frames.forEach((f, pb) => {
+    if (!f || !B.pages[pb]) return
+    const o0 = m.offB[pb] as number
+    const dx = new Map<number, number[]>()
+    for (let j = 0; j < B.pages[pb]!.glyphs.length; j++) {
+      const a = m.bToA[o0 + j] as number
+      if (a < 0) continue
+      const pa = pageA[a] as number
+      ;(dx.get(pa) ?? dx.set(pa, []).get(pa)!).push(gA(a).x0 - gB(o0 + j).x0)
+    }
+    let best = 0
+    let on: number[] = []
+    for (const [pa, d] of dx)
+      if (d.length > on.length) {
+        best = pa
+        on = d
+      }
+    if (!best || on.length <= (most.get(best) ?? 0)) return
+    const by100 = new Map<number, number>()
+    for (const d of on) by100.set(r2(d), (by100.get(r2(d)) ?? 0) + 1)
+    let shift = 0
+    for (const [d, n] of by100) if (2 * n > on.length) shift = d
+    const by = (x: [number, number]): [number, number] => [r2(x[0] + shift), r2(x[1] + shift)]
+    most.set(best, on.length)
+    out.set(best, { block: by(f.block), columns: f.columns.map(by) })
+  })
+  return out
+}
+
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
- *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
- *  \hangindent measures: stage 1b) */
+ *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
+ *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below; TeX's \parshape
+ *  and \hangindent measures: stage 1b) */
 function columnsAndMeasures(
   members: Member[],
   inkA: Doc,
   gA: (a: number) => DocGlyph,
   tableOf: (mem: Member) => number | undefined,
+  frames: ReadonlyMap<number, TexFrame>,
 ): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
@@ -1755,6 +1872,16 @@ function columnsAndMeasures(
       }
     return [Math.min(...own.map((c) => c[2])), right]
   }
+  // (TeX's frame of a line: of its page's columns the one its extent meets alone, a line in the left column that hangs into the
+  // gutter (a protruded stop, an overfull box) its column's; a line over both columns, in none (the gutter) or outside the text
+  // block (a margin's, arXiv's turned stamp, ink no compile of the source sets), the text block. The gutter is no line's paper:
+  // a line ends inside its column's measure (the maintainer, 2026-11-08: 2610.22065v1 p1's ACM reference line, today's run 16 pt
+  // past its column into the gutter, called wrong); a name centred on the page is centred on the block's middle, never on a
+  // hull of the page's ink that takes in the stamp at x 24 (2610.40645v1 p1's and 2610.10069v1 p1's "Abstract")
+  const frameOf = (f: TexFrame, x0: number, x1: number): [number, number] => {
+    const meets = f.columns.filter((c) => x1 > c[0] && x0 < c[1])
+    return meets.length === 1 ? meets[0]! : f.block
+  }
   const measures = new Map<Line, [number, number]>()
   // (a line's middle as today's widened block has it: from its label's start where its label stands on it, the label drawn
   // anew beginning the block (U.decor's first rectangle, RUN:2039); 1512.03385v1 p11's "Table 9." caption across both columns,
@@ -1763,7 +1890,8 @@ function columnsAndMeasures(
     for (const l of mem.lines) {
       const lb = mem.labelAt?.ink
       const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * (l[10] ?? mem.style.size) && lb[1] < l[2]
-      measures.set(l, columnOf(l, on ? lb[1] : l[2]))
+      const f = frames.get(l[0])
+      measures.set(l, f ? frameOf(f, on ? lb[1] : l[2], l[3]) : columnOf(l, on ? lb[1] : l[2]))
     }
   // (a table's cell: its line's room is its table's extent on the page where the table reaches past its text column, a float set
   // across both columns of a two-column page (2610.17024v1 p15's cell, whose room ended at the left column's edge, short of the

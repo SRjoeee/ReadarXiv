@@ -610,10 +610,12 @@ describe('LAYOUT_TEX', () => {
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
     // three messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
-    // (AXT-COLOUR, readColours): each a line of its own, which no reader of the log but theirs reads, and nothing typeset
-    // changes
+    // (AXT-COLOUR, readColours), and one write to the log at the shipout, each bracketed body's frame (AXT-BODY, readBodies):
+    // each a line of its own, which no reader of the log but theirs reads, and nothing typeset changes
     expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(3)
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR'])
+    expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(1)
+    expect(LAYOUT_TEX).toContain('\\write-1{AXT-BODY ')
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR', 'AXT-BODY'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
@@ -685,11 +687,17 @@ describe('LAYOUT_TEX', () => {
     // and \vsplit (balance.sty's last page) then takes an empty column (2608.06007); the closing one after the body's last
     // box, its glue, kerns and penalties taken off and put back after it, each where TeX had it: LaTeX's
     // \@outputbox@removebskip reads the body's \lastskip (2608.24503), and no place to break is made or lost
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}')
     // a page shipped with no column's body bracketed (a class whose output routine makes its columns without \@makecol:
     // revtex4-2's ltxgrid): its text block, \@outputbox at \@outputpage, bracketed as the body is, a vertical box or a
     // horizontal one (two columns side by side); the flag cleared at each page
-    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}')
+    // and beside each body's opening point, before its \penalty10000, the body's statement (AXT-BODY: which column it is, its
+    // \columnwidth and \textwidth, where TeX shipped its box's left edge): a saved position and a \write delayed to the
+    // shipout, to the log alone, in every engine's primitives (zref-savepos's), none where an engine has none
+    expect(POINTS_TEX).toContain('\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi')
+    expect(POINTS_TEX).toContain('\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx}}\\axt@bw}')
+    expect(POINTS_TEX.indexOf('\\def\\axt@body#1')).toBeLessThan(POINTS_TEX.indexOf('cmd/@makecol/before'))
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)

@@ -248,6 +248,21 @@ export function sourceText(content: readonly Piece[]): string {
   }
   return out
 }
+/** the code points whose default bidirectional class is R or AL (UAX #9 §3.2's defaults, DerivedBidiClass.txt's @missing
+ *  ranges: Hebrew to Arabic Extended-A, the Hebrew and Arabic presentation forms, and the supplementary planes' right-to-left
+ *  blocks); a letter there is a strong right-to-left character */
+const RTL_LETTER = /^[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}]$/u
+const LETTER = /^\p{L}$/u
+/**
+ * Whether a unit's text runs right to left: its paragraph direction by UAX #9's P2 and P3 over its source text, the first strong
+ * character's (a letter: right to left where its default class is R or AL, left to right else), its elements passed over as an
+ * isolate is (a formula, a citation); left to right where it has no letter (Line.flags' RTL: the order of its characters along
+ * its lines, which a link's reading order follows)
+ */
+export function rightToLeft(content: readonly Piece[]): boolean {
+  for (const ch of sourceText(content)) if (LETTER.test(ch)) return RTL_LETTER.test(ch)
+  return false
+}
 /** PDF.js's text content's spaces (pdf.worker evaluator compareWithLastPosition and addFakeSpaces): a glyph whose advance
  *  starts past the one before's end by more than TRACKING_SPACE_FACTOR of the font's size along the line, or on another
  *  line (its baseline moved by more than half the size: an end of line), is a space after it in the text layer */
