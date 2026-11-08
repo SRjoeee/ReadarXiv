@@ -30,6 +30,32 @@ describe('loadProject: a file \\input under another spelling is the file the sou
   })
 })
 
+describe('loadProject: a file named in another case is the one kpathsea opens (texmf_casefold_search)', () => {
+  // (2402.10294v1's main.tex reads \input{chapters/prompts}, the package holds chapters/Prompts.tex: TeX's kpathsea, its case
+  // fold on in every TeX Live the box serves (texmf_casefold_search = 1; `kpsewhich chapters/prompts.tex` gives
+  // ./chapters/Prompts.tex in both pinned images, 2026-11-09), opens it after no file of the name as given; the front end read
+  // the name as given only, and the whole appendix, Figure 10's caption among it, had no unit)
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const filesOf = (input: string, rest: string[]) => {
+    const fs = inMemory(new Map([['main.tex', enc(`\\documentclass{article}\n\\begin{document}\n${input}\n\\end{document}\n`)], ...rest.map((f) => [f, enc(`Prose of ${f}.\n`)] as [string, Uint8Array])]))
+    return [...new Set((loadProject(fs, 'main.tex').units as (Unit & { file: string })[]).map((u) => u.file))]
+  }
+  it('reads the file whose last component is the name’s, case aside, where none is of the name as given', () => {
+    expect(filesOf('\\input{chapters/prompts}', ['chapters/Prompts.tex'])).toEqual(['chapters/Prompts.tex'])
+    expect(filesOf('\\input{c/x}', ['c/x.TEX'])).toEqual(['c/x.TEX'])
+    // (written back under the package's name, which TeX opens)
+    const p = loadProject(inMemory(new Map([['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\input{chapters/prompts}\n\\end{document}\n')], ['chapters/Prompts.tex', enc('Prose.\n')]])), 'main.tex')
+    const translated = new Map((p.units as Unit[]).map((u) => [u, u.pieces.map((x) => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
+    expect([...patch(p, translated as Map<(typeof p.units)[number], unknown[]>).keys()].sort()).toEqual(['chapters/Prompts.tex', 'main.tex'])
+  })
+  it('takes the name as given first, folds no directory, and reads none where two names fold alike', () => {
+    expect(filesOf('\\input{c/prompts}', ['c/Prompts.tex', 'c/prompts.tex'])).toEqual(['c/prompts.tex'])
+    expect(filesOf('\\input{Chapters/prompts}', ['chapters/Prompts.tex'])).toEqual([])
+    // (kpathsea takes the first its directory lists, an order of the disk's the package does not tell)
+    expect(filesOf('\\input{d/two}', ['d/Two.tex', 'd/TWO.tex'])).toEqual([])
+  })
+})
+
 describe('loadProject: a file named through import.sty or subfiles is the one TeX reads', () => {
   const enc = (s: string) => new TextEncoder().encode(s)
   const fileOf = (u: Unit) => (u as Unit & { file: string }).file

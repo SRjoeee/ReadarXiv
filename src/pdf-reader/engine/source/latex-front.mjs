@@ -2932,13 +2932,28 @@ export function texFilesOf(fsys, main) {
   const dec = decodersOf(own, null, main)
   return own.map(x => { const d = dec.get(x.file); return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text)) })
 }
+/** a file's name as kpathsea's case fold compares it: its directory as it is, its last component's ASCII letters in lower case
+ *  (strcasecmp) */
+const foldOf = f => { const i = f.lastIndexOf('/'); return f.slice(0, i + 1) + f.slice(i + 1).replace(/[A-Z]/g, c => c.toLowerCase()) }
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
-  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
+  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract.
+  // Where no file is of a name as given, in any of those directories, kpathsea's case fold (texmf_casefold_search, on in every
+  // TeX Live the box serves: kpsewhich chapters/prompts.tex gives ./chapters/Prompts.tex) opens the one whose last component
+  // is the name's, case aside, in the same directory: 2402.10294v1's \input{chapters/prompts}, its appendix read by TeX and
+  // by no unit, Figure 10's caption English. Where two files fold alike, kpathsea takes the first its directory lists, an
+  // order of the disk's the package does not tell: none
+  const folded = new Map()
+  for (const f of fsys.list()) { const k = foldOf(f); folded.set(k, [...(folded.get(k) ?? []), f]) }
+  const read = (rel, dirs = []) => {
+    const keys = [...dirs, ''].flatMap(dir => [rel, `${rel}.tex`].map(cand => normalizePath(`${dir}/${cand}`)))
+    for (const key of keys) { const bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } }
+    for (const key of keys) { const one = folded.get(foldOf(key)); const bytes = one?.length === 1 ? fsys.read(one[0]) : null; if (bytes) return { rel: one[0], text: texText(bytes) } }
+    return null
+  }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
