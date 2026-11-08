@@ -9,6 +9,7 @@ import type { AddOn } from '../src/wrap/wrap.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
+const r2 = (v: number) => Math.round(v * 100) / 100
 const unitOf = (kind: string, s: string, more: Partial<InstrumentUnit> = {}): InstrumentUnit => {
   const content = [text(s)]
   return { id: unitId(kind, content), kind, content, ...more }
@@ -106,6 +107,24 @@ describe('locate', () => {
     const L = locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
+  })
+  it('states a shared row kept where a character of the page stays on it between the two (today’s keptBetween)', () => {
+    // (2608.25210v2 p17's notes made on A: "… Mao." ends one, "2024" (no unit's) stays, ". Be…" begins the next on the row; the
+    // follower is not laid from the first's end, which today kept (S.rowStart not applied, its share kept). Nothing between: not)
+    const lines = (between: boolean) => [
+      { text: 'First ends.', x: 72, y: 700 },
+      ...(between ? [{ text: '2024', x: 140, y: 700 }] : []),
+      { text: 'Next runs on', x: 170, y: 700 },
+      { text: 'and on', x: 72, y: 688 },
+    ]
+    const units2 = [unitOf('para', 'First ends.'), unitOf('para', 'Next runs on and on')]
+    const kept = docOf([{ lines: lines(true) }])
+    const L = locate(instrumentOf(kept, units2, [[0, -1, 1, 1]]), kept, align(kept, kept))
+    expect(L.flows).toEqual([[0, 1]])
+    expect(L.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6)), 1])
+    const free = docOf([{ lines: lines(false) }])
+    const F = locate(instrumentOf(free, units2, [[0, 1, 1]]), free, align(free, free))
+    expect(F.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6))])
   })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the

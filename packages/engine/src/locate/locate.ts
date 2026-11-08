@@ -1030,6 +1030,23 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // no insert's, and the paragraph ends inside those inserts (their own paragraphs: a caption's, a footnote's) are none of
   // its. 2608.06701v1 p6: a run-in head, a table and a footnote in the stream, then the head's paragraph on its row)
   const insert = (x: Member) => ownBox(x) || x.kind === 'caption' || x.kind === 'footnote'
+  // (whether something of the page stays on a shared row between the member before's end there and the next one's first text:
+  // a shown glyph of A whose advance's middle stands between the two, on the row (its baseline within ON_ROW of the row's size of
+  // the row's): today's keptBetween (RUN:1592, over the page's characters), the next member's own label among them, which goes
+  // with it (ownLabelOnRow, RUN:1623). Placed.join's kept: the next member is not laid from the first one's end, where something
+  // else stays there, and the first one's text on the row ends where TeX's did (keptAfter, RUN:1596))
+  const keptOn = (a: Line, b: Line, size: number) => {
+    const pg = inkA.pages[a[0] - 1]
+    if (!pg || b[0] !== a[0]) return false
+    for (const g of pg.glyphs) {
+      if (g.blank || g.unseen || !/\S/.test(g.u)) continue
+      const mid = (g.x0 + g.x1) / 2
+      if (mid > a[3] && mid < b[2] && Math.abs(g.y - a[4]) < ON_ROW * size) return true
+    }
+    return false
+  }
+  const joinOf = (a: Line, b: Line, size: number): [number] | [number, 1] =>
+    keptOn(a, b, size) ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
   let body: number | null = null
@@ -1066,7 +1083,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
     const into = shares ? flowOf.get(prev.ord) : undefined
     if (into) {
-      mem.join = mem.labelAt && mem.labelAt.ink[0] === b![0] ? [r2(b![2] - a![3]), 1] : [r2(b![2] - a![3])]
+      mem.join = joinOf(a!, b!, a![10] ?? prev!.style.size)
       into.push(mem.ord)
       flowOf.set(mem.ord, into)
     } else {
@@ -1129,10 +1146,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (own) flows.splice(flows.indexOf(own), 1)
     const k = flow.indexOf(led.ord)
     const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
-    if (prev && led.join) n.join = [r2(l[2] - prev[3])]
+    if (prev && led.join) n.join = joinOf(prev, l, prev[10] ?? members[flow[k - 1] as number]!.style.size)
     flow.splice(k, 0, n.ord)
     flowOf.set(n.ord, flow)
-    led.join = led.labelAt && led.labelAt.ink[0] === f[0] ? [r2(f[2] - l[3]), 1] : [r2(f[2] - l[3])]
+    led.join = joinOf(l, f, l[10] ?? n.style.size)
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
@@ -1267,6 +1284,9 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
   return out
 }
 
+/** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
+ *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
+const ON_ROW = 0.4
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */
@@ -1332,7 +1352,7 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
   for (const mem of members)
     for (const l of mem.lines) {
       const lb = mem.labelAt?.ink
-      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < 0.4 * (l[10] ?? mem.style.size) && lb[1] < l[2]
+      const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * (l[10] ?? mem.style.size) && lb[1] < l[2]
       measures.set(l, columnOf(l, on ? lb[1] : l[2]))
     }
   for (const [l, [m0, m1]] of measures) {
