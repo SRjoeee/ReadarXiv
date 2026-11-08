@@ -168,6 +168,34 @@ describe('the reading from the part', () => {
     expect(toks[0]).toMatchObject({ s: 'Abbildung', label: true })
     expect(toks.some((t) => t.crop)).toBe(true)
   })
+  it('draws an abbreviated float label in the target, its name stated with its own stop', () => {
+    // (2610.21880v1 p2's IEEE caption "Fig. 4.", as the engine states its parts: the name "Fig.", the number "4"; drawn as
+    // today's labelInTarget draws it, the target's name, the original's number and punctuation)
+    const m = member({
+      kind: 'caption',
+      label: {
+        kind: 'float',
+        ink: [1, 72, 698, 95, 708, 700],
+        style: { role: 'serif', size: 10 },
+        name: ['Fig.', [1, 72, 698, 87, 708, 700]],
+        num: ['4', [1, 89.5, 698, 94.5, 708, 700]],
+        punct: ['.', [1, 94.5, 698, 97, 708, 700]],
+      },
+    })
+    expect(read(m, [{ t: 'text', tr: true, s: 'Ein Bild' } as V0Piece], 'caption').labelDrawn).toBe('Abbildung 4.')
+    const caps = member({
+      kind: 'caption',
+      label: {
+        kind: 'float',
+        ink: [1, 72, 698, 100, 708, 700],
+        style: { role: 'serif', size: 10 },
+        name: ['FIG.', [1, 72, 698, 92, 708, 700]],
+        num: ['4', [1, 94.5, 698, 99.5, 708, 700]],
+        punct: [':', [1, 99.5, 698, 102, 708, 700]],
+      },
+    })
+    expect(read(caps, [{ t: 'text', tr: true, s: 'Ein Bild' } as V0Piece], 'caption').labelDrawn).toBe('ABBILDUNG 4:')
+  })
   it('takes the base style from the original’s through today’s baseOf: a majority its own groups set is theirs', () => {
     const src = sourcePieces([
       { t: 'span', id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [{ t: 'text', s: 'Bold words' }] },

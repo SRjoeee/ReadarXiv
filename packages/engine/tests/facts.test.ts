@@ -122,6 +122,51 @@ describe('a label’s parts (B16)', () => {
     })
     expect(labelParts(run('Proof.'), 1).num).toBeUndefined()
   })
+  it('gives an abbreviated name its own stop, which stands between no digits of the number (Fig., Tab., Eq., Thm., Def., Sec.)', () => {
+    // (2610.21880v1's IEEE captions, "Fig. 4.": the name "Fig" and the number ".4" drew no target word)
+    const fig = labelParts(run('Fig. 4.'), 1)
+    expect(fig.name?.[0]).toBe('Fig.')
+    expect(fig.num?.[0]).toBe('4')
+    expect(fig.punct?.[0]).toBe('.')
+    // (the name's ink takes its stop in, the number's begins at its digit)
+    const gs = run('Fig. 4.')
+    expect(fig.name?.[1][3]).toBe(Math.round(gs[3]!.x1 * 100) / 100)
+    expect(fig.num?.[1][1]).toBe(Math.round(gs[5]!.x0 * 100) / 100)
+    expect(labelParts(run('FIG. 3:'), 1)).toMatchObject({
+      name: ['FIG.', expect.anything()],
+      num: ['3', expect.anything()],
+      punct: [':', expect.anything()],
+    })
+    expect(labelParts(run('Tab. 2'), 1)).toMatchObject({
+      name: ['Tab.', expect.anything()],
+      num: ['2', expect.anything()],
+    })
+    expect(labelParts(run('Thm. 2.1.'), 1)).toMatchObject({
+      name: ['Thm.', expect.anything()],
+      num: ['2.1', expect.anything()],
+      punct: ['.', expect.anything()],
+    })
+    expect(labelParts(run('Def. 3'), 1)).toMatchObject({
+      name: ['Def.', expect.anything()],
+      num: ['3', expect.anything()],
+    })
+    expect(labelParts(run('Sec. A.4'), 1)).toMatchObject({
+      name: ['Sec.', expect.anything()],
+      num: ['A.4', expect.anything()],
+    })
+    expect(labelParts(run('Fig.S1'), 1)).toMatchObject({
+      name: ['Fig.', expect.anything()],
+      num: ['S1', expect.anything()],
+    })
+    // (a bracket before the number is no mark of the name's word: "Eq. (3)")
+    expect(labelParts(run('Eq. (3)'), 1)).toMatchObject({
+      name: ['Eq.', expect.anything()],
+      num: ['3', expect.anything()],
+    })
+    // (a number of no name before it keeps its marks, and a sub-figure's letter stays the name's, as before)
+    expect(labelParts(run('.5'), 1).num?.[0]).toBe('.5')
+    expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
+  })
 })
 
 describe('forced breaks and the room after them (C14)', () => {
