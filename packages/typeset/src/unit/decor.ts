@@ -2,7 +2,8 @@
 // the unit centred as its cell or the file has it, and a label kept as the original's ink that the unit's text group hides
 // (`labelHides`), whose first rectangle then starts at the label where the unit is centred by the file's flag (E8, E9).
 // After: TeX's flush alignment kept (E12), a hidden label on a centred or flush-right first line carried with it (E9, its
-// crop token T30), a single line widened to its column's edge or the next glyph on its baseline (E13), a line that stops
+// crop token T30), a single line widened to its column's edge or the next glyph on its baseline (E13; a cell's never, today's
+// RUN:2116: its widening is X.further's), a line that stops
 // where a page's character stays on the shared row after it (E14), the short skips over a display (E15), the first line
 // indented after a label kept as the original's (E16), a heading and a numbered heading (E17). Ported from engine
 // 065c1d973: RUN:2101-2137, widen RUN:1576-1587 (its room: `Side`), keptAfter's use RUN:2118-2121, shortSkipsTo L2:3048-3056,
@@ -150,11 +151,13 @@ export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter
   const b0 = blocks[0]
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))
-  // (a cell's single line too, where today's widened none (RUN:2116): its rectangle was its cell's as PDF.js's text items read the
-  // table, the part's line is its ink's alone, and a column head laid in its own ink's width wrapped where the original's one
-  // line had room on both sides: 1810.04805v2 p7's "Ours", the checkpoint's measure-10)
+  // (but a cell's, as today's widened none (RUN:2116): a cell is set in its own ink's width at its own size, shrunk there to its
+  // fit's floor, and runs on over the paper beside it only where it is clipped there, X.further's 'widen' (the adapter's
+  // `wide`): the owner's ruling of 2026-11-08, table cells sized as today. Widened at once, a column's every cell was set at
+  // the original's size run on to its rules, the column crowded (2608.25210v2-zh p14), and a cell left room for the page's
+  // fill to spread (2610.20967v1-zh p4))
   blocks.forEach((b, k) => {
-    widen(b, sideOf(b, k))
+    if (i.kind !== 'cell') widen(b, sideOf(b, k))
   })
   const kept = i.kept
   if (kept)

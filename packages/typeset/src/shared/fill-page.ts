@@ -253,7 +253,9 @@ export function fillPage(
     let full = !short,
       tracked = 0
     const untracked = { st, l }
-    if (short && P.cjk) {
+    // (never a table cell's: TeX stretches no entry of a tabular, the owner's ruling of 2026-11-08, "in the tables today's letter
+    // spacing is more natural", 2610.20967v1-zh p4)
+    if (short && P.cjk && p.unit.kind !== 'cell') {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01),
         st2 = (k: number): FitState => ({ ...st, track: r3(st.track + k * 0.01) })

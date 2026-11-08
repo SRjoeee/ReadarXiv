@@ -665,7 +665,9 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   it('splits the free paper two cells share on one baseline at its middle: neither widens over the other', () => {
     // (1706.03762v7-zh p9 t123/t124, "(dev)" under "PPL" and under "BLEU": each cell's Room.side runs to the other's ink, so
     // each widened into the whole gap between them and both translations were drawn over each other, 13.3 × 7.72 pt. The
-    // paper two members may both take is each one's half, as today's figure reading shares it between two figure texts)
+    // paper two members may both take is each one's half, as today's figure reading shares it between two figure texts. A
+    // cell widens only where its own ink's width cannot set it at its floor (X.further, today's fitFurther): 45 pt at the
+    // size, 36 at the floor, in 20)
     const idB = 'b'.repeat(64)
     const a = member({
       ord: 0,
@@ -683,10 +685,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       room: { below: 0, next: 300, side: [120, 300] },
     })
     const pt: Part = { ...part(a), flows: [[a], [b]] }
-    const rows = rowsOf([
-      row([{ t: 'text', s: 'Entwicklung' }]),
-      { ...row([{ t: 'text', s: 'Entwicklung' }]), id: idB },
-    ])
+    const rows = rowsOf([row([{ t: 'text', s: 'Entwickle' }]), { ...row([{ t: 'text', s: 'Entwickle' }]), id: idB }])
     const [la, lb] = layPage(pt, rows, rules, metrics()).members
     expect([la!.state, lb!.state]).toEqual(['laid', 'laid'])
     const [, , ax1] = la!.lines[0]!,

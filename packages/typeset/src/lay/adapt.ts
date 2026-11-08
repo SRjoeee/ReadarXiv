@@ -24,6 +24,7 @@ import {
   type KeptRow,
   type ShortSkip,
   type Side,
+  widen,
 } from '../unit/decor.ts'
 import { params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
@@ -342,6 +343,18 @@ export function adapt(i: AdaptInput): Adapted {
     shortSkips,
     lineInfo,
   })
+  // (a cell's single lines widened over the paper beside them, its fit's further step where it is clipped in its own ink's
+  // width at its floor (X.further's 'widen': today's widenOverPaper, a cell never widened before, RUN:2116); null where none
+  // grows)
+  let wide: FitBlock[] | null = null
+  if (kind === 'cell') {
+    const grown = blocks.map((b) => {
+      const w = { ...b }
+      widen(w, sideOf(w))
+      return w
+    })
+    if (grown.some((w, k) => w.x0 < blocks[k]!.x0 - 1e-9 || w.x1 > blocks[k]!.x1 + 1e-9)) wide = grown
+  }
   const edges = {
     first: !(lines[0]![9] & PINNED),
     last: !(last[9] & PINNED),
@@ -441,7 +454,7 @@ export function adapt(i: AdaptInput): Adapted {
           }
         : null,
     shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
-    wide: null,
+    wide,
     ...(rowStart ? { rowStart } : {}),
   }
   return { member }
