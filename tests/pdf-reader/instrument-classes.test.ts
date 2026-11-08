@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
 import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
 import {
+  besideEmpty,
   classesOf,
   FORCED_BREAK,
   glueOf,
@@ -231,5 +232,72 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
     const own = { points: [{ name: 'p5.0a', glyph: 0 }, ...at(8, 16).points], glyphs: glyphs('BERTBASE(Single)') }
     const row2 = [...Array(8).fill('u5.p'), ...Array(8).fill('u5')]
     expect([...glyphPiecesOf(own, row2, { units, texts, names: new Set(['p5.0a']) })]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
+  })
+})
+
+describe('a head or tail macro that sets nothing on its unit’s line (today’s maker, make.mjs besideMarks)', () => {
+  // (the marking gives a paper's macro at a unit's head no point, and one after its last word an opening point alone where its
+  // closing one would follow a control word: TeX set its ink, if any, before the start mark or after the end mark, never on the
+  // unit's own lines; where no glyph of no unit's stands beside the mark on its line, nothing of it is there, EMPTY. 2610.21880v1
+  // p2 u23 `...overhead.\endgroup`, 2609.20976v1 p12 u65 `\acknowledgments` (its heading on the line above), 2610.10069v1 p5
+  // u29 `\begingroup`: their units stayed English, unproven)
+  type G = { u: string; x0: number; x1: number; y: number; size: number }
+  const line = (s: string, x: number, y: number, size = 10): G[] => [...s].map((u, i) => ({ u, x0: x + 5 * i, x1: x + 5 * i + 5, y, size }))
+  const pt = (name: string, glyph: number) => ({ name, glyph })
+  const unitsOf = (pieces: unknown[]) => {
+    const units: unknown[] = []
+    units[5] = { kind: 'para', pieces }
+    return units
+  }
+  const classes = (units: unknown[]) => units.map((u) => (u ? new Map(classesOf((u as { pieces: never[] }).pieces)) : null))
+  const run = (pages: unknown[], rows: (string | null)[][], units: unknown[], known = new Set<string>()) =>
+    besideEmpty(pages as never, rows, units as never, { classes: classes(units) as never, known })
+  const para = [{ t: 'text', s: 'a word.' }, ph('\\endgroup')]
+  const tail = (after: G[], afterRow: (string | null)[]) => ({
+    pages: [{ glyphs: [...line('aword.', 72, 700), ...after], points: [pt('5s', 0), pt('5e', 6), pt('p5.1a', 6)], view: [0, 0, 612, 792] }],
+    rows: [[...Array(6).fill('u5'), ...afterRow]],
+  })
+  it('states a tail macro empty where nothing of no unit’s stands right of the end mark on its line', () => {
+    // (the next unit's glyphs on the next line; a glyph of no unit's far right, past two of its em)
+    const { pages, rows } = tail([...line('Next', 72, 688), ...line('x', 140, 700)], [...Array(4).fill('u6'), null])
+    expect(run(pages, rows, unitsOf(para))).toEqual([{ unit: 5, piece: '1' }])
+  })
+  it('states none where a glyph of no unit’s stands right of it within two of its em, or the unit took glyphs past its end mark', () => {
+    const near = tail(line('xy', 106, 700), [null, null])
+    expect(run(near.pages, near.rows, unitsOf(para))).toEqual([])
+    // (closing punctuation TeX set after the end mark, the unit's own (MR 4c): the tail is not looked at)
+    const past = tail(line(')', 102, 700), ['u5'])
+    expect(run(past.pages, past.rows, unitsOf(para))).toEqual([])
+  })
+  it('reads only the end mark’s column on a page of two', () => {
+    // (2610.21880v1 p2: a column's last line ends near the column's edge; the glyphs of no unit's beside it, within two em, are
+    // the other column's, past the page's middle)
+    const two = tail(line('seq', 312, 700), [null, null, null])
+    two.pages[0]!.glyphs = [...line('aword.', 272, 700), ...line('seq', 312, 700)]
+    expect(run(two.pages, two.rows, unitsOf(para))).toEqual([])
+    two.pages[0]!.points.push(pt('c2-1', 0))
+    expect(run(two.pages, two.rows, unitsOf(para))).toEqual([{ unit: 5, piece: '1' }])
+  })
+  it('states a head macro empty where nothing of no unit’s stands left of the start mark on its line', () => {
+    // (\acknowledgments, its heading of no unit's on the line above; \sloppy, which the marking gives no class at all)
+    const units = unitsOf([ph('\\acknowledgments'), ph('\\sloppy'), { t: 'text', s: '\nWe thank.' }])
+    const pages = [{ glyphs: [...line('Acknowledgments', 72, 724, 12), ...line('Wethank.', 72, 700)], points: [pt('5s', 15), pt('5e', 23)], view: [0, 0, 612, 792] }]
+    const rows = [[...Array(15).fill(null), ...Array(8).fill('u5')]]
+    expect(run(pages, rows, units)).toEqual([{ unit: 5, piece: '1' }, { unit: 5, piece: '0' }])
+    // (glyphs of no unit's right before the start: TeX set the macro's text there, which its probe did not spell: not known)
+    const sys = [{ glyphs: [...line('TensorCast', 22, 700), ...line('Wethank.', 72, 700)], points: [pt('5s', 10), pt('5e', 18)], view: [0, 0, 612, 792] }]
+    expect(run(sys, [[...Array(10).fill(null), ...Array(8).fill('u5')]], units)).toEqual([])
+  })
+  it('passes over pieces whose ink or text is known, and stops at inline code or a footnote’s call', () => {
+    const pages = [{ glyphs: line('Wethank.', 72, 700), points: [pt('5s', 0), pt('5e', 8)], view: [0, 0, 612, 792] }]
+    const rows = [Array(8).fill('u5')]
+    const units = unitsOf([ph('\\begingroup'), ph('\\texttt{x}'), ph('\\sloppy'), { t: 'text', s: ' We thank.' }])
+    // (nearest the mark first: \sloppy, then the code, which ends the look)
+    expect(run(pages, rows, units)).toEqual([{ unit: 5, piece: '2' }])
+    expect(run(pages, rows, units, new Set(['5|2']))).toEqual([])
+    const probed = unitsOf([ph('\\sys'), { t: 'text', s: ' We thank.' }])
+    const cs = classes(probed)
+    ;(cs[5] as Map<string, { text?: string }>).get('0')!.text = 'TensorCast'
+    expect(besideEmpty(pages as never, rows, probed as never, { classes: cs as never, known: new Set() })).toEqual([])
   })
 })

@@ -523,9 +523,15 @@ export function tailOf(after: readonly DocGlyph[], ends: readonly string[] | nul
 }
 
 // ---------------------------------------------------------------- a label's parts (B16, C10, E3)
-/** a label's parts by its glyphs' classes: the name (its letters before the number: "Figure", "Theorem"), the number (digits
- *  with the dots, letters and dashes between them: "3", "2.1", "A.4"), the punctuation after it (":", "."), each with its
- *  ink on `page`; today's head/float label readings (L2:1184-1195, L2:1245-1259) read the same three off the label's text */
+/** a character a name word holds besides its letters, as today's head rule reads a name (rules/tex-names.mjs headInTarget:
+ *  letters, combining marks, stops, apostrophes and hyphens; a float's "Fig." in labelInTarget L2:1184): an abbreviation's
+ *  stop is the name's; a glyph's text may be more than one of them (a ligature's "fi") */
+const NAME_WORD = /^[\p{L}\p{M}.'’-]+$/u
+/** a label's parts by its glyphs' classes: the name (its word before the number, from its first letter, with the marks the
+ *  word holds: "Figure", "Theorem", an abbreviation's "Fig.", "Thm."), the number (digits with the dots, letters and dashes
+ *  between them: "3", "2.1", "A.4"; a stop or dash before its first digit or letter stands between none of them, and is the
+ *  name's where a name stands before it: "Fig. 4."), the punctuation after it (":", "."), each with its ink on `page`; today's
+ *  head/float label readings (L2:1184-1195, L2:1245-1259) read the same three off the label's text */
 export function labelParts(
   gs: readonly DocGlyph[],
   page: number,
@@ -564,6 +570,8 @@ export function labelParts(
     if (prev && /\p{L}/u.test(prev.u) && Math.abs((t[s - 1] as DocGlyph).x0 - prev.x1) < 0.2 * prev.size) break
     s--
   }
+  // (the stops and dashes before the number's first digit or letter, where a name stands before them: the name's)
+  if (t.slice(0, s).some((g) => /\p{L}/u.test(g.u))) while (s < e && /^[.\-–]$/u.test((t[s] as DocGlyph).u)) s++
   if (s < e && t.slice(s, e).some((g) => /\p{N}/u.test(g.u)))
     out.num = [
       t
@@ -573,7 +581,11 @@ export function labelParts(
       inkOf(t.slice(s, e)),
     ]
   else s = e
-  const name = t.slice(0, s).filter((g) => /\p{L}/u.test(g.u))
+  // (from its first letter, as far as the word's characters go: a sub-figure's "(a" is its letter, "Eq. (" its "Eq.")
+  const f = t.findIndex((g, q) => q < s && /\p{L}/u.test(g.u))
+  let w = f
+  while (w >= 0 && w < s && NAME_WORD.test((t[w] as DocGlyph).u)) w++
+  const name = f >= 0 ? t.slice(f, w) : []
   if (name.length) out.name = [name.map((g) => g.u).join(''), inkOf(name)]
   return out
 }
