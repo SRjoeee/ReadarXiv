@@ -89,6 +89,22 @@ for (const pair of pairs) {
           style: m.style,
           lines: m.lines,
           ...(m.label ? { label: m.label } : {}),
+          // (its elements: each [piece, kind, its ink's boxes on this page [x0, y0, x1, y1, base], how many boxes its ink has on
+          // every page, a text it may be drawn as (1: its glyphs' reading, its symbol's or its source's copy; 2 stated empty:
+          // TeX set nothing; 0 none), raised (a mark, a raised symbol), kept)
+          ...(m.els?.length
+            ? {
+                els: m.els.map(([k, e]) => [
+                  k,
+                  e.kind,
+                  e.ink.filter((i) => i[0] === pg).map((i) => [i[1], i[2], i[3], i[4], i[5]]),
+                  e.ink.length,
+                  e.text === '' ? 2 : e.text || e.sym || e.copy ? 1 : 0,
+                  e.mark || e.sym?.[1] ? 1 : 0,
+                  e.keep ? 1 : 0,
+                ]),
+              }
+            : {}),
         })
       }
     // (and the page's size ties, each the part ords of one paragraph's members laid at one scale)

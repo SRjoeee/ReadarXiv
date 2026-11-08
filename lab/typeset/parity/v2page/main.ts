@@ -112,7 +112,8 @@ const p = {
     const svg = el?.querySelector<SVGSVGElement>('.axt-over svg')
     const got = pages[String(n)]
     const page: Page | null = got ? { page: n, wait: { rows: [], faces: [] }, members: got.members, links: got.links } : null
-    const crops = page ? cropsOf(page).map((c) => [c.ord, ...c.at]) : []
+    // (each crop: its member, where it is drawn, its piece, its source on A (both padded as the reader cuts it) and its page)
+    const crops = page ? cropsOf(page).map((c) => [c.ord, ...c.at, c.piece, ...c.src, c.from]) : []
     const vb = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number)
     const k = svg && vb[2] ? vb[2] / (view[2] - view[0]) : 1
     return {
@@ -132,6 +133,11 @@ const p = {
     document.documentElement.toggleAttribute('data-parity-text', on)
     for (const g of root.querySelectorAll<SVGGElement>('.axt-over svg g[data-axt-ord]'))
       g.style.display = on && hide.includes(Number(g.dataset.axtOrd)) ? 'none' : ''
+    return true
+  },
+  /** the drawing without its text (the page view's copy and the crops alone), or the whole of it again */
+  copyOnly(on: boolean) {
+    document.documentElement.toggleAttribute('data-parity-copy', on)
     return true
   },
   fonts: async () => {

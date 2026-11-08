@@ -13,10 +13,12 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
-import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
+import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
+import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
+import { frameOf, labelsPass } from './fidelity.mjs'
 import { whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, recount, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
@@ -58,15 +60,35 @@ for (const [pair, raw] of drawn) {
   const turned = new Set()
   const led = new Map()
   const top = new Set()
-  for (const part of l1Paper(raw.paper)?.parts.values() ?? [])
+  // (the page numbers of each page: a running head or foot whose text holds the page's number, the owner's ruling 6)
+  const folios = new Map()
+  const bundle = l1Paper(raw.paper)
+  for (const [pg, part] of bundle?.parts ?? [])
     for (const f of part.flows)
       f.forEach((m, k) => {
         if (m.dir && (Math.abs(m.dir[1]) > 1e-3 || m.dir[0] < 0)) turned.add(m.ord)
         if (m.title || m.front) top.add(m.ord)
         const b = f[k - 1]
         if (b && (m.join || (b.kind === 'name' && b.bound)) && !led.has(m.ord)) led.set(m.ord, b.ord)
+        const text = typeof m.text === 'string' ? (bundle.units.get(m.text)?.content ?? []).map((x) => (x.t === 'text' ? x.s : ' ')).join('') : ''
+        if (m.kind === 'inkheads' && m.lines.some((l) => l[0] === pg) && new RegExp(`(^|\\D)${pg}(\\D|$)`).test(text)) {
+          if (!folios.has(pg)) folios.set(pg, [])
+          folios.get(pg).push(m.ord)
+        }
       })
-  for (const rec of raw.pages) pages.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top }))
+  // (the paper's text frame, read off its own lines (frameOf); its tables' grid groups, TeX's grid as today's front end reads it
+  // (today's ledger); the cells whose door row today's group decision kept, whose translator's answer v2 is never handed)
+  const frame = frameOf(v2.facts)
+  const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
+  const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
+  const mine = []
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
+  // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
+  labelsPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  pages.push(...mine)
 }
 const incomplete = coverageOf(run, { asked: asked.length ? asked : null, notMeasured, drawn, pages })
 const verdict = verdictOf(incomplete, pages)
@@ -126,7 +148,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}${d.ruling ? ` <i>(${esc(d.ruling)})</i>` : ''}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'ruling' ? 'ruling' : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const fl = FLAGS.filter((f) => p.faults[f])

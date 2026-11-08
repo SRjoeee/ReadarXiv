@@ -25,7 +25,7 @@ import { readerAssets } from '../../../packages/reader/src/vite.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { CACHE, paperOf } from '../../../packages/typeset/tests/replay/today.ts'
 import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
-import { TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
+import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse } from './analyse.mjs'
 import { hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
@@ -60,6 +60,8 @@ const freeGiB = () => Math.min(...[WORK, OUT].map(freeGiBOf))
 if (freeGiB() < MIN_FREE_GIB) throw new Error(`disk: ${freeGiB().toFixed(1)} GiB free, under ${MIN_FREE_GIB}`)
 const json = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const sha = (b) => createHash('sha256').update(b).digest('hex')
+/** today's prepare dumps read so far, by paper (prepOf) */
+const preps = new Map()
 // (the manifest, written before anything is drawn: a run that stops or fails leaves it not done)
 const RUN = { id: `${new Date().toISOString()}-${process.pid}`, at: new Date().toISOString(), pairs, pages: PAGES, done: false, stopped: null, missing: [] }
 const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stringify(RUN, null, 1)}\n`)
@@ -327,6 +329,10 @@ const lab = await browser.newContext({ viewport: { width: 400, height: 300 } })
 await guard(lab)
 const labPage = await lab.newPage()
 await labPage.goto(`${server.origin}/h/blank.html`)
+// (the pixel readings analyse.mjs makes with, pixels.mjs: its functions on the lab page's globalThis.parityPixels)
+const pixelsJs = readFileSync(join(HERE, 'pixels.mjs'), 'utf8').replace(/^export /gm, '')
+const pixelNames = [...pixelsJs.matchAll(/^(?:async )?function (\w+)|^const (\w+) =/gm)].map((m) => m[1] ?? m[2])
+await labPage.addScriptTag({ content: `(() => {\n${pixelsJs}\nglobalThis.parityPixels = { ${pixelNames.join(', ')} }\n})()` })
 
 for (const pair of pairs) {
   if (!todayDesc.has(pair)) continue
@@ -382,7 +388,7 @@ for (const pair of pairs) {
       const clip = { x: 0, y: 0, width: o.size[0], height: o.size[1] }
       const A = await shot(tp, clip)
       rec.view = o.view
-      rec.original = { links: o.links }
+      rec.original = { links: o.links, runs: o.runs, fonts: o.fonts }
       // today's
       await tp.evaluate(() => globalThis.today.textOnly(false))
       const t = await tp.evaluate(([k, s]) => globalThis.today.page(k, s), [n, SCALE])
@@ -392,6 +398,11 @@ for (const pair of pairs) {
       await frames(tp)
       const Tt = await shot(tp, clip)
       await tp.evaluate(() => globalThis.today.textOnly(false))
+      // (its drawing without its text: the copy, the original's ink it keeps, its crops and pastes)
+      await tp.evaluate(() => globalThis.today.copyOnly(true))
+      await frames(tp)
+      const Tc = await shot(tp, clip)
+      await tp.evaluate(() => globalThis.today.copyOnly(false))
       rec.today = t
       // v2's
       await vp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
@@ -418,14 +429,33 @@ for (const pair of pairs) {
       const vclip = { x: s.rect[0], y: s.rect[1], width: s.rect[2], height: s.rect[3] }
       const V = await shot(vp, vclip)
       rec.v2 = { ...(await vp.evaluate(([k, view]) => globalThis.__p.measure(k, view), [n, o.view])), rect: s.rect, canvases: s.canvases }
-      const figs = (v2.facts[n]?.members ?? []).filter((m) => /figure/.test(m.kind)).map((m) => m.ord)
-      await vp.evaluate((hide) => globalThis.__p.textOnly(true, hide), figs)
+      // (its translated text alone, its figure texts with it: the page's darkness is read outside them, analyse.mjs)
+      await vp.evaluate(() => globalThis.__p.textOnly(true))
       await frames(vp)
       const Vt = await shot(vp, vclip)
       await vp.evaluate(() => globalThis.__p.textOnly(false))
-      // the pixels: the panes, the text's darkness, the difference (analyse.mjs, in the lab's own page)
+      // (its drawing without its text: the page view's copy and the crops)
+      await vp.evaluate(() => globalThis.__p.copyOnly(true))
+      await frames(vp)
+      const Vc = await shot(vp, vclip)
+      await vp.evaluate(() => globalThis.__p.copyOnly(false))
+      // the pixels: the panes, the text's darkness, the difference, each side against arXiv's page (analyse.mjs, in the lab's
+      // own page)
       const boxes = boxesOf(rec, v2, n)
-      const px = await labPage.evaluate(analyse, { A, T, Tt, V, Vt, view: o.view, boxes, textBoxes: textBoxesOf(rec, v2, n), scale: SCALE * DPR })
+      const px = await labPage.evaluate(analyse, {
+        A,
+        T,
+        Tt,
+        Tc,
+        V,
+        Vt,
+        Vc,
+        view: o.view,
+        boxes,
+        textBoxes: textBoxesOf(rec, v2, n),
+        ...fidelityOf(rec, v2, n, prepOf(paper)),
+        scale: SCALE * DPR,
+      })
       for (const [k, b64] of Object.entries(px.images)) writeFileSync(join(OUT, 'img', `${pair}-p${n}-${k}.webp`), Buffer.from(b64, 'base64'))
       delete px.images
       rec.px = px
@@ -461,6 +491,82 @@ await browser.close()
 await server.close()
 // (the built page is made again on every run: not kept in the work directory)
 rmSync(BUILD, { recursive: true, force: true })
+
+/** today's prepare dump of a paper (the original's lines and elements of today's units), read once (`preps`) */
+function prepOf(paper) {
+  if (!preps.has(paper)) {
+    const f = join(LAB, 'refactor-2026-11', 'baseline', 'prepare', `${paper}.prepare.json`)
+    preps.set(paper, existsSync(f) ? new Map(json(f).units.map((u) => [u.ord, u])) : new Map())
+  }
+  return preps.get(paper)
+}
+
+/** a drawn line's band, PDF units: its ink across, 0.3 of its size under its baseline to 1.0 over (a turned line its box) */
+function bandOf(l) {
+  return l.rot ? [l.x0 - 0.5, l.y0 - 0.5, l.x1 + 0.5, l.y1 + 0.5] : [l.x0 - 0.5, l.y - 0.3 * l.size, l.x1 + 0.5, l.y + 1.0 * l.size]
+}
+/** a part line's box on A [x0, bottom, x1, top]; a prepare line's */
+function partBox(l) {
+  return [l[2], Math.min(l[5], l[6]), l[3], Math.max(l[5], l[6])]
+}
+function prepBox(l) {
+  return [l.x0, Math.min(l.top, l.bottom), l.x1, Math.max(l.top, l.bottom)]
+}
+/** whether a crop is drawn where its source stands (its page, its box within half a point) */
+function inPlace(c, n) {
+  return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= 0.5)
+}
+
+/**
+ * What analyse.mjs reads of each side's drawing against arXiv's page (pixels.mjs): each drawn group's bands (`groups`, by side:
+ * today's units `t:<ord>`, figure texts `f:<id>`, names `n:<id>`; v2's members `p:<ord>`), the original's lines of every unit
+ * either side draws (`origs`: the part's `p:<ord>`, today's prepare dump's `q:<ord>`), the figure texts' drawn boxes (outside
+ * which the page's darkness is read), each side's translated units' original lines (`regions`, its figure texts aside) and its
+ * crops drawn away from their source (`moved`), and each element's ink on A (`elements`, `<group>:<piece>`: v2's the part's
+ * El.ink, today's its prepare dump's segments)
+ */
+function fidelityOf(rec, v2, n, prep) {
+  const facts = new Map((v2.facts[n]?.members ?? []).map((m) => [m.ord, m]))
+  const partOf = new Map(Object.entries(v2.today).map(([o, t]) => [t.today, Number(o)]))
+  const drawnLines = (u) => u.lines.filter((l) => l.n > 0 && l.x0 !== null)
+  const groups = {
+    today: [
+      ...(rec.today?.units ?? []).map((u) => ({ id: `t:${u.id}`, boxes: drawnLines(u).map(bandOf) })),
+      ...(rec.today?.figures ?? []).map((u) => ({ id: `f:${u.id}`, boxes: drawnLines(u).map(bandOf) })),
+      ...(rec.today?.names ?? []).map((u) => ({ id: `n:${u.id}`, boxes: drawnLines(u).map(bandOf) })),
+    ],
+    v2: (rec.v2?.units ?? []).map((u) => ({ id: `p:${u.id}`, boxes: drawnLines(u).map(bandOf) })),
+  }
+  const figBoxes = [
+    ...(rec.today?.figures ?? []).flatMap(drawnLines),
+    ...(rec.v2?.units ?? []).filter((u) => /figure/.test(facts.get(u.id)?.kind ?? '')).flatMap(drawnLines),
+  ].map((l) => { const b = bandOf(l); return [b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1] })
+  const onPage = (m) => (m?.lines ?? []).filter((l) => l[0] === n).map(partBox)
+  const prepLines = (u) => (u?.lines ?? []).filter((l) => l.page === n && !l.rot).map(prepBox)
+  const origs = [
+    ...(rec.v2?.units ?? []).map((u) => ({ id: `p:${u.id}`, boxes: onPage(facts.get(u.id)) })),
+    ...(rec.today?.units ?? []).map((u) => ({ id: `q:${u.id}`, boxes: prepLines(prep.get(u.id)) })),
+  ].filter((o) => o.boxes.length)
+  const text = (k) => !/figure/.test(k ?? '')
+  const regions = {
+    today: (rec.today?.units ?? []).flatMap((u) => {
+      const m = facts.get(partOf.get(u.id))
+      return m ? (text(m.kind) ? onPage(m) : []) : text(prep.get(u.id)?.kind) ? prepLines(prep.get(u.id)) : []
+    }),
+    v2: (rec.v2?.units ?? []).flatMap((u) => (text(facts.get(u.id)?.kind) ? onPage(facts.get(u.id)) : [])),
+  }
+  const moved = {
+    today: (rec.today?.crops ?? []).filter((c) => !inPlace(c, n)).map((c) => c.slice(1, 5)),
+    v2: (rec.v2?.crops ?? []).filter((c) => !inPlace(c, n)).map((c) => c.slice(1, 5)),
+  }
+  const elements = {
+    today: (rec.today?.units ?? []).flatMap((u) =>
+      (prep.get(u.id)?.elements ?? []).map((e) => ({ id: `${u.id}:${e.k}`, boxes: (e.segs ?? []).filter((g) => g.page === n).map(prepBox) })).filter((e) => e.boxes.length),
+    ),
+    v2: [...facts.values()].flatMap((m) => (m.els ?? []).map(([k, , boxes]) => ({ id: `${m.ord}:${k}`, boxes: boxes.map((b) => [b[0], b[1], b[2], b[3]]) })).filter((e) => e.boxes.length)),
+  }
+  return { figBoxes, groups, origs, regions, moved, elements }
+}
 
 /** the original lines of the units either side lays on the page (PDF units [x0, y0, x1, y1], their fonts' boxes): where the
  *  original's text darkness is read, the ink the translation stands for */

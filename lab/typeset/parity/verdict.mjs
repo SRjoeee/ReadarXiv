@@ -4,6 +4,8 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
+import { judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
 /** the stand-in of a crop in a drawn line's text (measure-dom.mjs: a transparent run, the canvas draws its ink) */
 const OBJ = '\ufffc'
@@ -48,8 +50,9 @@ export const NEAR = {
   positionMin: 1,
   /** the text's darkness: a share of the original text's own darkness */
   weight: 0.05,
-  /** a size: a share of the original's (two of the fit's steps of 0.025) */
-  size: 0.05,
+  /** a size: a share of the original's, half the fit's step of 0.025 (a step is a size a reader sees; two steps, the floor
+   *  before 2026-11-08, hid a body grown 5 % over the original's, 2610.10069 p5) */
+  size: SIZE_STEP / 2,
   /** a style's share of a unit's characters, and 3 characters at least */
   style: 0.15,
   styleMin: 3,
@@ -61,7 +64,32 @@ export const NEAR = {
   weightPixels: 3000,
 }
 /** how much each measure weighs in a page's order (each measure's worse differences counted, 8 at most) */
-export const WEIGHT = { shown: 3, weight: 3, anchor: 3, align: 3, cross: 3, gap: 3, turn: 3, stretch: 2, style: 2, pixels: 2, figures: 2, size: 1, links: 1, highlight: 1, 'line-count': 0.5 }
+export const WEIGHT = {
+  shown: 3,
+  weight: 3,
+  anchor: 3,
+  align: 3,
+  cross: 3,
+  gap: 3,
+  turn: 3,
+  over: 3,
+  frame: 3,
+  block: 3,
+  elements: 3,
+  stretch: 2,
+  style: 2,
+  pixels: 2,
+  figures: 2,
+  erased: 2,
+  groups: 2,
+  labels: 2,
+  size: 1,
+  links: 1,
+  highlight: 1,
+  folio: 1,
+  ink: 1,
+  'line-count': 0.5,
+}
 export const FLAGS = Object.keys(WEIGHT)
 /** what each measure is, as a distance from the original */
 export const SAYS = {
@@ -80,6 +108,15 @@ export const SAYS = {
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
+  over: "a side's text drawn over ink that stays (the copy's, a crop's, the original's it keeps): device pixels of its text over other ink (the original: none)",
+  frame: "a laid line past its column or the original's text block (a cell: past its own room, the owner's ruling 3), points (the original: none)",
+  block: "lines laid in space the original leaves empty, under its last line (the owner's ruling 1: no borrowing)",
+  elements: "an element drawn otherwise than the original sets it: pieces TeX set on one line drawn apart, its scripts set flat as text, drawn as nothing where TeX set ink",
+  erased: "the original's glyphs a side shows in part inside its translated units' regions (an erasure's sliver)",
+  groups: "a table's grid group translated or kept whole as today decides (the owner's ruling 3); a group v2 is handed already decided",
+  labels: "a paper's labels in one form, the target word everywhere (the owner's ruling 4)",
+  folio: "a page number at its size, right-aligned (the owner's ruling 6)",
+  ink: "a text whose original ink is black drawn in another fill (the owner's ruling 7: the PDF's own black)",
 }
 
 // ---------------------------------------------------------------- one page
@@ -90,7 +127,7 @@ export const SAYS = {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -138,7 +175,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (turned.has(m.ord)) continue
     const lines = m.lines
       .filter((l) => l[0] === n)
-      .map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? m.style.size, m0: l[7], m1: l[8] }))
+      .map((l) => ({ x0: l[2], x1: l[3], y: l[4], top: Math.max(l[5], l[6]), bottom: Math.min(l[5], l[6]), size: l[10] ?? m.style.size, m0: l[7], m1: l[8] }))
     // (a label TeX set on the first line (a caption's "Table 4:", a numbered head's number), which a side either keeps as the
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
@@ -149,7 +186,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (orig.has(key)) continue
     const u = prepByOrd.get(Number(key.slice(1)))
     if (!u) continue
-    const lines = (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, size: l.size }))
+    const lines = (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, top: Math.max(l.top, l.bottom), bottom: Math.min(l.top, l.bottom), size: l.size }))
     orig.set(key, { kind: u.kind, align: null, style: null, lines, first: u.lines?.[0]?.page === n, part: null, size: lines[0]?.size ?? null })
   }
   // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
@@ -193,6 +230,25 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     ties.push(keys)
   }
 
+  // (the original's style and size read off arXiv's glyphs in each unit's lines, apart from the part: render.mjs's runs of
+  // PDF.js's text content; a drawing of before them, the part's)
+  const runs = rec.original?.runs ?? null,
+    fonts = rec.original?.fonts ?? []
+  const aOrig = new Map()
+  if (runs)
+    for (const [key, o] of orig) {
+      const a = originalOf(runs, fonts, o.lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))
+      if (a) aOrig.set(key, a)
+    }
+  /** a drawn line by its ink: a CJK opening mark's blank first half and a closing mark's blank second half no ink */
+  const inkOf = (l) => {
+    if (l.rot) return l
+    const t = l.text.trim()
+    const x0 = l.x0 + (OPENING.test(t[0] ?? '') ? 0.5 * l.size : 0),
+      x1 = l.x1 - (CLOSING.test(t.at(-1) ?? '') ? 0.5 * l.size : 0)
+    return x1 > x0 ? { ...l, x0, x1 } : l
+  }
+
   // ------------------------------------------------ per unit, each side's distances from the original
   const units = []
   for (const key of new Set([...T.keys(), ...V.keys()])) {
@@ -208,7 +264,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (o?.lines.length && ls.length) {
         const ol = [...o.lines].sort((a, b) => b.y - a.y)
         const dl = [...ls].sort((a, b) => b.y - a.y)
-        const os = ol[0].size || o.size || s.size
+        const os = aOrig.get(key)?.size ?? (ol[0].size || o.size || s.size)
         s.osize = os
         // anchor: the unit's first line, where the original starts on this page; a section heading the side sets in fewer lines
         // than the original's (the part's heading, not its title nor its front matter, wholly on this page, its label not kept
@@ -295,16 +351,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       }
       if (t.olines !== undefined && v.olines !== undefined)
         judge('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
-      // style: against the original's font state (bold: 1 where TeX set the unit bold; slanted likewise)
-      if (o?.style)
+      // style: against the original's, its share of characters set in a bold and in a slanted face on arXiv's page (the part's
+      // font state where no glyph of arXiv's is read)
+      const ao = aOrig.get(key)
+      if (ao || o?.style)
         for (const [st, on] of [
-          ['bold', o.style.bold ? 1 : 0],
-          ['italic', o.style.slant ? 1 : 0],
+          ['bold', ao ? ao.bold : o.style.bold ? 1 : 0],
+          ['italic', ao ? ao.italic : o.style.slant ? 1 : 0],
         ]) {
           const a = t.chars ? t[st] / t.chars : 0,
             b = v.chars ? v[st] / v.chars : 0
           if (Math.abs(t[st] - v[st]) < NEAR.styleMin) continue
-          judge('style', name, `${st} share of its characters off the original's`, on, { value: r2(a), d: Math.abs(a - on) }, { value: r2(b), d: Math.abs(b - on) }, NEAR.style)
+          judge('style', name, `${st} share of its characters off the original's`, r2(on), { value: r2(a), d: Math.abs(a - on) }, { value: r2(b), d: Math.abs(b - on) }, NEAR.style)
         }
       if (t.over > 0 || v.over > 0) judge('stretch', name, 'overshoot past 1 em a word space, 0.25 em a letter gap (ems)', 0, { value: `word ${r2(t.word)}, letter ${r2(t.letter)}`, d: t.over }, { value: `word ${r2(v.word)}, letter ${r2(v.letter)}`, d: v.over }, NEAR.stretch)
     }
@@ -415,13 +473,20 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
   // translation missing within a unit both translate, counted per unit; v2's relabelled where today's is not is no fault)
+  // (and each label as each side drew it, for the paper's pass: the owner's ruling 4, the target word everywhere, one form in a
+  // paper; v2 relabelling a label today keeps is nearer)
+  out.labels = []
   for (const [key, o] of orig) {
     const name = o.label?.name
-    if (!o.first || !name?.[1] || name[1][0] !== n || !T.has(key) || !V.has(key)) continue
-    const t = labelOf(T.get(key), o.label),
-      v = labelOf(V.get(key), o.label)
+    if (!o.first || !name?.[1] || name[1][0] !== n || (!T.has(key) && !V.has(key))) continue
+    const t = T.has(key) ? labelOf(T.get(key), o.label) : null,
+      v = V.has(key) ? labelOf(V.get(key), o.label) : null
+    out.labels.push({ unit: `${key} ${o.kind ?? ''}`.trim(), name: name[0], today: t, v2: v })
+    if (!T.has(key) || !V.has(key)) continue
     if (t === 'translated' && v !== null && v !== 'translated')
       diff('shown', `${key} ${o.kind ?? ''}`.trim(), `its label ("${name[0]}") drawn in the target by today, ${v === 'kept' ? "kept as the original's ink" : "drawn in the original's words"} by v2`, name[0], { value: 'translated', off: null }, { value: 'label', off: null }, true, 'today')
+    if (v === 'translated' && t !== null && t !== 'translated')
+      diff('labels', `${key} ${o.kind ?? ''}`.trim(), "its label drawn in the target by v2, kept by today (the owner's ruling 4: the target word everywhere)", name[0], { value: t, off: 1 }, { value: v, off: 0 }, false, 'v2')
   }
   // (the figure texts each side drew: today's groups of their own (g[data-f]), v2's groups of the part's figure members
   // (g[data-axt-ord]), each with a drawn character; the members v2's Page lays kept beside, for diagnosis)
@@ -430,6 +495,48 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const figV = rec.v2.units.filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0)).length
   const figLaid = [...laidV2.keys()].filter((o) => figOrds.has(o)).length
   if (figV < figT) diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, true, 'today')
+
+  // ------------------------------------------------ against arXiv's page and the original's facts (fidelity.mjs), and the
+  // owner's rulings of 2026-11-08
+  const fc = {
+    n,
+    pair,
+    rec,
+    v2,
+    facts,
+    laidV2,
+    T,
+    V,
+    orig,
+    keyOfPart,
+    todayOf,
+    prepByOrd,
+    frame: frame ?? null,
+    groups: groups ?? [],
+    keptByGroup: keptByGroup ?? new Set(),
+    folios: new Set([...(folios ?? [])].filter((o) => facts.has(o))),
+    figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
+    judge,
+    diff,
+    fault,
+    inkOf,
+    band,
+    NEAR,
+  }
+  const { borrowed } = measureFidelity(fc)
+  judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
+  judgeJoined(fc, joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band), new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
+  // (the owner's ruling 1, no borrowing: where today lays a unit's lines in space the original leaves empty and v2 keeps its
+  // block, v2's smaller size or fewer lines there are the ruling's, not v2's fault)
+  for (const d of out.diffs) {
+    if (!d.worse || (d.flag !== 'size' && d.flag !== 'line-count') || !d.unit) continue
+    const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
+    if (keys.some((k) => (borrowed.today.get(k) ?? 0) > 0) && !keys.some((k) => (borrowed.v2.get(k) ?? 0) > 0)) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = "no borrowing (the owner's ruling 1): today lays lines in space the original leaves empty, v2 keeps the block"
+    }
+  }
 
   // ------------------------------------------------ page measures: links, the highlight, darkness, pixels
   const px = rec.px ?? {}
@@ -452,13 +559,6 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
   // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows))
-  const inkOf = (l) => {
-    if (l.rot) return l
-    const t = l.text.trim()
-    const x0 = l.x0 + (OPENING.test(t[0] ?? '') ? 0.5 * l.size : 0),
-      x1 = l.x1 - (CLOSING.test(t.at(-1) ?? '') ? 0.5 * l.size : 0)
-    return x1 > x0 ? { ...l, x0, x1 } : l
-  }
   const leadOf = (side) => {
     const gaps = []
     for (const m of v2.pages[n]?.members ?? [])
@@ -555,13 +655,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       b = faults.v2[f] ?? []
     if (a.length || b.length) out.faults[f] = { today: a.length, v2: b.length, todaySays: a.slice(0, 6), v2Says: b.slice(0, 6) }
   }
+  recount(out)
+  out.units = units
+  return out
+}
+
+/** a page's differences ordered, its worse ones counted and its score (each measure's worse differences, 8 at most, times its
+ *  weight): again after the paper's pass adds its own */
+export function recount(out) {
   out.diffs.sort((x, y) => Number(y.worse) - Number(x.worse) || FLAGS.indexOf(x.flag) - FLAGS.indexOf(y.flag))
   out.worse = out.diffs.filter((d) => d.worse).length
   const by = new Map()
   for (const d of out.diffs) if (d.worse) by.set(d.flag, (by.get(d.flag) ?? 0) + 1)
   out.score = [...by].reduce((s, [f, k]) => s + WEIGHT[f] * Math.min(k, 8), 0)
-  out.units = units
-  return out
 }
 
 /** a run set smaller and raised or lowered off its line's baseline (a footnote mark, a superscript: the typesetter's rise)
@@ -651,6 +757,25 @@ function figuresMatched(groups, prep, facts, n) {
   const drawnByToday = new Set(mutualBest(g, t).values())
   const out = new Map()
   for (const [today, ord] of mutualBest(t.filter((x) => drawnByToday.has(x.id)), v)) out.set(ord, today)
+  return out
+}
+
+/** the figure texts both sides translate on page n, v2's member ord → today's own group's id (figuresMatched's join, its group
+ *  kept) */
+function figureGroupsOf(groups, prep, facts, n) {
+  const figure = (k) => /figure/.test(k ?? '')
+  const g = groups.map((u) => ({ id: u.id, box: spanOf(u.lines.filter((l) => l.n > 0).map(band)) })).filter((x) => x.box)
+  const t = prep
+    .filter((u) => figure(u.kind))
+    .map((u) => ({ id: u.ord, box: spanOf((u.lines ?? []).filter((l) => l.page === n).map((l) => ({ x0: l.x0, y0: Math.min(l.top, l.bottom), x1: l.x1, y1: Math.max(l.top, l.bottom) }))) }))
+    .filter((x) => x.box)
+  const v = facts
+    .filter((m) => figure(m.kind))
+    .map((m) => ({ id: m.ord, box: spanOf(m.lines.filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))) }))
+    .filter((x) => x.box)
+  const groupOf = new Map([...bestPairs(g, t)].map(([gid, tid]) => [tid, gid]))
+  const out = new Map()
+  for (const [tid, ord] of bestPairs(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(tid))
   return out
 }
 
