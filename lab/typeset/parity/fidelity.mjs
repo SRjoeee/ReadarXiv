@@ -320,7 +320,7 @@ export function measureFidelity(c) {
   }
   // (b) scripts set flat, (c) drawn as nothing: v2's elements from the part (El: its ink's boxes here, its text), each read
   // against arXiv's glyphs in its ink's boxes and against TeX's points (today's prepare dump: its ink found on this page, or a
-  // piece TeX's points hold that its reading lost)
+  // piece TeX's points hold that its reading lost, its ink not outside the unit's lines)
   // (an element is drawn as a crop where a crop of its unit is cut from its ink: the crop's source on A holds half of its ink's
   // box or more; a crop's piece names its place in the row, not the element)
   const cropsBy = { today: new Map(), v2: new Map() }
@@ -351,16 +351,21 @@ export function measureFidelity(c) {
       if (!VISIBLE(kind) || keep) continue
       const id = `${ord}:${k}`
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
-      if (text === 1) {
-        if (boxes.length && !raised && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
+      // (with ink here and no crop cut from it, drawn as its text: its scripts flat where its glyphs on A have them)
+      if (boxes.length) {
+        if (text === 1 && !raised && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
         continue
       }
-      // (drawn as nothing: the part states no ink of it on this page, and no text to draw, where TeX's points hold ink. An element
-      // with ink here is drawn, cut from it or as its symbol; a symbol is drawn from its source's name where it has none)
-      if (text === 2 || boxes.length || kind === 'symbol') continue
+      // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
+      // its source's name, and a text macro whose text the part states, drawn as that text; one the instrument states empty,
+      // TeX set nothing: no element missing. Missing where TeX's points hold ink: today's reading finds it on this page, or its
+      // points hold ink its reading lost)
+      if (text === 2 || kind === 'symbol' || ((kind === 'macro' || kind === 'umacro') && text === 1)) continue
       const te = tu?.elements?.find((e) => String(e.k) === k)
       const found = te?.segs?.some((g) => g.page === n)
-      const lost = te?.flags?.includes('LOST') && !inkAll && n === firstLaid
+      // (a piece whose ink stands outside its unit's lines, OUTSIDE, stays the original's in place on both sides: an IEEE drop
+      // cap, 2610.20484 p1)
+      const lost = te?.flags?.includes('LOST') && !te.flags.includes('OUTSIDE') && !inkAll && n === firstLaid
       if (found || lost) note('v2', key, `element ${k}: drawn as nothing where TeX set ${found ? 'ink' : 'ink its reading did not find'}`)
     }
   }

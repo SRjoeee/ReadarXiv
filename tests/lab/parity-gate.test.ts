@@ -191,6 +191,21 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const p = measure(fe, sides(6, ll, ll, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
     expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts or sizes set flat as text' } }])
   })
+  it("an element of a formula's class with no ink on the page is drawn as nothing even with a text: its points' ink lost (2608.25210 p7)", () => {
+    // (the algorithm's El 4, an \\If block: no ink in the part, its copy stated; today's reading lost its ink (LOST))
+    const els = [['4', 'other', [], 0, 1, 0, 0]]
+    const fe = one(156, 'para', [factLine(320, 540, 678)], { els })
+    const prep = [{ ord: 156, kind: 'para', elements: [{ k: 4, kind: 'math', flags: ['LOST'], segs: [] }] }]
+    const ll = [drawnLine(320, 400, 678, 'x'.repeat(10))]
+    expect(of('elements')(measure(fe, sides(156, ll, ll), { prep }))).toMatchObject([{ unit: 't156 para', worse: true, v2: { value: 'element 4: drawn as nothing where TeX set ink its reading did not find' } }])
+  })
+  it("an element whose lost ink stands outside its unit's lines stays the original's in place: no element missing (2610.20484 p1)", () => {
+    const els = [['2', 'macro', [], 0, 0, 0, 0]]
+    const fe = one(6, 'para', [factLine(113.3, 300, 289.63)], { els })
+    const prep = [{ ord: 6, kind: 'para', elements: [{ k: 2, kind: 'macro', flags: ['LOST', 'OUTSIDE'], segs: [] }] }]
+    const ll = [drawnLine(113.3, 300, 289.63, 'x'.repeat(10))]
+    expect(of('elements')(measure(fe, sides(6, ll, ll), { prep }))).toEqual([])
+  })
   it("an element drawn as nothing where TeX set ink (today's reading found it on the page): worse", () => {
     // (2610.21312 p2 t9: El 13 "d/n = 0.191" with no ink on p2 in v2's part, today's segment on p2)
     const els = [['13', 'other', [], 0, 0, 0, 0]]
