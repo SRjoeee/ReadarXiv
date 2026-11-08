@@ -162,6 +162,21 @@ describe('locate', () => {
     expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
     expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
   })
+  it('states a shared row’s separation from the leader’s ink end, which S.rowStart lays the follower from (today’s file rows)', () => {
+    // (2610.40645v1 p34: "Proof of Proposition 4.4." ends in a full stop whose ink ends 0.85 pt before its advance; the
+    // follower is laid from the translation's ink end (S.share's ink), so the separation it keeps is from the original's ink
+    // end: today's rows are their glyphs' ink (make.mjs rowsOf), its follower 4.49 pt after the head's drawn end, v2's 3.33)
+    const B2 = docOf([
+      { lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x: 110, y: 700 }, 'and on'] },
+    ])
+    const stop = B2.pages[0]!.glyphs[4]!
+    stop.ix0 = stop.x0 + 1
+    stop.ix1 = stop.x1 - 0.85
+    const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+    const L = locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
+    expect(L.flows).toEqual([[0, 1]])
+    expect(L.members[1]!.join).toEqual([r2(110 - (72 + 5 * 6 - 0.85))])
+  })
   it('shares no line further apart than a shared line’s separation (today’s SHARED_SEP, 3 em): boxes set side by side', () => {
     // (1706.03762v7 p4: two minipages' titles on one baseline 97 pt apart; 2608.06701v1 p6: a run-in head and a paragraph
     // whose text starts 39.77 pt after it, its own label between, 4 em of its 9.96 pt; a running head's title and folio)

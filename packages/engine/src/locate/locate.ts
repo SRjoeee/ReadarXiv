@@ -1063,8 +1063,23 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return false
   }
-  const joinOf = (a: Line, b: Line, size: number): [number] | [number, 1] =>
-    keptOn(a, b, size) ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
+  // (Placed.join's separation: from the leader's ink end on the row, its last line's glyphs' outlines (an advance where a glyph
+  // has none), to the follower's first line: S.rowStart lays the follower from the translation's ink end (S.share's `ink`), so
+  // the separation it keeps is the original's from its ink; today's shared row is the file's row, its glyphs' ink (make.mjs
+  // rowsOf), 2610.40645v1 p34's "Proof of Proposition 4.4." and its theorem 4.49 pt apart drawn where v2's were 3.33)
+  const inkEnd = (lead: Member, a: Line) => {
+    let x = Number.NEGATIVE_INFINITY
+    for (const g of lead.lines.at(-1) === a ? (lead.lineGlyphs.at(-1) ?? []) : []) {
+      const d = gA(g)
+      if (/\S/.test(d.u)) x = Math.max(x, d.ix1 > d.ix0 ? d.ix1 : d.x1)
+    }
+    return Number.isFinite(x) ? x : a[3]
+  }
+  const joinOf = (lead: Member, b: Line, size: number): [number] | [number, 1] => {
+    const a = lead.lines.at(-1)!
+    const sep = r2(b[2] - inkEnd(lead, a))
+    return keptOn(a, b, size) ? [sep, 1] : [sep]
+  }
   // (the stream: the instrument's members in its order, and each member made on A (ink.ts, born.ts) where TeX set its text in
   // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
   // after its last, as a name leads the unit after it (above). amsthm's head no source unit owns, made on A, and its theorem's
@@ -1143,7 +1158,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
     const into = shares ? flowOf.get(prev.ord) : undefined
     if (into) {
-      mem.join = joinOf(a!, b!, a![10] ?? prev!.style.size)
+      mem.join = joinOf(prev!, b!, a![10] ?? prev!.style.size)
       into.push(mem.ord)
       flowOf.set(mem.ord, into)
     } else {
@@ -1219,11 +1234,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (tie.ords.length < 2) ties.splice(t, 1)
     }
     const k = flow.indexOf(led.ord)
-    const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
-    if (prev && led.join) n.join = joinOf(prev, l, prev[10] ?? members[flow[k - 1] as number]!.style.size)
+    const before = k > 0 ? members[flow[k - 1] as number] : undefined
+    const prev = before?.lines.at(-1)
+    if (before && prev && led.join) n.join = joinOf(before, l, prev[10] ?? before.style.size)
     flow.splice(k, 0, n.ord)
     flowOf.set(n.ord, flow)
-    led.join = joinOf(l, f, l[10] ?? n.style.size)
+    led.join = joinOf(n, f, l[10] ?? n.style.size)
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
