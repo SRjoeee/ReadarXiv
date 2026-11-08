@@ -24,7 +24,18 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
-import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
+import {
+  bracketsOf,
+  fakedCaps,
+  fillRunsOf,
+  type StyleGlyph,
+  sourceText,
+  styleOf,
+  textOf,
+  turnedStyleGlyph,
+  unitSize,
+  urlCopyOf,
+} from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
@@ -813,22 +824,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     // (the pages it has ink of its own on, which a group of its holds: a KEPT line's page alone is none of them)
     mem.pages = [...new Set(mem.lines.filter((l) => !(l[9] & 1)).map((l) => l[0]))]
-    // style: TeX's font state is not stated by today's instrument: read off its own glyphs on A as today's reader reads it
-    // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage 1b states it)
+    // style: TeX's font state is not stated by today's instrument: read off all of its own glyphs on A, level and turned, as
+    // today's reader reads it (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage
+    // 1b states it). A figure text set turned has its glyphs in `turned` alone: their font, size and fill are its style, as
+    // today's figure texts take their turned glyphs' font (layout/figure-text.mjs); read off its level glyphs alone, a bold
+    // axis title was the default serif (35 lines on 11 pages of the corpus)
     // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
     // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
-    const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
+    const own: StyleGlyph[] = [
+      ...mem.text.map(gA),
+      ...mem.turned.map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!)),
+    ]
+    const txt = own.filter((g) => /\S/.test(g.u))
+    // (its source's text: a babel name's none, its key (`ref`) being no text of it (\refname's is the class's: IEEEtran's
+    // "REFERENCES" in faked small capitals, read against `ref` as capitals at the small capitals' size, 41 names of the corpus))
+    const source = unit && unit.name === undefined ? sourceText(unit.content) : null
     // (its faked small capitals aside, as today's originalStyle reads its size: smallCapsOf's, facts.ts fakedCaps; their share
     // Style.sc, and whether its text is set in them, today's vote, Style.caps)
-    const caps = fakedCaps(txt, unit ? sourceText(unit.content) : null, mem.kind.startsWith('ink'))
+    const caps = fakedCaps(txt, source, mem.kind.startsWith('ink'))
     const read = unitSize(caps.small.size ? txt.filter((g) => !caps.small.has(g)) : txt)
-    const size =
-      read ??
-      mostOf(txt.map((g) => r2(g.size))) ??
-      (mem.turned[0] ? r2(inkA.pages[mem.turned[0][0] - 1]!.turned![mem.turned[0][1]]!.size) : 10)
+    const size = read ?? mostOf(txt.map((g) => r2(g.size))) ?? 10
     if (read === undefined && mem.lines.length) mem.read.push('size:lines')
     // (in the text's capitals by fakedCaps' `upper`: a faked small capital is no case change; an ink unit's by its capitals' share)
-    const { upper: _upper, ...read0 } = styleOf(mem.text.map(gA), size, unit ? sourceText(unit.content) : null)
+    const { upper: _upper, ...read0 } = styleOf(own, size, source)
     void _upper
     mem.style = {
       ...read0,

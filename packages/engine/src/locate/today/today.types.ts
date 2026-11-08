@@ -1,5 +1,8 @@
-// The types of today's ink makers copied beside this file (ledger.mjs, ink-units.mjs, figure-text.mjs, deps.mjs: JavaScript as it
-// is), what ink.ts reads of them; each value re-exported with its type (a package holds no declaration file).
+// The types of today's ink makers copied beside this file (ledger.mjs, ink-units.mjs, figure-text.mjs, deps.mjs, accents.mjs:
+// JavaScript as it is), what ink.ts and facts.ts read of them; each value re-exported with its type (a package holds no
+// declaration file).
+// @ts-ignore: JavaScript copied as it is, typed by this file alone
+import * as accents from './accents.mjs'
 // @ts-ignore: JavaScript copied as it is, typed by this file alone
 import * as deps from './deps.mjs'
 // @ts-ignore: JavaScript copied as it is, typed by this file alone
@@ -99,3 +102,18 @@ export const regionsOf = deps.regionsOf as (page: {
   boxes: ArrayLike<number>
   points: readonly { name: string; glyph: number; box: number }[]
 }) => { glyph: Int32Array; box: Int32Array; at: Int32Array; bodies: boolean }
+/** a glyph as accents.mjs reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
+export interface AccentGlyph {
+  u: string
+  font: string
+  size: number
+  x0: number
+  x1: number
+  y: number
+  top: number
+}
+/** each spacing accent's combining mark (accents.mjs COMBINING) */
+export const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
+/** whether spacing accent `a` is set over letter `l` by TeX's \accent: the letter's accented form (NFC), or null
+ *  (accents.mjs accentOver) */
+export const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
