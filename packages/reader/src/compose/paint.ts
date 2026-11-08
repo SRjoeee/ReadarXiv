@@ -138,18 +138,42 @@ export function cropsOf(page: Page): {
   return out
 }
 
-/** a page rendered in the crop configuration at the page view's resolution, on a canvas of its own; null where the render was
- *  let go (a page that leaves the view) */
+/** a page view's box rounding, CSS px (PDF.js's --scale-round-x and -y on its page box: the denominator of its output scale's
+ *  fraction, 1 at an integral pixel ratio) */
+export type Rounding = { x: number; y: number }
+
+/**
+ * The crops' canvas on the page view's own pixel grid: the page view's viewport (its turn and all) floored to its rounding, as
+ * PDF.js floors a page view's box (setLayerDimensions' `round(down, …, var(--scale-round-x))`), its pixels that box at the
+ * output scale, as the page view's canvas's are (PDFPageView's floorToDivide). Shown in that box (`.axt-crops`, the same
+ * `round(down, …)` of the frame) it maps pixel for pixel onto the device from the page's top-left corner, as the page view's
+ * canvas does. A canvas shown in the frame itself, a fraction of a CSS px wider, is resampled by the compositor to the whole px
+ * it snaps the box to (1587 device px shown in 1588 at a ratio of 2: the crops 0.063 % large against the page under them, a
+ * device px at its right); one drawn upright and turned about its own box stands the frame's fraction of a px off the page
+ * view, which is cut at its box from its own top-left corner
+ */
+export function cropGrid(
+  vp: Pick<PageViewport, 'width' | 'height'>,
+  scale: { sx: number; sy: number },
+  round: Rounding = { x: 1, y: 1 },
+): { css: [number, number]; px: [number, number] } {
+  const css: [number, number] = [vp.width - (vp.width % round.x), vp.height - (vp.height % round.y)]
+  return { css, px: [Math.max(1, Math.round(css[0] * scale.sx)), Math.max(1, Math.round(css[1] * scale.sy))] }
+}
+
+/** a page rendered in the crop configuration at the page view's resolution, on a canvas of its own `px` (its grid, cropGrid);
+ *  null where the render was let go (a page that leaves the view) */
 async function cropRender(
   pdfPage: PDFPageProxy,
   vp: PageViewport,
   crops: Promise<OptionalContentConfig>,
   scale: { sx: number; sy: number },
+  px: [number, number],
   signal?: AbortSignal,
 ): Promise<HTMLCanvasElement | null> {
   const source = document.createElement('canvas')
-  source.width = Math.max(1, Math.floor(vp.width * scale.sx))
-  source.height = Math.max(1, Math.floor(vp.height * scale.sy))
+  source.width = px[0]
+  source.height = px[1]
   const sctx = source.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
   // (a crop render of a page that leaves the view is cancelled before it is drawn: its drawing let go)
   const task = pdfPage.render({
@@ -176,12 +200,14 @@ async function cropRender(
 }
 
 /**
- * The page's crops drawn on a canvas over its frame: each page a crop is cut from rendered once in the crop configuration
+ * The page's crops drawn on a canvas over its page view: each page a crop is cut from rendered once in the crop configuration
  * (`crops`: every unit's text group off) at the page view's own resolution (this page, and another page of a member laid
- * across a page break), each crop's source cut from its own page's render and drawn at its place. Null where the page has
- * none. `pageOf`: the document's page n. `scale`: device pixels per CSS px (the page view's output scale). `vp`: the frame
- * drawn in (a turned page's upright viewport, `uprightOf`: the canvas is turned with the page); another page's is its own
- * upright viewport at the same scale
+ * across a page break), each crop's source cut from its own page's render and drawn at its place, on the page view's pixel grid
+ * (`cropGrid`, `round` the page view's rounding). Null where the page has none. `pageOf`: the document's page n. `scale`:
+ * device pixels per CSS px (the page view's output scale). `vp`: the page view's own viewport, a turned page's turned: the
+ * crops are ink of the page's own, drawn where the page view draws that ink, so they are made in its frame and never turned by
+ * CSS (the SVG's text is made upright and turned: B-408); another page's is its own viewport at the same scale and turn, so
+ * that its ink stands in this page's frame as this page's own does
  */
 export async function cropsFor(
   page: Page,
@@ -190,13 +216,25 @@ export async function cropsFor(
   crops: Promise<OptionalContentConfig>,
   scale: { sx: number; sy: number },
   signal?: AbortSignal,
+  round: Rounding = { x: 1, y: 1 },
 ): Promise<HTMLCanvasElement | null> {
   const list = cropsOf(page)
   if (!list.length || signal?.aborted) return null
+  const [w, h] = cropGrid(vp, scale, round).px
   const out = document.createElement('canvas')
   out.className = 'axt-crops'
-  out.width = Math.max(1, Math.floor(vp.width * scale.sx))
-  out.height = Math.max(1, Math.floor(vp.height * scale.sy))
+  out.width = w
+  out.height = h
+  // (its box the page view's: the frame, across where the page is turned a quarter, floored to the page view's rounding)
+  const quarter = turnOf(vp) % 180 !== 0
+  out.style.setProperty(
+    '--axt-crops-w',
+    `round(down, var(${quarter ? '--axt-frame-h' : '--axt-frame-w'}, 100%), ${round.x}px)`,
+  )
+  out.style.setProperty(
+    '--axt-crops-h',
+    `round(down, var(${quarter ? '--axt-frame-w' : '--axt-frame-h'}, 100%), ${round.y}px)`,
+  )
   out.setAttribute('aria-hidden', 'true')
   const ctx = out.getContext('2d') as CanvasRenderingContext2D
   const devOf =
@@ -214,8 +252,9 @@ export async function cropsFor(
   const at = devOf(vp)
   for (const from of new Set(list.map((c) => c.from))) {
     const pdfPage = await pageOf(from)
-    const v = from === page.page ? vp : pdfPage.getViewport({ scale: vp.scale, rotation: 0 })
-    const source = signal?.aborted ? null : await cropRender(pdfPage, v, crops, scale, signal)
+    const v = from === page.page ? vp : pdfPage.getViewport({ scale: vp.scale, rotation: turnOf(vp) })
+    const px = from === page.page ? ([w, h] as [number, number]) : cropGrid(v, scale, round).px
+    const source = signal?.aborted ? null : await cropRender(pdfPage, v, crops, scale, px, signal)
     if (!source) {
       out.width = 0
       out.height = 0

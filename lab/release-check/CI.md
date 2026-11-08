@@ -9,7 +9,7 @@ is taken as about twice as slow on the CPU-bound steps.
 | Tier | When | Runner | Command | Minutes a run | Secret |
 |---|---|---|---|---|---|
 | fast | every pull request and every push to `next`, `main`, `rebuild/v2` | GitHub-hosted `ubuntu-latest` | three jobs (below) | 14 wall clock, about 28 of runner time | the fixtures' read token (exists) |
-| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), one runner | none |
+| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), and 16 for `display`, one runner | none |
 | release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 120 | none here; the private repository's own |
 
 ## fast: every pull request (hosted)
@@ -78,7 +78,7 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`);
   Playwright's Chromium. No Docker (a compile no cache holds is a failed paper: exit 3).
 - **Minutes**: 26 of the gates' own on this machine at `13216ac44` (below; the heavy slot's waits for other lanes' jobs left
-  out); no hosted minute.
+  out), and 16 for `display` (measured at `a7a6e4097`); no hosted minute.
 - **Secret**: none. The job reads no network.
 
 | Gate | Here |
@@ -100,6 +100,15 @@ names (the frame class's 9 boxes, the footnote call's glyph; the `#` of its own,
 | `typeset-replays` (six replays) | 134 s: fail at `13216ac44`, fit and display on one pair (2610.21026v1-zh, a crop box the tap does not record); fill, emit, names, figures equal |
 | `typeset-data` (generated data, today's readings derived again, the lab's tests) | 7 s: pass |
 | `harness-lab` (the harness with five corpus papers) | 340 s: fail at `13216ac44`, 75 of 79: the text layer reads out of order on one page of each of four papers |
+| `display` (display ≥ today: no page worse than today's, a difference only where nearer the original; **a cut-over blocker**) | 16 min (v2's lay 15 s, the drawing 954 s for 344 pages with the machine shared, the verdict 10 s): fail at `a7a6e4097`, 326 of 344 pages worse than today's: the links (246 pages) and the highlight's sentence boxes (324) the entry does not state yet, and on 115 pages another measure (turned figure texts drawn upright 18 pages, lines across a rule or over a neighbour 16, sizes 36, anchoring 15, run-in gaps 11, translations missing 7 and figure texts 20) |
+
+**Cut-over blockers.** The maintainer's base threshold for the refactor: v2's display equal to or better than the
+production site's, and performance, complexity and debt improved. `display` (`lab/typeset/parity/`, its README) is the
+display part: every page of 22 corpus papers drawn by today's reader and by v2's with the same rows, each measure a distance
+from arXiv's page, and a page fails where v2 is farther from the original than today on any measure past its noise floor (a
+translation today shows and v2 does not, always). A gate marked `cutover` in `gates.mjs` keeps the report's cut-over
+verdict (`release-check.md`, "Cut-over") NO-GO until it passes, whatever the tier's verdict; a tier that does not run it
+says so.
 
 The private repository's platform tier (its whole local gate: the Worker, the paper's object and the Workflows under
 workerd, the routes' contract suite) runs on every pull request there, on its own runners; release-check names it in this

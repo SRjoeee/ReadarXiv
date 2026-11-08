@@ -39,9 +39,17 @@ import type { Groups } from './groups.ts'
 import { bordersOf, type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
-import { cropsFor, svgOf, turned, uprightOf } from './paint.ts'
+import { cropGrid, cropsFor, type Rounding, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
 import { ATTRIBUTE, decideOn } from './text-rendering.ts'
+
+/** a page view's box rounding as PDF.js set it on the page box it drew (--scale-round-x, -y; where it set none, its sheet's
+ *  1 px): the crops' canvas is floored to it, as that box is (paint.ts cropGrid) */
+function roundingOf(at: SlotAt): Rounding {
+  const st = at.view.div?.style
+  const px = (v: string | undefined) => Number.parseFloat(v ?? '') || 1
+  return { x: px(st?.getPropertyValue('--scale-round-x')), y: px(st?.getPropertyValue('--scale-round-y')) }
+}
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
@@ -297,8 +305,8 @@ export function createComposer(o: ComposerOptions): Composer {
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
     // (each crop cut from its own page: this one, or another of a member laid across a page break)
-    const crops = await cropsFor(page, (k) => doc.getPage(k), up, g.crops, out, at.signal)
-    if (crops) el.append(turned(crops, at.viewport))
+    const crops = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, roundingOf(at))
+    if (crops) el.append(crops)
     const tCrops = performance.now()
     const text = texts.get(n) ?? textContentOf(pdfPage)
     texts.set(n, text)
@@ -317,12 +325,11 @@ export function createComposer(o: ComposerOptions): Composer {
     const was = el.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
     if (!was) return
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
-    const up = uprightOf(at.viewport)
-    const w = Math.max(1, Math.floor(up.width * out.sx))
-    if (was.width === w) return
-    const next = await cropsFor(page, (k) => doc.getPage(k), up, g.crops, out, at.signal)
+    const round = roundingOf(at)
+    if (was.width === cropGrid(at.viewport, out, round).px[0]) return
+    const next = await cropsFor(page, (k) => doc.getPage(k), at.viewport, g.crops, out, at.signal, round)
     if (!next || at.signal.aborted || was.parentNode !== el) return
-    was.replaceWith(turned(next, at.viewport))
+    was.replaceWith(next)
     was.width = 0
     was.height = 0
   }
