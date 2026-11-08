@@ -174,6 +174,43 @@ describe("a unit both sides draw that today highlights: judged on the lines each
   })
 })
 
+describe('the highlight judged as the reader sees it: ink is ink, boxes as painted', () => {
+  // (a unit both sides draw that today highlights, today's boxes covering it as its reader paints them; v2's Laid.lit box given
+  // per test, which the measure paints as v2's reader does: 3 CSS px beside (2.25 pt at the parity's scale), half the page's
+  // leading above and below)
+  const at = (y: number, x1: number, text: string) => drawnLine(72, x1, y, text)
+  const v2 = (boxes: number[][], ys: number[]) =>
+    v2Of({
+      members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [ys.map((y) => [71, y - 3, 301, y + 9])], right: [boxes], own: [] } }],
+      facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)) }],
+      today: { 11: { today: 7 } },
+    })
+  const page = (f: ReturnType<typeof v2Of>, lines: Line[]) =>
+    measure(
+      f,
+      rec({
+        today: { units: [{ id: 7, lines }], lit: [7], litBoxes: { 7: { right: lines.map((l) => [69, l.y - 4, 305, l.y + 10]), left: lines.map((l) => [69, l.y - 4, 305, l.y + 10]) } } },
+        v2: { units: [{ id: 11, lines }], lit: [11] },
+      }),
+    )
+  const highlights = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.flag === 'highlight')
+
+  it("a line ending in a CJK full stop, its box stopping at the mark's ink (the advance's first half), is covered", () => {
+    // (the line drawn to 300, the full stop's advance 290-300 at 10 pt, its ink in 290-295: v2's box ends at 295)
+    expect(highlights(page(v2([[71, 397, 295, 409]], [400]), [at(400, 300, `${'x'.repeat(20)}\u3002`)]))).toEqual([])
+  })
+  it('a box short of a line by less than the paint beside it is covered; by more, not', () => {
+    expect(highlights(page(v2([[71, 397, 298, 409]], [400]), [at(400, 300, 'x'.repeat(20))]))).toEqual([])
+    expect(highlights(page(v2([[71, 397, 295, 409]], [400]), [at(400, 300, 'x'.repeat(20))]))).toMatchObject([{ worse: true, v2: { value: '1 of 1 drawn, 0 of 1 original lines not covered' } }])
+  })
+  it("a box short of a line's band by less than half the page's leading is covered", () => {
+    // (two lines 12 pt apart, their boxes 8 pt high: a gap of 4 between the rows, half the leading 2 above and below; each
+    // box 0.5 pt above its line's band, which the half leading covers)
+    const ys = [400, 388]
+    expect(highlights(page(v2(ys.map((y) => [71, y - 0.5, 301, y + 7.5]), ys), ys.map((y) => at(y, 300, 'x'.repeat(20)))))).toEqual([])
+  })
+})
+
 describe("a label in a translated unit: today's relabelled against v2's kept as the original's ink", () => {
   // (a numbered head "Proposition 1 (" set on the first line at 48.96–113.52, its name word to 98.04; the unit's text after it)
   const label = { ink: [N, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [N, 48.96, 256.26, 98.04, 265.18, 258.3]], num: ['1', [N, 101.63, 258.3, 106.61, 265.15, 258.3]] }

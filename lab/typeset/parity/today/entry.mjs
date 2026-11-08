@@ -31,6 +31,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 const ASSETS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 /** the door's scale (reader.mjs SCALE): its SVG's user units a PDF unit, its audit's device pixels a PDF unit (dpr 1) */
 const DOOR = 2.5
+/** the highlight's pad beside a run, CSS px (view/lighting.mjs PAD): its paint's, a point's share of it at the page's scale */
+const PAD = 3
 const bytes = async (url) => {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`${url}: ${r.status}`)
@@ -208,10 +210,10 @@ window.today = {
    * reading session tells them): { [id]: { right, left } }, each a list of [x0, y0, x1, y1] in PDF units, y up, the right's on
    * our page, the left's on arXiv's. Where the unit lights by sentence (view/lighting.mjs startsOf: its starts on both panes,
    * as many, each pane's shapes holding its words by them; made as view/layer-side.mjs startsFor makes them), every sentence's
-   * rectangles (shapes.sentence), else its runs' blocks (shapes.block: lit whole); none padded (the sentence boxes themselves,
-   * as v2's Laid.lit: the reader's pad is the paint's)
+   * rectangles (shapes.sentence), else its runs' blocks (shapes.block: lit whole); as the reader paints them at `scale` CSS px a
+   * point (lighting.mjs paint: padded PAD beside, the rows' half leading above and below their own)
    */
-  async litBoxes(n) {
+  async litBoxes(n, scale) {
     const out = {}
     for (const id of hlLit?.get(n) ?? []) {
       // (its left parts, every page of it: its starts are made once all have come, shapes.mjs starts)
@@ -225,7 +227,7 @@ window.today = {
         side.shapes
           .runs(id)
           .filter((r) => r.page === n)
-          .flatMap((r) => (by ? Array.from({ length: starts.length + 1 }, (_, s) => side.shapes.sentence(r, starts, s, 0)).flat() : [side.shapes.block(r, 0)]))
+          .flatMap((r) => (by ? Array.from({ length: starts.length + 1 }, (_, s) => side.shapes.sentence(r, starts, s, PAD / scale)).flat() : [side.shapes.block(r, PAD / scale)]))
           .map((b) => [b.x0, b.y0, b.x1, b.y1])
       out[id] = { right: boxesOf(hlRight, rs), left: boxesOf(hlLeft, ls), by }
     }

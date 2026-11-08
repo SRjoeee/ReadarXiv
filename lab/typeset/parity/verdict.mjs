@@ -9,6 +9,12 @@ const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100
 const OBJ = '\ufffc'
 /** the CJK opening marks, whose advance's blank half stands before their ink */
 const OPENING = /[\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c\uff08\uff3b\uff5b\uff5f]/
+/** the CJK closing marks (closing brackets, full stops, commas: JLREQ cl-02, cl-06, cl-07), whose ink stands in the first half of
+ *  their advance, its second half blank */
+const CLOSING = /[\u3001\u3002\uff0c\uff0e\u3009\u300b\u300d\u300f\u3011\u3015\u3017\u3019\u301b\u301e\u301f\u2019\u201d\uff09\uff3d\uff5d\uff60]/
+/** the highlight's paint beside a box, PDF units: both readers' pad of 3 CSS px (view/lighting.mjs PAD, packages/reader
+ *  compose/highlight.ts PAD) at the parity's drawing scale (render.mjs SCALE: 96/72 CSS px a point) */
+export const PAINT_PAD = (3 * 72) / 96
 
 /**
  * The absolute bounds: a side's fault, measured against the original (README.md gives the reason of each). Shown on the
@@ -416,10 +422,38 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
   const litT = new Set(rec.today.lit.map((id) => `t${id}`))
   const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
+  // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
+  // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
+  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows))
+  const inkOf = (l) => {
+    if (l.rot) return l
+    const t = l.text.trim()
+    const x0 = l.x0 + (OPENING.test(t[0] ?? '') ? 0.5 * l.size : 0),
+      x1 = l.x1 - (CLOSING.test(t.at(-1) ?? '') ? 0.5 * l.size : 0)
+    return x1 > x0 ? { ...l, x0, x1 } : l
+  }
+  const leadOf = (side) => {
+    const gaps = []
+    for (const m of v2.pages[n]?.members ?? [])
+      for (const rows of m.lit?.[side] ?? []) {
+        const ys = [...rows].sort((a, b) => b[3] - a[3])
+        for (let i = 1; i < ys.length; i++) {
+          const g = ys[i - 1][1] - ys[i][3]
+          if (g >= 0 && g < 2 * (ys[i][3] - ys[i][1])) gaps.push(g)
+        }
+      }
+    gaps.sort((a, b) => a - b)
+    return gaps.length ? gaps[Math.floor((gaps.length - 1) / 4)] / 2 : 0
+  }
+  const halfLead = { right: leadOf('right'), left: leadOf('left') }
+  /** v2's boxes of a member on a side as its reader paints them (its sentences' and its kept ink's) */
+  const paintedV2 = (lit, side) =>
+    [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)].map((b) => [b[0] - PAINT_PAD, b[1] - halfLead[side], b[2] + PAINT_PAD, b[3] + halfLead[side]])
   /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
   const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
   /** how many of a unit's drawn lines (`ls`) and original lines (`left`) a side's boxes (`rb` right, `lb` left) leave uncovered */
-  const missOf = (ls, left, rb, lb) => ({ r: ls.map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
+  const missOf = (ls, left, rb, lb) => ({ r: ls.map(inkOf).map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
   const says = (m) => `${m.r} of ${m.of} drawn, ${m.l} of ${m.ofL} original lines not covered`
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
   const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
@@ -428,9 +462,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     const left = origBoxes(ord)
     const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
-    const vb = laidV2.get(ord)?.lit ?? { left: [], right: [] }
+    const vb = laidV2.get(ord)?.lit
     const t = missOf(T.get(key), left, tb.right, tb.left),
-      v = missOf(V.get(key), left, vb.right.flat(), vb.left.flat())
+      v = missOf(V.get(key), left, paintedV2(vb, 'right'), paintedV2(vb, 'left'))
     const dt = t.r + t.l,
       dv = v.r + v.l
     if (dt) {
@@ -452,9 +486,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lit = laidV2.get(ord)?.lit ?? { left: [], right: [] }
-    const rb = lit.right.flat(),
-      lb = lit.left.flat()
+    const lit = laidV2.get(ord)?.lit
+    const rb = paintedV2(lit, 'right'),
+      lb = paintedV2(lit, 'left')
     if (!rb.length && !lb.length) continue
     const m = missOf(ls, origBoxes(ord), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()

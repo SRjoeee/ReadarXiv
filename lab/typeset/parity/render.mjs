@@ -439,7 +439,7 @@ for (const pair of pairs) {
   for (const rec of out.pages) {
     if (rec.error || !rec.today?.committed || rec.today.shownOriginal) continue
     try {
-      rec.today.litBoxes = await tp.evaluate((k) => globalThis.today.litBoxes(k), rec.page)
+      rec.today.litBoxes = await tp.evaluate(([k, s]) => globalThis.today.litBoxes(k, s), [rec.page, SCALE])
     } catch (e) {
       rec.error = `today's sentence boxes: ${String(e?.message ?? e).slice(0, 280)}`
     }
