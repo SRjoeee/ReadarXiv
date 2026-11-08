@@ -167,7 +167,14 @@ describe('locate', () => {
     // after its end: chained, it was laid on after the footnote's translation, 333.89 pt off its place. Today's rowLeadOf took a
     // unit's first row for another's continued only where it starts within SHARED_SEP, 3 em, of that one's end)
     const flowsAt = (x: number) => {
-      const B2 = docOf([{ lines: [{ text: 'First ends.', x: 72, y: 700 }, { text: 'page 1', x, y: 700 }] }])
+      const B2 = docOf([
+        {
+          lines: [
+            { text: 'First ends.', x: 72, y: 700 },
+            { text: 'page 1', x, y: 700 },
+          ],
+        },
+      ])
       const units2 = [unitOf('para', 'First ends.'), unitOf('para', 'page 1')]
       return locate(instrumentOf(B2, units2, [[0, 1]]), B2, align(B2, B2)).flows
     }
