@@ -9,9 +9,10 @@ const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100
 const OBJ = '\ufffc'
 /** the CJK opening marks, whose advance's blank half stands before their ink */
 const OPENING = /[\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c\uff08\uff3b\uff5b\uff5f]/
-/** the CJK closing marks (closing brackets, full stops, commas: JLREQ cl-02, cl-06, cl-07), whose ink stands in the first half of
- *  their advance, its second half blank */
-const CLOSING = /[\u3001\u3002\uff0c\uff0e\u3009\u300b\u300d\u300f\u3011\u3015\u3017\u3019\u301b\u301e\u301f\u2019\u201d\uff09\uff3d\uff5d\uff60]/
+/** the CJK closing marks (closing brackets, full stops, commas: JLREQ cl-02, cl-06, cl-07; the full-width colon and question
+ *  mark, which the SC faces set in the first half of the em, GB/T 15834), whose ink stands in the first half of their advance,
+ *  its second half blank */
+const CLOSING = /[\u3001\u3002\uff0c\uff0e\uff1a\uff1f\u3009\u300b\u300d\u300f\u3011\u3015\u3017\u3019\u301b\u301e\u301f\u2019\u201d\uff09\uff3d\uff5d\uff60]/
 /** the highlight's paint beside a box, PDF units: both readers' pad of 3 CSS px (view/lighting.mjs PAD, packages/reader
  *  compose/highlight.ts PAD) at the parity's drawing scale (render.mjs SCALE: 96/72 CSS px a point) */
 export const PAINT_PAD = (3 * 72) / 96
@@ -105,13 +106,27 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (each side's drawn lines by its unit, keyed by today's ord where the unit has one, else the part's ord)
   const keyOfPart = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
   // (a line's extent is its drawn characters' and its crops': a crop standing on the line (a formula's ink, drawn by the
-  // canvas, not the SVG) extends it, at its start as at its end)
-  const withCrops = (u, crops) =>
-    raised(u.lines.filter((l) => l.n > 0)).map((l) => {
-      if (l.rot) return l
-      const on = crops.filter((c) => c[0] === u.id && c[2] < l.y + 0.8 * l.size && c[4] > l.y - 0.2 * l.size)
-      return on.length ? { ...l, x0: Math.min(l.x0, ...on.map((c) => c[1])), x1: Math.max(l.x1, ...on.map((c) => c[3])) } : l
+  // canvas, not the SVG) extends it, at its start as at its end. A crop stands on one line, the one of its unit whose band
+  // holds most of its height (its ink's middle nearest the baseline where two hold as much): a formula's ink that dips into the
+  // next line's band is its own line's, a raised script's its own line's, never the neighbour's)
+  const withCrops = (u, crops) => {
+    const ls = raised(u.lines.filter((l) => l.n > 0))
+    const on = new Map()
+    for (const c of crops) {
+      if (c[0] !== u.id) continue
+      const meets = ls.filter((l) => !l.rot && c[2] < l.y + 0.8 * l.size && c[4] > l.y - 0.2 * l.size)
+      if (!meets.length) continue
+      const held = (l) => Math.min(c[4], l.y + 0.8 * l.size) - Math.max(c[2], l.y - 0.2 * l.size)
+      const mid = (l) => Math.abs((c[2] + c[4]) / 2 - l.y)
+      const host = meets.reduce((a, b) => (held(b) > held(a) || (held(b) === held(a) && mid(b) < mid(a)) ? b : a))
+      if (!on.has(host)) on.set(host, [])
+      on.get(host).push(c)
+    }
+    return ls.map((l) => {
+      const cs = on.get(l)
+      return cs ? { ...l, x0: Math.min(l.x0, ...cs.map((c) => c[1])), x1: Math.max(l.x1, ...cs.map((c) => c[3])) } : l
     })
+  }
   const drawn = (units, crops, keyOf) =>
     new Map(units.filter((u) => u.lines.some((l) => l.n > 0)).map((u) => [keyOf(u.id), withCrops(u, crops)]))
   const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => `t${o}`)
