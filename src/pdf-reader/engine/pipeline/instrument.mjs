@@ -17,7 +17,7 @@
 import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
-import { lastTexLog, startOf } from '../source/latex-front.mjs'
+import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
@@ -55,7 +55,8 @@ const SPAN_STYLES = [
 ]
 const styleOf = src => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 
-/** what today's wire reads of an element's source, stated so that no translator reads a source: a display's own stop
+/** what today's wire reads of an element's source, stated so that no translator reads a source: backref's list set after the
+ *  unit's text (`after`, BACKREF_GAP); a display's own stop
  *  (mt.mjs displayStop: the punctuation it sets at its end that is its sentence's, `x = y.`, which a wire writes after the
  *  element so that the sentence ends there: in Microsoft's recorded answers no display ending its sentence had the sentence cut
  *  after it, 0 of 444, a marker before `. ` and a capital every time, 1,357 of 1,357, TRANSLATE_VERSION 5), and an element that
@@ -64,9 +65,17 @@ const styleOf = src => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart(
  *  it is a hard boundary to Microsoft (2610.19159's `\bfseries` before every coloured word, 13,000 markers and word salad,
  *  TRANSLATE_VERSION 3 and 10) */
 const wireFacts = p => {
+  if (p.src === BACKREF_LIST) return { after: BACKREF_GAP }
   const stop = displayStop(p.src)
   return { ...(stop ? { stop } : {}), ...(isInkless(p) ? { silent: 1 } : {}) }
 }
+/** backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST: the piece the front end ends the entry's first
+ *  paragraph in, no byte of the source, its ink between the marks LAYOUT_TEX's hook sets around the list): TeX sets it after the
+ *  entry's text and is no word of it — backref.sty's parscan reads the entry to its paragraph's end (`\BR@@bibitem#1#2\par`),
+ *  sets it, then the list (\BR@backref, \newblock's glue before it) —, stated `after` with the white space today's wire puts
+ *  before it after the translation (mt.mjs listOf, TRANSLATE_VERSION 7: an en space; on the wire Microsoft's Chinese read the
+ *  list's marker as a page number and wrote the character for "page" before it, 2610.37668v1, 5 of 41 entries) */
+const BACKREF_GAP = '\u2002'
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
  *  element's wire facts (wireFacts); its run-in labels `must` (runIns) */

@@ -565,6 +565,9 @@ inserting sentence markers, is the package's now, per unit: write, store read, r
 with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
 translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last.
+An element its reader states TeX sets after the unit's text (`el.after`: the PDF's backref list of the pages citing a
+bibliography entry, PDF-READER §19.13) is given to no translator: the chain asks for the unit without it and puts it back
+after the translation, the white space it states before it, on every wire and the runs floor (`chain.ts` `tailOf`).
 The pacing, the cooldown and the breaker are a translator identity's (one endpoint, one budget); the equal wires sent once
 and the batches are a translator object's, so a service whose key was replaced while a page still translates (one
 identity, two objects) never has the new key's units answered by the old key's request.

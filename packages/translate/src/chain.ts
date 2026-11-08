@@ -55,9 +55,9 @@ export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
 export const KEY_VERSION = 't1'
 /** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
- *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts): a change to them is a
- *  change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads'
+ *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts; an element set after the
+ *  unit's text given to no translator, put back after the translation: tailOf): a change to them is a change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads|after'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -686,6 +686,12 @@ export function chainOf(ports: Ports = {}): Chain {
 
   async function outcomeOf(u: UnitIn, i: number, c: Call): Promise<Result> {
     if (!hasLetter(u)) return { id: u.id, ok: true, content: asOut(u.content), by: 'self' }
+    // (what TeX sets after the unit's text: every translator asked for the unit without it, put back after the translation)
+    const tail = tailOf(u)
+    if (tail) {
+      const r = await outcomeOf(tail.unit, i, c)
+      return r.ok ? { ...r, content: [...r.content, ...tail.after] } : r
+    }
     for (const s of c.skipped)
       c.note({ kind: 'passed', by: s.by, id: u.id, why: { kind: 'unconfigured', code: s.code } })
     if (!c.served.length)
@@ -877,6 +883,26 @@ export function chainOf(ports: Ports = {}): Chain {
       ? { content: r.content, sentences: r.sentences }
       : { content: r.content }
   }
+}
+
+/** a unit's elements TeX sets after its text (`after`: the PDF's backref list after a bibliography entry), wherever its
+ *  groups hold them: the unit without them, which is what every translator is asked for, and what goes after its translation,
+ *  each with the white space it states before it. Null for a unit with none. A translator never sees them: on the markers
+ *  wire such a list was a marker Microsoft's Chinese read as a page number, writing the character for "page" before it
+ *  (2610.37668v1, 5 of 41 entries; today's wire, mt.mjs listOf, TRANSLATE_VERSION 7) */
+function tailOf(u: UnitIn): { unit: UnitIn; after: OutPiece[] } | null {
+  const after: OutPiece[] = []
+  const keep = (ps: readonly Piece[]): Piece[] =>
+    ps.flatMap((p): Piece[] => {
+      if (p.t === 'el' && p.after !== undefined) {
+        if (p.after) after.push({ t: 'text', s: p.after })
+        after.push({ t: 'el', id: p.id })
+        return []
+      }
+      return p.t === 'span' ? [{ ...p, content: keep(p.content) }] : [p]
+    })
+  const content = keep(u.content)
+  return after.length ? { unit: { ...u, content }, after } : null
 }
 
 const aborted = (u: UnitIn): Result => ({ id: u.id, ok: false, why: { kind: 'aborted' } })

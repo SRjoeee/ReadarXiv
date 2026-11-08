@@ -5410,7 +5410,13 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   `mt.mjs` `listOf`): it is no word of the entry's sentence, and on the wire Microsoft's Chinese read it as a page number and
   wrote the character for "page" (U+9875) before it, between the year and the list (2610.37668v1). It comes back after the translation, an en space before it: the `\enspace`
   backref sets is a kern, no ink of the list's, and without it the list stood against the year in a CJK translation
-  ("2025.3, 5, 26"). In the marked original the entry names
+  ("2025.3, 5, 26"); what TeX sets there is `\newblock`'s glue, which `\BR@backref` begins with. The rebuilt reader states
+  it on its element (`el.after`, the en space its gap: the front half's adapter, `pipeline/instrument.mjs`), and
+  `packages/translate`'s chain asks every translator for the entry without it and puts it back after the translation, on
+  every wire and the runs floor. Until 2026-11-09 it went as a marker: over the 88 corpus papers 314 entries of 5 papers, 147
+  a marker alone at the wire's end, 167 in one marker with the year before it, read back against the year with no gap;
+  stated, 147 markers wires and every one of the 314 tags wires change, and 300 of the markers wires are today's byte for
+  byte (the rest differ before the list, by the package's own rules). In the marked original the entry names
   its marks after its end mark (`\axtbrname{p<i>.<k>}`, an assignment), and LAYOUT_TEX wraps both printers where the document
   begins (begindocument/end, after the class's own `\backrefalt`), so that the list has that piece's opening mark before it
   and its closing mark after it; `\backrefalt` only where a package or the paper defined one (backref calls `\backref` while

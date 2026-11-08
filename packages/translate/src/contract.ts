@@ -44,6 +44,12 @@ export type Piece =
        *  back, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group went
        *  out before it, else at the group's end. The tags wire sends it as any element */
       silent?: boolean | 1 | undefined
+      /** TeX sets it after the unit's text, no word of its sentences (the PDF's source reader: backref's list of the pages that
+       *  cite a bibliography entry, set after the entry), and the white space that stands for the gap before it. No translator
+       *  is given it: the chain asks for the unit without it (each marker a word to Microsoft, which read this one as a page
+       *  number and wrote the character for "page" before it) and puts it back after the translation, its white space before
+       *  it, on every wire and the runs floor */
+      after?: string | undefined
     }
   | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
 

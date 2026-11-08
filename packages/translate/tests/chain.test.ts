@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { ACCEPT_DIGEST } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'
-import { Fault, type Note, type Result, type Translator, type UnitIn } from '../src/contract.ts'
+import { Fault, type Note, type Piece, type Result, type Translator, type UnitIn } from '../src/contract.ts'
 import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
@@ -329,6 +329,88 @@ describe('the contract: the runs floor', () => {
     const nothing = fakeTranslator({ identity: 'nothing:0', reply: () => [] })
     const rs2 = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [nothing] }))
     expect(rs2[0]).toEqual({ id: 'r', ok: false, why: { kind: 'refused' } })
+  })
+})
+
+describe('the contract: an element TeX sets after the unit’s text (`after`) is given to no translator', () => {
+  // (the PDF's backref list after a bibliography entry, the pages that cite it: on a wire Microsoft's Chinese read its marker as
+  // a page number and wrote the character for "page" before it, 2610.37668v1, today's TRANSLATE_VERSION 7)
+  const GAP = ' '
+  const list: Piece = { t: 'el', id: 'l', kind: 'macro', after: GAP }
+  const body = [t('A. Author. A title of a paper. In Proc., '), el('pp', 'number'), t(' '), el('y', 'number')]
+  const entry = unit('b', [...body, list])
+  const bare = unit('b', body)
+  const echoing = () =>
+    scriptedFetch((_url, init) => ({
+      status: 200,
+      body: JSON.stringify((JSON.parse(init.body) as string[]).map((text) => ({ translations: [{ text }] }))),
+    }))
+  it('every translator is sent the unit without it, which comes back after the translation, its white space before it', async () => {
+    // (the list after the year: on the wire one marker with the year, read back glued to it; after a text: a marker of its own,
+    // the wire's last)
+    const oral = unit('o', [t('A. Author. Oral presentation.'), list])
+    const f = echoing()
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate([entry, oral], 'zh-Hans', {
+        translators: [microsoft({ fetch: f.fetch })],
+      }),
+    )
+    expect(JSON.parse(f.requests[0]?.init.body ?? '[]')).toEqual([
+      'A. Author. A title of a paper. In Proc., @a#',
+      'A. Author. Oral presentation.',
+    ])
+    const g = echoing()
+    const without = await all(
+      chainOf({ clock: fakeClock() }).translate([bare, unit('o', [t('A. Author. Oral presentation.')])], 'zh-Hans', {
+        translators: [microsoft({ fetch: g.fetch })],
+      }),
+    )
+    expect(g.requests[0]?.init.body).toBe(f.requests[0]?.init.body)
+    for (const id of ['b', 'o']) {
+      const s = byId(without, id)
+      expect(byId(rs, id)).toEqual({
+        ...s,
+        content: [...(s.ok ? s.content : []), { t: 'text', s: GAP }, { t: 'el', id: 'l' }],
+      })
+    }
+    const e = echo()
+    await all(chainOf({ clock: fakeClock() }).translate([entry], 'ja', { translators: [e] }))
+    expect(e.sent(bare)).toBe(1)
+    expect(e.sent(entry)).toBe(0)
+  })
+  it('the runs floor puts it after the stretches; a unit with no letter is its own translation, as the source has it', async () => {
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const [r] = await all(chainOf({ clock: fakeClock() }).translate([entry], 'ja', { translators: [upper] }))
+    expect(r).toEqual({
+      id: 'b',
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'text', s: 'A. AUTHOR. A TITLE OF A PAPER. IN PROC., ' },
+        { t: 'el', id: 'pp' },
+        { t: 'text', s: ' ' },
+        { t: 'el', id: 'y' },
+        { t: 'text', s: GAP },
+        { t: 'el', id: 'l' },
+      ],
+    })
+    const none = unit('n', [el('y', 'number'), list])
+    const [n] = await all(chainOf({ clock: fakeClock() }).translate([none], 'ja', { translators: [upper] }))
+    expect(n).toEqual({
+      id: 'n',
+      ok: true,
+      by: 'self',
+      content: [
+        { t: 'el', id: 'y' },
+        { t: 'el', id: 'l' },
+      ],
+    })
   })
 })
 

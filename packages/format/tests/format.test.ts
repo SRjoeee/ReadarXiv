@@ -101,6 +101,17 @@ describe('unitId', () => {
     expect(read('units', write('units', units).bytes).units[0]?.content[0]).toEqual(d[0])
     expect(unitId('para', d)).toBe(unitId('para', [{ t: 'el', id: '0', kind: 'display', src: '\\[ x = y. \\]' }]))
   })
+  it('an element TeX sets after the unit’s text (`after`, the white space before it) is read by the schema and is not in the id', () => {
+    const d: Piece[] = [
+      { t: 'text', s: 'A. Author. A title. 2022.' },
+      { t: 'el', id: '1', kind: 'macro', src: '\\axtbackref', after: ' ' },
+    ]
+    const units: Units = { format: 1, units: [{ id: unitId('reference', d), kind: 'reference', content: d }] }
+    expect(read('units', write('units', units).bytes).units[0]?.content[1]).toEqual(d[1])
+    expect(unitId('reference', d)).toBe(
+      unitId('reference', [d[0] as Piece, { t: 'el', id: '1', kind: 'macro', src: '\\axtbackref' }]),
+    )
+  })
   // (lane L2's tests of the walk, rebuild/source c26d4bf7a packages/engine/tests/source/id.test.ts: the flat list the id hashes,
   // hashed by FORMAT.md's rule through Node's own SHA-256)
   const reference = (kind: string, flat: unknown[]) =>

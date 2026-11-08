@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
 import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
-import { displayStop, isInkless } from '../../src/pdf-reader/engine/translate/mt.mjs'
+import { BACKREF_LIST, displayStop, isInkless, serialize } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import {
   boundedEmpty,
   classesOf,
@@ -556,5 +556,20 @@ describe('the instrument adapter’s wire facts of an element (what today’s wi
     expect(got).toEqual(srcs.map((s) => [s, displayStop(s), isInkless(ph(s))]))
     expect(got.filter(([, stop]) => stop).length).toBe(4)
     expect(got.filter(([, , silent]) => silent).length).toBe(18)
+  })
+  it('states backref’s list after a bibliography entry set after the unit’s text (`after`), with the gap today’s wire puts before it', () => {
+    // (latex-front.mjs BACKREF_LIST: the piece the front end ends the entry's first paragraph in, where backref.sty's parscan
+    // sets the list after the entry, \BR@@bibitem#1#2\par then \BR@backref; today's wire sends it on no wire and puts it back
+    // after the translation, an en space before it, mt.mjs listOf, TRANSLATE_VERSION 7)
+    const pieces = [{ t: 'text', s: 'A. Author. A title. In Proc., ' }, ph('5470--5479,'), { t: 'text', s: ' ' }, ph('2022.'), ph(BACKREF_LIST)]
+    const content = contentOf(pieces)
+    const els = elsOf(content) as (El & { after?: string })[]
+    expect(els.map((e) => [e.src, e.after ?? null, e.silent ?? null])).toEqual([
+      ['5470--5479,', null, null],
+      ['2022.', null, null],
+      [BACKREF_LIST, ' ', null],
+    ])
+    const today = serialize({ pieces })
+    expect(today.back).toEqual([{ t: 'text', tr: true, s: els[2]?.after }, pieces[4]])
   })
 })
