@@ -233,6 +233,51 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     // review)
     expect(layPage(part(m, [b, a]), rowsOf([r]), rules, metrics()).links).toEqual(p.links)
   })
+  it('lays each annotation of a piece drawn as text over two pages over its own occurrence, on its page (#631 review)', () => {
+    // (the same citation in a paragraph over pages 1 and 2, its translation drawing it across the page break: "(Smith 2020;" on
+    // page 1, "Smith 2020)" on page 2; the first work's annotation on page 1, the second's on page 2, each part holding the
+    // other's with its page. Searched among what page 2 draws alone, page 2's occurrence took page 1's destination, its own
+    // annotation unplaced, Codex's case)
+    const m = cite({
+      text: '(Smith 2020; Smith 2020)',
+      style: { role: 'serif', size: 10 },
+      ink: [
+        [1, 250, 98, 300, 107, 100],
+        [2, 72, 698, 110, 707, 700],
+      ],
+    })
+    const two = {
+      ...m,
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ] as Placed['lines'],
+    }
+    const a: Link = { box: [250, 97, 300, 108], to: { dest: '"cite.smith-a"' }, owner: [0, '5'], text: 'Smith 2020' }
+    const b: Link = { box: [72, 697, 110, 708], to: { dest: '"cite.smith-b"' }, owner: [0, '5'], text: 'Smith 2020' }
+    const rr = row([
+      { t: 'text', s: 'Ein Satz zuerst, dann folgt ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' und der Rest.' },
+    ])
+    const onPage = (n: 1 | 2) =>
+      layPage(
+        { ...part(two, n === 1 ? [a, { ...b, page: 2 }] : [b, { ...a, page: 1 }]), page: n },
+        rowsOf([rr]),
+        rules,
+        metrics(),
+      )
+    const [p1, p2] = [onPage(1), onPage(2)]
+    // (the citation's text drawn across the break: its first occurrence on page 1's line, its second on page 2's)
+    const runsOn = (p: Page) => p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it)
+    expect(runsOn(p1).map((it) => it.s.trim())).toContain('(Smith')
+    expect(runsOn(p2).map((it) => it.s.trim())).toContain('Smith')
+    expect(p1.links.map(([, to]) => to)).toEqual([a.to])
+    expect(p2.links.map(([, to]) => to)).toEqual([b.to])
+    const f = p2.members[0]!.fit!.size
+    expect(p1.links[0]![0][0]).toBeCloseTo(runsOn(p1).find((it) => it.s === '(Smith ')!.x + 0.5 * f, 6)
+    expect(p2.links[0]![0][0]).toBeCloseTo(runsOn(p2).find((it) => it.s === 'Smith ')!.x, 6)
+  })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
     // crop path and by the text path)

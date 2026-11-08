@@ -517,18 +517,27 @@ function placeText(
     } else merged.push({ ds: f.ds, de: f.de, annots: [f.c] })
   }
   for (const m of merged) {
-    const r = rangeRecord(Dc.slice(m.ds, m.de + 1), lines, edge, band)
-    if (!r) {
-      for (const c of m.annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
-      continue
+    // (a range set over two pages, where the lines are a member's on its pages: a record on each, of what each page draws)
+    const range = Dc.slice(m.ds, m.de + 1)
+    let made = false
+    for (const pg of new Set(range.map((e) => lines[e.li]!.line.page))) {
+      const r = rangeRecord(
+        range.filter((e) => lines[e.li]!.line.page === pg),
+        lines,
+        edge,
+        band,
+      )
+      if (!r) continue
+      made = true
+      records.push({
+        page: r.page,
+        li: r.li,
+        x: r.x,
+        rec: recordOf(m.annots[0]!.a, r.boxes, r.name),
+        sources: { annots: m.annots.map((c) => [c.q, c.a.i]), tier: m.annots[0]!.tier },
+      })
     }
-    records.push({
-      page: r.page,
-      li: r.li,
-      x: r.x,
-      rec: recordOf(m.annots[0]!.a, r.boxes, r.name),
-      sources: { annots: m.annots.map((c) => [c.q, c.a.i]), tier: m.annots[0]!.tier },
-    })
+    if (!made) for (const c of m.annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
   }
 }
 

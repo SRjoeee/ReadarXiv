@@ -64,7 +64,8 @@ const key = (to: Link['to']): string => {
   }
 }
 
-/** what became of each of a part's links (the gate's count; `away` one of another page not drawn here): at A's box with no owner, its owner not laid or its piece kept
+/** what became of each of a part's links (the gate's count; `away` one of another page not drawn here, or one a translation
+ *  draws on another page of its member alone): at A's box with no owner, its owner not laid or its piece kept
  *  there; moved over a crop, a piece's drawn text, an \href's group or the whole drawing; dropped where its ink is off and
  *  nothing of it is drawn, where several targets share a piece drawn as text, where the member's text holds it and no group
  *  or whole drawing takes it, or where placeUnit could not place it */
@@ -268,22 +269,51 @@ export function linksOf(
       }
     }
     if (!groups.length) continue
-    const placed = placeUnit({
-      groups,
-      lines,
-      edge: (line: LaidLine, run: TextRun, at: number) => runEdge(run, at, line, L, w100),
-      band: (t: unknown, line: LaidLine) =>
-        tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline),
-      scale: L.scale,
-    })
+    const edge = (line: LaidLine, run: TextRun, at: number) => runEdge(run, at, line, L, w100)
+    const band = (t: unknown, line: LaidLine) =>
+      tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline)
+    // (a piece drawn as text is searched over the member's laid lines on all its pages, its annotations of all its pages in
+    // their order on A, one search moving forward only: each takes its own occurrence wherever the translation sets it, and
+    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence took the
+    // annotation of an occurrence another page draws, #631's review. A crop, a pair and a whole drawing are placed over what
+    // the page draws of them. The records of this page are kept, in the groups' order)
+    const asText = groups.filter((g) => g.to.draw === 'text')
+    const placed = [
+      placeUnit({ groups: groups.filter((g) => g.to.draw !== 'text'), lines, edge, band, scale: L.scale }),
+      ...(asText.length
+        ? [
+            placeUnit({
+              groups: asText,
+              lines: L.lines.map((line) => ({ line, runs: lineRuns(line, L) })),
+              edge,
+              band,
+              scale: L.scale,
+            }),
+          ]
+        : []),
+    ]
     const drawOf = new Map(groups.flatMap((g) => g.annots.map((c) => [c.a.i, g.to.draw as LinkFate] as const)))
-    for (const t of placed.tried) fate(t.i, 'unplaced')
-    for (const r of placed.records) {
-      for (const [, i] of r.sources.annots) fate(i, drawOf.get(i) ?? 'unplaced')
+    const groupOf = new Map(groups.flatMap((g, n) => g.annots.map((c) => [c.a.i, n] as const)))
+    for (const t of placed.flatMap((x) => x.tried)) fate(t.i, 'unplaced')
+    const records = placed
+      .flatMap((x) => x.records)
+      .map((r, n) => ({ r, n }))
+      .sort((x, y) => groupOf.get(x.r.sources.annots[0]![1])! - groupOf.get(y.r.sources.annots[0]![1])! || x.n - y.n)
+      .map(({ r }) => r)
+    const drawn = new Set<number>()
+    for (const r of records) {
+      if (r.page !== page) continue
+      for (const [, i] of r.sources.annots) {
+        fate(i, drawOf.get(i) ?? 'unplaced')
+        drawn.add(i)
+      }
       const to = list[r.sources.annots[0]![1]]!.to
       const b = r.rec.boxes
       for (let j = 0; j + 3 < b.length; j += 4) out.push([[b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to])
     }
+    // (one drawn on another page of the member alone: that page's)
+    for (const r of records)
+      if (r.page !== page) for (const [, i] of r.sources.annots) if (!drawn.has(i)) fate(i, 'away')
   }
   return out
 }
