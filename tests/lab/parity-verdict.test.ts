@@ -1,7 +1,7 @@
 // @vitest-environment node
 // The display gate's verdict (lab/typeset/parity/verdict.mjs, #629's review): a page is judged from what each side drew, and the
 // gate passes only over the whole of what the run asked. Synthetic pages: one unit or figure text or link drawn or not, a
-// unit only v2 draws with its sentence boxes or without.
+// unit only v2 draws with its sentence boxes or without, a head's label relabelled or kept.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
@@ -100,6 +100,35 @@ describe('the highlight: units both sides draw judged against each other, a unit
     const p = measure(v2, rec(both))
     expect(p.diffs.filter((d: { flag: string }) => d.flag === 'highlight')).toMatchObject([{ unit: null, worse: true }])
     expect(worse(measure(v2, rec({ ...both, today: { ...both.today, lit: [] } })))).toEqual([])
+  })
+})
+
+describe("a label in a translated unit: today's relabelled against v2's kept as the original's ink", () => {
+  // (a numbered head "Proposition 1 (" set on the first line at 48.96–113.52, its name word to 98.04; the unit's text after it)
+  const label = { ink: [N, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [N, 48.96, 256.26, 98.04, 265.18, 258.3]], num: ['1', [N, 101.63, 258.3, 106.61, 265.15, 258.3]] }
+  const v2 = v2Of({
+    members: [{ ord: 21, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 21, kind: 'heading', align: 'l', style: { size: 10 }, label, lines: [factLine(48.96, 200, 258.3)] }],
+    today: { 21: { today: 21 } },
+  })
+  const relabelled = drawnLine(48.96, 190, 258.3, 'Satz 1 (Wohlgestelltheit). ')
+  const kept = drawnLine(113.52, 190, 258.3, 'Wohlgestelltheit). ')
+  const english = drawnLine(48.96, 190, 258.3, 'Proposition 1 (Wohlgestelltheit). ')
+  const page = (t: Line, v: Line) => measure(v2, rec({ today: { units: [{ id: 21, lines: [t] }], lit: [21] }, v2: { units: [{ id: 21, lines: [v] }] } }))
+  const labels = (p: { diffs: { flag: string; worse: boolean; v2: { value: unknown } }[] }) => p.diffs.filter((d) => d.flag === 'shown' && d.v2.value === 'label')
+
+  it("today relabels the head, v2 keeps the original's label: a translation missing, counted per unit", () => {
+    const p = page(relabelled, kept)
+    expect(labels(p)).toMatchObject([{ unit: 't21 heading', worse: true }])
+    expect(p.worse).toBeGreaterThanOrEqual(1)
+  })
+  it('both relabel, both keep, or today draws the English word anew: no difference', () => {
+    expect(labels(page(relabelled, relabelled))).toEqual([])
+    expect(labels(page(kept, kept))).toEqual([])
+    expect(labels(page(english, kept))).toEqual([])
+  })
+  it('v2 relabels a label today keeps: never judged worse', () => {
+    expect(labels(page(kept, relabelled))).toEqual([])
   })
 })
 

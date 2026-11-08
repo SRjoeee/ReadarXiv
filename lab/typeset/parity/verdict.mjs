@@ -5,6 +5,8 @@
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
+/** the stand-in of a crop in a drawn line's text (measure-dom.mjs: a transparent run, the canvas draws its ink) */
+const OBJ = '\ufffc'
 /** the CJK opening marks, whose advance's blank half stands before their ink */
 const OPENING = /[\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c\uff08\uff3b\uff5b\uff5f]/
 
@@ -56,7 +58,7 @@ export const WEIGHT = { shown: 3, weight: 3, anchor: 3, align: 3, cross: 3, gap:
 export const FLAGS = Object.keys(WEIGHT)
 /** what each measure is, as a distance from the original */
 export const SAYS = {
-  shown: "a unit today shows translated that v2 leaves the original's: a translation missing (no nearness judged)",
+  shown: "a unit today shows translated that v2 leaves the original's, or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
   weight: "the translated text's ink darkness (mean over its glyph pixels) against the original text's (its units' lines on arXiv's page)",
   anchor: "a unit's first line against the original's first line: the smaller of its baseline's and its em top's offsets",
   align: "TeX's alignment kept: a line's start (left, justified), midpoint (centred) or end (right) against the original's lines'",
@@ -117,7 +119,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
-    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, part: m.ord, size: m.style.size })
+    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, part: m.ord, size: m.style.size, label: m.label ?? null })
   }
   for (const key of T.keys()) {
     if (orig.has(key)) continue
@@ -348,6 +350,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, true, 'today')
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
+  // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
+  // translation missing within a unit both translate, counted per unit; v2's relabelled where today's is not is no fault)
+  for (const [key, o] of orig) {
+    const name = o.label?.name
+    if (!o.first || !name?.[1] || name[1][0] !== n || !T.has(key) || !V.has(key)) continue
+    const t = labelOf(T.get(key), name),
+      v = labelOf(V.get(key), name)
+    if (t === 'translated' && v !== null && v !== 'translated')
+      diff('shown', `${key} ${o.kind ?? ''}`.trim(), `its label ("${name[0]}") drawn in the target by today, ${v === 'kept' ? "kept as the original's ink" : "drawn in the original's words"} by v2`, name[0], { value: 'translated', off: null }, { value: 'label', off: null }, true, 'today')
+  }
   // (the figure texts each side drew: today's groups of their own (g[data-f]), v2's groups of the part's figure members
   // (g[data-axt-ord]), each with a drawn character; the members v2's Page lays kept beside, for diagnosis)
   const figOrds = new Set([...facts.values()].filter((m) => /figure/.test(m.kind ?? '')).map((m) => m.ord))
@@ -437,6 +449,19 @@ function raised(lines) {
     host.letter = Math.max(host.letter, l.letter)
   }
   return keep.sort((a, b) => b.y - a.y)
+}
+
+/**
+ * A unit's label on its first line as a side drew it (its lines, the label's name word and box, part facts): 'kept' where
+ * the line's ink starts at the name's end or after it, or with a crop's stand-in (the original's ink stands there); else
+ * drawn anew, 'original' where the line opens with the name word, 'translated' where it does not; null where nothing is drawn
+ */
+function labelOf(lines, name) {
+  const l = lines.filter((x) => !x.rot && x.n > 0).sort((a, b) => b.y - a.y)[0]
+  if (!l) return null
+  const text = l.text.trimStart()
+  if (l.x0 >= name[1][3] - NEAR.positionMin || text.startsWith(OBJ)) return 'kept'
+  return text.startsWith(name[0]) ? 'original' : 'translated'
 }
 
 /** whether a box {x0, y0, x1, y1} is covered by the union of boxes [x0, y0, x1, y1], each of its edges within `tol` points */
