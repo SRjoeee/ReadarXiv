@@ -174,11 +174,15 @@ export const Label = z.object({
   num: z.tuple([z.string(), Ink]).optional(),
   punct: z.tuple([z.string(), Ink]).optional(),
 })
+/** the room about a placement: below its last line, to the next ink under it, beside its lines (a figure text's: the free line
+ *  along its run today's figure reading gives it), a cell's clear band; `under` a figure text's depth under its baseline of the
+ *  nearest stroke under its text (S.figures: a translation that reaches it is crowded) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
   side: z.tuple([num, num]).optional(),
   band: z.tuple([num, num]).optional(),
+  under: num.optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({
@@ -224,10 +228,16 @@ export const Tie = z.discriminatedUnion('rule', [
   }),
   z.object({ rule: z.literal('size'), ords: z.array(int) }),
 ])
+/** one of A's link annotations: its rectangle, where it goes, the member and the piece that hold it (an element's id, '' its
+ *  text), the characters of the glyphs under it (their glyph points', PDF.js's rule, in their order, white space aside: what
+ *  today's link match finds among the characters a piece is drawn as; absent where it holds none), and its page where it is not
+ *  the part's (an annotation of a member of the page on another of its pages, which a translation may draw on this one) */
 export const Link = z.object({
   box: Box,
   to: z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })]),
   owner: z.tuple([int, z.string()]).optional(),
+  text: z.string().optional(),
+  page: page.optional(),
 })
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */

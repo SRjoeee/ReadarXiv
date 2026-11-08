@@ -6,6 +6,9 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 LIST=${1:?papers.tsv}; OUT=${2:?out}; CACHES=${3:?caches}; PAR=${4:-2}; shift 4 2>/dev/null || shift $#; FLAGS=("$@")
 mkdir -p "$OUT/logs"; : > "$OUT/log.tsv"
+# (the run.mjs flags and the caches, one a line: what a run's outputs are made from besides the code; same.mjs compares two runs'
+# outputs only where these agree, a dump's `replaced` units being --baseline's)
+printf '%s\n' "--caches=$CACHES" ${FLAGS[@]+"${FLAGS[@]}"} > "$OUT/flags.txt"
 one() {
   local id=$1 dir=$2 rc free
   free=$(df -g /System/Volumes/Data | awk 'NR==2{print $4}')

@@ -15,6 +15,9 @@
 //   inside one of their boxes, its baseline between their edges);
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
 //   the translation's text over it, today's freezeLinks drops it alike).
+// An annotation of a member's other page (Link.page: the part holds those of its members on every page they have lines on) is
+// drawn here only over what of its piece the page draws (a translation sets a member's text on whichever of its pages it falls),
+// never at its box, which is its own page's (`away`); a member's \href groups are paired with its annotations of all its pages.
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
 // list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
 import type { Line, Link, Part, Placed } from '@readarxiv/format'
@@ -48,7 +51,7 @@ type Tok = {
 }
 const key = (to: Link['to']) => ('url' in to ? `u${to.url}` : `d${to.dest}`)
 
-/** what became of each of a part's links (the gate's count): at A's box with no owner, its owner not laid or its piece kept
+/** what became of each of a part's links (the gate's count; `away` one of another page not drawn here): at A's box with no owner, its owner not laid or its piece kept
  *  there; moved over a crop, a piece's drawn text, an \href's group or the whole drawing; dropped where its ink is off and
  *  nothing of it is drawn, where several targets share a piece drawn as text, where the member's text holds it and no group
  *  or whole drawing takes it, or where placeUnit could not place it */
@@ -64,6 +67,7 @@ export type LinkFate =
   | 'targets'
   | 'unmatched'
   | 'unplaced'
+  | 'away'
 
 /**
  * The links of page `page`: `laid` the members laid on it, by ord (a member not among them keeps its links at A's boxes);
@@ -82,17 +86,23 @@ export function linksOf(
   const fate = (i: number, f: LinkFate) => {
     if (fates) fates[i] = f
   }
+  // (an annotation of another page, a member's of the page there (Link.page): drawn here only over what of its piece the page
+  // draws, never at its box, which is that page's)
+  const here = (i: number) => (list[i]!.page ?? page) === page
+  const atBox = (i: number, f: LinkFate) => {
+    if (here(i)) out.push([list[i]!.box, list[i]!.to])
+    fate(i, here(i) ? f : 'away')
+  }
   const byOwner = new Map<number, number[]>()
   list.forEach((l, i) => {
     const x = l.owner ? laid.get(l.owner[0]) : undefined
-    if (!x) {
-      out.push([l.box, l.to])
-      fate(i, l.owner ? 'unlaid' : 'free')
-    } else byOwner.set(l.owner![0], [...(byOwner.get(l.owner![0]) ?? []), i])
+    if (!x) atBox(i, l.owner ? 'unlaid' : 'free')
+    else byOwner.set(l.owner![0], [...(byOwner.get(l.owner![0]) ?? []), i])
   })
   for (const [ord, owned] of byOwner) {
     const { m, layout: L, off, kept, elOf } = laid.get(ord)!
     const ids = inReading(owned, list, m.lines, page)
+    const rank = new Map(ids.map((i, n) => [i, n]))
     const lines = L.lines.filter((line) => line.page === page).map((line) => ({ line, runs: lineRuns(line, L) }))
     // (each element drawn on the page as a crop or as text, by its id: the first piece of its drawn there)
     const crops = new Map<string, number>(),
@@ -118,11 +128,13 @@ export function linksOf(
       const l = list[i]!
       const a: Annot = {
         i,
+        at: rank.get(i)!,
         ...('url' in l.to ? { url: l.to.url } : { dest: l.to.dest }),
         rect: [...l.box],
+        ...(l.text ? { ov: l.text } : {}),
         g2: { x: [], y: [], ch: [] },
       }
-      return { q: page, a }
+      return { q: l.page ?? page, a }
     }
     const groups: { to: Target; annots: (Cand & { tier: string })[] }[] = []
     // (each element's annotations, and the member's text's in their order on the page)
@@ -141,47 +153,62 @@ export function linksOf(
       // member's elements' group on (none moved, or a group the add-on could not part, Placed.fixed): the original's anchor
       // stays with it, #626's review)
       const stays = !e || e.keep || e.kind === 'display' || kept.has(id) || !(off & 2)
-      if (stays)
-        for (const i of is) {
-          out.push([list[i]!.box, list[i]!.to])
-          fate(i, 'kept')
-        }
+      if (stays) for (const i of is) atBox(i, 'kept')
       else if (crop !== undefined)
         groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })) })
       else if (k !== undefined) {
-        // (over the characters it is drawn as, their whole: the annotations of one target one link; of two or more, none of
-        // them told apart, the part stating no annotation's characters (today's placeText finds each by its own))
-        if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
+        // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
+        // (Link.text, PDF.js's overlaidText: today's placeText), the piece's annotations in one group, so that one search, moving
+        // forward only, takes them in their order on A whatever their targets (the same text twice, two works: each its own
+        // occurrence, #631's review); where it does not (a part made before), the annotations of one target over their whole,
+        // those of two or more targets none, not told apart)
+        if (is.every((i) => !!list[i]!.text))
+          groups.push({
+            to: { k, draw: 'text', single: is.length === 1 },
+            annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })),
+          })
+        else if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
           groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: 'geometry' }] })
           for (const i of is.slice(1)) fate(i, 'text')
         } else for (const i of is) fate(i, 'targets')
-      } else for (const i of is) fate(i, 'off')
+      } else for (const i of is) fate(i, here(i) ? 'off' : 'away')
     }
     if (text.length) {
       for (const i of text) fate(i, 'unmatched')
+      // (the member's annotations over its text in their order on A (inReading), over all its pages: the part holds them on
+      // every page of the member, those of its other pages with their page, and the member's lines run over its pages in order)
       const runs = runsOf(text, list)
-      const drawn = (m.spans ?? [])
+      const groupsOf = (m.spans ?? [])
         .filter(([, s]) => LINK_CMD.test(s.cmd ?? ''))
         .map(([id]) => Number(id))
-        .filter((id) => pairs.has(id))
         .sort((a, b) => a - b)
-      const pair = (id: number, run: number[]) =>
-        groups.push({ to: { pair: id, draw: 'pair' }, annots: run.map((i) => ({ ...annot(i), tier: 'order' })) })
-      // (each annotation an occurrence where they are as many as the groups drawn: two links to one address one after the other
-      // are one run of one target, #626's review; else each run of one target a group, a link TeX broke over lines one run)
-      if (drawn.length && drawn.length === text.length) text.forEach((i, j) => void pair(drawn[j]!, [i]))
-      else if (drawn.length && drawn.length === runs.length) runs.forEach((run, j) => void pair(drawn[j]!, run))
-      else if (
-        drawn.length === 1 &&
-        runs.length &&
-        runs.every((r) => key(list[r[0]!]!.to) === key(list[runs[0]![0]!]!.to))
-      )
-        pair(drawn[0]!, runs.flat())
+      const drawn = groupsOf.filter((id) => pairs.has(id))
+      const ours = text.filter(here)
+      const pair = (id: number, run: number[]) => {
+        if (pairs.has(id))
+          groups.push({ to: { pair: id, draw: 'pair' }, annots: run.map((i) => ({ ...annot(i), tier: 'order' })) })
+        else for (const i of run) if (!here(i)) fate(i, 'away')
+      }
+      const oneTarget = (rs: number[][]) =>
+        rs.length > 0 && rs.every((r) => key(list[r[0]!]!.to) === key(list[rs[0]![0]!]!.to))
+      // (each \href group of the member's, in its source's order, with its occurrence among its annotations: each annotation an
+      // occurrence where they are as many as its groups (two links to one address one after the other are one run of one
+      // target, #626's review), else each run of one target a group (a link TeX broke over lines is one run), else one group
+      // takes all of one target; placed where the group is drawn on the page)
+      if (groupsOf.length && groupsOf.length === text.length) text.forEach((i, j) => void pair(groupsOf[j]!, [i]))
+      else if (groupsOf.length && groupsOf.length === runs.length)
+        runs.forEach((run, j) => void pair(groupsOf[j]!, run))
+      else if (groupsOf.length === 1 && oneTarget(runs)) pair(groupsOf[0]!, runs.flat())
+      // (else by the groups drawn on the page and the page's own annotations, as before the part held the others)
+      else if (drawn.length && drawn.length === ours.length) ours.forEach((i, j) => void pair(drawn[j]!, [i]))
+      else if (drawn.length && drawn.length === runsOf(ours, list).length)
+        runsOf(ours, list).forEach((run, j) => void pair(drawn[j]!, run))
+      else if (drawn.length === 1 && oneTarget(runsOf(ours, list))) pair(drawn[0]!, ours)
       else if (!drawn.length && drawsText) {
         // (matchUnit's whole tier: one target's annotations over every line of the member on the page)
         const mine = m.lines.filter((l) => l[0] === page && !(l[9] & 1))
         const byTarget = new Map<string, number[]>()
-        for (const i of text) byTarget.set(key(list[i]!.to), [...(byTarget.get(key(list[i]!.to)) ?? []), i])
+        for (const i of ours) byTarget.set(key(list[i]!.to), [...(byTarget.get(key(list[i]!.to)) ?? []), i])
         const holding = [...byTarget.values()].filter(
           (is) =>
             mine.length > 0 &&
@@ -222,23 +249,25 @@ export function linksOf(
 
 /**
  * A member's annotations in their order on A, the order TeX set them in: a paragraph's characters are set in the source's order
- * along its lines, its lines in the member's order (`lines`, Placed.lines). Each is at the member's line it lies on (of those
- * on its page, one its box overlaps across where any does, the one whose baseline is nearest its box's middle), then at its
- * box's start along that line; the PDF's annotation array, whose order the part's list keeps, need not be TeX's (#626's review:
- * two \href groups listed right to left). An annotation of no line of the member (none on its page) keeps its place in the
- * list after those that have one.
+ * along its lines, its lines in the member's order over its pages (`lines`, Placed.lines). Each is at the member's line it lies
+ * on (of those on its own page, Link.page or the part's, one its box overlaps across where any does, the one whose baseline is
+ * nearest its box's middle), then at its box's start along that line; the PDF's annotation array, whose order the part's list
+ * keeps, need not be TeX's (#626's review: two \href groups listed right to left). An annotation of no line of the member (none
+ * on its page) comes after those that have one, by its page, then its place in the list.
  */
 function inReading(ids: readonly number[], list: readonly Link[], lines: readonly Line[], page: number): number[] {
   const at = new Map<number, [number, number]>()
+  const pageOf = (i: number) => list[i]!.page ?? page
   for (const i of ids) {
-    const b = list[i]!.box
+    const b = list[i]!.box,
+      q = pageOf(i)
     const x0 = Math.min(b[0], b[2]),
       x1 = Math.max(b[0], b[2]),
       mid = (b[1] + b[3]) / 2
     let line = -1,
       best: [number, number] = [2, 0]
     lines.forEach((l, j) => {
-      if (l[0] !== page) return
+      if (l[0] !== q) return
       const d: [number, number] = [l[3] > x0 && l[2] < x1 ? 0 : 1, Math.abs(l[4] - mid)]
       if (d[0] < best[0] || (d[0] === best[0] && d[1] < best[1])) {
         best = d
@@ -248,7 +277,7 @@ function inReading(ids: readonly number[], list: readonly Link[], lines: readonl
     at.set(i, line < 0 ? [lines.length, 0] : [line, x0])
   }
   const of = (i: number) => at.get(i)!
-  return [...ids].sort((a, b) => of(a)[0] - of(b)[0] || of(a)[1] - of(b)[1] || a - b)
+  return [...ids].sort((a, b) => of(a)[0] - of(b)[0] || of(a)[1] - of(b)[1] || pageOf(a) - pageOf(b) || a - b)
 }
 
 /** annotations in their order, cut into runs of one target (a link TeX broke over lines is one annotation a line) */

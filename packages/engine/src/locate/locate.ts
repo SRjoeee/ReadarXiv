@@ -103,7 +103,13 @@ export interface Located {
   ties: ({ rule: 'cells'; cells: number[][]; head?: 1 } | { rule: 'size'; ords: number[] })[]
   links: Map<
     number,
-    { box: [number, number, number, number]; to: { url: string } | { dest: string }; owner?: [number, string] }[]
+    {
+      box: [number, number, number, number]
+      to: { url: string } | { dest: string }
+      owner?: [number, string]
+      text?: string
+      page?: number
+    }[]
   >
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
@@ -589,6 +595,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.figure = !!x.unit.figure
       if (x.unit.figure?.dir) mem.dir = x.unit.figure.dir
       mem.align = x.unit.align ?? 'j'
+      // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain)
+      if (x.unit.figure) mem.plain = x.unit.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
         mem.cause = 'no ink'
@@ -1212,7 +1220,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           if (owner) break
         }
       }
-      out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}) })
+      // (the characters of the glyphs under it, its glyph points' in their order: today's annotation's own (links.mjs g2.ch, which
+      // its placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server's reading
+      // skips it, pdf-lite.mjs's text guard)
+      const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
+      out.push({ box: [x0, y0, x1, y1], to, ...(owner ? { owner } : {}), ...(text ? { text } : {}) })
     }
     if (out.length) links.set(p + 1, out)
   })

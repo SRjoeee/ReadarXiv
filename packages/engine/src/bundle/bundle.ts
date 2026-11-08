@@ -56,7 +56,10 @@ export interface MemberState {
 
 export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   if (!mem.located) return { why: 'unlocated', drawn: false, fixed: 0 }
-  if (mem.fixed) return { drawn: false, fixed: 0 }
+  // (its ink stays whatever the translation: no group of it. A figure text so left (today's figure reading's crowded one,
+  // ink.ts) holds text a translation could be laid over, over ink that stays: unwrapped, the original's, #631's review. A kept
+  // block holds none)
+  if (mem.fixed) return mem.figure ? { why: 'unwrapped', drawn: false, fixed: 0 } : { drawn: false, fixed: 0 }
   if ('refused' in addOn) return { why: 'page', drawn: false, fixed: 0 }
   // (an image of its own the wrap could not group: hiding its text would leave that image standing under a translation)
   for (const g of addOn.lost ?? []) if (g.startsWith(`${mem.ord}.`)) return { why: 'unwrapped', drawn: false, fixed: 0 }
@@ -235,6 +238,18 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     const take = [...a, ...b, ...c].sort((x, y) => x - y)
     const held = new Set(take.flatMap((i) => located.flows[i]!))
     const ties = located.ties.filter((_, t) => tieOrds[t]!.some((o) => held.has(o)))
+    // (the page's annotations, and those of the members with a line on it on their other pages, with their page: a translation
+    // draws a member's piece on whichever of its pages its text falls, the link over it there, #626's review)
+    const own = located.links.get(p) ?? []
+    const across: NonNullable<Part['links']> = []
+    for (const i of a)
+      for (const o of located.flows[i]!) {
+        if (!members[o]!.pages.includes(p)) continue
+        for (const q of members[o]!.pages)
+          if (q !== p)
+            for (const l of located.links.get(q) ?? []) if (l.owner?.[0] === o) across.push({ ...l, page: q })
+      }
+    const links = [...own, ...across]
     const part: Part = {
       format: 1,
       page: p,
@@ -245,7 +260,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       },
       flows: take.map((i) => located.flows[i]!.map((o) => placed[o]!)),
       ...(ties.length ? { ties } : {}),
-      ...(located.links.get(p)?.length ? { links: located.links.get(p) } : {}),
+      ...(links.length ? { links } : {}),
     }
     const { bytes, digest } = write('part', part)
     partDigests.push(digest)

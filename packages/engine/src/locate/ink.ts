@@ -27,6 +27,9 @@ import {
   UNIT_FLAG,
 } from './today/today.types.ts'
 
+/** a figure text's anchor as an alignment: its start's, its centre's, its end's (Placed.align) */
+const ALIGN_OF = { start: 'l', centre: 'c', end: 'r' } as const
+
 /** a unit made on A and its ink there: its text glyphs (global, stream order), its placeholders' glyphs (the element `ph`), its
  *  turned glyphs ([page, index]) and its boxes ([page, index]) */
 export interface Made {
@@ -220,12 +223,23 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       Math.abs(ux - 1) > 1e-6 || Math.abs(uy) > 1e-6
         ? [Math.round(ux * 1e4) / 1e4, Math.round(uy * 1e4) / 1e4]
         : undefined
+    // (where a translation of it may stand, as today's figure reading tells it: S.figures reads these from the part)
+    const room = {
+      ...(Number.isFinite(f.x) ? { x: f.x } : {}),
+      ...(Number.isFinite(f.y) ? { y: f.y } : {}),
+      ...(Number.isFinite(f.length) ? { length: f.length } : {}),
+      ...(f.anchor ? { anchor: f.anchor } : {}),
+      ...(Number.isFinite(f.before) ? { before: f.before } : {}),
+      ...(Number.isFinite(f.after) ? { after: f.after } : {}),
+      ...(typeof f.under === 'number' && Number.isFinite(f.under) ? { under: f.under } : {}),
+    }
     made.push({
       unit: {
         id: unitId('inkfigures', content),
         kind: 'inkfigures',
         content,
-        figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}) },
+        figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
+        ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...(f.why ? { why: `figure: ${f.why}`, fixed: true as const } : {}),
       },
       text: [],

@@ -89,6 +89,8 @@ export type GateL1 = {
     /** what became of the parts' links (lay/links.ts LinkFate), and examples of the dropped */
     links: Map<string, number>
     linkEx: Map<string, string[]>
+    /** the figure texts (S.figures over the part): each figure member on its first page, by its turn and its state */
+    figures: Map<string, number>
     /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
     lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
   }
@@ -479,6 +481,7 @@ export function gateL1Pair(
             names: new Map(),
             links: new Map(),
             linkEx: new Map(),
+            figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
           },
         }
@@ -852,12 +855,19 @@ export function gateL1Pair(
       out.entry.ms.push(performance.now() - t1)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
-        const f = linkFates[i] ?? 'none'
+        // (an annotation of a member's other page, which the part holds with its page: counted apart)
+        const f = `${l.page && l.page !== pg ? 'across ' : ''}${linkFates[i] ?? 'none'}`
         out.entry!.links.set(f, (out.entry!.links.get(f) ?? 0) + 1)
         const ex = out.entry!.linkEx.get(f) ?? []
         if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
           out.entry!.linkEx.set(f, [...ex, `${pair} p${pg} ord ${l.owner?.[0]} ${l.owner?.[1] || 'text'}`])
       })
+      for (const m of (part as Part).flows.flat())
+        if (m.kind === 'figure' && m.lines[0]?.[0] === pg) {
+          const st = page.members.find((x) => x.ord === m.ord)?.state ?? 'none'
+          const k = `${m.dir ? 'turned' : 'level'}: ${st}`
+          out.entry.figures.set(k, (out.entry.figures.get(k) ?? 0) + 1)
+        }
       for (const x of page.members) {
         if (x.state !== 'laid' || !x.lines.length) continue
         const lit = out.entry.lit

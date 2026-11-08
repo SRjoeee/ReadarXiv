@@ -10,8 +10,9 @@
 // off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
 // member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: lit
 // whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
-// A's boxes). What it does not compose yet, said where it is decided: a figure text's members (S.figures: they stay the
-// original's, `kind`). A CJK cell's bands are read over the rules its Room.band states.
+// A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
+// fits; a turned one, which design-a's Item cannot draw, the original's), one of a part that states no text of its own
+// (Placed.plain: a part made before) read as before. A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -22,6 +23,7 @@ import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts
 import type { TextItem } from '../emit/display.ts'
 import { adapt, rectOf } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
+import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inkOfLine, litLaid, litOfA } from './lit.ts'
@@ -221,6 +223,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const boundTo = new Map<number, number>()
   // (each member as it is set: one led by a name with the name and the joint its label, one after a name kept pinned by it)
   const setAs = new Map<number, Placed>()
+  // (the figure texts: set by S.figures, never read as paragraphs. One of a part made before the prepare stated its own text
+  // (Placed.plain) is read as before (converge-4's entry, ec6715946: a paragraph's reading): S.figures, its source unknown,
+  // would redraw a label its translation leaves as it was, #631's review)
+  const figs: Placed[] = []
   for (const flow of part.flows)
     for (let k = 0; k < flow.length; k++) {
       const m = flow[k]!
@@ -231,6 +237,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         // any name kept (keptBefore; Devin on #624: its follower could widen over the name))
         const next = m.kind === 'name' && m.bound ? flow[k + 1] : undefined
         if (next && next.kind !== 'name') leadFor.set(next.ord, { name: m, word: null })
+        continue
+      }
+      if (m.kind === 'figure' && typeof m.plain === 'string') {
+        figs.push(m)
         continue
       }
       if (m.kind === 'name' && typeof m.text !== 'string') {
@@ -315,6 +325,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       }
       read.set(m.ord, { rd, pieces, tokens })
     }
+  // (the figure texts, S.figures over the part: a face not loaded waited for as any)
+  const fig = figuresOf(part, figs, rows, { paper, R, metrics })
+  faces.push(...fig.wait)
+  for (const [ord, w] of fig.why) state.set(ord, w)
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
   // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
@@ -436,6 +450,17 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   // (the members laid on the page with their layouts: the owners whose links are drawn with them)
   const owners = new Map<number, LinkOwner>()
   const out: Laid[] = members.map((m) => {
+    // (a figure text drawn: its translation on its line, its text group off)
+    const fl = fig.laid.get(m.ord)
+    if (fl)
+      return {
+        ord: m.ord,
+        page,
+        state: 'laid',
+        off: 1,
+        lines: fl,
+        lit: { left: [[boxOfA(m.lines[0]!)]], right: [fl.map(nameBox)], own: [] },
+      }
     // (a name drawn on its own: its word on its line, its text group off)
     const nl = names.get(m.ord)
     if (nl) {

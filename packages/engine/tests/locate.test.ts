@@ -571,6 +571,31 @@ describe('bundle', () => {
     expect(head.head.original).toMatchObject({ bytes: 70000, chunk: 65536 })
     expect(head.head.original.chunks).toHaveLength(44)
   })
+  it('gives a part the annotations of its members on their other pages, with their page (#626 review)', () => {
+    // (unit 0 runs on from page 1 to page 2, an annotation over its text on page 2: page 1's part holds it with its page, so
+    // that a translation whose \\href is drawn on page 1 takes its link there; page 2's holds it as its own)
+    const link = { annotationType: 2, rect: [60, 694, 140, 706], url: 'https://example.org/' }
+    const L2 = locate(ins, B, align(B, B), { annotations: [[], [link], []] })
+    const parts = [
+      ...bundle({
+        ins,
+        located: L2,
+        addOn: addOnOf(L2, 3),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 3 },
+        made: 'test',
+      }),
+    ].filter((o) => o.kind === 'part')
+    const linksOf = (n: number) => {
+      const o = parts.find((x) => x.page === n)!
+      return read('part', o.bytes, o.digest).links ?? []
+    }
+    const own = L2.links.get(2)![0]!
+    expect(own.owner?.[0]).toBe(L2.members.find((m) => m.unit === 0)!.ord)
+    expect(linksOf(1)).toEqual([{ ...own, page: 2 }])
+    expect(linksOf(2)).toEqual([own])
+    expect(linksOf(3)).toEqual([])
+  })
   it('holds in a part every flow its page reads: its own, and those of the page a running-on member begins on', () => {
     const parts = objects.filter((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>[]
     // page 2: unit 0 runs on from page 1 (a), and page 1's flows (b) are its own; unit 1's (a)
@@ -789,6 +814,29 @@ describe('review of #605', () => {
         .map((x) => x.ord),
     ).toEqual([0, 1])
   })
+  it('says a figure text whose ink stays is unwrapped: no group of it, so no translation is laid over it (#631 review)', () => {
+    // (today's figure reading leaves a crowded label's ink where it stands (ink.ts: `fixed`, no group made of it); the part states
+    // why, as for a member whose group the wrap did not make. A kept block holds no text a translation could stand for: as before)
+    const B = docOf([{ lines: ['a caption under it', 'Loss', 'kept as it is'] }])
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Loss', { figure: { set: 0 }, fixed: true }),
+      unitOf('inkorphan', 'kept as it is', { kept: true, fixed: true }),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members.map((m) => m.located)).toEqual([true, true, true])
+    const addOn = addOnOf(L, 1)
+    expect(stateOf(L.members[1]!, addOn)).toEqual({ why: 'unwrapped', drawn: false, fixed: 0 })
+    expect(stateOf(L.members[2]!, addOn)).toEqual({ drawn: false, fixed: 0 })
+    const objs = [
+      ...bundle({ ins, located: L, addOn, original, paper: { id: '2501.00001', version: 1, pages: 1 }, made: 't' }),
+    ]
+    const part = objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>
+    const placed = read('part', part.bytes).flows.flat()
+    expect(placed.find((x) => x.ord === 1)).toMatchObject({ kind: 'figure', why: 'unwrapped' })
+    expect(placed.find((x) => x.ord === 2)?.why).toBeUndefined()
+  })
   it('lays no member one of whose images the wrap could not group (planOf’s lost)', () => {
     const B = docOf([{ lines: ['a unit with an image'] }])
     const L = locate(instrumentOf(B, [unitOf('para', 'a unit with an image')], [[0]]), B, align(B, B))
@@ -851,7 +899,20 @@ describe('review of #605', () => {
     const units = [unitOf('para', 'see'), unitOf('para', 'Figure 12')]
     const link = { annotationType: 2, rect: [89, 695, 151, 708], dest: 'figure.12' }
     const L = locate(instrumentOf(B, units, [[0, 1]]), B, align(B, B), { annotations: [[link]] })
-    expect(L.links.get(1)).toEqual([{ box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''] }])
+    expect(L.links.get(1)).toEqual([
+      { box: [89, 695, 151, 708], to: { dest: '"figure.12"' }, owner: [1, ''], text: 'Figure12' },
+    ])
+  })
+  it('states the characters of the glyphs under a link, in their order (today’s annotation’s own, its g2)', () => {
+    // (1810.04805v2 p1: "(Peters et al., 2018a; Radford et al., 2018)" holds five annotations of two targets, "Peters et al.",
+    // "2018a", "Rad-", "ford et al.", "2018"; the typesetter finds each among the characters the citation is drawn as. A glyph
+    // 6 pt wide from 72: the link over 90-180 holds the centres of "Peters et al." but its spaces; one over no glyph none)
+    const B = docOf([{ lines: [{ text: 'see Peters et al.', x: 72 }] }])
+    const units = [unitOf('para', 'see Peters et al.')]
+    const link = { annotationType: 2, rect: [90, 695, 180, 708], dest: 'cite.p' }
+    const none = { annotationType: 2, rect: [300, 695, 310, 708], dest: 'cite.q' }
+    const L = locate(instrumentOf(B, units, [[0]]), B, align(B, B), { annotations: [[link, none]] })
+    expect(L.links.get(1)?.map((l) => l.text)).toEqual(['Petersetal.', undefined])
   })
 })
 

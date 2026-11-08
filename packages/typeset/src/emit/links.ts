@@ -14,9 +14,13 @@ export const WORK_MAX = 2e7
 /** how far a browser's advances may part from the layout's measure, a share of the distance from a run's start (DRIFT_BOUND) */
 export const DRIFT_BOUND = 0.06
 
-/** an annotation as the match reads it: its target, its glyph points under it (g2), its boxes, its text, its border */
+/** an annotation as the match reads it: its target, its glyph points under it (g2), its boxes, its text, its border; `at` its
+ *  place in its member's annotations' order on A where the caller states it (lay/links.ts inReading: the PDF's annotation
+ *  array need not be in TeX's order); where it does not, its order is its index `i` on its page (today's: page, then PDF
+ *  order) */
 export type Annot = {
   i: number
+  at?: number
   url?: string
   dest?: unknown
   rect?: number[]
@@ -450,7 +454,8 @@ function placeText(
   const forms = { letters: normed(dChars, LETTER), ink: normed(dChars, INK) }
   const found: { c: Group['annots'][number]; ds: number; de: number }[] = []
   let from = 0
-  const sorted = annots.slice().sort((a, b) => a.q - b.q || a.a.i - b.a.i)
+  // (in their order on A: one search, moving forward only, takes each over its own occurrence)
+  const sorted = annots.slice().sort((a, b) => a.q - b.q || (a.a.at ?? a.a.i) - (b.a.at ?? b.a.i))
   const formOf = (own: readonly string[]) => {
     const A = normed(own, LETTER)
     return A.s ? { mode: 'letters' as const, A } : { mode: 'ink' as const, A: normed(own, INK) }
