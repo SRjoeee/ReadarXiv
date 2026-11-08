@@ -662,6 +662,70 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(sizeOf({ below: 0, band: [697.9, 708.8] })).toBeLessThan(10)
     expect(sizeOf({ below: 0, band: [697.9, 708.8], bandOpen: 1 })).toBe(10)
   })
+  it('splits the free paper two cells share on one baseline at its middle: neither widens over the other', () => {
+    // (1706.03762v7-zh p9 t123/t124, "(dev)" under "PPL" and under "BLEU": each cell's Room.side runs to the other's ink, so
+    // each widened into the whole gap between them and both translations were drawn over each other, 13.3 × 7.72 pt. The
+    // paper two members may both take is each one's half, as today's figure reading shares it between two figure texts)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      kind: 'cell',
+      align: 'l',
+      lines: [[1, 0, 100, 120, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [72, 160] },
+    })
+    const b = member({
+      ord: 1,
+      kind: 'cell',
+      align: 'c',
+      text: idB,
+      lines: [[1, 0, 160, 180, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [120, 300] },
+    })
+    const pt: Part = { ...part(a), flows: [[a], [b]] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: 'Entwicklung' }]),
+      { ...row([{ t: 'text', s: 'Entwicklung' }]), id: idB },
+    ])
+    const [la, lb] = layPage(pt, rows, rules, metrics()).members
+    expect([la!.state, lb!.state]).toEqual(['laid', 'laid'])
+    const [, , ax1] = la!.lines[0]!,
+      [, bx0] = lb!.lines[0]!
+    // (the gap 120-160, its middle 140: each a quarter of its size short of it, the two half their size apart)
+    expect(ax1).toBeLessThanOrEqual(137.5 + 1e-9)
+    expect(bx0).toBeGreaterThanOrEqual(142.5 - 1e-9)
+  })
+  it('widens a cell to a quarter of its size off its column’s rule, half its size off another’s text (today’s paperTo)', () => {
+    // (2608.25210v2-zh p5 t119, "LLM_s" between two column rules 417.77 and 440.45: half its size off the rule, it was set at
+    // 4.63 where today's set it at 5.08 to 438.97, a quarter of its size off the rule, its original 5.98)
+    const cell = (side: [number, number]) =>
+      member({
+        kind: 'cell',
+        align: 'j',
+        lines: [[1, 0, 104, 120, 700, 707, 698, 72, 300, 0, 10]],
+        room: { below: 0, next: 300, side },
+      })
+    const x1Of = (m: Placed, others: Placed[] = []) => {
+      const pt: Part = { ...part(m), flows: [[m], ...others.map((o) => [o])] }
+      const got = layPage(pt, rowsOf([row([{ t: 'text', s: 'Entwicklung' }])], true), rules, metrics()).members[0]!
+      expect(got.state).toBe('laid')
+      return got.lines[0]![2]
+    }
+    // (a rule at 150: its line up to 147.5, set at 0.775 of its size, 42.6 wide)
+    const walled = x1Of(cell([100, 150]))
+    expect(walled).toBeGreaterThan(145)
+    expect(walled).toBeLessThanOrEqual(147.5 + 1e-9)
+    // (another member's text at 150, a multi-line one that widens nowhere: half its size off it, as any line)
+    const text = member({
+      ord: 1,
+      text: 'c'.repeat(64),
+      lines: [
+        [1, 0, 150, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    expect(x1Of(cell([100, 150]), [text])).toBeLessThanOrEqual(145 + 1e-9)
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

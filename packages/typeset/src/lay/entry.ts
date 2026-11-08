@@ -27,7 +27,7 @@ import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import type { TextItem } from '../emit/display.ts'
-import { adapt, rectOf } from './adapt.ts'
+import { adapt, rectOf, sharedPaper } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
@@ -248,6 +248,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
+  // (what stands at the ends of each member's Room.side: another member's text, the free paper two cells of a row share)
+  const beside = sharedPaper(part.flows, page)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
   // §19.14, today's ownNames)
@@ -417,6 +419,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         own: true,
       },
       bottomOf: (pg) => bottoms.get(pg),
+      ...(beside.has(m.ord) ? { beside: beside.get(m.ord)! } : {}),
     })
     if ('stop' in got) {
       state.set(m.ord, 'kind')
