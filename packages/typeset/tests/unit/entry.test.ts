@@ -441,6 +441,53 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(items.map((it) => it.s).join('')).toBe(ja.labels!.abstract)
     expect(items.every((it) => it.skew === 1)).toBe(true)
   })
+  it('turns off on each page only the groups the member has there: an element moved across the page break, its label on the first page (triage-1 B)', () => {
+    // (2608.16117v1-de t11, p3 to p4: an element of p3 drawn on p4's line as a crop set the member's elements off on p4, where
+    // the add-on holds no group of its elements; 2608.25210v2-zh t196, p9 to p10: its label drawn anew set its label off on
+    // p10, where it has none. The reader leaves a member whose groups the document lacks the original's: its text on that
+    // page stayed English. Today's hide.mjs: each page hides its own groups, a placeholder's where its ink is, the label where
+    // its box is)
+    const m = member({
+      kind: 'theorem',
+      label: {
+        kind: 'head',
+        ink: [1, 72, 98, 112, 107, 100],
+        style: { role: 'serif', size: 10, bold: 1 },
+        name: ['Theorem', [1, 72, 98, 105, 107, 100]],
+        num: ['1', [1, 107, 98, 110, 107, 100]],
+        punct: ['.', [1, 110, 98, 112, 107, 100]],
+      },
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      els: [['1', { kind: 'other', ink: [[1, 150, 98, 170, 107, 100]], copy: 'x' }]],
+      room: { below: 0, next: 300 },
+    })
+    const r = row([
+      { t: 'text', s: 'Ein langer Satz, der die erste Zeile des Satzes ganz füllt, und dann ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' am Ende.' },
+    ])
+    const on = (page: number) =>
+      layPage({ ...part(m), page }, rowsOf([r]), rules, metrics(), { heads: { Theorem: 'Satz' } }).members[0]!
+    // (the groups the member has on a page: its text where a line of it stands, its elements where one's ink is, its label
+    // where its box is)
+    const has = (page: number) =>
+      (m.lines.some((l) => l[0] === page) ? 1 : 0) |
+      (m.els!.some(([, e]) => e.ink.some((k) => k[0] === page)) ? 2 : 0) |
+      (m.label!.ink[0] === page ? 4 : 0)
+    const p1 = on(1),
+      p2 = on(2)
+    expect([p1.state, p2.state]).toEqual(['laid', 'laid'])
+    // (the element is drawn on p2's line, cut from its own page)
+    const crops = p2.lines.flatMap((l) => l[3]).filter((it) => 'src' in it)
+    expect(crops.map((it) => ('src' in it ? [it.piece, it.src[0]] : null))).toEqual([['1', 1]])
+    // (p1: its text, its element (drawn on p2) and its label (drawn anew) off; p2: its text alone)
+    expect(p1.off).toBe(7)
+    expect(p2.off).toBe(1)
+    for (const page of [1, 2]) expect(on(page).off & ~has(page)).toBe(0)
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

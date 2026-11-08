@@ -283,7 +283,8 @@ export function createComposer(o: ComposerOptions): Composer {
     const tSvg = performance.now()
     const pdfPage = await doc.getPage(n)
     const out = (at.view as unknown as { outputScale?: { sx: number; sy: number } }).outputScale ?? { sx: 1, sy: 1 }
-    const crops = await cropsFor(page, pdfPage, up, g.crops, out, at.signal)
+    // (each crop cut from its own page: this one, or another of a member laid across a page break)
+    const crops = await cropsFor(page, (k) => doc.getPage(k), up, g.crops, out, at.signal)
     if (crops) el.append(turned(crops, at.viewport))
     const tCrops = performance.now()
     const text = texts.get(n) ?? textContentOf(pdfPage)
@@ -306,7 +307,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const up = uprightOf(at.viewport)
     const w = Math.max(1, Math.floor(up.width * out.sx))
     if (was.width === w) return
-    const next = await cropsFor(page, await doc.getPage(at.n), up, g.crops, out, at.signal)
+    const next = await cropsFor(page, (k) => doc.getPage(k), up, g.crops, out, at.signal)
     if (!next || at.signal.aborted || was.parentNode !== el) return
     was.replaceWith(turned(next, at.viewport))
     was.width = 0
