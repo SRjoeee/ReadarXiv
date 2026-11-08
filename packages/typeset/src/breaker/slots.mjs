@@ -138,7 +138,7 @@ function slotsAt(blocks, st, P, s) {
       const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? flowMeasureAt(b, y) : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       // (and a block a forced break's region opens, `opens` (blocksOf2): its first line TeX's paragraph's, at its indent)
-      const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
+      let x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : (firstBlock || b.opens) && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
       // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
       // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,
@@ -146,6 +146,17 @@ function slotsAt(blocks, st, P, s) {
       const em = s * st.scale
       let x1 = mx1
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
+      // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: amsthm's QED box after a proof's last
+      // words, four rules TeX set at the measure's end): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
+      // display's top above) to its em over its baseline (no text glyph rises past its body), ends half an em before it, or,
+      // where it stood before the original's line, starts half an em after it, as the line widened beside a glyph keeps (U.decor
+      // widen). Borrowed or not: a ragged last line missed it by its shortness alone, and a line borrowed under it made the row
+      // full (2610.40645v1-ja p12 t80)
+      for (const k of b.stays ?? []) {
+        if (!(k.y0 < y + em && k.y1 > y - SHORT_SKIP * em)) continue
+        if (k.right) x1 = Math.min(x1, k.x0 - 0.5 * em)
+        else x0 = Math.max(x0, k.x1 + 0.5 * em)
+      }
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue
       const slot = { block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi }

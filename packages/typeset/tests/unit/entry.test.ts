@@ -419,6 +419,24 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(tight.fit!.size).toBeLessThan(10)
     expect(tight.lines.every(([y]) => y >= 687 - 0.05)).toBe(true)
   })
+  it('keeps every line it lays off the ink that stays beside its lines, borrowed or not (Room.stays: a QED box)', () => {
+    // (2610.40645v1-ja p12 t80: amsthm's QED box at the end of the proof's last line (it ends at 200, the box at 290-297); the
+    // translation two lines longer, laid at its size with two borrowed lines: its last original row now full, which ran over
+    // the box. A line on that row ends half an em before the box; the borrowed line under it, clear of it, runs full)
+    const text = 'wort '.repeat(28).trim()
+    const lay = (stays?: Placed['room']['stays']) => {
+      const a = member({ room: { below: 0, next: 300, runs: [[1, 200, 30]], sep: 12, ...(stays ? { stays } : {}) } })
+      return layPage(part(a), rowsOf([row([{ t: 'text', s: text }])]), still, metrics()).members[0]!
+    }
+    const bare = lay()
+    expect([bare.state, bare.fit?.size, bare.lines.length]).toEqual(['laid', 10, 4])
+    expect(bare.lines[1]![2]).toBeGreaterThan(290)
+    const kept = lay([[1, 290, 686, 297, 693]])
+    expect([kept.state, kept.fit?.size]).toEqual(['laid', 10])
+    const onRow = kept.lines.find(([y]) => Math.abs(y - 688) < 1)!
+    expect(onRow[2]).toBeLessThanOrEqual(290 - 5 + 0.01)
+    expect(kept.lines.find(([y]) => Math.abs(y - 676) < 1)![2]).toBeGreaterThan(290)
+  })
   it('borrows nothing where the part states no TeX room: a part made before, its runs’ room or its separation unstated', () => {
     // (a part made before 2026-11-08 may state the room under each run otherwise, Room.ends: read by nothing; its last line's
     // room alone, Room.below: no fact of TeX's bounds it. A run stated, no separation (a unit TeX set no paragraph for): none)

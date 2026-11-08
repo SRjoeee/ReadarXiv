@@ -1461,6 +1461,30 @@ describe('review of #605', () => {
     // (the paragraphs' measures are their columns' as before)
     expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([46, 286])
   })
+  it('states the ink that stays beside a paragraph’s lines, no member’s: a QED box TeX set after its last words (Room.stays)', () => {
+    // (2610.40645v1 p12 t80: amsthm's \openbox after the proof's last line, four rules no unit owns, at the measure's end; a
+    // translation's line laid on that row, borrowed or not, keeps off it. Room.side reads glyphs alone and is the narrowest over
+    // the lines: it says nothing of it)
+    const L40 = 'x'.repeat(40)
+    const B = docOf([
+      {
+        lines: [
+          { text: L40, x: 72, y: 700 },
+          { text: 'yyyy', x: 72, y: 688 },
+        ],
+        boxes: [
+          [44, 0, 300, 688, 300.4, 695],
+          [44, 0, 300, 694.6, 307, 695],
+          [44, 0, 300, 688, 307, 688.4],
+          [44, 0, 306.6, 688, 307, 695],
+        ],
+      },
+    ])
+    const L = locate(instrumentOf(B, [unitOf('para', `${L40} yyyy`)], [[0, 0]]), B, align(B, B))
+    const p = L.members[0]!
+    expect(p.room.stays).toEqual([[1, 300, 688, 307, 695]])
+    expect(p.room.side).toEqual([72, 312])
+  })
   it('states each cell’s grid place and its own text in the part, what a table’s groups are decided by (S.table.groups)', () => {
     // (1706.03762v7 p9's Table 3: today's groups follow TeX's tabular, the header, each column, a \multicolumn row of its own,
     // and a column of names is told by its cells' own text against their rows; the tie's cells were sorted by row and column

@@ -832,6 +832,42 @@ export function sideOf(
   return { side: [r2(lo), r2(hi)], wall: ((loWall ? 1 : 0) | (hiWall ? 2 : 0)) as 0 | 1 | 2 | 3 }
 }
 /**
+ * The ink that stays beside a member's text lines (Room.stays): on each of its lines (its kept rows aside), the ink no member
+ * owns (`stays`: a glyph no unit claims, a rule or an image no member's) standing on its band (a glyph by its baseline, within
+ * 0.4 of the line's size, as sideOf and pinnedOf read the band; a painted box by its height meeting that band, as sideOf reads
+ * a cell's walls) within its text block (`block`, as sideOf), wholly before the line's start or after its end (by half a
+ * point, pinnedOf's): on each side, the box of those pieces, [the line's index, x0, y0, x1, y1]. TeX set that ink on the line
+ * (amsthm's QED box after a proof's last words, \hfill'd to the measure's end: four rules, no glyph; a mark no unit holds), and
+ * no translation replaces it: whatever line a translation lays there, borrowed or not, keeps off it. Undefined where none
+ */
+export function staysOf(
+  lines: readonly Line[],
+  stays: (page: number) => readonly InkBox[],
+  block: (l: Line) => [number, number],
+): [number, number, number, number, number][] | undefined {
+  const out: [number, number, number, number, number][] = []
+  lines.forEach((l, j) => {
+    if (l[9] & 1) return
+    const [b0, b1] = block(l)
+    const c0 = Math.min(b0, l[2]),
+      c1 = Math.max(b1, l[3])
+    const band = 0.4 * (l[10] ?? l[5] - l[6])
+    const sides: (InkBox | null)[] = [null, null]
+    for (const k of stays(l[0])) {
+      const on = k.y !== undefined ? Math.abs(k.y - l[4]) < band : k.y0 < l[4] + band && k.y1 > l[4] - band
+      if (!on || k.x1 <= c0 || k.x0 >= c1) continue
+      const at = k.x1 <= l[2] - 0.5 ? 0 : k.x0 >= l[3] + 0.5 ? 1 : -1
+      if (at < 0) continue
+      const s = sides[at]
+      sides[at] = s
+        ? { x0: Math.min(s.x0, k.x0), x1: Math.max(s.x1, k.x1), y0: Math.min(s.y0, k.y0), y1: Math.max(s.y1, k.y1) }
+        : { x0: k.x0, x1: k.x1, y0: k.y0, y1: k.y1 }
+    }
+    for (const s of sides) if (s) out.push([j, r2(s.x0), r2(s.y0), r2(s.x1), r2(s.y1)])
+  })
+  return out.length ? out : undefined
+}
+/**
  * A cell's clear band between the rules over and under its lines (Room.band; today's cellBands L2:352): over, the lowest
  * rule at or above its first line's baseline, under, the highest at or below its last line's, each across its lines by more
  * than half a point; undefined where no rule stands over or under it. Where one stands on one side alone, the other side is

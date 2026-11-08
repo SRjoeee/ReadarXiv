@@ -14,6 +14,7 @@ import {
   pinnedOf,
   shortSkipLines,
   sideOf,
+  staysOf,
   centredByBlock,
   sourceEndMarks,
   styleOf,
@@ -288,6 +289,33 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => walls,
       ),
     ).toEqual({ side: [296.4, 404], wall: 1 })
+  })
+  it('reads the ink that stays beside each text line, rules and images too: a QED box at the end of a proof’s last line', () => {
+    // (2610.40645v1 p12 t80: amsthm's \openbox, four rules after the last line's text (it ends at 430.87), owned by no unit;
+    // the line over it full. A rule across the last line's band under its text, a glyph left of its start and one in the
+    // margin out of its column, one on the line over it, and ink beside a kept line (a display's row))
+    const qed = [
+      { x0: 532.09, x1: 532.48, y0: 361.01, y1: 368.77 },
+      { x0: 532.29, x1: 539.23, y0: 368.17, y1: 368.57 },
+      { x0: 532.29, x1: 539.23, y0: 361.21, y1: 361.6 },
+      { x0: 539.03, x1: 539.43, y0: 361.01, y1: 368.77 },
+    ]
+    const lines = [L(72, 540, 376.66), L(100, 430.87, 361.21), L(150, 300, 346, 1)]
+    const block = () => [72, 540] as [number, number]
+    expect(staysOf(lines, () => qed, block)).toEqual([[1, 532.09, 361.01, 539.43, 368.77]])
+    const more = [
+      ...qed,
+      { x0: 72, x1: 540, y0: 360.5, y1: 360.9 },
+      { x0: 80, x1: 86, y0: 359, y1: 366, y: 361.21 },
+      { x0: 40, x1: 46, y0: 359, y1: 366, y: 361.21 },
+      { x0: 300, x1: 306, y0: 365, y1: 372, y: 367 },
+      { x0: 320, x1: 330, y0: 344, y1: 352, y: 346 },
+    ]
+    expect(staysOf(lines, () => more, block)).toEqual([
+      [1, 80, 359, 86, 366],
+      [1, 532.09, 361.01, 539.43, 368.77],
+    ])
+    expect(staysOf(lines, () => [], block)).toBeUndefined()
   })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [

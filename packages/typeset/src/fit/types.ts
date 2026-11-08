@@ -16,7 +16,13 @@ export type FitBlock = DecorBlock & {
   flowX?: { y: number; lead: FitBlock | null }
   opens?: true
   widened?: boolean
+  /** the ink that stays beside its lines (lay/adapt.ts, from Room.stays: a QED box after a proof's last words), each piece's box
+   *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
+  stays?: Stay[]
 }
+/** ink beside a unit's line that no translation replaces: its box, and whether it stood after the line's end (else before its
+ *  start) */
+export type Stay = { right: boolean; x0: number; y0: number; x1: number; y1: number }
 /** a state of the fit (statesOf): its leading, tracking, compression, borrowing, scale and the knob that set it */
 export type FitState = {
   lead: number
