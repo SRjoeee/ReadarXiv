@@ -541,7 +541,8 @@ export function factsOf({
     // Line.flags' RTL), which the order of its links along a line follows
     if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
 
-    // -- its alignment, where TeX did not state it: the maker's reading (MAKE:2121-2135); a single-line cell by its column
+    // -- its alignment, where TeX did not state it (a cell's: its column's class or its own paragraph's, marks/channels.ts
+    // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
     if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
       const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
       // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)

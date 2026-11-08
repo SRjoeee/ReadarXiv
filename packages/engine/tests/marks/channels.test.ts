@@ -25,6 +25,46 @@ describe('readAlign: each unit’s alignment as TeX stated it at its end mark', 
     // (set as a paragraph then in an \hbox: none, the box's tells nothing)
     expect(readAlign('AXT-ALIGN 4 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 4 h 0 0.0pt 0 0.0pt 1 1.0pt').has(4)).toBe(false)
   })
+
+  it('reads a cell’s alignment from the class LaTeX built its column’s template from (AXT-CELL), its own paragraph’s first', () => {
+    const log = [
+      // (2602.23285v2 p7's "Acc", t61: a braced text in a siunitx S column, which is array's c; its \hbox's skips tell nothing)
+      'AXT-ALIGN t61 h 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-CELL 61 0',
+      // (\multicolumn{3}{c}{\textbf{TUSZ}}: the multicolumn's own spec)
+      'AXT-CELL 59 0',
+      'AXT-CELL 70 1',
+      'AXT-CELL 71 2',
+      // (a p column: the class says nothing of its lines, its paragraph does: >{\centering}p{3cm} centred, a bare p justified)
+      'AXT-ALIGN t72 p 1 1.0pt 1 1.0pt 0 0.0pt',
+      'AXT-CELL 72 4',
+      'AXT-ALIGN t73 p 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-CELL 73 4',
+      'AXT-CELL 74 3',
+      'AXT-CELL 75 5',
+      // (a \parbox{2cm}{\raggedright …} in a c column: its lines are the parbox's paragraph's)
+      'AXT-ALIGN t76 p 0 0.0pt 1 1.0pt 1 1.0pt',
+      'AXT-CELL 76 0',
+      // (tabularx sets its table once for each trial width and once more: the cell's first)
+      'AXT-CELL 77 0',
+      'AXT-CELL 77 0',
+      'AXT-CELL 77 0',
+    ].join('\n')
+    expect(Object.fromEntries(readAlign(log))).toEqual({
+      59: 'c',
+      61: 'c',
+      70: 'l',
+      71: 'r',
+      72: 'c',
+      73: 'j',
+      76: 'l',
+      77: 'c',
+    })
+    // (a unit's own end mark beside: a cell's paragraph is read as any unit's, by its index)
+    expect(readAlign('AXT-ALIGN 3 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN t4 p 0 0.0pt 1 1.0pt 1 1.0pt').get(4)).toBe('l')
+    // (a line not of the form, a class TeX has no letter of: none)
+    expect(readAlign('AXT-CELL 80 6\nAXT-CELL 81\nAXT-CELL x 0').size).toBe(0)
+  })
 })
 
 describe('framesOf: each page’s text frame as TeX shipped it (LAYOUT_TEX’s AXT-BODY at each body’s opening point)', () => {

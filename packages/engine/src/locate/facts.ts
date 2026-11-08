@@ -939,9 +939,9 @@ export function centredByBlock(own: readonly Line[], page: readonly Line[], lead
   return cellCentred(stack.map((x) => [x[2], x[3]])) === true
 }
 /** a single-line cell's centring by its table column's cells on its page (E8, today's cellCentred RUN:1508, its column by
- *  table, column and span; the tabular preamble's l/c/r is stage 1b's): every middle
- *  within 2 of every other and the widths spread by more than 4 (a column whose cells share a start or an end has its middles
- *  half the widths' spread apart); false where the middles spread; null where nothing tells */
+ *  table, column and span), where TeX stated no class for the cell (a template not LaTeX's: marks/channels.ts readAlign):
+ *  every middle within 2 of every other and the widths spread by more than 4 (a column whose cells share a start or an end
+ *  has its middles half the widths' spread apart); false where the middles spread; null where nothing tells */
 export function cellCentred(spans: readonly [number, number][]): boolean | null {
   if (spans.length < 2) return null
   const mids = spans.map(([a, z]) => (a + z) / 2).sort((a, b) => a - b)

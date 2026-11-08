@@ -72,8 +72,19 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     expect(readAlign(undefined)).toEqual([])
   })
 
-  it('the probe is LAYOUT_TEX\'s: for a unit\'s and a heading\'s end mark, never a cell\'s; through \\message, which sets nothing', () => {
-    expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}')
+  it('passes over a cell\'s lines, its own paragraph\'s (AXT-ALIGN t<i>) and its column\'s class (AXT-CELL): the engine\'s readAlign reads them', () => {
+    expect(readAlign('AXT-ALIGN t61 h 0 0.0pt 0 0.0pt 1 1.0pt\nAXT-CELL 61 0\nAXT-ALIGN t72 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 3 p 1 1.0pt 1 1.0pt 0 0.0pt\n')).toEqual([[3, 'c']])
+  })
+
+  it('the probe is LAYOUT_TEX\'s: for a unit\'s, a heading\'s and a cell\'s end mark; through \\message, which sets nothing', () => {
+    expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{}\\axt@alg#1e\\@nil}')
+    // (a cell's column: its start mark's index defined in the cell's group, carried out by \\aftergroup to the innermost
+    // alignment entry's and no further; each column template of LaTeX's ends in its class, written where the index is defined at
+    // the template's own group level)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@ate{\\xdef\\@preamble{\\@preamble\\axt@te{\\the\\@chnum}}}')
+    expect(LAYOUT_TEX).toContain('\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\let\\axt@cz\\@classz\\def\\@classz{\\axt@cz\\axt@ate}\\axt@mkp{#1}\\let\\@classz\\axt@cz}}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}')
     // (the skips a paragraph is broken by are those at its \\par, so its own are read once it ends: a one-shot para/after hook set

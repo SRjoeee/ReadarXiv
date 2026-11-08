@@ -38,7 +38,8 @@ export interface InstrumentUnit {
   /** the paper's title, a unit of its front matter (the front end's) */
   title?: true
   front?: true
-  /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip) */
+  /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip); a cell's, its own
+   *  paragraph's, else the class LaTeX built its column's template from (marks/channels.ts readAlign) */
   align?: 'j' | 'l' | 'c' | 'r'
   /** a babel name's key (a unit of kind `name`: its occurrences are owned with ROLE.name) */
   name?: string
