@@ -248,8 +248,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
-  // (what stands at the ends of each member's Room.side: another member's text, the free paper two cells of a row share)
-  const beside = sharedPaper(part.flows, page)
+  // (the free paper two members share on one baseline, each its half: two cells of a row)
+  const shared = sharedPaper(part.flows, page)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
   // §19.14, today's ownNames)
@@ -419,7 +419,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         own: true,
       },
       bottomOf: (pg) => bottoms.get(pg),
-      ...(beside.has(m.ord) ? { beside: beside.get(m.ord)! } : {}),
+      ...(shared.has(m.ord) ? { shared: shared.get(m.ord)! } : {}),
     })
     if ('stop' in got) {
       state.set(m.ord, 'kind')

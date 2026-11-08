@@ -691,40 +691,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect([la!.state, lb!.state]).toEqual(['laid', 'laid'])
     const [, , ax1] = la!.lines[0]!,
       [, bx0] = lb!.lines[0]!
-    // (the gap 120-160, its middle 140: each a quarter of its size short of it, the two half their size apart)
-    expect(ax1).toBeLessThanOrEqual(137.5 + 1e-9)
-    expect(bx0).toBeGreaterThanOrEqual(142.5 - 1e-9)
-  })
-  it('widens a cell to a quarter of its size off its column’s rule, half its size off another’s text (today’s paperTo)', () => {
-    // (2608.25210v2-zh p5 t119, "LLM_s" between two column rules 417.77 and 440.45: half its size off the rule, it was set at
-    // 4.63 where today's set it at 5.08 to 438.97, a quarter of its size off the rule, its original 5.98)
-    const cell = (side: [number, number]) =>
-      member({
-        kind: 'cell',
-        align: 'j',
-        lines: [[1, 0, 104, 120, 700, 707, 698, 72, 300, 0, 10]],
-        room: { below: 0, next: 300, side },
-      })
-    const x1Of = (m: Placed, others: Placed[] = []) => {
-      const pt: Part = { ...part(m), flows: [[m], ...others.map((o) => [o])] }
-      const got = layPage(pt, rowsOf([row([{ t: 'text', s: 'Entwicklung' }])], true), rules, metrics()).members[0]!
-      expect(got.state).toBe('laid')
-      return got.lines[0]![2]
-    }
-    // (a rule at 150: its line up to 147.5, set at 0.775 of its size, 42.6 wide)
-    const walled = x1Of(cell([100, 150]))
-    expect(walled).toBeGreaterThan(145)
-    expect(walled).toBeLessThanOrEqual(147.5 + 1e-9)
-    // (another member's text at 150, a multi-line one that widens nowhere: half its size off it, as any line)
-    const text = member({
-      ord: 1,
-      text: 'c'.repeat(64),
-      lines: [
-        [1, 0, 150, 300, 700, 707, 698, 72, 300, 0, 10],
-        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
-      ],
-    })
-    expect(x1Of(cell([100, 150]), [text])).toBeLessThanOrEqual(145 + 1e-9)
+    // (the gap 120-160, its middle 140: each widened to it at most, half way, as today's paperTo)
+    expect(ax1).toBeLessThanOrEqual(140 + 1e-9)
+    expect(bx0).toBeGreaterThanOrEqual(140 - 1e-9)
+    expect(ax1).toBeGreaterThan(137.5)
   })
   it('keeps italic a unit a declaration at its start sets italic: its style is the state after it, not one to toggle', () => {
     // (2608.25210v2-zh p4 t72-t75, cells "{\em response_equality_human}": the part states the cell's style italic (A's glyphs),
