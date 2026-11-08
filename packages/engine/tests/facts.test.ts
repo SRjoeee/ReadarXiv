@@ -166,6 +166,11 @@ describe('a label’s parts (B16)', () => {
     // (a number of no name before it keeps its marks, and a sub-figure's letter stays the name's, as before)
     expect(labelParts(run('.5'), 1).num?.[0]).toBe('.5')
     expect(labelParts(run('(a)'), 1).name?.[0]).toBe('a')
+    // (a ligature's one glyph, whose text is two letters: amsthm's "Deﬁnition 3." of 2501.14787v1, which the first stage 1a
+    // of this rule read as "De")
+    const lig = run('Definition 3.')
+    lig.splice(2, 2, { ...lig[2]!, u: 'fi', x1: lig[3]!.x1 })
+    expect(labelParts(lig, 1)).toMatchObject({ name: ['Definition', expect.anything()], num: ['3', expect.anything()] })
   })
 })
 

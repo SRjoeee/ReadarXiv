@@ -525,8 +525,8 @@ export function tailOf(after: readonly DocGlyph[], ends: readonly string[] | nul
 // ---------------------------------------------------------------- a label's parts (B16, C10, E3)
 /** a character a name word holds besides its letters, as today's head rule reads a name (rules/tex-names.mjs headInTarget:
  *  letters, combining marks, stops, apostrophes and hyphens; a float's "Fig." in labelInTarget L2:1184): an abbreviation's
- *  stop is the name's */
-const NAME_WORD = /^[\p{L}\p{M}.'’-]$/u
+ *  stop is the name's; a glyph's text may be more than one of them (a ligature's "fi") */
+const NAME_WORD = /^[\p{L}\p{M}.'’-]+$/u
 /** a label's parts by its glyphs' classes: the name (its word before the number, from its first letter, with the marks the
  *  word holds: "Figure", "Theorem", an abbreviation's "Fig.", "Thm."), the number (digits with the dots, letters and dashes
  *  between them: "3", "2.1", "A.4"; a stop or dash before its first digit or letter stands between none of them, and is the
