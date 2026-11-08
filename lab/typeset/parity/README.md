@@ -24,7 +24,7 @@ when a page is worse than today's, or when the run is not judged whole: the gate
 
 | Step | Command | What it does |
 |---|---|---|
-| v2's lay | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --out=<work>/v2 <pair>…` | each page laid by design-a's entry (`layPage`) over the paper's part and the pair's door rows, as `lab/typeset/checkpoint/laid.mjs --entry` lays the checkpoint's pages (gate-l1.ts, the layered metrics), under the reader's default toggles (`hook.mjs`) |
+| v2's lay | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --out=<work>/v2 <pair>…` | each page laid by the reader's own lay (`packages/reader/src/compose/typeset.ts` `typesetLay`: `layPage` under the rules, toggles and options the reader passes, nothing more) over the paper's part and the pair's door rows, the layered metrics and the served hyphenation patterns, driven page by page as `lab/typeset/checkpoint/laid.mjs --entry` drives the checkpoint's (gate-l1.ts; `hook.mjs` puts the reader's lay in place of gate-l1's own entry call) |
 | the drawing | `heavy-slot.sh e2e -- node lab/typeset/parity/render.mjs --work=<work> --out=<out> [--pages=<n>,…] <pair>…` | arXiv's page (PDF.js), today's (`today/entry.mjs`) and v2's (`v2page/main.ts`) drawn in one Chromium at PDF.js's scale 1, device scale 2; each side shot whole and with its translated text alone; what each drew read back (`measure-dom.mjs`) and its pixels read (`analyse.mjs`); the run's manifest `<work>/raw/run.json` |
 | the verdict | `node lab/typeset/parity/measure.mjs --work=<work> --out=<out> [<pair>…]` | the measures below (`verdict.mjs`) over the run's own drawing, `parity.json` and `index.html` |
 
@@ -62,8 +62,10 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
 - **v2's side**: the paper's L1 bundle (`AXT_L1_BUNDLES`, default `lanes/L7/prepare/bundles`; the release check passes its
   own prepare's), the tap's ledgers and metrics (`baseline/tap/`), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`).
   The reader is opened with no engine of the host's, so that it composes and draws with its own served faces and sheet as
-  the website's reader does; the one seam replaced is the lay (`compose/typeset.ts`'s `typesetLay` returns the entry's Page
-  from v2.mjs; a Page whose faces are not loaded is answered with `wait.faces`, so the composer loads them and lays again).
+  the website's reader does; the one seam replaced is the lay (`compose/typeset.ts`'s `typesetLay` returns the Page v2.mjs
+  laid in Node through that same `typesetLay`; a Page whose faces are not loaded is answered with `wait.faces`, so the
+  composer loads them and lays again). What the reader passes to `layPage` the parity passes: no option the reader does not
+  give (the theorem heads' and the paper's own names, `EntryOptions`, are passed only once the reader passes them).
   The page's left margin in the pane is fixed (`v2page/index.html`): centred, an A4 page stands at a fraction of a pixel
   and the compositor resamples it, which is the screenshot's, not the drawing's.
 - **The page boxes**: every side's page stands in a box of whole CSS px, its canvas that box at the device ratio, drawn at the

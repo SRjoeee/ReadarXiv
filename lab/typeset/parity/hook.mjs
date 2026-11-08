@@ -1,21 +1,20 @@
-// lab/typeset/parity/hook.mjs: a Node module hook (registered by v2.mjs after ../checkpoint/items-hook.mjs) that makes the
-// entry's lay in packages/typeset/tests/replay/gate-l1.ts read the reader's choices: design-a's `Choices.leave` (the unit kinds
-// the reader shows untranslated), which the runner's entry call leaves out (it lays every kind). The parity check lays as a
-// reader who has toggled nothing: the reader's defaults (packages/reader/src/compose/classes.ts CLASS_DEFAULTS, leftKinds),
-// which are today's door's defaults (content-classes.mjs TOGGLE_DEFAULTS, the door opened with no `classes`), so that both
-// sides translate the same units. Nothing else of any module is touched.
-const CALL = '{ ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} }'
+// lab/typeset/parity/hook.mjs: a Node module hook (registered by v2.mjs after ../checkpoint/items-hook.mjs) that lays the entry's
+// pages in packages/typeset/tests/replay/gate-l1.ts as the product lays them: its call of design-a's `layPage` (with the rules,
+// the hyphenation patterns and the options the gate's runner chooses) is replaced by `globalThis.__parityLay(part, rows)`, the
+// reader's own lay (packages/reader/src/compose/typeset.ts `typesetLay`, which v2.mjs makes over the pair's metrics and the
+// served patterns), so that whatever the reader passes to `layPage` (its rules for the target, its toggles' `leave`, its
+// options) the parity check passes, and nothing more. The part and the rows stay gate-l1's (the pair's door rows, the same
+// translation on both sides). Nothing else of any module is touched; a gate-l1.ts that no longer holds the call once throws.
+const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
 
 export async function load(url, context, nextLoad) {
   const r = await nextLoad(url, context)
   if (!url.endsWith('/packages/typeset/tests/replay/gate-l1.ts')) return r
   const source = String(r.source)
-  if (source.split(CALL).length !== 2) throw new Error(`parity hook: gate-l1.ts no longer holds its anchor once: ${CALL}`)
+  const found = source.match(CALL) ?? []
+  if (found.length !== 1) throw new Error(`parity hook: gate-l1.ts no longer holds the entry's layPage call once (${found.length})`)
   return {
     ...r,
-    source: source.replace(
-      CALL,
-      '{ ...rulesFor(L.target as never, (globalThis as any).__parityChoices ?? {}), set: R, hyph: patternsSeen ?? {} }',
-    ),
+    source: source.replace(CALL, 'const page = (globalThis as any).__parityLay(part as Part, entryRows)\n'),
   }
 }

@@ -17,6 +17,12 @@ export const pdfOf = new Map(
     .map(([id, dir]) => [id, join(dir, 'arxiv.pdf')]),
 )
 
+/** the hyphenation patterns the reader is served (GET /hyph/<lang>.json, `{ patterns, exceptions }`): the release sweep's
+ *  static files, else the baseline's copy */
+export const HYPH = [join(CACHE, 'static/hyph'), join(LAB, 'refactor-2026-11', 'baseline', 'static', 'hyph')]
+/** a language's served patterns file, or null where none is served */
+export const hyphFileOf = (lang) => HYPH.map((d) => join(d, `${lang}.json`)).find((f) => existsSync(f)) ?? null
+
 /** why a pair cannot be drawn from lab-data, or null: arXiv's PDF, today's server-made bundle, the door rows, the L1 bundle,
  *  and v2.mjs's pages (`work`, where v2.mjs wrote them) */
 export function whyNot(pair, work) {

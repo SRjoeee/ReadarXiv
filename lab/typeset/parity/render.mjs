@@ -25,10 +25,10 @@ import { readerAssets } from '../../../packages/reader/src/vite.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { CACHE, paperOf } from '../../../packages/typeset/tests/replay/today.ts'
 import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
-import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
+import { TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse } from './analyse.mjs'
-import { pdfOf, whyNot } from './inputs.mjs'
+import { hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
@@ -44,7 +44,6 @@ const pairs = asked.length ? asked : PAIRS
 const WEB = process.env.AXT_WEB ?? join(TABLES, '..', '..', '..', '..')
 const MODS = join(ROOT, 'node_modules')
 const PDFJS = join(ROOT, 'node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist')
-const HYPH = [join(CACHE, 'static/hyph'), join(LAB, 'refactor-2026-11', 'baseline', 'static', 'hyph')]
 /** CSS px a point (PDF.js's scale 1) and device px a CSS px */
 export const SCALE = 96 / 72
 export const DPR = 2
@@ -280,7 +279,7 @@ const routes = [
     handle(_req, res, url) {
       const name = url.pathname.slice('/hyph/'.length)
       if (!/^[a-z]{2,3}(-[A-Za-z0-9]+)*\.json$/.test(name)) return false
-      const f = HYPH.map((d) => join(d, name)).find((x) => existsSync(x))
+      const f = hyphFileOf(name.slice(0, -'.json'.length))
       if (!f) return false
       return send(res, readFileSync(f), TYPES['.json'])
     },
