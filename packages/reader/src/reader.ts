@@ -313,14 +313,31 @@ export function openReader(
    *  digest */
   const byDigest = (path: string, sha256: string): Promise<Uint8Array> =>
     objects.ofDigest(path, sha256, BOUNDS.part.bytes)
-  const partOf = async (n: number): Promise<Part | null> => {
-    const c = catalogOf(),
-      d = head?.parts[n - 1]
-    if (!c || !head || !d) return null
-    const part = read('part', await byDigest(`${dirOf(c)}/${d}`, d), d) as Part
-    // (the contents' headings placed by the part's members)
-    if (contents?.place(part.flows.flat())) outlineSoon()
-    return part
+  /** the parts of one layer (its catalog, the head read from it): page n's, or null where the head names none. One function a
+   *  layer, kept while its catalog is the layer's: the composer reads a layer's parts once, and anew for another (Layer.part is
+   *  the layer). One function for every layer laid a newer catalog's composed document with the parts of the head before it,
+   *  whose members its groups lack, each page then settled as arXiv's for good (staging, 2026-11-08: 1706.03762v7 once its
+   *  catalog moved, laid 0 and two pages arXiv's for 18 minutes) */
+  let layerParts: { catalog: string; part: (n: number) => Promise<Part | null> } | null = null
+  const partsOf = (c: Ref, h: Head) => {
+    if (layerParts?.catalog !== c.sha256)
+      layerParts = {
+        catalog: c.sha256,
+        part: async (n) => {
+          const d = h.parts[n - 1]
+          if (!d) return null
+          const part = read('part', await byDigest(`${dirOf(c)}/${d}`, d), d) as Part
+          // (the contents' headings placed by the part's members: the contents of this head's alone)
+          if (head === h && contents?.place(part.flows.flat())) outlineSoon()
+          return part
+        },
+      }
+    return layerParts.part
+  }
+  /** the parts of the layer now, where its head is read */
+  const partOf = (n: number): Promise<Part | null> => {
+    const l = rt.state.layer
+    return l.s === 'ready' && l.head ? partsOf(l.catalog, l.head)(n) : Promise.resolve(null)
   }
   /** the layer's units, in their objects' order, read once a head (the contents' headings, the rows made here) */
   let unitsHeld: { key: string; units: Promise<Unit[]> } | null = null
@@ -473,7 +490,13 @@ export function openReader(
   let original: { source: OriginalSource; doc: PDFDocumentProxy | null } | null = null
   /** the composed document open, with its groups and its own lay: the engine's, made over its parts once its head is read (none
    *  lays nothing). A generation: published whole, by the ticket that made it while it lives, and read only through it */
-  let composed: { doc: PDFDocumentProxy; groups: import('./compose/groups.ts').Groups; lay: Lay } | null = null
+  let composed: {
+    doc: PDFDocumentProxy
+    groups: import('./compose/groups.ts').Groups
+    lay: Lay
+    /** its layer's parts (partsOf) */
+    part: (n: number) => Promise<Part | null>
+  } | null = null
   const none: Lay = (part) => ({ page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] })
   /** the reader's own typesetter's lay, where the host gives no engine: the rules of the target the rows are of and of the toggles
    *  at each call, the served Metrics (compose/typeset.ts) */
@@ -720,13 +743,14 @@ export function openReader(
           await groups.ready
           // (the lay held here until the ticket is known to live: one made for a document let go, which may come after a
           // newer catalog's, never reaches the composer)
-          const lay = o.engine ? (o.engine.lay ? await o.engine.lay(partOf, h.paper.pages) : none) : await typesetOf()
+          const part = partsOf(c, h)
+          const lay = o.engine ? (o.engine.lay ? await o.engine.lay(part, h.paper.pages) : none) : await typesetOf()
           if (signal.aborted) return
-          mine = { doc, groups, lay }
+          mine = { doc, groups, lay, part }
           composed = mine
           asOriginal.clear()
           composer?.setDocuments({ original: original?.doc ?? null, composed: doc, groups })
-          composer?.setLayer({ part: partOf, pages: h.paper.pages }, rowsSource())
+          composer?.setLayer({ part, pages: h.paper.pages }, rowsSource())
           mark('composedOpen')
           emit({ i: 'composed.opened', t })
         } catch {
@@ -753,8 +777,15 @@ export function openReader(
         asOriginal.clear()
         if (contents?.clearTexts()) outlineSoon()
         rowsDone = false
-        composer?.setLayer(composed ? { part: partOf, pages: head?.paper.pages ?? 0 } : null, rowsSource())
-      } else rowsDone = false
+        composer?.setLayer(composed ? { part: composed.part, pages: head?.paper.pages ?? 0 } : null, rowsSource())
+      } else if (rowsDone) {
+        // (the same target's rows taken again after their end: a retry, a run our server started again, machine.ts rowsOfDoc.
+        // A page committed is final within its generation, and those laid at that end show the original where no row had come:
+        // laid again in a generation of their own as the new rows come, those laid before shown until theirs commit)
+        rowsDone = false
+        asOriginal.clear()
+        if (composed) composer?.setLayer({ part: composed.part, pages: head?.paper.pages ?? 0 }, rowsSource())
+      }
       void (async () => {
         try {
           if (spec.from === 'here' && host.translate) {
@@ -823,7 +854,9 @@ export function openReader(
             return
           }
           const total = () => rows.size
-          // the server's rows: every ref the documents name for the target, each once, until the target is done
+          // the server's rows: every ref the documents name for the target, each once, until its run is done or failed (a run
+          // not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again after
+          // an end is the machine's to take again, rowsOfDoc)
           const read1 = new Set<string>()
           for (;;) {
             const d = rt.state.doc as Doc | null
@@ -835,7 +868,11 @@ export function openReader(
               rowsIn(o2.rows ?? [])
               emit({ i: 'rows.batch', t, got: total(), total: tg?.total ?? 0, lost: 0 })
             }
-            if (tg && tg.state !== 'running' && (tg.rows ?? []).every((r) => read1.has(r.sha256))) {
+            if (
+              tg &&
+              (tg.state === 'done' || tg.state === 'failed') &&
+              (tg.rows ?? []).every((r) => read1.has(r.sha256))
+            ) {
               rowsDone = true
               rowsIn([])
               emit(
