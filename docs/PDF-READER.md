@@ -2771,6 +2771,22 @@ today's last line stood on the folio). Where today borrowed past TeX's bottom v2
 shrinks to its line where today borrowed one (2608.16117v1 page 4). 2602.23285v2 page 4's paragraph over heading 4 keeps its
 four lines, as today: the heading's baseline 25.36 pt under it, its separation 16.94 (a 6 pt `\parskip`), no line's room.
 
+**Each paragraph TeX states inside a unit has its own leading.** A unit can hold more than one of TeX's paragraphs (an
+item's run-in text and the prompt TeX set in a frame under it, a theorem's two paragraphs); the part states where TeX opened
+each (`SpanAt.opens`, `El.opens`) and the row is paired with those points, each paragraph's text on its own lines. The fit
+still searches one leading for the unit: a looser leading holds no more lines, so the size it settles is the same. The page
+fill then gives each such paragraph its own fill leading, as it gives each frame of a paragraph over a page or column break
+its own (`frameLeadsOf`), and holds the gap under each to its own leading as under the unit's last (`footFloorAt`,
+`paraFloorAt`); the unit's one fill leading, which the page's target reads, is unchanged. The owner's comment on the round-3
+sheet: on 2608.25210v2 page 3 three prompt boxes held about the same text at different spacings, the first two set solid
+because their run-in text needed both of its lines and held the prompt under it to that, the third, whose run-in text took
+one line, spread to 1.45; all three prompts now spread to 1.45, their run-in lines as they were. The frames are filled
+whichever way the unit's fill leading is found: where the gap under its last line takes the unit closer than its fit's
+leading (a paragraph that borrows part of a line of TeX's room fits at a looser leading than that gap allows), its other
+frames still fill their own blocks (1810.04805v2 pages 6-7, unit 119: four lines and two, as today, where the closer leading
+had set five on page 6 and one of two characters alone on page 7). Over the 22 parity pairs (344 pages) the two move the
+lines of 18 members' frames on 15 pages; the parity check finds one page fewer worse (1810.04805v2 page 7), none newly.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
