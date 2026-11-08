@@ -270,17 +270,20 @@ function readingsOf(
     // (a text macro whose glyphs are the unit's text, its text stated (El.text, the probe's): drawn as that text, as today's
     // reader draws the rendering it finds by it among the unit's characters; with none, nothing, inklessOf)
     const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined && el.text !== ''
-    // (a text macro whose span the instrument states empty, El.text '' and no ink: TeX set no glyph between its two points, or
-    // its probe said it sets none; drawn as nothing, proven, as one the part states no El of)
-    if (MACRO_CLASSES.has(cls) && (!el || (!el.ink.length && el.text === '')))
-      fixed = { mode: 'none', text: '', proof: true }
-    // (a paper's own macro the part states no ink and no text of: TeX may have set nothing for it, or its glyphs as the unit's
-    // text, which the reading cannot tell; drawn as nothing, its glyphs were erased with the text group and never drawn again
-    // (2608.06007v1 p10's \sys, "TensorCast", the checkpoint's free-17). Unproven: the unit is left the original's whole, nothing
-    // erased without a replacement, until the instrument states the glyphs TeX set for it)
-    else if (MACRO_CLASSES.has(cls) && el?.unknown && !ink.length && !textOnly) fixed = { mode: 'none', text: '' }
-    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
-      fixed = { mode: 'none', text: '', proof: true, empty: true }
+    // (an element of no ink, of a class drawn from its ink, read by the one of three the part states (format's El): TeX set
+    // nothing for it, El.text '' (its two points hold no glyph, its probe said it sets none: 2610.19159v1's
+    // `\trajectoryMark{}`), drawn as nothing, proven; TeX set it before the unit's start, outside the unit's text, El.keep,
+    // drawn as nothing and its ink, never erased, left where it stands (texParts' OUTSIDE); neither, its ink was not found:
+    // drawn as nothing, its glyphs may have been erased with the text group and never drawn again (2608.06007v1 p10's \sys,
+    // "TensorCast"; 2608.25210v2 p7's algorithm under one line; 2402.10294v1's reference [1] without its year), so the unit is
+    // unproven, left the original's whole (today's LOST)
+    if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
+      fixed =
+        el?.text === ''
+          ? { mode: 'none', text: '', proof: true, ...(MACRO_CLASSES.has(cls) ? {} : { empty: true as const }) }
+          : el?.keep
+            ? { mode: 'none', text: '', proof: true, inPlace: true }
+            : { mode: 'none', text: '' }
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null

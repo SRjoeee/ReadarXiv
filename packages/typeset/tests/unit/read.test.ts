@@ -76,10 +76,33 @@ describe('the reading from the part', () => {
     // (2608.06007v1 p10's \\sys, "TensorCast", the checkpoint's free-17): the unit is unproven, left the original's whole)
     const none = read(member({ els: [['0', { kind: 'umacro', unknown: 1, cmd: 'bert', bare: 1, ink: [] }]] }), pieces)
     expect(none.unproven).toBe(0)
-    // (a macro a table renders, no ink stated: TeX set none for it, drawn as nothing, the unit read)
+    // (a macro a table renders, no ink found and none stated set: not found, its unit unproven as a paper's own is)
     const known = read(member({ els: [['0', { kind: 'macro', ink: [] }]] }), pieces)
-    expect(known.resolutions.get(0)!.mode).toBe('none')
-    expect(known.unproven).toBe(-1)
+    expect(known.unproven).toBe(0)
+  })
+  it('reads an element of no ink by the one of three the part states: set nothing, outside the unit, or not found', () => {
+    // (math.md §4, lave.md §2: an empty ink meant "TeX set none", "not found" and "outside the unit" alike, and the reading took
+    // a visible one for TeX's nothing: 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn
+    // without its year, both drawn as nothing while their glyphs went with the text group. Now El.text '' states TeX set
+    // nothing (drawn as nothing), El.keep that TeX set it outside the unit's text (drawn as nothing, its ink never erased),
+    // neither that its ink was not found: the unit is left the original's)
+    const pieces = [
+      { t: 'ph', src: '{=0}', k: 0 } as V0Piece,
+      { t: 'text', tr: true, s: ' Adobe Premiere Pro.' } as V0Piece,
+    ]
+    for (const kind of ['other', 'cite', 'num', 'display', 'macro', 'umacro'] as const) {
+      const lost = read(member({ els: [['0', { kind, ink: [] }]] }), pieces)
+      expect(lost.unproven, kind).toBe(0)
+      const none = read(member({ els: [['0', { kind, ink: [], text: '' }]] }), pieces)
+      expect(none.unproven, kind).toBe(-1)
+      expect(none.resolutions.get(0), kind).toMatchObject({ mode: 'none', text: '', proof: true })
+      const outside = read(member({ els: [['0', { kind, ink: [], keep: 1 }]] }), pieces)
+      expect(outside.unproven, kind).toBe(-1)
+      expect(outside.resolutions.get(0), kind).toMatchObject({ mode: 'none', text: '', proof: true, inPlace: true })
+    }
+    // (a symbol, drawn by its own text, and TeX's nothing, as before)
+    expect(read(member({ els: [['0', { kind: 'symbol', ink: [], sym: ['%'] }]] }), pieces).unproven).toBe(-1)
+    expect(read(member({ els: [['0', { kind: 'zero', ink: [] }]] }), pieces).unproven).toBe(-1)
   })
   it('draws a paper’s own macro whose span the instrument states empty as nothing, its unit read', () => {
     // (2610.19159v1's `\\trajectoryMark{}`, which sets nothing for an empty argument: the marked compile's two points around it hold

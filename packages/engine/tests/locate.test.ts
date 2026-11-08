@@ -1571,6 +1571,51 @@ describe('the element classes the part states', () => {
     expect(els.get('4')).toMatchObject({ ink: [], text: '' })
   })
 
+  it('states which of three an element of no ink is: TeX set nothing, it stands outside the unit, or it was not found', () => {
+    // (lave.md §2, math.md §4: an El of no ink meant "TeX set none", "not found" and "outside the unit" alike. TeX set nothing for
+    // any piece whose span the instrument states empty, whatever its class: El.text '' (2402.10294v1's `\url` in `\urldef\tempurl`,
+    // a visible class's); a piece TeX set before its unit's start point is outside the unit's text: El.keep, its ink never erased
+    // (`outside`); with neither, El.ink [] alone says its ink was not found)
+    const B = docOf([{ lines: ['Adobe Premiere Pro.'] }])
+    const content = [
+      { t: 'el' as const, id: '0', kind: 'other', src: '2023' },
+      text('Adobe Premiere Pro.'),
+      { t: 'el' as const, id: '2', kind: 'url', src: '\\url{https://www.adobe.com/}' },
+      { t: 'el' as const, id: '3', kind: 'cite', src: '\\cite{a}' },
+      { t: 'el' as const, id: '4', kind: 'other', src: '$x$' },
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('reference', content),
+        kind: 'reference',
+        content,
+        classes: [
+          ['0', { cls: 'other', literal: true }],
+          ['2', { cls: 'other' }],
+          ['3', { cls: 'cite' }],
+          ['4', { cls: 'other' }],
+        ],
+      },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      places: [
+        { unit: 0, piece: '3', page: 1, glyph: 16, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 16, end: true },
+      ],
+      empty: [{ unit: 0, piece: '2' }],
+      outside: [{ unit: 0, piece: '0' }],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('0')).toMatchObject({ ink: [], keep: 1 })
+    expect(els.get('0')!.text).toBeUndefined()
+    expect(els.get('2')).toMatchObject({ ink: [], text: '' })
+    expect(els.get('3')).toMatchObject({ ink: [], text: '' })
+    expect(els.get('4')!.text).toBeUndefined()
+    expect(els.get('4')!.keep).toBeUndefined()
+  })
+
   it('writes each element with its source’s class, copy text, a symbol’s drawing and a footnote’s mark (the instrument’s)', () => {
     const B = docOf([{ lines: ['see the result'] }])
     const content = [text('see '), { t: 'el' as const, id: '1', kind: 'cite', src: '\\cite{a}' }, text(' the result')]

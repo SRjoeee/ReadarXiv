@@ -121,6 +121,39 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.groups[0]!.glyphs[21]).not.toBe(`${entry.ord}.1.t`)
   })
 
+  it('states an ink unit’s placeholders after its first in that one’s ink: TeX’s nothing of their own, El.text empty', () => {
+    // (no points tell an ink unit's placeholders apart: their glyphs are its first's (inkOf); one of no ink of its own read as not
+    // found would leave every such line the original's (2307.16209v1's contents lines, three-state El, lave.md §2))
+    const spec = { lines: ['Body text here', 'and then x plus y equals z for all of them'] }
+    const B = docOf([
+      {
+        ...spec,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 46],
+        ],
+      },
+    ])
+    const A = docOf([spec])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.n === 1 && /^[xyz]$/.test(g.u)) {
+          g.font = 'ABCDEF+CMMI10'
+          g.base = 'CMMI10'
+        }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const classesOf = (p: readonly { t: string }[]) =>
+      p.flatMap((x, k) => (x.t === 'ph' ? [[String(k), { cls: 'other' }]] : []))
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A), classesOf: classesOf as never })
+    const els = new Map(L.members.find((m) => m.kind === 'inkorphan')!.elements)
+    expect(els.get('1')!.ink).toHaveLength(1)
+    expect(els.get('1')!.text).toBeUndefined()
+    expect(els.get('3')).toMatchObject({ ink: [], text: '' })
+    expect(els.get('5')).toMatchObject({ ink: [], text: '' })
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

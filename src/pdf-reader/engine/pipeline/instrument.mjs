@@ -347,6 +347,20 @@ export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new S
     // (the texts spell the whole run, as own.mjs claimed it, or the run is not the lead's: none of it a piece's)
     if (got.size && n < 0) for (const [j, k] of got) out[j] = k
   }
+  // (and the glyphs own.mjs claims `.p` after the unit's end point with no point open, a footnote's call TeX gave no mark after
+  // its last word (MR 4b): the call's, where the unit's tail holds that one piece of a class, of no point of its own)
+  const ends = new Map()
+  for (const pt of pg.points) { const e = END_POINT.exec(pt.name); if (e) ends.set(Number(e[1]), pt.glyph) }
+  for (let j = 0; j < pg.glyphs.length; j++) {
+    const m = out[j] < 0 ? /^u(\d+)\.p$/.exec(row[j] ?? '') : null
+    const u = m ? Number(m[1]) : -1
+    if (u < 0 || !(ends.get(u) <= j)) continue
+    const pieces = units[u]?.pieces ?? []
+    const last = pieces.findLastIndex(q => q.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : ''))
+    const tails = pieces.map((q, k) => [q, k]).filter(([q, k]) => k > last && classOf(q) !== null)
+    const [q, k] = tails.length === 1 ? tails[0] : []
+    if (q?.t === 'ph' && classOf(q) === 'footnote' && !names.has(`n${u}.${k}a`) && !names.has(`n${u}.${k}b`) && !names.has(`p${u}.${k}a`)) out[j] = k
+  }
   return out
 }
 
@@ -443,7 +457,8 @@ export function boundedEmpty(pages, units, { glyphs = [], boxes = [] } = {}) {
     if (at.has(pt.name)) twice.add(Number(m[1]))
     at.set(pt.name, [p, q])
   }))
-  const point = ([p, q]) => pages[p].points[q]
+  /** a point's place in B's stream: its page, the glyphs and the boxes shown before it there */
+  const placeOf = ([p, q]) => [p, pages[p].points[q].glyph, pages[p].points[q].box ?? 0]
   const before = (x, y) => x[0] < y[0] || (x[0] === y[0] && x[1] < y[1])
   /** the stream's point after one, and before one, over pages */
   const next = ([p, q]) => {
@@ -456,19 +471,35 @@ export function boundedEmpty(pages, units, { glyphs = [], boxes = [] } = {}) {
     for (let i = p - 1; i >= 0; i--) if (pages[i].points?.length) return [i, pages[i].points.length - 1]
     return null
   }
+  const opened = (O, j, u, opener) => opener !== null && O?.unit[j] === u && O.role[j] === ROLE.element && O.piece[j] === opener
   /** whether B's stream from `lo` to `hi` holds a glyph or a painted box TeX set but `opener`'s, the piece whose opening point
    *  `lo` is (its element's, by the ownership). Another unit's is not passed over: the ownership may have given it the piece's
    *  ink (2608.06701v1 p6's run-in heading `Comparison Against \\sage`, its "SAGE" the next paragraph's label) */
   const holds = (u, lo, hi, opener) => {
-    const others = (O, j) => opener !== null && O?.unit[j] === u && O.role[j] === ROLE.element && O.piece[j] === opener
     for (let p = lo[0]; p <= hi[0]; p++) {
       const pg = pages[p]
-      const g0 = p === lo[0] ? point(lo).glyph : 0, g1 = p === hi[0] ? point(hi).glyph : pg.glyphs.length
-      for (let j = g0; j < g1; j++) if (inked(pg.glyphs[j]) && !others(glyphs[p], j)) return true
-      const b0 = p === lo[0] ? (point(lo).box ?? 0) : 0, b1 = p === hi[0] ? (point(hi).box ?? 0) : (pg.boxes?.length ?? 0) / 4
-      for (let j = b0; j < b1; j++) if (!others(boxes[p], j)) return true
+      const g0 = p === lo[0] ? lo[1] : 0, g1 = p === hi[0] ? hi[1] : pg.glyphs.length
+      for (let j = g0; j < g1; j++) if (inked(pg.glyphs[j]) && !opened(glyphs[p], j, u, opener)) return true
+      const b0 = p === lo[0] ? lo[2] : 0, b1 = p === hi[0] ? hi[2] : (pg.boxes?.length ?? 0) / 4
+      for (let j = b0; j < b1; j++) if (!opened(boxes[p], j, u, opener)) return true
     }
     return false
+  }
+  /** after an opening point TeX gave no closing one, where the ink the ownership gives its piece ends: the place of the first glyph
+   *  past it that is no glyph of that piece's, where that glyph is the unit's text and begins the text piece next in the source
+   *  (TeX sets a text's characters as written: what the pieces between set lies before it); null else */
+  const textAfter = (u, lo, opener, piece) => {
+    const want = (typeof piece.s === 'string' ? piece.s : '').normalize('NFKC').replace(/\s/gu, '')
+    for (let p = lo[0]; p < pages.length; p++) {
+      const pg = pages[p]
+      for (let j = p === lo[0] ? lo[1] : 0; j < pg.glyphs.length; j++) {
+        if (!inked(pg.glyphs[j]) || opened(glyphs[p], j, u, opener)) continue
+        const t = (pg.glyphs[j].u ?? '').normalize('NFKC').replace(/\s/gu, '')
+        const O = glyphs[p]
+        return O?.unit[j] === u && O.role[j] === ROLE.text && t && want.startsWith(t) ? [p, j, pg.boxAt?.[j] ?? (p === lo[0] ? lo[2] : 0)] : null
+      }
+    }
+    return null
   }
   const real = q => q?.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : '')
   const out = []
@@ -507,22 +538,59 @@ export function boundedEmpty(pages, units, { glyphs = [], boxes = [] } = {}) {
         if (real(P[j])) break
       }
       if (!lo) return
+      // (the nearest after it; after an opener, text first is bounded by its first glyph (textAfter): `\\DOIprefix\\doi{…}.`, the
+      // prefix's opening point alone and its ink to the stop, the DOI's in it)
+      let text = null
       if (!hi) for (let j = k + 1; ; j++) {
         if (S && k < start && j === start) { hi = S; break }
         if (j >= P.length) { hi = 'stream'; break }
         const o = own(j)
         if (o) { hi = o.a ?? o.b; break }
-        if (real(P[j])) break
+        if (real(P[j])) { if (opener !== null) text = P[j]; break }
       }
-      if (!hi || (lo === 'stream' && hi === 'stream')) return
+      if ((!hi && !text) || (lo === 'stream' && hi === 'stream')) return
       if (lo === 'stream') lo = prev(hi)
       if (hi === 'stream') hi = next(lo)
-      if (!lo || !hi || before(hi, lo)) return
+      if (!lo || (!hi && !text)) return
+      const from = placeOf(lo), to = text ? textAfter(u, from, opener, text) : placeOf(hi)
+      if (!to || before(to, from)) return
       // (the pieces of one interval read it once)
-      const key = `${lo}|${hi}|${opener}`
-      if (!seen.has(key)) seen.set(key, holds(u, lo, hi, opener))
+      const key = `${from}|${to}|${opener}`
+      if (!seen.has(key)) seen.set(key, holds(u, from, to, opener))
       if (!seen.get(key)) out.push({ unit: u, piece: String(k) })
     })
+  })
+  return out
+}
+
+/**
+ * The pieces TeX set before their unit's start point, as Instrument `outside` pieces (rootcause/lave.md §2): the marking passes
+ * over a unit's head (marks.mjs passedOver) and patch sets the start point before the piece latex-front.mjs startOf names, so
+ * whatever TeX set for a piece before that one stands before the unit's text, which begins at the point, and is never erased
+ * with it: drawn as nothing, its ink, wherever TeX set it, the original's (today's OUTSIDE, make.mjs outsideOf: a head piece
+ * not found, before its start mark). Only where the ownership gives the unit's text nothing before the start point in B's
+ * stream; a unit whose points TeX set more than once is not read. `pages` the adapter's, `owners` the instrument's glyphs'
+ */
+export function outsidePieces(pages, units, { glyphs = [] } = {}) {
+  const at = new Map(), twice = new Set()
+  pages.forEach((pg, p) => (pg.points ?? []).forEach(pt => {
+    const m = START_POINT.exec(pt.name) ?? END_POINT.exec(pt.name) ?? OWN_POINT.exec(pt.name)
+    if (!m) return
+    if (at.has(pt.name)) twice.add(Number(m[1]))
+    at.set(pt.name, [p, pt.glyph])
+  }))
+  // (each unit's first glyph of its text in B's stream)
+  const first = new Map()
+  glyphs.forEach((O, p) => { for (let j = 0; j < (O?.unit.length ?? 0); j++) if (O.unit[j] >= 0 && O.role[j] === ROLE.text && !first.has(O.unit[j])) first.set(O.unit[j], [p, j]) })
+  const out = []
+  units.forEach((unit, u) => {
+    const P = unit?.pieces ?? []
+    const S = at.get(`${u}s`) ?? at.get(`h${u}s`) ?? at.get(`t${u}s`) ?? null
+    if (!S || !P.length || twice.has(u)) return
+    const f = first.get(u)
+    if (f && (f[0] < S[0] || (f[0] === S[0] && f[1] < S[1]))) return
+    const start = startOf(P.map(q => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0]
+    for (let k = 0; k < start; k++) if (P[k].t === 'ph') out.push({ unit: u, piece: String(k) })
   })
   return out
 }
@@ -642,8 +710,10 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const empty = inklessPieces(units, { classes: classesBy, inkless })
   const stated = new Set(empty.map(x => `${x.unit}|${x.piece}`))
   for (const x of boundedEmpty(pages, units, { glyphs, boxes })) if (!stated.has(`${x.unit}|${x.piece}`)) empty.push(x)
+  // (the pieces TeX set before their unit's start point (outsidePieces): whatever they set is no text of the unit's)
+  const outside = outsidePieces(pages, units, { glyphs })
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), ...(outside.length ? { outside } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

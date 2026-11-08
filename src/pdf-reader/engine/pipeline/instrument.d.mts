@@ -50,6 +50,13 @@ export declare function boundedEmpty(
   units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
   owners: { glyphs: readonly Owners[]; boxes: readonly Owners[] },
 ): NonNullable<Instrument['empty']>
+/** the pieces TeX set before their unit's start point, where the ownership gives the unit's text nothing before it, as
+ *  Instrument `outside` pieces */
+export declare function outsidePieces(
+  pages: readonly { points?: readonly { name: string; glyph: number; box?: number }[] }[],
+  units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  owners: { glyphs: readonly Owners[] },
+): NonNullable<Instrument['outside']>
 /** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known); `open`
  *  the placeholder points open at the page's start by unit, carried by the caller from page to page in order (it is updated) */
 export declare function glyphPiecesOf(

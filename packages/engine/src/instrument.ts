@@ -127,6 +127,10 @@ export interface Instrument {
    *  and no painted box between them, nor text of the unit's (the adapter's boundedEmpty): their span stated empty, by
    *  unit index and piece id */
   empty?: { unit: number; piece: string }[]
+  /** the pieces TeX set before their unit's start point, the ownership giving the unit's text nothing before it (the marking
+   *  passes over a unit's head): whatever they set is no text of the unit's and is never erased with it, by unit index and
+   *  piece id (the adapter's outsidePieces) */
+  outside?: { unit: number; piece: string }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
   tex: {

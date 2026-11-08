@@ -10,6 +10,7 @@ import {
   glueOf,
   glyphPiecesOf,
   inklessPieces,
+  outsidePieces,
   placesOf,
   spansOf,
   textsOf,
@@ -236,6 +237,30 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
   })
 })
 
+describe('the piece of a footnote call’s mark TeX gave no point after the unit’s last word (own.mjs MR 4b’s `.p`)', () => {
+  // (2610.35877v1's abstract ends `…deployment law\footnotemark`: no mark around the call (TeX's answer), its raised "1" right after
+  // the end point claimed `.p` with no point of its unit open, so no piece: the element had no ink, and with an element of no ink
+  // and none stated set the abstract was left English. Its glyphs are the one tail piece's)
+  const glyphs = (s: string) => [...s].map((u) => ({ u }))
+  const unitsOf = (pieces: unknown[]) => {
+    const units: unknown[] = []
+    units[5] = { kind: 'abstract', pieces }
+    return units
+  }
+  const pg = { points: [{ name: '5s', glyph: 0 }, { name: '5e', glyph: 5 }], glyphs: glyphs('step.1') }
+  const row = [...Array(5).fill('u5'), 'u5.p']
+  it('gives them to the unit’s one tail piece, a footnote’s call of no point', () => {
+    const got = glyphPiecesOf(pg, row, { units: unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), { t: 'text', s: '\n' }]), names: new Set(['5s', '5e']) })
+    expect([...got]).toEqual([-1, -1, -1, -1, -1, 1])
+  })
+  it('gives none where the tail holds two calls, or the call has a point of its own', () => {
+    const two = unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), ph('\\footnotemark')])
+    expect([...glyphPiecesOf(pg, row, { units: two, names: new Set(['5s', '5e']) })]).toEqual(Array(6).fill(-1))
+    const marked = unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark')])
+    expect([...glyphPiecesOf(pg, row, { units: marked, names: new Set(['5s', '5e', 'n5.1a']) })]).toEqual(Array(6).fill(-1))
+  })
+})
+
 describe('the piece of a glyph a page after its opening point (TeX’s stream runs on across a page break)', () => {
   // (marks.mjs puts a placeholder's opening point before the glue in front of it, so where TeX breaks the line there and the
   // break is a page's, the point `p<u>.<k>a` stands at the previous page's end and the piece's glyphs on the next: read one page
@@ -369,9 +394,45 @@ describe('a piece with no point of its own, between the nearest points TeX shipp
     rows[0]![5] = 'u5'
     expect(run(pages, rows, cites)).toEqual([])
   })
+  it('bounds a piece after an opening point alone by the first glyph of the text after it, where the ownership ends that ink', () => {
+    // (2610.20848v1's `\DOIprefix\doi{10.1086/304041}.`: the prefix's opening point alone (a macro that may read ahead), `\doi` no
+    // point, the end point after the stop; the prefix's ink to the stop (the maker's reading by what follows), the DOI's in it.
+    // With the stop the unit's text between, its references were unproven, 48 of the corpus's English)
+    const doi = unitsOf([{ t: 'text', s: 'A. Author. 1997. ApJ 1, 386.\n' }, ph('\\DOIprefix'), ph('\\doi{10.1086/304041}'), { t: 'text', s: '.\n' }])
+    const pages = [{ glyphs: glyphs('ApJ1,386.doi:10.1086/1.'), points: [pt('5s', 0), pt('p5.1a', 9), pt('5e', 23)] }]
+    const rows = [[...Array(9).fill('u5'), ...Array(13).fill('u5.1'), 'u5']]
+    expect(run(pages, rows, doi)).toEqual([{ unit: 5, piece: '2' }])
+    // (a glyph of the text's that does not begin the next text: the piece's own, which the ownership read as text, unknown)
+    rows[0]![21] = 'u5'
+    expect(run(pages, rows, doi)).toEqual([])
+  })
   it('reads no unit whose points TeX set more than once', () => {
     const pages = [{ glyphs: glyphs('pages.https://doi.org'), points: [pt('5s', 0), pt('5e', 6), pt('p5.9a', 6), pt('5e', 21)] }]
     expect(run(pages, [[...Array(6).fill('u5'), ...Array(15).fill('u5.9')]], unitsOf(entry))).toEqual([])
+  })
+})
+
+describe('a piece TeX set before its unit’s start point (Instrument `outside`)', () => {
+  // (lave.md §2: a piece the marking passes over at the unit's head, before the start point patch sets (latex-front.mjs startOf):
+  // whatever TeX set for it stands before the unit's text, which begins at that point, and is never erased with it, as today's
+  // OUTSIDE (make.mjs outsideOf): an affiliation's `\textsuperscript{1}`, `\acknowledgments`'s heading on the line above)
+  const glyphs = (s: string) => [...s].map((u) => ({ u }))
+  const pt = (name: string, glyph: number) => ({ name, glyph, box: 0 })
+  const owners = (row: (string | null)[]) => ({
+    unit: Int32Array.from(row.map((g) => (g ? Number(/^u(\d+)/.exec(g)![1]) : -1))),
+    role: Uint8Array.from(row.map((g) => (!g ? 0 : g.includes('.') ? 2 : 1))),
+    piece: Int32Array.from(row.map((g) => (g?.includes('.') ? Number(g.split('.')[1]) : -1))),
+  })
+  const units: unknown[] = []
+  units[5] = { kind: 'affiliation', pieces: [ph('\\textsuperscript{1}'), { t: 'text', s: 'Univ. ' }, ph('\\cite{a}')] }
+  const run = (pages: { glyphs: { u: string }[]; points: unknown[] }[], rows: (string | null)[][]) =>
+    outsidePieces(pages.map((pg) => ({ boxes: [], ...pg })) as never, units as never, { glyphs: rows.map(owners) } as never)
+  it('states the unit’s head pieces outside it where its text begins at its start point', () => {
+    expect(run([{ glyphs: glyphs('1Univ.'), points: [pt('5s', 1), pt('5e', 6)] }], [[null, ...Array(5).fill('u5')]])).toEqual([{ unit: 5, piece: '0' }])
+  })
+  it('states none where TeX set no start point, or the ownership gives the unit text before it', () => {
+    expect(run([{ glyphs: glyphs('1Univ.'), points: [pt('5e', 6)] }], [[null, ...Array(5).fill('u5')]])).toEqual([])
+    expect(run([{ glyphs: glyphs('1Univ.'), points: [pt('5s', 1), pt('5e', 6)] }], [Array(6).fill('u5')])).toEqual([])
   })
 })
 
