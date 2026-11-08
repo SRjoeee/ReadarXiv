@@ -180,10 +180,12 @@ export function factsOf({
     for (const g of l) ends.push((m.offB[p] as number) + g)
   })
   ends.sort((x, y) => x - y)
-  // (each element's opening point on B, by unit and piece: the glyph before which it begins, global)
+  // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
+  // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()
+  const placeEnd = new Map<string, number>()
   for (const pl of ins.places ?? [])
-    if (!pl.end) placeAt.set(`${pl.unit}|${pl.piece}`, (m.offB[pl.page - 1] as number) + pl.glyph)
+    (pl.end ? placeEnd : placeAt).set(`${pl.unit}|${pl.piece}`, (m.offB[pl.page - 1] as number) + pl.glyph)
   // (a table column's cells, for a single-line cell's centring)
   const column = new Map<string, Member[]>()
   for (const mem of members) {
@@ -209,6 +211,12 @@ export function factsOf({
     })
     const sizeOf = (j: number) => mostOf((mem.lineGlyphs[j] ?? []).map((a) => r2(gA(a).size))) ?? mem.style.size
     const own = mem.lines.map((l, j) => [l, j] as const).filter(([l]) => !(l[9] & 1))
+    // (the line TeX ended at a point of B's stream: that of the unit's last glyph before it, carried to A)
+    const lineBefore = (point: number) => {
+      let b = point - 1
+      while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
+      return b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
+    }
     // (its measure read off A, where TeX did not ship its pages' frame: a hull of the page's lines)
     if (!mem.lines.every((l) => framed.has(l[0]))) mem.read.push('measure')
 
@@ -270,54 +278,117 @@ export function factsOf({
       const p = pieces.get(id)
       if (p && FORCED_BREAK.test(p.src.trim())) {
         // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A)
-        let b = (placeAt.get(`${mem.unit}|${id}`) ?? 0) - 1
-        while (b >= 0 && b >= mem.bFirst && ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0)) b--
-        const j = b >= mem.bFirst && b >= 0 ? lineOf.get(m.bToA[b] as number) : undefined
+        const j = lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
         if (j !== undefined) breaks.push([el, j])
         else unplaced.push([id, el])
       }
     }
-    // (a break the marked compile set no point for, an invisible piece's: today's reading of the line it ended (forcedBreaks
-    // TEX:120), its own lines that end short of their column's right edge by SHORT of a size, not its last and none over a
-    // display, taken in order where they are as many as such breaks; the line read, not stated. Breaks the source sets one after
-    // the other, nothing but white space between them, end one line: TeX ends it at the first, each next one sets an empty line)
-    if (unplaced.length) {
-      const order = new Map<string, number>()
-      const blankAfter: boolean[] = []
-      const walk = (ps: readonly Piece[]) => {
-        for (const p of ps) {
-          if (p.t === 'span') walk(p.content)
-          else if (p.t === 'el') {
-            order.set(p.id, blankAfter.length)
-            blankAfter.push(true)
-          } else if (p.t === 'text' && /\S/.test(p.s) && blankAfter.length) blankAfter[blankAfter.length - 1] = false
-          else if (p.t === 'unit' && blankAfter.length) blankAfter[blankAfter.length - 1] = false
+    // (a break the marked compile set no point for: the marking gives an invisible piece none, which would move a line. Breaks
+    // the source sets one after the other, nothing that sets ink between them, end one line: TeX ends it at the first, each next
+    // one sets an empty line. TeX's points around such a group in the unit's source, the nearest before it (an element's end,
+    // the unit's start) and after it (an element's opening, the unit's end), bound where it stands in B's stream:
+    // - where nothing that sets ink stands between the group and one of them, that point is the group's (no glyph of B between
+    //   them), and its line the one TeX ended there, as a placed break's: at the unit's end its last line, which has no line
+    //   after it to state;
+    // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
+    //   and a group one of its own, so where the window's lines end there as often as it holds groups (a paragraph's end TeX
+    //   set there aside), TeX ended each at one of them, in order; else where as many of those lines end short of their
+    //   column's right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none over a held
+    //   line, they are the groups', in order, the lines read; else no break of the window is stated. A window's count is its
+    //   own: another's, or a break at the unit's end, leaves it as it is)
+    if (unplaced.length && unit && mem.bFirst >= 0) {
+      const seq = flatOf(unit.content)
+      const classes = new Map(unit.classes ?? [])
+      const unplacedEl = new Map(unplaced)
+      const isBreak = (x: Flat) => x.t === 'el' && FORCED_BREAK.test(pieces.get(x.id)?.src.trim() ?? '')
+      // (a piece that sets ink: a text's characters, a visible element, a nested unit; a forced break none)
+      const sets = (x: Flat) =>
+        x.t === 'text'
+          ? /\S/.test(x.s)
+          : x.t === 'unit' || (x.t === 'el' && !isBreak(x) && VISIBLE.has(classes.get(x.id)?.cls ?? 'other'))
+      // (TeX's points at the boundaries of the unit's pieces, in the source's order: before piece q, the glyph of B's stream
+      // TeX was at, where it states it)
+      const at: (number | undefined)[] = new Array(seq.length + 1).fill(undefined)
+      at[0] = mem.bFirst
+      at[seq.length] = mem.bLast + 1
+      seq.forEach((x, q) => {
+        if (x.t !== 'el') return
+        at[q] ??= placeAt.get(`${mem.unit}|${x.id}`)
+        at[q + 1] ??= placeEnd.get(`${mem.unit}|${x.id}`)
+      })
+      const groups: { from: number; to: number; els: El[] }[] = []
+      seq.forEach((x, q) => {
+        const el = x.t === 'el' ? unplacedEl.get(x.id) : undefined
+        if (!el) return
+        const g = groups.at(-1)
+        if (g && !seq.slice(g.to + 1, q).some(sets)) {
+          g.to = q
+          g.els.push(el)
+        } else groups.push({ from: q, to: q, els: [el] })
+      })
+      const windows = new Map<string, { lo: number; hi: number; groups: El[][] }>()
+      for (const g of groups) {
+        let l = g.from
+        let inkBefore = false
+        while (at[l] === undefined) {
+          if (sets(seq[l - 1]!)) inkBefore = true
+          l--
         }
-      }
-      walk(unit?.content ?? [])
-      const groups: El[][] = []
-      let prev = -2
-      for (const [id, el] of unplaced) {
-        const k = order.get(id) ?? -2
-        // (consecutive: the piece right after the one before, with nothing but white space between them)
-        if (groups.length && k === prev + 1 && blankAfter[prev]) groups.at(-1)!.push(el)
-        else groups.push([el])
-        prev = k
+        let r = g.to + 1
+        let inkAfter = false
+        while (at[r] === undefined) {
+          if (sets(seq[r]!)) inkAfter = true
+          r++
+        }
+        const lo = at[l] as number
+        const hi = at[r] as number
+        if (!inkBefore || !inkAfter) {
+          const j = lineBefore(!inkBefore ? lo : hi)
+          if (j !== undefined && !((mem.lines[j] as Line)[9] & 1)) for (const el of g.els) breaks.push([el, j])
+          continue
+        }
+        const w = windows.get(`${lo}|${hi}`) ?? windows.set(`${lo}|${hi}`, { lo, hi, groups: [] }).get(`${lo}|${hi}`)!
+        w.groups.push(g.els)
       }
       const right = new Map<string, number>()
       for (const [l] of own) right.set(`${l[0]}|${l[1]}`, Math.max(right.get(`${l[0]}|${l[1]}`) ?? -1e9, l[3]))
-      const short: number[] = []
-      own.forEach(([l, j], q) => {
-        const next = mem.lines[j + 1]
-        if (q === own.length - 1 || !next || next[9] & 1) return
-        if (l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)) short.push(j)
-      })
-      if (short.length === groups.length) {
-        groups.forEach((g, q) => {
-          for (const el of g) breaks.push([el, short[q] as number])
-        })
-        mem.read.push('breaks')
+      let read = false
+      for (const w of windows.values()) {
+        // (the lines its glyphs stand on, in B's order: each but the last ends inside it)
+        const seen: number[] = []
+        for (let b = w.lo; b < w.hi; b++) {
+          if ((unitB[b] as number) !== mem.unit || (m.bToA[b] as number) < 0) continue
+          const j = lineOf.get(m.bToA[b] as number)
+          if (j !== undefined && j !== seen.at(-1)) seen.push(j)
+        }
+        if (seen.some((j, q) => q > 0 && j < (seen[q - 1] as number))) continue
+        const paragraph = new Set<number>()
+        for (const e of ends)
+          if (e > w.lo && e < w.hi && (unitB[e - 1] as number) === mem.unit) {
+            const j = lineBefore(e)
+            if (j !== undefined) paragraph.add(j)
+          }
+        const lineEnds = seen.slice(0, -1).filter((j) => !paragraph.has(j))
+        // (a line of its own text, the next one too: no held line's)
+        const textual = (j: number) => !((mem.lines[j] as Line)[9] & 1) && !((mem.lines[j + 1] as Line)[9] & 1)
+        let lines: number[] | null = null
+        if (lineEnds.length === w.groups.length && lineEnds.every(textual)) lines = lineEnds
+        else {
+          const short = lineEnds.filter((j) => {
+            const l = mem.lines[j] as Line
+            return textual(j) && l[3] < (right.get(`${l[0]}|${l[1]}`) as number) - SHORT * sizeOf(j)
+          })
+          if (short.length === w.groups.length) {
+            lines = short
+            read = true
+          }
+        }
+        if (lines)
+          w.groups.forEach((els, q) => {
+            for (const el of els) breaks.push([el, lines[q] as number])
+          })
       }
+      if (read) mem.read.push('breaks')
     }
     const breakLines = new Set(breaks.map(([, j]) => j))
     for (const [el, j] of breaks) {
