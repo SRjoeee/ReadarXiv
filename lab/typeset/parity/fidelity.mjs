@@ -277,7 +277,7 @@ export function measureFidelity(c) {
   }
 
   // ---------------- elements: an element drawn otherwise than the original sets it: its pieces apart that TeX set on one line,
-  // its scripts set flat as text, or drawn as nothing where TeX set ink for it
+  // its scripts or sizes set flat as text, or drawn as nothing where TeX set ink for it
   const wrong = { today: new Map(), v2: new Map() }
   const note = (side, key, what) => {
     if (!wrong[side].has(key)) wrong[side].set(key, [])
@@ -350,7 +350,7 @@ export function measureFidelity(c) {
       const id = `${ord}:${k}`
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
       if (text === 1) {
-        if (boxes.length && !raised && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts set flat as text`)
+        if (boxes.length && !raised && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
         continue
       }
       // (drawn as nothing: the part states no ink of it on this page, and no text to draw, where TeX's points hold ink. An element
@@ -370,7 +370,7 @@ export function measureFidelity(c) {
       const boxes = (e.segs ?? []).filter((g) => g.page === n).map((g) => [g.x0, Math.min(g.top, g.bottom), g.x1, Math.max(g.top, g.bottom)])
       const id = `${key.slice(1)}:${e.k}`
       if (!boxes.length || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
-      if (runs && scriptedOf(runs, boxes)) note('today', key, `element ${e.k}: its scripts set flat as text`)
+      if (runs && scriptedOf(runs, boxes)) note('today', key, `element ${e.k}: its scripts or sizes set flat as text`)
     }
   }
   for (const side of ['today', 'v2']) for (const [key, ws] of wrong[side]) for (const w of ws) fault(side, 'elements', `${name(key)}: ${w}`)

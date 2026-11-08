@@ -15,10 +15,15 @@ export function darkAt(d, p) {
   return 1 - (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255
 }
 
+/** the pixels seen by the last pixelsOf call: one array of the page's size, stamped with a call's number, reused */
+const SEEN = { stamp: new Int32Array(0), call: 0 }
+
 /** the device pixels of PDF boxes [x0, y0, x1, y1] (y up) on a page drawn from `view`'s top-left corner at `scale` device px
  *  a point, each once (an Int32Array of indices) */
 export function pixelsOf(boxes, view, scale, W, H) {
-  const seen = new Uint8Array(W * H)
+  if (SEEN.stamp.length !== W * H) SEEN.stamp = new Int32Array(W * H)
+  const seen = SEEN.stamp
+  const call = ++SEEN.call
   const out = []
   for (const [x0, y0, x1, y1] of boxes) {
     const c0 = Math.max(0, Math.floor((x0 - view[0]) * scale)),
@@ -28,8 +33,8 @@ export function pixelsOf(boxes, view, scale, W, H) {
     for (let r = r0; r < r1; r++)
       for (let c = c0; c < c1; c++) {
         const p = r * W + c
-        if (!seen[p]) {
-          seen[p] = 1
+        if (seen[p] !== call) {
+          seen[p] = call
           out.push(p)
         }
       }

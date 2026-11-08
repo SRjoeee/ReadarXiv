@@ -189,7 +189,7 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const fe = one(6, 'para', [factLine(72, 540, 600)], { els })
     const ll = [drawnLine(72, 400, 600, 'x'.repeat(20))]
     const p = measure(fe, sides(6, ll, ll, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
-    expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts set flat as text' } }])
+    expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts or sizes set flat as text' } }])
   })
   it("an element drawn as nothing where TeX set ink (today's reading found it on the page): worse", () => {
     // (2610.21312 p2 t9: El 13 "d/n = 0.191" with no ink on p2 in v2's part, today's segment on p2)
