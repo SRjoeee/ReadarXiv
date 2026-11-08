@@ -98,7 +98,8 @@ export const READER_CSS = `
    geometricPrecision unless the reader's fixed probe said auto (text-rendering.ts, decided once a reader before its first
    overlay and written on the root by the composer; Chromium on macOS draws geometricPrecision without the smoothing: 80 % of
    the ink); in the layer's ink, the PDF's own black, where a run names no fill of its own (the owner's ruling of 2026-11-08:
-   today's layer, layer-proto/run.mjs SVG_RULES, drew #141414; typeset's display.ts LAYER_INK the same ink for a named colour) */
+   today's layer, layer-proto/run.mjs SVG_RULES, drew #141414). A CJK run comes with its own fill, #141414, today's ink (the
+   owner's exception of 2026-11-08: typeset's display.ts CJK_INK, by the class of its characters), painted as its attribute */
 .axt-reader .axt-over { position: absolute; inset: 0; }
 .axt-reader .axt-over > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; -webkit-user-select: none; user-select: none; pointer-events: none; }
 .axt-reader[data-axt-layer-text="auto"] .axt-over > svg { text-rendering: auto; }

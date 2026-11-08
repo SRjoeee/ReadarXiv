@@ -1038,7 +1038,17 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   page was shot at hung on the order the pages were laid (the owner's question of 2026-11-08).
   It draws a run that names no fill of its own in the layer's ink, the PDF's own black (the owner's ruling of 2026-11-08:
   today's `layer-proto/run.mjs` `SVG_RULES` draws `#141414`, the approved prototype's ink, whose darkest pixel is 92 % of
-  black's, so that the translation stood lighter than the original's text on every page; a run's own fill is kept).
+  black's, so that the translation stood lighter than the original's text on every page; a run's own fill is kept), but a
+  CJK run, which it draws in `#141414`, today's ink (the owner's exception of the same day, on the lane's measurement that
+  this ink was the one difference between today's CJK text and v2's: the same faces, sizes, smoothing and rendering, 0.922 of
+  black's ink a glyph). A CJK run is one whose characters are of the breaker's CJK class (`script.ts` `cjkClassRe`: Han,
+  kana, Hangul, Bopomofo, the CJK marks and full-width forms, and the curly quotes, dashes, ellipsis and middle dot where the
+  rules set them as CJK's), the class it was set in the CJK face by; typeset's `emit/display.ts` `inkLines` inks every laid
+  line of a page (units, names, figure texts) with `CJK_INK`, so the Page states it as the run's fill and the painter writes
+  it; the translation's Latin, digits and formulas stay in the PDF's black. Measured against the original's body text (mean
+  darkness of glyph pixels, 42 pages of the 21 CJK pairs, macOS Chromium at a device pixel ratio of 2): beside Times-like
+  originals the CJK text in `#141414` is 0.911 of the original's darkness (0.978 in black), beside Computer Modern 0.996
+  (1.071 in black).
   Without the smoothing and `auto` (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
   translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
   4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check

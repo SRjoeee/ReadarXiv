@@ -90,6 +90,29 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.lines[0]![0]).toBe(700)
     expect(laid!.lines.flatMap((l) => l[3]).some((it) => 'src' in it && it.piece === '1')).toBe(true)
   })
+  it("inks a CJK run that names no fill #141414, today's ink; its Latin runs the PDF's black; a coloured unit its own fill", () => {
+    // (the owner's exception of 2026-11-08 to the PDF's black: the translation's CJK text at today's weight, #141414, its Latin,
+    // digits and formulas in the PDF's black, a run TeX set in a colour in that colour)
+    const zh = rulesFor('zh')
+    const r = row([
+      {
+        t: 'text',
+        s: '\u6211\u4eec\u63d0\u51fa\u4e86\u53d8\u6362\u5668 Transformer \u6a21\u578b\uff0c\u5b83\u5b8c\u5168\u4f9d\u8d56\u6ce8\u610f\u529b\u673a\u5236\u3002',
+      },
+    ])
+    const inks = (m: Placed) =>
+      layPage(part(m), rowsOf([r]), zh, metrics())
+        .members[0]!.lines.flatMap((l) => l[3])
+        .flatMap((it) => ('src' in it ? [] : [[it.s.trim(), it.fill]]))
+    const plain = inks(member())
+    expect(plain.length).toBeGreaterThan(2)
+    for (const [s, fill] of plain)
+      expect([s, fill]).toEqual([s, /[\u4e00-\u9fff]/u.test(s as string) ? 0x141414 : undefined])
+    expect(plain.some(([s]) => s === 'Transformer')).toBe(true)
+    // (a unit TeX set in a colour: each of its runs, CJK or Latin, in that colour)
+    const blue = inks(member({ style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu', fill: 0x0000cc } }))
+    expect(new Set(blue.map(([, fill]) => fill))).toEqual(new Set([0x0000cc]))
+  })
   it('turns its elements off where one is drawn as text, not kept where it stands (today’s hide.mjs: its placeholders hidden)', () => {
     // (a citation drawn as the page's text in the translation: its ink on A must go with the text, or it shows twice)
     const m = member({

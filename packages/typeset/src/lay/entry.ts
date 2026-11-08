@@ -27,7 +27,7 @@ import { type NameRow, setNameOf } from '../shared/names.ts'
 import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
-import type { TextItem } from '../emit/display.ts'
+import { inkLines, type TextItem } from '../emit/display.ts'
 import { adapt, rectOf, sharedPaper } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
@@ -37,7 +37,7 @@ import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA } from './lit
 import { layPagePrepared } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
 import { tokenBand } from '../emit/sentences.ts'
-import { CJK } from '../breaker/script.ts'
+import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { waitOf } from './wait.ts'
 
@@ -551,6 +551,9 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   }
   // (the members laid on the page with their layouts: the owners whose links are drawn with them)
   const owners = new Map<number, LinkOwner>()
+  // (every laid line inked: a CJK run of no fill of its own in CJK_INK, the owner's exception of 2026-11-08; display.ts inkLines)
+  const cjkClass = cjkClassRe(!!(R as { cjkQuotes?: boolean }).cjkQuotes)
+  const inked = (lines: Laid['lines']): Laid['lines'] => inkLines(lines, cjkClass)
   const out: Laid[] = members.map((m) => {
     // (a figure text drawn: its translation on its line, its text group off)
     const fl = fig.laid.get(m.ord)
@@ -560,7 +563,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         page,
         state: 'laid',
         off: groupsOn(m, page) & 1,
-        lines: fl,
+        lines: inked(fl),
         lit: litOfFigure(m, page, fl),
       }
     // (a name drawn on its own: its word on its line, its text group off)
@@ -572,7 +575,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         page,
         state: 'laid',
         off: groupsOn(m, page) & 1,
-        lines: here ? nl : [],
+        lines: here ? inked(nl) : [],
         lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
       }
     }
@@ -592,8 +595,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     }
     const x = byOrd.get(m.ord)
     const st = x?.state ?? state.get(m.ord) ?? 'none'
-    const lines = (x?.lines ?? []).map(
-      ([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number],
+    const lines = inked(
+      (x?.lines ?? []).map(([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number]),
     )
     // (its groups turned off, each only where it has it on a page (groupsOn): its text where laid, its elements where one with
     // ink there is drawn otherwise than kept where it stands (a crop cut from that page, on a line of either page, or text in the
