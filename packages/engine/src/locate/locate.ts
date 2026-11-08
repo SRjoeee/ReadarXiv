@@ -1026,9 +1026,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
 
-  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end, in one paragraph of
-  // TeX's (no paragraph end of B's between the one's last glyph and the other's first, where the instrument states them); a
-  // table's cell and a figure's text are set in boxes of their own, never in a paragraph with another
+  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end (SHARED_SEP of its size at
+  // most, today's rowLeadOf), in one paragraph of TeX's (no paragraph end of B's between the one's last glyph and the other's
+  // first, where the instrument states them); a table's cell and a figure's text are set in boxes of their own, never in a
+  // paragraph with another
   const ends: number[] = []
   ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
     for (const g of l) ends.push((m.offB[p] as number) + g)
@@ -1065,20 +1066,75 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return false
   }
-  const joinOf = (a: Line, b: Line, size: number): [number] | [number, 1] =>
-    keptOn(a, b, size) ? [r2(b[2] - a[3]), 1] : [r2(b[2] - a[3])]
+  // (Placed.join's separation: from the leader's ink end on the row, its last line's glyphs' outlines (an advance where a glyph
+  // has none), to the follower's first line: S.rowStart lays the follower from the translation's ink end (S.share's `ink`), so
+  // the separation it keeps is the original's from its ink; today's shared row is the file's row, its glyphs' ink (make.mjs
+  // rowsOf), 2610.40645v1 p34's "Proof of Proposition 4.4." and its theorem 4.49 pt apart drawn where v2's were 3.33)
+  const inkEnd = (lead: Member, a: Line) => {
+    let x = Number.NEGATIVE_INFINITY
+    for (const g of lead.lines.at(-1) === a ? (lead.lineGlyphs.at(-1) ?? []) : []) {
+      const d = gA(g)
+      if (/\S/.test(d.u)) x = Math.max(x, d.ix1 > d.ix0 ? d.ix1 : d.x1)
+    }
+    return Number.isFinite(x) ? x : a[3]
+  }
+  const sepOf = (lead: Member, b: Line) => r2(b[2] - inkEnd(lead, lead.lines.at(-1)!))
+  const joinOf = (lead: Member, b: Line, size: number): [number] | [number, 1] => {
+    const sep = sepOf(lead, b)
+    return keptOn(lead.lines.at(-1)!, b, size) ? [sep, 1] : [sep]
+  }
+  // (the stream: the instrument's members in its order, and each member made on A (ink.ts, born.ts) where TeX set its text in
+  // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
+  // after its last, as a name leads the unit after it (above). amsthm's head no source unit owns, made on A, and its theorem's
+  // text after it on the row (2608.25210v2 p4 "Definition 2. Minimal Provenance."): one flow, as a run-in head's and its
+  // paragraph's, today's shared line over every unit of the page (need.mjs rowLeadOf). One B never printed, or after which no
+  // member begins on its page, stands after the instrument's, as made. Which box TeX set a member made on A in the instrument
+  // does not say: none is the body an insert is passed over to)
+  const madeOnA = (x: Member) => x.unit < 0 || x.unit >= ins.units.length
+  const madeB = new Set<number>()
+  const firstAt = new Map<number, number>()
+  for (const x of members) {
+    if (x.bFirst >= 0) firstAt.set(x.bFirst, x.ord)
+    if (!madeOnA(x)) continue
+    for (const a of x.text) if ((m.aToB[a] as number) >= 0) madeB.add(m.aToB[a] as number)
+    for (const l of x.els.values()) for (const a of l) if ((m.aToB[a] as number) >= 0) madeB.add(m.aToB[a] as number)
+  }
+  const standsBefore = new Map<number, number[]>()
+  const standing = new Set<number>()
+  for (const x of members) {
+    if (!madeOnA(x) || x.bLast < 0) continue
+    let b = x.bLast + 1
+    while (b < NB && pageB[b] === pageB[x.bLast] && (unitB[b] as number) < 0 && !madeB.has(b)) b++
+    const next = b < NB && pageB[b] === pageB[x.bLast] ? firstAt.get(b) : undefined
+    if (next === undefined || next === x.ord) continue
+    ;(standsBefore.get(next) ?? standsBefore.set(next, []).get(next)!).push(x.ord)
+    standing.add(x.ord)
+  }
+  const seq: Member[] = []
+  const put = (o: number) => {
+    for (const x of standsBefore.get(o) ?? []) put(x)
+    seq.push(members[o]!)
+  }
+  for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
   let body: number | null = null
-  for (let q = 0; q < members.length; q++) {
-    const mem = members[q]!
+  // (a footnote's text is set in the footnote insert, TeX's \footins, the page's notes one after the other there: the member
+  // before a footnote is the footnote before it, the body between them in the stream passed over (footmisc's para sets the
+  // notes as one paragraph, a note on the row the one before ends: 2608.06701v1 p5), but a member made on A that B printed
+  // right before it)
+  let note: number | null = null
+  for (let q = 0; q < seq.length; q++) {
+    const mem = seq[q]!
     let k = q - 1
-    if (!insert(mem) && k >= 0 && insert(members[k]!) && body !== null) k = body
-    const prev = k >= 0 ? members[k]! : null
+    if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
+    else if (mem.kind === 'footnote' && note !== null && !(k >= 0 && standsBefore.get(mem.ord)?.includes(seq[k]!.ord)))
+      k = note
+    const prev = k >= 0 ? seq[k]! : null
     // (the paragraph ends between the two that are not inside the inserts between them)
     const insideInsert = (e: number) => {
       for (let j = k + 1; j < q; j++) {
-        const x = members[j]!
+        const x = seq[j]!
         if (x.bFirst >= 0 && e > x.bFirst && e <= x.bLast + 1) return true
       }
       return false
@@ -1092,18 +1148,20 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       !!b &&
       !!prev?.located &&
       mem.located &&
+      // (a member born on A, of glyphs B never printed, has no place in TeX's stream to tell its paragraph by)
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
       (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
+      sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
     const into = shares ? flowOf.get(prev.ord) : undefined
     if (into) {
-      mem.join = joinOf(a!, b!, a![10] ?? prev!.style.size)
+      mem.join = joinOf(prev!, b!, a![10] ?? prev!.style.size)
       into.push(mem.ord)
       flowOf.set(mem.ord, into)
     } else {
@@ -1111,8 +1169,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (!insert(mem)) body = q
+    if (!insert(mem) && !madeOnA(mem)) body = q
+    if (mem.kind === 'footnote') note = q
   }
+  // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
+  flows.sort((f, g) => Math.min(...f) - Math.min(...g))
 
   // ---- ties: a table's cells, laid together; a figure's set, at one size; a flow's members, at one size
   const ties: Located['ties'] = []
@@ -1176,11 +1237,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (tie.ords.length < 2) ties.splice(t, 1)
     }
     const k = flow.indexOf(led.ord)
-    const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
-    if (prev && led.join) n.join = joinOf(prev, l, prev[10] ?? members[flow[k - 1] as number]!.style.size)
+    const before = k > 0 ? members[flow[k - 1] as number] : undefined
+    const prev = before?.lines.at(-1)
+    if (before && prev && led.join) n.join = joinOf(before, l, prev[10] ?? before.style.size)
     flow.splice(k, 0, n.ord)
     flowOf.set(n.ord, flow)
-    led.join = joinOf(l, f, l[10] ?? n.style.size)
+    led.join = joinOf(n, f, l[10] ?? n.style.size)
   }
 
   // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
@@ -1400,6 +1462,10 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** a shared line's separation at most, in em of the follower's size: a run-in head's \quad, a float split's word space
+ *  (today's need.mjs SHARED_SEP, rowLeadOf; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set
+ *  side by side (a running head's title and folio, two minipages' titles), not one line of a paragraph */
+const SHARED_SEP = 3
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */

@@ -162,23 +162,61 @@ describe('locate', () => {
     expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
     expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
   })
+  it('states a shared row’s separation from the leader’s ink end, which S.rowStart lays the follower from (today’s file rows)', () => {
+    // (2610.40645v1 p34: "Proof of Proposition 4.4." ends in a full stop whose ink ends 0.85 pt before its advance; the
+    // follower is laid from the translation's ink end (S.share's ink), so the separation it keeps is from the original's ink
+    // end: today's rows are their glyphs' ink (make.mjs rowsOf), its follower 4.49 pt after the head's drawn end, v2's 3.33)
+    const B2 = docOf([
+      { lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x: 110, y: 700 }, 'and on'] },
+    ])
+    const stop = B2.pages[0]!.glyphs[4]!
+    stop.ix0 = stop.x0 + 1
+    stop.ix1 = stop.x1 - 0.85
+    const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+    const L = locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
+    expect(L.flows).toEqual([[0, 1]])
+    expect(L.members[1]!.join).toEqual([r2(110 - (72 + 5 * 6 - 0.85))])
+  })
+  it('shares no line further apart than a shared line’s separation (today’s SHARED_SEP, 3 em): boxes set side by side', () => {
+    // (1706.03762v7 p4: two minipages' titles on one baseline 97 pt apart; 2608.06701v1 p6: a run-in head and a paragraph
+    // whose text starts 39.77 pt after it, its own label between, 4 em of its 9.96 pt; a running head's title and folio)
+    const at = (x: number) => {
+      const B2 = docOf([{ lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x, y: 700 }, 'and on'] }])
+      const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+      return locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
+    }
+    // (the head ends at 72 + 5 glyphs of 6 pt: 102)
+    expect(at(102 + 30).flows).toEqual([[0, 1]])
+    expect(at(102 + 30).members[1]!.join).toEqual([30])
+    expect(at(102 + 31).flows).toEqual([[0], [1]])
+    expect(at(102 + 31).members[1]!.join).toBeUndefined()
+    // (the separation the bound reads is the one the join states, from the leader's ink end: today's rows are ink, 2307.16209v1's
+    // contents entries 36.18-36.78 pt after their numbers' ink at 11.96 pt type, no shared line of today's)
+    const B2 = docOf([
+      { lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x: 132, y: 700 }, 'and on'] },
+    ])
+    const stop = B2.pages[0]!.glyphs[4]!
+    stop.ix1 = stop.x1 - 0.85
+    const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+    expect(locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2)).flows).toEqual([[0], [1]])
+  })
   it('states a shared row kept where a character of the page stays on it between the two (today’s keptBetween)', () => {
     // (2608.25210v2 p17's notes made on A: "… Mao." ends one, "2024" (no unit's) stays, ". Be…" begins the next on the row; the
     // follower is not laid from the first's end, which today kept (S.rowStart not applied, its share kept). Nothing between: not)
     const lines = (between: boolean) => [
       { text: 'First ends.', x: 72, y: 700 },
       ...(between ? [{ text: '2024', x: 140, y: 700 }] : []),
-      { text: 'Next runs on', x: 170, y: 700 },
+      { text: 'Next runs on', x: 166, y: 700 },
       { text: 'and on', x: 72, y: 688 },
     ]
     const units2 = [unitOf('para', 'First ends.'), unitOf('para', 'Next runs on and on')]
     const kept = docOf([{ lines: lines(true) }])
     const L = locate(instrumentOf(kept, units2, [[0, -1, 1, 1]]), kept, align(kept, kept))
     expect(L.flows).toEqual([[0, 1]])
-    expect(L.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6)), 1])
+    expect(L.members[1]!.join).toEqual([r2(166 - (72 + 11 * 6)), 1])
     const free = docOf([{ lines: lines(false) }])
     const F = locate(instrumentOf(free, units2, [[0, 1, 1]]), free, align(free, free))
-    expect(F.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6))])
+    expect(F.members[1]!.join).toEqual([r2(166 - (72 + 11 * 6))])
   })
   it('states the line of its own a label stands on: a raised mark on the row it shares with the member before (Label.line)', () => {
     // (2608.06701v1 p5 t76: footnote 3's mark set raised before its text, on the row footnote 2 ends on: by El.ink's rule (the
@@ -204,6 +242,30 @@ describe('locate', () => {
     expect(three.lines.map((l) => l[4])).toEqual([700, 688])
     expect(three.labelAt?.ink[5]).toBe(702.8)
     expect(three.labelAt?.line).toBe(0)
+  })
+  it('chains a footnote to the footnote before it on its row, a body paragraph between them in the stream (footmisc’s para)', () => {
+    // (2608.06701v1 p5: footnote 1 is set inside paragraph 72, footnote 2 inside paragraph 74; footmisc's para sets the page's
+    // footnotes as one paragraph in the footnote insert, the second on the first's row. B ships the body, then the notes)
+    const lines = [
+      { text: 'first paragraph', x: 72, y: 700 },
+      { text: 'second paragraph', x: 72, y: 688 },
+      { text: 'note one', x: 72, y: 100 },
+      { text: 'note two', x: 132, y: 100 },
+    ]
+    const B2 = docOf([{ lines }])
+    const units2 = [
+      unitOf('para', 'first paragraph'),
+      unitOf('footnote', 'note one'),
+      unitOf('para', 'second paragraph'),
+      unitOf('footnote', 'note two'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 2, 1, 3]])
+    const L = locate(ins2, B2, align(B2, B2))
+    expect(L.flows).toEqual([[0], [1, 3], [2]])
+    expect(L.members[3]!.join).toEqual([132 - (72 + 8 * 6)])
+    // (footnotes each a paragraph of their own: the first's end between them, apart)
+    ins2.tex = { paragraphEnds: [[15 + 16 + 8]] }
+    expect(locate(ins2, B2, align(B2, B2)).flows).toEqual([[0], [1], [2], [3]])
   })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
