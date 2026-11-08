@@ -9,6 +9,12 @@ const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100
 const OBJ = '\ufffc'
 /** the CJK opening marks, whose advance's blank half stands before their ink */
 const OPENING = /[\u3008\u300a\u300c\u300e\u3010\u3014\u3016\u3018\u301a\u301d\u2018\u201c\uff08\uff3b\uff5b\uff5f]/
+/** the CJK closing marks (closing brackets, full stops, commas: JLREQ cl-02, cl-06, cl-07), whose ink stands in the first half of
+ *  their advance, its second half blank */
+const CLOSING = /[\u3001\u3002\uff0c\uff0e\u3009\u300b\u300d\u300f\u3011\u3015\u3017\u3019\u301b\u301e\u301f\u2019\u201d\uff09\uff3d\uff5d\uff60]/
+/** the highlight's paint beside a box, PDF units: both readers' pad of 3 CSS px (view/lighting.mjs PAD, packages/reader
+ *  compose/highlight.ts PAD) at the parity's drawing scale (render.mjs SCALE: 96/72 CSS px a point) */
+export const PAINT_PAD = (3 * 72) / 96
 
 /**
  * The absolute bounds: a side's fault, measured against the original (README.md gives the reason of each). Shown on the
@@ -71,7 +77,7 @@ export const SAYS = {
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
-  highlight: "the units today highlights: v2 without sentence boxes there; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
+  highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
 }
 
@@ -80,12 +86,15 @@ export const SAYS = {
  * One page measured: `v2` v2.mjs's file of the pair (its Pages, the part's facts, the join of part members to today's units),
  * `rec` render.mjs's record of the page (what each side drew, read back, and its pixels), `prepByOrd` today's prepare dump's
  * units by ord (the original's lines of today's units), `todayOf` part ord → today's ord, `turned` the part's members set
- * turned on A. A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
+ * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
+ * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
-  const error = rec.error ?? (!rec.today ? "today's side not drawn" : !rec.v2 ? "v2's side not drawn" : rec.today.error ? `today's page not laid: ${rec.today.error}` : null)
+  const error =
+    rec.error ??
+    (!rec.today ? "today's side not drawn" : !rec.v2 ? "v2's side not drawn" : rec.today.error ? `today's page not laid: ${rec.today.error}` : rec.today.lit.length && !rec.today.litBoxes ? "today's sentence boxes not read (a drawing of before they were)" : null)
   if (error) {
     out.error = error
     return out
@@ -119,7 +128,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
-    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, part: m.ord, size: m.style.size, label: m.label ?? null })
+    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null })
   }
   for (const key of T.keys()) {
     if (orig.has(key)) continue
@@ -128,22 +137,23 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     const lines = (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, size: l.size }))
     orig.set(key, { kind: u.kind, align: null, style: null, lines, first: u.lines?.[0]?.page === n, part: null, size: lines[0]?.size ?? null })
   }
-  // (the pairs a line of the original sets one after the other: a head (a run-in heading, a name, a label of its own) and the
-  // unit it leads, in one measure of TeX's (the part's m0..m1: one column); a table's cells and a figure's texts are set apart
-  // by their columns, not by a separation of the text's)
+  // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
+  // (Placed.join: the two share that one's last line, TeX's separation between them), and the member a bound name leads
+  // (lay/lead.ts); each judged where its first line on this page is the leader's last. Two units set on one line otherwise
+  // (an author's address in a column of its own beside another's, a table's cells, a figure's texts) are no run-in: each
+  // stands where TeX set it, judged by anchor and align)
   const APART = new Set(['cell', 'figure', 'inkfigures'])
-  const onA = [...orig.entries()].filter(([, o]) => o.lines.length && o.part !== null && !APART.has(o.kind))
   const runIns = []
-  for (const [hk, h] of onA) {
+  for (const [fk, f] of orig) {
+    const lead = f.part === null || !f.first || APART.has(f.kind) ? undefined : led?.get(f.part)
+    if (lead === undefined || !f.lines.length) continue
+    const hk = keyOfPart(lead),
+      h = orig.get(hk)
+    if (!h?.lines.length || APART.has(h.kind)) continue
     const hl = [...h.lines].sort((a, b) => a.y - b.y)[0]
-    for (const [fk, f] of onA) {
-      if (fk === hk || !f.first) continue
-      const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
-      const sz = fl.size || f.size || 10
-      const sep = fl.x0 - hl.x1
-      if (Math.abs(fl.m0 - hl.m0) > 1 || Math.abs(fl.m1 - hl.m1) > 1 || Math.abs(fl.y - hl.y) > 0.5 || sep < -0.5 || sep > 3 * sz) continue
-      runIns.push({ hk, h, hl, fk, f, fl, sz, sep })
-    }
+    const fl = [...f.lines].sort((a, b) => b.y - a.y)[0]
+    if (Math.abs(fl.y - hl.y) > 0.5) continue
+    runIns.push({ hk, h, hl, fk, f, fl, sz: fl.size || f.size || 10, sep: fl.x0 - hl.x1 })
   }
   const followers = new Set(runIns.map((r) => r.fk))
   const faults = { today: {}, v2: {} }
@@ -185,8 +195,17 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
         const dl = [...ls].sort((a, b) => b.y - a.y)
         const os = ol[0].size || o.size || s.size
         s.osize = os
-        // anchor: the unit's first line, where the original starts on this page
-        if (o.first) {
+        // anchor: the unit's first line, where the original starts on this page; a section heading the side sets in fewer lines
+        // than the original's (the part's heading, not its title nor its front matter, wholly on this page, its label not kept
+        // as the original's ink on its first line) stands on the original's last lines (X.lastLines, the owner's ruling of
+        // 2026-10-19): its last line's baseline against the original's last
+        const onLast =
+          o.first && o.last && o.kind === 'heading' && !o.top && ls.length < o.lines.length && (!o.label?.name || labelOf(ls, o.label) !== 'kept')
+        if (onLast) {
+          const db = dl.at(-1).y - ol.at(-1).y
+          s.anchor = { baseline: r2(db), top: null, off: Math.abs(db), at: ol.at(-1).y, last: true }
+          if (Math.abs(db) > BOUNDS.anchor * os) fault(side, 'anchor', `${name}: last line ${r2(db)} pt from the original's last baseline (size ${r2(os)})`)
+        } else if (o.first) {
           const db = dl[0].y - ol[0].y
           const dt = dl[0].y + 0.8 * dl[0].size - (ol[0].y + 0.8 * os)
           s.anchor = { baseline: r2(db), top: r2(dt), off: Math.min(Math.abs(db), Math.abs(dt)), at: ol[0].y }
@@ -249,8 +268,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     if (t && v) {
       const os = v.osize ?? t.osize ?? o?.size ?? t.size
       const eps = Math.max(NEAR.positionMin, NEAR.position * (os || 10))
+      const said = (a) => (a.last ? `last line's baseline ${a.baseline} off the original's last` : `baseline ${a.baseline}, top ${a.top}`)
       if (t.anchor && v.anchor)
-        judge('anchor', name, 'first line off the original\'s (baseline or top, the nearer)', t.anchor.at, { value: `baseline ${t.anchor.baseline}, top ${t.anchor.top}`, d: t.anchor.off }, { value: `baseline ${v.anchor.baseline}, top ${v.anchor.top}`, d: v.anchor.off }, eps)
+        judge('anchor', name, "first line off the original's (baseline or top, the nearer); a section heading set in fewer lines, its last line off the original's last", t.anchor.at, { value: said(t.anchor), d: t.anchor.off }, { value: said(v.anchor), d: v.anchor.off }, eps)
       if (t.align && v.align)
         judge('align', name, `${v.align.how} off the original's`, { c: 'centred', l: 'left', j: 'justified', r: 'right' }[o?.align] ?? null, { value: null, d: t.align.off }, { value: null, d: v.align.off }, eps)
       if (os) {
@@ -294,6 +314,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     const g = {}
     for (const [side, M] of [['today', T], ['v2', V]]) {
       const flat = (k) => M.get(k)?.filter((l) => !l.rot)
+      // (a head v2 lays with no line of its own stands in its follower's first line, a bound name set as its lead: the two are
+      // one drawn line there, no separation between units to read)
+      if (side === 'v2' && !flat(hk)?.length && stateOf.get(h.part) === 'laid') continue
       const fd = flat(fk)?.length ? [...flat(fk)].sort((a, b) => b.y - a.y)[0] : { y: fl.y, x0: fl.x0 }
       const hd = flat(hk)?.length ? flat(hk).find((l) => Math.abs(l.y - fd.y) <= 0.5) : Math.abs(hl.y - fd.y) <= 0.5 ? hl : null
       if (!hd || (!flat(fk)?.length && !flat(hk)?.length)) continue
@@ -380,8 +403,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   for (const [key, o] of orig) {
     const name = o.label?.name
     if (!o.first || !name?.[1] || name[1][0] !== n || !T.has(key) || !V.has(key)) continue
-    const t = labelOf(T.get(key), name),
-      v = labelOf(V.get(key), name)
+    const t = labelOf(T.get(key), o.label),
+      v = labelOf(V.get(key), o.label)
     if (t === 'translated' && v !== null && v !== 'translated')
       diff('shown', `${key} ${o.kind ?? ''}`.trim(), `its label ("${name[0]}") drawn in the target by today, ${v === 'kept' ? "kept as the original's ink" : "drawn in the original's words"} by v2`, name[0], { value: 'translated', off: null }, { value: 'label', off: null }, true, 'today')
   }
@@ -400,19 +423,75 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   // Each side's links as its layout gave them kept beside, for diagnosis)
   const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
-  // (the highlight is a feature of today's for the units today highlights: there v2 must have its sentence boxes too, judged
-  // against today's. Elsewhere v2 is judged only on not drawing a wrong one: on a unit today draws without boxes (a figure
-  // text both translate among them, matched by its original's box), none is equal, boxes that cover it better; on a unit only
-  // v2 translates, none or covering boxes pass. Boxes that do not cover it are v2's fault and worse: they must cover its drawn
-  // lines on the right and its original's lines on arXiv's page on the left, every edge within a point)
-  const litT = new Set(rec.today.lit.map((id) => `t${id}`)),
-    litV = new Set(rec.v2.lit.map(keyOfPart))
+  // (the highlight is a feature of today's for the units today highlights: there each side's sentence boxes are judged by the
+  // lines they leave uncovered, its drawn lines on the right and its original's lines on arXiv's page on the left, and v2 is
+  // worse where it leaves more of them than today does (today's own misses are not held against v2), nearer where fewer.
+  // Elsewhere v2 is judged only on not drawing a wrong one: on a unit today draws without boxes (a figure text both translate
+  // among them, matched by its original's box), none is equal, boxes that cover it better; on a unit only v2 translates, none
+  // or covering boxes pass. Boxes that do not cover it are v2's fault and worse. Covering, everywhere: a line's box within the
+  // boxes' union, every edge within a point)
+  const litT = new Set(rec.today.lit.map((id) => `t${id}`))
   const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
+  // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
+  // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
+  // half the page's leading above and below (halfLeading: half the lower quartile of the gaps between a member's rows))
+  const inkOf = (l) => {
+    if (l.rot) return l
+    const t = l.text.trim()
+    const x0 = l.x0 + (OPENING.test(t[0] ?? '') ? 0.5 * l.size : 0),
+      x1 = l.x1 - (CLOSING.test(t.at(-1) ?? '') ? 0.5 * l.size : 0)
+    return x1 > x0 ? { ...l, x0, x1 } : l
+  }
+  const leadOf = (side) => {
+    const gaps = []
+    for (const m of v2.pages[n]?.members ?? [])
+      for (const rows of m.lit?.[side] ?? []) {
+        const ys = [...rows].sort((a, b) => b[3] - a[3])
+        for (let i = 1; i < ys.length; i++) {
+          const g = ys[i - 1][1] - ys[i][3]
+          if (g >= 0 && g < 2 * (ys[i][3] - ys[i][1])) gaps.push(g)
+        }
+      }
+    gaps.sort((a, b) => a - b)
+    return gaps.length ? gaps[Math.floor((gaps.length - 1) / 4)] / 2 : 0
+  }
+  const halfLead = { right: leadOf('right'), left: leadOf('left') }
+  /** v2's boxes of a member on a side as its reader paints them (its sentences' and its kept ink's) */
+  // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint)
+  const paintedV2 = (lit, side) =>
+    [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)]
+      .map((b) => (lit?.dir ? pageBoxOf(b, lit.dir) : b))
+      .map((b) => [b[0] - PAINT_PAD, b[1] - halfLead[side], b[2] + PAINT_PAD, b[3] + halfLead[side]])
+  /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
+  const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
+  /** how many of a unit's drawn lines (`ls`) and original lines (`left`) a side's boxes (`rb` right, `lb` left) leave uncovered */
+  const missOf = (ls, left, rb, lb) => ({ r: ls.map(inkOf).map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
+  const says = (m) => `${m.r} of ${m.of} drawn, ${m.l} of ${m.ofL} original lines not covered`
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
-  const noV = todays.filter((k) => !litV.has(k)).length
-  judge('highlight', null, 'units today highlights and v2 draws, with no sentence boxes', 0, { value: `boxes on ${todays.length} of ${todays.length}`, d: 0 }, { value: `boxes on ${todays.length - noV} of ${todays.length}`, d: noV }, 0.5)
-  const hl = { todays: todays.length, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
+  const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
+  for (const key of todays) {
+    const ord = ordOfKey.get(key)
+    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    const left = origBoxes(ord)
+    const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
+    const vb = laidV2.get(ord)?.lit
+    const t = missOf(T.get(key), left, tb.right, tb.left),
+      v = missOf(V.get(key), left, paintedV2(vb, 'right'), paintedV2(vb, 'left'))
+    const dt = t.r + t.l,
+      dv = v.r + v.l
+    if (dt) {
+      hl.todayMissed++
+      fault('today', 'highlight', `${name}: ${says(t)}`)
+    }
+    if (dv) {
+      hl.v2Missed++
+      fault('v2', 'highlight', `${name}: ${says(v)}`)
+    }
+    if (dv !== dt)
+      diff('highlight', name, "lines its sentence boxes leave uncovered: its drawn lines (right), its original's (left)", 0, { value: says(t), off: dt }, { value: says(v), off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
+  }
   for (const [key, ls] of V) {
     const ord = ordOfKey.get(key)
     const fig = figBoth.get(ord)
@@ -421,20 +500,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lit = laidV2.get(ord)?.lit ?? { left: [], right: [], own: [] }
-    // (its boxes as the reader lights them: a turned member's in its run's frame (Laid.lit's dir) on the page, the box each
-    // stands in; its kept ink (`own`) with it on both panes)
-    const onPage = (bs) => (lit.dir ? bs.map((b) => pageBoxOf(b, lit.dir)) : bs)
-    const own = (lit.own ?? []).flatMap(([, bs]) => bs)
-    const rb = onPage([...lit.right.flat(), ...own]),
-      lb = onPage([...lit.left.flat(), ...own])
+    const lit = laidV2.get(ord)?.lit
+    const rb = paintedV2(lit, 'right'),
+      lb = paintedV2(lit, 'left')
     if (!rb.length && !lb.length) continue
-    const right = ls.map(band),
-      left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
-    const r = right.filter((b) => !covered(b, rb)).length,
-      lf = left.filter((b) => !covered(b, lb)).length
+    const m = missOf(ls, origBoxes(ord), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    if (!r && !lf) {
+    if (!m.r && !m.l) {
       if (both) {
         hl.better++
         diff('highlight', name, "sentence boxes over its drawn lines (right) and its original's (left) where today draws none", 'covered', { value: 'none', off: 1 }, { value: 'covered', off: 0 }, false, 'v2')
@@ -442,8 +514,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
       continue
     }
     hl.wrong++
-    fault('v2', 'highlight', `${name}: ${r} of ${right.length} drawn lines, ${lf} of ${left.length} original lines outside its sentence boxes`)
-    diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: `${r} of ${right.length} drawn, ${lf} of ${left.length} original lines not covered`, off: null }, true, 'today')
+    fault('v2', 'highlight', `${name}: ${m.r} of ${m.of} drawn lines, ${m.l} of ${m.ofL} original lines outside its sentence boxes`)
+    diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: says(m), off: null }, true, 'today')
   }
   const dk = px.darkness
   const ref = dk?.originalText?.mean ?? dk?.original?.mean ?? null
@@ -497,15 +569,27 @@ function raised(lines) {
 }
 
 /**
- * A unit's label on its first line as a side drew it (its lines, the label's name word and box, part facts): 'kept' where
- * the line's ink starts at the name's end or after it, or with a crop's stand-in (the original's ink stands there); else
- * drawn anew, 'original' where the line opens with the name word, 'translated' where it does not; null where nothing is drawn
+ * A unit's label on its first line as a side drew it (its lines; the part's label: its name word and box, its number), read
+ * from the drawn text. TeX's label is a name word and a number (Placed.label name, num); a side that draws it anew draws a
+ * word, the target's or the original's, and that number at the line's opening, wherever the line stands (a centred head
+ * relabelled starts where its width puts it, past the name's end as often as not). So: 'kept' where the line opens with a
+ * crop's stand-in (the original's ink stands there) or does not open with a word and the label's number (the original's ink
+ * stands for the label, the line holds the unit's text alone); else drawn anew, 'original' where the line opens with the name word,
+ * 'translated' where it does not. A label that states no number (a word alone) is read by its place, no text telling it
+ * from the unit's own: kept where the line's ink starts at the name's end or after it. null where nothing is drawn
  */
-function labelOf(lines, name) {
+function labelOf(lines, label) {
   const l = lines.filter((x) => !x.rot && x.n > 0).sort((a, b) => b.y - a.y)[0]
   if (!l) return null
   const text = l.text.trimStart()
-  if (l.x0 >= name[1][3] - NEAR.positionMin || text.startsWith(OBJ)) return 'kept'
+  const name = label.name
+  if (text.startsWith(OBJ)) return 'kept'
+  // (the number as drawn: the part's, the punctuation TeX set about it aside (a caption's "Fig. 4." states ".4"))
+  const num = (label.num?.[0] ?? '').replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '')
+  if (num) {
+    const esc = num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (!new RegExp(`^[^\\s\\p{N}\\p{P}]+[\\s\\p{P}]*${esc}(?![\\p{L}\\p{N}])`, 'u').test(text)) return 'kept'
+  } else if (l.x0 >= name[1][3] - NEAR.positionMin) return 'kept'
   return text.startsWith(name[0]) ? 'original' : 'translated'
 }
 

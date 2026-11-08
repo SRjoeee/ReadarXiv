@@ -46,6 +46,9 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
       const text = tk++
       let i = 0
       for (const span of t.querySelectorAll('tspan')) {
+        // (a run placed at its own x: what stands before it is the typesetter's glue, its first character a word's start)
+        const run = `${text}:${i}`,
+          placed = span.getAttribute('x') !== null
         const n = span.getNumberOfChars()
         const cs = getComputedStyle(span)
         const weight = Number.parseInt(cs.fontWeight, 10) || 400
@@ -84,6 +87,8 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
             italic,
             hidden,
             fill: cs.fill,
+            run,
+            placed,
           })
         }
         i += n
@@ -102,8 +107,9 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
       const ink = cs.filter((c) => !c.hidden && !SPACE.test(c.ch) && c.ch)
       const sizes = ink.map((c) => c.size).sort((a, b) => a - b)
       const size = sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
-      // (the widest gaps: between consecutive drawn characters, a space between them a word space, none a letter gap; a
-      // crop standing between them, or a hidden stand-in, no gap at all)
+      // (the widest gaps: between consecutive drawn characters, a space between them a word space, and so a run placed at its
+      // own x (the typesetter's glue before it: a lead's word, its label, the text after them, set apart with no space
+      // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all)
       let word = 0,
         letter = 0,
         prev = null,
@@ -123,7 +129,8 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
           if (!cropBetween && size > 0) {
             const em = gap / size
             const boundary = CJK.test(prev.ch) !== CJK.test(c.ch)
-            if (spaced || boundary) word = Math.max(word, em)
+            const glue = c.placed && c.run !== prev.run
+            if (spaced || boundary || glue) word = Math.max(word, em)
             else letter = Math.max(letter, em)
           }
         }

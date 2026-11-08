@@ -434,6 +434,16 @@ for (const pair of pairs) {
     }
     out.pages.push(rec)
   }
+  // (today's sentence boxes of each page drawn, read once every page is: a unit's sentences are known once all its pages are told,
+  // as in a reading session; today/entry.mjs litBoxes)
+  for (const rec of out.pages) {
+    if (rec.error || !rec.today?.committed || rec.today.shownOriginal) continue
+    try {
+      rec.today.litBoxes = await tp.evaluate(([k, s]) => globalThis.today.litBoxes(k, s), [rec.page, SCALE])
+    } catch (e) {
+      rec.error = `today's sentence boxes: ${String(e?.message ?? e).slice(0, 280)}`
+    }
+  }
   out.errors = errors
   writeFileSync(join(WORK, 'raw', `${pair}.json`), `${JSON.stringify(out)}\n`)
   console.log(`${pair}: ${out.pages.length} pages in ${((Date.now() - t0) / 1000).toFixed(0)} s; page errors today ${errors.today.length}, v2 ${errors.v2.length}${errors.v2.length ? ` (${errors.v2.slice(0, 2).join(' | ')})` : ''}`)

@@ -5,7 +5,8 @@
 // read as the reader's served.ts reads them; driven page by page by gate-l1.ts's gateL1Pair as lab/typeset/checkpoint/laid.mjs
 // `--entry` drives the checkpoint's (the reading from the part; hook.mjs puts the reader's lay in place of its entry call,
 // items-hook.mjs hands each page over), on whole pages: `<dir>/<pair>.json` holds each page's `Page` whole (its members and
-// its links), the join of each part member to today's unit (today's ord, by content id and rank: the baseline's rule), and
+// its links), the join of each member of those Pages to today's unit (today's ord, by its unit's id and rank: the baseline's
+// rule, join.mjs; never the runner's, whose stops leave a member the entry lays unrecorded), and
 // the facts of the part's members the measures read (kind, the TeX-stated alignment, the lines on A, the style, the text's
 // id) and the page's size ties. Lab-data only: the pages hold licensed papers' text. Heavy: run through heavy-slot.sh test.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -15,7 +16,7 @@ import { join } from 'node:path'
 register('../checkpoint/items-hook.mjs', import.meta.url)
 register('./hook.mjs', import.meta.url)
 const { gateL1Pair } = await import('../../../packages/typeset/tests/replay/gate-l1.ts')
-const { readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
+const { ledger, readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
 const { l1Paper } = await import('../../../packages/typeset/tests/replay/l1.ts')
 const { paperOf } = await import('../../../packages/typeset/tests/replay/today.ts')
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
@@ -23,6 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
+const { todayJoin } = await import('./join.mjs')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -48,10 +50,6 @@ const patterns = (lang) => {
 
 for (const pair of pairs) {
   const t0 = performance.now()
-  const today = {}
-  globalThis.__ckMem = (p, todayOrd, ord, labelDrawn) => {
-    if (p === pair) today[ord] = { today: todayOrd, labelDrawn }
-  }
   const pages = {}
   globalThis.__ckPage = (p, pg, page) => {
     if (p === pair) pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait }
@@ -71,11 +69,12 @@ for (const pair of pairs) {
     classes: () => null,
   })
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
-  globalThis.__ckMem = undefined
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
+  // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs)
+  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units) : {}
   const facts = {}
   for (const [pg, part] of bundle?.parts ?? []) {
     const list = []

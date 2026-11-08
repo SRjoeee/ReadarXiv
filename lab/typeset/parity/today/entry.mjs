@@ -21,6 +21,9 @@ import { indexOf, readHead, readPart, readUnitsChunk } from '@today/layer-proto/
 import { openLayer, PDF_OPTIONS } from '@today/layer-proto/reader.mjs'
 import { pagesOf } from '@today/layout/delta-wire.mjs'
 import { linkLayer } from '@today/view/links.mjs'
+import { createShapes, layerShapes } from '@today/view/shapes.mjs'
+import { unitOf } from '@today/layer-proto/rows.mjs'
+import { plainTranslated } from '@today/translate/mt.mjs'
 import { applyLayerText } from '@today/view/text-rendering.mjs'
 import { linesOfSvg } from '../measure-dom.mjs'
 
@@ -28,6 +31,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/build/pdf.worker.mjs'
 const ASSETS = { cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/' }
 /** the door's scale (reader.mjs SCALE): its SVG's user units a PDF unit, its audit's device pixels a PDF unit (dpr 1) */
 const DOOR = 2.5
+/** the highlight's pad beside a run, CSS px (view/lighting.mjs PAD): its paint's, a point's share of it at the page's scale */
+const PAD = 3
 const bytes = async (url) => {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`${url}: ${r.status}`)
@@ -44,7 +49,14 @@ let layer = null,
   doc = null,
   orig = null,
   target = null,
-  head = null
+  head = null,
+  /** today's highlight shapes of the two panes, made as the reading view makes them (view/layer-side.mjs catchUp); the rows
+   *  by unit (its sentences' offsets, row[4]); the units each page drawn lights (its laid words' spans) */
+  hlLeft = null,
+  hlRight = null,
+  hlRows = null,
+  hlLit = null,
+  hlIndex = null
 const faceSources = faceSourcesOf(INDEX, groupsAt(tableUrlsOf(INDEX)))
 const stage = () => document.getElementById('stage')
 /** a page view's box at a viewport: its CSS px, whole (PDF.js floors them to a multiple of its pixel fraction's denominator, 1
@@ -84,7 +96,15 @@ window.today = {
       leftPart: (_page, ref) => obj(ref),
       onRetired: () => {},
     })
+    // (the highlight's shapes as the reading view makes them: the left's of the parts and each page's left part, the right's of
+    // each laid page's words: view/layer-side.mjs catchUp, leftFor, rLay)
+    hlLeft = createShapes({ kindOf: (id) => index.kinds[id] ?? undefined, warn: () => {} })
+    hlRight = layerShapes(hlLeft)
+    hlLeft.addParts(parts)
+    hlLit = new Map()
+    hlIndex = index
     const rows = await (await fetch(desc.rows)).json()
+    hlRows = new Map(rows.filter((r) => Array.isArray(r) && Number.isInteger(r[0])).map((r) => [r[0], r]))
     layer.take(rows)
     layer.end()
     layer.endParts()
@@ -122,7 +142,7 @@ window.today = {
     // (a page the layer draws nothing of its own on shows arXiv's page: layer-side commit's shownOriginal)
     if (laid.hides === 0) {
       await window.today.original(n, scale)
-      return { page: n, committed: true, shownOriginal: true, view, hides: 0, units: [], figures: [], names: [], crops: [], recs: [], links: 0, linksDrawn: 0, lit: [], original: laid.words.original }
+      return { page: n, committed: true, shownOriginal: true, view, hides: 0, units: [], figures: [], names: [], crops: [], recs: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {}, original: laid.words.original }
     }
     const dpr = window.devicePixelRatio
     const k = scale * dpr
@@ -164,6 +184,11 @@ window.today = {
     const names = linesOfSvg(laid.svg, 'data-n', view, k2)
     const recs = (run?.stats ?? []).filter((r) => (r.pages ?? []).includes(n)).map((r) => ({ id: r.id, s: r.s ?? null, lead: r.lead ?? null }))
     const spans = laid.words.spans.filter(([, ranges]) => ranges.some((v, i) => i % 2 === 1 && v > 0)).map(([id]) => id)
+    // (the page told to the highlight's shapes, as the reading view tells them a page it draws: its left part, its laid words;
+    // its sentence boxes read once every page is drawn, litBoxes)
+    if (!hlLeft.has(n)) hlLeft.addPage(await layer.leftPageOf(n))
+    hlRight.lay(n, laid.words)
+    hlLit.set(n, spans)
     return {
       page: n,
       committed: true,
@@ -180,12 +205,42 @@ window.today = {
       original: laid.words.original,
     }
   },
+  /**
+   * The sentence boxes of each unit page n lights, on both panes, once the pages are drawn (each unit's every page told, as a
+   * reading session tells them): { [id]: { right, left } }, each a list of [x0, y0, x1, y1] in PDF units, y up, the right's on
+   * our page, the left's on arXiv's. Where the unit lights by sentence (view/lighting.mjs startsOf: its starts on both panes,
+   * as many, each pane's shapes holding its words by them; made as view/layer-side.mjs startsFor makes them), every sentence's
+   * rectangles (shapes.sentence), else its runs' blocks (shapes.block: lit whole); as the reader paints them at `scale` CSS px a
+   * point (lighting.mjs paint: padded PAD beside, the rows' half leading above and below their own)
+   */
+  async litBoxes(n, scale) {
+    const out = {}
+    for (const id of hlLit?.get(n) ?? []) {
+      // (its left parts, every page of it: its starts are made once all have come, shapes.mjs starts)
+      for (const p of hlLeft.layout.pagesOf.get(id) ?? []) if (!hlLeft.has(p)) hlLeft.addPage(await layer.leftPageOf(p))
+      const row = hlRows.get(id),
+        u = row?.[4] ? unitOf(hlIndex, row) : null
+      const ls = u?.pieces ? hlLeft.starts(id, u.src, row[4].src) : null
+      const rs = u?.pieces ? hlRight.starts(id, plainTranslated(u.pieces), row[4].tr, ls) : null
+      const by = !!ls && !!rs && ls.length === rs.length && hlLeft.shapes.fits(id, ls, true) === true && hlRight.shapes.fits(id, rs, true) === true
+      const boxesOf = (side, starts) =>
+        side.shapes
+          .runs(id)
+          .filter((r) => r.page === n)
+          .flatMap((r) => (by ? Array.from({ length: starts.length + 1 }, (_, s) => side.shapes.sentence(r, starts, s, PAD / scale)).flat() : [side.shapes.block(r, PAD / scale)]))
+          .map((b) => [b.x0, b.y0, b.x1, b.y1])
+      out[id] = { right: boxesOf(hlRight, rs), left: boxesOf(hlLeft, ls), by }
+    }
+    return out
+  },
   /** the drawing's translated text alone (its copy and links hidden), or the whole of it again */
   textOnly(on) {
     document.documentElement.toggleAttribute('data-parity-text', on)
     return true
   },
   dispose() {
+    hlRight?.dispose()
+    hlLeft = hlRight = hlRows = hlLit = hlIndex = null
     layer?.dispose()
     layer = null
     // (the composed document is the layer's to let go; arXiv's own is ours)

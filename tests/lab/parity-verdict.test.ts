@@ -14,7 +14,7 @@ const N = 3
 const rec = (o: { today?: object; v2?: object; original?: number } = {}) => ({
   page: N,
   original: { links: o.original ?? 0 },
-  today: { units: [], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], ...o.today },
+  today: { units: [], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {}, ...o.today },
   v2: { committed: true, units: [], crops: [], links: 0, linksDrawn: 0, lit: [], ...o.v2 },
   px: {},
 })
@@ -25,8 +25,17 @@ const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; toda
   today: o.today ?? {},
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
-const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = []) =>
-  measurePage('p-zh', v2, r, { prepByOrd: new Map(prep.map((u) => [u.ord, u])), todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])), turned: new Set() })
+/** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
+ *  member a bound name leads: measure.mjs reads them off the part); `top`: the part's title and front matter (Placed.title,
+ *  Placed.front) */
+const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = [], led: Record<number, number> = {}, top: number[] = []) =>
+  measurePage('p-zh', v2, r, {
+    prepByOrd: new Map(prep.map((u) => [u.ord, u])),
+    todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
+    turned: new Set(),
+    led: new Map(Object.entries(led).map(([f, h]) => [Number(f), h])),
+    top: new Set(top),
+  })
 const worse = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.worse).map((d) => d.flag)
 
 describe('a page measured from what each side drew', () => {
@@ -60,6 +69,8 @@ describe('a page measured from what each side drew', () => {
   })
   it('a page either side did not draw is an error, not a page judged', () => {
     expect(measure(v2Of(), { ...rec(), error: 'screenshot failed' } as never).error).toBe('screenshot failed')
+    // (a drawing of before today's sentence boxes were read: today's highlight cannot be judged on its cover)
+    expect(measure(v2Of(), rec({ today: { lit: [7], litBoxes: undefined } })).error).toMatch(/sentence boxes not read/)
     expect(measure(v2Of(), rec({ today: { error: 'lay threw' } })).error).toBe("today's page not laid: lay threw")
     const { v2: _gone, ...noV2 } = rec()
     expect(measure(v2Of(), noV2 as never).error).toBe("v2's side not drawn")
@@ -114,10 +125,12 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
   describe('a unit both sides draw', () => {
     const v2 = (lit: object = {}) =>
       v2Of({ members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }], facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 400)] }], today: { 11: { today: 7 } } })
-    const page = (todayLit: number[], v2Lit: number[]) => rec({ today: { units: [{ id: 7, lines: [line(400)] }], lit: todayLit }, v2: { units: [{ id: 11, lines: [line(400)] }], lit: v2Lit } })
+    // (today's sentence boxes as its page painted them, by its unit: render.mjs reads them off today's own shapes)
+    const todayBoxes = { 7: { right: [[71, 397, 301, 409]], left: [[71, 397, 301, 409]] } }
+    const page = (todayLit: number[], v2Lit: number[]) => rec({ today: { units: [{ id: 7, lines: [line(400)] }], lit: todayLit, litBoxes: todayBoxes }, v2: { units: [{ id: 11, lines: [line(400)] }], lit: v2Lit } })
     const its = { right: [[[71, 397, 301, 409]]], left: [[[71, 397, 301, 409]]] }
     it('today highlights it, v2 does not: worse (the highlight is a feature of today\'s there)', () => {
-      expect(highlights(measure(v2(), page([7], [])))).toMatchObject([{ unit: null, worse: true }])
+      expect(highlights(measure(v2(), page([7], [])))).toMatchObject([{ unit: 't7 para', worse: true }])
       expect(highlights(measure(v2(its), page([7], [11])))).toEqual([])
     })
     it('today does not highlight it: v2 none is equal, v2 covering it better, v2 missing it worse', () => {
@@ -125,6 +138,78 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(measure(v2(its), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: false, nearer: 'v2' }])
       expect(highlights(measure(v2({ right: [[[71, 397, 150, 409]]], left: its.left }), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: true }])
     })
+  })
+})
+
+describe("a unit both sides draw that today highlights: judged on the lines each side's sentence boxes leave uncovered", () => {
+  // (1810.04805 p8 t140's geometry: 13 drawn lines at 10.91 pt on 72–290.3, five of them reaching 295.7 and the fourth ending
+  // at 126.5, a crop's ink past the text; v2's one sentence's boxes end at 290.3 and 121.1, so 6 of the 13 drawn lines stand
+  // past them; its 18 original lines on A, which v2's boxes cover on the left)
+  const ys = [523.5, 505.1, 486.6, 468.2, 438.2, 419.8, 401.4, 383, 364.5, 346.1, 327.7, 309.2, 290.8]
+  const ends = [290.3, 290.3, 290.2, 126.5, 295.7, 272, 290.3, 295.7, 290.3, 295.7, 290.3, 290.3, 295.6]
+  const boxEnds = [290.3, 290.3, 290.3, 121.1, 290.3, 266.6, 290.3, 290.3, 290.3, 290.3, 290.3, 290.3, 290.2]
+  const drawn = ys.map((y, i) => drawnLine(72, ends[i]!, y, 'x'.repeat(20), 10.91))
+  const orig = Array.from({ length: 18 }, (_, i) => factLine(72, 290, 700 - 12 * i, 10))
+  const leftAll = [[71, 480, 291, 710]]
+  const box = (x1: number, y: number) => [72, y - 1.3, x1, y + 9.6]
+  const v2Boxes = (x1s: number[]) => ({ right: [ys.map((y, i) => box(x1s[i]!, y))], left: [leftAll] })
+  const v2 = (lit: object) =>
+    v2Of({ members: [{ ord: 140, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }], facts: [{ ord: 140, kind: 'para', align: 'j', style: { size: 10 }, lines: orig }], today: { 140: { today: 140 } } })
+  const page = (f: ReturnType<typeof v2Of>, todayRight: number[][]) =>
+    measure(f, rec({ today: { units: [{ id: 140, lines: drawn }], lit: [140], litBoxes: { 140: { right: todayRight, left: leftAll } } }, v2: { units: [{ id: 140, lines: drawn }], lit: [140] } }))
+  const highlights = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'highlight')
+  const todayCovers = ys.map((y, i) => box(ends[i]! + 2.25, y))
+
+  it('v2 leaving 6 of 13 drawn lines uncovered where today covers them all is worse', () => {
+    expect(highlights(page(v2(v2Boxes(boxEnds)), todayCovers))).toMatchObject([
+      { unit: 't140 para', worse: true, v2: { value: '6 of 13 drawn, 0 of 18 original lines not covered' }, today: { value: '0 of 13 drawn, 0 of 18 original lines not covered' } },
+    ])
+  })
+  it("today's own misses are not held against v2: as many lines uncovered on each side is no difference", () => {
+    expect(highlights(page(v2(v2Boxes(boxEnds)), ys.map((y, i) => box(boxEnds[i]!, y))))).toEqual([])
+  })
+  it('v2 covering lines today leaves uncovered is nearer, never worse', () => {
+    expect(highlights(page(v2(v2Boxes(ends.map((x) => x + 2.25))), ys.map((y, i) => box(boxEnds[i]!, y))))).toMatchObject([{ unit: 't140 para', worse: false, nearer: 'v2' }])
+  })
+  it('v2 with no sentence boxes leaves every line uncovered: worse', () => {
+    expect(highlights(page(v2({}), todayCovers))).toMatchObject([{ unit: 't140 para', worse: true, v2: { value: '13 of 13 drawn, 18 of 18 original lines not covered' } }])
+  })
+})
+
+describe('the highlight judged as the reader sees it: ink is ink, boxes as painted', () => {
+  // (a unit both sides draw that today highlights, today's boxes covering it as its reader paints them; v2's Laid.lit box given
+  // per test, which the measure paints as v2's reader does: 3 CSS px beside (2.25 pt at the parity's scale), half the page's
+  // leading above and below)
+  const at = (y: number, x1: number, text: string) => drawnLine(72, x1, y, text)
+  const v2 = (boxes: number[][], ys: number[]) =>
+    v2Of({
+      members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [ys.map((y) => [71, y - 3, 301, y + 9])], right: [boxes], own: [] } }],
+      facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)) }],
+      today: { 11: { today: 7 } },
+    })
+  const page = (f: ReturnType<typeof v2Of>, lines: Line[]) =>
+    measure(
+      f,
+      rec({
+        today: { units: [{ id: 7, lines }], lit: [7], litBoxes: { 7: { right: lines.map((l) => [69, l.y - 4, 305, l.y + 10]), left: lines.map((l) => [69, l.y - 4, 305, l.y + 10]) } } },
+        v2: { units: [{ id: 11, lines }], lit: [11] },
+      }),
+    )
+  const highlights = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.flag === 'highlight')
+
+  it("a line ending in a CJK full stop, its box stopping at the mark's ink (the advance's first half), is covered", () => {
+    // (the line drawn to 300, the full stop's advance 290-300 at 10 pt, its ink in 290-295: v2's box ends at 295)
+    expect(highlights(page(v2([[71, 397, 295, 409]], [400]), [at(400, 300, `${'x'.repeat(20)}\u3002`)]))).toEqual([])
+  })
+  it('a box short of a line by less than the paint beside it is covered; by more, not', () => {
+    expect(highlights(page(v2([[71, 397, 298, 409]], [400]), [at(400, 300, 'x'.repeat(20))]))).toEqual([])
+    expect(highlights(page(v2([[71, 397, 295, 409]], [400]), [at(400, 300, 'x'.repeat(20))]))).toMatchObject([{ worse: true, v2: { value: '1 of 1 drawn, 0 of 1 original lines not covered' } }])
+  })
+  it("a box short of a line's band by less than half the page's leading is covered", () => {
+    // (two lines 12 pt apart, their boxes 8 pt high: a gap of 4 between the rows, half the leading 2 above and below; each
+    // box 0.5 pt above its line's band, which the half leading covers)
+    const ys = [400, 388]
+    expect(highlights(page(v2(ys.map((y) => [71, y - 0.5, 301, y + 7.5]), ys), ys.map((y) => at(y, 300, 'x'.repeat(20)))))).toEqual([])
   })
 })
 
@@ -154,6 +239,39 @@ describe("a label in a translated unit: today's relabelled against v2's kept as 
   })
   it('v2 relabels a label today keeps: never judged worse', () => {
     expect(labels(page(kept, relabelled))).toEqual([])
+  })
+})
+
+describe("a label read from the drawn text: drawn anew where the first line opens with a word and the label's number", () => {
+  // (2610.30034's centred "Lemma 3 (": the label's ink 58.92–103.52, its name word to 88.25, the head's text after it to 244.25,
+  // TeX's alignment centred; today draws the relabelled head from the label's start, v2 centres it, its first line starting
+  // past the name's end)
+  const lemma = { ink: [N, 58.92, 204.55, 103.52, 213.09, 206.36], kind: 'head', name: ['Lemma', [N, 58.92, 206.25, 88.25, 212.86, 206.36]], num: ['3', [N, 91.74, 206.29, 96.72, 213.09, 206.36]], punct: ['(', [N, 100.21, 204.55, 103.52, 213.02, 206.36]] }
+  // (a caption "Fig. 4." whose number the part states with the abbreviation's stop, ".4": its name word to 59.6, its ink to 69.9)
+  const fig = { ink: [N, 49, 600, 69.9, 607, 601], kind: 'caption', name: ['Fig', [N, 49, 600, 59.6, 607, 601]], num: ['.4', [N, 61, 600, 69.9, 607, 601]] }
+  const v2 = (ord: number, kind: string, align: string, label: object, x0: number, y: number) =>
+    v2Of({ members: [{ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }], facts: [{ ord, kind, align, style: { size: 10 }, label, lines: [factLine(x0, 244.25, y)] }], today: { [ord]: { today: ord } } })
+  const page = (f: ReturnType<typeof v2Of>, ord: number, t: Line, v: Line) =>
+    measure(f, rec({ today: { units: [{ id: ord, lines: [t] }], lit: [ord] }, v2: { units: [{ id: ord, lines: [v] }] } }))
+  const labels = (p: { diffs: { flag: string; v2: { value: unknown } }[] }) => p.diffs.filter((d) => d.flag === 'shown' && d.v2.value === 'label')
+
+  it("a centred head v2 relabels, its line starting past the name's end, is relabelled, not kept", () => {
+    const head = v2(81, 'heading', 'c', lemma, 103.52, 206.36)
+    const today = drawnLine(58.24, 171.83, 206.36, 'Hilfssatz 3 (Zerlegung): ')
+    const centred = drawnLine(94.51, 208.04, 206.36, 'Hilfssatz 3 (Zerlegung): ')
+    expect(labels(page(head, 81, today, centred))).toEqual([])
+  })
+  it('a caption v2 keeps "Fig. 4." for, its line holding no label, is still a label kept', () => {
+    const cap = v2(94, 'caption', 'j', fig, 69.9, 601)
+    const today = drawnLine(49, 240, 601, 'Abb. 4. Ein Vergleich der Budgets')
+    const kept = drawnLine(74.5, 240, 601, 'Ein Vergleich der Budgets')
+    expect(labels(page(cap, 94, today, kept))).toMatchObject([{ unit: 't94 caption', worse: true }])
+  })
+  it("a kept label whose text opens with the label's number is no label drawn anew", () => {
+    const head = v2(81, 'heading', 'c', lemma, 103.52, 206.36)
+    const today = drawnLine(58.24, 171.83, 206.36, 'Hilfssatz 3 (3 Schritte): ')
+    const kept = drawnLine(104, 208.04, 206.36, '3 Schritte): ')
+    expect(labels(page(head, 81, today, kept))).toMatchObject([{ unit: 't81 heading', worse: true }])
   })
 })
 
@@ -189,6 +307,88 @@ describe("a size tie (one paragraph's text is even) judged as one paragraph", ()
   })
   it('members no tie holds are judged one by one, as before', () => {
     expect(sizes(page([9, 10], [9, 9]))).toMatchObject([{ unit: 't59 para', worse: true }])
+  })
+})
+
+describe('gap: a follower the part states as run in after its leader, nothing else set on one line', () => {
+  const gaps = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'gap')
+  const laid = (ords: number[]) => ords.map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }))
+  // (two units on one line in one measure: e-mail addresses in two author columns, 2610.21313 p1; or a run-in head and its
+  // paragraph)
+  const pair = (kinds: [string, string]) =>
+    v2Of({
+      members: laid([10, 11]),
+      facts: [
+        { ord: 10, kind: kinds[0], align: 'l', style: { size: 10 }, lines: [factLine(72, 150, 700)] },
+        { ord: 11, kind: kinds[1], align: 'l', style: { size: 10 }, lines: [factLine(160, 250, 700)] },
+      ],
+      today: { 10: { today: 10 }, 11: { today: 11 } },
+    })
+  const page = (f: ReturnType<typeof v2Of>, todayAt: number, v2At: number, led: Record<number, number> = {}) =>
+    measure(
+      f,
+      rec({
+        today: { units: [{ id: 10, lines: [drawnLine(72, 150, 700, 'x'.repeat(12))] }, { id: 11, lines: [drawnLine(todayAt, todayAt + 90, 700, 'x'.repeat(12))] }] },
+        v2: { units: [{ id: 10, lines: [drawnLine(72, 150, 700, 'x'.repeat(12))] }, { id: 11, lines: [drawnLine(v2At, v2At + 90, 700, 'x'.repeat(12))] }] },
+      }),
+      [],
+      led,
+    )
+
+  it('two units the part joins in no flow are no run-in: judged by their alignment, not by a gap', () => {
+    const p = page(pair(['author', 'author']), 156.2, 160)
+    expect(gaps(p)).toEqual([])
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'align')).toMatchObject([{ unit: 't11 author', nearer: 'v2' }])
+  })
+  it('a follower the part joins to its leader is judged by its gap', () => {
+    expect(gaps(page(pair(['heading', 'para']), 160, 152, { 11: 10 }))).toMatchObject([{ unit: 't11 para after t10 heading', worse: true }])
+  })
+  it("a bound name v2 lays as its follower's lead (drawn in the follower's own line) has no gap of v2's to judge", () => {
+    // (2608.16117 p37: the name "Appendix" 79.4–136.8 bound to the heading after it, 161.4–442.2; today keeps the name the
+    // original's and draws the heading from 161.42; v2 draws "Anhang C. Einaxiale …" from 79.37, the name its lead)
+    const f = v2Of({
+      members: laid([236, 108]),
+      facts: [
+        { ord: 236, kind: 'name', align: 'j', style: { size: 11.96 }, lines: [factLine(79.4, 136.8, 739.5, 11.96)] },
+        { ord: 108, kind: 'heading', align: 'j', style: { size: 11.96, bold: 1 }, lines: [factLine(161.4, 442.2, 739.5, 11.96)] },
+      ],
+      today: { 108: { today: 108 } },
+    })
+    const p = measure(
+      f,
+      rec({
+        today: { units: [{ id: 108, lines: [drawnLine(161.42, 511.47, 739.48, 'Einaxiale Zugkraft', 11.96)] }] },
+        v2: { units: [{ id: 108, lines: [drawnLine(79.37, 501.19, 739.48, 'AnhangC.Einaxiale Zugkraft', 11.96)] }] },
+      }),
+      [],
+      { 108: 236 },
+    )
+    expect(gaps(p)).toEqual([])
+  })
+})
+
+describe("anchor: a section heading set in fewer lines than the original's stands on its last lines", () => {
+  // (1810.04805 p16 t265: a heading of two lines on A, 393.01 and 379.47 at 10.91 pt, each side's one line: today's 8.63 over
+  // the first, v2's on the last (X.lastLines, the owner's ruling of 2026-10-19))
+  const head = v2Of({
+    members: [{ ord: 265, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 265, kind: 'heading', align: 'l', style: { size: 10.91 }, lines: [factLine(72, 300, 393.01, 10.91), factLine(72, 200, 379.47, 10.91)] }],
+    today: { 265: { today: 265 } },
+  })
+  const page = (t: Line[], v: Line[], top: number[] = []) =>
+    measure(head, rec({ today: { units: [{ id: 265, lines: t }] }, v2: { units: [{ id: 265, lines: v }] } }), [], {}, top)
+  const anchors = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'anchor')
+  const one = (y: number) => [drawnLine(72, 250, y, 'x'.repeat(20), 10.91)]
+
+  it("its last line against the original's last: v2 on it is nearer than today 8.63 over the first", () => {
+    expect(anchors(page(one(401.64), one(379.47)))).toMatchObject([{ unit: 't265 heading', worse: false, nearer: 'v2' }])
+  })
+  it('the title and the front matter stay anchored at their first line', () => {
+    expect(anchors(page(one(401.64), one(379.47), [265]))).toMatchObject([{ unit: 't265 heading', worse: true }])
+  })
+  it("a heading set in as many lines as the original's is read at its first line", () => {
+    const two = (y: number) => [drawnLine(72, 250, y, 'x'.repeat(20), 10.91), drawnLine(72, 200, y - 13.54, 'x'.repeat(10), 10.91)]
+    expect(anchors(page(two(393.01), two(379.47)))).toMatchObject([{ unit: 't265 heading', worse: true }])
   })
 })
 
