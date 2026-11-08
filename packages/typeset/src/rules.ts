@@ -772,10 +772,11 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
     file: 'shared/fill-page.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400)",
       replay:
-        "every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2)",
-      cases: 3013,
+        'every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways',
+      cases: 344,
     },
   },
   {

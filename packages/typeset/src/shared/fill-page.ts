@@ -293,7 +293,7 @@ export function fillPage(
     f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
-  // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
+  // set whole, a step up at a time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
   // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
   // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
   // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
@@ -321,16 +321,17 @@ export function fillPage(
       }
       return ls
     }
+    // (a step at a time from the original's size, the first a unit no longer holds ending it: a page that grows not at all,
+    // most pages that try, is tried once, where today's halving tried twice (the 22 parity pairs, 2026-11-08: growth's lays
+    // 223 of 89,431 halving, 153 so; every page's size the same). Changed from today's, the owner's word of 2026-11-08:
+    // today's effect, by the simplest search and the fewest lays)
     let ok = 0,
-      no = Math.round((size - 1) / P.step) + 1,
       best: (Layout | null)[] | null = null
-    while (no - ok > 1) {
-      const k = (ok + no) >> 1,
-        ls = all(k)
-      if (ls) {
-        ok = k
-        best = ls
-      } else no = k
+    for (let k = 1, top = Math.round((size - 1) / P.step); k <= top; k++) {
+      const ls = all(k)
+      if (!ls) break
+      ok = k
+      best = ls
     }
     if (ok && best)
       grown.forEach((f, i) => {

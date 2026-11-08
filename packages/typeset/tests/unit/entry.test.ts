@@ -363,6 +363,36 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.state).toBe('laid')
     expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
   })
+  it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
+    // (the page fill's one size, today's effect (the owner, 2026-11-08: "效果看起来跟主站差不多就行"), found with the fewest lays:
+    // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph
+    // of two lines at the original's pitch is short of its frame; with room on its lines it grows (to 1.075), and filling them it
+    // holds no step: tried at the first alone, whatever the cap (each try lays it: its lines' extents read, Metrics.ink, once
+    // each). Today's halving tried 1.05 and then 1.025)
+    const de = rulesFor('de')
+    const grown = (x1: number, cap: number) => {
+      let reads = 0
+      const counted: Metrics = { ...metrics(), ink: () => (reads++, [0.7, 0.2, 0]) }
+      const m = member({
+        lines: [
+          [1, 0, 72, x1, 700, 707, 698, 72, x1, 0, 10],
+          [1, 0, 72, x1, 688, 695, 686, 72, x1, 0, 10],
+        ],
+        room: { below: 200, next: 212 },
+      })
+      const R = {
+        ...de,
+        set: { ...de.set, adaptiveFill: { ...(de.set.adaptiveFill as object), size: cap } },
+      } as unknown as typeof de
+      const [laid] = layPage(part(m), rowsOf([row([{ t: 'text', s: 'wort '.repeat(18).trim() }])]), R, counted).members
+      return { size: laid!.fit!.size, reads }
+    }
+    expect(grown(300, 1.1).size).toBe(10.75)
+    const [none, one, all] = [grown(286, 1), grown(286, 1.025), grown(286, 1.1)]
+    expect([none.size, one.size, all.size]).toEqual([10, 10, 10])
+    expect(one.reads).toBeGreaterThan(none.reads)
+    expect(all.reads).toBe(one.reads)
+  })
   it('keeps a page number’s size and its end: a foot line set flush right grows leftwards into its free row', () => {
     // (the owner's ruling of 2026-11-08: 2609.36054v2's "page 13 of 14" at the text block's right edge (548.28) was laid from the
     // original's start and shrunk to 0.825 of its size; its translation keeps the original's size and ends where it ends)
