@@ -24,7 +24,7 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
-import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
+import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
@@ -913,10 +913,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
-      if (p.kind === 'url' && ink.length === 1) {
-        const breaks = urlBreaks(gl.map(gA))
-        if (breaks.length) el.breaks = breaks
-      }
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
       // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
@@ -939,6 +935,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
         const runs = fillRunsOf(gl.map(gA), lineEnds)
         if (runs) el.fills = runs
+      }
+      // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
+      // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
+      // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
+      // of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630. Where TeX set it on one line,
+      // where its url package lets TeX break it, counted in that text (urlBreaks))
+      if (p.kind === 'url' && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
+      if (p.kind === 'url' && ink.length === 1) {
+        const breaks = urlBreaks(gl.map(gA), el.copy ?? classOf.get(id)?.copy ?? '')
+        if (breaks.length) el.breaks = breaks
       }
       // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
       // text the unit's own text glyphs between its two points on B, as today's reader finds its rendering among the unit's
@@ -1289,29 +1295,38 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
 /** the characters after which TeX's url package may break a URL (url.sty's \UrlBreaks and \UrlBigBreaks; a hyphen only under
  *  its `hyphens` option) */
 const URL_BREAKS = new Set(".@\\/!_|;>]),?&'+=#:")
-/** a glyph's share of a URL's copy text (the source's, which TeX's url package sets character by character), in UTF-16 code
- *  units, the unit the typesetter slices that text in: a ligature its letters (ﬁ, ﬄ: NFKC), whether PDF.js gives it as one
- *  character or as its letters; a character past the Basic Multilingual Plane its two */
-const copyUnitsOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normalize('NFKC')).length
+/** a glyph's text as a copy text may hold it: as PDF.js gives it, or a ligature as its letters (ﬁ, ﬄ: NFKC) */
+const lettersOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normalize('NFKC'))
 /**
  * Where a URL TeX set on one line may break (El.breaks): after a run of url.sty's break characters, never inside one (a
  * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle of the paper between the run's
- * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text stands
- * before it (UTF-16 code units, copyUnitsOf: a glyph's count would misplace every cut after an astral character or a
- * ligature). Its glyphs in their order on the line
+ * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text `copy`
+ * stands before it, in UTF-16 code units, the unit the typesetter slices it in: read off the text itself, each glyph found in
+ * it in turn, so that a space it holds between two glyphs (urlCopyOf's, where they stand apart on a line), an astral
+ * character's two units and a ligature's letters are counted as the text has them (a count of the glyphs misplaced every cut after any of them,
+ * Devin on #630). None where the glyphs are not that text: a cut there would fall elsewhere than after a break. Its glyphs in
+ * their order on the line
  */
-export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
+export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, number][] {
   const line = gs.filter((g) => /\S/.test(g.u)).sort((a, b) => a.x0 - b.x0)
+  // (the copy's code units through each glyph)
+  const ends: number[] = []
+  let at = 0
+  for (const g of line) {
+    while (at < copy.length && /\s/.test(copy[at]!)) at++
+    const u = copy.startsWith(g.u, at) ? g.u : lettersOf(g.u)
+    if (!copy.startsWith(u, at)) return []
+    at += u.length
+    ends.push(at)
+  }
   const out: [number, number][] = []
-  let units = 0
   for (let k = 1; k < line.length; k++) {
     const a = line[k - 1]!,
       b = line[k]!
-    units += copyUnitsOf(a.u)
     if (!URL_BREAKS.has(a.u) || URL_BREAKS.has(b.u)) continue
     const right = a.ix1 > a.ix0 ? a.ix1 : a.x1,
       left = b.ix1 > b.ix0 ? b.ix0 : b.x0
-    out.push([r2((right + left) / 2), units])
+    out.push([r2((right + left) / 2), ends[k - 1]!])
   }
   return out
 }
