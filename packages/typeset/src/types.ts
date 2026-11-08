@@ -158,8 +158,10 @@ export type Laid = {
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
-  /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][] }
+  /** per sentence, on A (left) and as drawn (right); `own`: its kept ink, the same boxes on both panes; `dir` where the member is
+   *  set along a direction (a figure text the original sets turned, Placed.dir): every box of it is in its run's frame, [s0, t0,
+   *  s1, t1] along `dir` and across it (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text */
+  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][]; dir?: [ux: number, uy: number] }
 }
 
 /** a page, laid or waiting (design-a §1.2); `ledger` where the call asked for a trace (design-b §1.7) */

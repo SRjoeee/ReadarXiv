@@ -72,6 +72,9 @@ export type AdaptInput = {
   /** for a part made before (no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911: a rectangle's bottom
    *  and 0.24 of its height, the lowest of the page's units'): no unit borrows below it; undefined where the page has none */
   bottomOf?: (page: number) => number | undefined
+  /** the middle of the free paper it shares on its baseline with a member that may widen into it too, left and right
+   *  (sharedPaper; NaN where it shares none) */
+  shared?: readonly [number, number]
 }
 export type Adapted = { member: FlowMember } | { stop: string }
 
@@ -90,7 +93,8 @@ export const rectOf = (l: Line, m: Placed): Rect => [
   r2(l[3]),
   r2(l[4] + ABOVE * sizeOf(l, m)),
 ]
-/** the label as U.decor reads it: its parts' ink as its characters */
+/** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (today's
+ *  decor read every glyph of the label: a bracket before its name, "(a)", no part names, is its ink's all the same) */
 function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNullable<DecorLabel['chars']> }) | null {
   const lb = m.label
   if (!lb) return null
@@ -104,12 +108,56 @@ function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNul
     yb: ink[5]!,
     size,
   }))
+  const onInk = chars.filter((c) => c.page === lb.ink[0])
+  if (onInk.length) {
+    const first = onInk.reduce((a, c) => (c.x0 < a.x0 ? c : a)),
+      last = onInk.reduce((a, c) => (c.x1 > a.x1 ? c : a))
+    first.x0 = Math.min(first.x0, lb.ink[1])
+    last.x1 = Math.max(last.x1, lb.ink[3])
+  }
   return {
     x1: Math.max(...chars.map((c) => c.x1)),
     text: parts.map(([t]) => t).join(''),
     chars,
     ...(drawn !== null ? { drawn } : {}),
   }
+}
+
+/**
+ * The free paper two members share on one baseline (two cells of a table's row): where a line's Room.side stops at another
+ * member's ink on its baseline (within 0.4 of the smaller size) and that one's stops at its own, both may widen into the paper
+ * between, and each takes its half: today's paperTo widened a cell half way to another unit's text (RUN:1717), as today's
+ * figure reading shares the line between two figure texts (figure-text.mjs: half the line to another unit's band, the other
+ * half that unit's). Not between a member and the one it shares a row with (Placed.join, a name's bound member: set as one
+ * row). By ord, [left, right] the middle of the paper on each side, NaN where it shares none
+ */
+export function sharedPaper(flows: readonly (readonly Placed[])[], page: number): Map<number, [number, number]> {
+  const rowOf = new Set<string>()
+  for (const flow of flows)
+    for (let k = 1; k < flow.length; k++)
+      if (flow[k]!.join || flow[k - 1]!.bound) rowOf.add(`${flow[k - 1]!.ord}|${flow[k]!.ord}`)
+  const ls = flows
+    .flat()
+    .flatMap((m) =>
+      m.kind === 'figure' || !m.room.side
+        ? []
+        : m.lines.filter((l) => l[0] === page && !(l[9] & KEPT)).map((l) => ({ m, l, side: m.room.side! })),
+    )
+  const out = new Map<number, [number, number]>()
+  const at = (ord: number) => out.get(ord) ?? out.set(ord, [Number.NaN, Number.NaN]).get(ord)!
+  for (const a of ls)
+    for (const b of ls) {
+      if (a.m === b.m || a.l[3] > b.l[2] + 0.01) continue
+      if (Math.abs(a.l[4] - b.l[4]) >= 0.4 * Math.min(sizeOf(a.l, a.m), sizeOf(b.l, b.m))) continue
+      if (Math.abs(a.side[1] - b.l[2]) > 0.02 || Math.abs(b.side[0] - a.l[3]) > 0.02) continue
+      if (rowOf.has(`${a.m.ord}|${b.m.ord}`) || rowOf.has(`${b.m.ord}|${a.m.ord}`)) continue
+      const mid = (a.l[3] + b.l[2]) / 2
+      const A = at(a.m.ord),
+        B = at(b.m.ord)
+      A[1] = Number.isFinite(A[1]) ? Math.min(A[1], mid) : mid
+      B[0] = Number.isFinite(B[0]) ? Math.max(B[0], mid) : mid
+    }
+  return out
 }
 
 /** U.blocks, U.decor and U.params over a member's stated facts; with the rows it shares in its flow */
@@ -265,10 +313,13 @@ export function adapt(i: AdaptInput): Adapted {
     // (no side stated: a member across columns, whose lines' sides the one interval cannot hold; its line runs to its column)
     if (!side) return { column: [l[7], l[8]], left: [], right: [] }
     const half = 0.5 * (b.sizes?.[0] ?? m.style.size)
+    // (the paper it shares with a member beside it: its half, as today's paperTo widened a cell half way to another unit's text
+    // (RUN:1717))
+    const [sl, sr] = i.shared ?? [Number.NaN, Number.NaN]
     return {
       column: [l[7], l[8]],
-      left: side[0] > l[7] + 0.01 ? [side[0] + half] : [],
-      right: side[1] < l[8] - 0.01 ? [side[1] - half] : [],
+      left: [...(side[0] > l[7] + 0.01 ? [side[0] + half] : []), ...(Number.isFinite(sl) ? [sl] : [])],
+      right: [...(side[1] < l[8] - 0.01 ? [side[1] - half] : []), ...(Number.isFinite(sr) ? [sr] : [])],
     }
   }
   const firstX0 = m.label ? lines[0]![2] : undefined

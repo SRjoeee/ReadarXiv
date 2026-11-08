@@ -90,6 +90,34 @@ describe('adapt: a member set from its part’s facts', () => {
     if (!('member' in got)) throw new Error(got.stop)
     expect([got.member.blocks[0]!.x0, got.member.blocks[0]!.x1]).toEqual([72, 228])
   })
+  it('carries a label with the whole of its ink, a bracket no part names too, and centres the line with it', () => {
+    // (2608.16117v1-de p18 t52: a centred caption "(a) Spannungs-…", its label's ink from its "(" at 184.85, its name "a" from
+    // 188.14: read from its parts alone, its crop began at the "a" and the "(" was drawn nowhere, its line centred 1.65 pt off
+    // the original's midpoint (2610.21880v1 p4 t84, "(b)", 1.3 pt))
+    const caption = member({
+      kind: 'caption',
+      align: 'c',
+      lines: [[1, 0, 118, 200, 700, 707, 698, 72, 300, 0]],
+      room: { below: 20 },
+      label: {
+        kind: 'float',
+        ink: [1, 100, 698, 115, 707, 700],
+        style: { role: 'serif', size: 10 },
+        line: 0,
+        name: ['a', [1, 104, 698, 110, 707, 700]],
+        punct: [')', [1, 110, 698, 115, 707, 700]],
+      },
+    })
+    const got = adapt(input(caption, { reading: { ...input(caption).reading, own: true } }))
+    if (!('member' in got)) throw new Error(got.stop)
+    const crop = (got.member.tokens[0] as unknown as { crop: { crop: number[] } }).crop.crop
+    // (its ink from its "(" to its text's start, 0.4 either side as today's)
+    expect(crop[0]).toBeCloseTo(99.6, 6)
+    expect(crop[2]).toBeCloseTo(117.6, 6)
+    // (the line it is centred on: the original's own midpoint, its label with it, 100 to 200, widened about it to its measure)
+    const b = got.member.blocks[0]!
+    expect((b.x0 + b.x1) / 2).toBe(150)
+  })
   it('shares its last row with the member after it, and starts on the one before', () => {
     const after = member({ ord: 4, lines: [line(676, 300)], join: [4] })
     const got = adapt(input(member(), { after, afterOpen: true }))

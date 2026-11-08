@@ -58,8 +58,10 @@ export interface Laid {
   /** laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]
-  /** per sentence (one entry: the member lights whole), on A (left) and as drawn (right); `own`: its kept ink */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][] }
+  /** per sentence (one entry: the member lights whole), on A (left) and as drawn (right); `own`: its kept ink; `dir` a member
+   *  set along a direction (a turned figure text): its boxes in its run's frame, [s0, t0, s1, t1] along `dir` and across it
+   *  (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text */
+  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][]; dir?: [ux: number, uy: number] }
 }
 
 export interface Page {

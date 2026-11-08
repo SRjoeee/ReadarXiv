@@ -662,6 +662,87 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(sizeOf({ below: 0, band: [697.9, 708.8] })).toBeLessThan(10)
     expect(sizeOf({ below: 0, band: [697.9, 708.8], bandOpen: 1 })).toBe(10)
   })
+  it('splits the free paper two cells share on one baseline at its middle: neither widens over the other', () => {
+    // (1706.03762v7-zh p9 t123/t124, "(dev)" under "PPL" and under "BLEU": each cell's Room.side runs to the other's ink, so
+    // each widened into the whole gap between them and both translations were drawn over each other, 13.3 × 7.72 pt. The
+    // paper two members may both take is each one's half, as today's figure reading shares it between two figure texts)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      ord: 0,
+      kind: 'cell',
+      align: 'l',
+      lines: [[1, 0, 100, 120, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [72, 160] },
+    })
+    const b = member({
+      ord: 1,
+      kind: 'cell',
+      align: 'c',
+      text: idB,
+      lines: [[1, 0, 160, 180, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [120, 300] },
+    })
+    const pt: Part = { ...part(a), flows: [[a], [b]] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: 'Entwicklung' }]),
+      { ...row([{ t: 'text', s: 'Entwicklung' }]), id: idB },
+    ])
+    const [la, lb] = layPage(pt, rows, rules, metrics()).members
+    expect([la!.state, lb!.state]).toEqual(['laid', 'laid'])
+    const [, , ax1] = la!.lines[0]!,
+      [, bx0] = lb!.lines[0]!
+    // (the gap 120-160, its middle 140: each widened to it at most, half way, as today's paperTo)
+    expect(ax1).toBeLessThanOrEqual(140 + 1e-9)
+    expect(bx0).toBeGreaterThanOrEqual(140 - 1e-9)
+    expect(ax1).toBeGreaterThan(137.5)
+  })
+  it('keeps italic a unit a declaration at its start sets italic: its style is the state after it, not one to toggle', () => {
+    // (2608.25210v2-zh p4 t72-t75, cells "{\em response_equality_human}": the part states the cell's style italic (A's glyphs),
+    // and its row's \em toggled that base to upright: italic share 0 where today's 0.73-0.78. Today's base was its glyphs'
+    // outside its styled pieces (measuredOf); v2's, its style less what its own groups and declarations set)
+    const m = member({
+      kind: 'cell',
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-ReguItal', slant: 1 },
+      lines: [[1, 0, 72, 140, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300 },
+      els: [['3', { bare: 1, cmd: 'em', kind: 'zero', ink: [] }]],
+    })
+    const r = row([
+      { t: 'el', id: '3' },
+      { t: 'text', s: 'Antwort' },
+    ])
+    const [laid] = layPage(part(m), rowsOf([r]), rules, metrics()).members
+    expect(laid!.state).toBe('laid')
+    const faces = laid!.lines.flatMap((l) => l[3]).flatMap((it) => ('face' in it && /\S/.test(it.s) ? [it.face] : []))
+    expect(faces.length).toBeGreaterThan(0)
+    for (const f of faces) expect(f).toMatch(/^italic /)
+    // (a word of a paragraph set upright, its \em in a group of its own: italic, the rest upright as its style)
+    const p = member({
+      els: [['3', { bare: 1, cmd: 'em', kind: 'zero', ink: [] }]],
+      spans: [['2', {}]],
+    })
+    const pr = row([
+      { t: 'text', s: 'Ein ' },
+      {
+        t: 'span',
+        id: '2',
+        content: [
+          { t: 'el', id: '3' },
+          { t: 'text', s: 'Wort' },
+        ],
+      },
+      { t: 'text', s: ' hier' },
+    ])
+    const [pl] = layPage(part(p), rowsOf([pr]), rules, metrics()).members
+    const runs = pl!.lines
+      .flatMap((l) => l[3])
+      .flatMap((it) => ('face' in it ? [[it.s.trim(), /^italic /.test(it.face)]] : []))
+    expect(runs.filter(([s]) => s)).toEqual([
+      ['Ein', false],
+      ['Wort', true],
+      ['hier', false],
+    ])
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

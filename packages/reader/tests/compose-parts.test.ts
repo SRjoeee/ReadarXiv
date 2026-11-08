@@ -452,6 +452,64 @@ describe('the laid text layer (§11.11)', () => {
       expect(at('KI').transform).toEqual([0, 8, -8, 0, 171, 648])
       expect(r.translated).toHaveLength(2)
     })
+    it('tells two turned labels whose origins share a page y apart: a line change across their run, its size its own', () => {
+      // (Codex on #632: two y-axis words turned a quarter, along (0, 1) from (100, 300) and (112, 300), size 8; read by page y
+      // and page x their boundary was neither a line change nor a space, and their words ran together when copied)
+      const word = (ord: number, x: number) =>
+        ({ ...placed(ord, []), lines: [[1, 0, x - 6, x + 2, 300, 330, 300, x - 6, x + 2, 0]] }) as unknown as Placed
+      const content = contentOf([
+        OC,
+        { ...item('Loss', 100, 300, 16), transform: [0, 8, -8, 0, 100, 300] },
+        EMC,
+        OC,
+        { ...item('Gain', 112, 300, 16), transform: [0, 8, -8, 0, 112, 300] },
+        EMC,
+      ])
+      const turned = (ord: number, x: number, s: string): Laid => ({
+        ...laid(ord, [[300, x, x + 28, [{ s, x, face: 'sans', size: 8, dir: [0, 1] }]]]),
+        off: 1,
+      })
+      const r = laidText(
+        content,
+        pageOf(turned(1, 100, 'Verlust'), turned(2, 112, 'Gewinn')),
+        new Map([
+          [1, word(1, 100)],
+          [2, word(2, 112)],
+        ]),
+        facesStub,
+        measure,
+      )
+      const items = r.content.items as { str?: string; hasEOL?: boolean }[]
+      expect(items.map((x) => x.str)).toEqual(['Verlust', 'Gewinn'])
+      // (12 apart across their run, their size 8: two lines)
+      expect(items[0]!.hasEOL).toBe(true)
+      // (one run on along the same turned line by another's, half a point on: one line, no space at its size 8, 0.15 of it;
+      // read at the size 1 a quarter turn gave, half a point took one)
+      const on = laidText(
+        contentOf([
+          OC,
+          { ...item('Loss', 100, 300, 16), transform: [0, 8, -8, 0, 100, 300] },
+          EMC,
+          OC,
+          { ...item('Gain', 100, 328.5, 16), transform: [0, 8, -8, 0, 100, 328.5] },
+          EMC,
+        ]),
+        pageOf(turned(1, 100, 'Verlust'), {
+          ...laid(2, [[328.5, 100, 128, [{ s: 'Gewinn', x: 100, face: 'sans', size: 8, dir: [0, 1] }]]]),
+          off: 1,
+        }),
+        new Map([
+          [1, word(1, 100)],
+          [2, { ...word(2, 100), lines: [[1, 0, 94, 102, 328.5, 358.5, 328.5, 94, 102, 0]] } as unknown as Placed],
+        ]),
+        facesStub,
+        measure,
+      ).content.items as { str?: string; hasEOL?: boolean }[]
+      expect(on.map((x) => [x.str, !!x.hasEOL])).toEqual([
+        ['Verlust', false],
+        ['Gewinn', false],
+      ])
+    })
     it("gives a run split evenly between a unit's element and its line to the element, whole: never split", () => {
       // (2406.06525v1 p. 1: a mark "2∗", "2" on the element's ink, "∗" above it on the line alone; the unit keeps its elements)
       const m = placed(1, [[700, 50, 300]], [['e1', [1, 150, 699, 155, 706, 700]]])

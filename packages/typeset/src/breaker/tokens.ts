@@ -212,10 +212,18 @@ function nonSpace(s: string): number {
   }
   return n
 }
-/** the unit's base style without what its own groups set (L2:2253 baseOf) */
+/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …) */
+const declared = (src: string | undefined): number =>
+  (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
+  (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
+  (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
+/** the unit's base style without what its own groups set (L2:2253 baseOf), and its declarations: a declaration sets its group
+ *  from where it stands, at the unit's top level the rest of it (today's \sc rule, for every switch: the part's style is the
+ *  state of the unit's glyphs, its declarations' already, so that "{\em …}" read over an italic base toggled it upright where
+ *  today's base, its glyphs' outside its styled pieces (measuredOf), was upright) */
 export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   let total = 0,
-    capsAfter = false,
+    after = 0,
     inItalic = 0,
     inBold = 0,
     inCaps = 0,
@@ -239,18 +247,22 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
       if (bits & GROUP_ITALIC) nItalic--
       if (bits & GROUP_BOLD) nBold--
       if (bits & GROUP_CAPS) nCaps--
-    } else if (p.t === 'ph' && /^\\(?:sc|scshape)$/.test(p.src ?? '')) {
-      if (!open.length) capsAfter = true
-      else if (!(open[open.length - 1]! & GROUP_CAPS)) {
-        open[open.length - 1]! |= GROUP_CAPS
-        nCaps++
+    } else if (p.t === 'ph' && declared(p.src)) {
+      const bits = declared(p.src)
+      if (!open.length) after |= bits
+      else {
+        const fresh = bits & ~open[open.length - 1]!
+        open[open.length - 1]! |= fresh
+        if (fresh & GROUP_ITALIC) nItalic++
+        if (fresh & GROUP_BOLD) nBold++
+        if (fresh & GROUP_CAPS) nCaps++
       }
     } else if (p.t === 'text') {
       const n = nonSpace(p.s)
       total += n
-      if (nItalic) inItalic += n
-      if (nBold) inBold += n
-      if (capsAfter || nCaps) inCaps += n
+      if (nItalic || after & GROUP_ITALIC) inItalic += n
+      if (nBold || after & GROUP_BOLD) inBold += n
+      if (nCaps || after & GROUP_CAPS) inCaps += n
     }
   }
   const out = { ...base }

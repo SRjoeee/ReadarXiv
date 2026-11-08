@@ -907,32 +907,52 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     const [y, x0, x1, items] = m.lines[0]!
     expect([y, x0, x1]).toEqual([376, 150, 178])
     expect(items).toEqual([expect.objectContaining({ s: 'Verlust', x: 150, size: 8, dir: [0, 1] })])
-    expect(m.lit.left).toEqual([[[144, 380, 152, 400]]])
-    // (its box as drawn: along the run 376 to 404, across it its band at 8 on the run's left, the turned page's up)
+    // (lit turned with it, its boxes in its run's frame: along (0, 1) a point's y, across it (−1, 0) its −x. On A its run's box,
+    // 380 to 400 along it from its origin, across it the band its box on the page tells, x 144-152 about 150: −152 to −144)
+    expect(m.lit.dir).toEqual([0, 1])
+    expect(m.lit.left).toEqual([[[380, -152, 400, -144]]])
+    // (its box as drawn: along the run 376 to 404, across it its band at 8 on the run's left, the turned page's up: its baseline
+    // 0.22 of its size under, 0.75 over, a Latin run's tokenBand)
     const [b] = m.lit.right[0]!
-    expect(b![1]).toBeCloseTo(376, 6)
-    expect(b![3]).toBeCloseTo(404, 6)
-    expect(b![0]).toBeLessThan(150)
-    expect(b![2]).toBeGreaterThan(150)
-    expect(b![2] - b![0]).toBeLessThan(10)
+    for (const [v, w] of b!.map((v, k) => [v, [376, -151.76, 404, -144][k]!])) expect(v).toBeCloseTo(w!, 6)
     // (its room along its run is the run's: 4 before and after leave 28 to "Verluste", 32 at 8: its set at 7)
     const tight = label({ ...quarter, run: [150, 380, 20, 4, 4] })
     const t = layPage(part(tight), rowsOf([rowF('Verluste')]), rules, metrics()).members[0]!
     expect(t.state).toBe('laid')
     expect((t.lines[0]![3][0] as { size: number }).size).toBeCloseTo(7, 9)
-    // (any angle the original states: one turned 30 degrees, set from its start, its room after it along its run)
+    // (any angle the original states: one turned 30 degrees, set from its start, its room after it along its run; its line on A
+    // the page's box its run's box stands in, 20 along it from (100, 300), 2 under its baseline and 6 over)
     const [ux, uy] = [Math.cos(Math.PI / 6), Math.sin(Math.PI / 6)]
+    const corners = [0, 20].flatMap((a) => [-2, 6].map((c) => [100 + a * ux - c * uy, 300 + a * uy + c * ux]))
+    const [bx0, bx1] = [Math.min(...corners.map((q) => q[0]!)), Math.max(...corners.map((q) => q[0]!))]
+    const [by0, by1] = [Math.min(...corners.map((q) => q[1]!)), Math.max(...corners.map((q) => q[1]!))]
     const slant = label({
       align: 'l',
       dir: [ux, uy],
       run: [100, 300, 20, 0, 60],
-      lines: [[1, 0, 96, 121, 300, 316, 296, 96, 121, 0, 8]],
+      lines: [[1, 0, bx0, bx1, 300, by1, by0, bx0, bx1, 0, 8]],
     })
     const s = layPage(part(slant), rowsOf([rowF('Verlust')]), rules, metrics()).members[0]!
     expect(s.state).toBe('laid')
     const [sy, sx0, sx1, sitems] = s.lines[0]!
     expect([sy, sx0, sx1]).toEqual([300, 100, 128])
     expect(sitems[0]).toMatchObject({ x: 100, dir: [ux, uy] })
+    // (lit turned with it: on A its run's box, never the level box over it it stands in on the page; as drawn its line, 28
+    // along it from its origin, its band across)
+    const [os, ot] = [100 * ux + 300 * uy, 300 * ux - 100 * uy]
+    expect(s.lit.dir).toEqual([ux, uy])
+    const near = (got: number[] | undefined, want: number[]) => {
+      expect(got).toHaveLength(4)
+      for (const [k, v] of got!.entries()) expect(v).toBeCloseTo(want[k]!, 6)
+    }
+    near(s.lit.left[0]![0], [os, ot - 2, os + 20, ot + 6])
+    near(s.lit.right[0]![0], [os, ot - 1.76, os + 28, ot + 6])
+    // (one not drawn, its translation its source: the original's, lit from A on both panes, turned the same)
+    const kept = layPage(part(slant), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!
+    expect(kept.state).toBe('none')
+    expect(kept.lit.dir).toEqual([ux, uy])
+    near(kept.lit.left[0]![0], [os, ot - 2, os + 20, ot + 6])
+    expect(kept.lit.right).toEqual(kept.lit.left)
   })
   it('lays no translation over a figure text whose ink stays: the part’s why, the original’s (#631 review)', () => {
     // (a label today's figure reading leaves where it stands, crowded: no group of it, the part states it unwrapped)

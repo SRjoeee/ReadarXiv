@@ -12,7 +12,10 @@
 // page's layout every frame); the left's layer put back in the same task where PDF.js's redraw removes it (§10.2). One look and
 // one paint a frame, the pointer read before anything is written; a scroll under a still pointer lights what comes under it; what
 // is lit drawn again by what replaces it, the resting pointer asked again. Nothing is computed while the switch is off; a page
-// another generation still shows is muted (nothing of it lit or hit on the right).
+// another generation still shows is muted (nothing of it lit or hit on the right). A member set along a direction (a figure text
+// the original sets turned: Laid.lit's `dir`, its boxes in its run's frame) is lit as a band turned with its text about its own
+// centre, padded beside along its run and by half the leading across it, and hit where it is painted; a level box over it would
+// stand over its neighbours (a label set at 30° about twice its height).
 import type { Panes, Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
 import type { Composer } from './composer.ts'
@@ -51,6 +54,8 @@ function boxesOf(page: Page, ord: number, side: Side, committed: boolean): Box[]
   return own.length ? [...per, own] : per
 }
 const areaOf = (bs: Box[][]) => bs.flat().reduce((a, b) => a + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0)
+/** the direction a member's boxes are set along (a turned figure text's: Laid.lit's `dir`, its boxes in its run's frame) */
+const dirOf = (page: Page, ord: number) => page.members.find((x) => x.ord === ord)?.lit.dir
 
 const leads = new WeakMap<Page, Map<string, number>>()
 /** the half of a page's leading on a pane, PDF units: half the lower quartile of the gaps between a member's consecutive rows
@@ -68,7 +73,7 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
 function leadOf(page: Page, side: Side, committed: boolean): number {
   const gaps: number[] = []
   for (const m of page.members)
-    for (const rows of side === 'right' && committed ? m.lit.right : m.lit.left) {
+    for (const rows of m.lit.dir ? [] : side === 'right' && committed ? m.lit.right : m.lit.left) {
       const ys = [...rows].sort((a, b) => b[3] - a[3])
       for (let i = 1; i < ys.length; i++) {
         const g = (ys[i - 1] as Box)[1] - (ys[i] as Box)[3]
@@ -216,6 +221,35 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     }
     return out
   }
+  /** the rows of a turned member's shape (its boxes in its run's frame along `dir`) in the page's CSS px at its scale now, each
+   *  a rectangle turned with its text: its centre, its length along its run padded beside, its band across it padded by half
+   *  the leading, and the angle its run stands at on the page (CSS's: clockwise, y down) */
+  function turnedRowsOf(side: Side, n: number, boxes: Box[], lead: number, [ux, uy]: [number, number]) {
+    const at = (s: number, t: number) => {
+      const x = s * ux - t * uy,
+        y = s * uy + t * ux
+      const r = panes.boxOf(side, n, [x, y, x, y], { upright: true })
+      return r ? [r.left, r.top] : null
+    }
+    const o = at(0, 0),
+      e = at(1, 0)
+    if (!o || !e) return []
+    const k = Math.hypot((e[0] as number) - (o[0] as number), (e[1] as number) - (o[1] as number))
+    const deg = (Math.atan2((e[1] as number) - (o[1] as number), (e[0] as number) - (o[0] as number)) * 180) / Math.PI
+    const out: { cx: number; cy: number; w: number; h: number; deg: number }[] = []
+    for (const b of boxes) {
+      const c = at((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+      if (!c) continue
+      out.push({
+        cx: c[0] as number,
+        cy: c[1] as number,
+        w: (b[2] - b[0]) * k + 2 * PAD,
+        h: (b[3] - b[1] + 2 * lead) * k,
+        deg,
+      })
+    }
+    return out
+  }
   function paint() {
     for (const side of ['left', 'right'] as const) for (const l of layers[side].values()) l.replaceChildren()
     if (!lit || !on) return
@@ -238,7 +272,25 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         }
         const s0 = panes.scale
         const lead = halfLeading(page, side, committed)
-        for (const boxes of shapes) {
+        const dir = dirOf(page, lit.id)
+        // (a turned member's rows turned with its text: each a band of its own about its centre, at its run's angle, scaled with
+        // the page about the page's origin as any)
+        if (dir)
+          for (const r of shapes.flatMap((boxes) => turnedRowsOf(side, n, boxes, lead, dir))) {
+            const el = document.createElement('div')
+            el.className = 'axt-hl'
+            Object.assign(el.style, {
+              left: '0px',
+              top: '0px',
+              width: `${r.w}px`,
+              height: `${r.h}px`,
+              transformOrigin: '0px 0px',
+              transform: `translate(${r.cx}px, ${r.cy}px) rotate(${r.deg}deg) translate(${-r.w / 2}px, ${-r.h / 2}px)`,
+              scale: `calc(var(--total-scale-factor) / ${s0 * (96 / 72)})`,
+            })
+            layer.append(el)
+          }
+        for (const boxes of dir ? [] : shapes) {
           const rows = rowsOf(side, n, boxes, lead)
           if (!rows.length) continue
           const X0 = Math.min(...rows.map((r) => r.x0)),
@@ -295,11 +347,23 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     // (what is painted is what is hit: the same rows; the smaller unit winning where two overlap, a heading run into its paragraph)
     let best: Lit | null = null,
       least = Number.POSITIVE_INFINITY
+    // (a turned member's rows hit as painted: the point turned back into each row's own frame)
+    const inside = (dir: [number, number] | undefined, boxes: Box[]) =>
+      dir
+        ? turnedRowsOf(side, n, boxes, lead, dir).some((q) => {
+            const a = (-q.deg * Math.PI) / 180,
+              dx = px - q.cx,
+              dy = py - q.cy
+            return (
+              Math.abs(dx * Math.cos(a) - dy * Math.sin(a)) <= q.w / 2 &&
+              Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) <= q.h / 2
+            )
+          })
+        : rowsOf(side, n, boxes, lead).some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)
     for (const m of page.members) {
       const per = boxesOf(page, m.ord, side, committed)
       for (let s = 0; s < per.length; s++)
-        for (const q of rowsOf(side, n, per[s] as Box[], lead)) {
-          if (px < q.x0 || px > q.x1 || py < q.y0 || py > q.y1) continue
+        if (inside(m.lit.dir, per[s] as Box[])) {
           const area = areaOf(per)
           if (area < least) {
             least = area

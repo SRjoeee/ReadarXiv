@@ -1462,9 +1462,11 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
-/** a shared line's separation at most, in em of the follower's size: a run-in head's \quad, a float split's word space
- *  (today's need.mjs SHARED_SEP, rowLeadOf; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set
- *  side by side (a running head's title and folio, two minipages' titles), not one line of a paragraph */
+/** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
+ *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
+ *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a
+ *  running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after a footnote's
+ *  last line), not one line of a paragraph */
 const SHARED_SEP = 3
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
