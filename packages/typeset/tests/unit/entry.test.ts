@@ -363,6 +363,57 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.state).toBe('laid')
     expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
   })
+  it('fills each frame of a paragraph over a page break at its own leading: a roomy frame is not held to a full one’s', () => {
+    // (the owner on staging, 2026-11-08: 1810.04805v2 p6's "Our best performing system", the last paragraph of a column going on
+    // to the next page, set at the original's pitch with its frame's last line empty, among paragraphs spread to 1.33. One
+    // leading a unit: its part on the next page, two lines in two, held its part here, four lines in five, to the original's
+    // pitch. Each frame of a paragraph is filled over its own block, as a run between displays is, at the paragraph's one size)
+    const zh = rulesFor('zh')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idB] = ['b'.repeat(64), 'c'.repeat(64)]
+    // (two paragraphs over it on the page, each two lines of translation in four: the page's leading theirs, spread)
+    const a = member({
+      ord: 0,
+      text: idA,
+      lines: [700, 688, 676, 664].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [640, 628, 616, 604].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const m = member({
+      ord: 2,
+      lines: [...[580, 568, 556, 544, 532].map((y) => lineAt(1, y)), lineAt(2, 700), lineAt(2, 688)],
+      room: { below: 200, next: 212 },
+    })
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(250) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idB },
+    ])
+    const laid = (page: number) =>
+      layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
+    const [p1, p2] = [laid(1), laid(2)]
+    expect([p1.state, p2.state, p1.fit?.size, p2.fit?.size]).toEqual(['laid', 'laid', 10, 10])
+    // (four lines over the five of its frame here, to its foot; two in two on the next page)
+    expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
+    expect(p2.lines.map(([y]) => y)).toEqual([700, 688])
+  })
   it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
     // (the page fill's one size, today's effect (the owner, 2026-11-08: "效果看起来跟主站差不多就行"), found with the fewest lays:
     // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph

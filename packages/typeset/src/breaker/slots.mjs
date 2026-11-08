@@ -105,8 +105,11 @@ function slotsAt(blocks, st, P, s) {
   const base = P.blockBase ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
-    const pitch = p0 * st.lead
-    const onGrid = Math.abs(st.lead - 1) < 1e-6
+    // (a block of a frame before the unit's last filled at a leading of its own, `leads` (S.fill.leads: each frame of a paragraph
+    // over a page or column break filled over its own block); the unit's last frame's the state's)
+    const lead = st.leads?.[bi] ?? st.lead
+    const pitch = p0 * lead
+    const onGrid = Math.abs(lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's

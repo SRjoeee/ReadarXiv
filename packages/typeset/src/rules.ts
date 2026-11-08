@@ -737,9 +737,10 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
     file: 'shared/fill-leads.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five). The unit's fill leading, top and line count, its L9 slot, as today's",
       replay:
-        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out)',
+        "chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out); the frames' own leadings in the page replays where they differ",
       cases: 31612,
     },
   },
