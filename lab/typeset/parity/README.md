@@ -15,21 +15,35 @@ anchored at its last line, centred lines set left, bold and italic spreading, an
 broken highlight, a cell across a column rule, a wide gap after a run-in head).
 
 ```
-node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [<pair>…]
+node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [<pair>…]
 ```
 
 Defaults: the sheet and `parity.json` in `$AXT_LAB_DATA/refactor-2026-11/parity/`, the work files in its `work/`. Exit 1
-when a page is worse than today's. The three steps can be run alone (heavy ones through `heavy-slot.sh`):
+when a page is worse than today's, or when the run is not judged whole: the gate passes only over every page the run asked
+(see "The run judged whole"). The three steps can be run alone (heavy ones through `heavy-slot.sh`):
 
 | Step | Command | What it does |
 |---|---|---|
 | v2's lay | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --out=<work>/v2 <pair>…` | each page laid by design-a's entry (`layPage`) over the paper's part and the pair's door rows, as `lab/typeset/checkpoint/laid.mjs --entry` lays the checkpoint's pages (gate-l1.ts, the layered metrics), under the reader's default toggles (`hook.mjs`) |
-| the drawing | `heavy-slot.sh e2e -- node lab/typeset/parity/render.mjs --work=<work> --out=<out>` | arXiv's page (PDF.js), today's (`today/entry.mjs`) and v2's (`v2page/main.ts`) drawn in one Chromium at PDF.js's scale 1, device scale 2; each side shot whole and with its translated text alone; what each drew read back (`measure-dom.mjs`) and its pixels read (`analyse.mjs`) |
-| the verdict | `node lab/typeset/parity/measure.mjs --work=<work> --out=<out>` | the measures below, `parity.json` and `index.html` |
+| the drawing | `heavy-slot.sh e2e -- node lab/typeset/parity/render.mjs --work=<work> --out=<out> [--pages=<n>,…] <pair>…` | arXiv's page (PDF.js), today's (`today/entry.mjs`) and v2's (`v2page/main.ts`) drawn in one Chromium at PDF.js's scale 1, device scale 2; each side shot whole and with its translated text alone; what each drew read back (`measure-dom.mjs`) and its pixels read (`analyse.mjs`); the run's manifest `<work>/raw/run.json` |
+| the verdict | `node lab/typeset/parity/measure.mjs --work=<work> --out=<out> [<pair>…]` | the measures below (`verdict.mjs`) over the run's own drawing, `parity.json` and `index.html` |
 
 On the maintainer's machine (shared with other lanes' jobs, 2026-11-08) the 22 pairs took 15 s to lay and 954 s to draw
 (344 pages, about 3 s a page), the verdict 10 s. The images are WebP at 1.33 px a point (about 100 KB a pane, 160 MB in
-all); the drawing stops when the disk has under 12 GiB free.
+all); the drawing stops when the volume of `--work` or of `--out` has under 12 GiB free (`statfs`, on any platform), and the
+pairs it did not draw make the run incomplete.
+
+## The run judged whole
+
+render.mjs writes the run's manifest before it draws anything (`<work>/raw/run.json`: its id, the pairs and pages asked, not
+done), the pairs it cannot draw and why as it finds them, and `done` at the end (with the reason it stopped, if it did); each
+pair's raw file names the run and the digest of the v2.mjs file it drew from, and the pages it was to draw. measure.mjs
+measures the manifest's pairs alone, each from this run's raw file and the v2.mjs file it was drawn from (a raw file of an
+earlier run, or one whose v2 pages were laid again since, is never measured), and the pairs it is told (run.mjs and the
+release check tell them) must be the manifest's. The gate fails, whatever the pages measured, where: there is no manifest or
+the drawing did not finish; an asked pair was not drawn (no inputs, the disk) or has no raw file of this run; a page it was
+to draw is not there; a page failed (a screenshot, today's lay, either side not drawn); or no page at all was measured. The
+first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAIRS`): the sheet names it, not the gate.
 
 ## Inputs (lab-data, never committed: licensed papers)
 
@@ -69,7 +83,7 @@ A unit is joined across the sides by today's ord (the part member's join to toda
 
 | Measure | Distance from the original (each side's) | Same within (the noise floor) | Why this floor |
 |---|---|---|---|
-| `shown` | a unit today lays on the page that v2 leaves the original's (its state named: unproven, none, unfit, …) | none: always worse | a reader sees English where production shows the translation; no nearness can stand for a missing translation |
+| `shown` | a unit today lays on the page that v2 leaves the original's (its state named: unproven, none, unfit, …; or no member of v2's part joined to it) | none: always worse | a reader sees English where production shows the translation; no nearness can stand for a missing translation |
 | `weight` | the translated text's mean darkness (1 − luminance over its glyph pixels, darkness ≥ 0.1; each side shot with its copy, crops, links and figure texts hidden) against the original text's (arXiv's page over the original lines of the units laid) | 5 % of the original's darkness, 3,000 glyph pixels a side at least | the same faces at the same size give the same mean: measured on the first run, v2 against today on one page p5 −1.3 %, p95 +1.7 % (today's own pages of one paper, other text, p95 4.3 %); a face a weight lighter, a lighter fill or another antialiasing moves it by more |
 | `anchor` | the smaller of the first line's baseline offset and its em top's offset (baseline + 0.8 size) from the original's first line, where the unit starts on the page | a tenth of the size, 1 pt at least | a point is a visible step at reading size (1.33 CSS px at 100 %) and above what drawing the same line twice moves (0.01 pt); a unit anchored at its last line is a whole line pitch off |
 | `align` | TeX's alignment (the part's `align`): centred, a line's midpoint off the original lines' (a first line's with its label, drawn anew or kept); left or justified, a first line's start off the original's (or its label's), every other line's off the nearest original line start (its column, a float's margin, after a display; a CJK opening mark's blank half allowed); right, a line's end | as `anchor` | as `anchor` |
@@ -79,9 +93,9 @@ A unit is joined across the sides by today's ord (the part member's join to toda
 | `stretch` | a line's overshoot past 1 em of word space or 0.25 em of letter gap (the original's TeX spaces stay near a third of an em, its letters unspaced) | 0.1 em | below a tenth of an em two spacings look alike |
 | `style` | a unit's share of bold (weight 600 or more) and of slanted characters off the original's font state (1 where TeX set the unit bold or slanted, else 0) | 15 % of its characters, 3 characters at least | a translator's reordering moves a styled word by a few characters; spreading is a whole phrase or unit |
 | `pixels` | device pixels off arXiv's page outside every unit's box (its original lines, either side's drawn lines, figure texts, names and crops, padded 1 pt), luminance by 0.25 or more where no pixel within one device pixel matches (ink, not a sub-pixel phase) | 150 device pixels | about one glyph of 10 pt type at 2.67 pixels a point: an erased or a stray piece of ink |
-| `figures` | the figure texts drawn translated: fewer than today's | none: always worse | as `shown` |
+| `figures` | the figure texts drawn translated (each side's drawn groups: today's `g[data-f]`, v2's `g[data-axt-ord]` of the part's figure members, a character drawn): fewer than today's | none: always worse | as `shown` |
 | `size` | a unit's median drawn size off the original's (a share of it) | 5 % | two of the fit's steps (0.025 of the size each, `data/rules/scripts.ts`) |
-| `links` | the page's links missing against the original's link annotations (today's layer's records, v2's Page.links) | half a link: any | every link of the original is one a reader follows |
+| `links` | the links a reader can follow missing against the original's link annotations: the anchors each side drew (the overlay's; on a page shown as arXiv's, its page view's annotation layer, today's by `shownOriginal`'s rule the original's), the layouts' own counts kept beside | half a link: any | every link of the original is one a reader follows |
 | `highlight` | the laid units with no sentence boxes for the highlight (today's laid words' spans, v2's `Laid.lit`) | any | the original's every unit has its sentences on the left |
 | `line-count` | a unit's drawn lines on the page off the original's count there | half a line: any | another line count is a reflow; nearer the original's is better |
 
@@ -97,8 +111,9 @@ gate. All floors and bounds were set before the first run from what a reader see
   4 and acknowledgement): each difference with the original's value, today's and v2's with their distance from it ("off")
   and which is nearer; the faults; the original, today's and v2's panes; the difference of the two panes (v2's ink alone
   red, today's alone blue, the original faint).
-- `parity.json`: the floors and bounds, the summary, the ten worst pages, and every page's differences, faults, page
-  measures (links, sentence boxes, darkness, pixels off the original, the rules found) and per unit both sides' measures.
+- `parity.json`: whether the gate passes (`pass`), the run, what keeps it from being judged whole (`incomplete`), the floors
+  and bounds, the summary, the ten worst pages, and every page's differences, faults, page measures (links, sentence boxes,
+  darkness, pixels off the original, the rules found) and per unit both sides' measures.
 
 Pages are ordered by a score: each measure's worse differences (8 at most) times its weight (`shown`, `weight`, `anchor`,
 `align`, `cross`, `gap`, `turn` 3; `stretch`, `style`, `pixels`, `figures` 2; `size`, `links`, `highlight` 1;
@@ -108,5 +123,5 @@ Pages are ordered by a score: each measure's worse differences (8 at most) times
 
 `pnpm release-check --tier full` runs it as the gate `display` ("display ≥ today: no page worse than today's, a difference
 only where nearer the original"; stage reader, after `prepare`, over that run's bundles): the three steps, judged by
-measure.mjs's exit code. It is a cut-over blocker: the report's cut-over verdict stays NO-GO until it passes
-(`lab/release-check/CI.md`).
+measure.mjs's exit code (no page worse, and the run judged whole). It is a cut-over blocker: the report's cut-over verdict
+stays NO-GO until it passes (`lab/release-check/CI.md`).

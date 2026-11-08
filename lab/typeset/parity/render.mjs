@@ -10,10 +10,12 @@
 // v2's, inside and outside the units' boxes. Writes <work>/raw/<pair>.json (every page's measures of both sides) and the
 // sheet's images under <out>/img/ (WebP, the panes at half the device resolution: 1.33 px a point). Offline: a server on the
 // loopback answers every file from disk, the browser refuses every other request. Licensed papers: the images and the raw
-// files stay in lab-data. Run through heavy-slot.sh e2e; it stops when the disk has less than 12 GiB free.
+// files stay in lab-data. Run through heavy-slot.sh e2e; it stops when the volume of the work or of the sheet has less than
+// 12 GiB free. The run's manifest (<work>/raw/run.json) says what it was asked and what it drew: written at the start (not
+// done), its pairs not drawn and why as they come, done at the end; each pair's raw file names the run and the v2.mjs file it
+// drew from, so that measure.mjs judges this run's drawing alone and the whole of it.
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { build as esbuild } from 'esbuild'
 import { build as vite } from 'vite'
@@ -27,7 +29,7 @@ import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse } from './analyse.mjs'
 import { pdfOf, whyNot } from './inputs.mjs'
-import { FIRST, PAIRS } from './pairs.mjs'
+import { PAIRS } from './pairs.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const HERE = import.meta.dirname
@@ -47,12 +49,22 @@ const HYPH = [join(CACHE, 'static/hyph'), join(LAB, 'refactor-2026-11', 'baselin
 export const SCALE = 96 / 72
 export const DPR = 2
 const MIN_FREE_GIB = 12
-const freeGiB = () => Number(execFileSync('df', ['-g', '/'], { encoding: 'utf8' }).trim().split('\n')[1].split(/\s+/)[3])
-if (freeGiB() < MIN_FREE_GIB) throw new Error(`disk: ${freeGiB()} GiB free, under ${MIN_FREE_GIB}`)
 mkdirSync(join(WORK, 'raw'), { recursive: true })
 mkdirSync(join(OUT, 'img'), { recursive: true })
+/** the GiB free on the volume an existing path is on (statfs: the blocks an unprivileged writer may use, on any platform) */
+const freeGiBOf = (path) => {
+  const st = statfsSync(path)
+  return (st.bavail * st.bsize) / 2 ** 30
+}
+/** the least free of the volumes the run writes to: the raw files' (work) and the images' (out) */
+const freeGiB = () => Math.min(...[WORK, OUT].map(freeGiBOf))
+if (freeGiB() < MIN_FREE_GIB) throw new Error(`disk: ${freeGiB().toFixed(1)} GiB free, under ${MIN_FREE_GIB}`)
 const json = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const sha = (b) => createHash('sha256').update(b).digest('hex')
+// (the manifest, written before anything is drawn: a run that stops or fails leaves it not done)
+const RUN = { id: `${new Date().toISOString()}-${process.pid}`, at: new Date().toISOString(), pairs, pages: PAGES, done: false, stopped: null, missing: [] }
+const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stringify(RUN, null, 1)}\n`)
+manifest()
 // ---------------------------------------------------------------- today's page: esbuild over today's engine and the web
 const standIn = {
   // (run.mjs opened with `records` and kept, as baseline/tools/reader.mjs's stand-in: the crops' audit; the drawing the same)
@@ -292,6 +304,9 @@ const routes = [
     },
   },
 ]
+// (the pairs that cannot be drawn, told before any is: a run that stops still names them)
+RUN.missing = missing
+manifest()
 const server = await startServer({ out: BUILD, objects, routes })
 
 // ---------------------------------------------------------------- the browser
@@ -316,14 +331,21 @@ await labPage.goto(`${server.origin}/h/blank.html`)
 
 for (const pair of pairs) {
   if (!todayDesc.has(pair)) continue
+  if (RUN.stopped) {
+    missing.push({ pair, why: RUN.stopped })
+    continue
+  }
   if (freeGiB() < MIN_FREE_GIB) {
-    console.log(`stopped: the disk has under ${MIN_FREE_GIB} GiB free`)
-    break
+    RUN.stopped = `the disk has under ${MIN_FREE_GIB} GiB free`
+    console.log(`stopped: ${RUN.stopped}`)
+    missing.push({ pair, why: RUN.stopped })
+    continue
   }
   const t0 = Date.now()
   const paper = paperOf(pair)
   const target = /-([a-z]{2,3})$/.exec(pair)[1]
-  const v2 = json(join(WORK, 'v2', `${pair}.json`))
+  const v2Bytes = readFileSync(join(WORK, 'v2', `${pair}.json`))
+  const v2 = JSON.parse(v2Bytes.toString('utf8'))
   const errors = { today: [], v2: [] }
   // (today's context: the original and today's drawing, one page at a time on a stage the page's size)
   const tc = await browser.newContext({ viewport: { width: 1000, height: 1200 }, deviceScaleFactor: DPR })
@@ -350,9 +372,10 @@ for (const pair of pairs) {
   } catch {
     errors.v2.push(`not ready: ${JSON.stringify(await vp.evaluate(() => globalThis.__p.state()))}`)
   }
-  const out = { pair, paper, target, opened, pages: [] }
-  for (let n = 1; n <= opened.orig; n++) {
-    if (PAGES && !PAGES.includes(n)) continue
+  // (the pages this run is to draw of the pair: every page of arXiv's, or those --pages names)
+  const expected = Array.from({ length: opened.orig }, (_, i) => i + 1).filter((n) => !PAGES || PAGES.includes(n))
+  const out = { pair, paper, target, run: RUN.id, v2: sha(v2Bytes), expected, opened, pages: [] }
+  for (const n of expected) {
     const rec = { page: n }
     try {
       // the original
@@ -420,8 +443,9 @@ for (const pair of pairs) {
   await vp.evaluate(() => globalThis.__p.close())
   await vc.close()
 }
-for (const pair of FIRST) if (!pairs.includes(pair)) missing.push({ pair, why: whyNot(pair, WORK) ?? 'not asked of this run' })
-writeFileSync(join(WORK, 'raw', 'missing.json'), `${JSON.stringify(missing, null, 1)}\n`)
+RUN.missing = missing
+RUN.done = true
+manifest()
 console.log(`missing: ${missing.map((m) => `${m.pair} (${m.why})`).join('; ') || 'none'}`)
 console.log(`refused requests: ${refused.length}${refused.length ? ` (${refused.slice(0, 3).join(', ')})` : ''}`)
 await browser.close()

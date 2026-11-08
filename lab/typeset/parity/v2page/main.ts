@@ -120,7 +120,9 @@ const p = {
       units: svg ? linesOfSvg(svg, 'data-axt-ord', view, k, crops) : [],
       crops,
       links: got?.links.length ?? 0,
-      linksDrawn: el?.querySelectorAll('.axt-links a').length ?? 0,
+      // (the links a reader can follow on the page: the overlay's anchors on a laid page, PDF.js's annotation layer's on a page
+      // the reader shows as arXiv's)
+      linksDrawn: el?.querySelectorAll('.axt-links a, .annotationLayer a').length ?? 0,
       lit: (got?.members ?? []).filter((m) => m.state === 'laid' && m.lit.right.some((b) => b.length)).map((m) => m.ord),
     }
   },

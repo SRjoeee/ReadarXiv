@@ -418,7 +418,7 @@ export const GATES = [
       return [
         { cmd: ['node', 'lab/typeset/parity/v2.mjs', `--out=${join(work, 'v2')}`, ...PARITY_PAIRS], slot: 'test', env, fresh: work },
         { cmd: ['node', 'lab/typeset/parity/render.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], slot: 'e2e', env },
-        { cmd: ['node', 'lab/typeset/parity/measure.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`], env },
+        { cmd: ['node', 'lab/typeset/parity/measure.mjs', `--work=${work}`, `--out=${join(work, 'sheet')}`, ...PARITY_PAIRS], env },
       ]
     },
     judge: (ctx, steps) => {
