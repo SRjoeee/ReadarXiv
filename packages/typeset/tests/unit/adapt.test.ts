@@ -143,4 +143,20 @@ describe('adapt: a shared row’s own label (review of #606, finding 3)', () => 
     if (!('member' in today)) throw new Error(today.stop)
     expect(today.member.rowStart?.label).toBeUndefined()
   })
+  it('holds its label on the row where the part says it stands on its first line, raised or not (Label.line; L3)', () => {
+    // (2608.06701v1 p5 t76: a footnote's mark "3" raised 2.81 pt over the row it shares with the footnote before; read as on the
+    // row only within 0.05 pt of its baseline, it was none, and the follower stayed on its own line where today ran it on)
+    const on = (label: Placed['label']) => {
+      const got = adapt(input({ ...follower, join: [4, 1], label }, { before }))
+      if (!('member' in got)) throw new Error(got.stop)
+      return got.member.rowStart?.ownLabel ?? null
+    }
+    const label = follower.label!
+    expect(on({ ...label, line: 0 })).toEqual([0, 1, 128, 703, 134, 707, 698])
+    // (on its second line: not the row's)
+    expect(on({ ...label, line: 1 })).toBeNull()
+    // (a part made before states no line: its label's baseline the row's, as before)
+    expect(on(label)).toBeNull()
+    expect(on({ ...label, ink: [1, 128, 698, 134, 707, 700] })).not.toBeNull()
+  })
 })

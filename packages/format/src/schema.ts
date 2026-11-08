@@ -166,6 +166,9 @@ export const SpanAt = z.object({
   cmd: z.string().optional(),
   colour: int.optional(),
 })
+/** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
+ *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's
+ *  base), absent where it stands on none (a part made before states none) */
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
   ink: Ink,
@@ -173,11 +176,16 @@ export const Label = z.object({
   name: z.tuple([z.string(), Ink]).optional(),
   num: z.tuple([z.string(), Ink]).optional(),
   punct: z.tuple([z.string(), Ink]).optional(),
+  line: int.optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
- *  crowded) */
+ *  crowded); `ends` the room under each run of its text lines (a run's last line: the next line on another page or column, a
+ *  kept row, under another's ink (a float set inside the paragraph), or none), each [that line's index, the free depth under it
+ *  to the first ink across the run (its lines' own start to their column's end), its own kept rows and elements too, its page's
+ *  lowest unit baseline (but a figure text's, an ink figure's and a name's)]: what a translation may borrow there, on each page
+ *  it runs over (`below` is its last line's alone, which a part made before states) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -187,6 +195,7 @@ export const Room = z.object({
   // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
   bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
   under: num.optional(),
+  ends: z.array(z.tuple([int, num, num])).optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({

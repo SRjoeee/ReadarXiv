@@ -102,8 +102,10 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
   return (pg) => (pg === first[0] && rules.length ? rules : undefined)
 }
 
-/** the page's lowest unit line, as today's pageBottom (RUN:911: a line's band bottom and 0.24 of its height, the lowest of the
- *  page's units' but a figure's): no unit borrows below it */
+/** for a part made before (one whose members state no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911:
+ *  a line's band bottom and 0.24 of its height, the lowest of the page's units' but a figure's), read off the part: no unit
+ *  borrows below it. A part of now states each page's own under each run of a member's lines, the page's every member read
+ *  (this part holds a member running on to the next page, not that page's others) */
 function bottomsOf(part: Part): Map<number, number> {
   const out = new Map<number, number>()
   for (const flow of part.flows)

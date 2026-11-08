@@ -2,8 +2,8 @@
 // unit laid at the first state at which every token is placed. Ported from engine 065c1d973 layer2.mjs L2:4040-4134
 // (statesOf, sameState, sharedStates, layoutUnit2; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript),
 // held by the walk's, the chain's and the fill's replays on the corpus. As today, a block whose borrow room is not stated
-// (`freeOf`) has it measured once and written on it (`free`): the parts state it (Room.below), so a stated block is not
-// written.
+// (`freeOf`) has it measured once and written on it (`free`): the parts state it (Room.ends under each run of a member's lines;
+// Room.below in a part made before), so a stated block is not written.
 import { breakLines } from '../breaker/break.types.ts'
 import { laidOut } from '../breaker/place.types.ts'
 import { slotsAt } from '../breaker/slots.types.ts'

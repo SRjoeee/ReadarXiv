@@ -296,6 +296,122 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(a2).toBe(b2)
     expect(sizes(1)[0]).toBe(b2)
   })
+  // (a translation longer than its original by a line: 165 characters at half a size each, 45 to a line of 228 pt at 10 pt)
+  const longer = 'wort '.repeat(33).trim()
+  it('borrows a line at the foot of the page a member runs on from, under that page’s room (Room.ends: today’s freeFor, every block)', () => {
+    // (2608.16117v1-de t23, 2602.23285v2-ja t29: the member's last block, on the next page, has no room, and the room of its block
+    // at the earlier page's foot was never asked: it shrank where today borrowed one line there and stayed at its size)
+    const a = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+        [2, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10],
+      ],
+      // (page 1's foot: 79 pt down to the first ink, page 1's lowest unit line at 600; page 2's last line: no room)
+      room: {
+        below: 0,
+        next: 300,
+        ends: [
+          [1, 79, 600],
+          [2, 0, 650],
+        ],
+      },
+    })
+    // (the page's fill off: its growth is its own question)
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const [laid] = layPage(part(a), rowsOf([row([{ t: 'text', s: longer }])]), still, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.fit).toMatchObject({ size: 10, borrowed: 1 })
+    // (the borrowed line under the earlier page's last, a pitch down)
+    expect(laid!.lines.map(([y]) => y)).toEqual([700, 688, 676])
+  })
+  it('borrows no line through a row of its own that stays under its text (P2: 2608.16117v1-de p27 t89 over its display)', () => {
+    // (its last line a kept row (a held line, a display's row): the room under that row was given to the text over it, and its
+    // lines were laid over the row; the room under the text ends at the row, 3 pt down)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+        [1, 0, 100, 250, 676, 683, 674, 72, 300, 1, 10],
+      ],
+      room: { below: 100, next: 300, ends: [[1, 3, 500]] },
+    })
+    const b = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 500, 507, 498, 72, 300, 0, 10]] })
+    const pt: Part = { ...part(a), flows: [[a], [b]] }
+    // (a translation of 99 characters: two lines at 0.9 of its size)
+    const text = 'wort '.repeat(20).trim()
+    const [laid] = layPage(pt, rowsOf([row([{ t: 'text', s: text }])], true), rules, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.fit!.borrowed).toBe(0)
+    expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
+  })
+  it('caps a size tie by scale, not by points: a run-in head of a smaller size keeps the original’s ratio (S3)', () => {
+    // (2610.30034v1 p2: a head at 8.97 and its paragraph at 9.96, both laid at their size, the paragraph capped at 8.97, 0.9 of
+    // its own; one paragraph's text even (the maintainer's ruling) is one scale for both)
+    const idB = 'b'.repeat(64)
+    const head = (o: Partial<Placed> = {}) =>
+      member({
+        ord: 0,
+        kind: 'heading',
+        style: { role: 'serif', size: 9, bold: 1, design: 'NimbusRomNo9L-Medi' },
+        lines: [[1, 0, 72, 300, 700, 706.3, 698.2, 72, 300, 0, 9]],
+        room: { below: 0, next: 300 },
+        ...o,
+      })
+    const para = member({
+      ord: 1,
+      text: idB,
+      lines: [[1, 0, 72, 300, 600, 607, 598, 72, 300, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const sizes = (h: Placed, headText: string) => {
+      const pt: Part = { ...part(h), flows: [[h], [para]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      const rows = rowsOf([row([{ t: 'text', s: headText }]), { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }])
+      return layPage(pt, rows, rules, metrics()).members.map((m) => m.fit?.size)
+    }
+    // (both at their own size: the paragraph is not capped at the head's 9)
+    expect(sizes(head(), 'Kopf')).toEqual([9, 10])
+    // (the head shrunk to fit its line, the paragraph at the head's scale, not at its size in points)
+    const [h, p] = sizes(head(), 'wort '.repeat(12).trim())
+    expect(h).toBeLessThan(9)
+    expect(p).toBeCloseTo((10 * h!) / 9, 6)
+  })
+  it('lays a size tie’s members at one scale where capping the one laid larger frees the other on the row they share', () => {
+    // (2608.16117v1-de p19 t57 and t59, a paragraph TeX's float cut in two, the second starting on the first's last row: the
+    // first laid at its 0.9, the second at 0.875; the first capped, its last line ended sooner, and the second, laid again
+    // uncapped on the row it then had, came out at 0.975: one paragraph at two sizes)
+    const idB = 'b'.repeat(64)
+    const a = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 250, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      join: [6],
+      lines: [[1, 0, 256, 300, 688, 695, 686, 72, 300, 2, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const words = (n: number) =>
+      'wort '
+        .repeat(Math.ceil(n / 5))
+        .slice(0, n)
+        .trim()
+    const rows = rowsOf([row([{ t: 'text', s: words(82) }]), { ...row([{ t: 'text', s: words(12) }]), id: idB }])
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const sizes = (ties: Part['ties']) =>
+      layPage({ ...part(a), flows: [[a, b]], ties }, rows, still, metrics()).members.map((m) => m.fit?.size)
+    // (apart: the first at its size, the second shrunk on the row the first leaves it)
+    const [fa, fb] = sizes([])
+    expect(fa).toBe(10)
+    expect(fb).toBeLessThan(10)
+    // (tied: one size, the smaller)
+    expect(sizes([{ rule: 'size', ords: [0, 1] }])).toEqual([fb, fb])
+  })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
     const name = member({

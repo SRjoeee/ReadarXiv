@@ -180,6 +180,31 @@ describe('locate', () => {
     const F = locate(instrumentOf(free, units2, [[0, 1, 1]]), free, align(free, free))
     expect(F.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6))])
   })
+  it('states the line of its own a label stands on: a raised mark on the row it shares with the member before (Label.line)', () => {
+    // (2608.06701v1 p5 t76: footnote 3's mark set raised before its text, on the row footnote 2 ends on: by El.ink's rule (the
+    // line whose band its ink meets, the nearest by baseline) it stands on its first line, the shared row)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'note two ends', y: 700 },
+          { text: '3', x: 152, y: 702.8, size: 6 },
+          { text: 'note three', x: 158, y: 700 },
+          { text: 'runs on below', y: 688 },
+          { text: 'x', x: 72, y: 640, size: 6 },
+        ],
+      },
+    ])
+    const units2 = [unitOf('footnote', 'note two ends'), unitOf('footnote', 'note three runs on below')]
+    const L = locate(
+      instrumentOf(B2, units2, [[0, 1, 1, 1, -1]], [[ROLE.text, ROLE.label, ROLE.text, ROLE.text, ROLE.text]]),
+      B2,
+      align(B2, B2),
+    )
+    const three = L.members[1]!
+    expect(three.lines.map((l) => l[4])).toEqual([700, 688])
+    expect(three.labelAt?.ink[5]).toBe(702.8)
+    expect(three.labelAt?.line).toBe(0)
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
@@ -690,6 +715,94 @@ describe('locate: the room under a unit', () => {
     expect(make(false).below).toBe(1)
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
+  })
+  it('states the room under each run of its text lines with its page’s lowest unit line: at a page’s foot, over its own kept row', () => {
+    // (today's freeFor, RUN:1677 given every block at RUN:2193: a paragraph running on from page 1 borrows at page 1's foot, under
+    // that page's lowest unit line, not the next page's (2608.16117v1-de t23, 2602.23285v2-ja t29); and the room under the text
+    // over a row of its own that stays ends at that row (2608.16117v1-de p27 t89: a paragraph's lines borrowed over its display))
+    const B = docOf([
+      {
+        lines: [
+          { text: 'para one', y: 700 },
+          { text: 'para two', y: 688 },
+          { text: 'other unit', y: 600 },
+        ],
+      },
+      {
+        lines: [
+          { text: 'para three', y: 700 },
+          { text: 'held row', x: 80, y: 688 },
+          { text: 'para four', y: 676 },
+          { text: 'last unit', y: 500 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('para', 'para one para two para three para four'),
+      unitOf('para', 'other unit'),
+      unitOf('para', 'last unit'),
+    ]
+    const L = locate(
+      instrumentOf(B, units, [
+        [0, 0, 1],
+        [0, -1, 0, 2],
+      ]),
+      B,
+      align(B, B),
+    )
+    const para = L.members[0]!
+    expect(para.lines.map((l) => [l[0], l[4], l[9] & 1])).toEqual([
+      [1, 700, 0],
+      [1, 688, 0],
+      [2, 700, 0],
+      [2, 688, 1],
+      [2, 676, 0],
+    ])
+    // (each [the run's last line, the free depth under it to the first ink, the page's lowest unit baseline]: page 1's foot over
+    // the other unit 79 pt down, its page's lowest line 600; the text over the kept row 3 pt down to it; its last line 167 pt
+    // over the last unit, page 2's lowest line 500)
+    expect(para.room.ends).toEqual([
+      [1, 79, 600],
+      [2, 3, 500],
+      [4, 167, 500],
+    ])
+    expect(para.room.below).toBe(167)
+  })
+  it('ends a run of its lines where other ink stands between two of them, and measures it across its own lines from their start', () => {
+    // (2608.16117v1-de p19 t59: its first line the end of a row it shares, then a figure TeX set inside the paragraph, its lines
+    // under it: today's blocks end at the figure's gap and the room under the row's end is read across its own line (from its
+    // start to the column's end), beside the figure; one run read across the measure met the figure and stated none)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'row tail', x: 200, y: 700 },
+          { text: 'caption text here', y: 580 },
+          { text: 'para continues', y: 560 },
+          { text: 'and ends', y: 548 },
+          { text: 'footer text that is long', y: 100 },
+        ],
+        // (the figure: an image left of the row's end, between the row and the paragraph's next line)
+        boxes: [[8, -3, 72, 600, 190, 690]],
+      },
+    ])
+    const units = [
+      unitOf('para', 'row tail para continues and ends'),
+      unitOf('caption', 'caption text here'),
+      unitOf('para', 'footer text that is long'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 0, 0, 2]]), B, align(B, B))
+    const para = L.members[0]!
+    expect(para.lines.map((l) => [l[2], l[4]])).toEqual([
+      [200, 700],
+      [72, 560],
+      [72, 548],
+    ])
+    // (the row's end: across 200..248, beside the figure, down to the footer's top at 107; its last line down to the footer too;
+    // the page's lowest unit line the footer's, 100)
+    expect(para.room.ends).toEqual([
+      [0, 591, 100],
+      [2, 439, 100],
+    ])
   })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one

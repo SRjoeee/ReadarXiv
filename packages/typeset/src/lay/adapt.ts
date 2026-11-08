@@ -62,8 +62,8 @@ export type AdaptInput = {
   rulesOf: (page: number) => readonly number[] | null | undefined
   lineskip: readonly [number, number] | null
   reading: Reading
-  /** the page's lowest unit line, as today's pageBottom (RUN:911: a rectangle's bottom and 0.24 of its height, the lowest of
-   *  the page's units'): no unit borrows below it; undefined where the page has none */
+  /** for a part made before (no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911: a rectangle's bottom
+   *  and 0.24 of its height, the lowest of the page's units'): no unit borrows below it; undefined where the page has none */
   bottomOf?: (page: number) => number | undefined
 }
 export type Adapted = { member: FlowMember } | { stop: string }
@@ -177,24 +177,39 @@ export function adapt(i: AdaptInput): Adapted {
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]
-  // (the borrow room under its last block (today's freeFor RUN:1677, read where the walk asks): down from a third of its size
-  // under its last baseline to the first ink under it (Room.below: under its last line, to the first ink not its own), a
-  // borrowGap of pitches clear of it, and never past the page's lowest unit line; the blocks before it none)
-  const lastBlock = blocks.at(-1)
-  const bottom = lastBlock ? i.bottomOf?.(lastBlock.page) : undefined
+  // (the room each block may borrow under it, read where the walk asks (today's freeFor RUN:1677, which RUN:2193 gives every
+  // block but a cell's): a block that ends a run of its text lines takes the room the part states under that line (Room.ends:
+  // the free depth to the first ink, its own kept rows and elements too, and its page's lowest unit baseline), so that a member
+  // running on to the next page or column borrows at the foot of the one it leaves and none through a display of its own; down
+  // from a third of its size under its last baseline to that ink, a borrowGap of pitches clear of it, never past that lowest
+  // line. A part made before states its last line's room alone (Room.below): its last block's, the page's lowest unit line the
+  // part's (`bottomOf`), as before)
+  const ends = m.room.ends
+  const roomUnder = (b: FitBlock): { inkTop: number; floor: number } | null => {
+    if (ends) {
+      const r = b.rects.at(-1) as Rect
+      const j = (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
+      const e = j === undefined ? undefined : ends.find((x) => x[0] === j)
+      return e ? { inkTop: lines[j!]![6] - e[1], floor: e[2] } : null
+    }
+    const floor = b === blocks.at(-1) ? i.bottomOf?.(b.page) : undefined
+    return floor === undefined ? null : { inkTop: lines.at(-1)![6] - m.room.below, floor }
+  }
+  const gap = Number((R as { borrowGap?: number }).borrowGap ?? 0)
   // (set after the size below is read)
   const borrowRoom = (s: number) => {
-    if (!lastBlock || bottom === undefined) return
-    const last = lastBlock.B.at(-1)!,
-      l = lines.at(-1)!
-    const yStart = last - 0.3 * s,
-      yLimit = bottom - 0.3 * s
-    if (yLimit >= yStart) return
-    const inkTop = l[6] - m.room.below
-    const pitch = lastBlock.pitch0 ?? 1.2 * s
-    const lowest =
-      inkTop <= yLimit + 0.01 ? bottom : inkTop + Number((R as { borrowGap?: number }).borrowGap ?? 0) * pitch + 0.3 * s
-    lastBlock.free = Math.max(0, last - lowest)
+    if (ends && kind === 'cell') return
+    for (const b of blocks) {
+      const room = roomUnder(b)
+      if (!room) continue
+      const last = b.B.at(-1)!
+      const yStart = last - 0.3 * s,
+        yLimit = room.floor - 0.3 * s
+      if (yLimit >= yStart) continue
+      const pitch = b.pitch0 ?? 1.2 * s
+      const lowest = room.inkTop <= yLimit + 0.01 ? room.floor : room.inkTop + gap * pitch + 0.3 * s
+      b.free = Math.max(0, last - lowest)
+    }
   }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
   // lines' bands over 0.894 (RUN:2088))
@@ -294,8 +309,13 @@ export function adapt(i: AdaptInput): Adapted {
             size: sizeOf(bl, b),
           } as Row,
           carried: decor.carried,
+          // (its label on the row: where the part says it stands on its first line, which is the row (Label.line: a mark raised
+          // over the row is the row's); a part made before states no line: its baseline the row's, as before)
           ownLabel:
-            m.label && m.label.ink[0] === bl[0] && Math.abs(m.label.ink[5] - bl[4]) < 0.05
+            m.label &&
+            (m.label.line !== undefined
+              ? m.label.line === 0
+              : m.label.ink[0] === bl[0] && Math.abs(m.label.ink[5] - bl[4]) < 0.05)
               ? [0, m.label.ink[0], m.label.ink[1], m.label.ink[5], m.label.ink[3], m.label.ink[4], m.label.ink[2]]
               : null,
           keptBetween: () => !!m.join![1],
