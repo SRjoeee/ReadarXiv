@@ -658,6 +658,12 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
       expect(fates).toEqual(['text'])
       const [b, to] = only(p)
       expect(to).toEqual(comma.to)
+      // (paired by order alone, its characters not found among the drawn ones: none, never over the whole piece, placeText)
+      const f2: LinkFate[] = []
+      const q = layPage(part(member({ els: [['5', ref()]] }), [{ ...comma, text: '9,' }]), rowsOf([r7]), rules, metrics(), {
+        linkFates: f2,
+      })
+      expect([f2, q.links]).toEqual([['unplaced'], []])
       // (over the drawn "7" alone: the comma is the text's, drawn after it)
       const seven = p.members[0]!.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.startsWith('7'))!
       expect(b[0]).toBeCloseTo(seven.x, 6)

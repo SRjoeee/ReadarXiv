@@ -245,6 +245,10 @@ export function linksOf(
     // Paired as the order rule below pairs (each, each run of one target, or all to one piece), else left to it)
     const byOrder = new Map<number, number>()
     const taken = new Set<number>()
+    // (the tier that gave an element each of its annotations: its geometry, the part's owner, else this order; one paired by
+    // order alone is never laid over the whole piece where its characters are not found, placeText)
+    const tierOf = new Map<number, string>()
+    const tier = (i: number) => tierOf.get(i) ?? 'geometry'
     for (const kind of ['note', 'internal'] as const) {
       const as = text.filter((i) => kindOf(list[i]!.to) === kind && !named.has(key(list[i]!.to)))
       if (!as.length) continue
@@ -258,6 +262,7 @@ export function linksOf(
       ].sort((a, b) => a.id - b.id)
       const runs = runsOf(as, list)
       const to = (i: number, p: (typeof pieces)[number]) => {
+        tierOf.set(i, 'order')
         if (p.el !== null) byEl.set(p.el, [...(byEl.get(p.el) ?? []), i].sort((a, b) => rank.get(a)! - rank.get(b)!))
         else {
           byOrder.set(i, p.id)
@@ -286,7 +291,7 @@ export function linksOf(
       if (crop !== undefined) {
         // (over its crop where the page draws one, else another page of the member draws it)
         if (cropsOn.get(id)!.has(page))
-          groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })) })
+          groups.push({ to: { k: crop, draw: 'crop' }, annots: is.map((i) => ({ ...annot(i), tier: tier(i) })) })
         else for (const i of is) fate(i, 'away')
       } else if (k !== undefined) {
         // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
@@ -297,10 +302,10 @@ export function linksOf(
         if (is.every((i) => !!list[i]!.text))
           groups.push({
             to: { k, draw: 'text', single: is.length === 1 },
-            annots: is.map((i) => ({ ...annot(i), tier: 'geometry' })),
+            annots: is.map((i) => ({ ...annot(i), tier: tier(i) })),
           })
         else if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
-          groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: 'geometry' }] })
+          groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: tier(is[0]!) }] })
           for (const i of is.slice(1)) fate(i, 'text')
         } else for (const i of is) fate(i, 'targets')
       } else for (const i of is) fate(i, here(i) ? 'off' : 'away')
