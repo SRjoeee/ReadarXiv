@@ -13,7 +13,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { linkTargetOf, ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
+import { linkTargetOf, ownersOf, readPdf, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, headEnd, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { columnsAt } from '../layout/stream.mjs'
@@ -54,7 +54,8 @@ const SPAN_STYLES = [
 const styleOf = src => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
- *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close */
+ *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; its
+ *  run-in labels `must` (runIns) */
 export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
   let level = []
   const stack = []
@@ -80,7 +81,8 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
       default: throw new Error(`a piece the front end does not make (${String(p.t).slice(0, 20)})`)
     }
   })
-  return stack.length ? stack[0].outer : level
+  // (its run-in labels `must`, as the source reader states them: packages/engine/src/marks/run-ins.ts)
+  return runIns(stack.length ? stack[0].outer : level)
 }
 
 // ---- today's reader's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
