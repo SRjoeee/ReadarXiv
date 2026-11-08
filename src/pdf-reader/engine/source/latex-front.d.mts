@@ -27,6 +27,8 @@ export declare function inputencOf(text: string, options?: { lineEnvs?: Set<stri
 export declare function urlPercents(text: string, file: string, scan?: { ifs?: ReadonlySet<string>; lineEnvs?: ReadonlySet<string> | null; defined?: { has(name: string): boolean } | null; skipEnvs?: ReadonlySet<string> | null }): string
 /** the placeholder of the list backref sets after a bibliography entry (the pages citing it): an entry's last piece where the package turns the lists on; patch writes nothing for it */
 export declare const BACKREF_LIST: string
+/** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (the engine package's copy of ink-units.mjs, rule 4) */
+export declare const EMAIL_ADDRESS: RegExp
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null

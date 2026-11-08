@@ -197,6 +197,44 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect([...member.elBoxes]).toEqual([['3', [[1, 0]]]])
   })
 
+  it('keeps an ink unit’s e-mail addresses each an element in its own ink, its fill the original’s (#28)', () => {
+    // (2609.36054v2 p1's note: its two grey addresses said as text in colour groups no translation kept, drawn black)
+    const note = 'Correspondence to: alan.chan@example.org and bo.writer@example.ac. The views are ours.'
+    const spec = { lines: ['Body text here', note] }
+    const B = docOf([
+      {
+        ...spec,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 14 + note.length],
+        ],
+      },
+    ])
+    const A = docOf([spec])
+    // (each address grey, and the stop after the second, as the note's colour groups set them; the rest black)
+    const grey = 0x7a7f80
+    const greyAt = (at: number) =>
+      (at >= note.indexOf('alan') && at < note.indexOf(' and ')) ||
+      (at >= note.indexOf('bo.') && at < note.indexOf(' The'))
+    for (const D of [A, B]) for (const g of D.pages[0]!.glyphs) if (g.n === 1 && greyAt(g.k - 14)) g.fill = grey
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const unit = L.units.find((u) => u.kind === 'inkorphan')!
+    expect(
+      unit.content.filter((p) => p.t === 'el').map((p) => [p.t === 'el' && p.kind, p.t === 'el' && p.src]),
+    ).toEqual([
+      ['url', '\\url{alan.chan@example.org}'],
+      ['url', '\\url{bo.writer@example.ac}'],
+    ])
+    const els = new Map(L.members.find((m) => m.kind === 'inkorphan')!.elements)
+    expect([...els].map(([id, e]) => [id, e.text, e.style?.fill, e.ink.length])).toEqual([
+      ['1', 'alan.chan@example.org', grey, 1],
+      ['3', 'bo.writer@example.ac', grey, 1],
+    ])
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

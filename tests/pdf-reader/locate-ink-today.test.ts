@@ -10,6 +10,7 @@ import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/l
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
 import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
 import { contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
@@ -202,6 +203,34 @@ describe('today’s ink makers in the engine package', () => {
     expect(cls(TODAY)).toEqual(['symbols', 'orphan', 'symbols'])
     expect(one(TODAY)).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
     expect(one(T as unknown as Impl)).toEqual({ lines: [['symbols', 'ab'], ['math', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['An orphan line of words after it here'] })
+  })
+  it('keep an e-mail address in an ink unit a run of its own, as the front end keeps one in a source unit’s text (#28)', () => {
+    // (2609.36054v2 p1's note "*Correspondence to: <address> and <address>. The views …", its addresses grey: today's said them as
+    // text in colour groups the translator never saw, and they came back black. Kept, each is an element whose ink is the
+    // original's; the stop after the second is the sentence's, as the front end reads an address in a source unit's text
+    // (latex-front.mjs keepAddresses, its EMAIL_ADDRESS the copy's))
+    const note = 'Correspondence to: alan.chan@example.org and bo.writer@example.ac. The views are ours.'
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: note, y: 688 },
+    ], { points: [['bs1', 16], ['be1', 31 + note.length]] })
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inkorphan').map((u) => u.pieces)
+    }
+    expect(one(TODAY)).toEqual([[{ t: 'text', s: note }]])
+    expect(one(T as unknown as Impl)).toEqual([[
+      { t: 'text', s: 'Correspondence to: ' },
+      { t: 'ph', src: '\\url{alan.chan@example.org}' },
+      { t: 'text', s: ' and ' },
+      { t: 'ph', src: '\\url{bo.writer@example.ac}' },
+      { t: 'text', s: '. The views are ours.' },
+    ]])
+    // (one pattern for both readers: the front end's)
+    expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
+    expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
   })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
     for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))

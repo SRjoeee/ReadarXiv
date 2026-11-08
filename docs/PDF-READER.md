@@ -4625,7 +4625,12 @@ section number's `\quad`, a page number after leaders) or is a running head's fo
 page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
 word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
 (LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
-left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders, and
+left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders (the
+rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mjs`, keeps an e-mail address in a word one too, the
+address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
+groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and it gives each kept run its own ink, which
+today's file draws by its own segments and the copy had given the unit's first placeholder: 149 of the 88 corpus papers' 185 ink
+members of two elements or more drew every run at the first one's place), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular

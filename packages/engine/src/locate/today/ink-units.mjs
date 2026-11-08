@@ -1,6 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but three changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased; each kept run's glyphs by its placeholder stated, `glyphs.runs`): run
+// marked COPY, nothing else but four changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// head's number of its phrase no folio, phrased; each kept run's glyphs by its placeholder stated, `glyphs.runs`; an e-mail address
+// a kept run of its own, addressed): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -28,8 +29,8 @@
 //      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
-//      its source the run's characters; a word that is a web address is one in whatever face (a note of an address alone
-//      is then no unit);
+//      its source the run's characters; a word that is a web address is one in whatever face, and so is an e-mail address in a
+//      word, the word's characters around it the text's (a note of an address alone is then no unit);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -61,7 +62,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
 import { accentTexts } from './accents.mjs'
-import { classifyFont, classOf, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
+import { classifyFont, classOf, EMAIL_ADDRESS, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
@@ -199,6 +200,33 @@ function wordsOf(G, gs, fams) {
   }
   // (an address set in the text's face, \urlstyle{same}: a typewriter run as any, kept, rule 4)
   for (const w of out) if (w.fam === 'text' && URL_WORD.test(w.text)) w.fam = 'mono'
+  return out.flatMap(w => (w.fam === 'text' ? addressed(w) : [w]))
+}
+/** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
+ *  the text's (an address's stop, a bracket), as the front end keeps one in a source unit's text (latex-front.mjs keepAddresses,
+ *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). CHANGED: today's said it as text, in a colour group of its
+ *  run where its ink has another colour, which no translation kept (2609.36054v2 p1's grey addresses drawn black, #28); kept, it is
+ *  an element every reply brings back, its ink the original's. A word's text is its glyphs' (`ts`): an address that begins or
+ *  ends inside a glyph's text takes that glyph whole */
+const ADDRESSES = new RegExp(EMAIL_ADDRESS.source, 'g')
+function addressed(w) {
+  const found = [...w.text.matchAll(ADDRESSES)]
+  if (!found.length) return [w]
+  const starts = []
+  let n = 0
+  for (const t of w.ts) { starts.push(n); n += t.length }
+  const glyphAt = o => { let i = 0; while (i + 1 < starts.length && starts[i + 1] <= o) i++; return i }
+  const out = []
+  const part = (a, b, fam) => { if (b > a) out.push({ gs: w.gs.slice(a, b), ts: w.ts.slice(a, b), text: w.ts.slice(a, b).join(''), fam }) }
+  let from = 0
+  for (const m of found) {
+    const a = glyphAt(m.index), b = glyphAt(m.index + m[0].length - 1) + 1
+    if (a < from) continue
+    part(from, a, 'text')
+    part(a, b, 'mono')
+    from = b
+  }
+  part(from, w.gs.length, 'text')
   return out
 }
 
