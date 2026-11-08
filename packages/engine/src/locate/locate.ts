@@ -31,6 +31,7 @@ import { type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
+import { bySentence, type Word, wordsOn } from './words.ts'
 
 /** where a located unit stands on A against B */
 export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
@@ -96,6 +97,9 @@ export interface Member {
   read: string[]
   /** each line's glyphs on A (global), by line, for the facts read after the lines */
   lineGlyphs: number[][]
+  /** where on A a sentence of its may begin: each word of its projection at its first glyph (words.ts; Placed.words), for a
+   *  unit lit by sentence */
+  words?: Word[]
 }
 
 export interface Located {
@@ -992,6 +996,22 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         }
       }
     }
+  }
+  // ---- where a sentence may begin: each word of a running unit's projection at its first glyph on A (words.ts), a unit drawn
+  // with its own row (no echo of another's, no kept block, no babel name's occurrence, no figure text)
+  for (const mem of members) {
+    const unit = mem.unit >= 0 ? units[mem.unit] : undefined
+    const content = unit ? unit.content : born.get(mem.ord)?.content
+    if (!content || !mem.located || !mem.lines.length || mem.fixed || mem.figure || mem.dir || mem.name !== undefined)
+      continue
+    if (unit?.echo !== undefined || unit?.kept || !bySentence(mem.kind, !!unit?.figure)) continue
+    const lineOf = new Map<number, number>()
+    mem.lineGlyphs.forEach((gs, j) => {
+      for (const a of gs) lineOf.set(a, j)
+    })
+    const text = [...mem.text].sort((x, y) => x - y)
+    const words = wordsOn(content, text.map(gA), (i) => lineOf.get(text[i] as number) ?? -1, sourceText(content))
+    if (words.length) mem.words = words
   }
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined))
   const floors = floorsOf(members)

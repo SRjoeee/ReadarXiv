@@ -260,7 +260,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         // (a page another generation still shows: nothing of it lit on the right until the new one commits)
         if (side === 'right' && composer.muted(n)) continue
         const per = boxesOf(page, lit.id, side, committed)
-        const shapes = lit.s >= 0 && lit.s < per.length ? [per[lit.s] as Box[]] : per
+        // (a sentence the page holds none of, its kept ink lit alone on another page among them: nothing of it here)
+        const shapes = lit.s < 0 ? per : lit.s < per.length ? [per[lit.s] as Box[]] : []
         const layer = layerOf(side, n)
         const frame = panes.frameOf(side, n)
         if (!layer || !frame) continue

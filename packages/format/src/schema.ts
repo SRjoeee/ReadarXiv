@@ -228,7 +228,13 @@ export const Placed = z.object({
   label: Label.optional(),
   tail: z.array(z.tuple([z.string(), Style])).optional(),
   room: Room,
-  cuts: z.array(z.tuple([int, int, num])).optional(),
+  // where on A a sentence of its may begin: each word of its source projection (the text a row's `sentences.src` counts in:
+  // text pieces joined, each element and nested unit one character, a group's edges none), in order, as [its offset there, the
+  // index in `lines` of the line its first glyph stands on, that glyph's x0]; a word whose letters are not the page's in order
+  // [offset, -1, 0]. Stated for a unit lit by sentence (Unit.sentences); a row's start is found at its sentence's first word
+  // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
+  // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
+  words: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
   plain: z.string().optional(),
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's

@@ -1514,3 +1514,64 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
   })
 })
+
+describe('the places on A where a sentence may begin (Placed.words, Unit.sentences)', () => {
+  const partsOf = (ins: Instrument, L: ReturnType<typeof locate>, pages: number) => [
+    ...bundle({
+      ins,
+      located: L,
+      addOn: addOnOf(L, pages),
+      original: new Uint8Array(10),
+      paper: { id: '2501.00001', version: 1, pages },
+      made: 'test',
+    }),
+  ]
+  it('states each word of a running unit’s projection at its first glyph on A, its line and x; a heading none', () => {
+    const B = docOf([{ lines: ['One two three. Four', 'five six. Seven eight.', 'A heading'] }])
+    const units = [unitOf('para', 'One two three. Four five six. Seven eight.'), unitOf('heading', 'A heading')]
+    const ins = instrumentOf(B, units, [[0, 0, 1]])
+    const L = locate(ins, B, align(B, B))
+    // (6 pt a glyph from x 72: "Four" the 16th glyph of the first line, "Seven" the 11th of the second)
+    expect(L.members[0]!.words).toEqual([
+      [0, 0, 72],
+      [4, 0, 96],
+      [8, 0, 120],
+      [15, 0, 162],
+      [20, 1, 72],
+      [25, 1, 102],
+      [30, 1, 132],
+      [36, 1, 168],
+    ])
+    expect(L.members[1]!.words).toBeUndefined()
+    // (the part states them; the units say which a translator cuts into sentences)
+    const objects = partsOf(ins, L, 1)
+    const part = read('part', (objects.find((o) => o.kind === 'part') as { bytes: Uint8Array }).bytes)
+    const placed = part.flows.flat()
+    expect(placed.find((m) => m.kind === 'para')!.words).toEqual(L.members[0]!.words)
+    expect(placed.find((m) => m.kind === 'heading')!.words).toBeUndefined()
+    const us = read('units', (objects.find((o) => o.kind === 'units') as { bytes: Uint8Array }).bytes).units
+    expect(us.find((u) => u.kind === 'para')!.sentences).toBe(true)
+    expect(us.find((u) => u.kind === 'heading')!.sentences).toBeUndefined()
+  })
+  it('places a word where its letters are the page’s in order, a macro’s text beside it none of its; one TeX never set at -1', () => {
+    // (a text macro set as "BERT" before the unit's own "-based": the word "based" at its own "b", never at BERT's; and "two",
+    // which the compile never printed, not placed)
+    const B = docOf([{ lines: ['BERT-based models. They', 'work. One three.'] }])
+    const content = [
+      { t: 'el' as const, id: '0', kind: 'macro', src: '\\bert' },
+      text('-based models. They work. One two three.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const L = locate(instrumentOf(B, [u], [[0, 0]]), B, align(B, B))
+    const words = L.members[0]!.words!
+    // (a word's offset in the projection: the macro one character, then the text)
+    const off = (w: string) => 1 + '-based models. They work. One two three.'.indexOf(w)
+    const at = (w: string) => words.find((x) => x[0] === off(w))
+    expect(words.map((x) => x[0])).toEqual(['based', 'models', 'They', 'work', 'One', 'two', 'three'].map(off))
+    expect(at('based')).toEqual([off('based'), 0, 72 + 5 * 6])
+    expect(at('They')).toEqual([off('They'), 0, 72 + 19 * 6])
+    expect(at('work')).toEqual([off('work'), 1, 72])
+    expect(at('two')).toEqual([off('two'), -1, 0])
+    expect(at('three')).toEqual([off('three'), 1, 72 + 10 * 6])
+  })
+})

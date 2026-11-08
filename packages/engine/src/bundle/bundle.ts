@@ -21,6 +21,7 @@ import {
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
+import { bySentence } from '../locate/words.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
 export type BundleObject =
@@ -141,6 +142,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   if (mem.plain !== undefined) p.plain = mem.plain
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
+  if (mem.words) p.words = mem.words
   return p
 }
 
@@ -185,10 +187,18 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       kind: u.kind,
       content: u.content,
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
+      // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)
+      ...(!u.kept && bySentence(u.kind, !!u.figure) ? { sentences: true as const } : {}),
       ...(u.kept ? { kept: true as const } : {}),
     })
   }
-  for (const [ord, b] of located.born) add({ id: members[ord]!.id, kind: b.kind, content: b.content })
+  for (const [ord, b] of located.born)
+    add({
+      id: members[ord]!.id,
+      kind: b.kind,
+      content: b.content,
+      ...(bySentence(b.kind) ? { sentences: true as const } : {}),
+    })
   const unitDigests: string[] = []
   for (const w of unitWindows(units)) {
     const { bytes, digest } = write('units', { format: 1, units: w })
