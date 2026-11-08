@@ -33,8 +33,9 @@ const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : S
 const stateOf = (st: FitState) => (layoutOf({ state: st } as Raw) as { state: unknown }).state
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 
-/** a unit over a page or column break a frame of which the port fills at a leading of its own (S.fill.leads frameLeadsOf, the
- *  owner's word of 2026-11-08: each paragraph fills the original's block), which today's held to one leading */
+/** a unit over a page or column break, or of paragraphs TeX states inside it, a frame of which the port fills at a leading of
+ *  its own (S.fill.leads frameLeadsOf, the owner's word of 2026-11-08: each paragraph fills the original's block, at its own
+ *  leading), which today's held to one leading */
 export const framed = (p: PassUnit | undefined): boolean =>
   !!p && (!!p.fillLeads || (p.runs ?? []).some((q) => !!(q as PassUnit).fillLeads))
 /** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences (a unit today laid with a

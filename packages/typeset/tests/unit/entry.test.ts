@@ -577,6 +577,89 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid[1]!.lines.length).toBe(7)
     expect(laid[1]!.lines.at(-1)![0] - 556).toBeGreaterThanOrEqual(1.14 * 12 - 0.05)
   })
+  // (a unit of two paragraphs TeX states between its blocks (SpanAt.opens): an item's run-in text, then its prompt TeX set in a
+  // frame of its own, at another measure and size; between two paragraphs whose translations take two lines of four)
+  const zhPage = () => {
+    const zh = rulesFor('zh')
+    const at = (y: number, x0 = 72, x1 = 300, size = 10): Placed['lines'][number] => [
+      1,
+      0,
+      x0,
+      x1,
+      y,
+      y + 0.7 * size,
+      y - 0.2 * size,
+      72,
+      300,
+      0,
+      size,
+    ]
+    const ids = ['b', 'c'].map((c) => c.repeat(64))
+    const ys = (y0: number, n: number, pitch: number, x0?: number, x1?: number, size?: number) =>
+      Array.from({ length: n }, (_, i) => at(y0 - pitch * i, x0, x1, size))
+    const a = member({ ord: 0, text: ids[0], lines: ys(700, 4, 12), room: { below: 20, next: 24 } })
+    const b = member({ ord: 2, text: ids[1], lines: ys(520, 4, 12), room: { below: 200, next: 212 } })
+    const lay = (m: Placed, content: OutPiece[]) => {
+      const rows = rowsOf(
+        [
+          row(content),
+          { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: ids[0]! },
+          { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: ids[1]! },
+        ],
+        true,
+      )
+      return layPage({ ...part(m), flows: [[a, m, b]] }, rows, zh, metrics()).members.find((x) => x.ord === 1)!
+    }
+    return { at, ys, lay }
+  }
+  it('fills each paragraph TeX set inside a unit at its own leading: a roomy one is not held to a full one’s', () => {
+    // (the owner's comment #9 on 2608.25210v2 p3: three prompt boxes, each a unit of two paragraphs, an item's run-in line and its
+    // prompt in a frame. Where the run-in line's translation needs both of its lines, one leading a unit held the prompt, with
+    // room to spare in its frame, to the original's pitch: set solid beside a box whose run-in line took one line and whose
+    // prompt spread. A paragraph's leading is its own (the owner's ruling of 2026-11-08, (a)), each paragraph TeX states one)
+    const { ys, lay } = zhPage()
+    const m = member({
+      ord: 1,
+      lines: [...ys(640, 2, 12), ...ys(612, 4, 9, 82, 290, 8)],
+      spans: [['4', { cmd: 'mypython', opens: 2 }]],
+      room: { below: 25, next: 32 },
+    })
+    const laid = lay(m, [
+      { t: 'text', s: '\u6587'.repeat(60) },
+      { t: 'span', id: '4', content: [{ t: 'text', s: '\u5b57'.repeat(60) }] },
+    ])
+    expect(laid.state).toBe('laid')
+    const prompt = laid.lines.filter((l) => l[3].some((it) => it.s.includes('\u5b57')))
+    // (the run-in text on its two lines, at the original's pitch: it needs both)
+    expect(laid.lines.slice(0, 2).map(([y]) => y)).toEqual([640, 628])
+    // (the prompt from its own first line, its two lines spread over its frame as its neighbours' are, not at the pitch of 9)
+    expect(prompt.length).toBe(2)
+    expect(prompt[0]![0]).toBe(612)
+    expect(prompt[0]![0] - prompt[1]![0]).toBeGreaterThan(1.5 * 9)
+  })
+  it('holds the gap under a paragraph inside a unit to that paragraph’s own leading, as under its last (the ruling of 2026-11-08)', () => {
+    // (the first of two paragraphs TeX states in a unit, three lines of translation in four, filled at its own leading: its
+    // last line no nearer the second paragraph's first than that leading, TeX's own skip there kept, as footFloorAt holds the gap
+    // under the unit's last line; spread to its frame's foot it stood 12 over a paragraph its lines stood 18 apart in)
+    const { ys, lay } = zhPage()
+    const m = member({
+      ord: 1,
+      lines: [...ys(640, 4, 12), ...ys(592, 2, 12)],
+      spans: [['4', { opens: 4 }]],
+      room: { below: 30, next: 36 },
+    })
+    const laid = lay(m, [
+      { t: 'text', s: '\u6587'.repeat(110) },
+      { t: 'span', id: '4', content: [{ t: 'text', s: '\u5b57'.repeat(20) }] },
+    ])
+    expect(laid.state).toBe('laid')
+    const first = laid.lines.filter((l) => l[3].some((it) => it.s.includes('\u6587'))).map(([y]) => y)
+    const second = laid.lines.filter((l) => l[3].some((it) => it.s.includes('\u5b57'))).map(([y]) => y)
+    expect([first.length, second]).toEqual([3, [592]])
+    const pitch = (first[0]! - first[2]!) / 2
+    expect(pitch).toBeGreaterThan(12)
+    expect(first[2]! - 592).toBeGreaterThanOrEqual(pitch - 0.05)
+  })
   it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
     // (the page fill's one size, today's effect (the owner, 2026-11-08: it should look about as today's does), found with the fewest lays:
     // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph

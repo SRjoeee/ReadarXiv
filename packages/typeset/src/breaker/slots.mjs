@@ -30,16 +30,35 @@ const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free ?? 0, st.borrow * (b.pi
  * last frame of one line (no room to give), no line under it
  */
 function footFloorAt(blocks, st, P, s) {
-  const e = P.halfLead, L = st.lead
-  if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
-  const bl = blocks.at(-1), low = lowOf(bl, st, s)
-  if (!(bl.B[0] - low > 0.05)) return null
+  const e = P.halfLead
+  if (!e?.foot || !blocks.length) return null
+  return floorOver(blocks.at(-1), e.below, st.lead, st, s)
+}
+/** the floor of block `b`'s last line at leading L, the original's next line of its column `below` under its last baseline: the
+ *  gap under a paragraph at its own leading (footFloorAt), or null */
+function floorOver(b, below, L, st, s) {
+  if (!(L > 1 + 1e-9) || !Number.isFinite(below)) return null
+  const low = lowOf(b, st, s)
+  if (!(b.B[0] - low > 0.05)) return null
   // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
   // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
   // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
-  const p0 = bl.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, e.below - p0), p0)
-  const floor = bl.B.at(-1) - e.below + L * p0 + skip
+  const p0 = b.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, below - p0), p0)
+  const floor = b.B.at(-1) - below + L * p0 + skip
   return floor > low + 1e-9 ? floor : null
+}
+/**
+ * The same floor under each paragraph TeX states inside the unit (the owner's ruling of 2026-11-08, (a): the gap under a
+ * paragraph follows its own leading, a paragraph's that ends a unit or one that ends inside it): a block whose next block opens
+ * a paragraph (`opens`: SpanAt.opens, El.opens) in its column, the original's next line that paragraph's first, its leading
+ * the block's own (`leads`, the page fill's: each paragraph filled at its own). 2608.25210v2 p3's prompt boxes: an item's
+ * run-in text, then its prompt in a frame; a first paragraph filled to its block's foot stood a pitch of the original over the
+ * second, its own lines half again as far apart. Null where nothing is asked
+ */
+function paraFloorAt(blocks, bi, st, s) {
+  const b = blocks[bi], n = blocks[bi + 1]
+  if (!n?.opens || n.page !== b.page || !(Math.min(b.x1, n.x1) > Math.max(b.x0, n.x0))) return null
+  return floorOver(b, b.B.at(-1) - n.B[0], st.leads?.[bi] ?? st.lead, st, s)
 }
 /** footFloorAt for the fill leadings' guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
 export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
@@ -100,6 +119,12 @@ function slotsAt(blocks, st, P, s) {
   const lows = blocks.map(b => lowOf(b, st, s))
   const floor = st.box ? footFloorAt(blocks, st, P, s) : null
   if (floor !== null) lows[lows.length - 1] = floor
+  // (and under each paragraph TeX states inside the unit, at its own leading: paraFloorAt)
+  if (st.box)
+    for (let bi = 0; bi + 1 < blocks.length; bi++) {
+      const f = paraFloorAt(blocks, bi, st, s)
+      if (f !== null) lows[bi] = f
+    }
   const feet = lows.slice()
   for (let bi = blocks.length - 2; bi >= 0; bi--) if (blocks[bi].through) feet[bi] = feet[bi + 1]
   // (a run's blocks are laid alone, layoutRuns: the unit's first line is the first block's of the unit, P.blockBase the run's
