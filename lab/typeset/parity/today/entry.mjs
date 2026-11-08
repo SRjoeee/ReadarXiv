@@ -138,8 +138,9 @@ window.today = {
     await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
     const anns = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action))
     const bordered = anns.filter((a) => a.borderStyle?.width > 0 && a.borderColor).length
-    // (each annotation's target and rectangle, PDF units: the links counted per target per drawn line, verdict.mjs linksOf)
-    const linkBoxes = anns.map((a) => [a.url ?? (a.dest !== undefined ? `#${JSON.stringify(a.dest)}` : `action:${JSON.stringify(a.action)}`), ...a.rect])
+    // (each annotation's target and rectangle, PDF units, in the order PDF.js lists them (TeX's), flagged A's: the links counted
+    // per target per drawn line, verdict.mjs linksOf)
+    const linkBoxes = anns.map((a) => [a.url ?? (a.dest !== undefined ? `#${JSON.stringify(a.dest)}` : `action:${JSON.stringify(a.action)}`), ...a.rect, 1])
     const { runs, fonts } = await runsOf(p)
     stage().replaceChildren(canvas)
     p.cleanup()

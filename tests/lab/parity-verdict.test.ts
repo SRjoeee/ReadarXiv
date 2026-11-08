@@ -69,13 +69,13 @@ describe('a page measured from what each side drew', () => {
   })
   it('links are counted per target per drawn line: a URL TeX broke over two lines is one link, however many lines each side draws it on', () => {
     // (2610.22065 p7 t126: its URL's two annotations on A, one at the end of a line and one at the start of the next (PDF units,
-    // y up, 9.96 pt lines 11.96 apart); today draws two anchors over two lines, v2 one over the one line it sets the URL on; a
-    // citation [5] of another target on a line far under it, on every side)
+    // y up, 9.96 pt lines 11.96 apart), one after the other as TeX writes them (the 6th field: an annotation of A's); today draws
+    // two anchors over two lines, v2 one over the one line it sets the URL on; a citation [5] of another target far under it)
     const url = 'https://arxiv.org/abs/1503.02531'
     const A = [
-      [url, 420, 600, 540, 609.96],
-      [url, 72, 588.04, 160, 598],
-      ['#cite.5', 300, 400, 312, 409.96],
+      [url, 420, 600, 540, 609.96, 1],
+      [url, 72, 588.04, 160, 598, 1],
+      ['#cite.5', 300, 400, 312, 409.96, 1],
     ]
     const T = [
       [url, 600, 300, 760, 315],
@@ -90,13 +90,27 @@ describe('a page measured from what each side drew', () => {
     const one = measure(v2Of(), boxed({ today: { linksDrawn: 3, linkBoxes: T }, v2: { linksDrawn: 2, linkBoxes: V } }, A))
     expect(worse(one)).toEqual([])
     expect(one.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
-    // (the same target cited on two lines far apart is two links: v2 drawing one of them misses one)
-    const twice = [...A, ['#cite.5', 300, 300, 312, 309.96]]
-    const lost = measure(v2Of(), boxed({ today: { linksDrawn: 4, linkBoxes: [...T, ['#cite.5', 400, 800, 416, 815]] }, v2: { linksDrawn: 2, linkBoxes: V } }, twice))
+    // (a DOI TeX broke from the foot of the left column to the head of the right one: its two annotations one after the other on
+    // A, far apart: one link; v2 draws the DOI on one line in two pieces, one link; today an anchor in each column, two lines not
+    // one under the other, two: more than A's, none missing. 2610.22065 p7's s41928-018-0092-2)
+    const doi = 'https://doi.org/10.1038/s41928-018-0092-2'
+    const cols = measure(
+      v2Of(),
+      boxed(
+        { today: { linkBoxes: [[doi, 189, 935, 208, 945], [doi, 443, 118, 488, 128]] }, v2: { linkBoxes: [[doi, 644, 353, 704, 361], [doi, 706, 354, 750, 360]] } },
+        [[doi, 250, 72, 300, 80, 1], [doi, 320, 700, 360, 708, 1]],
+      ),
+    )
+    expect(worse(cols)).toEqual([])
+    expect(cols.measures.links).toMatchObject({ original: 1, today: 2, v2: 1 })
+    // (the same target cited twice with another link between, on lines far apart: two links; v2 drawing one of them misses one)
+    const twice = [...A, ['#cite.7', 300, 350, 312, 359.96, 1], ['#cite.5', 300, 300, 312, 309.96, 1]]
+    const T2 = [...T, ['#cite.7', 400, 700, 416, 715], ['#cite.5', 400, 800, 416, 815]]
+    const lost = measure(v2Of(), boxed({ today: { linkBoxes: T2 }, v2: { linkBoxes: [...V, ['#cite.7', 400, 700, 416, 715]] } }, twice))
     expect(worse(lost)).toEqual(['links'])
-    expect(lost.measures.links).toMatchObject({ original: 3, today: 3, v2: 2 })
-    // (a page today shows as arXiv's has the original's, counted alike)
-    const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linksDrawn: 2, linkBoxes: V } }, A))
+    expect(lost.measures.links).toMatchObject({ original: 4, today: 4, v2: 3 })
+    // (a page today shows as arXiv's has the original's; a page v2 shows as arXiv's draws A's annotations, counted as A's)
+    const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linkBoxes: A.map((b) => [...b.slice(0, 5), 1]) } }, A))
     expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
   })
   it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {

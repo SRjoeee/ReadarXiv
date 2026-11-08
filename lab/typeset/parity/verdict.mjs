@@ -108,7 +108,7 @@ export const SAYS = {
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
-  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations, counted alike: how many are missing",
+  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
@@ -126,22 +126,32 @@ export const SAYS = {
 
 // ---------------------------------------------------------------- links
 /**
- * A page's links counted per target per drawn line: `boxes` [target, x0, y0, x1, y1] (A's link annotations, or the anchors a side
- * drew, in its own frame; y up or down alike). The boxes of one target that stand on one line, or on lines one under the other,
- * are one link: TeX writes one annotation a line for a link it broke over lines (a URL's end on one line, its rest on the next),
- * which a side may set on one line under one anchor or over two under two. Two boxes are on one line or on adjacent ones where no
- * line of theirs fits between them: the gap between their vertical extents (negative where they overlap) is under the lower of
- * their heights. A box of no height is a link of its own. (So a target cited on lines one under the other counts once: a lenient
- * count, which never makes a side's link missing that a reader can follow)
+ * A page's links counted per target per drawn line: `boxes` [target, x0, y0, x1, y1, annotation?] in the order the page lists
+ * them, each in its own frame (y up or down alike). TeX writes an annotation a line for a link it breaks over lines, the foot of
+ * a column and the head of the next included, one right after the other; a side may set that link on one line under one anchor,
+ * or over two under two. So:
+ * - A's annotations (annotation 1: as PDF.js lists them, also the annotation layer of a page a side shows as arXiv's): those of
+ *   one target one right after the other are one link.
+ * - The anchors a side drew (in its own order, not TeX's): one target's anchors on one line, or on lines one under the other
+ *   (their vertical gap under the lower of their heights: no line of theirs fits between), are one link. An anchor of no height
+ *   is a link of its own.
+ * (Lenient: a target cited twice with no other link between counts once on A, a target on lines one under the other once on a
+ * side; a side's count above A's is never a link missing)
  */
 export function linksOf(boxes) {
+  let n = 0,
+    prev = null
   const by = new Map()
-  for (const [to, x0, y0, x1, y1] of boxes) {
-    const b = { lo: Math.min(y0, y1), hi: Math.max(y0, y1) }
+  for (const [to, , y0, , y1, annotation] of boxes) {
+    if (annotation) {
+      if (to !== prev) n++
+      prev = to
+      continue
+    }
+    prev = null
     if (!by.has(to)) by.set(to, [])
-    by.get(to).push(b)
+    by.get(to).push({ lo: Math.min(y0, y1), hi: Math.max(y0, y1) })
   }
-  let n = 0
   for (const list of by.values()) {
     const sized = list.filter((b) => b.hi > b.lo).sort((a, b) => a.lo - b.lo)
     n += list.length - sized.length
