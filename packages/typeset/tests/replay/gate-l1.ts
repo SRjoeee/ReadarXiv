@@ -10,7 +10,7 @@ import { layPage, nameOf } from '../../src/lay/entry.ts'
 import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
-import { readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { adapt, rectOf } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
@@ -858,6 +858,12 @@ export function gateL1Pair(
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
         const f = `${l.page && l.page !== pg ? 'across ' : ''}${linkFates[i] ?? 'none'}`
         out.entry!.links.set(f, (out.entry!.links.get(f) ?? 0) + 1)
+        // (AXT_GATE_LINKS=<file>: each link's fate a line, its pair, page, index in the part's and owner, to compare two runs)
+        if (process.env.AXT_GATE_LINKS)
+          appendFileSync(
+            process.env.AXT_GATE_LINKS,
+            `${pair}\tp${pg}\t${i}\t${f}\t${l.owner?.[0] ?? ''} ${l.owner?.[1] || 'text'}\n`,
+          )
         const ex = out.entry!.linkEx.get(f) ?? []
         if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
           out.entry!.linkEx.set(f, [...ex, `${pair} p${pg} ord ${l.owner?.[0]} ${l.owner?.[1] || 'text'}`])
