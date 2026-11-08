@@ -6,7 +6,7 @@ import { align } from '../src/align/align.ts'
 import type { Doc } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.types.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
-import { carry } from '../src/locate/ink.ts'
+import { carry, spansOf } from '../src/locate/ink.ts'
 import { locate } from '../src/locate/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
@@ -176,6 +176,29 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const ins = instrumentOf(B, [heading], [[-1, 0]])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.units[1]).toMatchObject({ id: unitId('inkcontents', heading.content), content: heading.content, echo: 0 })
+    // (its groups' commands and link targets the heading's, read from the source as the heading's are; no fill of the log's)
+    const linked: InstrumentUnit = {
+      ...heading,
+      spans: [['0', { cmd: 'href', colour: 0xff, to: { url: 'https://example.org/' } }]],
+    }
+    const E = locate(instrumentOf(B, [linked], [[-1, 0]]), A, align(B, A), { pages: rawOf(A) })
+    expect(E.units[1]!.spans).toEqual([['0', { cmd: 'href', to: { url: 'https://example.org/' } }]])
+  })
+  it('states an ink unit’s link groups’ targets from their opens, as the adapter states a source unit’s (linkTargetOf)', () => {
+    expect(
+      spansOf([
+        { t: 'open', src: '\\href{https://example.org/a\\_b}{' },
+        { t: 'text', s: 'x' },
+        { t: 'close', src: '}' },
+        { t: 'open', src: '\\hyperlink{intro}{' },
+        { t: 'close', src: '}' },
+        { t: 'open', src: '\\emph{' },
+      ]),
+    ).toEqual([
+      ['0', { cmd: 'href', to: { url: 'https://example.org/a_b' } }],
+      ['3', { cmd: 'hyperlink', to: { dest: '"intro"' } }],
+      ['5', { cmd: 'emph' }],
+    ])
   })
 
   it('leaves a unit made on A the original’s where A sets text inside it our compile does not: a content difference', () => {

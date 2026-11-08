@@ -80,7 +80,55 @@ describe('the instrument adapter’s element classes', () => {
     expect(got.get('5')).toMatchObject({ cmd: 'cref*' })
     expect(got.get('6')).toMatchObject({ same: '4' })
     expect(got.get('10')).toMatchObject({ cmd: 'color', colour: 0xff0000 })
-    expect(spansOf(pieces, new Map([[7, 0x0000ff]]))).toEqual([['7', { cmd: 'href', colour: 0x0000ff }]])
+    expect(spansOf(pieces, new Map([[7, 0x0000ff]]))).toEqual([
+      ['7', { cmd: 'href', colour: 0x0000ff, to: { url: 'http://a.b/' } }],
+    ])
+  })
+  it('states a link group’s target where its source names it, as today’s link match reads it (linkKindOf, urlOf)', () => {
+    const open = (src: string) => ({ t: 'open', src })
+    const close = { t: 'close', src: '}' }
+    const x = { t: 'text', s: 'x' }
+    const pieces = [
+      // (an \href's address, TeX's escapes undone, in the WHATWG parser's form; with hyperref's options)
+      open('\\href{https://Example.org/a\\_b\\#c}{'),
+      x,
+      close,
+      open('\\href[pdfnewwindow]{mailto:a@b.org}{'),
+      x,
+      close,
+      // (a \hyperlink's destination by its name, as the part states a named one: JSON)
+      open('\\hyperlink{intro}{'),
+      x,
+      close,
+      // (a \url group's text)
+      open('\\url{'),
+      { t: 'text', s: 'https://example.org/x' },
+      close,
+      // (none: a \hyperref, whose destination is its label's anchor; an address written with a command, which only TeX expands;
+      // one that is no absolute URL; a style group)
+      open('\\hyperref[sec:a]{'),
+      x,
+      close,
+      open('\\href{\\myurl/x}{'),
+      x,
+      close,
+      open('\\href{paper.pdf}{'),
+      x,
+      close,
+      open('\\textbf{'),
+      x,
+      close,
+    ]
+    expect(spansOf(pieces).map(([k, c]) => [k, c.to ?? null])).toEqual([
+      ['0', { url: 'https://example.org/a_b#c' }],
+      ['3', { url: 'mailto:a@b.org' }],
+      ['6', { dest: '"intro"' }],
+      ['9', { url: 'https://example.org/x' }],
+      ['12', null],
+      ['15', null],
+      ['18', null],
+      ['21', null],
+    ])
   })
   it('reads glue and forced breaks as today’s functions do (its copies held equal to layer2.mjs glueOf and tex.mjs FORCED_BREAK)', () => {
     const srcs = ['\\,', '\\:', '\\;', '\\enspace', '\\thinspace', '\\quad', '\\qquad', '\\hspace{1em}', '\\hspace*{0.5cm}', '\\hskip 3pt plus 1pt', '\\kern-2pt', '\\kern 2bp', '\\hspace{\\fill}', '\\\\', '\\\\[2pt]', '\\\\*', '\\newline', '\\linebreak', '$x$']

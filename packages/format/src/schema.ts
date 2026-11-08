@@ -158,13 +158,18 @@ export const El = z.object({
   // the typesetter slices `copy` in
   breaks: z.array(z.tuple([num, int])).optional(),
 })
+/** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
+export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])
 /** a group of the source on A: its style, the paragraph TeX opened at it; the command its open begins with (its name and
- *  star), the fill TeX set its run in */
+ *  star), the fill TeX set its run in; a link group's target where its source names it, as Link.to states an annotation's (an
+ *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
+ *  its name): what the typesetter pairs the group's translation with its annotations by */
 export const SpanAt = z.object({
   style: Style.optional(),
   opens: int.optional(),
   cmd: z.string().optional(),
   colour: int.optional(),
+  to: LinkTo.optional(),
 })
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
@@ -240,7 +245,7 @@ export const Tie = z.discriminatedUnion('rule', [
  *  the part's (an annotation of a member of the page on another of its pages, which a translation may draw on this one) */
 export const Link = z.object({
   box: Box,
-  to: z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })]),
+  to: LinkTo,
   owner: z.tuple([int, z.string()]).optional(),
   text: z.string().optional(),
   page: page.optional(),
@@ -334,6 +339,7 @@ export type Word = z.infer<typeof Word>
 export type Placed = z.infer<typeof Placed>
 export type Tie = z.infer<typeof Tie>
 export type Link = z.infer<typeof Link>
+export type LinkTo = z.infer<typeof LinkTo>
 export type Faces = z.infer<typeof Faces>
 export type Part = z.infer<typeof Part>
 export type Original = z.infer<typeof Original>

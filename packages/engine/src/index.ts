@@ -29,6 +29,7 @@ export {
   ROLE,
   type Role,
 } from './instrument.ts'
+export { linkTargetOf } from './locate/ink.ts'
 export { cutLines } from './locate/lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
 export { type PrepareDeps, prepareBack, type Tally } from './prepare.ts'

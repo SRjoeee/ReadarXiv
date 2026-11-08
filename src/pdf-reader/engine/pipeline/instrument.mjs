@@ -13,7 +13,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
+import { linkTargetOf, ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
@@ -207,13 +207,16 @@ function sourceFactsOf(src, k, first, colours) {
   if (colours?.has(k)) x.colour = colours.get(k)
   return x
 }
-/** each group's facts by its open piece's id: the command its open begins with, and the fill TeX set its run in */
+/** each group's facts by its open piece's id: the command its open begins with, the fill TeX set its run in, and a link
+ *  group's target where its source names it (the engine's linkTargetOf: an \href's or a \url's address, a \hyperlink's
+ *  destination), which the typesetter pairs the group's translation with its annotations by */
 export function spansOf(pieces, colours = null) {
   const out = []
   pieces.forEach((p, k) => {
     if (p.t !== 'open') return
     const c = commandOf(unicodeOf(p.src))
-    const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}) }
+    const to = linkTargetOf(pieces, k)
+    const x = { ...(c ? { cmd: c.cmd } : {}), ...(colours?.has(k) ? { colour: colours.get(k) } : {}), ...(to ? { to } : {}) }
     if (Object.keys(x).length) out.push([String(k), x])
   })
   return out

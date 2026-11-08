@@ -441,6 +441,110 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b.left).toBeCloseTo(6 * 0.5 * b.f, 1)
     expect(b.right).toBeCloseTo(15 * 0.5 * b.f, 1)
   })
+  it('pairs a member’s link groups with its annotations by the target each group states where their counts differ', () => {
+    // (an \href to one address and a \hyperlink to a destination, and between them a link over text that is no group's: three
+    // annotations, two groups, which no rule of order pairs (every link was dropped). The part states each group's target
+    // (SpanAt.to), as today's url and name tiers read it from the source (links.mjs matchUnit); the URL compared in the WHATWG
+    // parser's form, as today's urlOf compares two)
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href', to: { url: 'https://example.org/a' } }],
+        ['3', { cmd: 'hyperlink', to: { dest: '"intro"' } }],
+      ],
+    })
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    const links: Link[] = [
+      { box: [100, 697, 130, 708], to: { url: 'HTTPS://Example.ORG/a' }, owner: [0, ''] },
+      { box: [135, 697, 155, 708], to: { url: 'https://example.org/other' }, owner: [0, ''] },
+      { box: [160, 697, 190, 708], to: { dest: '"intro"' }, owner: [0, ''] },
+    ]
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, links), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['pair', 'unmatched', 'pair'])
+    const [, x0] = p.members[0]!.lines[0]!
+    const f = p.members[0]!.fit!.size
+    expect(p.links.map(([, to]) => to)).toEqual([links[0]!.to, links[2]!.to])
+    // ("hier" six characters from the line's start, "dort" fifteen: half a size each)
+    expect(p.links[0]![0][0] - x0).toBeCloseTo(6 * 0.5 * f, 1)
+    expect(p.links[1]![0][0] - x0).toBeCloseTo(15 * 0.5 * f, 1)
+  })
+  describe('a member over two pages, its groups set on either', () => {
+    // (a paragraph whose first line is page 1's, its second page 2's: an \href to each of two addresses and a \hyperref, whose
+    // destination its source does not name; the first address's annotation on page 1, the second's on page 2, the \hyperref's
+    // none (three groups, two annotations: no rule of order pairs them over the member). Each page's part holds the member's
+    // annotations of its other page with that page, as the bundle gives them)
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href', to: { url: 'https://example.org/one' } }],
+        ['3', { cmd: 'href', to: { url: 'https://example.org/two' } }],
+        ['5', { cmd: 'hyperref' }],
+      ],
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      ],
+    })
+    const one: Link = { box: [72, 97, 120, 108], to: { url: 'https://example.org/one' }, owner: [0, ''] }
+    const two: Link = { box: [72, 697, 120, 708], to: { url: 'https://example.org/two' }, owner: [0, ''] }
+    const onPage = (n: 1 | 2): Part => ({
+      ...part(m, n === 1 ? [one, { ...two, page: 2 }] : [two, { ...one, page: 1 }]),
+      page: n,
+    })
+    /** each page's links, by address, with the text drawn under each */
+    const laidOn = (rr: Row) =>
+      ([1, 2] as const).map((n) => {
+        const p = layPage(onPage(n), rowsOf([rr]), rules, metrics())
+        const items = p.members[0]!.lines.flatMap(([y, , , it]) => it.map((x) => ({ ...x, y })))
+        return p.links.map(([b, to]) => {
+          const under = items.filter((x) => 'face' in x && x.x >= b[0] - 1e-6 && x.x < b[2] && x.y > b[1] && x.y < b[3])
+          return ['url' in to ? to.url : to.dest, under.map((x) => x.s.trim()).join(' ')]
+        })
+      })
+    it('draws each link over its own group where the translation sets it, never over another’s', () => {
+      // (both \href groups set on page 1, the \hyperref on page 2: page 1 draws both links, the second its other page's; page 2
+      // draws none (by order, page 2's own annotation went to the one group drawn there, the \hyperref's translation))
+      const rr = row([
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Eins' }] },
+        { t: 'text', s: ' und ' },
+        { t: 'span', id: '3', content: [{ t: 'text', s: 'Zwei' }] },
+        { t: 'text', s: ' sind die beiden Seiten, von denen ' },
+        { t: 'text', s: 'hier die Rede ist, mehr steht ' },
+        { t: 'span', id: '5', content: [{ t: 'text', s: 'weiter' }] },
+        { t: 'text', s: ' unten.' },
+      ])
+      const [p1, p2] = laidOn(rr)
+      expect(p1).toEqual([
+        ['https://example.org/one', 'Eins'],
+        ['https://example.org/two', 'Zwei'],
+      ])
+      expect(p2).toEqual([])
+    })
+    it('draws each annotation once over both pages, on the page its group falls on (neither lost nor drawn twice)', () => {
+      // (both \href groups set on page 2: page 2 draws both, the first its other page's annotation; page 1 draws neither, at its
+      // box or moved)
+      const rr = row([
+        { t: 'text', s: 'Ein langer Satz steht zuerst und füllt die erste Zeile ganz, ' },
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Eins' }] },
+        { t: 'text', s: ' und ' },
+        { t: 'span', id: '3', content: [{ t: 'text', s: 'Zwei' }] },
+        { t: 'text', s: ' mit ' },
+        { t: 'span', id: '5', content: [{ t: 'text', s: 'dem' }] },
+        { t: 'text', s: ' Rest.' },
+      ])
+      const [p1, p2] = laidOn(rr)
+      expect(p1).toEqual([])
+      expect(p2).toEqual([
+        ['https://example.org/one', 'Eins'],
+        ['https://example.org/two', 'Zwei'],
+      ])
+    })
+  })
   it('lays a link that holds the member’s every line over its whole drawing (a contents entry), drops one over part of it', () => {
     const entry = member({ kind: 'inkcontents', lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]] })
     const whole: Link = { box: [71, 696, 301, 709], to: { dest: '"section.1"' }, owner: [0, ''] }
