@@ -7,7 +7,10 @@
 // its size, how many of its characters are bold and slanted, and the widest word space and letter gap between its drawn
 // characters (in ems of the line's size), the places a crop stands taken out (a crop is a formula's ink, no gap). A character
 // is placed through its <text>'s own transform into the SVG's user space (a figure text turned by `rotate`, an oblique run
-// skewed about its baseline); a turned <text> is one line of its own, told `rot`, with the box its characters cover.
+// skewed about its baseline); a turned <text> is one line of its own, told `rot`, with the box its characters cover and its
+// band as a level line's is read (`band`: each character's advance along its run, from 0.2 of its size under its baseline to
+// 0.8 over it across, turned with it: the browser's own box across a character is its first face's ascent and descent rounded
+// to the pixel, which no layout of either side is made from).
 
 const SPACE = /\s/u
 /** a character of the CJK scripts (a boundary between one and a Latin letter is a word boundary, not a letter gap) */
@@ -63,6 +66,9 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
           const xs = pts.map((q) => q[0]),
             ys = pts.map((q) => q[1])
           const [, sy] = at(start.x, start.y)
+          // (a turned character's band: its advance along, 0.2 of its size under its baseline to 0.8 over, in its own frame)
+          const fs = Number.parseFloat(cs.fontSize)
+          const bp = rot ? [at(ext.x, start.y - 0.8 * fs), at(ext.x + ext.width, start.y - 0.8 * fs), at(ext.x, start.y + 0.2 * fs), at(ext.x + ext.width, start.y + 0.2 * fs)] : null
           chars.push({
             ch: hidden ? OBJ : ch,
             x0: X(Math.min(...xs)),
@@ -71,6 +77,7 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
             top: Y(Math.min(...ys)),
             bottom: Y(Math.max(...ys)),
             rot,
+            ...(bp ? { band: [X(Math.min(...bp.map((q) => q[0]))), Y(Math.max(...bp.map((q) => q[1]))), X(Math.max(...bp.map((q) => q[0]))), Y(Math.min(...bp.map((q) => q[1])))] } : {}),
             text,
             size,
             weight,
@@ -125,8 +132,10 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
       }
       const fills = {}
       for (const c of ink) fills[c.fill] = (fills[c.fill] ?? 0) + 1
+      const bands = rot ? ink.filter((c) => c.band).map((c) => c.band) : []
       return {
         ...(rot ? { rot: true } : {}),
+        ...(bands.length ? { band: [0, 1, 2, 3].map((q) => r2((q < 2 ? Math.min : Math.max)(...bands.map((b) => b[q])))) } : {}),
         y: r2(y),
         y0: cs.length ? r2(Math.min(...cs.map((c) => c.bottom))) : null,
         y1: cs.length ? r2(Math.max(...cs.map((c) => c.top))) : null,

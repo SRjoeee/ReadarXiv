@@ -421,9 +421,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lit = laidV2.get(ord)?.lit ?? { left: [], right: [] }
-    const rb = lit.right.flat(),
-      lb = lit.left.flat()
+    const lit = laidV2.get(ord)?.lit ?? { left: [], right: [], own: [] }
+    // (its boxes as the reader lights them: a turned member's in its run's frame (Laid.lit's dir) on the page, the box each
+    // stands in; its kept ink (`own`) with it on both panes)
+    const onPage = (bs) => (lit.dir ? bs.map((b) => pageBoxOf(b, lit.dir)) : bs)
+    const own = (lit.own ?? []).flatMap(([, bs]) => bs)
+    const rb = onPage([...lit.right.flat(), ...own]),
+      lb = onPage([...lit.left.flat(), ...own])
     if (!rb.length && !lb.length) continue
     const right = ls.map(band),
       left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
@@ -552,6 +556,11 @@ function figuresMatched(groups, prep, facts, n) {
 }
 
 /** whether a box {x0, y0, x1, y1} is covered by the union of boxes [x0, y0, x1, y1], each of its edges within `tol` points */
+/** a box in a run's frame along `dir` [s0, t0, s1, t1] (Laid.lit's dir) as the page's box it stands in */
+function pageBoxOf([s0, t0, s1, t1], [ux, uy]) {
+  const pts = [s0, s1].flatMap((s) => [t0, t1].map((t) => [s * ux - t * uy, s * uy + t * ux]))
+  return [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]
+}
 function covered(b, boxes, tol = NEAR.positionMin) {
   const inset = (a, c) => (c - a > 2 * tol ? [a + tol, c - tol] : [(a + c) / 2, (a + c) / 2])
   const [x0, x1] = inset(b.x0, b.x1),
@@ -576,6 +585,8 @@ function covered(b, boxes, tol = NEAR.positionMin) {
 }
 
 function band(l) {
+  // (a turned line's band as a level line's, turned with it (measure-dom's `band`); a raw file before it, its box)
+  if (l.rot && l.band) return { x0: l.band[0], y0: l.band[1], x1: l.band[2], y1: l.band[3] }
   if (l.rot) return { x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1 }
   return { x0: l.x0, x1: l.x1, y0: l.y - 0.2 * l.size, y1: l.y + 0.8 * l.size }
 }
