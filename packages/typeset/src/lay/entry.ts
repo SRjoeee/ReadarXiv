@@ -8,9 +8,10 @@
 // whole or not at all, a size tie's members at one size), and the members as drawn (D.display). The reader's leave
 // (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
 // off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
-// member after it in its flow, as that member's lead (lay/lead.ts). What it does not compose yet, each said where it is
-// decided: a figure text's members (S.figures: they stay the original's, `kind`), the sentences' boxes (Laid.lit: empty), the
-// page's links (Page.links: empty). A CJK cell's bands are read over the rules its Room.band states.
+// member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: lit
+// whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
+// A's boxes). What it does not compose yet, said where it is decided: a figure text's members (S.figures: they stay the
+// original's, `kind`). A CJK cell's bands are read over the rules its Room.band states.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -22,7 +23,11 @@ import type { TextItem } from '../emit/display.ts'
 import { adapt, rectOf } from './adapt.ts'
 import type { FlowMember } from './flow.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
+import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
+import { inkOfLine, litLaid, litOfA } from './lit.ts'
 import { layPagePrepared } from './page.ts'
+import { tokenBand } from '../emit/sentences.ts'
+import { CJK } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { waitOf } from './wait.ts'
 
@@ -31,6 +36,8 @@ import { waitOf } from './wait.ts'
 export type EntryOptions = {
   heads?: Readonly<Record<string, string>> | null
   names?: ReadonlyMap<string, string> | null
+  /** where given, what became of each of the part's links (lay/links.ts LinkFate, by its index): the gate's count */
+  linkFates?: LinkFate[]
 }
 
 const LABEL_KEPT = 4
@@ -167,9 +174,10 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       state: 'waiting',
       off: 0,
       lines: [],
-      lit: { left: [], right: [], own: [] },
+      lit: litOfA(m, page),
     })),
-    links: [],
+    // (the page is the original's while it waits: every link at A's box, as for a member not laid; no run is measured)
+    links: linksOf(part, page, new Map(), () => 0, o.linkFates),
   })
   if (waiting.length) return waitAll([])
   const R = rules.set
@@ -197,6 +205,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const relabelled = new Set<number>()
   // (the members whose elements on this page are drawn otherwise than kept where they stand: a crop or text in the translation)
   const moved = new Set<number>()
+  // (the elements each member's reading keeps where they stand (U.elements' kept, in place): their ink and their links stay)
+  const keptIn = new Map<number, Set<string>>()
   // (each member read, its faces asked and only then measured: the reading takes no width, B.cover asks Metrics' readiness
   // first, so that a face not loaded is waited for and never measured, PR #620's re-review)
   const read = new Map<
@@ -347,12 +357,15 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     // (today's hide.mjs: its placeholders' group hidden on a page where one with ink there, no display, is not kept where it
     // stands; an element kept in place by the part (El.keep) is in no group)
     const els = new Map(m.els ?? [])
+    const inPlace = new Set<string>()
     for (const [q, res] of rd.resolutions) {
       const p = pieces[q] as { t: string; k?: number } | undefined
       const e = p?.t === 'ph' || p?.t === 'nested' ? els.get(String(p.k)) : undefined
+      if (e && (res.mode === 'kept' || res.inPlace)) inPlace.add(String(p!.k))
       if (!e || e.keep || e.kind === 'display' || res.mode === 'kept' || res.inPlace) continue
       if (e.ink.some((x) => x[0] === page)) moved.add(m.ord)
     }
+    keptIn.set(m.ord, inPlace)
     prepared.set(m.ord, got.member)
   }
   for (const flow of part.flows)
@@ -414,19 +427,30 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   ]
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
+  // (each name drawn as a lead, by the member it leads: its ink on A lit with that member's)
+  const leadOf = new Map<number, Placed>()
+  for (const m of members) {
+    const to = boundTo.get(m.ord)
+    if (to !== undefined) leadOf.set(to, m)
+  }
+  // (the members laid on the page with their layouts: the owners whose links are drawn with them)
+  const owners = new Map<number, LinkOwner>()
   const out: Laid[] = members.map((m) => {
     // (a name drawn on its own: its word on its line, its text group off)
     const nl = names.get(m.ord)
-    if (nl)
+    if (nl) {
+      const here = m.lines[0]![0] === page
       return {
         ord: m.ord,
         page,
         state: 'laid',
         off: 1,
-        lines: m.lines[0]![0] === page ? nl : [],
-        lit: { left: [], right: [], own: [] },
+        lines: here ? nl : [],
+        lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
       }
-    // (a name drawn as its member's lead: its text off where that member is laid, both the original's where it is not)
+    }
+    // (a name drawn as its member's lead: its text off where that member is laid, both the original's where it is not; lit with
+    // the member it leads)
     const to = boundTo.get(m.ord)
     if (to !== undefined) {
       const with_ = (byOrd.get(to)?.state ?? state.get(to)) === 'laid'
@@ -436,7 +460,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         state: with_ ? 'laid' : 'bound',
         off: with_ ? 1 : 0,
         lines: [],
-        lit: { left: [], right: [], own: [] },
+        lit: with_ ? { left: [], right: [], own: [] } : litOfA(m, page),
       }
     }
     const x = byOrd.get(m.ord)
@@ -448,20 +472,57 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     // a laid line, or text in the translation: today's hide.mjs), its label where it is drawn anew or carried as a crop)
     const crops = lines.flatMap((l) => l[3]).filter((it): it is Extract<Item, { src: unknown }> => 'src' in it)
     const off =
-      st !== 'laid'
+      (st !== 'laid'
         ? 0
         : 1 |
           (moved.has(m.ord) || crops.some((c) => c.piece !== 'label' && c.piece !== 'counter') ? 2 : 0) |
-          (relabelled.has(m.ord) || crops.some((c) => c.piece === 'label') ? LABEL_KEPT : 0)
+          (relabelled.has(m.ord) || crops.some((c) => c.piece === 'label') ? LABEL_KEPT : 0)) & ~(m.fixed ?? 0)
+    const layout = x?.lay?.layout
+    const kept = keptIn.get(m.ord) ?? new Set<string>()
+    const pieces = read.get(m.ord)?.pieces
+    if (st === 'laid' && layout && pieces)
+      owners.set(m.ord, {
+        m,
+        layout,
+        off,
+        kept,
+        elOf: (k) => {
+          const p = pieces[k] as { t: string; k?: number } | undefined
+          return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : null
+        },
+      })
     return {
       ord: m.ord,
       page,
       state: st,
-      off: off & ~(m.fixed ?? 0),
+      off,
       ...(x?.fit ? { fit: x.fit } : {}),
       lines,
-      lit: { left: [], right: [], own: [] },
+      lit: st === 'laid' ? litLaid(m, page, layout, { off, kept, lead: leadOf.get(m.ord) ?? null }) : litOfA(m, page),
     }
   })
-  return { page, wait: { rows: [], faces: [] }, members: out, links: [] }
+  return {
+    page,
+    wait: { rows: [], faces: [] },
+    members: out,
+    links: linksOf(part, page, owners, measure.w100, o.linkFates),
+  }
+}
+
+/** a name's line on A as a box: its ink across, its fonts' boxes up and down */
+const boxOfA = (l: Placed['lines'][number]): [number, number, number, number] => {
+  const k = inkOfLine(l)
+  return [k[1], k[2], k[3], k[4]]
+}
+/** a name's drawn line as a box: its runs across, each run's band at its size (D.sentences' tokenBand: a CJK run's em box) */
+const nameBox = ([y, x0, x1, items]: Laid['lines'][number]): [number, number, number, number] => {
+  let bottom = y,
+    top = y
+  for (const it of items) {
+    if (!('size' in it)) continue
+    const b = tokenBand({ cls: CJK.test(it.s) ? 'cjk' : 'latin' }, { f: it.size }, y)
+    bottom = Math.min(bottom, b.bottom)
+    top = Math.max(top, b.top)
+  }
+  return [x0, bottom, x1, top]
 }

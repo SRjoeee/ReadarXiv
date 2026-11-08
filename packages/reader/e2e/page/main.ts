@@ -153,7 +153,8 @@ const h = {
   /**
    * The layer of fixture `name` over the original open: its head and parts read from our server's objects, the original's chunks
    * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
-   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from
+   * given (all at once, or none until `give`), the right composed. `unlaid`: what a page not laid is drawn from; `pages`: the
+   * URL of the pages to lay instead of the dump's (page → Page: a typesetter's own, lab/typeset/checkpoint/entry-reader.mjs)
    */
   async layer(
     name: string,
@@ -163,6 +164,7 @@ const h = {
       target?: string
       classes?: Record<'figures' | 'tables' | 'heads' | 'references' | 'names', boolean>
       ahead?: number
+      pages?: string
       /** an element's crop cut over two lines, as the typesetter cuts a URL (cutCrop) */
       cut?: { piece: string; share: number; text: [string, string] }
     } = {},
@@ -195,11 +197,15 @@ const h = {
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
     ).rows
-    const pages = pagesOf(
-      parts,
-      dump,
-      (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
-    )
+    const pages = o.pages
+      ? new Map(
+          Object.entries((await (await fetch(o.pages)).json()) as Record<string, Page>).map(([n, p]) => [Number(n), p]),
+        )
+      : pagesOf(
+          parts,
+          dump,
+          (m) => fx.face ?? ([...JSON.stringify(m)].some((c) => c.charCodeAt(0) > 127) ? 'cjk' : 'sans'),
+        )
     h.pages = pages
     if (o.cut && !cutCrop(pages, o.cut)) throw new Error(`no crop of ${o.cut.piece} to cut`)
     const given = new Map<string, Row>()

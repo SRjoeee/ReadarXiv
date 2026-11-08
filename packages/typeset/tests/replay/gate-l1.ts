@@ -7,6 +7,7 @@
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { OutPiece, Part, Row } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
+import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import { readFileSync } from 'node:fs'
@@ -79,7 +80,18 @@ export type GateL1 = {
   tokens: Map<number, string>
   /** the entry's check (o.entry): the runner's laid members laid alike by layPage, those not, examples; each page's time by the
    *  entry (the reading, the adapter and the lay: what a reader pays a page), ms */
-  entry?: { alike: number; differ: number; ex: string[]; ms: number[]; names: Map<string, number> }
+  entry?: {
+    alike: number
+    differ: number
+    ex: string[]
+    ms: number[]
+    names: Map<string, number>
+    /** what became of the parts' links (lay/links.ts LinkFate), and examples of the dropped */
+    links: Map<string, number>
+    linkEx: Map<string, string[]>
+    /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
+    lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
+  }
 }
 
 /** I3-I5 over a page's laid members (their lines on the page, as their lay and the page's fill left them) */
@@ -457,7 +469,20 @@ export function gateL1Pair(
     inputs: new Map(),
     readMs: 0,
     tokens: new Map(),
-    ...(o.entry ? { entry: { alike: 0, differ: 0, ex: [], ms: [], names: new Map() } } : {}),
+    ...(o.entry
+      ? {
+          entry: {
+            alike: 0,
+            differ: 0,
+            ex: [],
+            ms: [],
+            names: new Map(),
+            links: new Map(),
+            linkEx: new Map(),
+            lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
+          },
+        }
+      : {}),
   }
   const stop = (why: string) => out.stops.set(why, (out.stops.get(why) ?? 0) + 1)
   const L = ledger(pair)
@@ -813,6 +838,7 @@ export function gateL1Pair(
     if (got) invariantsOf(pg, got.members, R, out.inv)
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
+      const linkFates: LinkFate[] = []
       const page = layPage(
         part as Part,
         entryRows,
@@ -820,9 +846,27 @@ export function gateL1Pair(
         metrics,
         {
           heads: heads?.[L.target]?.heads ?? null,
+          linkFates,
         },
       )
       out.entry.ms.push(performance.now() - t1)
+      // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
+      ;((part as Part).links ?? []).forEach((l, i) => {
+        const f = linkFates[i] ?? 'none'
+        out.entry!.links.set(f, (out.entry!.links.get(f) ?? 0) + 1)
+        const ex = out.entry!.linkEx.get(f) ?? []
+        if (ex.length < 3 && ['off', 'targets', 'unmatched', 'unplaced', 'none'].includes(f))
+          out.entry!.linkEx.set(f, [...ex, `${pair} p${pg} ord ${l.owner?.[0]} ${l.owner?.[1] || 'text'}`])
+      })
+      for (const x of page.members) {
+        if (x.state !== 'laid' || !x.lines.length) continue
+        const lit = out.entry.lit
+        lit.laid++
+        lit.lines += x.lines.length
+        lit.boxes += x.lit.right[0]?.length ?? 0
+        if (x.lit.left.length !== x.lit.right.length) lit.apart++
+        if (!x.lit.right[0]?.length) lit.empty++
+      }
       // (the babel names the entry sets, S.names over the part: each name member on its first page, by its key and state)
       for (const m of (part as Part).flows.flat())
         if (m.kind === 'name' && typeof m.text !== 'string' && m.lines[0]?.[0] === pg) {

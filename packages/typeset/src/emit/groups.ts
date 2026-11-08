@@ -27,6 +27,10 @@ export type GroupsInput = {
   label: { ink: readonly (readonly number[])[]; drawn: boolean } | null
   /** its groups the add-on could not part (Placed.fixed): 2 elements, 4 label */
   fixed?: number
+  /** whether its elements' group is off on the page where the caller decided it (the entry's Laid.off & 2: an element the
+   *  translation draws otherwise than kept where it stands); absent, read from the elements (one with ink on the page not
+   *  kept). An element the translation omits is drawn nowhere else: the entry leaves the group on, its ink shown */
+  elementsOff?: boolean
   /** the characters the reading leaves where they stand on the page (kept or accounted for nowhere): each box and baseline */
   chars?: readonly { box: readonly [number, number, number, number]; base: number }[]
 }
@@ -65,7 +69,7 @@ export function groupsOff(i: GroupsInput): { off: number; shown: Shown[] } {
   let off = 1
   const on = (e: GroupEl) => e.ink.filter((s) => s[0] === i.page)
   const rowsOn = i.els.filter((e) => e.ink.length && on(e).length)
-  const moved = rowsOn.some((e) => !e.display && !e.kept)
+  const moved = i.elementsOff ?? rowsOn.some((e) => !e.display && !e.kept)
   if (moved) off |= 2
   const shown: Shown[] = []
   const displayIds = displayIdsOf(
