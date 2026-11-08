@@ -139,7 +139,7 @@ describe("a unit both sides draw that today highlights: judged on the lines each
   const ys = [523.5, 505.1, 486.6, 468.2, 438.2, 419.8, 401.4, 383, 364.5, 346.1, 327.7, 309.2, 290.8]
   const ends = [290.3, 290.3, 290.2, 126.5, 295.7, 272, 290.3, 295.7, 290.3, 295.7, 290.3, 290.3, 295.6]
   const boxEnds = [290.3, 290.3, 290.3, 121.1, 290.3, 266.6, 290.3, 290.3, 290.3, 290.3, 290.3, 290.3, 290.2]
-  const drawn = ys.map((y, i) => drawnLine(72, ends[i], y, 'x'.repeat(20), 10.91))
+  const drawn = ys.map((y, i) => drawnLine(72, ends[i]!, y, 'x'.repeat(20), 10.91))
   const orig = Array.from({ length: 18 }, (_, i) => factLine(72, 290, 700 - 12 * i, 10))
   const leftAll = [[71, 480, 291, 710]]
   const box = (x1: number, y: number) => [72, y - 1.3, x1, y + 9.6]
