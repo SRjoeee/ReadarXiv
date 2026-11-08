@@ -10,7 +10,7 @@ import { MissingMeasure } from '../../src/metrics/table.ts'
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { derived, firstDifference, flooredIn, ledger } from './tap.ts'
+import { derived, firstDifference, flooredIn, ledger, roomUnderIn } from './tap.ts'
 
 type Raw = Record<string, unknown>
 type Pass = {
@@ -25,7 +25,8 @@ type Pass = {
 }
 /** a pass replayed: its first difference, the units the chain did not lay, how many it filled; `ruled` a pass that differs and
  *  holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`), or one that differs
- *  where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08 */
+ *  where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08; or one on a page
+ *  of a unit a run of which the room ruling lays otherwise (tap.ts roomUnderIn) */
 export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number; ruled?: true }
 
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
@@ -37,9 +38,11 @@ let rules: { targets: Record<string, { params: Raw }> } | null = null
 export const framed = (p: PassUnit | undefined): boolean =>
   !!p && (!!p.fillLeads || (p.runs ?? []).some((q) => !!(q as PassUnit).fillLeads))
 /** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences (a unit today laid with a
- *  borrowed line too: the chain borrows from the room today's walk had, its block's `free`) */
+ *  borrowed line too: the chain borrows from the room today's walk had, its block's `free`), but a unit a run of which the room
+ *  ruling changes (tap.ts roomUnderIn), whose lay is the ruling's */
 export function laysOf(pair: string): { lays: Map<number, PassUnit>; differ: string[] } {
   const L = ledger(pair)
+  const room = roomUnderIn(pair)
   const lays = new Map<number, PassUnit>(),
     differ: string[] = []
   for (const u of L.units) {
@@ -49,10 +52,13 @@ export function laysOf(pair: string): { lays: Map<number, PassUnit>; differ: str
     const c = walkCase(pair, u.ord, last)
     if (typeof c === 'string') continue
     const got = chain(c)
-    if (got.d) differ.push(`ord ${u.ord}: ${got.at} ${got.d}`)
-    if (!got.lay) continue
+    // (a unit the room ruling lays otherwise: the port's own lay, which its page's pass fills)
+    const ruled = !!got.d && room.runs.has(u.ord)
+    if (got.d && !ruled) differ.push(`ord ${u.ord}: ${got.at} ${got.d}`)
+    const lay = ruled ? got.own : got.lay
+    if (!lay) continue
     const admit = u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined
-    lays.set(u.ord, Object.assign(got.lay, { fillable: true, pages: (admit?.pages ?? []) as number[] }))
+    lays.set(u.ord, Object.assign(lay, { fillable: true, pages: (admit?.pages ?? []) as number[] }))
   }
   return { lays, differ }
 }
@@ -82,6 +88,7 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
   const cells = new Set(L.units.filter((u) => u.kind === 'cell').map((u) => u.ord))
   const out: PassResult[] = []
   const gap = flooredIn(pair)
+  const room = roomUnderIn(pair)
   for (const pass0 of L.passes as Pass[]) {
     // (a cell the fill found short: untracked by the ruling, so not full (a cell's `full` is read by nothing: no cell is a
     // body unit the page's size grows), its decision today's but for that; the layouts of one today tracked not compared.
@@ -163,7 +170,8 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
         `L10 ord ${id}`,
       )
     }
-    const ruled = !!d && (gap.pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
+    const ruled =
+      !!d && (gap.pages.has(pass.page) || room.pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
     out.push({ page: pass.page, d: ruled ? null : d, filled: took.length, ...(ruled ? { ruled: true as const } : {}) })
   }
   return out

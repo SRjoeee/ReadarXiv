@@ -385,6 +385,40 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(tight.fit!.size).toBeLessThan(10)
     expect(tight.lines.map(([y]) => y)).toEqual([700, 688])
   })
+  it('borrows the room under a line where it holds no whole line: TeX’s \\lineskip rule sets the last line into it', () => {
+    // (2602.23285v2-ja p5 t32: under a tall formula TeX's rule sets the translation's last line 1.25 pt lower, and the 10.82 pt
+    // of room under the paragraph holds it, a pitch of 10.96 not; the room offered in whole lines offered none, and the
+    // paragraph shrank. Here a 13 pt tall element on the last line: \lineskip 1 sets it about 2 pt lower; TeX's room 8 pt
+    // (its bottom 8 under the last line), then 1 pt)
+    const idEl = [['1', { kind: 'other', ink: [[1, 150, 698, 170, 713, 700]], copy: 'x' }]] as Placed['els']
+    const r = row([
+      { t: 'text', s: 'wort '.repeat(9) },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' ende' },
+    ])
+    const lay = (foot: number) => {
+      const a = member({
+        els: idEl,
+        lines: [
+          [1, 0, 72, 300, 700, 713, 698, 72, 300, 0, 10],
+          [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+        ],
+        room: { below: 0, next: 300, runs: [[1, 200, foot]], sep: 12 },
+      })
+      return layPage({ ...part(a), paper: { ...part(a).paper, lineskip: [1, 1] } }, rowsOf([r]), still, metrics())
+        .members[0]!
+    }
+    const roomy = lay(8)
+    expect([roomy.state, roomy.fit?.size]).toEqual(['laid', 10])
+    const [y1, y2] = roomy.lines.map(([y]) => y)
+    expect([y1, roomy.lines.length]).toEqual([700, 2])
+    expect(y2).toBeLessThan(688 - 1)
+    expect(y2).toBeGreaterThanOrEqual(688 - 8)
+    // (1 pt of room: the line set lower is past TeX's bottom, never laid there; the paragraph shrinks)
+    const tight = lay(1)
+    expect(tight.fit!.size).toBeLessThan(10)
+    expect(tight.lines.every(([y]) => y >= 687 - 0.05)).toBe(true)
+  })
   it('borrows nothing where the part states no TeX room: a part made before, its runs’ room or its separation unstated', () => {
     // (a part made before 2026-11-08 may state the room under each run otherwise, Room.ends: read by nothing; its last line's
     // room alone, Room.below: no fact of TeX's bounds it. A run stated, no separation (a unit TeX set no paragraph for): none)

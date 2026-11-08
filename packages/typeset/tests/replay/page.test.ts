@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { readerDump } from './display.ts'
 import { framed, laysOf, trackedCells } from './pass.ts'
 import { gatePair } from './gate.ts'
-import { firstDifference, flooredIn, hasDerived, hasTap } from './tap.ts'
+import { firstDifference, flooredIn, hasDerived, hasTap, roomUnderIn } from './tap.ts'
 import { hasCache } from './today.ts'
 
 const PAIRS = ['2610.21377v1-zh', '1512.03385v1-ja.pack', '1706.03762v7-de.pack']
@@ -20,6 +20,8 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
         const got = gatePair(pair)
         // (a unit on a page whose fill today held a paragraph's gap to the next one's leading: tap.ts flooredIn)
         const gap = flooredIn(pair)
+        // (a unit on a page of one a run of which the room ruling lays otherwise: tap.ts roomUnderIn)
+        const room = roomUnderIn(pair)
         // (a unit whose frames the port fills each at its own leading: pass.ts framed)
         const { lays } = laysOf(pair)
         // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its size and its lines' text today's)
@@ -42,7 +44,7 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
                     { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
                     `ord ${u.ord}`,
                   )
-            return d && (gap.units.has(u.ord) || framed(lays.get(u.ord))) ? null : d
+            return d && (gap.units.has(u.ord) || room.units.has(u.ord) || framed(lays.get(u.ord))) ? null : d
           })
           .filter((d) => d !== null)
         expect(differ).toEqual([])

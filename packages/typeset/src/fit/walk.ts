@@ -43,13 +43,16 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
       }
     } else if (knob === 'borrow') {
       if (!P.borrow) continue
-      // (the lines its room holds at the original's pitch: one at a time to six, then all it holds)
+      // (the lines its room holds at the original's pitch: one at a time to six, then all of the room. A room under a whole line
+      // is offered too: a line TeX's \lineskip rule sets lower than its slot (a tall formula over it) takes a fraction of a
+      // line, which the room holds (2602.23285v2 p5 t32: 1.25 pt of 10.82, a pitch 10.96); offered in whole lines alone it was
+      // never offered, and the paragraph shrank where TeX's room held it)
       const most = Math.max(0, ...blocks.map((b) => Math.floor((b.free as number) / (b.pitch0 ?? 1.2 * s) + 1e-6)))
       for (let n = 1; n <= Math.min(most, 6); n++) {
         st.borrow = n
         yield { ...st, knob }
       }
-      if (most > 0) {
+      if (blocks.some((b) => (b.free as number) > 0)) {
         st.borrow = 99
         yield { ...st, knob }
       }
