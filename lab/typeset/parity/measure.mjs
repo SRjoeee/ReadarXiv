@@ -159,7 +159,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}${d.ruling ? ` <i>(${esc(d.ruling)})</i>` : ''}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'ruling' ? 'ruling' : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}${d.ruling ? ` <i>(${esc(d.ruling)})</i>` : ''}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'ruling' ? 'ruling' : d.nearer === 'unexercised' ? 'not exercised' : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const fl = FLAGS.filter((f) => p.faults[f])
