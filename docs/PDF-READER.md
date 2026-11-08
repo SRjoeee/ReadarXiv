@@ -2814,16 +2814,16 @@ to flush left; 416 more keep theirs and drop `align` from `read`. The flush chan
 The parity over those 16 pairs (210 pages, against round 4's sheet on the same pages): 28 pages worse than today's, now 31.
 No longer worse: 2602.23285v2 page 7, the comment's ("Acc" laid 182.31–218.07, its middle 200.19 the original's, at the
 original's 7.15 pt; it had been laid from the original's start at 6.97, 22.51 pt past its room, today 13.02, now 12.12),
-2608.25210v2 page 5 and 2610.22065v1 page 6 (cells no longer shrunk). Newly worse: four pages by `align` (2608.25210v2
-pages 13 and 14, 2610.17024v1 page 18, 1706.03762v7 page 8), twelve cells whose line ends with "）": the measure reads a
-drawn line's box, which holds the mark's blank half, where v2's ink stands 0.00 pt off the original's middle or end (the
-breaker hangs the blank half); 1810.04805v2 page 7, a centred "Dev" that now fits, its widening on both sides, and is laid
-3.95 pt past its original's extent, so its header row is translated as the page's two other tables' already are while today
-kept that one whole; 2608.04322v1 page 10, "Avg. HS" centred in a room whose nearer wall is 20.3 pt from its middle and so
-set at 6.10 pt where today keeps 6.97 by drawing it 6.49 pt off its middle and 12.98 past its room. Reading the alignment by
-`inkOf` instead clears the first four and makes three other lines worse (a v2 line whose last character, before a formula's
-crop its text does not hold, is a comma; a closing mark the breaker already compressed), so the parity's reading was left as
-it is.
+2608.25210v2 page 5 and 2610.22065v1 page 6 (cells no longer shrunk). Newly worse: four pages by `align` (2608.25210v2 pages
+13 and 14, 2610.17024v1 page 18, 1706.03762v7 page 8), twelve cells whose line ends with a full-width closing parenthesis
+(U+FF09): the measure reads a drawn line's box, which holds the mark's blank half, where v2's ink stands 0.00 pt off the
+original's middle or end (the breaker hangs the blank half); 1810.04805v2 page 7, a centred "Dev" that now fits, its widening
+on both sides, and is laid 3.95 pt past its original's extent, so its header row is translated as the page's two other
+tables' already are while today kept that one whole; 2608.04322v1 page 10, "Avg. HS" centred in a room whose nearer wall is
+20.3 pt from its middle and so set at 6.10 pt where today keeps 6.97 by drawing it 6.49 pt off its middle and 12.98 past its
+room. Reading the alignment by `inkOf` instead clears the first four and makes three other lines worse (a v2 line whose last
+character, before a formula's crop its text does not hold, is a comma; a closing mark the breaker already compressed), so the
+parity's reading was left as it is.
 
 ## 19. The engine's contract
 
