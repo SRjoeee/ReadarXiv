@@ -57,6 +57,24 @@ export declare function outsidePieces(
   units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
   owners: { glyphs: readonly Owners[] },
 ): NonNullable<Instrument['outside']>
+/** the ink TeX set for a unit's tail pieces past its end point that no point of theirs bounds (`ink`: each claim's unit, piece id, page
+ *  index from 0, glyphs and role), and the text macros there of a probe's text whose ink is not found (`unfound`) */
+export declare function tailInkOf(
+  pages: readonly {
+    glyphs: readonly { u?: string; blank?: boolean }[]
+    boxes?: readonly number[]
+    points?: readonly { name: string; glyph: number; box?: number }[]
+  }[],
+  units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  o?: {
+    glyphs?: readonly Owners[]
+    classes?: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]
+    inkless?: readonly string[] | null
+  },
+): {
+  ink: { unit: number; piece: string; page: number; glyphs: number[]; role: number }[]
+  unfound: { unit: number; piece: string }[]
+}
 /** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known); `open`
  *  the placeholder points open at the page's start by unit, carried by the caller from page to page in order (it is updated) */
 export declare function glyphPiecesOf(

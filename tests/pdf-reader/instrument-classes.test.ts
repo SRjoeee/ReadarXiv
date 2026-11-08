@@ -13,6 +13,7 @@ import {
   outsidePieces,
   placesOf,
   spansOf,
+  tailInkOf,
   textsOf,
 } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
@@ -506,5 +507,107 @@ describe('the pieces TeX sets no ink for, as the instrument states them (Instrum
       { unit: 3, piece: '5' },
       { unit: 3, piece: '7' },
     ])
+  })
+})
+
+describe('the ink TeX set past a unit’s end point for its tail pieces that no point bounds (tailInkOf)', () => {
+  // (the marking sets a unit's end point after its last text: a piece after it that TeX gave no closing point — a paper's macro
+  // that may read ahead, its opening point alone (2608.25210v2 u8's `doi:\vldbdoi`), or one no mark may stand before (2610.21313v1
+  // u3's e-mail after `\\`, which reads ahead) — has ink no reading of the ownership's gives anyone: the typesetter drew the
+  // translation's DOI over the original's DOI, never erased, 218 device px. TeX states what it sets: its probe's
+  // text, a literal piece's characters as written, a text symbol's character; the glyphs right after its start that spell it)
+  type G = { u: string }
+  const glyphs = (s: string): G[] => [...s].map((u) => ({ u }))
+  const pt = (name: string, glyph: number) => ({ name, glyph, box: 0 })
+  const owners = (row: (string | null)[]) => {
+    const O = { unit: new Int32Array(row.length).fill(-1), role: new Uint8Array(row.length), piece: new Int32Array(row.length).fill(-1) }
+    row.forEach((g, j) => {
+      const m = /^u(\d+)$/.exec(g ?? '')
+      if (m) { O.unit[j] = Number(m[1]); O.role[j] = 1 }
+    })
+    return O
+  }
+  const unitAt = (at: number, kind: string, pieces: unknown[]) => {
+    const units: unknown[] = []
+    units[at] = { kind, pieces }
+    return units
+  }
+  const run = (page: { glyphs: G[]; points: unknown[] }, row: (string | null)[], units: unknown[], classes: [number, [string, unknown][]]) => {
+    const by: unknown[] = []
+    by[classes[0]] = new Map(classes[1])
+    return tailInkOf([{ boxes: [], ...page }] as never, units as never, { glyphs: [owners(row)], classes: by } as never).ink
+  }
+  const fill = (n: number, g: string | null) => Array(n).fill(g)
+  const vldb = unitAt(8, 'footnote', [{ t: 'text', s: 'see doi:' }, ph('\\vldbdoi'), { t: 'close', src: '}' }, { t: 'text', s: ' ' }, ph('\\\\'), { t: 'text', s: '\n' }])
+  const doi: [number, [string, unknown][]] = [8, [['1', { cls: 'umacro', unknown: true, text: '10.1/2' }], ['4', { cls: 'space', brk: true }]]]
+  const vldbPage = { glyphs: glyphs('seedoi:10.1/2Next'), points: [pt('8s', 0), pt('8e', 7), pt('p8.1a', 7), pt('bs3', 13)] }
+  it('gives a macro past the end point the glyphs after its opening point that spell the text TeX showed it sets', () => {
+    expect(run(vldbPage, [...fill(7, 'u8'), ...fill(6, null), ...fill(4, 'u9')], vldb, doi)).toEqual([
+      { unit: 8, piece: '1', page: 0, glyphs: [7, 8, 9, 10, 11, 12], role: 2 },
+    ])
+  })
+  it('gives a literal piece of no point, its unit’s first of ink past the end point, the glyphs from that point (an e-mail)', () => {
+    const units = unitAt(3, 'affiliation', [{ t: 'text', s: 'Haining, China ' }, ph('\\\\'), { t: 'text', s: '\n' }, ph('a@b.cn'), { t: 'close', src: '}' }])
+    const page = { glyphs: glyphs('Haining,Chinaa@b.cnKai'), points: [pt('3s', 0), pt('3e', 13), pt('4s', 19)] }
+    const got = run(page, [...fill(13, 'u3'), ...fill(6, null), ...fill(3, 'u4')], units, [3, [['1', { cls: 'space', brk: true }], ['3', { cls: 'other', copy: 'a@b.cn', literal: true }]]])
+    expect(got).toEqual([{ unit: 3, piece: '3', page: 0, glyphs: [13, 14, 15, 16, 17, 18], role: 2 }])
+  })
+  it('gives a text symbol’s glyph its unit’s text, as own.mjs does, and nothing past what it sets (a cell’s `\\%` before others’)', () => {
+    const units = unitAt(5, 'cell', [{ t: 'text', s: '12.3' }, ph('\\%')])
+    const page = { glyphs: glyphs('12.3%0.19'), points: [pt('t5s', 0), pt('t5e', 4), pt('t6s', 9)] }
+    expect(run(page, [...fill(4, 'u5'), ...fill(5, null)], units, [5, [['1', { cls: 'symbol', copy: '%', sym: ['%'] }]]])).toEqual([
+      { unit: 5, piece: '1', page: 0, glyphs: [4], role: 1 },
+    ])
+  })
+  it('reads the tail pieces in order, each from where the one before it ended', () => {
+    const units = unitAt(5, 'para', [{ t: 'text', s: 'at' }, ph('\\%'), { t: 'text', s: ' ' }, ph('a@b.cn')])
+    const page = { glyphs: glyphs('at%a@b.cn'), points: [pt('5s', 0), pt('5e', 2), pt('6s', 9)] }
+    expect(run(page, [...fill(2, 'u5'), ...fill(7, null)], units, [5, [['1', { cls: 'symbol', copy: '%', sym: ['%'] }], ['3', { cls: 'other', copy: 'a@b.cn', literal: true }]]])).toEqual([
+      { unit: 5, piece: '1', page: 0, glyphs: [2], role: 1 },
+      { unit: 5, piece: '3', page: 0, glyphs: [3, 4, 5, 6, 7, 8], role: 2 },
+    ])
+  })
+  it('gives none where the glyphs spell otherwise, another unit owns one first, or a point stands before its text ends', () => {
+    const row = [...fill(7, 'u8'), ...fill(6, null), ...fill(4, 'u9')]
+    expect(run({ ...vldbPage, glyphs: glyphs('seedoi:10.9/2Next') }, row, vldb, doi)).toEqual([])
+    expect(run(vldbPage, [...fill(7, 'u8'), 'u9', ...fill(5, null), ...fill(4, 'u9')], vldb, doi)).toEqual([])
+    expect(run({ ...vldbPage, points: [pt('8s', 0), pt('8e', 7), pt('p8.1a', 7), pt('9s', 10)] }, row, vldb, doi)).toEqual([])
+  })
+  it('gives none where TeX states no text for it, nor to a piece after it with no point of its own', () => {
+    // (\inst{1}'s copy is the reader's reading of its source, no statement of TeX's: the e-mail after it has no known start)
+    const units = unitAt(5, 'author', [{ t: 'text', s: 'Ann' }, ph('\\inst{1}'), ph('a@b.cn')])
+    const page = { glyphs: glyphs('Ann1a@b.cn'), points: [pt('5s', 0), pt('5e', 3), pt('6s', 10)] }
+    expect(run(page, [...fill(3, 'u5'), ...fill(7, null)], units, [5, [['1', { cls: 'other', copy: '1' }], ['2', { cls: 'other', copy: 'a@b.cn', literal: true }]]])).toEqual([])
+  })
+  it('spells it case aside, as TeX may set a macro’s text in capitals its probe’s box does not (2010.11929v2’s heading)', () => {
+    const units = unitAt(5, 'heading', [{ t: 'text', s: 'Inspecting ' }, ph('\\oursfull{}')])
+    const page = { glyphs: glyphs('InspectingVISIONTRANSFORMERNext'), points: [pt('h5s', 0), pt('h5e', 10), pt('p5.1a', 10), pt('6s', 27)] }
+    expect(run(page, [...fill(10, 'u5'), ...fill(17, null), ...fill(4, 'u6')], units, [5, [['1', { cls: 'umacro', unknown: true, text: 'Vision Transformer' }]]])).toEqual([
+      { unit: 5, piece: '1', page: 0, glyphs: Array.from({ length: 17 }, (_, j) => 10 + j), role: 2 },
+    ])
+  })
+  it('gives a macro TeX bounded by the end point and its point after its group the glyphs between them, no unit’s', () => {
+    // (\axttg: the end point its opening point, a point after the group it stands in its closing one; 2610.19159v1 u1264)
+    const units = unitAt(5, 'para', [{ t: 'text', s: 'word' }, ph('\\mark{Lenient}')])
+    const page = { glyphs: glyphs('word(Lenient)Next'), points: [pt('5s', 0), pt('5e', 4), pt('p5.1g', 13), pt('6s', 13)] }
+    expect(run(page, [...fill(4, 'u5'), ...fill(9, null), ...fill(4, 'u6')], units, [5, [['1', { cls: 'other' }]]])).toEqual([
+      { unit: 5, piece: '1', page: 0, glyphs: [4, 5, 6, 7, 8, 9, 10, 11, 12], role: 2 },
+    ])
+  })
+  it('names a text macro past the end point whose ink it does not find: its glyphs are no text of its unit’s', () => {
+    // (2608.06701v1 u133, `Comparison Against \sage`: "SAGE" the next paragraph's label by the ownership; the probe's text drawn
+    // as the heading's, beside the label's "SAGE:" kept. Not where its own two points bound it: TeX's span says what it set)
+    const by: unknown[] = []
+    by[8] = new Map(doi[1])
+    const got = tailInkOf([{ boxes: [], ...vldbPage }] as never, vldb as never, { glyphs: [owners([...fill(7, 'u8'), ...fill(6, 'u9'), ...fill(4, 'u9')])], classes: by } as never)
+    expect(got).toEqual({ ink: [], unfound: [{ unit: 8, piece: '1' }] })
+    const bounded = { ...vldbPage, points: [...vldbPage.points.slice(0, 3), pt('p8.1b', 13)] }
+    expect(tailInkOf([{ boxes: [], ...bounded }] as never, vldb as never, { glyphs: [owners([...fill(7, 'u8'), ...fill(10, 'u9')])], classes: by } as never)).toEqual({ ink: [], unfound: [] })
+  })
+  it('leaves a piece its own two points bound, or the ownership gave ink, as it is, and reads on past its closing point', () => {
+    const units = unitAt(5, 'para', [{ t: 'text', s: 'at' }, ph('\\cite{x}'), ph('\\%')])
+    const page = { glyphs: glyphs('at[1]%Next'), points: [pt('5s', 0), pt('5e', 2), pt('p5.1a', 2), pt('p5.1b', 5), pt('6s', 6)] }
+    const row = [...fill(2, 'u5'), ...fill(3, null), null, ...fill(4, 'u6')]
+    expect(run(page, row, units, [5, [['1', { cls: 'cite' }], ['2', { cls: 'symbol', copy: '%', sym: ['%'] }]]])).toEqual([{ unit: 5, piece: '2', page: 0, glyphs: [5], role: 1 }])
   })
 })
