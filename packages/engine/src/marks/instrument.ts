@@ -30,6 +30,7 @@ import { classOf, symbolText } from './classes.ts'
 import { followsOf, spellOf, writtenOf } from './follows.ts'
 import { type Plan, pieceIdsOf } from './mark.ts'
 import { IMAGE_BOX, type PageGlyph, type PagePoint, type PageRead } from './page.ts'
+import { INK_ANY } from './probe.ts'
 import { readStates, SENTENCE_POINT, type TexState } from './statements.ts'
 import { framedOf, type Ink, OWNED, piecesInk, type Regions } from './stream.ts'
 
@@ -136,6 +137,17 @@ const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 /** a word's space at a glyph's size (TeX's interword space is a third of an em in Computer Modern, fontdimen 2: a gap of a
  *  fifth of an em or more is one; a kern between letters, an italic correction, is less) */
 const WORD_SPACE = 0.2
+/** one glyph of a lead read against its text from its end (marks.mjs leadStep): `want` the text up to `end` (exclusive), `t` the
+ *  glyph's, both NFKC with no white space. An INK_ANY is one glyph of any text but none (a blank glyph is no formula's); every
+ *  other character is spelled by the glyphs' own, a blank glyph passed over between them. The end past the glyph, or -1 */
+function leadStep(want: string, end: number, t: string): number {
+  if (end <= 0) return -1
+  if (want[end - 1] === INK_ANY) return t ? end - 1 : -1
+  if (!t) return end
+  const k = end - t.length
+  const part = k >= 0 ? want.slice(k, end) : null
+  return part === t && !part.includes(INK_ANY) ? k : -1
+}
 /** the same baseline: two glyphs whose baselines are within half the larger size */
 const onLine = (a: PageGlyph, b: PageGlyph) => Math.abs(a.y - b.y) < 0.5 * Math.max(a.size, b.size)
 type At = [number, number]
@@ -350,14 +362,21 @@ export function instrumentFromPlan({
   // ---- a unit's lead text symbols with no point of their own (own.mjs headSymbolsOf, MR 5b's symbols): TeX sets their
   // characters right before the unit's start point, on its line; the glyphs there, in stream order, that set exactly those
   // characters are the unit's text (the layer draws a text symbol as its character: `\#\# Role`, an affiliation's `\{kahe,
-  // …\}`, a cell's `\#`). Before the labels, which take what is left. Not ported: a cell's lead macro by the text the probe
-  // showed it sets (CELL_ABUT, a threshold), which stays no unit's
+  // …\}`, a cell's `\#`). Before the labels, which take what is left.
+  // And a cell's lead macro (own.mjs MR 5b): a cell takes no head mark (a mark before \multicolumn's \omit is refused, mark.ts),
+  // so a paper's macro (or inline code) that opens it has its ink right before the cell's start point too; the glyphs there that
+  // spell the text the probe showed it sets (`texts`, probe.ts inkTexts: 1810.04805v2 p7's `\bertbase (Single)`, "BERTBASE"; a
+  // formula's glyph it spells no character of, INK_ANY, one glyph) are that piece's ink. The spelling bounds the run: it takes
+  // exactly the glyphs that spell the lead, nearest the start first, and stops (today's CELL_ABUT, a gap under 0.6 em between
+  // them, a threshold, is not ported: an unmarked cell before it, a number, is passed over only where its glyphs spell the lead)
   const symbolsInText = new Set<string>()
   for (const [id, { s }] of textOf) {
     if (!s) continue
     const ps = doc.units[id]?.pieces ?? []
-    let want = ''
-    const ks: number[] = []
+    const cell = doc.units[id]?.kind === 'cell'
+    /** the lead's parts in order, each its text and its piece (a text symbol's: the unit's text) */
+    const parts: { k: number; text: string; symbol: boolean }[] = []
+    let ok = true
     for (let k = 0; k < ps.length; k++) {
       const p = ps[k] as (typeof ps)[number]
       if (p.t === 'text') {
@@ -366,32 +385,46 @@ export function instrumentFromPlan({
       }
       if (!classOf(p)) continue
       const sym = p.t === 'ph' ? symbolText(p.src) : null
-      if (sym === null || w.opening(id, k) || w.closing(id, k)) {
-        want = ''
+      const said = sym === null && cell && p.t === 'ph' ? texts?.get(p.src) : undefined
+      if ((sym === null && said === undefined) || w.opening(id, k) || w.closing(id, k)) {
+        ok = false
         break
       }
-      want += sym.normalize('NFKC').replace(/\s/g, '')
-      ks.push(k)
+      parts.push({ k, text: (sym ?? said ?? '').normalize('NFKC').replace(/\s/g, ''), symbol: sym !== null })
     }
+    const want = ok ? parts.map((x) => x.text).join('') : ''
     if (!want) continue
     const [p] = s
     const S = pt(s)
     const F = (pages[p] as PageRead).glyphs[S.glyph]
     if (!F) continue
-    const run: number[] = []
+    // (each glyph of the run and where its text begins in the lead's)
+    const run: [g: number, from: number][] = []
     let end = want.length
     for (let g = S.glyph - 1; g >= 0 && end > 0; g--) {
       const G = glyphOf(p, g)
       const t = (G.u ?? '').normalize('NFKC').replace(/\s/g, '')
       if ((regions[p] as Regions).glyph[g] !== at(s) || ownerAt(p, g) >= 0 || !onLine(G, F)) break
+      const e = leadStep(want, end, t)
+      if (e < 0) break
       if (!t) continue
-      if (!want.slice(0, end).endsWith(t)) break
-      run.push(g)
-      end -= t.length
+      run.push([g, e])
+      end = e
     }
     if (end !== 0) continue
-    for (const g of run) set(glyphs[p] as Owners, g, id, ROLE.text)
-    for (const k of ks) symbolsInText.add(`${id}.${k}`)
+    // (each glyph its part's: a text symbol's the unit's text, a macro's its piece's ink)
+    const startOf: number[] = []
+    parts.reduce((n, x) => {
+      startOf.push(n)
+      return n + x.text.length
+    }, 0)
+    for (const [g, from] of run) {
+      const q = startOf.findLastIndex((n) => n <= from)
+      const part = parts[q] as (typeof parts)[number]
+      if (part.symbol) set(glyphs[p] as Owners, g, id, ROLE.text)
+      else set(glyphs[p] as Owners, g, id, ROLE.element, part.k)
+    }
+    for (const x of parts) if (x.symbol) symbolsInText.add(`${id}.${x.k}`)
   }
 
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's

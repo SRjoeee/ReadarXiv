@@ -280,6 +280,43 @@ describe('instrumentFromPlan: B’s points joined to the units through the plan'
     })
     expect(roles(ins).slice(0, 3)).toEqual([1, 1, 1])
   })
+  it('gives a cell’s lead macro the glyphs that spell the text the probe showed it sets, right before its start (own.mjs MR 5b)', () => {
+    // (1810.04805v2 p7's `\\bertbase (Single)`: a cell takes no head mark (a mark before \\multicolumn's \\omit is refused), so
+    // TeX sets the macro's ink before the cell's start point; the number cell before it is no unit's, and its glyphs abut)
+    const tree = {
+      main: 'main.tex',
+      files: new Map([
+        [
+          'main.tex',
+          enc.encode(
+            '\\documentclass{article}\\newcommand\\bertbase{BERT$_{\\textsc{base}}$}\\begin{document}\n' +
+              '\\begin{tabular}{ll}\n85.1 & \\bertbase (Single) \\\\\n\\end{tabular}\n\\end{document}\n',
+          ),
+        ],
+      ]),
+    }
+    const doc = readSource(tree, NO_DEFINITIONS)
+    const { plan } = markSource(tree, doc)
+    expect(doc.units[0]?.kind).toBe('cell')
+    const pg = page('85.1BERTBASE(Single)', [
+      ['t0s', 12],
+      ['t0e', 20],
+    ])
+    const lay = (texts: Map<string, string>) =>
+      instrumentFromPlan({
+        ink: { pages: [] },
+        pages: [pg],
+        plan,
+        doc,
+        texts,
+        made: { compiler: 'pdflatex', tree: '2025' },
+      })
+    const ins = lay(new Map([['\\bertbase', 'BERTBASE']]))
+    expect(roles(ins)).toEqual([0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1])
+    expect([...(ins.glyphs[0]?.piece ?? [])].slice(4, 12)).toEqual(Array(8).fill(0))
+    // (a text the glyphs there do not spell: no unit's, as before)
+    expect(roles(lay(new Map([['\\bertbase', 'BERTLARGE']]))).slice(0, 12)).toEqual(Array(12).fill(0))
+  })
   it('ends a pathological paper in no layer and why (WorkBound), never in a hang: ranges each running to the page’s end', () => {
     // (400 paragraphs whose start points TeX set on one page of 40,000 glyphs and whose end points all stand at its end:
     // each text range is the rest of the page, 16 million glyphs visited against a bound of 2 million)
