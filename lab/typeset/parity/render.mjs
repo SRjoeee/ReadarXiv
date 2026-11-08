@@ -38,6 +38,10 @@ const WORK = arg('work')
 const OUT = arg('out')
 if (!WORK || !OUT) throw new Error('render.mjs: --work=<dir> and --out=<dir> are required')
 const PAGES = arg('pages')?.split(',').map(Number) ?? null
+/** the toggles both readers draw under: the defaults, or every switch on (--toggles=on); each pair's v2 file must be laid under
+ *  the same (v2.mjs --toggles) */
+const TOGGLES = arg('toggles') === 'on' ? 'on' : 'defaults'
+const CLASSES_ON = { figures: true, tables: true, heads: true, references: true, names: true }
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const pairs = asked.length ? asked : PAIRS
 /** the web's tree of this release (its faces' module and static index): AXT_WEB, else the worktree beside the face tables */
@@ -63,7 +67,7 @@ const sha = (b) => createHash('sha256').update(b).digest('hex')
 /** today's prepare dumps read so far, by paper (prepOf) */
 const preps = new Map()
 // (the manifest, written before anything is drawn: a run that stops or fails leaves it not done)
-const RUN = { id: `${new Date().toISOString()}-${process.pid}`, at: new Date().toISOString(), pairs, pages: PAGES, done: false, stopped: null, missing: [] }
+const RUN = { id: `${new Date().toISOString()}-${process.pid}`, at: new Date().toISOString(), pairs, pages: PAGES, toggles: TOGGLES, done: false, stopped: null, missing: [] }
 const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stringify(RUN, null, 1)}\n`)
 manifest()
 // ---------------------------------------------------------------- today's page: esbuild over today's engine and the web
@@ -163,7 +167,7 @@ for (const pair of pairs) {
   // (today's: the catalog's objects by digest, from the sweep cache; its rows the door rows, as the baseline's reader laid them)
   const c = json(cat)
   files.set(`/rows/${pair}.json`, Buffer.from(JSON.stringify([...rows.values()])))
-  todayDesc.set(pair, { head: c.head, units: c.units, parts: c.parts, rows: `/rows/${pair}.json`, target, original: `/arxiv/${seg}.pdf` })
+  todayDesc.set(pair, { head: c.head, units: c.units, parts: c.parts, rows: `/rows/${pair}.json`, target, original: `/arxiv/${seg}.pdf`, classes: TOGGLES === 'on' ? CLASSES_ON : null })
   // (v2's: our server's v2 document over the L1 bundle, its head's canonical bytes under its digest: real.mjs's)
   const listing = readdirSync(bundle)
   for (const f of listing) if (/^[0-9a-f]{64}\./.test(f)) objects.set(`/api/v2/o/p/${seg}/fx/${f.split('.')[0]}`, join(bundle, f))
@@ -176,6 +180,11 @@ for (const pair of pairs) {
   }
   // (a row a unit the Page lays, its text the drawn runs': what the reader's own text layer reads; the drawing is the Page's)
   const v2 = json(v2f)
+  if ((v2.toggles ?? 'defaults') !== TOGGLES) {
+    missing.push({ pair, why: `v2.mjs laid it under the toggles ${v2.toggles ?? 'defaults'}, the drawing is asked ${TOGGLES}` })
+    todayDesc.delete(pair)
+    continue
+  }
   const byId = new Map()
   for (const [pg, f] of Object.entries(v2.facts))
     for (const m of f.members) {
@@ -371,7 +380,7 @@ for (const pair of pairs) {
   })
   await vp.goto(`${server.origin}/index.html`)
   await vp.waitForFunction(() => !!globalThis.__p)
-  await vp.evaluate((o) => globalThis.__p.open(o), { paper, target, pages: v2.pages })
+  await vp.evaluate((o) => globalThis.__p.open(o), { paper, target, pages: v2.pages, classes: TOGGLES === 'on' ? CLASSES_ON : null })
   try {
     await vp.waitForFunction(() => globalThis.__p.state()?.layer.s === 'ready', null, { timeout: 60_000, polling: 100 })
   } catch {

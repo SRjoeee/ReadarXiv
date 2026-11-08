@@ -286,3 +286,18 @@ describe("labels: the target word everywhere, consistent within a paper (the own
     expect(pages[1]!.diffs).toMatchObject([{ flag: 'labels', unit: 't9 caption', worse: true }])
   })
 })
+
+describe("lead: a paragraph set tighter than the original's leading while its block has room (1810.04805 p8, 2010.11929 p5)", () => {
+  // (a paragraph of 4 lines on A at 10 pt, 12 pt apart; each side lays 3 lines at 10 pt: today 12 apart, v2 10 apart, its last
+  // line 16 pt over the original's last, a line and more of room left)
+  const f = one(140, 'para', [700, 688, 676, 664].map((y) => factLine(72, 300, y)))
+  const at = (pitch: number) => [0, 1, 2].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))
+  it('v2 tighter than the original where today keeps its leading: worse', () => {
+    expect(of('lead')(measure(f, sides(140, at(12), at(10))))).toMatchObject([{ unit: 't140 para', worse: true }])
+  })
+  it('a paragraph tightened to fit a block it fills is no fault', () => {
+    // (4 lines on each side: v2's at 11 apart end at 667, within a line of the original's last)
+    const four = (pitch: number) => [0, 1, 2, 3].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))
+    expect(of('lead')(measure(f, sides(140, four(12), four(11))))).toEqual([])
+  })
+})

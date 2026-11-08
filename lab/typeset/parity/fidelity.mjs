@@ -29,6 +29,8 @@ export const CLASS_PIXELS = 500
  *  \raisebox shifts one, each by a third of an em or more) */
 const SCRIPT_RISE = 0.15
 const SCRIPT_SIZE = 0.85
+/** a paragraph's leading off the original's that a reader sees: a twentieth of its pitch (0.6 pt of a 12 pt pitch) */
+export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
 const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
 /** a cased letter (Unicode: it has another case) */
@@ -476,7 +478,43 @@ export function measureFidelity(c) {
     }
   }
 
-  // ---------------- labels: what each side draws of each label here, for the paper's pass (the owner's ruling 4)
+  // ---------------- lead: a text set tighter than the original's leading while its block has room (the maintainer's 2010.11929
+  // p5, 1810.04805 p8): its pitch over its size against the original's, where its last line stands a pitch or more over the
+  // original's last
+  const pitchOf = (ls) => {
+    const ys = ls.map((l) => l.y).sort((a, b) => b - a)
+    const size = ls.map((l) => l.size).sort((a, b) => a - b)[ls.length >> 1] || 10
+    const gaps = []
+    for (let i = 1; i < ys.length; i++) {
+      const g = ys[i - 1] - ys[i]
+      if (g > 0 && g < 2.5 * size) gaps.push(g)
+    }
+    gaps.sort((a, b) => a - b)
+    return gaps.length ? { pitch: gaps[gaps.length >> 1], size } : null
+  }
+  const tight = { today: new Map(), v2: new Map() }
+  const leadOf = new Map()
+  for (const [side, M] of [['today', T], ['v2', V]])
+    for (const [key, ls] of M) {
+      const o = orig.get(key)
+      if (!o || o.lines.length < 2 || /figure/.test(o.kind ?? '') || o.kind === 'cell') continue
+      const fl = flat(ls)
+      const d = pitchOf(fl),
+        a = pitchOf(o.lines)
+      if (!d || !a) continue
+      const room = Math.min(...fl.map((l) => l.y)) - Math.min(...o.lines.map((l) => l.y)) >= a.pitch - 0.5
+      const t = room ? Math.max(0, 1 - d.pitch / d.size / (a.pitch / a.size)) : 0
+      tight[side].set(key, t)
+      leadOf.set(`${side}|${key}`, d.pitch / d.size)
+      if (t > LEAD_SHARE) fault(side, 'lead', `${name(key)}: its pitch ${r2(d.pitch)} pt at ${r2(d.size)} pt, the original's ${r2(a.pitch)} at ${r2(a.size)}, with a line of room left`)
+    }
+  for (const key of [...both, ...v2Only]) {
+    const t = T.has(key) ? tight.today.get(key) : 0,
+      v = tight.v2.get(key)
+    if (t === undefined || v === undefined) continue
+    judge('lead', name(key), "its leading tighter than the original's while its block has room (share of the original's pitch over size)", 0, { value: r2(leadOf.get(`today|${key}`) ?? null), d: t }, { value: r2(leadOf.get(`v2|${key}`)), d: v }, LEAD_SHARE)
+  }
+
   return { borrowed, past }
 }
 

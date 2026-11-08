@@ -30,6 +30,11 @@ const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
+/** the reader's toggles the pages are laid under: the defaults, or (--toggles=on) every switch of "What to translate" on (figure
+ *  and table text, headers and footers, references, the author block: docs/PDF-READER.md §15), so that what a reader turns on
+ *  is judged too */
+export const TOGGLES = args.find((a) => a.startsWith('--toggles='))?.slice(10) === 'on' ? 'on' : 'defaults'
+const classes = TOGGLES === 'on' ? { figures: true, tables: true, heads: true, references: true, names: true } : null
 mkdirSync(OUT, { recursive: true })
 const served = servedMetrics()
 const metricsOf = (pair) => layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served)
@@ -55,7 +60,7 @@ for (const pair of pairs) {
     if (p === pair) pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait }
   }
   // (the reader's lay of the pair, as openReader binds it once the head is read: its target the pair's, as render.mjs opens
-  // the reader on it, its toggles none (the defaults), its metrics the layered ones, its patterns the served ones)
+  // the reader on it, its toggles TOGGLES's, its metrics the layered ones, its patterns the served ones)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
   if (!target) throw new Error(`v2.mjs: ${pair} names no target`)
   const metrics = metricsOf(pair)
@@ -66,7 +71,7 @@ for (const pair of pairs) {
       hyphNow: (lang) => patterns(lang),
     },
     target: () => target,
-    classes: () => null,
+    classes: () => classes,
   })
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
   globalThis.__ckPage = undefined
@@ -111,7 +116,7 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)

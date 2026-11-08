@@ -103,7 +103,7 @@ const result = {
   format: 'readarxiv-parity 3',
   verdict: 'display ≥ today: no page worse than today\'s, a difference only where nearer the original, over every page the run asked',
   pass: verdict.pass,
-  run: run ? { id: run.id, at: run.at, pairs: run.pairs, pages: run.pages ?? null, done: run.done, stopped: run.stopped ?? null } : null,
+  run: run ? { id: run.id, at: run.at, pairs: run.pairs, pages: run.pages ?? null, toggles: run.toggles ?? 'defaults', done: run.done, stopped: run.stopped ?? null } : null,
   bounds: BOUNDS,
   near: NEAR,
   measures: SAYS,
@@ -207,7 +207,7 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 </head>
 <body>
 <h1>Display ≥ today: v2 against today's output, judged against arXiv's page</h1>
-<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
+<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
 <table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
 ${inc}
 ${miss}

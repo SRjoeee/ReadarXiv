@@ -20,8 +20,15 @@ glyphs as PDF.js's text content gives them, their PDF fonts) and the original's 
 today's prepare dump states them), never off v2's part where the two can differ (`fidelity.mjs`).
 
 ```
-node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [<pair>…]
+node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [<pair>…]
 ```
+
+`--toggles=on` lays and draws both readers with every switch of "What to translate" on (figure and table text, headers and
+footers, references, the author block: docs/PDF-READER.md §15; today's `openLayer` `classes`, v2's `typesetLay` `classes` and
+the reader's prefs), its sheet and work in `parity/toggles-on/`: what a reader turns on is judged too (the maintainer's
+staging review, 2026-11-08: today translates the references with the switch on, v2 left them English on 2010.11929). The
+default run judges the defaults (references and the author block the original's). A pair's v2 file names the toggles it was
+laid under, and the drawing refuses one laid under others.
 
 Defaults: the sheet and `parity.json` in `$AXT_LAB_DATA/refactor-2026-11/parity/`, the work files in its `work/`. Exit 1
 when a page is worse than today's, or when the run is not judged whole: the gate passes only over every page the run asked
@@ -126,6 +133,7 @@ unit.
 | `groups` | a table's grid groups (TeX's grid as today's front end reads it, its ledger's `tables`: the header, each column, the cells spanning the same columns) with two cells or more on the page, each side's state from its drawing: a cell in the target where it is drawn and its drawn text is not its source's (letters and digits, case aside), else the original's; a group in one state is whole, else mixed. v2's state other than today's is worse (the owner's ruling 3: translated or kept by group as today decides). A group today's decision kept whole (its door rows `kept` with a translation of their own) reaches v2 as no rows, so v2 draws today's decision, not one of its own: worse until the product decides groups (the translator's answers for those cells are not stored offline: a run that judges the product's own decision needs them) | none | the owner's ruling |
 | `labels` | over the paper's pages, each side's labels (a name word TeX set on a unit's first line, read as `shown`'s label is): a side that draws one translated and another kept or in the original's words mixes them, a fault; v2 mixing where today does not is worse on each page v2 keeps one, today mixing where v2 does not nearer; v2 relabelling a label today keeps is nearer (the owner's ruling 4) | none | the owner's ruling |
 | `folio` | a page number (a running head or foot whose text holds the page's number): its drawn size's shrink against arXiv's glyphs' and its end off the original's end (the owner's ruling 6: its size kept, right-aligned) | half the fit's step; as `anchor` | as `size`, `anchor` |
+| `lead` | a text's leading tighter than the original's while its block has room: its drawn pitch over its size (the median of its consecutive baselines' gaps under 2.5 sizes) against the original's lines', the tightening as a share of it, counted where its last drawn line stands a pitch or more over the original's last (a block it fills may be tightened to fit, the owner's ruling 1); the original's 0 (1810.04805 p8's "We first examine…", 2010.11929 p5) | a twentieth of it | 0.6 pt of a 12 pt pitch, a step a reader sees between neighbouring paragraphs |
 | `ink` | the units both draw whose original ink is black (arXiv's page reaches luminance 0.05 or less in their lines) and whose drawn fill is not black (the owner's ruling 7: the PDF's own black) | any | the owner's ruling |
 
 ## The maintainer's rulings (2026-11-08)

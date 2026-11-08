@@ -44,7 +44,7 @@ const slotOf = (n: number) => root.querySelector<HTMLElement>(`.axt-pane.right .
 
 const p = {
   /** the paper opened over its v2 document, its pages the entry's (v2.mjs's `pages`) */
-  async open(o: { paper: string; target: string; pages: typeof pages }) {
+  async open(o: { paper: string; target: string; pages: typeof pages; classes?: Record<string, boolean> | null }) {
     pages = o.pages
     asked = {}
     reader?.close()
@@ -57,6 +57,8 @@ const p = {
             ...DEFAULTS,
             display: 'translation' as const,
             target: o.target,
+            // (the reader's toggles: the defaults, or each switch render.mjs is asked to turn on)
+            ...(o.classes ? { classes: { ...DEFAULTS.classes, ...o.classes } } : {}),
             sync: false,
           }),
           write: async () => {},

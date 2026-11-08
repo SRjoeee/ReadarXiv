@@ -93,6 +93,8 @@ window.today = {
       hyphUrl: (lang) => `/hyph/${lang}.json`,
       OPS: pdfjs.OPS,
       fillsMs: Number.POSITIVE_INFINITY,
+      // (the reader's toggles: the defaults, or each switch render.mjs is asked to turn on)
+      ...(desc.classes ? { classes: desc.classes } : {}),
       leftPart: (_page, ref) => obj(ref),
       onRetired: () => {},
     })

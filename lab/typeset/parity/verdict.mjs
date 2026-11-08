@@ -74,6 +74,7 @@ export const WEIGHT = {
   turn: 3,
   over: 3,
   frame: 3,
+  lead: 3,
   block: 3,
   elements: 3,
   stretch: 2,
@@ -116,6 +117,7 @@ export const SAYS = {
   groups: "a table's grid group translated or kept whole as today decides (the owner's ruling 3); a group v2 is handed already decided",
   labels: "a paper's labels in one form, the target word everywhere (the owner's ruling 4)",
   folio: "a page number at its size, right-aligned (the owner's ruling 6)",
+  lead: "a text's leading tighter than the original's while its block has room: its pitch over its size against the original's",
   ink: "a text whose original ink is black drawn in another fill (the owner's ruling 7: the PDF's own black)",
 }
 
