@@ -865,6 +865,35 @@ describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragr
       [680, 'und seine zweite Zeile'],
     ])
   })
+  it('keeps a title’s first block on the original’s first baseline where it is set in fewer lines (Placed.title, X.lastLines)', () => {
+    // (a paper title TeX broke with \\ after its second line (2610.11256v1 p1's t0, one of the four titles fx-breaks found laid
+    // on their last lines where the entry handed title: false): its first block set in one line stands on the original's first
+    // baseline, the title's rule, where a section heading's stands on its last; the block after the break follows at the
+    // frame's pitch (TeX's room 0))
+    const title = (flag: boolean) =>
+      member({
+        kind: 'heading',
+        align: 'c',
+        ...(flag ? { title: 1 as const } : {}),
+        style: { role: 'serif', size: 14, bold: 1, design: 'NimbusRomNo9L-Regu' },
+        lines: [lineAt(700, 90, 480), lineAt(683, 120, 450), lineAt(666, 200, 380)],
+        els: [['1', { kind: 'space', ink: [], brk: 1, ends: [1, 0] }]],
+      })
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Ein kurzer Titel' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'Untertitel' },
+    ]
+    const at = (flag: boolean) => lay(title(flag), content).lines.map((l) => [l[0], textOf(l)])
+    expect(at(true)).toEqual([
+      [700, 'Ein kurzer Titel'],
+      [683, 'Untertitel'],
+    ])
+    expect(at(false)).toEqual([
+      [683, 'Ein kurzer Titel'],
+      [666, 'Untertitel'],
+    ])
+  })
   it('takes no read break whose line an element of the row before it stands under (today’s check of a read pairing)', () => {
     // (the line read by its short end (Placed.read 'breaks'), not TeX's point: an element the row sets before the break whose
     // ink stands on a later line says the pairing is wrong, and the unit is laid as one paragraph, as today's forcedBreaks did
