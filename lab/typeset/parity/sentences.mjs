@@ -3,11 +3,14 @@
 // found on staging, 2026-11-08, v2 lighting every unit whole where today pairs sentence by sentence, which coverage passed).
 // A feature of today's: a unit today lights by sentence (today/entry.mjs litBoxes `by`, its starts found on both panes) must be
 // lit by sentence by v2, judged on the boxes per sentence:
-// - v2 lights it by sentence on both panes (Laid.lit: an entry a sentence), as many sentences as today;
-// - on arXiv's page, the same page under both, each sentence v2 lights is today's same sentence: of today's sentences on the
-//   page, the one its boxes meet most (each pane cuts the original's lines at the sentence's first word);
-// - on the right, each side its own drawing (the lines fall apart), every sentence today lights on the page v2 lights there
-//   too, and none it does not.
+// - v2 lights it by sentence on both panes (Laid.lit: an entry a sentence), with today's sentences or finer: v2 ends a sentence
+//   at a forced break too (TeX's \\, a block of its own on the page), where a translator's sentence runs across it;
+// - on arXiv's page, the same page under both, each of v2's sentences that meets today's meets most one of them, in today's
+//   order (a v2 sentence within one of today's), and every sentence today lights there v2 lights there (each pane cuts the
+//   original's lines at the sentence's first word). A box of v2's that meets none of today's (a display's own stop at a line's
+//   head, which today lights with nothing) is no fault;
+// - as drawn, each side its own drawing (the lines and the page breaks fall apart: which page a sentence's translation lands
+//   on is the layout's, judged by its own measures), v2 lights the unit there where today does.
 // A unit of one sentence today lights as that sentence's shape, the unit whole, as v2's one entry does: not judged. v2 by
 // sentence where today lights a unit whole is no fault. A drawing made before today's boxes were kept per sentence (no
 // `leftBy`) tells no count: its units are counted unread, not judged.
@@ -44,16 +47,25 @@ export function sentencesPaired(keys, today, v2) {
     const counted = `${vl.length} on arXiv's page, ${vr.length} as drawn`
     let says = null
     if (vl.length < 2 || vr.length < 2) says = `lit whole by v2 (${counted}) where today pairs ${n} sentences`
-    else if (vl.length !== n || vr.length !== n) says = `${counted} sentences by v2, ${n} by today`
+    else if (vl.length < n || vr.length < n) says = `${counted} sentences by v2, ${n} by today`
     else {
       const off = []
-      for (let s = 0; s < n; s++) {
-        const own = shared(vl[s], t.leftBy[s])
-        const best = t.leftBy.reduce((b, q, j) => (shared(vl[s], q) > shared(vl[s], t.leftBy[b]) ? j : b), s)
-        if (vl[s].length && (own === 0 || best !== s)) off.push(`sentence ${s + 1} on arXiv's page meets today's ${own === 0 ? 'none of its' : `sentence ${best + 1} most`}`)
-        if (!vl[s].length && t.leftBy[s].length) off.push(`sentence ${s + 1} not lit on arXiv's page`)
-        if (!!vr[s].length !== !!t.rightBy[s].length) off.push(`sentence ${s + 1} ${vr[s].length ? 'lit' : 'not lit'} as drawn on this page, ${t.rightBy[s].length ? 'lit' : 'not'} by today`)
+      // (on arXiv's page: each of v2's sentences within one of today's, in order; each of today's there met by one of v2's)
+      let last = -1
+      const met = new Set()
+      for (let s = 0; s < vl.length; s++) {
+        if (!vl[s].length) continue
+        const areas = t.leftBy.map((q) => shared(vl[s], q))
+        const best = areas.reduce((b, a, j) => (a > areas[b] ? j : b), 0)
+        if (!(areas[best] > 0)) continue
+        if (best < last) off.push(`sentence ${s + 1} on arXiv's page meets today's sentence ${best + 1} most, after its ${last + 1}`)
+        last = Math.max(last, best)
+        met.add(best)
       }
+      t.leftBy.forEach((q, j) => {
+        if (q.length && !met.has(j)) off.push(`today's sentence ${j + 1} on arXiv's page met by none of v2's`)
+      })
+      if (t.rightBy.some((q) => q.length) && !vr.some((q) => q.length)) off.push('not lit as drawn on this page, lit by today')
       if (off.length) says = off.join('; ')
     }
     if (!says) out.paired++

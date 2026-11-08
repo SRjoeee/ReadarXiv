@@ -644,7 +644,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
               off,
               kept,
               lead: leadOf.get(m.ord) ?? null,
-              by: sentences && pieces ? { sentences, pieces } : undefined,
+              by: pieces ? { sentences, pieces } : undefined,
             })
           : litOfA(m, page, sentences?.src),
     }

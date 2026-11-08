@@ -368,9 +368,17 @@ describe("the no-borrowing ruling over hl-sentence's page placement on a unit to
   const v2With = (right: number[][][], left = leftBy) => v2Of({ members: [laid(26, { left, right })], facts: [{ ord: 26, kind: 'para', align: 'j', style: { size: 10 }, lines: [700, 688, 676, 664].map((y) => factLine(72, 300, y)) }], today: { 26: { today: 26 } } })
   const sentences = (p: { diffs: { what: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => /sentences paired one by one/.test(d.what))
   const placed = [[box(700)], [box(688), box(676)], [box(664)]]
-  it("a sentence v2 draws on this page that today drew on the next is the ruling's", () => {
-    expect(sentences(measure(v2With(placed), page()))).toMatchObject([{ worse: true }])
-    expect(sentences(measure(v2With(placed), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: false, nearer: 'ruling' }])
+  it('a sentence v2 draws on this page that today drew on the next is no difference: which page holds it is the layout\'s', () => {
+    // (hl-sentence's 15dbb0f91: as drawn, v2 is judged on lighting the unit on a page where today does, not on which of its
+    // sentences the page holds; rc-gate's 41f28ebf2 made this the ruling's, which it no longer needs to be)
+    expect(sentences(measure(v2With(placed), page()))).toEqual([])
+    expect(sentences(measure(v2With(placed), page(), { ruled: new Set([26]) }))).toEqual([])
+  })
+  it("v2 lighting nothing of the unit as drawn on a page today lights it is worse, and the ruling's where today borrowed", () => {
+    // (its translation a reflow moved off this page: v2 keeps the block where today's borrowed line held its last sentence here)
+    const none = [[], [], []]
+    expect(sentences(measure(v2With(none), page()))).toMatchObject([{ worse: true }])
+    expect(sentences(measure(v2With(none), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: false, nearer: 'ruling' }])
   })
   it('the granularity stays judged: v2 lighting the unit whole is worse whatever today borrowed', () => {
     const whole = [[box(700), box(688), box(676), box(664)]]

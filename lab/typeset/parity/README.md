@@ -140,10 +140,11 @@ The highlight's granularity is judged apart from its coverage (`sentences.mjs`, 
 that cover a unit's lines tell nothing of whether they are the unit's or a sentence's (the maintainer found on staging,
 2026-11-08, v2 lighting every unit whole where today pairs sentence by sentence: coverage passed it). A unit today lights by
 sentence, of two sentences or more (today's `litBoxes` kept per sentence, `leftBy`/`rightBy`), is worse where v2 lights it
-whole, pairs another count of sentences, lights a sentence on arXiv's page whose boxes meet most another of today's sentences
-there or none of its own, or lights on a page as drawn a sentence today does not (or not one it does). A unit of one sentence
-is lit as that sentence's shape, the unit whole, alike on both; a drawing of before the per-sentence boxes is not judged by it
-(`measures.sentences.unread`).
+whole or in fewer sentences (finer is allowed: v2 also ends a sentence at a forced break), where on arXiv's page a sentence
+of v2's meets most one of today's out of today's order or a sentence today lights there is met by none of v2's, or where
+v2 lights nothing of it as drawn on a page today lights it (which sentences a page's translation holds is the layout's). A
+unit of one sentence is lit as that sentence's shape, the unit whole, alike on both; a drawing of before the per-sentence
+boxes is not judged by it (`measures.sentences.unread`).
 
 ## The maintainer's rulings (2026-11-08)
 
@@ -156,8 +157,9 @@ sheet (not worse, not nearer).
    and `line-count`, and their knock-ons on the same unit, `anchor`, `gap` (its start after its head) and `block`, are the
    ruling's (`ruling`), not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its
    column or text block, `frame`) or crosses a rule of the page the original's lines do not (`cross`). So is the highlight's
-   sentence placement on it (a sentence lit as drawn on this page by one side and not the other: a reflow moves it; the
-   coordinator's call); the sentences' granularity stays judged. Every other measure on such a unit is judged as anywhere
+   sentence placement on it (v2 lighting nothing of it as drawn on a page today lights it: a reflow moved its translation
+   off the page; the coordinator's call); which of its sentences a page holds is no finding anywhere (the highlight's
+   granularity, below the measures); the sentences' granularity stays judged. Every other measure on such a unit is judged as anywhere
    (the highlight's cover, the erasure, the elements, the style, the weight).
 2. **Body growth** (corrected the same day): body text may grow as today grows it (up to about 1.1×); the effect, by a simpler
    method. A size above the original's is no fault: `size` judges it against the original's as before, v2 nearer today's

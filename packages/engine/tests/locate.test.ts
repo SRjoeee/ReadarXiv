@@ -2203,6 +2203,17 @@ describe('the places on A where a sentence may begin (Placed.words, Unit.sentenc
       [1, 7],
     ])
   })
+  it('places a word at the opening bracket or quote set against it, as the page’s text runs it in one token', () => {
+    // (today's left side starts a sentence at the text layer's token of its first word: "(See" begins at its "(")
+    const B = docOf([{ lines: ['One. (See two.) “Three.”'] }])
+    const L = locate(instrumentOf(B, [unitOf('para', 'One. (See two.) “Three.”')], [[0]]), B, align(B, B))
+    expect(L.members[0]!.words).toEqual([
+      [0, 0, 72],
+      [6, 0, 72 + 5 * 6],
+      [10, 0, 72 + 10 * 6],
+      [17, 0, 72 + 16 * 6],
+    ])
+  })
   it('places a word where its letters are the page’s in order, a macro’s text beside it none of its; one TeX never set at -1', () => {
     // (a text macro set as "BERT" before the unit's own "-based": the word "based" at its own "b", never at BERT's; and "two",
     // which the compile never printed, not placed)

@@ -536,11 +536,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its column or text block) or
   // crosses a rule of the page the original's lines do not. Every other measure on it is judged as anywhere: the highlight's
   // cover, the erasure, the elements, the style are no line budget's. The one exception within the highlight: its sentences'
-  // page placement (sentences.mjs: a sentence lit as drawn on this page by one side and not the other), which a reflow moves
+  // page placement (sentences.mjs: v2 lights nothing of it as drawn on a page today lights it), which a reflow moves
   // (the coordinator's call, 2026-11-08); the sentences' granularity stays judged: a difference holding any other finding
   // (lit whole, other counts, a sentence meeting another of today's on arXiv's page) stays worse)
   const RULED = new Set(['size', 'line-count', 'anchor', 'gap', 'block'])
-  const PLACED = /^sentence \d+ (lit|not lit) as drawn on this page, (lit|not) by today$/
+  // (sentences.mjs's one placement finding: v2 lights nothing of the unit as drawn on a page today lights it, its translation
+  // moved off the page; which of its sentences a page holds is the layout's and no finding there, hl-sentence's 15dbb0f91)
+  const PLACED = /^not lit as drawn on this page, lit by today$/
   const placement = (d) =>
     d.flag === 'highlight' && /sentences paired one by one/.test(d.what) && String(d.v2?.value ?? '').split('; ').every((x) => PLACED.test(x))
   const borrowedToday = (k) => (borrowed.today.get(k) ?? 0) > 0 || (k.startsWith('t') && !!ruled?.has(Number(k.slice(1))))
