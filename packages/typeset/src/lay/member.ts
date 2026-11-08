@@ -138,7 +138,8 @@ export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null
   if (layout.clipped) {
     const got = fitFurther(
       {
-        rules: R as unknown as { further: readonly string[]; floor: number; floorMin: number },
+        // (the unit's own: the target's, but a floor U.params sets, a line of the page's head or foot)
+        rules: unitP as unknown as { further: readonly string[]; floor: number; floorMin: number },
         tokens: tokens0,
         blocks,
         s: p.s,

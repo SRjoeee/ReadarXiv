@@ -104,23 +104,6 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
   return (pg) => (pg === first[0] && rules.length ? rules : undefined)
 }
 
-/** for a part made before (one whose members state no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911:
- *  a line's band bottom and 0.24 of its height, the lowest of the page's units' but a figure's), read off the part: no unit
- *  borrows below it. A part of now states each page's own under each run of a member's lines, the page's every member read
- *  (this part holds a member running on to the next page, not that page's others) */
-function bottomsOf(part: Part): Map<number, number> {
-  const out = new Map<number, number>()
-  for (const flow of part.flows)
-    for (const m of flow) {
-      if (m.kind === 'figure' || m.kind === 'inkfigures' || m.kind === 'name') continue
-      for (const l of m.lines) {
-        const r = rectOf(l, m)
-        out.set(r[0], Math.min(out.get(r[0]) ?? Number.POSITIVE_INFINITY, r[2] + 0.24 * (r[4] - r[2])))
-      }
-    }
-  return out
-}
-
 /**
  * Whether a member a table's tie names, not set for `why`, holds its table the original's (today's contract, RUN:1223 and
  * settleGroup RUN:2411: a translated cell that cannot be drawn keeps every cell of its group the original's): a cell to be
@@ -247,7 +230,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const R = rules.set
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
-  const bottoms = bottomsOf(part)
   // (the free paper two members share on one baseline, each its half: two cells of a row)
   const shared = sharedPaper(part.flows, page)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
@@ -420,7 +402,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         breaks: rd.breaks,
         own: true,
       },
-      bottomOf: (pg) => bottoms.get(pg),
       ...(shared.has(m.ord) ? { shared: shared.get(m.ord)! } : {}),
     })
     if ('stop' in got) {

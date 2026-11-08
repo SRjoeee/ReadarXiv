@@ -977,10 +977,9 @@ describe('locate: the room under a unit', () => {
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
   })
-  it('states the room under each run of its text lines with its page’s lowest unit line: at a page’s foot, over its own kept row', () => {
-    // (today's freeFor, RUN:1677 given every block at RUN:2193: a paragraph running on from page 1 borrows at page 1's foot, under
-    // that page's lowest unit line, not the next page's (2608.16117v1-de t23, 2602.23285v2-ja t29); and the room under the text
-    // over a row of its own that stays ends at that row (2608.16117v1-de p27 t89: a paragraph's lines borrowed over its display))
+  it('states no room under each run of its text lines, its last line’s alone (Room.below): no translation borrows a line', () => {
+    // (the owner's ruling of 2026-11-08: a translation keeps to its own lines, so nothing reads the room under a run of them (Room.ends,
+    // today's freeFor given every block); a paragraph running on from page 1, a row of its own kept between its lines)
     const B = docOf([
       {
         lines: [
@@ -1019,51 +1018,9 @@ describe('locate: the room under a unit', () => {
       [2, 688, 1],
       [2, 676, 0],
     ])
-    // (each [the run's last line, the free depth under it to the first ink, the page's lowest unit baseline]: page 1's foot over
-    // the other unit 79 pt down, its page's lowest line 600; the text over the kept row 3 pt down to it; its last line 167 pt
-    // over the last unit, page 2's lowest line 500)
-    expect(para.room.ends).toEqual([
-      [1, 79, 600],
-      [2, 3, 500],
-      [4, 167, 500],
-    ])
+    expect((para.room as { ends?: unknown }).ends).toBeUndefined()
+    // (its last line 167 pt over the last unit)
     expect(para.room.below).toBe(167)
-  })
-  it('ends a run of its lines where other ink stands between two of them, and measures it across its own lines from their start', () => {
-    // (2608.16117v1-de p19 t59: its first line the end of a row it shares, then a figure TeX set inside the paragraph, its lines
-    // under it: today's blocks end at the figure's gap and the room under the row's end is read across its own line (from its
-    // start to the column's end), beside the figure; one run read across the measure met the figure and stated none)
-    const B = docOf([
-      {
-        lines: [
-          { text: 'row tail', x: 200, y: 700 },
-          { text: 'caption text here', y: 580 },
-          { text: 'para continues', y: 560 },
-          { text: 'and ends', y: 548 },
-          { text: 'footer text that is long', y: 100 },
-        ],
-        // (the figure: an image left of the row's end, between the row and the paragraph's next line)
-        boxes: [[8, -3, 72, 600, 190, 690]],
-      },
-    ])
-    const units = [
-      unitOf('para', 'row tail para continues and ends'),
-      unitOf('caption', 'caption text here'),
-      unitOf('para', 'footer text that is long'),
-    ]
-    const L = locate(instrumentOf(B, units, [[0, 1, 0, 0, 2]]), B, align(B, B))
-    const para = L.members[0]!
-    expect(para.lines.map((l) => [l[2], l[4]])).toEqual([
-      [200, 700],
-      [72, 560],
-      [72, 548],
-    ])
-    // (the row's end: across 200..248, beside the figure, down to the footer's top at 107; its last line down to the footer too;
-    // the page's lowest unit line the footer's, 100)
-    expect(para.room.ends).toEqual([
-      [0, 591, 100],
-      [2, 439, 100],
-    ])
   })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
@@ -2050,5 +2007,37 @@ describe('a member’s style read off all of its glyphs, as TeX set them', () =>
     ).members.find((m) => m.name === 'abstract')!
     expect(caps.style).toMatchObject({ size: 9.96, upper: 1 })
     expect(caps.style.sc).toBeUndefined()
+  })
+})
+
+describe('the alignment of a line of the page’s head or foot', () => {
+  it('reads a head or foot line that ends at its measure’s end and starts within it set flush right (TeX’s \\hfil before it)', () => {
+    // (2609.36054v2's foot, "page 13 of 14" at the text block's right edge, read justified: its translation was laid from the
+    // original's start and shrunk to 0.825 of its size; a head or foot line is a box of the text's width, the place TeX's \hfil
+    // left it in that box its alignment. A paragraph's single line indented and full is no such line: it stays justified)
+    const body = 'w'.repeat(70)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'A running title', y: 760 },
+          { text: body, y: 700 },
+          { text: body, y: 688 },
+          { text: body, y: 676 },
+          { text: body, y: 664 },
+          { text: 'w'.repeat(65), x: 102, y: 640 },
+          { text: 'page 2 of 9', x: 426, y: 60 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('inkheads', 'A running title'),
+      unitOf('para', 'the body'),
+      unitOf('para', 'one full line'),
+      unitOf('inkheads', 'page 2 of 9'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 1, 1, 1, 2, 3]]), B, align(B, B))
+    const at = (u: number) => L.members.find((m) => m.unit === u)!
+    expect(at(3).lines[0]!.slice(2, 4)).toEqual([426, 492])
+    expect([at(0).align, at(1).align, at(2).align, at(3).align]).toEqual(['j', 'j', 'j', 'r'])
   })
 })

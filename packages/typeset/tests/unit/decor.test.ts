@@ -21,7 +21,6 @@ const block = (o: Partial<Block> = {}): DecorBlock => ({
   exact: [true],
   sizes: [10],
   pitch0: null,
-  free: 0,
   flow: 0,
   ...o,
 })

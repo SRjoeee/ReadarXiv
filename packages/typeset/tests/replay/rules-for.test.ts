@@ -1,8 +1,9 @@
 // rulesFor replayed: for each target of the tap's pairs, today's resolveRules(BUILTIN_RULES, target) as derive.mjs wrote it
-// (lanes/L3/replay/rules.json.gz: the params, the patterns, the float labels) equals the port's over the data files.
+// (lanes/L3/replay/rules.json.gz: the params, the patterns, the float labels) equals the port's over the data files, less the
+// fields an owner's ruling removed from the port (tap.ts ruledParams: no borrowing, 2026-11-08).
 import { describe, expect, it } from 'vitest'
 import { resolveRules, rulesFor } from '../../src/rules-for.ts'
-import { derived, firstDifference, hasDerived } from './tap.ts'
+import { derived, firstDifference, hasDerived, ruledParams } from './tap.ts'
 
 type Want = { targets: Record<string, { params: unknown; patterns: string[]; labels: Record<string, string> }> }
 
@@ -13,7 +14,7 @@ describe.skipIf(!hasDerived('rules'))('rulesFor: today’s resolveRules on every
     for (const [t, w] of Object.entries(want)) {
       const r = resolveRules(t)
       const d =
-        firstDifference(r.params, w.params, `${t}.params`) ??
+        firstDifference(r.params, ruledParams(w.params), `${t}.params`) ??
         firstDifference(r.patterns, w.patterns, `${t}.patterns`) ??
         firstDifference(r.labels, w.labels, `${t}.labels`)
       if (d) differ.push(d)

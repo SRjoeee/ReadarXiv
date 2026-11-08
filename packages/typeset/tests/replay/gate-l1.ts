@@ -394,11 +394,11 @@ export function tokensDiff(mine: readonly Tok[], today: readonly Tok[]): string 
   }
   return null
 }
-/** the inputs a named correction's effect substitutes, today's value for the part's: `free` the borrow room under each block
- *  (Room.below's freeFor), `measure` each block's measure x0..x1 (the column's), `next` the room under the last line
+/** the inputs a named correction's effect substitutes, today's value for the part's: `measure` each block's measure x0..x1
+ *  (the column's), `next` the room under the last line
  *  (Room.next: U.params' halfLead.below), `side` the widened blocks (X.further's), `all` the whole prepared member (the
  *  tokens too); a block's only where the two cut as many blocks */
-export type Substitute = 'free' | 'measure' | 'next' | 'side' | 'all' | `.${string}`
+export type Substitute = 'measure' | 'next' | 'side' | 'all' | `.${string}`
 export function substitute(mem: FlowMember, td: FlowMember, what: readonly Substitute[]) {
   const same = mem.blocks.length === td.blocks.length
   for (const w of what) {
@@ -427,10 +427,6 @@ export function substitute(mem: FlowMember, td: FlowMember, what: readonly Subst
     if (!same) continue
     mem.blocks.forEach((b, k) => {
       const t = td.blocks[k]!
-      if (w === 'free') {
-        b.free = t.free
-        b.freeOf = t.freeOf
-      }
       if (w === 'measure') {
         b.x0 = t.x0
         b.x1 = t.x1
@@ -510,18 +506,6 @@ export function gateL1Pair(
   let paperR: PaperReading | null = null
   if (o.reading === 'part' && part0)
     paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
-  // (each page's lowest unit line, as today's pageBottom: RUN:911 over every unit's rectangles but a figure's)
-  const bottoms = new Map<number, number>()
-  for (const part of bundle.parts.values())
-    for (const flow of part.flows)
-      for (const m of flow) {
-        if (m.kind === 'figure' || m.kind === 'inkfigures' || m.kind === 'name') continue
-        for (const l of m.lines) {
-          const r = rectOf(l, m)
-          const y = r[2] + 0.24 * (r[4] - r[2])
-          bottoms.set(r[0], Math.min(bottoms.get(r[0]) ?? Number.POSITIVE_INFINITY, y))
-        }
-      }
   // (every member once, from the part of its first page; its flow's neighbours, a name none (it is no row of theirs): the name
   // the part binds to a member its lead (lay/lead.ts, as the entry sets it))
   const byOrd = new Map<
@@ -725,7 +709,6 @@ export function gateL1Pair(
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,
-      bottomOf: (pg) => bottoms.get(pg),
     })
     out.adaptMs += performance.now() - ta
     if ('stop' in got) {
@@ -748,18 +731,15 @@ export function gateL1Pair(
     // block's h and pitch the walk sets on today's, and noOver unset against false, are no input)
     if (setting === 'equal') {
       // (nor the fields of a shared row no rule reads: the follower's row is read by its page and baseline, S.share's by its
-      // page, baseline and size; today's rows carry the lead's id and extent beside them)
+      // page, baseline and size; today's rows carry the lead's id and extent beside them. Nor today's borrow room under a block,
+      // `free`, which the port has not: no translation borrows a line, the owner's ruling of 2026-11-08)
       const rest = differences(mem, td).filter(
         (d) =>
-          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against/.test(
+          !/\.(h|pitch): .* against undefined$|^\.noOver: undefined against false$|^\.(follower\.row|shareRow)\.(id|x0|x1|size): undefined against|\.free: undefined against/.test(
             d,
           ),
       )
       if (rest.length) setting = `prepared: ${rest[0]!.replace(/\[\d+\]/g, '[]').replace(/: .*$/, '')}`
-      if (process.env.AXT_GATE_FREE && rest[0]?.includes('.free'))
-        console.log(
-          `FREE ${pair} ${u.ord} ${rest[0]} blocks ${mem.blocks.length} last ${mem.blocks.at(-1)!.B.at(-1)} below ${x.m.room.below} bottom ${bottoms.get(mem.blocks.at(-1)!.page)}`,
-        )
     }
     out.setting.set(u.ord, setting)
     if (o.reading === 'part') out.inputs.set(u.ord, setting !== 'equal' ? setting : (tokensVerdict ?? 'equal'))

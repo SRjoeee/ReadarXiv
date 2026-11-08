@@ -39,6 +39,10 @@ export type FillLaid = {
   fillLead?: number | null
   fillTop?: number
   fitLines?: number
+  /** a unit over a page or column break: the fill leading of each frame before its last, by block, and of its last
+   *  (S.fill.leads frameLeadsOf) */
+  fillLeads?: (number | undefined)[]
+  lastLead?: number
   /** the layout S.fill.leads found at the unit's fill leading (FillLeads.laid) */
   fillLaid?: { state: FitState; lead: number | null; l: Layout }
   [more: string]: unknown
@@ -210,14 +214,24 @@ export function fillPage(
     // (laid with its last line no lower than a leading over the next line of its column, its own or the next paragraph's,
     // the larger, layer2.mjs footFloorAt; its tracking and the page's size with it, so that neither takes back the room its
     // leading gave)
-    const lead = leadOf(p),
+    // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
+    // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
+    const top = r3(target + band),
+      leads = p.fillLeads?.map((v) => (v === undefined ? v : Math.min(v, top))),
+      lead = p.lastLead !== undefined ? Math.min(p.lastLead, top) : leadOf(p),
       next = nextOf(p)
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
-    let st: FitState = { ...p.layout.state, box: 1, lead, ...(next !== null && next > lead + 1e-9 ? { next } : {}) }
+    let st: FitState = {
+      ...p.layout.state,
+      box: 1,
+      lead,
+      ...(leads ? { leads: leads as number[] } : {}),
+      ...(next !== null && next > lead + 1e-9 ? { next } : {}),
+    }
     // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
     const kept = p.fillLaid
     delete p.fillLaid
-    const same = kept && !st.next && kept.state === p.layout.state && kept.lead === lead
+    const same = kept && !leads && !st.next && kept.state === p.layout.state && kept.lead === lead
     let l = same ? settledAt(p, kept.l) : at(p, st),
       closer = false
     if (!l && st.next) {
@@ -293,7 +307,7 @@ export function fillPage(
     f.l = l ?? f.untracked.l
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
-  // set whole, by halving (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
+  // set whole, a step up at a time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
   // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
   // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
   // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
@@ -321,16 +335,17 @@ export function fillPage(
       }
       return ls
     }
+    // (a step at a time from the original's size, the first a unit no longer holds ending it: a page that grows not at all,
+    // most pages that try, is tried once, where today's halving tried twice (the 22 parity pairs, 2026-11-08: growth's lays
+    // 223 of 89,431 halving, 153 so; every page's size the same). Changed from today's, the owner's word of 2026-11-08:
+    // today's effect, by the simplest search and the fewest lays)
     let ok = 0,
-      no = Math.round((size - 1) / P.step) + 1,
       best: (Layout | null)[] | null = null
-    while (no - ok > 1) {
-      const k = (ok + no) >> 1,
-        ls = all(k)
-      if (ls) {
-        ok = k
-        best = ls
-      } else no = k
+    for (let k = 1, top = Math.round((size - 1) / P.step); k <= top; k++) {
+      const ls = all(k)
+      if (!ls) break
+      ok = k
+      best = ls
     }
     if (ok && best)
       grown.forEach((f, i) => {

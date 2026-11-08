@@ -9,7 +9,7 @@ import type { FillDecision, FillLaid, PageRules } from '../../src/shared/fill-pa
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { derived, firstDifference, ledger } from './tap.ts'
+import { derived, firstDifference, ledger, ruledIn } from './tap.ts'
 
 type Raw = Record<string, unknown>
 type Pass = {
@@ -22,18 +22,29 @@ type Pass = {
   told: Raw | null
   size?: Raw
 }
-export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number }
+/** a pass replayed: its first difference, the units the chain did not lay, how many it filled; `ruled` a pass on a page a unit
+ *  today laid with a borrowed line stands on (tap.ts ruledIn) that is not replayed (it holds that unit) or differs, or one that
+ *  differs and holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`): the
+ *  owner's 2026-11-08 */
+export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number; ruled?: true }
 
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
 const stateOf = (st: FitState) => (layoutOf({ state: st } as Raw) as { state: unknown }).state
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 
-/** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences */
+/** a unit over a page or column break a frame of which the port fills at a leading of its own (S.fill.leads frameLeadsOf, the
+ *  owner's word of 2026-11-08: each paragraph fills the original's block), which today's held to one leading */
+export const framed = (p: PassUnit | undefined): boolean =>
+  !!p && (!!p.fillLeads || (p.runs ?? []).some((q) => !!(q as PassUnit).fillLeads))
+/** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences. A unit today laid with a
+ *  borrowed line is not laid (tap.ts ruledIn: the ruling's) */
 export function laysOf(pair: string): { lays: Map<number, PassUnit>; differ: string[] } {
   const L = ledger(pair)
   const lays = new Map<number, PassUnit>(),
     differ: string[] = []
+  const { borrowed } = ruledIn(pair)
   for (const u of L.units) {
+    if (borrowed.has(u.ord)) continue
     const rounds = [...new Set(u.slots.filter((s) => s.by === 'X.cut').map((s) => s.round))]
     const last = rounds.at(-1)
     if (last === undefined) continue
@@ -55,8 +66,13 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
   const R = rules!.targets[L.target]!.params
   const P = { ...R, adaptiveFill: L.info.adaptiveFill } as unknown as PageRules
   const out: PassResult[] = []
+  const { pages, borrowed } = ruledIn(pair)
   for (const pass of L.passes as Pass[]) {
     const ids = [...pass.begun, ...pass.continuing]
+    if (ids.some((id) => borrowed.has(id))) {
+      out.push({ page: pass.page, d: null, filled: 0, ruled: true })
+      continue
+    }
     const missing = ids.filter((id) => !lays.has(id))
     if (missing.length) {
       out.push({ page: pass.page, d: null, missing, filled: 0 })
@@ -110,7 +126,8 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
         `L10 ord ${id}`,
       )
     }
-    out.push({ page: pass.page, d, filled: took.length })
+    const ruled = !!d && (pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
+    out.push({ page: pass.page, d: ruled ? null : d, filled: took.length, ...(ruled ? { ruled: true as const } : {}) })
   }
   return out
 }

@@ -3,7 +3,8 @@
 // script's: its labels, its patterns, any field it sets), one of the scripts' fields and the hyphenation minimums, and an index;
 // and the targets' head names (`heads.ts`) and reference names (`refs.ts`) from today's rules/tex-names.json (TeX Live's, LPPL
 // 1.3c data: docs/THIRD_PARTY.md).
-// Not edited by hand; the set's own editor is today's (rules/layout.mjs writeRules). CJK characters (labels, the no-start
+// Not edited by hand; the set's own editor is today's (rules/layout.mjs writeRules), less the fields an owner's ruling removed
+// from the port (RULED_OUT). CJK characters (labels, the no-start
 // and no-end marks) are written as \u escapes (the English gate counts CJK lines in code). Run from the worktree's root:
 // node lab/typeset/rules-data.mjs; with --check it writes nothing and exits 1 where a file differs from what today's set gives.
 import { execFileSync } from 'node:child_process'
@@ -14,6 +15,16 @@ const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTrans
 const SET = JSON.parse(readFileSync(`${TODAY}/src/pdf-reader/engine/rules/layout-rules.json`, 'utf8'))
 const NAMES = JSON.parse(readFileSync(`${TODAY}/src/pdf-reader/engine/rules/tex-names.json`, 'utf8'))
 const check = process.argv.includes('--check')
+// (the fields the port no longer has, each by the owner's ruling that removed its rule: today's set holds them, the port's
+// does not. 2026-11-08: no borrowing, a translation keeps to its own lines (`borrow`, `borrowGap`, the walk's 'borrow' knob))
+const RULED_OUT = ['borrow', 'borrowGap']
+const ruled = (fields) => {
+  const out = { ...fields }
+  for (const k of RULED_OUT) delete out[k]
+  if (out.order) out.order = out.order.filter((k) => !RULED_OUT.includes(k))
+  return out
+}
+for (const set of [SET.scripts, SET.languages]) for (const k of Object.keys(set)) set[k] = ruled(set[k])
 const ROOT = join(import.meta.dirname, '../..')
 const DIR = join(ROOT, 'packages/typeset/src/data/rules')
 
