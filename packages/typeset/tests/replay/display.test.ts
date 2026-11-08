@@ -16,7 +16,7 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('D.display: replay
       expect(r.chains).toEqual([])
       expect(r.unlaid).toEqual([])
       expect(r.differ).toEqual([])
-      expect(r.equal + r.ruled.cells).toBe(r.units - r.ruled.onPage - r.ruled.frames)
+      expect(r.equal + r.ruled.cells).toBe(r.units - r.ruled.onPage - r.ruled.frames - r.ruled.gap)
       expect(r.lines).toBeGreaterThan(r.units)
     })
 })

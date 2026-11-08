@@ -6,10 +6,11 @@
 // which.
 import type { FitState, Layout } from '../../src/fit/types.ts'
 import type { FillDecision, FillLaid, PageRules } from '../../src/shared/fill-page.ts'
+import { MissingMeasure } from '../../src/metrics/table.ts'
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { derived, firstDifference, ledger, ruledIn } from './tap.ts'
+import { derived, firstDifference, flooredIn, ledger, ruledIn } from './tap.ts'
 
 type Raw = Record<string, unknown>
 type Pass = {
@@ -24,8 +25,8 @@ type Pass = {
 }
 /** a pass replayed: its first difference, the units the chain did not lay, how many it filled; `ruled` a pass on a page a unit
  *  today laid with a borrowed line stands on (tap.ts ruledIn) that is not replayed (it holds that unit) or differs, or one that
- *  differs and holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`): the
- *  owner's 2026-11-08 */
+ *  differs and holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`), or one
+ *  that differs where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08 */
 export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number; ruled?: true }
 
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
@@ -84,12 +85,17 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
   const cells = new Set(L.units.filter((u) => u.kind === 'cell').map((u) => u.ord))
   const out: PassResult[] = []
   const { pages, borrowed } = ruledIn(pair)
+  const gap = flooredIn(pair)
   for (const pass0 of L.passes as Pass[]) {
     // (a cell the fill found short: untracked by the ruling, so not full (a cell's `full` is read by nothing: no cell is a
-    // body unit the page's size grows), its decision today's but for that; the layouts of one today tracked not compared)
+    // body unit the page's size grows), its decision today's but for that; the layouts of one today tracked not compared.
+    // Today's decisions told the next paragraph's leading and whether it set the unit closer, which the gap ruling of
+    // 2026-11-08 no longer reads: left out)
     const pass: Pass = {
       ...pass0,
-      units: pass0.units.map((u) => (cells.has(u.id as number) && u.short ? { ...u, tracked: 0, full: false } : u)),
+      units: pass0.units
+        .map(({ next: _next, closer: _closer, ...u }) => u)
+        .map((u) => (cells.has(u.id as number) && u.short ? { ...u, tracked: 0, full: false } : u)),
       ...(pass0.filled ? { filled: pass0.filled.filter((f) => !untracked.has(f.id as number)) } : {}),
     }
     const ids = [...pass.begun, ...pass.continuing]
@@ -106,20 +112,30 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
     const units: Raw[] = [],
       filled: Raw[] = []
     let size: Raw | undefined
-    const { told, filled: took } = fillPass(pass.page, laid, P, {
-      unit: (q: FillLaid, v: FillDecision) => units.push({ id: q.id, run: q.run ?? null, ...v }),
-      size: (ok, scale, grown) => {
-        size = { ok, scale: fin(scale), grown }
-      },
-      filled: (q: FillLaid, st: FitState, l: Layout, target: number) =>
-        filled.push({
-          id: q.id,
-          run: q.run ?? null,
-          state: stateOf(st),
-          layout: layoutOf(l as Raw),
-          target: fin(target),
-        }),
-    })
+    // (a pass the gap ruling changes may lay a unit at states today never tried, no longer set closer and so grown with the
+    // page: the table holds no width of them and throws MissingMeasure, the ruling's)
+    let got: ReturnType<typeof fillPass>
+    try {
+      got = fillPass(pass.page, laid, P, {
+        unit: (q: FillLaid, v: FillDecision) => units.push({ id: q.id, run: q.run ?? null, ...v }),
+        size: (ok, scale, grown) => {
+          size = { ok, scale: fin(scale), grown }
+        },
+        filled: (q: FillLaid, st: FitState, l: Layout, target: number) =>
+          filled.push({
+            id: q.id,
+            run: q.run ?? null,
+            state: stateOf(st),
+            layout: layoutOf(l as Raw),
+            target: fin(target),
+          }),
+      })
+    } catch (e) {
+      if (!(e instanceof MissingMeasure) || !gap.pages.has(pass.page)) throw e
+      out.push({ page: pass.page, d: null, filled: 0, ruled: true })
+      continue
+    }
+    const { told, filled: took } = got
     const toldOf = told
       ? { own: fin(told.own), anchor: fin(told.anchor), target: fin(told.target), body: !!told.body }
       : null
@@ -155,7 +171,7 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
         `L10 ord ${id}`,
       )
     }
-    const ruled = !!d && (pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
+    const ruled = !!d && (pages.has(pass.page) || gap.pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
     out.push({ page: pass.page, d: ruled ? null : d, filled: took.length, ...(ruled ? { ruled: true as const } : {}) })
   }
   return out

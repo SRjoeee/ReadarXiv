@@ -2694,6 +2694,32 @@ the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (t
 - 25: with PIPELINE 73, a piece's ink read through a macro TeX said sets no ink and up to a text symbol right after it (marks.mjs followsOf, the wrap's reading as the maker's), its glyphs its placeholders' group, the symbol its unit's text (2608.28692v1's `\MainRel\%`: the number in `u<id>.p`, the sign in `u<id>`); the base pages of two papers wrapped otherwise, glyph for glyph the same
 - 26: an image TeX painted inside a placeholder's own ink — between its two points, or from its opening one to the text after it in its unit — is the placeholder's (own.mjs MR 7, wrap.mjs planOf: the page's images aligned with PDF.js's, remove.mjs alignOf `images`), and an opening point with nothing of its region before a float TeX set right after it reads past the float to the text after it (stream.mjs pastOther): with LAYOUT 38, the wrapped base pages of the papers with such a piece change (the lost class of 2026-11-05)
 
+### 18.11 Layout decisions of 2026-11-08
+
+**The gap under a paragraph is held to its own leading alone.** Since the half-leading round of 2026-10-17 (its second
+form, B′) a paragraph's first line stays on the original's first baseline, and the room a gap lacks is taken from the
+paragraph above it: where the next line of its column would stand nearer its last line than a leading and the original's
+skip there, the paragraph ends higher (`footFloorAt`). That leading was the larger of the paragraph's own and the next
+paragraph's (the page fill's `next`). A paragraph whose translation nearly fills its block can open its leading only a
+little while its neighbours' shorter translations spread wide, and the next paragraph's leading then pulled it under even
+that: the owner on staging, 1810.04805v2 page 8, unit 156, seven lines of eight at 1.08 among neighbours at 1.38-1.5, its
+own 1.14; 2010.11929v2 page 5, unit 46, at 1.10, its own 1.14. Today's production sets them the same. The gap now reads the
+paragraph's own leading alone; B′ stands, no first line moves, and no unit is searched for a closer leading.
+
+The owner chose it on a preview of two rules drawn side by side over staging's own translations (2026-11-08, lab-data
+`refactor-2026-11/lead-variants/`): this one, and one leading for the body text of a column as TeX's one `\baselineskip`,
+each column's paragraphs at the smallest of their own leadings with the slack under each. The second set a column at the
+leading of its tightest paragraph, often one whose translation needs all its original's lines: over the 22 parity pairs the
+median leading of body paragraphs went from 1.33 to 1.00, and paragraphs at 1.05 or closer from 26 % to 52 %.
+
+Measured on the preview (the 22 parity pairs, 344 pages, at 499cc8f9b): 229 of 3,900 units change leading, 228 looser by a
+median of 0.02 (54 by 0.05 or more); one closer, 2610.30034v1 page 11 unit 215, which the old rule could not set under the
+next paragraph's floor and so left at its fit's 1.3, over its own 1.15. Lays 91,788 to 90,424 a run (the closer-leading
+searches gone); lay time a page, the median of three interleaved runs, p50 25.6 to 24.6 ms, p95 58.5 to 55.8 ms. The replays
+of today's fill read a pass where today's decision carried the next paragraph's leading over a unit's own as the ruling's
+(`packages/typeset/tests/replay/tap.ts` `flooredIn`): over the corpus's 2,883 passes, 785 are this ruling's alone and none
+differs otherwise.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
