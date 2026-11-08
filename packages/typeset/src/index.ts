@@ -208,11 +208,13 @@ export {
 } from './shared/figures.ts'
 export { CJK_FOOT, type FigureFit, type FitFigure, fitFigureSet, sameAsSource } from './shared/figure-fit.ts'
 export {
+  CJK_INK,
   COPY_SPACE_EM,
   type CropItem,
   type DisplayItem,
   type DisplayLine,
   displayLines,
+  inkLines,
   type LineRun,
   lineRuns,
   runEdge,

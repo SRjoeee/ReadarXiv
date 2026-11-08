@@ -3,7 +3,16 @@
 // no copy text, a page whose view does not start at 0).
 import { describe, expect, it } from 'vitest'
 import type { Face, Token } from '../../src/breaker/tokens.ts'
-import { displayLines, lineRuns, runEdge, type TextRun } from '../../src/emit/display.ts'
+import { cjkClassRe } from '../../src/breaker/script.ts'
+import {
+  CJK_INK,
+  type DisplayLine,
+  displayLines,
+  inkLines,
+  lineRuns,
+  runEdge,
+  type TextRun,
+} from '../../src/emit/display.ts'
 import type { LaidLine, Layout } from '../../src/fit/types.ts'
 import { dumpUnit, viewport } from '../replay/display.ts'
 
@@ -116,7 +125,7 @@ describe('D.display: items and the harness\u2019s reading', () => {
     const [x] = lines[2]![3]
     expect(x && !('src' in x) && [x.s, x.size, x.rise, x.skew, x.slant]).toEqual(['x ', 6.2, 10 * 0.36, 1, 12])
   })
-  it("draws a run's own fill as it is, a colour of no fill the layer's ink: the PDF's black (the owner's ruling of 2026-11-08)", () => {
+  it("draws a run's own fill as it is; a colour that is no fill names none (the sheet's ink)", () => {
     const red = { color: '#c00000' },
       named = { color: 'teal' }
     const lines = displayLines(
@@ -134,9 +143,44 @@ describe('D.display: items and the harness\u2019s reading', () => {
     )
     expect(lines[0]![3].map((i) => ('src' in i ? null : [i.s.trim(), i.fill]))).toEqual([
       ['a', 0xc00000],
-      ['b', 0],
+      ['b', undefined],
       ['c', undefined],
     ])
+  })
+  it("inks a CJK run that names no fill #141414 (the owner's exception of 2026-11-08), a Latin run none, a coloured run its own", () => {
+    // (CJK by the breaker's class of its characters, script.ts: Han, kana, Hangul and the CJK marks, the curly quotes where the
+    // rules set them as CJK's; a run of the Latin class keeps the sheet's ink, the PDF's black)
+    const red = { color: '#c00000' }
+    const line = (items: ReturnType<typeof item>[]): DisplayLine => [
+      700,
+      72,
+      300,
+      displayLines(layoutOf([{ baseline: 700, items }]), 1)[0]![3],
+    ]
+    const got = inkLines(
+      [
+        line([
+          item({ s: '\u4e2d', cls: 'cjk', face: CJK }, 72),
+          item({ s: '\u201c', cls: 'cjk', face: CJK }, 82),
+          item({ s: 'GPU', cls: 'latin', face: SERIF, brk: true }, 92),
+          item({ s: '\uff0c', cls: 'cjk', face: CJK, brk: true }, 110),
+          item({ s: '\u6587', cls: 'cjk', face: CJK, st: red, brk: true }, 120),
+          item({ s: '12', cls: 'latin', face: SERIF, st: red, brk: true }, 130),
+        ]),
+      ],
+      cjkClassRe(true),
+    )
+    expect(got[0]![3].map((i) => ('src' in i ? null : [i.s.trim(), i.fill]))).toEqual([
+      ['\u4e2d\u201c', CJK_INK],
+      ['GPU', undefined],
+      ['\uff0c', CJK_INK],
+      ['\u6587', 0xc00000],
+      ['12', 0xc00000],
+    ])
+    expect(CJK_INK).toBe(0x141414)
+    // (where the rules set the curly quotes as Latin's, a quote alone is no CJK run)
+    const quote = inkLines([line([item({ s: '\u201c', cls: 'latin', face: SERIF }, 72)])], cjkClassRe(false))
+    expect(quote[0]![3].map((i) => ('src' in i ? null : i.fill))).toEqual([undefined])
   })
   it('reads two lines on one baseline as one, a crop with no copy text as none, a slanted superscript off its line', () => {
     const view = [10, 20, 622, 812]

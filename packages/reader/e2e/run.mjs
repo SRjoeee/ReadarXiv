@@ -1476,11 +1476,32 @@ async function linesInk(page, lines = null) {
         let ink = 0
         for (let i = 0; i < px.length; i += 4)
           ink += 1 - (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) / 255
-        return { ink, text: t.textContent.trim().slice(0, 24), fill: getComputedStyle(t.querySelector('tspan')).fill }
+        // (each run's script and ink: a run of Han, kana or Hangul, one of Latin letters or digits and none of those, its own
+        // fill attribute where it names one)
+        const runs = [...t.querySelectorAll('tspan')].map((s) => ({
+          cjk: /[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u.test(s.textContent),
+          latin:
+            /[\p{sc=Latn}\p{Nd}]/u.test(s.textContent) &&
+            !/[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u.test(s.textContent),
+          own: s.getAttribute('fill'),
+          fill: getComputedStyle(s).fill,
+        }))
+        return {
+          ink,
+          text: t.textContent.trim().slice(0, 24),
+          fill: getComputedStyle(t.querySelector('tspan')).fill,
+          runs,
+        }
       },
       [k, clip],
     )
-    out.push({ text: canvas.text, fill: canvas.fill, svg: Math.round(svg - none), canvas: Math.round(canvas.ink) })
+    out.push({
+      text: canvas.text,
+      fill: canvas.fill,
+      runs: canvas.runs,
+      svg: Math.round(svg - none),
+      canvas: Math.round(canvas.ink),
+    })
   }
   const state = await page.evaluate(() => ({
     decided: document.querySelector('.axt-reader').getAttribute('data-axt-layer-text'),
@@ -1490,7 +1511,7 @@ async function linesInk(page, lines = null) {
   return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
 }
 await check(
-  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
+  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black, a CJK run today's #141414: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
   async () => {
     if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
     const out = {}
@@ -1518,7 +1539,7 @@ await check(
       }
       await context.close()
       assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
-      out[name] = got
+      out[name] = { ...got, target }
     }
     if (process.env.AXT_INK_OUT)
       (await import('node:fs')).writeFileSync(process.env.AXT_INK_OUT, `${JSON.stringify(out, null, 1)}\n`)
@@ -1534,10 +1555,16 @@ await check(
         Math.abs(got.ratio - 1) <= 0.06,
         `${name}: the overlay's ink ${got.ratio} of the canvas's ${JSON.stringify(got.lines)}`,
       )
-      // (in the layer's ink, the PDF's own black: the owner's ruling of 2026-11-08, #141414 before)
+      // (a run of no fill of its own in the layer's ink: a Latin run the PDF's own black (the owner's ruling of 2026-11-08,
+      // #141414 before), a CJK run #141414, today's (his exception of 2026-11-08, typeset's display.ts CJK_INK))
+      const runs = got.lines.flatMap((l) => l.runs).filter((r) => r.own === null || r.own === '#141414')
       assert(
-        got.lines.every((l) => l.fill === 'rgb(0, 0, 0)'),
-        `${name}: a run of no fill of its own drawn in ${got.lines.map((l) => l.fill)}`,
+        runs.every((r) => (r.cjk ? r.fill === 'rgb(20, 20, 20)' : !r.latin || r.fill === 'rgb(0, 0, 0)')),
+        `${name}: runs of no fill of their own drawn in ${JSON.stringify(runs.filter((r) => r.cjk || r.latin).map((r) => [r.cjk ? 'cjk' : 'latin', r.fill]))}`,
+      )
+      assert(
+        runs.some((r) => (got.target === 'de' ? r.latin : r.cjk)),
+        `${name}: no run of its target's script measured`,
       )
     }
     return Object.fromEntries(

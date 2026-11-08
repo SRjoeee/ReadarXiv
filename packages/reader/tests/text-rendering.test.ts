@@ -15,6 +15,9 @@ import {
   type ProbeWord,
   probeWords,
 } from '../src/compose/text-rendering.ts'
+import { CJK_INK } from '@readarxiv/typeset'
+import type { Page } from '../src/compose/page.ts'
+import { svgOf } from '../src/compose/paint.ts'
 import { READER_CSS } from '../src/styles.ts'
 
 /** a word's starts from its advances */
@@ -228,7 +231,43 @@ describe("the sheet: the overlay's text in the browser's smoothing and the PDF's
     expect(rule('.axt-reader .axt-over > svg')).toMatch(/text-rendering: geometricPrecision;/)
     expect(rule('.axt-reader .axt-over > svg')).toMatch(/-webkit-font-smoothing: auto;/)
     expect(rule(`.axt-reader[${ATTRIBUTE}="auto"] .axt-over > svg`)).toMatch(/text-rendering: auto;/)
-    // (the owner's ruling of 2026-11-08: the layer's ink is the PDF's own black, TeX's default colour, no longer #141414)
+    // (the owner's ruling of 2026-11-08: the layer's ink is the PDF's own black, TeX's default colour, no longer #141414; a CJK run
+    // brings its own, below)
     expect(rule('.axt-reader .axt-over > svg text')).toMatch(/fill: #000;/)
+  })
+  it("paints a CJK run in the fill its item states, #141414 (the owner's exception of 2026-11-08), a Latin run in the sheet's black", () => {
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 0,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lit: { left: [], right: [], own: [] },
+          lines: [
+            [
+              700,
+              72,
+              300,
+              [
+                { s: '\u6211\u4eec', x: 72, face: '400 100px "axt-shs-sc"', size: 10, dx: [0, 10], fill: CJK_INK },
+                { s: 'Transformer ', x: 92, face: '400 100px "axt-nimbus-roman"', size: 10 },
+                { s: '\u6a21\u578b', x: 150, face: '400 100px "axt-shs-sc"', size: 10, dx: [0, 10], fill: 0x0000cc },
+              ],
+            ],
+          ],
+        },
+      ],
+    }
+    const vp = { viewBox: [0, 0, 600, 800], rotation: 0 } as never
+    const spans = [...svgOf(page, vp, { classOf: () => 'f0' } as never).querySelectorAll('tspan')]
+    expect(spans.map((s) => [s.textContent?.trim(), s.getAttribute('fill')])).toEqual([
+      ['\u6211\u4eec', '#141414'],
+      ['Transformer', null],
+      ['\u6a21\u578b', '#0000cc'],
+    ])
   })
 })
