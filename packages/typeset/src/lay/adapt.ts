@@ -24,6 +24,7 @@ import {
   type KeptRow,
   type ShortSkip,
   type Side,
+  widen,
 } from '../unit/decor.ts'
 import { params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
@@ -121,7 +122,8 @@ function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNul
 }
 
 /**
- * The free paper two members share on one baseline (two cells of a table's row): where a line's Room.side stops at another
+ * The free paper two members share on one baseline (two authors set side by side; a table cell's own widening reads its side
+ * alone, half way to the glyph beside it, the adapter's cellSideOf): where a line's Room.side stops at another
  * member's ink on its baseline (within 0.4 of the smaller size) and that one's stops at its own, both may widen into the paper
  * between, and each takes its half: today's paperTo widened a cell half way to another unit's text (RUN:1717), as today's
  * figure reading shares the line between two figure texts (figure-text.mjs: half the line to another unit's band, the other
@@ -304,6 +306,35 @@ export function adapt(i: AdaptInput): Adapted {
     shortSkips,
     lineInfo,
   })
+  // (a cell's single lines widened over the paper beside them, its fit's further step where it is clipped in its own ink's
+  // width at its floor (X.further's 'widen': today's widenOverPaper, a cell never widened before, RUN:2116), its room today's
+  // paperTo's (RUN:1699): half way to the glyph beside it, another cell's text or a number's (two cells sharing paper take
+  // half each), a quarter of its size off a wall (Room.wall: its column's rule, a neighbour's fill), to its column's edge
+  // where nothing stands before it; null where none grows)
+  const cellSideOf = (b: FitBlock): Side | undefined => {
+    const r0 = b.rects[0] as Rect
+    const j = (lineInfo.get(rectKey(r0)) ?? lineInfo.get(rectKeyNoX0(r0)))?.j
+    const l = j === undefined ? undefined : lines[j]
+    if (!l) return undefined
+    const side = m.room.side
+    if (!side) return { column: [l[7], l[8]], left: [], right: [] }
+    const quarter = 0.25 * (b.sizes?.[0] ?? m.style.size),
+      wall = m.room.wall ?? 0
+    return {
+      column: [l[7], l[8]],
+      left: side[0] > l[7] + 0.01 ? [wall & 1 ? side[0] + quarter : (side[0] + l[2]) / 2] : [],
+      right: side[1] < l[8] - 0.01 ? [wall & 2 ? side[1] - quarter : (side[1] + l[3]) / 2] : [],
+    }
+  }
+  let wide: FitBlock[] | null = null
+  if (kind === 'cell') {
+    const grown = blocks.map((b) => {
+      const w = { ...b }
+      widen(w, cellSideOf(w))
+      return w
+    })
+    if (grown.some((w, k) => w.x0 < blocks[k]!.x0 - 1e-9 || w.x1 > blocks[k]!.x1 + 1e-9)) wide = grown
+  }
   const edges = {
     first: !(lines[0]![9] & PINNED),
     last: !(last[9] & PINNED),
@@ -403,7 +434,7 @@ export function adapt(i: AdaptInput): Adapted {
           }
         : null,
     shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
-    wide: null,
+    wide,
     ...(rowStart ? { rowStart } : {}),
   }
   return { member }

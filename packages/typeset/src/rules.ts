@@ -164,6 +164,7 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:2029-2042',
     ],
     how: 'ported',
+    ruling: "2026-11-08 a figure's and a table's label in one form a paper, by its float's type",
     reads: [
       'words',
       'captions',
@@ -171,7 +172,12 @@ const SPECS: readonly RuleSpec[] = [
       "the paper's own names (Part.paper.names, their rows: ownNamesOf)",
     ],
     file: 'unit/label.ts',
-    state: { is: 'ported', replay: "samples/U.label.json.gz (+ today's rules/tex-names.json)", cases: 15 },
+    state: {
+      is: 'changed',
+      why: "a caption whose part states its float's type (Label.float) is relabelled by the type, its number as printed (today's spelling of the name and the number read only where no type is stated): 'Table A1', 'Figure S3' relabelled beside 'Table 1', an algorithm's label kept",
+      replay: "samples/U.label.json.gz (+ today's rules/tex-names.json); tests/unit/label-float.test.ts",
+      cases: 15,
+    },
   },
   {
     id: 'U.lead',
@@ -572,6 +578,24 @@ const SPECS: readonly RuleSpec[] = [
     state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz tables', cases: 2059 },
   },
   {
+    id: 'S.table.groups',
+    home: 'shared',
+    step: 'L2',
+    owns: ['3.4:decide'],
+    ports: ['groups.mjs:37-93 groupOf, decideGroups, NAMES_SHARE, unchanged', 'rows.mjs:265-292 layerRows'],
+    how: 'ported',
+    ruling: "2026-11-08 a table's cells translated or kept by group, the way the production site judges them",
+    reads: ['NAMES_SHARE'],
+    file: 'shared/table-groups.ts',
+    state: {
+      is: 'changed',
+      why: "decided in the entry over each member's own row and TeX's grid places (Placed.cell), not over the rows the door gives a unit id; a member the prepare leaves the original's (its why) tells nothing, where today counted its row",
+      replay:
+        'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
+      cases: 7,
+    },
+  },
+  {
     id: 'S.names',
     home: 'shared',
     step: 'L3',
@@ -769,15 +793,15 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:2365-2394 fillPass',
     ],
     how: 'ported',
-    ruling: '2026-10-09 one page size',
+    ruling: '2026-10-09 one page size; 2026-11-08 no letter spacing on a table cell',
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
     file: 'shared/fill-page.ts',
     state: {
       is: 'changed',
-      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400)",
+      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400); and a table cell takes no tracking from the page's fill (TeX stretches no tabular entry; the owner's ruling of 2026-11-08), where today's tracked a CJK cell short of its fill: such a cell is laid untracked, its decision otherwise today's (pass.ts trackedCells)",
       replay:
-        'every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways',
-      cases: 344,
+        "every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways; and every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2), a cell today tracked untracked",
+      cases: 3013,
     },
   },
   {

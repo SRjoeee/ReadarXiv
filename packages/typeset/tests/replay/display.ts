@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
-import { framed, laysOf, passesOf } from './pass.ts'
+import { framed, laysOf, passesOf, trackedCells } from './pass.ts'
 import { firstDifference, LAB, ledger, ruledIn } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
@@ -198,8 +198,9 @@ export type DisplayResult = {
   chains: string[]
   /** the dump's units today laid with a borrowed line (tap.ts ruledIn), not replayed; and those on a page one stands on that
    *  the port lays otherwise (the page's fill reads them all): the ruling's; and those whose frames the port fills each at its
-   *  own leading (pass.ts framed) that it lays otherwise */
-  ruled: { borrowed: number; onPage: number; frames: number }
+   *  own leading (pass.ts framed) that it lays otherwise; and the cells today's fill letter-spaced, laid untracked by the ruling
+   *  of 2026-11-08 (pass.ts trackedCells), whose size and lines' text are today's */
+  ruled: { borrowed: number; onPage: number; frames: number; cells: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
@@ -208,6 +209,8 @@ export function displayReplay(pair: string): DisplayResult {
   passesOf(pair, lays)
   const off = pieceCrops(pair, lays)
   const v = viewsOf(paperOf(pair))
+  // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its lines' text today's, their extents not)
+  const untracked = trackedCells(pair)
   const out: DisplayResult = {
     units: 0,
     equal: 0,
@@ -216,7 +219,7 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
-    ruled: { borrowed: 0, onPage: 0, frames: 0 },
+    ruled: { borrowed: 0, onPage: 0, frames: 0, cells: 0 },
   }
   const ruled = ruledIn(pair)
   for (const u of readerDump(pair).units) {
@@ -232,6 +235,17 @@ export function displayReplay(pair: string): DisplayResult {
     }
     const mine = dumpUnit(p, (pg) => v.get(pg))
     const want = { size: u.size, leading: u.leading, lines: u.lines, ...(u.elements ? { elements: u.elements } : {}) }
+    if (untracked.has(u.ord)) {
+      const d = firstDifference(
+        { size: mine.size, texts: mine.lines.map((l) => l.text) },
+        { size: u.size, texts: u.lines.map((l) => l.text) },
+        '',
+      )
+      if (d && ruled.units.has(u.ord)) out.ruled.onPage++
+      else if (d) out.differ.push({ ord: u.ord, d })
+      else out.ruled.cells++
+      continue
+    }
     const d = firstDifference(mine, want, '')
     if (d && ruled.units.has(u.ord)) out.ruled.onPage++
     else if (d && framed(p)) out.ruled.frames++

@@ -428,7 +428,9 @@ export function factsOf({
     // -- its label's parts and style
     if (mem.labelAt && mem.label.length) {
       const lg = mem.label.map(gA)
-      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0]), { style: styleOf(lg, mem.labelAt.style.size) })
+      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0], mem.labelAt.kind === 'float'), {
+        style: styleOf(lg, mem.labelAt.style.size),
+      })
     }
 
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
@@ -510,7 +512,11 @@ export function factsOf({
       blockOf,
       unit?.cell ? (p) => boxes(p).filter((b) => !mine.has(`${p}|${b.j}`)) : undefined,
     )
-    if (side) mem.room.side = side
+    if (side) {
+      mem.room.side = side.side
+      // (a cell's sides that stop at its walls: X.further widens it a quarter of its size off a rule, half way to a glyph)
+      if (unit?.cell && side.wall) mem.room.wall = side.wall
+    }
     // (a figure text's room as today's figure reading tells it (layout/figure-text.mjs roomOf, its set's cut): along a level run,
     // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching
     // it is crowded by. A turned one's is stated with its run (Placed.run: its first glyph's origin, its box's length along its

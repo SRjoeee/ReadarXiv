@@ -59,15 +59,39 @@ export function laysOf(pair: string): { lays: Map<number, PassUnit>; differ: str
   return { lays, differ }
 }
 
+/**
+ * The cells today's page fill letter-spaced: the units of kind `cell` a pass of the pair's ledger tracked (its decision's
+ * `tracked` above 0). The owner's ruling of 2026-11-08 sets no letter spacing on a cell (fill-page.ts: TeX stretches no tabular
+ * entry), so each is laid untracked where today's was tracked: its pass's decision is today's but for its tracking (0, and so
+ * not full), and its filled layout, its final layout and its drawing differ from today's by that alone
+ */
+export function trackedCells(pair: string): Set<number> {
+  const L = ledger(pair)
+  const cells = new Set(L.units.filter((u) => u.kind === 'cell').map((u) => u.ord))
+  const out = new Set<number>()
+  for (const pass of L.passes as Pass[])
+    for (const u of pass.units) if (cells.has(u.id as number) && Number(u.tracked) > 0) out.add(u.id as number)
+  return out
+}
+
 /** each pass of a pair replayed over the chain's lays */
 export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[] {
   const L = ledger(pair)
   rules ??= derived('rules')
   const R = rules!.targets[L.target]!.params
   const P = { ...R, adaptiveFill: L.info.adaptiveFill } as unknown as PageRules
+  const untracked = trackedCells(pair)
+  const cells = new Set(L.units.filter((u) => u.kind === 'cell').map((u) => u.ord))
   const out: PassResult[] = []
   const { pages, borrowed } = ruledIn(pair)
-  for (const pass of L.passes as Pass[]) {
+  for (const pass0 of L.passes as Pass[]) {
+    // (a cell the fill found short: untracked by the ruling, so not full (a cell's `full` is read by nothing: no cell is a
+    // body unit the page's size grows), its decision today's but for that; the layouts of one today tracked not compared)
+    const pass: Pass = {
+      ...pass0,
+      units: pass0.units.map((u) => (cells.has(u.id as number) && u.short ? { ...u, tracked: 0, full: false } : u)),
+      ...(pass0.filled ? { filled: pass0.filled.filter((f) => !untracked.has(f.id as number)) } : {}),
+    }
     const ids = [...pass.begun, ...pass.continuing]
     if (ids.some((id) => borrowed.has(id))) {
       out.push({ page: pass.page, d: null, filled: 0, ruled: true })
@@ -108,10 +132,15 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
       firstDifference(toldOf, pass.told, 'told') ??
       firstDifference(units, pass.units, 'units') ??
       firstDifference(size ?? null, pass.size ?? null, 'size') ??
-      firstDifference(filled, pass.filled ?? [], 'filled')
+      firstDifference(
+        filled.filter((f) => !untracked.has(f.id as number)),
+        pass.filled ?? [],
+        'filled',
+      )
     // (each begun unit's final layout, its L10 slot)
     for (const id of pass.begun) {
       if (d) break
+      if (untracked.has(id)) continue
       const p = lays.get(id)!
       const want = L.units.find((u) => u.ord === id)?.slots.find((s) => s.by === 'S.fill.page')?.value
       d = firstDifference(

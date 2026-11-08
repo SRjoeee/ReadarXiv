@@ -787,7 +787,8 @@ export function gateL1Pair(
       if (content)
         byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), content, ...(sentences ? { sentences } : {}) })
     }
-    entryRows = { get: (k) => byId.get(k), done: true }
+    // (and the units the paper keeps as they are, as the reader's rows say them (reader.ts, Unit.kept): never translated)
+    entryRows = { get: (k) => byId.get(k), done: true, kept: (k) => bundle.units.get(k)?.kept === true }
   }
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++

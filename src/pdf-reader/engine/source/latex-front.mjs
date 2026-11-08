@@ -344,6 +344,14 @@ const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|superta
  *  it there: a minipage, a subfigure) is no neighbour in the text of the units around it. A longtable breaks across pages where
  *  it stands, and is none */
 const FLOAT_ENVS = /^(?:figure\*?|table\*?|wrapfigure|sidewaystable|algorithm|listing)$/
+/** a float's type, LaTeX's \@captype in it (the counter its \caption steps, the name its label prints): a starred float's its
+ *  own, wrapfig's wrapfigure and rotating's sidewaystable a figure's and a table's. The walk's `inFloat` is it */
+const floatTypeOf = env => env.replace(/\*$/, '').replace(/^(?:wrap|sideways)(?=figure$|table$)/, '')
+/** subcaption's environments of a part of a float: their \caption's type is `sub` and their float's (\@captype sub\@captype) */
+const SUB_FLOAT_ENVS = /^sub(?:figure|table)$/
+/** each caption unit's float type (`floatTypes`, by index), and the units of an algorithm float's body (`pseudocode`): told
+ *  beside the units, never on them (a field of a unit is its parent's hash's, as `floats`) */
+const CAPTYPES = new WeakMap(), PSEUDOCODE = new WeakSet()
 /** tabularray's tables, \\begin{tblr}[outer]{inner}, and the paper's own (\\NewTblrEnviron): their cells are math where
  *  the table says so — mode = math, imath or dmath, for the cells, a column, a row or one cell, in the table's own
  *  specifications or in \\SetTblrInner for every table. Such a table is math throughout, as an array is: nothing in it
@@ -1225,6 +1233,9 @@ class Builder {
     // (written inside a float: told beside the units, by index — no field of the unit, whose objects a nested piece holds
     // and its parent's hash reads)
     if (this.inFloat) this.floats?.add(u)
+    // (a caption's float type: a command's own (\captionof, a sub-caption's), else its float's; an algorithm float's other
+    // units, its lines as algorithm2e writes them in the float, are its pseudocode)
+    if (u.kind === 'caption') { const t = this.captype ?? (typeof this.inFloat === 'string' ? this.inFloat : null); if (t) CAPTYPES.set(u, t) } else if (this.inFloat === 'algorithm') PSEUDOCODE.add(u)
     this.units.push(u)
   }
 }
@@ -1696,7 +1707,7 @@ function pairsOf(s, from, to, b, ctx) {
   if (to <= from || ctx.dry?.b === b) return 0
   const shadow = { ...ctx, letters: false, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
   const sb = new Builder(b.file, [], s, ctx.bodies, shadow.floats)
-  if (b.inFloat) sb.inFloat = true
+  if (b.inFloat) sb.inFloat = b.inFloat
   sb.kind = b.kind; walk(s, from, to, sb, shadow); sb.flush()
   return sb.pairId
 }
@@ -1709,7 +1720,7 @@ function olderUnits(s, from, to, b, ctx) {
   // all `later`, every other unit keeping its number: 2010.11929v2's footnote stays u1)
   const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs], boxesUnread: true }
   const out = [], sb = new Builder(b.file, out, s, ctx.bodies, shadow.floats)
-  if (b.inFloat) sb.inFloat = true
+  if (b.inFloat) sb.inFloat = b.inFloat
   sb.kind = 'author'; walk(s, from, to, sb, shadow); sb.flush()
   return topUnits(out).map(u => [u.start, u.end])
 }
@@ -2008,14 +2019,15 @@ function walk(s, from, to, b, ctx) {
       // eleven proofs in English) —, but a theorem's title, a heading of its own (\\begin{theorem}[Convergence of X]:
       // the reader sees it as the body's words)
       const { end: argsEnd, title } = envArgs(s, afterBegin, bodyEnd, env, ctx)
-      // (a float's units, and those of whatever it holds, `inFloat`)
-      const outside = b.inFloat
-      if (FLOAT_ENVS.test(env)) b.inFloat = true
+      // (a float's units, and those of whatever it holds, `inFloat`: its type; a part of a float's captions their own type)
+      const outside = b.inFloat, outsideType = b.captype
+      if (FLOAT_ENVS.test(env)) { b.inFloat = floatTypeOf(env); b.captype = undefined }
+      if (SUB_FLOAT_ENVS.test(env) && typeof b.inFloat === 'string') b.captype = env
       // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
       if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
       const saved = b.kind; b.kind = blockKind(b, env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved)
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
-      b.inFloat = outside
+      b.inFloat = outside; b.captype = outsideType
       i = afterEnd; continue
     }
     if (name === 'end') {
@@ -2090,8 +2102,14 @@ function walk(s, from, to, b, ctx) {
         i = e; continue
       }
       endText(); b.flush()
+      // (a caption's float type where the command says it: \\captionof's first argument, a \\tablecaption's a table's, a
+      // sub-caption's its float's `sub` type; else its float's, `inFloat`)
+      const savedType = b.captype
+      if (name === 'captionof') { const t = args.find(a => a.kind === 'req'); const ty = t && t !== req ? s.slice(t.start + 1, t.end - 1).trim() : ''; if (/^[a-z][a-z0-9]*$/.test(ty)) b.captype = ty }
+      else if (name === 'tablecaption') b.captype = 'table'
+      else if ((name === 'subcaption' || name === 'subcaptionbox') && typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`
       // an abstract given as an argument (sn-jnl's \\abstract{…}) is the paper's abstract, as its environment is
-      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
+      b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved; b.captype = savedType
       i = e; continue
     }
     // \multicolumn{n}{spec}{text}, \multirow[v]{n}{width}[shift]{text}, \makecell[pos]{text}: only the content is prose,
@@ -2107,7 +2125,7 @@ function walk(s, from, to, b, ctx) {
       const opt = args[0]?.kind === 'opt' ? args[0] : null, content = args.find(a => a.kind === 'req')
       if (content) {
         endText(); b.flush()
-        if (opt) { const saved = b.kind; b.kind = 'caption'; walk(s, opt.start + 1, opt.end - 1, b, ctx); b.flush(); b.kind = saved }
+        if (opt) { const saved = b.kind, savedType = b.captype; b.kind = 'caption'; if (typeof b.inFloat === 'string') b.captype = `sub${b.inFloat}`; walk(s, opt.start + 1, opt.end - 1, b, ctx); b.flush(); b.kind = saved; b.captype = savedType }
         walk(s, content.start + 1, content.end - 1, b, ctx); b.flush()
         i = content.end; continue
       }
@@ -2954,7 +2972,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
-   *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
+   *  `inFloat`: the float the file is read inside, its type (the walk's builder there), or false */
   function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
@@ -2962,7 +2980,7 @@ function readProject(fsys, main, tables, sourceText, own) {
     // what patch writes around the units)
     const text = urlPercents(f.text, f.rel, percents)
     const b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats), outer = ctx.dirs
-    if (inFloat) b.inFloat = true
+    if (inFloat) b.inFloat = inFloat
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)
@@ -3009,6 +3027,9 @@ function readProject(fsys, main, tables, sourceText, own) {
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
+  // (each caption's float type, [index, type]; the units of an algorithm float's body, rising)
+  const floatTypes = units.flatMap((u, i) => (CAPTYPES.has(u) ? [[i, CAPTYPES.get(u)]] : []))
+  const pseudocode = units.flatMap((u, i) => (PSEUDOCODE.has(u) ? [i] : []))
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
   // (the code environments the paper uses, a listing package's or its own (codeEnvsOf), by name: the layout compile marks each line
@@ -3017,7 +3038,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const codeEnvNames = [...new Set([...LISTINGS, ...codeEnvs.code])].filter(n => begun.has(n)).sort()
   // (and those whose own body the compile marks, the environment's hook: the others' lines a listing package sets, by its hooks)
   const codeBodies = codeEnvNames.filter(n => !PACKAGE_LINES.has(n) && !codeEnvs.typeset.has(n))
-  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  return { main: mainFile.rel, files, units, inFloat, floatTypes, pseudocode, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

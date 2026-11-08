@@ -63,5 +63,8 @@ export declare function glyphPiecesOf(
 ): Int32Array
 /** the texts the marking's probe showed the paper's macros set, by source (null where none is given) */
 export declare function textsOf(texts: unknown): ReadonlyMap<string, string> | null
+/** each unit's facts from the front end's beside it, by index: a caption's float type, a unit kept as it is (its names, an
+ *  algorithm float's body) */
+export declare function unitFactsOf(paper: import('./live.mjs').Paper): { float: Map<number, string>; kept: Set<number> }
 /** the Instrument of today's marked compile */
 export declare function instrumentOf(o: Record<string, unknown>): Promise<{ instrument: Instrument; today: unknown }>

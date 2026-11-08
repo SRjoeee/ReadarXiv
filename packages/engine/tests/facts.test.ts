@@ -174,6 +174,37 @@ describe('a label’s parts (B16)', () => {
   })
 })
 
+describe('a float label’s parts: TeX’s \\fnum@<type>, its name, a tie, its number', () => {
+  it('reads its number as its last word: a roman one, and one whose tie a justified line set tight', () => {
+    // (IEEEtran's "TABLE I.": no digit, so no number was read and the name was "TABLEI"; 2610.30875v1 p15's "Table S2:", its tie
+    // 0.19 em on a justified line, under the 0.2 em that keeps a capital before a digit the name's: name "TableS". The tie on
+    // the 87 papers' float labels measured 0.19 to 0.48 em, a kern inside their words -0.09 to 0)
+    const any = expect.anything()
+    expect(labelParts(run('TABLE I.'), 1, true)).toMatchObject({
+      name: ['TABLE', any],
+      num: ['I', any],
+      punct: ['.', any],
+    })
+    const tight = run('TableS2:').map((x, k) => (k >= 5 ? { ...x, x0: x.x0 + 1.9, x1: x.x1 + 1.9 } : x))
+    expect(labelParts(tight, 1, true)).toMatchObject({ name: ['Table', any], num: ['S2', any], punct: [':', any] })
+    expect(labelParts(run('Table IV:'), 1, true)).toMatchObject({ name: ['Table', any], num: ['IV', any] })
+    // (as before where the number is no last word of its own: one word, a number with a digit read already)
+    expect(labelParts(run('Fig. 4.'), 1, true)).toMatchObject({
+      name: ['Fig.', any],
+      num: ['4', any],
+      punct: ['.', any],
+    })
+    expect(labelParts(run('Figure 1.1 –'), 1, true)).toMatchObject({ name: ['Figure', any], num: ['1.1', any] })
+    expect(labelParts(run('Fig.S1'), 1, true)).toMatchObject({ name: ['Fig.', any], num: ['S1', any] })
+    expect(labelParts(run('(a)'), 1, true).name?.[0]).toBe('a')
+    expect(labelParts(run('(a)'), 1, true).num).toBeUndefined()
+    // (an unnumbered label's last word is its name's: no number)
+    expect(labelParts(run('Figure:'), 1, true).num).toBeUndefined()
+    // (a head's label as before)
+    expect(labelParts(run('Theorem 2.1.'), 1)).toMatchObject({ name: ['Theorem', any], num: ['2.1', any] })
+  })
+})
+
 describe('forced breaks and the room after them (C14)', () => {
   it('states the line TeX ended and its room in pitches, by the unit’s other lines', () => {
     const lines = [L(72, 300, 700), L(72, 200, 688), L(72, 300, 664), L(72, 300, 652)]
@@ -209,14 +240,14 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => ink,
         () => [50, 500],
       ),
-    ).toEqual([60, 400])
+    ).toEqual({ side: [60, 400], wall: 0 })
     expect(
       sideOf(
         [L(100, 200, 700)],
         () => [],
         () => [50, 500],
       ),
-    ).toEqual([50, 500])
+    ).toEqual({ side: [50, 500], wall: 0 })
   })
   it('reads a cell’s room to its column’s rules too: a painted box beside its line whose height meets its band', () => {
     // (1706.03762v7 p10's Table 4: the "Training" column's cell between the rules at 296.4 and 409, its neighbours' ink at
@@ -238,7 +269,9 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => glyphs,
         () => [107.5, 505.6],
       ),
-    ).toEqual([290.6, 429.01])
+    ).toEqual({ side: [290.6, 429.01], wall: 0 })
+    // (and says which sides stop at a wall, not a glyph: today's further widening keeps a quarter of its size off a rule and
+    // goes half way to another's text (run.mjs paperTo), so the typesetter must tell them apart)
     expect(
       sideOf(
         line,
@@ -246,7 +279,15 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
         () => [107.5, 505.6],
         () => walls,
       ),
-    ).toEqual([296.4, 409])
+    ).toEqual({ side: [296.4, 409], wall: 3 })
+    expect(
+      sideOf(
+        line,
+        () => [{ x0: 380, x1: 392, y0: 676, y1: 685, y: 678.91 }].map((g) => ({ ...g, x0: 404, x1: 408 })),
+        () => [107.5, 505.6],
+        () => walls,
+      ),
+    ).toEqual({ side: [296.4, 404], wall: 1 })
   })
   it('reads a cell’s band between the rules over and under its lines', () => {
     const rules = [

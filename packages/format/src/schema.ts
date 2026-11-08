@@ -176,7 +176,9 @@ export const SpanAt = z.object({
 })
 /** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
  *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's
- *  base), absent where it stands on none (a part made before states none) */
+ *  base), absent where it stands on none (a part made before states none); `float` a caption's float type, LaTeX's \@captype
+ *  where its \caption runs (`figure`, `table`, `algorithm`, `subfigure`, …: its float environment's, \captionof's), absent
+ *  where the source tells none */
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
   ink: Ink,
@@ -185,6 +187,10 @@ export const Label = z.object({
   num: z.tuple([z.string(), Ink]).optional(),
   punct: z.tuple([z.string(), Ink]).optional(),
   line: int.optional(),
+  float: z
+    .string()
+    .regex(/^[a-z][a-z0-9]{0,31}$/)
+    .optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
@@ -199,6 +205,10 @@ export const Room = z.object({
   // (the side of `band` no rule stands on, where one stands on the other: 1 under, 2 over. The band states the cell's line's own
   // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
   bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
+  // (a table cell's sides of `side` that stop at a painted box, its column's rule or a neighbour's fill, not at a glyph: 1 the
+  // left, 2 the right. A cell widened past its own ink keeps a quarter of its size off a wall and goes half way to a glyph,
+  // today's paperTo; a part made before states none, every side a glyph's)
+  wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   under: num.optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
@@ -233,6 +243,8 @@ export const Placed = z.object({
   // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
   words: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
+  // its own text, where a rule tells a translation by it: a babel name's on A, a figure text's and a table cell's as its source
+  // writes them (its text pieces, an element a space): a translation that says nothing else came back as it went
   plain: z.string().optional(),
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
   // origin, its box's length along `dir` and its room before and after its box along it (its lines are its box on the page,
@@ -243,6 +255,10 @@ export const Placed = z.object({
   // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
   title: flag.optional(),
   front: flag.optional(),
+  // a table cell's place in TeX's grid, as the source's tabular sets it: its row, its first column, the columns it spans
+  // (\multicolumn), and 1 where it is a header's (the rows above the table's first full rule), else 0. The cells of one table
+  // are its `cells` tie's; what a reader decides of them together (a header, a column) is read from these
+  cell: z.tuple([int, int, int, z.union([z.literal(0), z.literal(1)])]).optional(),
   // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),

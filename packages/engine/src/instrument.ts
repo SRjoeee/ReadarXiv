@@ -33,6 +33,9 @@ export interface InstrumentUnit {
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */
   cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true }
+  /** a caption's float type, LaTeX's \@captype where its \caption runs (its float environment's, \captionof's): the part's
+   *  Label.float */
+  float?: string
   /** the paper's title, a unit of its front matter (the source reader's) */
   title?: true
   front?: true

@@ -22,8 +22,11 @@ export type Glyph = {
 }
 /** a part of a label drawn anew: its text in its own style */
 export type LabelPart = { text: string; st: { bold?: boolean; italic?: boolean; color?: string | undefined } }
+/** a caption's label as its part states it with its float's type (Label.float, LaTeX's \@captype): its type, its name, and
+ *  its glyphs after the name (its number and punctuation as TeX printed them), and whether its parts hold its every glyph */
+export type FloatLabel = { type: string; name: string; rest: readonly Glyph[]; num: boolean; whole: boolean }
 /** the unit's label, as the unit is laid with it: its glyphs, and where it is drawn anew its words (`drawn`, `parts`) and
- *  whether it ends in an opening bracket (`open`) */
+ *  whether it ends in an opening bracket (`open`); a caption's, its float's type where its part states one (`float`) */
 export type UnitLabel = {
   x1: number
   text: string
@@ -31,6 +34,7 @@ export type UnitLabel = {
   drawn?: string
   parts?: readonly LabelPart[]
   open?: boolean
+  float?: FloatLabel
 }
 export type HeadLabel = { text: string; parts: LabelPart[]; open: boolean; chars: readonly Glyph[] }
 
@@ -68,13 +72,24 @@ const NAME_ENGLISH = [
 const BABEL_HEADS = new RegExp(`^\\s*(?:${NAME_ENGLISH.join('|')})\\s*[.:\\u2013\\u2014]?\\s*$`, 'u')
 
 /** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
- *  (L2:1184 labelInTarget) */
+ *  (L2:1184 labelInTarget). Where its part states its float's type (`float`, the owner's ruling of 2026-11-08: one form a
+ *  paper), by the type: a figure's or a table's in the rules' word, its glyphs after its name as TeX printed them, any
+ *  number ("A1", "S3", "I"); any other type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold
+ *  its every glyph or state no number. Else by its spelling, as today's */
 export function labelInTarget(
   label: UnitLabel | undefined,
   names: LabelInput['words'],
   captions: LabelInput['captions'],
   to: string,
 ): string | null {
+  const f = label?.float
+  if (f) {
+    const kind = f.type === 'figure' || f.type === 'table' ? f.type : null
+    if (!kind || captions?.[kind] !== 'target' || !names?.[kind] || !f.whole || !f.num || !/\p{L}/u.test(f.name))
+      return null
+    const name = f.name === f.name.toUpperCase() ? names[kind]!.toLocaleUpperCase(to) : names[kind]!
+    return name === f.name ? null : `${name} ${spacedText(f.rest)}`
+  }
   const m =
     label?.text &&
     /^\s*(Figure|Fig\.|FIGURE|FIG\.|Table|TABLE)\s*([0-9]+(?:\.[0-9]+)?[a-z]?|[IVXL]+)\s*([.:]?)\s*$/.exec(label.text)

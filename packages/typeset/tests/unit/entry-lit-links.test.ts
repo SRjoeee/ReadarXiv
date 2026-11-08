@@ -922,6 +922,9 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(sizes[0]!).toBeLessThan(8)
     // (its translation the same as its source: the original's)
     expect(layPage(part(label()), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!.state).toBe('none')
+    // (a unit the paper keeps as it is, a row of it given: the original's, as the entry's members (Unit.kept))
+    const kept: Rows = { ...rowsOf([rowF('Verlust')]), kept: (k) => k === idF }
+    expect(layPage(part(label()), kept, rules, metrics()).members[0]).toMatchObject({ state: 'none', off: 0 })
   })
   it('draws a turned one at its angle along its run about its anchor, its runs along it, lit by its turned box', () => {
     // (a y-axis title "Loss" set a quarter turned: its run from (150, 380) up for 20, centred, its room 20 before and after along
