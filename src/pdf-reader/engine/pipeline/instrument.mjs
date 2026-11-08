@@ -14,8 +14,9 @@
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
 import { linkTargetOf, ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { classOf, followsOf, headEnd, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
+import { columnsAt } from '../layout/stream.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
@@ -386,6 +387,88 @@ export function placesOf(pages, count) {
   return places
 }
 
+/** a glyph beside a unit's mark is of the run there within this many of its own size of the run's edge (today's maker's
+ *  LABEL_EM, make.mjs besideMarks) */
+const BESIDE_EM = 2
+/**
+ * The paper's macros at a unit's head and after its last text that set nothing on the unit's lines, by today's maker's rule
+ * (make.mjs besideMarks), as Instrument `empty` pieces: TeX set a head piece's ink, if any, before the unit's start mark and a
+ * tail piece's after its end mark, so never on the unit's own lines, which begin at the one mark and end at the other; where no
+ * glyph of no unit's stands beside the mark on its line, in its column, the nearest within BESIDE_EM of its size, nothing of it
+ * is there: the reading draws it as nothing, and its ink, wherever TeX set it, stays the original's. Today's marking gives
+ * such a piece no point to bound it (a head piece none, a tail one its opening point alone where its closing one would follow a
+ * control word), so the compile's evidence is the line beside the mark: 2610.21880v1 p2 u23's `\\endgroup` after its last word,
+ * 2609.20976v1 p12 u65's `\\acknowledgments` (its heading on the line above), 2610.10069v1 p5 u29's `\\begingroup`, units
+ * left unproven before. The mark's place is the unit's own glyph TeX set right after its start point (before its end point).
+ * A tail is looked at only where the unit took nothing past its end mark on that line (its closing punctuation, own.mjs MR
+ * 4c), as today's. The pieces are the reading's text macros (`classes`' macro and umacro, which the probe showed no text of),
+ * nearest the mark first; one whose ink or span is stated (`known`, `unit|piece`) is passed over; inline code (at the head)
+ * and a footnote's call always set ink, and end the look. `pages` the adapter's (glyphs, points, view), `rows` the ownership's
+ * group names by glyph, `units` today's, `classes` each unit's classesOf by piece id
+ */
+export function besideEmpty(pages, rows, units, { classes, known = new Set() }) {
+  // (each unit's start and end point, page and glyph count; a unit whose marks TeX set more than once is not looked at)
+  const S = new Map(), E = new Map(), twice = new Set()
+  pages.forEach((pg, p) => (pg.points ?? []).forEach(pt => {
+    const s = START_POINT.exec(pt.name), e = s ? null : END_POINT.exec(pt.name), m = s ?? e
+    if (!m) return
+    const i = Number(m[1]), M = s ? S : E
+    if (M.has(i)) twice.add(i)
+    else M.set(i, [p, pt.glyph])
+  }))
+  /** whether nothing of no unit's stands beside unit i's mark `at` (its start's, else its end's) on the mark's line */
+  const nothingBeside = (i, at, tail) => {
+    const [p, n] = at, pg = pages[p], row = rows[p] ?? [], G = pg?.glyphs ?? [], j = tail ? n - 1 : n, M = G[j]
+    const mine = `u${i}`, own = g => row[g] === mine || row[g] === `${mine}.p` || row[g] === `${mine}.l`
+    if (!M || !own(j)) return false
+    const mx = tail ? M.x1 : M.x0, my = M.y
+    const v = pg.view ?? [0, 0, 0, 0], mid = (v[0] + v[2]) / 2, col = columnsAt(pg), c = col(mx, mx), two = col(v[2], v[2]) === 1
+    const [cx0, cx1] = !two || c === 2 ? [v[0], v[2]] : c === 1 ? [mid, v[2]] : [v[0], mid]
+    const onBand = g => G[g].y > my - 0.35 * G[g].size && G[g].y < my + 0.75 * Math.max(G[g].size, 6)
+    const beside = g => (tail ? G[g].x0 >= mx - 0.05 && G[g].x1 <= cx1 + 1 : G[g].x1 <= mx + 0.05 && G[g].x0 >= cx0 - 1)
+    const real = g => /\S/.test(G[g].u ?? '') && !G[g].blank
+    // (what the unit took past its end mark on its line: its closing punctuation, which ends the look)
+    if (tail && G.some((_, g) => g >= n && own(g) && real(g) && onBand(g) && (G[g].x0 + G[g].x1) / 2 > mx + 0.05 && G[g].x1 <= cx1 + 1)) return false
+    // (the run outwards from the mark, nearest first: the glyphs of no unit's, and the unit's own pieces' a head found (MR 5b))
+    const cand = []
+    for (let g = 0; g < G.length; g++) if (g !== j && (row[g] == null || row[g] === `${mine}.p`) && real(g) && onBand(g) && beside(g)) cand.push(g)
+    cand.sort((a, b) => (tail ? G[a].x0 - G[b].x0 : G[b].x1 - G[a].x1) || a - b)
+    let edge = mx
+    for (const g of cand) {
+      if ((tail ? G[g].x0 - edge : edge - G[g].x1) > BESIDE_EM * G[g].size) break
+      if (row[g] == null) return false
+      edge = tail ? Math.max(edge, G[g].x1) : Math.min(edge, G[g].x0)
+    }
+    return true
+  }
+  const out = []
+  units.forEach((u, i) => {
+    const pieces = u?.pieces ?? []
+    if (twice.has(i) || !pieces.length) return
+    const last = pieces.findLastIndex(q => q.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : ''))
+    if (last < 0) return
+    const cs = classes[i]
+    for (const tail of [false, true]) {
+      const at = (tail ? E : S).get(i)
+      if (!at) continue
+      const ks = []
+      if (tail) for (let k = last + 1; k < pieces.length; k++) ks.push(k)
+      else for (let k = headEnd(pieces, 0) - 1; k >= 0; k--) ks.push(k)
+      let looked = null
+      for (const k of ks) {
+        const c = classOf(pieces[k])
+        if (c === 'footnote' || (!tail && c === 'code')) break
+        const x = cs?.get(String(k))
+        if (!x || (x.cls !== 'macro' && x.cls !== 'umacro') || x.text !== undefined || known.has(`${i}|${k}`)) continue
+        looked ??= nothingBeside(i, at, tail)
+        if (!looked) break
+        out.push({ unit: i, piece: String(k) })
+      }
+    }
+  })
+  return out
+}
+
 /** the texts the marking's probe showed the paper's macros set, by source: as markedOfPaper's options hold them (readInkTexts'
  *  [source, text] pairs: what the box and the lab hand in), as the marks file's `marking.texts` (flat [source, text, …]) or a
  *  Map; null where none is given */
@@ -428,12 +511,14 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const ids = []
   const out = []
   const kindOf = p => classOf(p) ?? 'other'
+  const classesBy = []
   units.forEach((u, i) => {
     const content = contentOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null })
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
+    classesBy[i] = new Map(classes)
     out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
@@ -478,6 +563,14 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const noInk = new Set(inkless ?? [])
   const empty = []
   units.forEach((u, i) => u.pieces.forEach((p, k) => { if (p.t === 'ph' && classOf(p) === 'macro' && noInk.has(p.src)) empty.push({ unit: i, piece: String(k) }) }))
+  // (and a head or tail macro that sets nothing on its unit's line, by the line beside the unit's mark (besideEmpty): those whose
+  // ink, span or no ink the instrument states already passed over)
+  const known = new Set(empty.map(x => `${x.unit}|${x.piece}`))
+  for (const O of [...glyphs, ...boxes]) for (let j = 0; j < O.unit.length; j++) if (O.role[j] === ROLE.element && O.piece[j] >= 0) known.add(`${O.unit[j]}|${O.piece[j]}`)
+  const ends = new Map()
+  for (const x of places) { const k = `${x.unit}|${x.piece}`; ends.set(k, (ends.get(k) ?? 0) | (x.end ? 2 : 1)) }
+  for (const [k, e] of ends) if (e === 3) known.add(k)
+  empty.push(...besideEmpty(pages, own.glyphs, units, { classes: classesBy, known }))
   return {
     instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },

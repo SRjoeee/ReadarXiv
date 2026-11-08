@@ -243,7 +243,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? Number.NaN])
     else placeSpan.set(k, [was?.[0] ?? Number.NaN, at])
   }
-  // (the pieces TeX said set no ink: the instrument's `empty`)
+  // (the pieces TeX said set no ink, or that set none on their unit's lines: the instrument's `empty`)
   const emptyPiece = new Set((ins.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
@@ -959,8 +959,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       // (a text macro whose span the instrument states with nothing in it: both its places stated and no glyph of B between them,
       // or TeX's probe said it sets none: TeX set none for it, its text '' (2610.19159v1's `\trajectoryMark{}`, whose argument
-      // is empty: its end point and the point after its group hold no glyph). The reading draws it as nothing, and may: no glyph of
-      // it is erased with any group)
+      // is empty: its end point and the point after its group hold no glyph); or a head or tail macro the instrument states sets
+      // none on the unit's lines (`empty`: nothing beside the unit's mark on its line, 2610.21880v1's `\endgroup`). The reading
+      // draws it as nothing, and may: no glyph of it is erased with any group)
       const emptySpan = !!span && span[0] === span[1]
       const macro = cls ?? p.kind
       if (

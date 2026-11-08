@@ -31,6 +31,18 @@ export declare function placesOf(
   pages: readonly { points: readonly { name: string; glyph: number; box?: number }[] }[],
   count: number,
 ): NonNullable<Instrument['places']>
+/** the paper's macros at a unit's head and after its last text that set nothing on the unit's lines (today's maker's
+ *  besideMarks): no glyph of no unit's beside the unit's mark on its line, in its column; as Instrument `empty` pieces */
+export declare function besideEmpty(
+  pages: readonly {
+    glyphs: readonly { u?: string; x0: number; x1: number; y: number; size: number; blank?: boolean }[]
+    points?: readonly { name: string; glyph: number; box?: number }[]
+    view?: readonly number[]
+  }[],
+  rows: readonly (readonly (string | null | undefined)[])[],
+  units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; known?: ReadonlySet<string> },
+): NonNullable<Instrument['empty']>
 /** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known) */
 export declare function glyphPiecesOf(
   pg: { points: readonly { name: string; glyph: number; box?: number }[]; glyphs: readonly { u?: string }[] },
