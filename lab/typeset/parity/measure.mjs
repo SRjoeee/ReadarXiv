@@ -13,10 +13,12 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
-import { LAB } from '../../../packages/typeset/tests/replay/tap.ts'
+import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
+import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
+import { frameOf, labelsPass } from './fidelity.mjs'
 import { whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, recount, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
@@ -58,15 +60,43 @@ for (const [pair, raw] of drawn) {
   const turned = new Set()
   const led = new Map()
   const top = new Set()
-  for (const part of l1Paper(raw.paper)?.parts.values() ?? [])
+  // (the page numbers of each page, the owner's ruling 6: a running head or foot whose text holds the page's number, or a note
+  // that does on the page's first or last row (a first page's folio is read as a note, 2609.36054 p1))
+  const folios = new Map()
+  const bundle = l1Paper(raw.paper)
+  const rowsOf = new Map()
+  for (const [pg, part] of bundle?.parts ?? []) {
+    const ys = part.flows.flat().flatMap((m) => m.lines.filter((l) => l[0] === pg).map((l) => l[4]))
+    if (ys.length) rowsOf.set(pg, [Math.min(...ys), Math.max(...ys)])
+  }
+  const edgeRow = (m, pg) => m.lines.some((l) => l[0] === pg && rowsOf.get(pg)?.some((y) => Math.abs(l[4] - y) <= 0.5))
+  for (const [pg, part] of bundle?.parts ?? [])
     for (const f of part.flows)
       f.forEach((m, k) => {
         if (m.dir && (Math.abs(m.dir[1]) > 1e-3 || m.dir[0] < 0)) turned.add(m.ord)
         if (m.title || m.front) top.add(m.ord)
         const b = f[k - 1]
         if (b && (m.join || (b.kind === 'name' && b.bound)) && !led.has(m.ord)) led.set(m.ord, b.ord)
+        const text = typeof m.text === 'string' ? (bundle.units.get(m.text)?.content ?? []).map((x) => (x.t === 'text' ? x.s : ' ')).join('') : ''
+        const page = m.kind === 'inkheads' ? m.lines.some((l) => l[0] === pg) : m.kind === 'inknotes' && edgeRow(m, pg)
+        if (page && new RegExp(`(^|\\D)${pg}(\\D|$)`).test(text)) {
+          if (!folios.has(pg)) folios.set(pg, [])
+          folios.get(pg).push(m.ord)
+        }
       })
-  for (const rec of raw.pages) pages.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top }))
+  // (the paper's text frame, read off its own lines (frameOf); its tables' grid groups, TeX's grid as today's front end reads it
+  // (today's ledger); the cells whose door row today's group decision kept, whose translator's answer v2 is never handed)
+  const frame = frameOf(v2.facts)
+  const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
+  const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
+  const mine = []
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
+  // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
+  labelsPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  pages.push(...mine)
 }
 const incomplete = coverageOf(run, { asked: asked.length ? asked : null, notMeasured, drawn, pages })
 const verdict = verdictOf(incomplete, pages)
@@ -81,7 +111,7 @@ const result = {
   format: 'readarxiv-parity 3',
   verdict: 'display ≥ today: no page worse than today\'s, a difference only where nearer the original, over every page the run asked',
   pass: verdict.pass,
-  run: run ? { id: run.id, at: run.at, pairs: run.pairs, pages: run.pages ?? null, done: run.done, stopped: run.stopped ?? null } : null,
+  run: run ? { id: run.id, at: run.at, pairs: run.pairs, pages: run.pages ?? null, toggles: run.toggles ?? 'defaults', done: run.done, stopped: run.stopped ?? null } : null,
   bounds: BOUNDS,
   near: NEAR,
   measures: SAYS,
@@ -126,7 +156,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}${d.ruling ? ` <i>(${esc(d.ruling)})</i>` : ''}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'ruling' ? 'ruling' : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const fl = FLAGS.filter((f) => p.faults[f])
@@ -185,7 +215,7 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 </head>
 <body>
 <h1>Display ≥ today: v2 against today's output, judged against arXiv's page</h1>
-<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
+<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
 <table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
 ${inc}
 ${miss}

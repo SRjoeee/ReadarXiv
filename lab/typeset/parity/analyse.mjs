@@ -16,9 +16,14 @@
 //   rules     the vertical rules of arXiv's page, read off its pixels (the bundle's rules list the horizontal ones alone): a
 //             straight run of dark pixels RULE_LONG points long or more, at most RULE_THICK points wide, light on both sides
 //             (a glyph's stem is shorter than a line's height; a table's column rule spans a row at least).
+//   fidelity  each side's drawing against arXiv's page itself (pixels.mjs, on globalThis.parityPixels: the lab's page holds it):
+//             its text drawn over other ink (Tt/Vt against Tc/Vc, its drawing without its text, per drawn group), each drawn
+//             group's darkness and each original unit's (and whether its ink is black), the original's glyphs it shows in
+//             part inside its translated units' regions (`regions`, its moved crops' places `moved` aside), and how much of
+//             each of its elements' ink (`elements`) it shows in place.
 // Returns the numbers and the sheet's images (WebP, half the device resolution): the original, today's, v2's, and the
 // difference (the original faint, v2's ink alone red, today's alone blue).
-export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }) {
+export async function analyse({ A, T, Tt, Tc, V, Vt, Vc, view, boxes, textBoxes, figBoxes = [], groups = null, origs = [], regions = null, moved = null, elements = null, scale }) {
   const DARK_MIN = 0.1
   const DIFF_MIN = 0.25
   const RULE_LONG = 12
@@ -51,6 +56,7 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     return { mean: n ? Math.round((sum / n) * 10000) / 10000 : null, pixels: n }
   }
   const [pa, pt, ptt, pv, pvt] = [await pixels(A), await pixels(T), await pixels(Tt), await pixels(V), await pixels(Vt)]
+  const [ptc, pvc] = [Tc ? await pixels(Tc) : null, Vc ? await pixels(Vc) : null]
   // (the units' boxes as a mask of device pixels)
   const maskOf = (list) => {
     const m = new Uint8Array(W * H)
@@ -64,6 +70,8 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     return m
   }
   const inside = maskOf(boxes)
+  const fig = maskOf(figBoxes)
+  const notFig = fig.map((v) => (v ? 0 : 1))
   // (a pixel off arXiv's page only where no pixel of either within one device pixel matches it: the same ink drawn a
   // fraction of a pixel elsewhere, as PDF.js's page view does in a box it floors to whole pixels, is no difference of ink)
   const near = (d, p) => {
@@ -153,6 +161,42 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
     } else rules.push([...s])
   }
   const r2 = (v) => Math.round(v * 100) / 100
+  // (the drawing against arXiv's page itself, each side's: pixels.mjs)
+  const P = globalThis.parityPixels
+  let fidelity = null
+  if (P && ptc && pvc && groups) {
+    const sides = { today: { t: ptt.data, c: ptc.data }, v2: { t: pvt.data, c: pvc.data } }
+    fidelity = { over: {}, dark: {}, orig: {}, parts: {}, shown: {} }
+    for (const [side, { t, c }] of Object.entries(sides)) {
+      const over = {},
+        dk = {}
+      for (const g of groups[side] ?? []) {
+        const px = P.pixelsOf(g.boxes, view, scale, W, H)
+        const n = P.overOf(t, c, px)
+        if (n) over[g.id] = n
+        dk[g.id] = P.darkOf(t, px)
+      }
+      fidelity.over[side] = over
+      fidelity.dark[side] = dk
+      // (the original's glyphs shown in part inside the side's translated units' original lines: its moved crops' places aside)
+      const region = P.maskOf(regions?.[side] ?? [], view, scale, W, H)
+      const skip = P.maskOf(moved?.[side] ?? [], view, scale, W, H)
+      fidelity.parts[side] = P.partsOf(pa.data, c, region, skip, W, H).map((x) => ({
+        box: [r2(view[0] + x.box[0] / scale), r2(view[3] - x.box[3] / scale), r2(view[0] + x.box[2] / scale), r2(view[3] - x.box[1] / scale)],
+        size: x.size,
+        shown: x.shown,
+      }))
+      const sh = {}
+      for (const e of elements?.[side] ?? []) sh[e.id] = P.shownOf(pa.data, c, P.pixelsOf(e.boxes, view, scale, W, H), W, H)
+      fidelity.shown[side] = sh
+    }
+    for (const o of origs) {
+      const px = P.pixelsOf(o.boxes, view, scale, W, H)
+      let lo = 1
+      for (const p of px) lo = Math.min(lo, lum(pa.data, p * 4))
+      fidelity.orig[o.id] = { ...P.darkOf(pa.data, px), least: r2(lo) }
+    }
+  }
   const vrules = rules.map(([a, r0, b, r1]) => [r2(view[0] + a / scale), r2(view[3] - (r1 + 1) / scale), r2(view[0] + (b + 1) / scale), r2(view[3] - r0 / scale)])
   const half = async (canvas) => {
     const c = new OffscreenCanvas(Math.round(W / 2), Math.round(H / 2))
@@ -168,7 +212,9 @@ export async function analyse({ A, T, Tt, V, Vt, view, boxes, textBoxes, scale }
   return {
     size: [W, H],
     sizes: { today: pt.size, v2: pv.size },
-    darkness: { original: darkness(pa.data), originalText: darkness(pa.data, maskOf(textBoxes)), today: darkness(ptt.data), v2: darkness(pvt.data) },
+    // (each side's translated text outside the figure texts, which its text-alone shot draws: the page's body text)
+    darkness: { original: darkness(pa.data), originalText: darkness(pa.data, maskOf(textBoxes)), today: darkness(ptt.data, notFig), v2: darkness(pvt.data, notFig) },
+    fidelity,
     rules: vrules,
     diff: { pixels: diff, share: Math.round((diff / (W * H)) * 1e6) / 1e6, outside, outsideToday, insideShare: Math.round((inside.reduce((n, v) => n + v, 0) / (W * H)) * 1e4) / 1e4 },
     images: { a: await half(pa.canvas), t: await half(pt.canvas), v: await half(pv.canvas), d: await half(dc) },

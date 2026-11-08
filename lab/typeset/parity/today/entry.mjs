@@ -93,6 +93,8 @@ window.today = {
       hyphUrl: (lang) => `/hyph/${lang}.json`,
       OPS: pdfjs.OPS,
       fillsMs: Number.POSITIVE_INFINITY,
+      // (the reader's toggles: the defaults, or each switch render.mjs is asked to turn on)
+      ...(desc.classes ? { classes: desc.classes } : {}),
       leftPart: (_page, ref) => obj(ref),
       onRetired: () => {},
     })
@@ -110,7 +112,8 @@ window.today = {
     layer.endParts()
     return { pages: head.paper.pages, numPages: doc.numPages, orig: orig.numPages, delta }
   },
-  /** arXiv's page n drawn by PDF.js at `scale` CSS px a point (dpr device px each), and its link annotations */
+  /** arXiv's page n drawn by PDF.js at `scale` CSS px a point (dpr device px each), its link annotations and its glyphs' runs
+   *  (runsOf) */
   async original(n, scale) {
     const p = await orig.getPage(n)
     const vp = p.getViewport({ scale })
@@ -123,9 +126,10 @@ window.today = {
     canvas.className = 'axt-original'
     await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
     const links = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action)).length
+    const { runs, fonts } = await runsOf(p)
     stage().replaceChildren(canvas)
     p.cleanup()
-    return { view: [...p.view], links, size: box.css }
+    return { view: [...p.view], links, size: box.css, runs, fonts }
   },
   /** page n laid by the door and drawn as the reading view draws it, at `scale` CSS px a point; what was drawn read back */
   async page(n, scale) {
@@ -174,9 +178,10 @@ window.today = {
     await document.fonts.ready
     // (what the page drew, read back: each unit's lines (g[data-u]) from its characters' places, in PDF units, y up)
     const run = window.__baseRuns.at(-1)
+    // (each crop: its unit, where it is drawn, its piece (a label's: 'label'), its source on A and the page of it)
     const crops = (run?.audit ?? [])
       .filter((a) => a.what === 'crop' && a.page === n && a.dst)
-      .map((a) => [a.unit, view[0] + a.dst[0] / DOOR, view[3] - a.dst[3] / DOOR, view[0] + a.dst[2] / DOOR, view[3] - a.dst[1] / DOOR])
+      .map((a) => [a.unit, view[0] + a.dst[0] / DOOR, view[3] - a.dst[3] / DOOR, view[0] + a.dst[2] / DOOR, view[3] - a.dst[1] / DOOR, a.k === undefined ? 'label' : String(a.k), ...(a.src ?? [null, null, null, null]), a.srcPage ?? n])
     const k2 = laid.w / (view[2] - view[0])
     const units = linesOfSvg(laid.svg, 'data-u', view, k2, crops)
     // (the figure texts and babel names it drew, groups of their own: g[data-f], g[data-n])
@@ -193,6 +198,8 @@ window.today = {
       page: n,
       committed: true,
       view,
+      // (a delta's replaced page: the copy is our compile's page, not arXiv's, so its ink is not arXiv's in place)
+      ...(replaced ? { replaced: true } : {}),
       hides: laid.hides ?? null,
       units,
       figures,
@@ -238,6 +245,11 @@ window.today = {
     document.documentElement.toggleAttribute('data-parity-text', on)
     return true
   },
+  /** the drawing without its text (its copy, the original's ink it keeps and its crops alone), or the whole of it again */
+  copyOnly(on) {
+    document.documentElement.toggleAttribute('data-parity-copy', on)
+    return true
+  },
   dispose() {
     hlRight?.dispose()
     hlLeft = hlRight = hlRows = hlLit = hlIndex = null
@@ -249,3 +261,43 @@ window.today = {
   },
 }
 window.todayReady = true
+
+/**
+ * The glyphs of a page of arXiv's PDF as PDF.js's text content gives them, in runs of one font, size and baseline: each
+ * [x0, y0, x1, y1, base, size, font, text, turned] in PDF units (y up), its box the run's advance along its direction from 0.2
+ * of its size under its baseline to 0.8 over, turned with it; `font` an index into `fonts`, the PDF's own font names (the
+ * subset tag included, as A names them). What the original's style, size and scripts are read from, apart from any part
+ */
+async function runsOf(p) {
+  const tc = await p.getTextContent()
+  const fonts = []
+  const at = new Map()
+  const runs = []
+  const r2 = (v) => Math.round(v * 100) / 100
+  for (const it of tc.items) {
+    if (!it.str || !/\S/.test(it.str) || !it.transform) continue
+    const [a, b, c, d, e, f] = it.transform
+    const size = Math.hypot(c, d),
+      len = Math.hypot(a, b)
+    if (!size || !len) continue
+    const ux = a / len,
+      uy = b / len
+    let fi = at.get(it.fontName)
+    if (fi === undefined) {
+      let name = ''
+      try {
+        if (p.commonObjs.has(it.fontName)) name = p.commonObjs.get(it.fontName)?.name ?? ''
+      } catch {}
+      fi = fonts.length
+      fonts.push(name)
+      at.set(it.fontName, fi)
+    }
+    const w = it.width ?? 0
+    const pts = [0, w].flatMap((s) => [-0.2 * size, 0.8 * size].map((t) => [e + s * ux - t * uy, f + s * uy + t * ux]))
+    const xs = pts.map((q) => q[0]),
+      ys = pts.map((q) => q[1])
+    const turned = Math.abs(uy) > 1e-3 || ux < 0 ? 1 : 0
+    runs.push([r2(Math.min(...xs)), r2(Math.min(...ys)), r2(Math.max(...xs)), r2(Math.max(...ys)), r2(f), r2(size), fi, it.str, turned])
+  }
+  return { runs, fonts }
+}
