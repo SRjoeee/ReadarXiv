@@ -9,6 +9,15 @@
 // forced break, an item, a display) or any other one character; a group with no text nothing, or one character where it holds
 // an element that sets ink. Not ported: today's merge of same-style neighbours, and its keeping of a pair that sets more than a
 // style (a box, a paper's macro of prose), which the translate lane's wire sends on no wire by its own decision.
+//
+// A label after a forced break is kept on the premise that the endpoint's sentence is cut there; on the markers wire it is not
+// (a forced break is a marker like any other, and Microsoft reads neither a marker nor a colon as a sentence's end): staging,
+// 2026-11-09, 1810.04805v2 p8's "as \bertbase: \\ \noindent \textbf{No NSP}: A bidirectional model ... (NSP) task." went out
+// as one sentence of Microsoft's, the label's words a fragment between two markers inside it, and came back as the word for
+// "no" alone, the term lost. So the
+// break such a label follows, where no stop ends the text before it, states the line it ends: its `stop` a line end, which a
+// wire writes after the element so that the endpoint's sentence ends there (begun on its own line, the label came back
+// with its term). A break no label follows states nothing: a title or an affiliation broken over lines is one phrase.
 import type { Piece } from '@readarxiv/format'
 import { ABBR } from '@readarxiv/text'
 import { INVISIBLE, STRUCTURE } from './tex.ts'
@@ -86,7 +95,8 @@ export function runIns(content: Piece[]): Piece[] {
   // ---- the flat text, each group's range in it, in the order the groups open, and where it breaks (mt.mjs flatOf)
   const parts: string[] = []
   const ranges = new Map<Span, [number, number]>()
-  const broken = new Set<number>()
+  /** where the text breaks, and the element that breaks it there */
+  const broken = new Map<number, El>()
   let at = 0
   {
     type Frame = { span: Span | null; list: readonly Piece[]; k: number }
@@ -103,7 +113,7 @@ export function runIns(content: Piece[]): Piece[] {
         parts.push(p.s)
         at += p.s.length
       } else if (p.t === 'el') {
-        if (breaks(p)) broken.add(at)
+        if (breaks(p)) broken.set(at, p)
         else if (inkless(p)) continue
         parts.push(OBJ)
         at++
@@ -181,6 +191,11 @@ export function runIns(content: Piece[]): Piece[] {
       kept.add(s)
       edges.push(a, b)
     }
+    // (a label after a forced break, no stop ending the text before the break: the break ends the endpoint's sentence)
+    const at = solidBeforeAt(a)
+    const brk = broken.get(at)
+    if (label && brk && brk.kind !== 'display' && !endsSentence(flat.slice(Math.max(0, at - WINDOW), at)))
+      brk.stop = '\n'
   }
   // ---- the boundary rule (mt.mjs classOf's last): a group whose two ends both stand where the wire is cut anyway (a forced
   // break, an item or a display beside it, a kept or enclosing group's edge with white space alone between) is kept too; the

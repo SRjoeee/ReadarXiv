@@ -146,11 +146,46 @@ export const NESTED_DISPLAY: UnitIn[] = [
     span('s', 'other', [el('d', 'display', '.'), t(' '), el('r', 'ref'), t(' Then we go on.')]),
   ]),
 ]
+/** a run-in label after a forced break that ends no sentence (1810.04805v2 p8's shape, words of our own): the break states the
+ *  line it ends (`stop` a line end, the source reader's run-in rule), inside a stretch of side-by-side elements; the second
+ *  label begins after a full stop, and its break states nothing */
+export const LABEL_AFTER_BREAK: UnitIn = unit(
+  'label-after-break',
+  [
+    t('We compare two settings as follows:\n'),
+    el('v', 'other'),
+    t('\n'),
+    el('b', 'other', '\n'),
+    t('\n'),
+    el('n', 'other'),
+    span('h', 'bold', [t('No XYZ')], true),
+    t(': A model trained without the XYZ task. '),
+    el('b2', 'other'),
+    t('\n'),
+    el('n2', 'other'),
+    span('h2', 'bold', [t('Only XYZ')], true),
+    t(': A model trained with it alone.'),
+  ],
+  true,
+)
+/** elements inside words (2608.25210v2 p5's `str\_s`): an escaped character and a formula between two letters, which the
+ *  word holds; a tie between two names, TeX's space, which it does not (the source reader types it `other`) */
+export const INSIDE_WORDS: UnitIn = unit('inside-words', [
+  t('The column str'),
+  el('u', 'macro'),
+  t('s holds Ni'),
+  el('f', 'math'),
+  t('B, by Jane'),
+  el('tie', 'other'),
+  t('Doe.'),
+])
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
   /* 18 */ BERT_STRATEGIES,
   /* 19, 20, 21, 22 */ ...NESTED_DISPLAY,
+  /* 23 */ LABEL_AFTER_BREAK,
+  /* 24 */ INSIDE_WORDS,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
@@ -219,6 +254,23 @@ export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why
     raw: BERT_STRATEGIES_REPLY,
     taken: true,
     why: '`{\\em all}`: a declaration at a group’s head, as it came',
+  },
+  {
+    unit: 23,
+    raw: ms(
+      '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      [49, 47, 49],
+      [21, 28, 23],
+    ),
+    taken: true,
+    why: "the line end after the break's marker kept and taken back, as Microsoft gave it on 2026-11-09 (words ours)",
+  },
+  { unit: 24, raw: ms('列 str@a#s 包含 Ni@a#B，作者 Jane @c# Doe。'), taken: false, why: 'a marker doubled' },
+  {
+    unit: 24,
+    raw: ms('列 str@a#s 包含 Ni@b#B，作者 Jane @c# Doe。'),
+    taken: true,
+    why: 'the words holding an element back as they went, as Microsoft gave `str@a#s` on 2026-11-09',
   },
 ]
 

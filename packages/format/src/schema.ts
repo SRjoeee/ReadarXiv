@@ -50,7 +50,7 @@ export type Piece =
 /**
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
- * identity only (`stop` not in the id: it is part of `src`). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
+ * identity only (`stop` not in the id: it is read from `src`, or from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
  * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). `unit`: a unit
  * nested in this one (a footnote set inside a paragraph), by its id, with the source around it (`pre`, `post`)
  */
@@ -63,8 +63,9 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       kind: ElKind,
       src: z.string(),
       keys: z.array(z.string()).optional(),
-      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`; today's displayStop):
-      // a translator may write it after the element so that the sentence ends there
+      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`; today's displayStop),
+      // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
+      // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
     }),
     z.object({

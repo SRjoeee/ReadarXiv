@@ -7,7 +7,7 @@ import { sentenceCuts } from '@readarxiv/text'
 import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { contentOf, refill, type Tok } from './markers.ts'
-import { decode, escapeTags, INVISIBLE, LETTER, SAYS, SENTINEL } from './text.ts'
+import { decode, escapeTags, INVISIBLE, LETTER, LINE_END, SAYS, SENTINEL, standInOf } from './text.ts'
 
 export type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
 export interface TagsPlan {
@@ -30,21 +30,16 @@ const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
-/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a citation or a
- *  note's mark belongs to the sentence before it, a reference is a number, a formula a word, a break a space */
-export function standInOf(kind: string): 'annotation' | string | undefined {
-  if (kind === 'cite' || kind === 'note-mark' || kind === 'footnote') return 'annotation'
-  if (kind === 'ref' || kind === 'eqref') return '1'
-  if (kind === 'math') return 'x'
-  if (kind === 'break' || kind === 'space') return ' '
-  return undefined
-}
-
 type Item =
   | { t: 'text'; s: string; at: number }
   | { t: 'void'; out: OutPiece[]; at: number; len: number; stop: string | undefined }
   | { t: 'open'; id: string; letters: boolean; depth: number }
   | { t: 'close' }
+
+/** an element's own stop as the tags wire reads it: its punctuation; a line end is the markers wire's (Microsoft cuts its
+ *  sentence there; here our cutter reads the sentences, and the tags' white space is none) */
+const ownStop = (stop: string | undefined): string | undefined =>
+  stop !== undefined && LINE_END.test(stop) ? undefined : stop
 
 /** A unit's tags wire */
 export function planTags(unit: UnitIn): TagsPlan {
@@ -56,7 +51,7 @@ export function planTags(unit: UnitIn): TagsPlan {
     for (const p of ps) {
       if (p.t === 'text') at += p.s.length
       else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: p.stop, reads: p.reads })
+        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
         at += 1
       } else at = readsOf(p.content, at)
     }
@@ -68,8 +63,8 @@ export function planTags(unit: UnitIn): TagsPlan {
         items.push({ t: 'text', s: p.s, at })
         at += p.s.length
       } else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: p.stop, reads: p.reads })
-        items.push({ t: 'void', out: [{ t: 'el', id: p.id }], at, len: 1, stop: p.stop })
+        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
+        items.push({ t: 'void', out: [{ t: 'el', id: p.id }], at, len: 1, stop: ownStop(p.stop) })
         at += 1
       } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, letters: LETTER.test(textOf(p.content)), depth })
@@ -85,7 +80,7 @@ export function planTags(unit: UnitIn): TagsPlan {
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
           at,
           len,
-          stop: last?.t === 'el' ? last.stop : undefined,
+          stop: last?.t === 'el' ? ownStop(last.stop) : undefined,
         })
         at += len
       }

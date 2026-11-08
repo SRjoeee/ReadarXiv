@@ -6,8 +6,10 @@
 export type Lang = string
 
 /** An element's kind, as the source reader typed it: an open string (`math`, `display`, `cite`, `ref`, `url`, `code`,
- *  `note-mark`, `other`, …). A wire reads it for two things only: what the element reads as to a sentence cutter where the
- *  host says nothing (`reads`), and, for `display`, that it keeps a marker of its own (`alone`) */
+ *  `note-mark`, `other`, …). A wire reads it for three things only: what the element reads as to a sentence cutter where the
+ *  host says nothing (`reads`); for `display`, that it keeps a marker of its own (`alone`); and whether it can stand inside a
+ *  word, its characters the word's (one that reads as a word: a formula, a macro, an escaped character; never `other`, the
+ *  kind of an element its reader states nothing of, nor a display, a space, a break, a reference or an annotation) */
 export type ElKind = string
 /** A span's style: an open string (`bold`, `italic`, `mono`, `link`, `label`, …). The wire reads `must`, never the style */
 export type SpanStyle = string
@@ -15,6 +17,7 @@ export type SpanStyle = string
 /**
  * A unit's content, as the source reader types it. A piece's id is local to its unit. An `el` travels whole and is never
  * translated; `stop` is the punctuation the element itself sets at its end that is its sentence's (a display's `x = y.`),
+ * or a line end (white space) where it ends its sentence and sets no punctuation (a forced break a run-in label follows),
  * stated by the source reader, which a wire may write after the element so that the sentence ends there. A `span` holds
  * pieces; `must` marks one that comes back exactly once or the reply is refused (a link, a run-in label); a span without it
  * may come back unstyled, its words outside it. Where a wire sends it on no wire (the markers wire, the runs floor), its

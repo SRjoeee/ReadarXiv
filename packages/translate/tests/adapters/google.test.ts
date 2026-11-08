@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { google, readTagged } from '../../src/adapters/google.ts'
-import type { FetchInit } from '../../src/contract.ts'
+import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, UNITS } from './fixtures.ts'
+import { GOOGLE_REPLIES, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -77,5 +77,20 @@ describe('google: sentences from boundary markers', () => {
     const r = readTagged(u, '设<x id="1"/>如<x id="2"/>所述。<x id="4"/><x id="4"/>更多内容见第<x id="3"/>节。')
     expect(r?.sentences).toBeUndefined()
     expect(r?.content.filter((p) => p.t === 'el').length).toBe(3)
+  })
+})
+
+// (a line end an element states is the markers wire's, where Microsoft cuts its sentence: the tags wire, whose sentences our
+// cutter reads, writes the unit as it did before the source reader stated it, and reads no mark after it as the element's)
+describe('google: a stop that is a line end', () => {
+  it('is written by neither the wire nor the cutter: the unit goes as it did with no stop stated', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    const strip = (ps: readonly Piece[]): Piece[] =>
+      ps.map((p) =>
+        p.t === 'el' ? { t: 'el', id: p.id, kind: p.kind } : p.t === 'span' ? { ...p, content: strip(p.content) } : p,
+      )
+    expect(t.write(LABEL_AFTER_BREAK, 'zh-Hans')).toBe(
+      t.write({ ...LABEL_AFTER_BREAK, content: strip(LABEL_AFTER_BREAK.content) }, 'zh-Hans'),
+    )
   })
 })
