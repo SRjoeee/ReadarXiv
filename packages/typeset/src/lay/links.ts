@@ -31,8 +31,10 @@
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
 // list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
 // Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
-// links back at A's boxes (composer.ts held()).
-import { LINE_FLAG, type Line, type Link, type Part, type Placed } from '@readarxiv/format'
+// links back at A's boxes (composer.ts held()), and carries its own annotation's border on A (its fourth, Link.border: a moved
+// link keeps it whatever box it is drawn over; the annotations one record is drawn for share it, placeUnit joining or pairing
+// only those of one border, today's sameBorder), which the reader draws as it is stated.
+import { LINE_FLAG, type Line, type Link, type LinkBorder, type Part, type Placed } from '@readarxiv/format'
 import type { Face } from '../breaker/tokens.ts'
 import { lineRuns, runEdge, type TextRun } from '../emit/display.ts'
 import { type Annot, type Cand, placeUnit, type Target } from '../emit/links.ts'
@@ -106,6 +108,17 @@ const key = (to: Link['to']): string => {
   }
 }
 
+/** a link as drawn: its box, its target, its owner's ord and its annotation's border where it has them */
+const drawnOf = (
+  box: Page['links'][number][0],
+  to: Link['to'],
+  owner: number | undefined,
+  border: LinkBorder | undefined,
+): Page['links'][number] => (border ? [box, to, owner, border] : owner === undefined ? [box, to] : [box, to, owner])
+/** a border as placeUnit compares two (today's record's: its width, its colour's components, its style) */
+const borderOf = (b: LinkBorder | undefined): Annot['border'] =>
+  b && { width: b[0], rgb: [(b[1] >> 16) & 255, (b[1] >> 8) & 255, b[1] & 255], style: b[2] ?? 'solid' }
+
 /** what became of each of a part's links (the gate's count; `away` one of another page not drawn here, or one a translation
  *  draws on another page of its member alone): at A's box with no owner, its owner not laid or its piece kept
  *  there; moved over a crop, a piece's drawn text, an \href's group or the whole drawing; dropped where its ink is off and
@@ -146,8 +159,8 @@ export function linksOf(
   // draws, never at its box, which is that page's)
   const here = (i: number) => (list[i]!.page ?? page) === page
   const atBox = (i: number, f: LinkFate) => {
-    const owner = list[i]!.owner
-    if (here(i)) out.push([list[i]!.box, list[i]!.to, ...(owner ? [owner[0]] : [])] as Page['links'][number])
+    const l = list[i]!
+    if (here(i)) out.push(drawnOf(l.box, l.to, l.owner?.[0], l.border))
     fate(i, here(i) ? f : 'away')
   }
   const byOwner = new Map<number, number[]>()
@@ -198,6 +211,7 @@ export function linksOf(
         ...('url' in l.to ? { url: l.to.url } : { dest: l.to.dest }),
         rect: [...l.box],
         ...(l.text ? { ov: l.text } : {}),
+        ...(l.border ? { border: borderOf(l.border) } : {}),
         g2: { x: [], y: [], ch: [] },
       }
       return { q: l.page ?? page, a }
@@ -441,9 +455,10 @@ export function linksOf(
         fate(i, drawOf.get(i) ?? 'unplaced')
         drawn.add(i)
       }
-      const to = list[r.sources.annots[0]![1]]!.to
+      const { to, border } = list[r.sources.annots[0]![1]]!
       const b = r.rec.boxes
-      for (let j = 0; j + 3 < b.length; j += 4) out.push([[b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to, ord])
+      for (let j = 0; j + 3 < b.length; j += 4)
+        out.push(drawnOf([b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to, ord, border))
     }
     // (one drawn on another page of the member alone: that page's)
     for (const r of records)

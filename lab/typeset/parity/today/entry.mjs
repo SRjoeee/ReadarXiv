@@ -112,8 +112,8 @@ window.today = {
     layer.endParts()
     return { pages: head.paper.pages, numPages: doc.numPages, orig: orig.numPages, delta }
   },
-  /** arXiv's page n drawn by PDF.js at `scale` CSS px a point (dpr device px each), its link annotations and its glyphs' runs
-   *  (runsOf) */
+  /** arXiv's page n drawn by PDF.js at `scale` CSS px a point (dpr device px each), its link annotations (those PDF.js draws a
+   *  border round apart: a width above 0 and a colour) and its glyphs' runs (runsOf) */
   async original(n, scale) {
     const p = await orig.getPage(n)
     const vp = p.getViewport({ scale })
@@ -125,11 +125,12 @@ window.today = {
     Object.assign(canvas.style, { width: `${box.css[0]}px`, height: `${box.css[1]}px`, display: 'block' })
     canvas.className = 'axt-original'
     await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
-    const links = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action)).length
+    const anns = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action))
+    const bordered = anns.filter((a) => a.borderStyle?.width > 0 && a.borderColor).length
     const { runs, fonts } = await runsOf(p)
     stage().replaceChildren(canvas)
     p.cleanup()
-    return { view: [...p.view], links, size: box.css, runs, fonts }
+    return { view: [...p.view], links: anns.length, bordered, size: box.css, runs, fonts }
   },
   /** page n laid by the door and drawn as the reading view draws it, at `scale` CSS px a point; what was drawn read back */
   async page(n, scale) {
@@ -208,6 +209,7 @@ window.today = {
       recs,
       links: laid.links.length,
       linksDrawn: links ? links.querySelectorAll('a').length : 0,
+      bordersDrawn: links ? links.querySelectorAll('a[data-axt-border]').length : 0,
       lit: spans,
       original: laid.words.original,
     }

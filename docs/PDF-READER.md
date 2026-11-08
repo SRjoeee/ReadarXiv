@@ -1384,7 +1384,10 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   runs. A click on a link, on either pane, levels nothing (the click's levelling skips a link).
 - **Looked at.** As PDF.js draws a link on the left: the PDF's border where it gives one (its width, colour and style:
   solid, dashed, underline), a yellow wash under a hovering pointer; the focus ring is the reader's (2 px, `--focus`), the
-  system's in forced colours.
+  system's in forced colours. The border is the link's own annotation's, wherever the translation draws it and whatever its
+  box there: the engine states it on the part's link (`Link.border`, as PDF.js reads /BS, /Border and /C), the typesetter
+  carries it onto each link it draws of that annotation (`Page.links`), and the reader draws it as stated, matching nothing
+  against the original's annotations (a citation set as text has another size than its box on A); one with none draws none.
 - **Gone with the drawing.** A page let go far from the view takes its links; after a reopen the drawing kept keeps its own
   until the new door's replaces it; dispose leaves none. A link holding the focus when its page is drawn again gives it to
   the link of the same rank, else to the place; its page is not let go far from the view while it holds it (above).

@@ -397,7 +397,7 @@ for (const pair of pairs) {
       const clip = { x: 0, y: 0, width: o.size[0], height: o.size[1] }
       const A = await shot(tp, clip)
       rec.view = o.view
-      rec.original = { links: o.links, runs: o.runs, fonts: o.fonts }
+      rec.original = { links: o.links, bordered: o.bordered, runs: o.runs, fonts: o.fonts }
       // today's
       await tp.evaluate(() => globalThis.today.textOnly(false))
       const t = await tp.evaluate(([k, s]) => globalThis.today.page(k, s), [n, SCALE])

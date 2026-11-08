@@ -17,7 +17,17 @@
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
 // - Groups (design §4.5): per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
-import { type El, type Ink, type Label, type Line, type Piece, type Room, type Style, unitId } from '@readarxiv/format'
+import {
+  type El,
+  type Ink,
+  type Label,
+  type Line,
+  type LinkBorder,
+  type Piece,
+  type Room,
+  type Style,
+  unitId,
+} from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import { HUNK, hunkName } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
@@ -139,6 +149,7 @@ export interface Located {
       label?: 1
       whole?: 1
       page?: number
+      border?: LinkBorder
     }[]
   >
   /** per A page (index p - 1): each glyph's and each box's group (the wrap's plan), null for none */
@@ -1559,6 +1570,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       url?: string
       unsafeUrl?: string
       dest?: unknown
+      borderStyle?: { width?: number; style?: number }
+      borderColor?: ArrayLike<number> | null
     }[]) {
       if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) continue
       const to =
@@ -1612,12 +1625,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // its placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server's reading
       // skips it, pdf-lite.mjs's text guard)
       const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
+      const border = borderOf(an)
       out.push({
         box: [x0, y0, x1, y1],
         to,
         ...(owner ? { owner } : {}),
         ...(text ? { text } : {}),
         ...(label ? { label: 1 as const } : {}),
+        ...(border ? { border } : {}),
       })
       under.push({ pts, mem: owning })
     }
@@ -1733,6 +1748,21 @@ function rowAligns(members: Member[], flows: readonly number[][]): void {
   }
 }
 
+/** a link annotation's border as PDF.js's annotation layer draws it (the original's pane): its width where above 0 (its /BS /W,
+ *  else its /Border's, as PDF.js reads them: none where neither is), its colour (PDF.js's borderColor: a link's /C, null for /C
+ *  [], black where it has none), its style (PDF.js's AnnotationBorderStyleType: 2 dashed, 5 underline, any other solid, today's
+ *  layer-proto/links.mjs annotsOf). None where the width or the colour is none: PDF.js draws none */
+function borderOf(an: {
+  borderStyle?: { width?: number; style?: number }
+  borderColor?: ArrayLike<number> | null
+}): LinkBorder | undefined {
+  const w = r2(Number(an.borderStyle?.width))
+  const c = an.borderColor
+  if (!(w > 0) || !Number.isFinite(w) || !c || c.length !== 3) return undefined
+  const rgb = ((c[0]! & 255) << 16) | ((c[1]! & 255) << 8) | (c[2]! & 255)
+  const style = an.borderStyle?.style
+  return style === 2 ? [w, rgb, 'dashed'] : style === 5 ? [w, rgb, 'underline'] : [w, rgb]
+}
 /** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed
  *  (today's links.mjs quadBoxes) */
 function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, number, number][] | null {

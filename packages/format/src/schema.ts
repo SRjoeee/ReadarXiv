@@ -279,13 +279,19 @@ export const Tie = z.discriminatedUnion('rule', [
   }),
   z.object({ rule: z.literal('size'), ords: z.array(int) }),
 ])
+/** a link annotation's border as PDF.js draws it on A (its annotation layer, the original's pane): its width (its /BS /W, else
+ *  its /Border's third number, as PDF.js reads them: CSS px as it draws it), its colour 0xRRGGBB (its /C, PDF.js's borderColor),
+ *  its style where it is not solid (/S /D or a /Border dash array, dashed; /S /U, underline; beveled and inset drawn solid, as
+ *  today's reader draws them). Stated where the width is above 0 and the colour is one: an annotation with none draws none */
+export const LinkBorder = z.union([z.tuple([num, int]), z.tuple([num, int, z.enum(['dashed', 'underline'])])])
 /** one of A's link annotations: its rectangle, where it goes, the member and the piece that hold it (an element's id, '' its
  *  text), the characters of the glyphs under it (their glyph points', PDF.js's rule, in their order, white space aside: what
  *  today's link match finds among the characters a piece is drawn as; absent where it holds none), whether those of its text's
  *  are its label's (more than half of its glyphs: the label's group, which stays on where the label is not drawn anew), whether
  *  its owner's annotations of its target on its page hold, together, every glyph of its owner's text and elements there (by
  *  glyph point: a link round the member's whole text, a contents entry's), and its page where it is not the part's (an
- *  annotation of a member of the page on another of its pages, which a translation may draw on this one) */
+ *  annotation of a member of the page on another of its pages, which a translation may draw on this one), and its border on A
+ *  where it has one (LinkBorder: what the typesetter carries onto each link it draws of it, moved or not) */
 export const Link = z.object({
   box: Box,
   to: LinkTo,
@@ -294,6 +300,7 @@ export const Link = z.object({
   label: flag.optional(),
   whole: flag.optional(),
   page: page.optional(),
+  border: LinkBorder.optional(),
 })
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */
@@ -385,6 +392,7 @@ export type Placed = z.infer<typeof Placed>
 export type Tie = z.infer<typeof Tie>
 export type Link = z.infer<typeof Link>
 export type LinkTo = z.infer<typeof LinkTo>
+export type LinkBorder = z.infer<typeof LinkBorder>
 export type Faces = z.infer<typeof Faces>
 export type Part = z.infer<typeof Part>
 export type Original = z.infer<typeof Original>

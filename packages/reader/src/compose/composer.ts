@@ -36,7 +36,7 @@ import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
 import type { Groups } from './groups.ts'
-import { bordersOf, type LinkHooks, linkLayer } from './links.ts'
+import { type LinkHooks, linkLayer } from './links.ts'
 import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { cropGrid, cropsFor, type Rounding, svgOf, turned, uprightOf } from './paint.ts'
@@ -314,7 +314,7 @@ export function createComposer(o: ComposerOptions): Composer {
     texts.set(n, text)
     const laid = laidText(await text, page, members, faces, measure)
     el.append(await textLayerOf(o.kit, laid.content, at.viewport, o.lang(), laid.translated))
-    const links = linkLayer(page, up, o.links, laid.content, page.links.length ? await bordersOf(pdfPage) : [])
+    const links = linkLayer(page, up, o.links, laid.content)
     if (links) el.append(turned(links, at.viewport))
     const tEnd = performance.now()
     timings.push({ n, svgMs: tSvg - t0, cropsMs: tCrops - tSvg, textMs: tEnd - tCrops, overlayMs: tEnd - t0 })
@@ -480,7 +480,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const links: Page['links'] = page.links.filter(([, , owner]) => owner === undefined || !unwrapped.has(owner))
     for (const l of part.links ?? [])
       if (l.owner && unwrapped.has(l.owner[0]) && (l.page ?? page.page) === page.page)
-        links.push([l.box, l.to, l.owner[0]])
+        links.push(l.border ? [l.box, l.to, l.owner[0], l.border] : [l.box, l.to, l.owner[0]])
     return { ...page, members: out, links }
   }
   /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */

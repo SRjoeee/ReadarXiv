@@ -215,7 +215,8 @@ function standInLay(ready: Set<string> = new Set(['sans'])): Lay & { calls: numb
         return [
           laid ? [x0 - 20, y0, x1 - 20, y1] : l.box,
           l.to,
-          ...(ord !== undefined ? [ord] : []),
+          ...(ord !== undefined || l.border ? [ord] : []),
+          ...(l.border ? [l.border] : []),
         ] as Page['links'][number]
       }),
     }
@@ -445,10 +446,11 @@ describe("what stays the original's", () => {
   })
   it('a member left unwrapped keeps its links at A’s boxes, over the original’s text (Codex on #626)', async () => {
     // (Page.links held the unwrapped member's links where its translation, now not drawn, had moved them: over the original's
-    // text, opening from words they are not on; the laid member's stay moved, a link of no member's at its box)
+    // text, opening from words they are not on; the laid member's stay moved, a link of no member's at its box; each with its
+    // own annotation's border)
     const links: NonNullable<Part['links']> = [
       { box: [100, 698, 140, 708], to: { url: 'https://example.org/a' }, owner: [30, ''] },
-      { box: [100, 658, 140, 668], to: { url: 'https://example.org/b' }, owner: [31, ''] },
+      { box: [100, 658, 140, 668], to: { url: 'https://example.org/b' }, owner: [31, ''], border: [1, 0x00ffff] },
       { box: [400, 600, 440, 610], to: { dest: 'sec.1' } },
     ]
     const part = { ...partOf(3, [member(30, 3, 0), member(31, 3, 1)]), links } as Part
@@ -463,6 +465,7 @@ describe("what stays the original's", () => {
       [[400, 600, 440, 610], { dest: 'sec.1' }],
       [[100, 658, 140, 668], { url: 'https://example.org/b' }],
     ])
+    expect(p3.links[2]).toEqual([[100, 658, 140, 668], { url: 'https://example.org/b' }, 31, [1, 0x00ffff]])
   })
 })
 
