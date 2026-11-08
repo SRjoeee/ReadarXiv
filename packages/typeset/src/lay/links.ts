@@ -22,6 +22,9 @@
 //   their boxes, its baseline between their edges). A link the part gives to an element
 //   that holds on A another of the element's, of another target (a group's link left open round it), is the text's: today's
 //   geometry tier gives a piece only a link every character of which is the piece's;
+// - one over a member the entry draws whole on lines of its own, no layout of it made (a figure text, a babel name: DrawnWhole),
+//   over its whole drawing where one target's annotations hold all of its text (the whole tier, as above): its text's ink is
+//   hidden, and at A's box the link would stand over that and miss the translation's ends wherever the translation is longer;
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
 //   the translation's text over it, today's freezeLinks drops it alike).
 // An annotation of a member's other page (Link.page: the part holds those of its members on every page they have lines on) is
@@ -45,15 +48,22 @@ import type { Page } from '../types.ts'
 /** a laid member as its links read it: its layout, its groups off on the page and on any of its pages (`offOn`, the same rule:
  *  where a link of an element the translation moves across the page break stays), the elements its reading keeps in place, and
  *  the element a piece of its reading is (its tokens' `k`, the piece's place in the row's pieces: the element's id, or null
- *  for a piece of no element) */
-export type LinkOwner = {
-  m: Placed
-  layout: Layout
-  off: number
-  offOn: (page: number) => number
-  kept: ReadonlySet<string>
-  elOf: (k: number) => string | null
-}
+ *  for a piece of no element); or a member drawn whole (DrawnWhole) */
+export type LinkOwner =
+  | {
+      m: Placed
+      layout: Layout
+      off: number
+      offOn: (page: number) => number
+      kept: ReadonlySet<string>
+      elOf: (k: number) => string | null
+    }
+  | DrawnWhole
+/** a member the entry draws whole on lines of its own, no layout of it made (a figure text, S.figures; a babel name, S.names):
+ *  its groups off on the page and the page's boxes its lines are drawn in (a turned one's the page's box of its run's; none for
+ *  a name drawn as its member's lead, its word among that member's lines). No piece of it is drawn apart (its row sets an element
+ *  as a space) and it draws no link group */
+export type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number][0][] }
 
 /** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's */
 const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
@@ -139,7 +149,8 @@ export type LinkFate =
   | 'away'
 
 /**
- * The links of page `page`: `laid` the members laid on it, by ord (a member not among them keeps its links at A's boxes);
+ * The links of page `page`: `laid` the members laid or drawn whole on it, by ord (a member not among them keeps its links at
+ * A's boxes);
  * `w100` a run's width at 100 px in its face (Metrics', as the drawing measures it); `fates`, where given, each link's fate by
  * its index in the part's
  */
@@ -170,7 +181,30 @@ export function linksOf(
     else byOwner.set(l.owner![0], [...(byOwner.get(l.owner![0]) ?? []), i])
   })
   for (const [ord, owned] of byOwner) {
-    const { m, layout: L, offOn, kept, elOf } = laid.get(ord)!
+    const x = laid.get(ord)!
+    if ('drawn' in x) {
+      // (a member drawn whole: an annotation of another page `away`; one whose ink stays (its group on) at A's box; one over its
+      // text over its whole drawing where one target's annotations hold all of it (the whole tier, as a laid member's below), one
+      // record a drawn line, joined only where of one border; any other dropped: its ink is off, an element of it is drawn as
+      // nothing, and no part of its translation is known to be a link's round part of its text)
+      const text: number[] = []
+      for (const i of owned) {
+        const bit = list[i]!.owner![1] === '' ? 1 : 2
+        if (!here(i)) fate(i, 'away')
+        else if (!(x.off & bit)) atBox(i, 'kept')
+        else if (bit === 1) text.push(i)
+        else fate(i, 'off')
+      }
+      const holding = x.drawn.length ? wholeOf(text, list, x.m, page) : null
+      const one = !!holding && new Set(holding.map((i) => JSON.stringify(list[i]!.border ?? null))).size === 1
+      for (const i of text) fate(i, holding?.includes(i) ? (one ? 'whole' : 'unplaced') : 'unmatched')
+      if (one) {
+        const { to, border } = list[holding[0]!]!
+        for (const b of x.drawn) out.push(drawnOf(b, to, ord, border))
+      }
+      continue
+    }
+    const { m, layout: L, offOn, kept, elOf } = x
     const ids = inReading(owned, list, m.lines, page)
     const rank = new Map(ids.map((i, n) => [i, n]))
     const all = L.lines.map((line) => ({ line, runs: lineRuns(line, L) }))
@@ -392,27 +426,12 @@ export function linksOf(
         !groupsOf.some(([id]) => pairs.has(id)) &&
         drawsText
       ) {
-        // (matchUnit's whole tier: one target's annotations that hold every own glyph of the member on the page, where no group
-        // of it is drawn there: as the part states it (Link.whole, by glyph point, as today's), else (a part made before) where
-        // each line's ink is inside one of their boxes, its baseline between their edges)
-        const mine = m.lines.filter((l) => l[0] === page && !(l[9] & 1))
-        const byTarget = new Map<string, number[]>()
-        for (const i of ours) byTarget.set(key(list[i]!.to), [...(byTarget.get(key(list[i]!.to)) ?? []), i])
-        const holding = [...byTarget.values()].filter(
-          (is) =>
-            is.some((i) => list[i]!.whole) ||
-            (mine.length > 0 &&
-              mine.every((l) =>
-                is.some((i) => {
-                  const b = list[i]!.box
-                  return l[2] >= b[0] && l[3] <= b[2] && l[4] > b[1] && l[4] < b[3]
-                }),
-              )),
-        )
-        if (holding.length === 1)
+        // (matchUnit's whole tier, where no group of the member is drawn on the page: wholeOf)
+        const holding = wholeOf(ours, list, m, page)
+        if (holding)
           groups.push({
             to: { draw: 'whole', own: [] },
-            annots: holding[0]!.map((i) => ({ ...annot(i), tier: 'whole' })),
+            annots: holding.map((i) => ({ ...annot(i), tier: 'whole' })),
           })
       }
     }
@@ -501,6 +520,27 @@ function inReading(ids: readonly number[], list: readonly Link[], lines: readonl
   }
   const of = (i: number) => at.get(i)!
   return [...ids].sort((a, b) => of(a)[0] - of(b)[0] || of(a)[1] - of(b)[1] || pageOf(a) - pageOf(b) || a - b)
+}
+
+/** matchUnit's whole tier: of annotations `ids` of member `m`'s text, those of the one target that hold every own glyph of it on
+ *  page `page`: as the part states it (Link.whole, by glyph point, as today's), else (a part made before) where each of its lines'
+ *  ink is inside one of their boxes, its baseline between their edges; null where no target or more than one does */
+function wholeOf(ids: readonly number[], list: readonly Link[], m: Placed, page: number): number[] | null {
+  const mine = m.lines.filter((l) => l[0] === page && !(l[9] & LINE_FLAG.KEPT))
+  const byTarget = new Map<string, number[]>()
+  for (const i of ids) byTarget.set(key(list[i]!.to), [...(byTarget.get(key(list[i]!.to)) ?? []), i])
+  const holding = [...byTarget.values()].filter(
+    (is) =>
+      is.some((i) => list[i]!.whole) ||
+      (mine.length > 0 &&
+        mine.every((l) =>
+          is.some((i) => {
+            const b = list[i]!.box
+            return l[2] >= b[0] && l[3] <= b[2] && l[4] > b[1] && l[4] < b[3]
+          }),
+        )),
+  )
+  return holding.length === 1 ? holding[0]! : null
 }
 
 /** annotations in their order, cut into runs of one target (a link TeX broke over lines is one annotation a line) */

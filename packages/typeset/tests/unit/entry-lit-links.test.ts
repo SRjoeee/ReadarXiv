@@ -911,6 +911,55 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(two.fates).toEqual(['away'])
     expect(two.p.links).toEqual([])
   })
+  it('lays a link round a babel name drawn on its own over its word as drawn, never at A’s box over its hidden ink', () => {
+    // (the same root as a figure text's: a member the entry draws on a line of its own, its text group off, was no owner of its
+    // links, and they stayed at A's boxes)
+    const name = member({
+      kind: 'name',
+      text: { name: 'abstract' },
+      plain: 'Abstract',
+      align: 'c',
+      lines: [[1, 0, 140, 180, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+    const round: Link = { box: [139, 696, 181, 709], to: { dest: '"abstract"' }, owner: [0, ''] }
+    const fates: LinkFate[] = []
+    const p = layPage(part(name, [round]), rowsOf([], true), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['whole'])
+    expect(only(p)).toEqual([[122.5, 700 - 2.2, 197.5, 707.5], round.to, 0])
+  })
+  it('drops the link round a name drawn as its member’s lead, its text off, and keeps it at A’s box where the name stays', () => {
+    // (its word is drawn among its member's lines, no box of its own: nothing to lay the link over, and at A's box it stood over
+    // the name's hidden ink, as today's freeze never leaves one)
+    const proof = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'proof' },
+      plain: 'Proof',
+      bound: 1,
+      style: { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' },
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 100] },
+    })
+    const para = member({
+      ord: 1,
+      kind: 'theorem',
+      text: id,
+      join: [10, 1],
+      lines: [
+        [1, 0, 110, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const round: Link = { box: [71, 696, 101, 709], to: { dest: '"proof"' }, owner: [0, ''] }
+    const pt: Part = { ...part(proof, [round]), flows: [[proof, para]] }
+    const fates: LinkFate[] = []
+    const p = layPage(pt, rowsOf([row([{ t: 'text', s: 'ein Satz' }])], true), rules, metrics(), { linkFates: fates })
+    expect(p.members[0]).toMatchObject({ state: 'laid', off: 1 })
+    expect([p.links, fates]).toEqual([[], ['unmatched']])
+    // (its member not laid: the name the original's with it, its link at A's box)
+    expect(only(layPage(pt, rowsOf([], true), rules, metrics()))).toEqual([round.box, round.to, 0])
+  })
 })
 
 describe('S.figures over the part: a figure text drawn in its translation where it fits', () => {
@@ -942,6 +991,56 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(x1).toBeCloseTo(164, 6)
     expect(m!.lit.left).toEqual([[[140, 398, 160, 406]]])
     expect(m!.lit.right[0]).toHaveLength(1)
+  })
+  it('lays a link round a figure text drawn in its translation over its drawing, never at A’s box over its hidden ink (Codex on #634)', () => {
+    // ("Loss" 140-160 drawn "Verlust" 136-164 about its centre, its text group off. Its link round it on A stayed at A's box,
+    // 139-161: the drawing's ends dead. A figure text drawn has no link group: one target's annotations round all of it go over
+    // all of it as drawn (the whole tier, as for any member's text, and as the entry laid it when it read figure texts as
+    // paragraphs); one round part of it is dropped, no part of its translation known to be that part's, as today's freeze drops
+    // a link over ink it hid)
+    const round: Link = {
+      box: [139, 396, 161, 408],
+      to: { url: 'https://example.org/loss' },
+      owner: [0, ''],
+      border: [1, 0xff0000],
+    }
+    const fates: LinkFate[] = []
+    const p = layPage(part(label(), [round]), rowsOf([rowF('Verlust')]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['whole'])
+    const [b, to, owner, border] = only(p)
+    expect([to, owner, border]).toEqual([round.to, 0, [1, 0xff0000]])
+    // (its drawn line's box, the one it is lit by: its runs across, its band at 8 about its baseline, a Latin run's tokenBand)
+    for (const [k, v] of [136, 400 - 0.22 * 8, 164, 400 + 0.75 * 8].entries()) expect(b[k]).toBeCloseTo(v, 6)
+    expect(b).toEqual(p.members[0]!.lit.right[0]![0])
+    // (one round part of it: dropped)
+    const some: Link = { ...round, box: [139, 396, 150, 408] }
+    const f2: LinkFate[] = []
+    expect(
+      layPage(part(label(), [some]), rowsOf([rowF('Verlust')]), rules, metrics(), { linkFates: f2 }).links,
+    ).toEqual([])
+    expect(f2).toEqual(['unmatched'])
+    // (left the original's, its translation its source: at A's box)
+    expect(only(layPage(part(label(), [round]), rowsOf([rowF('LOSS')]), rules, metrics()))).toEqual([
+      round.box,
+      round.to,
+      0,
+      [1, 0xff0000],
+    ])
+  })
+  it('lays a link round a turned figure text over its drawing on the page, along its run (Codex on #634)', () => {
+    // (a y-axis title "Loss" a quarter turned, its run from (150, 380) up for 20; the part states its link holds every glyph of it
+    // (Link.whole). Drawn "Verlust" from 376 up for 28, its band across the run 144-151.76: the link's box the page's box of it)
+    const quarter = label({
+      dir: [0, 1],
+      run: [150, 380, 20, 20, 20],
+      lines: [[1, 0, 144, 152, 380, 400, 380, 144, 152, 0, 8]],
+    })
+    const up: Link = { box: [143, 379, 153, 401], to: { url: 'https://example.org/loss' }, owner: [0, ''], whole: 1 }
+    const fates: LinkFate[] = []
+    const p = layPage(part(quarter, [up]), rowsOf([rowF('Verlust')]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['whole'])
+    const [b] = only(p)
+    for (const [k, v] of [144, 376, 151.76, 404].entries()) expect(b[k]).toBeCloseTo(v, 6)
   })
   it('shrinks a set to one size where one of it needs it, and leaves the original’s what says nothing else', () => {
     // (two labels of one set: the second's translation, 16 characters at 8 (64 wide), centred in a free line of 50 (its box of 30
