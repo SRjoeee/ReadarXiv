@@ -150,7 +150,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
     const classes = o.classesOf?.(u.pieces) ?? []
     const spans: [string, SpanClass][] = echoed
       ? (echoed.spans ?? []).flatMap(([id, x]): [string, SpanClass][] =>
-          x.cmd !== undefined ? [[id, { cmd: x.cmd }]] : [],
+          x.cmd !== undefined ? [[id, { cmd: x.cmd, ...(x.to ? { to: x.to } : {}) }]] : [],
         )
       : spansOf(u.pieces)
     const flags = u.rows.unit[3]
@@ -574,14 +574,58 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   })
   return stack.length ? stack[0]!.outer : level
 }
-/** each group's command by its open piece's id (pipeline/instrument.mjs:187-219 commandOf, spansOf, ported; an ink unit's groups
- *  carry no colour of the log's) */
+/** each group's command and a link group's target by its open piece's id (pipeline/instrument.mjs:187-219 commandOf, spansOf,
+ *  ported; an ink unit's groups carry no colour of the log's) */
 export function spansOf(pieces: readonly TodayPiece[]): [string, SpanClass][] {
   const out: [string, SpanClass][] = []
   pieces.forEach((p, k) => {
     if (p.t !== 'open') return
     const m = /^\\([A-Za-z]+\*?)/.exec(unicodeOf(p.src))
-    if (m) out.push([String(k), { cmd: m[1]! }])
+    const to = linkTargetOf(pieces, k)
+    if (m) out.push([String(k), { cmd: m[1]!, ...(to ? { to } : {}) }])
   })
   return out
+}
+/**
+ * The target a link group's source names (SpanClass.to, the part's SpanAt.to), by today's reading of it (layer-proto/links.mjs
+ * linkKindOf and urlOf, the match's url and name tiers): an \href's address, its first argument with TeX's escapes undone (`\#`,
+ * `\%`, `\_`, `\&`, `\~`, `\$`), or a \url's, its text as written, each in the WHATWG URL parser's form; a \hyperlink's
+ * destination, its name, as the part states a named destination (PDF.js's dest as JSON, Link.to). None for any other group, a
+ * \hyperref (its destination is its label's anchor, which TeX names), an address that is no absolute URL, and one the source
+ * writes with a command or a group (only TeX expands it). `pieces` a unit's flat pieces (today's, strings as today's engine holds
+ * them), `k` the group's open.
+ */
+export function linkTargetOf(
+  pieces: readonly { t: string; s?: string; src?: string }[],
+  k: number,
+): { url: string } | { dest: string } | undefined {
+  const open = unicodeOf(pieces[k]?.src)
+  const href = /^\\href\*?\s*(?:\[[^\]]*\]\s*)?\{((?:[^{}]|\{[^{}]*\})*)\}/.exec(open)
+  const url = href
+    ? href[1]!.replace(/\\([#%_&~$])/g, '$1')
+    : /^\\url\*?\s*\{\s*$/.test(open)
+      ? textOfGroup(pieces, k)
+      : null
+  if (url !== null) {
+    if (/[\\{}]/.test(url)) return undefined
+    try {
+      return { url: new URL(url).href }
+    } catch {
+      return undefined
+    }
+  }
+  const name = /^\\hyperlink\s*\{([^{}\\]*)\}/.exec(open)?.[1]?.trim()
+  return name ? { dest: JSON.stringify(name) } : undefined
+}
+/** the text of the group opened at `k`, where it holds text alone up to its close (null where it holds anything else, or
+ *  runs to the unit's end) */
+function textOfGroup(pieces: readonly { t: string; s?: string }[], k: number): string | null {
+  let s = ''
+  for (let j = k + 1; j < pieces.length; j++) {
+    const p = pieces[j]!
+    if (p.t === 'close') return s
+    if (p.t !== 'text') return null
+    s += unicodeOf(p.s)
+  }
+  return null
 }

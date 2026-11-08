@@ -640,6 +640,36 @@ describe('bundle', () => {
     expect(linksOf(2)).toEqual([own])
     expect(linksOf(3)).toEqual([])
   })
+  it('states each link group’s target with its member in every part that holds it (SpanAt.to)', () => {
+    // (unit 0 runs on from page 1 to page 2 with an \\href group: both pages' parts state the group's address, so that each pairs
+    // the group's translation with its annotation, wherever either falls)
+    const to = { url: 'https://example.org/' }
+    const linked = [
+      { ...units[0]!, spans: [['0', { cmd: 'href', to }]] as InstrumentUnit['spans'] },
+      units[1]!,
+      units[2]!,
+    ]
+    const I = instrumentOf(B, linked, [[0, 0], [0, 1], [2]])
+    const L2 = locate(I, B, align(B, B))
+    const parts = [
+      ...bundle({
+        ins: I,
+        located: L2,
+        addOn: addOnOf(L2, 3),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 3 },
+        made: 'test',
+      }),
+    ].filter((o) => o.kind === 'part')
+    const ord = L2.members.find((m) => m.unit === 0)!.ord
+    for (const n of [1, 2]) {
+      const o = parts.find((x) => x.page === n)!
+      const m = read('part', o.bytes, o.digest)
+        .flows.flat()
+        .find((x) => x.ord === ord)!
+      expect(m.spans).toEqual([['0', { cmd: 'href', to }]])
+    }
+  })
   it('holds in a part every flow its page reads: its own, and those of the page a running-on member begins on', () => {
     const parts = objects.filter((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>[]
     // page 2: unit 0 runs on from page 1 (a), and page 1's flows (b) are its own; unit 1's (a)

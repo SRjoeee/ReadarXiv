@@ -12,7 +12,7 @@ export declare function classesOf(
   colours?: ReadonlyMap<number, number> | null,
   texts?: ReadonlyMap<string, string> | null,
 ): [string, PieceClass][]
-/** each group's facts by its open piece's id: its command, its run's fill */
+/** each group's facts by its open piece's id: its command, its run's fill, a link group's target */
 export declare function spansOf(
   pieces: readonly { t: string; src?: string; [more: string]: unknown }[],
   colours?: ReadonlyMap<number, number> | null,

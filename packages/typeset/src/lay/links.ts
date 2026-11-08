@@ -8,16 +8,20 @@
 // - one over a piece of a laid member, moved with what is drawn of it on the page (placeUnit): over a crop of it by the crop's
 //   own map (placeCrop), over the characters it is drawn as (placeText: the whole of them, the part stating no annotation's
 //   characters under it; the annotations of one target over it one link); one over the member's text, over the translation of
-//   its \href's or \url's group (placePair, as matchUnit's order tier pairs them: the k-th annotation the k-th group of the
-//   member's drawn on the page where they are as many, else the k-th run of one target's annotations; one group takes them all
-//   where they are of one target), else, where the member has no such group drawn, over its whole drawing where one target's
-//   annotations hold every line of it on the page (matchUnit's whole tier, its every own character under them: each line's ink
-//   inside one of their boxes, its baseline between their edges);
+//   its link group (\href, \url, \hyperlink, \hyperref: placePair) of its target, as matchUnit's url and name tiers pair
+//   them (the target each group's source names, SpanAt.to: the annotations of a target with the groups that name it), then,
+//   for what no target decides (a group that names none, a part made before SpanAt.to), as its order tier does (the k-th
+//   annotation the k-th group where they are as many, else the k-th run of one target's annotations; one group takes them all
+//   where they are of one target; over the member, else by the groups drawn on the page and its own annotations), else, where
+//   the member has no link group drawn, over its whole drawing where one target's annotations hold every line of it on the
+//   page (matchUnit's whole tier, its every own character under them: each line's ink inside one of their boxes, its baseline
+//   between their edges);
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
 //   the translation's text over it, today's freezeLinks drops it alike).
 // An annotation of a member's other page (Link.page: the part holds those of its members on every page they have lines on) is
 // drawn here only over what of its piece the page draws (a translation sets a member's text on whichever of its pages it falls),
-// never at its box, which is its own page's (`away`); a member's \href groups are paired with its annotations of all its pages.
+// never at its box, which is its own page's (`away`); a member's link groups are paired with its annotations of all its pages,
+// so that each of its pages pairs them alike: an annotation is drawn on the page its group is set on, and on no other.
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
 // list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
 // Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
@@ -51,9 +55,19 @@ type Tok = {
   ph?: unknown
   st?: { link?: unknown }
 }
-const key = (to: Link['to']) => ('url' in to ? `u${to.url}` : `d${to.dest}`)
+/** a target as two are compared: an address in the WHATWG URL parser's form (today's urlOf; as written where it parses as none),
+ *  a destination as stated */
+const key = (to: Link['to']): string => {
+  if (!('url' in to)) return `d${to.dest}`
+  try {
+    return `u${new URL(to.url).href}`
+  } catch {
+    return `u${to.url}`
+  }
+}
 
-/** what became of each of a part's links (the gate's count; `away` one of another page not drawn here): at A's box with no owner, its owner not laid or its piece kept
+/** what became of each of a part's links (the gate's count; `away` one of another page not drawn here, or one a translation
+ *  draws on another page of its member alone): at A's box with no owner, its owner not laid or its piece kept
  *  there; moved over a crop, a piece's drawn text, an \href's group or the whole drawing; dropped where its ink is off and
  *  nothing of it is drawn, where several targets share a piece drawn as text, where the member's text holds it and no group
  *  or whole drawing takes it, or where placeUnit could not place it */
@@ -179,36 +193,64 @@ export function linksOf(
     if (text.length) {
       for (const i of text) fate(i, 'unmatched')
       // (the member's annotations over its text in their order on A (inReading), over all its pages: the part holds them on
-      // every page of the member, those of its other pages with their page, and the member's lines run over its pages in order)
-      const runs = runsOf(text, list)
+      // every page of the member, those of its other pages with their page, and the member's lines run over its pages in order;
+      // its link groups in their source's order, each with the target its source names (SpanAt.to), where it names one)
       const groupsOf = (m.spans ?? [])
         .filter(([, s]) => LINK_CMD.test(s.cmd ?? ''))
-        .map(([id]) => Number(id))
-        .sort((a, b) => a - b)
-      const drawn = groupsOf.filter((id) => pairs.has(id))
-      const ours = text.filter(here)
-      const pair = (id: number, run: number[]) => {
+        .map(([id, s]) => [Number(id), s.to ? key(s.to) : null] as const)
+        .sort((a, b) => a[0] - b[0])
+      const pair = (id: number, run: number[], tier: string) => {
         if (pairs.has(id))
-          groups.push({ to: { pair: id, draw: 'pair' }, annots: run.map((i) => ({ ...annot(i), tier: 'order' })) })
+          groups.push({ to: { pair: id, draw: 'pair' }, annots: run.map((i) => ({ ...annot(i), tier })) })
         else for (const i of run) if (!here(i)) fate(i, 'away')
       }
       const oneTarget = (rs: number[][]) =>
         rs.length > 0 && rs.every((r) => key(list[r[0]!]!.to) === key(list[rs[0]![0]!]!.to))
-      // (each \href group of the member's, in its source's order, with its occurrence among its annotations: each annotation an
-      // occurrence where they are as many as its groups (two links to one address one after the other are one run of one
-      // target, #626's review), else each run of one target a group (a link TeX broke over lines is one run), else one group
-      // takes all of one target; placed where the group is drawn on the page)
-      if (groupsOf.length && groupsOf.length === text.length) text.forEach((i, j) => void pair(groupsOf[j]!, [i]))
-      else if (groupsOf.length && groupsOf.length === runs.length)
-        runs.forEach((run, j) => void pair(groupsOf[j]!, run))
-      else if (groupsOf.length === 1 && oneTarget(runs)) pair(groupsOf[0]!, runs.flat())
-      // (else by the groups drawn on the page and the page's own annotations, as before the part held the others)
-      else if (drawn.length && drawn.length === ours.length) ours.forEach((i, j) => void pair(drawn[j]!, [i]))
-      else if (drawn.length && drawn.length === runsOf(ours, list).length)
-        runsOf(ours, list).forEach((run, j) => void pair(drawn[j]!, run))
-      else if (drawn.length === 1 && oneTarget(runsOf(ours, list))) pair(drawn[0]!, ours)
-      else if (!drawn.length && drawsText) {
-        // (matchUnit's whole tier: one target's annotations over every line of the member on the page)
+      // (annotations with groups in their orders: each annotation an occurrence where they are as many as the groups (two links
+      // to one address one after the other are one run of one target, #626's review), else each run of one target a group (a
+      // link TeX broke over lines is one run), else one group takes all of one target; placed where the group is drawn, on
+      // whichever page of the member that is)
+      const inOrder = (as: number[], gs: readonly number[], tier: string): boolean => {
+        const runs = runsOf(as, list)
+        if (gs.length && gs.length === as.length) as.forEach((i, j) => void pair(gs[j]!, [i], tier))
+        else if (gs.length && gs.length === runs.length) runs.forEach((run, j) => void pair(gs[j]!, run, tier))
+        else if (gs.length === 1 && oneTarget(runs)) pair(gs[0]!, runs.flat(), tier)
+        else return false
+        return true
+      }
+      // (by target first, as today's url and name tiers pair them (matchUnit): the annotations of each target a group names
+      // with the groups that name it, whatever the member's other links and wherever each falls, so that every page of the
+      // member pairs them alike; where they are not told apart so, none of them)
+      const addr = (i: number) => key(list[i]!.to)
+      const named = new Set(groupsOf.flatMap(([, x]) => (x === null ? [] : [x])))
+      for (const x of named) {
+        const as = text.filter((i) => addr(i) === x)
+        if (as.length)
+          inOrder(
+            as,
+            groupsOf.filter(([, y]) => y === x).map(([id]) => id),
+            x[0] === 'u' ? 'url' : 'key',
+          )
+      }
+      // (then by order what no target decides: the annotations of a target no group names (none named: a part made before
+      // SpanAt.to) with the groups that name none (a \hyperref, whose destination is its label's anchor), over the member, else
+      // by those drawn on the page and the page's own annotations)
+      const rest = text.filter((i) => !named.has(addr(i)))
+      const bare = groupsOf.filter(([, x]) => x === null).map(([id]) => id)
+      const ours = rest.filter(here)
+      if (
+        rest.length &&
+        !inOrder(rest, bare, 'order') &&
+        !inOrder(
+          ours,
+          bare.filter((id) => pairs.has(id)),
+          'order',
+        ) &&
+        !groupsOf.some(([id]) => pairs.has(id)) &&
+        drawsText
+      ) {
+        // (matchUnit's whole tier: one target's annotations over every line of the member on the page, where no group of it is
+        // drawn there)
         const mine = m.lines.filter((l) => l[0] === page && !(l[9] & 1))
         const byTarget = new Map<string, number[]>()
         for (const i of ours) byTarget.set(key(list[i]!.to), [...(byTarget.get(key(list[i]!.to)) ?? []), i])
@@ -230,22 +272,51 @@ export function linksOf(
       }
     }
     if (!groups.length) continue
-    const placed = placeUnit({
-      groups,
-      lines,
-      edge: (line: LaidLine, run: TextRun, at: number) => runEdge(run, at, line, L, w100),
-      band: (t: unknown, line: LaidLine) =>
-        tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline),
-      scale: L.scale,
-    })
+    const edge = (line: LaidLine, run: TextRun, at: number) => runEdge(run, at, line, L, w100)
+    const band = (t: unknown, line: LaidLine) =>
+      tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline)
+    // (a piece drawn as text is searched over the member's laid lines on all its pages, its annotations of all its pages in
+    // their order on A, one search moving forward only: each takes its own occurrence wherever the translation sets it, and
+    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence took the
+    // annotation of an occurrence another page draws, #631's review. A crop, a pair and a whole drawing are placed over what
+    // the page draws of them. The records of this page are kept, in the groups' order)
+    const asText = groups.filter((g) => g.to.draw === 'text')
+    const placed = [
+      placeUnit({ groups: groups.filter((g) => g.to.draw !== 'text'), lines, edge, band, scale: L.scale }),
+      ...(asText.length
+        ? [
+            placeUnit({
+              groups: asText,
+              lines: L.lines.map((line) => ({ line, runs: lineRuns(line, L) })),
+              edge,
+              band,
+              scale: L.scale,
+            }),
+          ]
+        : []),
+    ]
     const drawOf = new Map(groups.flatMap((g) => g.annots.map((c) => [c.a.i, g.to.draw as LinkFate] as const)))
-    for (const t of placed.tried) fate(t.i, 'unplaced')
-    for (const r of placed.records) {
-      for (const [, i] of r.sources.annots) fate(i, drawOf.get(i) ?? 'unplaced')
+    const groupOf = new Map(groups.flatMap((g, n) => g.annots.map((c) => [c.a.i, n] as const)))
+    for (const t of placed.flatMap((x) => x.tried)) fate(t.i, 'unplaced')
+    const records = placed
+      .flatMap((x) => x.records)
+      .map((r, n) => ({ r, n }))
+      .sort((x, y) => groupOf.get(x.r.sources.annots[0]![1])! - groupOf.get(y.r.sources.annots[0]![1])! || x.n - y.n)
+      .map(({ r }) => r)
+    const drawn = new Set<number>()
+    for (const r of records) {
+      if (r.page !== page) continue
+      for (const [, i] of r.sources.annots) {
+        fate(i, drawOf.get(i) ?? 'unplaced')
+        drawn.add(i)
+      }
       const to = list[r.sources.annots[0]![1]]!.to
       const b = r.rec.boxes
       for (let j = 0; j + 3 < b.length; j += 4) out.push([[b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to, ord])
     }
+    // (one drawn on another page of the member alone: that page's)
+    for (const r of records)
+      if (r.page !== page) for (const [, i] of r.sources.annots) if (!drawn.has(i)) fate(i, 'away')
   }
   return out
 }

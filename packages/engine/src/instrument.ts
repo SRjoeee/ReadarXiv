@@ -62,13 +62,15 @@ export interface InstrumentUnit {
    *  reads a source */
   classes?: [piece: string, PieceClass][]
   /** what its source says of each group (by its open piece's id), which the part states as the span's facts (format's
-   *  SpanAt: `cmd`, `colour`) */
+   *  SpanAt: `cmd`, `colour`, `to`) */
   spans?: [piece: string, SpanClass][]
 }
-/** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in */
+/** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in, a link
+ *  group's target where the source names it (linkTargetOf) */
 export interface SpanClass {
   cmd?: string
   colour?: number
+  to?: { url: string } | { dest: string }
 }
 /** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
 export interface PieceClass {
