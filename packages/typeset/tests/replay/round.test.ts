@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { hasDerived, hasTap, ledger, sample } from './tap.ts'
+import { hasDerived, hasTap, ledger, ruledIn, sample } from './tap.ts'
 import { hasCache } from './today.ts'
 
 const RULES = [
@@ -28,7 +28,8 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
       const differ: string[] = []
       const steps = new Map<string, number>(),
         stopped = new Map<string, number>()
-      let cases = 0
+      let cases = 0,
+        ruled = 0
       const seen = new Set<string>()
       for (const rule of RULES)
         for (const e of sample(rule).entries) {
@@ -36,9 +37,15 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
           if (seen.has(key)) continue
           seen.add(key)
           const u = ledger(e.pair).units.find((x) => x.ord === e.ord)
+          // (a unit today laid with a borrowed line: the owner's ruling of 2026-11-08 removed the borrow, tap.ts ruledIn)
+          const borrowed = ruledIn(e.pair).borrowed.has(e.ord)
           for (const r of new Set((u?.slots ?? []).filter((s) => s.by === 'X.cut').map((s) => s.round))) {
             const c = walkCase(e.pair, e.ord, r)
             if (typeof c === 'string') continue
+            if (borrowed) {
+              ruled++
+              continue
+            }
             cases++
             const got = chain(c)
             for (const s of got.steps) steps.set(s, (steps.get(s) ?? 0) + 1)
@@ -48,19 +55,20 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
         }
       expect(differ).toEqual([])
       // (S.onLeadRetry runs on no sampled unit: the corpus runner's; a chain stops where the tap holds no input of its next step)
-      expect({ cases, steps: Object.fromEntries(steps), stopped: Object.fromEntries(stopped) }).toEqual({
-        cases: 164,
+      expect({ cases, ruled, steps: Object.fromEntries(steps), stopped: Object.fromEntries(stopped) }).toEqual({
+        cases: 145,
+        ruled: 19,
         steps: {
-          F2: 164,
+          F2: 145,
           F4: 2,
           F5: 8,
           'F6 further': 6,
-          'F6 runs': 142,
+          'F6 runs': 123,
           F7: 5,
           'F7 moved': 4,
           F8: 8,
-          out: 163,
-          L9: 163,
+          out: 144,
+          L9: 144,
         },
         stopped: { 'left the original\u2019s (X.further found none)': 1 },
       })

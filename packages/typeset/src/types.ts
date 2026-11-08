@@ -154,7 +154,7 @@ export type Laid = {
   state: 'laid' | Unlaid
   /** this member's groups turned off on this page: 1 text, 2 elements, 4 label */
   off: number
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  fit?: { size: number; lead: number; track: number }
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */
   lines: [y: number, x0: number, x1: number, items: Item[]][]

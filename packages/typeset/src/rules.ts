@@ -372,13 +372,14 @@ const SPECS: readonly RuleSpec[] = [
       'L2:3061 inFlow',
     ],
     how: 'ported',
-    reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3'],
+    reads: ['tex.predisplay', 'k.SHORT_SKIP 0.3'],
     file: 'breaker/slots.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner's ruling of 2026-11-08, no borrowing: a block's foot is its last baseline, never lower by a borrowed line (today's lowOf less min(free, borrow pitches))",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
+      cases: 145,
     },
   },
   {
@@ -448,16 +449,16 @@ const SPECS: readonly RuleSpec[] = [
       'fit.leadFloor',
       'fit.trackMin',
       'fit.compressMax',
-      'fit.borrow',
       'fit.floor',
       'fit.step',
     ],
     file: 'fit/walk.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner's ruling of 2026-11-08, no borrowing: the walk has no borrow knob (today's statesOf borrowed lines under a block, into room the original leaves empty, before its leading and size); a unit that does not fit its own lines shrinks, one size",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
+      cases: 145,
     },
   },
   {
@@ -908,9 +909,10 @@ const SPECS: readonly RuleSpec[] = [
     home: 'fact',
     step: 'prepare',
     owns: ['E20', 'A19', 'A20', 'A23', '3.2'],
-    ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
+    // (today's freeFor, RUN:1677-1687, the room a block borrowed under it, not ported: the owner's ruling of 2026-11-08)
+    ports: ['RUN:1557-1573 columnOf', 'RUN:1699-1729 paperTo'],
     how: 'moved',
-    reads: ['fit.borrowGap'],
+    reads: [],
     state: L1,
   },
   {

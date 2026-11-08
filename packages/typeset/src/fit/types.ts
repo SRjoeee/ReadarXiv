@@ -6,7 +6,7 @@ import type { Patterns } from '../breaker/hyph.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { DecorBlock } from '../unit/decor.ts'
 
-/** a block as the walk reads it: U.blocks' and U.decor's, with what the row's start (F1) and the borrow room set on it */
+/** a block as the walk reads it: U.blocks' and U.decor's, with what the row's start (F1) set on it */
 export type FitBlock = DecorBlock & {
   /** where the first line starts on a shared row or after a name (S.rowStart, S.nameLed) */
   start?: number
@@ -14,18 +14,15 @@ export type FitBlock = DecorBlock & {
   onLead?: boolean
   /** a unit laid on from the unit before over the rows it left: the shared row's baseline and that unit's block */
   flowX?: { y: number; lead: FitBlock | null }
-  /** the room under its last line the walk may borrow (Room.free); `freeOf` reads it once where it is not stated */
-  freeOf?: (() => number) | null
   opens?: true
   widened?: boolean
 }
-/** a state of the fit (statesOf): its leading, tracking, compression, borrowing, scale and the knob that set it */
+/** a state of the fit (statesOf): its leading, tracking, compression, scale and the knob that set it */
 export type FitState = {
   lead: number
   track: number
   trackLatin: number
   compress: number
-  borrow: number
   scale: number
   knob: string
   fitTrack?: number
@@ -40,7 +37,6 @@ export type FitParams = {
   leadFloor: number
   trackMin: number
   compressMax: number
-  borrow: number | boolean
   floor: number
   step: number
   trackStart?: number

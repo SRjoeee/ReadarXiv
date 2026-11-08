@@ -37,8 +37,6 @@ const SCRIPT_KEYS: readonly (keyof ScriptRules)[] = [
   'trackMin',
   'compressMax',
   'centredPunct',
-  'borrow',
-  'borrowGap',
   'floor',
   'step',
   'further',

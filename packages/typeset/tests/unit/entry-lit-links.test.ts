@@ -973,7 +973,7 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     // paragraph's reading, its fit and its line), these numbers that entry's own on this part)
     const { plain: _, ...older } = label()
     const m = layPage(part(older), rowsOf([rowF('Loss')]), rules, metrics()).members[0]!
-    expect(m).toMatchObject({ state: 'laid', off: 1, fit: { size: 8, lead: 1, track: 0, borrowed: 0 } })
+    expect(m).toMatchObject({ state: 'laid', off: 1, fit: { size: 8, lead: 1, track: 0 } })
     expect(m.lines.map(([y, x0, x1, items]) => [y, x0, x1, items.map((it) => [it.s, it.x])])).toEqual([
       [400, 124, 158, [['Loss ', 142]]],
     ])

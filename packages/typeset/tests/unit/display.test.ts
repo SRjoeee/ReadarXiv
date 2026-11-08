@@ -21,7 +21,7 @@ const face = (o: Partial<Face> = {}): Face =>
 const SERIF = face(),
   CJK = face({ family: '"axt-shs-sc"' }),
   SLANT = face({ family: '"axt-shs-sc"', oblique: 12 })
-const state = { lead: 1.2, scale: 1, track: 0.02, trackLatin: 0.01, compress: 1, borrow: 0, knob: 'none' }
+const state = { lead: 1.2, scale: 1, track: 0.02, trackLatin: 0.01, compress: 1, knob: 'none' }
 const item = (t: Partial<Token>, x: number, w = 5, more: Record<string, unknown> = {}) => ({
   t: { w100: 0, ...t } as Token,
   x,

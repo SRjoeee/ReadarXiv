@@ -14,7 +14,7 @@ import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
 import { laysOf, passesOf } from './pass.ts'
-import { firstDifference, LAB, ledger } from './tap.ts'
+import { firstDifference, LAB, ledger, ruledIn } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
 /** the harness's CSS pixels a PDF unit (reader-entry.mjs SCALE; dpr 1: its audit's device pixels too) */
@@ -196,6 +196,9 @@ export type DisplayResult = {
   /** the dump's laid units the chain did not lay */
   unlaid: number[]
   chains: string[]
+  /** the dump's units today laid with a borrowed line (tap.ts ruledIn), not replayed; and those on a page one stands on that
+   *  the port lays otherwise (the page's fill reads them all): the ruling's */
+  ruled: { borrowed: number; onPage: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
@@ -212,8 +215,14 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
+    ruled: { borrowed: 0, onPage: 0 },
   }
+  const ruled = ruledIn(pair)
   for (const u of readerDump(pair).units) {
+    if (ruled.borrowed.has(u.ord)) {
+      out.ruled.borrowed++
+      continue
+    }
     out.units++
     const p = lays.get(u.ord)
     if (!p) {
@@ -223,7 +232,8 @@ export function displayReplay(pair: string): DisplayResult {
     const mine = dumpUnit(p, (pg) => v.get(pg))
     const want = { size: u.size, leading: u.leading, lines: u.lines, ...(u.elements ? { elements: u.elements } : {}) }
     const d = firstDifference(mine, want, '')
-    if (d) out.differ.push({ ord: u.ord, d })
+    if (d && ruled.units.has(u.ord)) out.ruled.onPage++
+    else if (d) out.differ.push({ ord: u.ord, d })
     else {
       out.equal++
       out.lines += u.lines.length
