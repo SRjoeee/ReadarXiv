@@ -2,8 +2,9 @@
 // A table cell's alignment under TeX (src/pdf-reader/engine/layout/marks.mjs LAYOUT_TEX's AXT-CELL, the class LaTeX built the
 // cell's column template from, and AXT-ALIGN at a cell's end mark, its own paragraph's; read by packages/engine/src/marks/
 // channels.ts readAlign): small documents, each cell unit's start and end mark set by hand as layoutMarking sets them
-// (`\leavevmode\axtmark{t<i>s}` … `\axtend{t<i>e}`), compiled in each pinned TeX Live year's image under pdfLaTeX, XeLaTeX and
-// LuaLaTeX, each cell's reading held to how TeX set it. The cases: LaTeX's own tabular (l, c, r, p, \multicolumn), array's
+// (`\leavevmode\axtmark{t<i>s}` … `\axtend{t<i>e}`), compiled in each pinned TeX Live year's image under pdfLaTeX, XeLaTeX,
+// LuaLaTeX and latex (arXiv's DVI compiler, its DVI made a PDF by dvipdfmx, with the DVI marks the marked original sets for it:
+// DVI_MARK_DEF, DVI_LAYOUT_TEX), each cell's reading held to how TeX set it. The cases: LaTeX's own tabular (l, c, r, p, \multicolumn), array's
 // (m and b, >{\centering\arraybackslash}p, a braced cell, a cell holding a tabular and a cell of a tabular in another cell),
 // siunitx's S column (a braced text, centred), colortbl's colours (its template sets the cell in a box and paints leaders),
 // tabularx's X, longtable, multirow and makecell, nicematrix's NiceTabular (its preamble LaTeX's), and tables no template of
@@ -19,13 +20,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { readAlign } from '../../../packages/engine/src/marks/channels.ts'
-import { MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { LAYOUT_TEX } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { DVI_MARK_DEF, MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { DVI_LAYOUT_TEX, LAYOUT_TEX } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { checkCompileImage, compileImageRef } from './compile-image.mjs'
 
 const arg = name => { const a = process.argv.find(x => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : null }
 const YEARS = (arg('years') ?? '2023,2025').split(',')
-const ENGINES = ['pdflatex', 'xelatex', 'lualatex']
+const ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
 const OUT = resolve(arg('out') ?? join(tmpdir(), `layout-cell-cases-${process.pid}`))
 const BASE = arg('base') ? readFileSync(resolve(arg('base')), 'latin1') : null
 
@@ -101,7 +102,10 @@ const CASES = {
 }
 
 let bad = 0
-const heads = { new: `${MARK_DEF}${LAYOUT_TEX}\n`, ...(BASE ? { base: BASE } : {}) }
+// (a head as the marked original writes it: under latex, each part followed by its DVI marks; the base's LAYOUT_TEX the file's)
+const headOf = (layout, e) => (e === 'latex' ? `${MARK_DEF}${DVI_MARK_DEF}${layout}${DVI_LAYOUT_TEX}\n` : `${MARK_DEF}${layout}\n`)
+if (BASE && !BASE.startsWith(MARK_DEF)) throw new Error('--base does not begin with this MARK_DEF')
+const heads = { new: LAYOUT_TEX, ...(BASE ? { base: BASE.slice(MARK_DEF.length).replace(/\n$/, '') } : {}) }
 for (const year of YEARS) {
   const image = compileImageRef(process.env, year)
   await checkCompileImage(image, [])
@@ -111,10 +115,11 @@ for (const year of YEARS) {
     for (const e of ENGINES)
       for (const [name, [src]] of Object.entries(CASES)) {
         mkdirSync(join(dir, `${h}-${e}-${name}`), { recursive: true })
-        writeFileSync(join(dir, `${h}-${e}-${name}`, 'main.tex'), `${head}${src}`)
+        writeFileSync(join(dir, `${h}-${e}-${name}`, 'main.tex'), `${headOf(head, e)}${src}`)
       }
   // (two passes each, as a paper's marked original gets; the date fixed, so that two heads' PDFs can be compared byte for byte)
-  writeFileSync(join(dir, 'run.sh'), `${ENGINES.map(e => `for d in *-${e}-*/; do (cd "$d" && ${e} -interaction=nonstopmode main.tex >/dev/null 2>&1; ${e} -interaction=nonstopmode main.tex >/dev/null 2>&1); done`).join('\n')}\n`)
+  const pass = e => `${e} -interaction=nonstopmode main.tex >/dev/null 2>&1${e === 'latex' ? '; dvipdfmx -q main.dvi >/dev/null 2>&1' : ''}`
+  writeFileSync(join(dir, 'run.sh'), `${ENGINES.map(e => `for d in *-${e}-*/; do (cd "$d" && ${pass(e)}; ${pass(e)}); done`).join('\n')}\n`)
   execFileSync('docker', ['run', '--rm', '--network', 'none', '-e', 'SOURCE_DATE_EPOCH=1700000000', '-e', 'FORCE_SOURCE_DATE=1', '-v', `${dir}:/work`, '-w', '/work', image, 'sh', 'run.sh'], { stdio: 'ignore', timeout: 1_800_000 })
   for (const e of ENGINES)
     for (const [name, [, want, classless = []]] of Object.entries(CASES)) {

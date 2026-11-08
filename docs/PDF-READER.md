@@ -2801,7 +2801,8 @@ the typesetter keeps a cell's flush as any unit's (today's never did, no fact te
 ends where its original ends and, clipped there, widens to its left, and an l column's wrapped lines are ragged.
 Locate's reading of the cell's column stays only where TeX states neither (a template that is not LaTeX's: `\shortstack`'s,
 a plain `\halign`). Nothing of B moves: assignments, `\aftergroup` and a `\message`
-(`lab/pdf/spikes/layout-cell-cases.mjs`: 8 documents in pdfLaTeX, XeLaTeX and LuaLaTeX under both years read as TeX set them,
+(`lab/pdf/spikes/layout-cell-cases.mjs`: 8 documents in pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx under both years
+read as TeX set them,
 each PDF byte for byte the one before; over the 21 papers of the parity's pairs every marked original and final pass is byte
 for byte what it was).
 
