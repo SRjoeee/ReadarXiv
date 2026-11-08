@@ -34,7 +34,12 @@ export interface TodayInkUnit {
   /** its text's glyphs, its placeholders' (`ph`), each kept run's by its placeholder's index among the pieces (`runs`,
    *  inkUnitsOf's; none for a kept block), and, of its text's, its label's where it has one (`label`: inkUnitsOf's,
    *  labelLength) */
-  glyphs: { text: [number, number][]; ph: [number, number][]; runs?: [number, [number, number][]][]; label?: [number, number][] }
+  glyphs: {
+    text: [number, number][]
+    ph: [number, number][]
+    runs?: [number, [number, number][]][]
+    label?: [number, number][]
+  }
   rows: { unit: [number, string, number, number, number] }
 }
 /** a figure's text (figureUnitsOf) */
