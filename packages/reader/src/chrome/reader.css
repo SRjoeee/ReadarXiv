@@ -69,12 +69,21 @@ html[data-axt-contents] .doc { left: var(--side); }
    the element it scrolls (it throws where that is not placed absolutely); the chrome's own, so that a host's page sheet needs
    none of it (the extension's engine.css held it, the website's v2 page carried a copy: L11's gap 4) */
 .pane .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; scroll-timeline: --pane-y block; scrollbar-width: none; }
-/* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3) */
-html[data-axt-pdf-mode="original"] .doc, html[data-axt-pdf-mode="translation"] .doc, html[data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
-html[data-axt-pdf-mode="original"] .pane[data-side="right"],
-html[data-axt-pdf-mode="translation"] .pane[data-side="left"],
-html[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { display: none; }
-html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
+/* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3). The view's
+   marks are read wherever they are written around the panes: on the reader's root (the package's, panes.ts), which a host
+   gives as <body> or any element around the chrome, and on <html> (the extension's today engine). Read on <html> alone, a
+   host that opened the reader on <body> showed both panes side by side in every display (L11 third round, gap 1) */
+[data-axt-pdf-mode="original"] .doc, [data-axt-pdf-mode="translation"] .doc, [data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+/* the original's pane out of the display: laid out still, at no width and out of sight, as the reader's own sheet takes it out
+   (styles.ts). It is PDF.js's viewer, which the reader still fits and scrolls there: taken out by display: none, PDF.js had no
+   offsetParent to scroll ("offsetParent is not set -- cannot scroll", an error on every narrow window: gap 2). At no width it
+   draws no page (none is in its view) */
+[data-axt-pdf-mode="translation"] .pane[data-side="left"],
+[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 0; visibility: hidden; }
+/* the translation's pane out of the original's display: the reader's stack, which nothing scrolls there, out of the layout as
+   the reader's own sheet takes it out */
+[data-axt-pdf-mode="original"] .pane[data-side="right"] { display: none; }
+[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
 
 /* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
    foot is negative, give way (as in the harness the maintainer approved) ----- */

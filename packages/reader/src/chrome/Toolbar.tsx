@@ -14,7 +14,7 @@ import { PaperTitle } from './PaperTitle.tsx'
 import { useParts } from './parts.tsx'
 import { ProgressLine } from './ProgressLine.tsx'
 import { ReadingOptions } from './ReadingOptions.tsx'
-import { refusedNow } from './status.ts'
+import { nothingShown, refusedNow } from './status.ts'
 import { useSettingsLock } from './settings-lock.ts'
 import { ToolbarButton } from './ToolbarButton.tsx'
 import { useReader } from './use-reader.ts'
@@ -24,15 +24,35 @@ const MAC = /Mac/.test(navigator.platform)
 const MOD = MAC ? '⌘' : 'Ctrl'
 const MOD_KEY = MAC ? 'Meta' : 'Control'
 
-export function Toolbar({
-  controller,
-  contents,
-  onContents,
-}: {
-  controller: ReaderController
-  contents: boolean
-  onContents: () => void
-}) {
+type BarProps = { controller: ReaderController; contents: boolean; onContents: () => void }
+
+/** the paper's bar, or, where neither side has anything to show and the host's rule says so (parts.tsx `bar`: the website's), the
+ *  bare one */
+export function Toolbar(props: BarProps) {
+  const { bar } = useParts()
+  const bare = useReader(props.controller, (s) => bar === 'bare' && nothingShown(s))
+  return bare ? <BareBar controller={props.controller} /> : <PaperBar {...props} />
+}
+
+/** the bar where neither side has anything to show, by the website's rule: the lead's slot (its way home) and the reading
+ *  options alone, in the bar's zones, so that each stays on its side at every width (today's web reader/LostBar.tsx); no
+ *  zoom key is taken, nothing to zoom */
+function BareBar({ controller }: { controller: ReaderController }) {
+  const { slots } = useParts()
+  return (
+    <header className="chrome bar">
+      <div data-zone="lead" className="flex min-w-0 items-center gap-1">
+        {slots.lead}
+      </div>
+      <div data-zone="centre" className="flex items-center" />
+      <div data-zone="trail" className="flex items-center gap-1 justify-self-end">
+        <ReadingOptions controller={controller} bare />
+      </div>
+    </header>
+  )
+}
+
+function PaperBar({ controller, contents, onContents }: BarProps) {
   const { slots, narrow: narrowRule, sync: syncRule, refusal } = useParts()
   const state = useReader(controller, (s) => ({
     swapped: s.prefs?.swapped ?? false,

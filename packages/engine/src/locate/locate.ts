@@ -850,6 +850,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
     // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
+    const unitText = unit ? sourceText(unit.content) : ''
     for (const [id, p0] of pieces) {
       if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
@@ -904,21 +905,31 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
+      if (p.kind === 'url' && ink.length === 1) {
+        const breaks = urlBreaks(gl.map(gA))
+        if (breaks.length) el.breaks = breaks
+      }
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
       // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
       // kind of text, a class drawn as the page's text (a citation, a reference, a macro: the instrument's), its own brackets
       // (U.brackets reads the text inside them), ink over lines (a formula broken over lines is drawn as text where its
       // segments make no crops))
+      // (a line's end inside a word of its text, facts.ts lineEnd: decided by the source where it states the word, its own TeX
+      // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
+      const lineEnds = {
+        literal: !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code',
+        source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
+      }
       const asText =
         TEXT_KINDS.has(p.kind) ||
         TEXT_CLASSES.has(classOf.get(id)?.cls ?? '') ||
         ink.length > 1 ||
         !!bracketsOf(gl.map(gA))
       if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
-        el.text = textOf(gl.map(gA))
+        el.text = textOf(gl.map(gA), lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
-        const runs = fillRunsOf(gl.map(gA))
+        const runs = fillRunsOf(gl.map(gA), lineEnds)
         if (runs) el.fills = runs
       }
       // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
@@ -933,7 +944,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           const a = m.bToA[b] as number
           if (unitB[b] === mem.unit && roleB[b] === ROLE.text && a >= 0 && mine.has(a)) between.push(a)
         }
-        if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA))
+        if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA), lineEnds)
       }
       // (a text macro whose span the instrument states with nothing in it: both its places stated and no glyph of B between them,
       // or TeX's probe said it sets none: TeX set none for it, its text '' (2610.19159v1's `\trajectoryMark{}`, whose argument
@@ -987,7 +998,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // the one to the other; the columns as columnsAndMeasures read them on A, a line over both (2) of either)
       const nc = n.lines.at(-1)?.[1],
         lc = led.lines[0]?.[1]
-      if (nc !== undefined && lc !== undefined && nc !== 2 && lc !== 2 && nc !== lc) continue
+      if (nc !== undefined && lc !== undefined && !sameColumn(nc, lc)) continue
       n.leads = led.ord
       led.leader = n.ord
     }
@@ -1047,7 +1058,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
-      a[1] === b[1] &&
+      (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
       !ownBox(prev) &&
@@ -1114,8 +1125,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const f = led.lines[0]
     if (!flow || !l || !f || n.lines.length !== 1) continue
     if (f[0] !== l[0] || Math.abs(f[4] - l[4]) > 0.5 || f[2] < l[3] - 0.05) continue
+    // (the name alone taken out of the flow it stood in, the members beside it left in theirs (two names on one line: Devin on
+    // #624), the flow dropped where it is left empty; and out of the size ties, which name it with that flow's members)
     const own = flowOf.get(n.ord)
-    if (own) flows.splice(flows.indexOf(own), 1)
+    if (own) {
+      own.splice(own.indexOf(n.ord), 1)
+      if (!own.length) flows.splice(flows.indexOf(own), 1)
+    }
+    for (let t = ties.length - 1; t >= 0; t--) {
+      const tie = ties[t]!
+      if (tie.rule !== 'size' || !tie.ords.includes(n.ord)) continue
+      tie.ords = tie.ords.filter((o) => o !== n.ord)
+      if (tie.ords.length < 2) ties.splice(t, 1)
+    }
     const k = flow.indexOf(led.ord)
     const prev = k > 0 ? members[flow[k - 1] as number]?.lines.at(-1) : undefined
     if (prev && led.join) n.join = [r2(l[2] - prev[3])]
@@ -1251,6 +1273,43 @@ function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, 
   }
   return out
 }
+
+/** the characters after which TeX's url package may break a URL (url.sty's \UrlBreaks and \UrlBigBreaks; a hyphen only under
+ *  its `hyphens` option) */
+const URL_BREAKS = new Set(".@\\/!_|;>]),?&'+=#:")
+/** a glyph's share of a URL's copy text (the source's, which TeX's url package sets character by character), in UTF-16 code
+ *  units, the unit the typesetter slices that text in: a ligature its letters (ﬁ, ﬄ: NFKC), whether PDF.js gives it as one
+ *  character or as its letters; a character past the Basic Multilingual Plane its two */
+const copyUnitsOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normalize('NFKC')).length
+/**
+ * Where a URL TeX set on one line may break (El.breaks): after a run of url.sty's break characters, never inside one (a
+ * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle of the paper between the run's
+ * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text stands
+ * before it (UTF-16 code units, copyUnitsOf: a glyph's count would misplace every cut after an astral character or a
+ * ligature). Its glyphs in their order on the line
+ */
+export function urlBreaks(gs: readonly DocGlyph[]): [number, number][] {
+  const line = gs.filter((g) => /\S/.test(g.u)).sort((a, b) => a.x0 - b.x0)
+  const out: [number, number][] = []
+  let units = 0
+  for (let k = 1; k < line.length; k++) {
+    const a = line[k - 1]!,
+      b = line[k]!
+    units += copyUnitsOf(a.u)
+    if (!URL_BREAKS.has(a.u) || URL_BREAKS.has(b.u)) continue
+    const right = a.ix1 > a.ix0 ? a.ix1 : a.x1,
+      left = b.ix1 > b.ix0 ? b.ix0 : b.x0
+    out.push([r2((right + left) / 2), units])
+  }
+  return out
+}
+
+/** whether a run-in lead's line and the line TeX set after it stand in one column as columnsAndMeasures reads them: the same,
+ *  or either over both (2). One rule for a name that leads a unit and a run-in head before its paragraph: on a one-column page
+ *  that reads as two (a table's cells on both halves, 1706.03762v7 p10), the head's line keeps to the left half and its
+ *  paragraph's first line, after it on its row, spans both. Members a tabular row sets side by side (an author block's names,
+ *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
+const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and

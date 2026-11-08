@@ -418,8 +418,18 @@ above the page pills, clear of the header (the maintainer: 「放在文字切换
     website's store page); a `javascript:` or `data:` address, a foreign origin, draws none (`chrome/links.ts`).
   - A face the translation is set in that cannot be had is the reader's state (`ReaderState.faces`), for the host to
     say.
+  - `bar: 'bare'`: where neither side has anything to show (the original could not be read, nothing of the translation
+    there, none to be had now: its layer refused), the bar is its page's for a paper arXiv does not have: the lead's slot
+    (its way home) and the reading options alone, without a paper's rows (the appearance, the dimming and its own last
+    rows), no progress line (the interface review of 2026-11-03, v-modes-disabled). The extension's keeps its whole bar
+    over the card.
+  - With `openOriginal`, the capsule tells the translation's state beside the original's own card (a refusal for now with
+    its retry, the paper's own refusal, a run's stage where the host words it), as its page did; not where the service
+    failed too, whose card is the pane's answer.
   The hold of the original (`refusal`, `narrow: 'shown'`) is the reader's `hold` command: never written and not a
-  choice, so the run the chosen display engages goes on, and the reader's own choice of a display ends it.
+  choice, so the run the chosen display engages goes on, and the reader's own choice of a display ends it. While it holds
+  the original as the paper is made, the progress line is the original's load, whole once read, as the website's page
+  drew it (the maintainer's ruling that nothing a website reader sees changes at the cut-over).
 
 The states are §8's.
 
@@ -820,6 +830,29 @@ Tailwind v4, as the popup and the settings page use it, with **the extension's t
 since the redesign; §4.1) through `@theme inline`, not `ui.css`. PDF.js's viewer sheet with a `box-sizing` reset inside
 the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for want of it).
 
+The panes are laid out by the view's marks (`data-axt-pdf-mode`, `-narrow`, `-swapped`) wherever they are written around
+them: the reader package writes them on its root (any element a host opens it on: `<body>` on both hosts' v2 pages), today's
+engine on `<html>`; read on `<html>` alone, a host that opened the package's reader on `<body>` showed both panes in every
+display (2026-11-07). The original's pane out of the display (the translation's display, side by side in a narrow window) is
+laid out at no width and out of sight, as the package's own sheet takes it out (`styles.ts`): it is PDF.js's viewer, which the
+reader still fits and scrolls there, and under `display: none` PDF.js had no `offsetParent` to scroll ("offsetParent is not
+set -- cannot scroll"); at no width it draws no page. The translation's pane in the original's display stays `display: none`.
+
+A page shown from the back-forward cache: the reader meets a persisted `pagehide` and `pageshow` itself, as it meets the
+document's visibility and the browser's online state: away, our server is neither followed nor asked and no timer runs; back,
+the document is followed anew, the panes as they were (today's web `session/job.ts putAway`). A `pagehide` that is not
+persisted is the host's to close the reader on.
+
+Where its host gives no engine, the reader lays with lane L3's typesetter (`packages/reader/src/compose/typeset.ts`):
+`layPage` under the rule set's rules for the target the rows are of, the reader's "What to translate" as the rules' `leave`
+(a toggle lays the pages again under them), the hyphenation patterns the rules read (our site's `/hyph/<lang>.json`), and the
+reader's own Metrics over our site's served faces (`served.ts`: `/static-fonts/index.json`, its groups'
+`/static-fonts/<group>.json?fonts=<fonts>`, each slice `/static-fonts/<16 hex>.woff2` fetched as data through the host's
+fetch and made a FontFace with its code points as its unicode-range), measured as lane L7's spec says (runs cut where the
+slice changes, a CJK run unkerned and cut between two punctuation marks, never in small capitals; held in a browser by
+`lab/typeset/metrics-browser.mjs`). The website serves those files from its origin; the extension reads them from our
+server's, as today's reader does.
+
 ### 11.6 Words
 
 The reader's words go into the locale packs (`zh-CN`, `en`; `zh-TW`, `ja` and `ko` since 2026-11-04) under a new surface in `docs/UI.md`, **R** (`S-R-01` …),
@@ -995,6 +1028,14 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
   WebKit takes `auto`, its places the same to the pixel. Not yet seen by eye: Chrome on Windows, a Linux desktop, Safari on
   iOS (which has no smoothing to restore).
+  The reader package (`packages/reader`) decides the same, once a reader, from its first overlay's runs of one place laid
+  out again in their own classes (`compose/text-rendering.ts`), written on the reader's root (`.axt-reader`, its sheet
+  `styles.ts`), and draws a run that names no fill of its own in the layer's ink, `#141414` (today's `layer-proto/run.mjs`
+  `SVG_RULES`). Without the two (the maintainer's report of 2026-11-08, 1706.03762v7 in Chinese, page 1) it drew the
+  translation at 80 % of its own `auto` ink, in pure black: 86 % of today's ink on the abstract's first line (4,305 against
+  4,982 units at a device pixel ratio of 2), 92 % on the bold title; with them 4,989 and 100 %. Held by the harness's check
+  (`packages/reader/e2e/run.mjs`, "at the weight a canvas draws it"): every measured line's ink within 6 % of the same runs
+  drawn by a canvas's `fillText`, 0.80 before, 1.00 after.
 - **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
   before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be

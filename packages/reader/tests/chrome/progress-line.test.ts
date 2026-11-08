@@ -1,5 +1,6 @@
 import { act, createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PARTS, type Parts, PartsProvider } from '../../src/chrome/parts.tsx'
 import { ProgressLine } from '../../src/chrome/ProgressLine.tsx'
 import { lineOf } from '../../src/chrome/status.ts'
 import { mountElement } from '../render-hook.ts'
@@ -39,6 +40,41 @@ describe("the progress line under the toolbar (the reader's design, §6.6)", () 
     const half = Number(running.style.getPropertyValue('--p'))
     await act(async () => fake.set({ progress: 0.2 }))
     expect(Number(running.style.getPropertyValue('--p'))).toBe(half)
+  })
+
+  it("held at the original in a narrow window while the paper is made (the website's rule): the line the original's load, whole, through the prepare (L11 third round, gap 3)", async () => {
+    const fake = fakeController({ phase: 'loading', loaded: 1, display: 'original', narrow: true })
+    const line = (parts: Partial<Parts>) =>
+      mountElement(
+        createElement(
+          PartsProvider,
+          { value: { ...PARTS, ...parts } },
+          createElement(ProgressLine, { controller: fake.controller }),
+        ),
+      )
+    const site = await line({ narrow: 'shown' })
+    const ext = await line({})
+    await act(async () => fake.set({ phase: 'preparing', preparing: { position: null, progress: 0.1 } }))
+    const p = (c: HTMLElement) => Number(c.querySelector<HTMLElement>('.progress-line')?.style.getPropertyValue('--p'))
+    expect(p(site.container)).toBe(1)
+    // (the extension's, no rule for the narrow window: its line as before, which held the longest it reached, the download's)
+    expect(p(ext.container)).toBe(1)
+    // a prepare told before the original came in: the line runs from the download's share there, the original's load here
+    const late = fakeController({ phase: 'loading', loaded: 0.4, display: 'translation', narrow: true })
+    const mount = (parts: Partial<Parts>) =>
+      mountElement(
+        createElement(
+          PartsProvider,
+          { value: { ...PARTS, ...parts } },
+          createElement(ProgressLine, { controller: late.controller }),
+        ),
+      )
+    const a = await mount({ narrow: 'shown' })
+    const b = await mount({})
+    await act(async () =>
+      late.set({ phase: 'preparing', loaded: 1, display: 'original', preparing: { position: null, progress: 0 } }),
+    )
+    expect([p(a.container), p(b.container)]).toEqual([1, 0.15])
   })
 
   it('a process begun after the line had left is a line of its own, from its start: the original read, then a translation asked for', async () => {

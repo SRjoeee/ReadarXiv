@@ -143,6 +143,9 @@ export interface ReaderState {
   unavailable: { why: Unavailable; retryAt: number | null } | null
   /** 0–1, the share of the paper's paragraphs translated */
   progress: number
+  /** a run's rows coming in: from its first batch to its end (or a refusal), whatever the phase, which the original's failure
+   *  holds meanwhile (the capsule beside the original's own card tells the run: status.ts stageOf) */
+  rowsComing: boolean
   /** the paragraphs translated of the paper's, as the run last told them (a host's words count them) */
   translated: { got: number; total: number }
   /** our server's document followed, its stream lost and asked again: the run under way not heard for now */
@@ -213,6 +216,7 @@ export const INITIAL: ReaderState = {
   layer: { laid: 0, total: 0 },
   unavailable: null,
   progress: 0,
+  rowsComing: false,
   translated: { got: 0, total: 0 },
   reconnecting: false,
   loaded: 0,
@@ -454,6 +458,7 @@ function reduceRunFree(
         begun: true,
         laying: false,
         progress,
+        rowsComing: true,
         translated: countOf(state, event),
         failedUnits: event.lost,
         failureAt: null,
@@ -463,6 +468,7 @@ function reduceRunFree(
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       const counted = {
         ...state,
+        rowsComing: false,
         translated: countOf(state, event),
         failureAt: event.stopped ? (event.retryAt ?? null) : null,
       }
@@ -500,6 +506,7 @@ function reduceRunFree(
       return {
         ...state,
         preparing: null,
+        rowsComing: false,
         unavailable: { why: event.why, retryAt: event.retryAt },
         // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
         available: lasting && event.why !== 'target' ? false : state.available,

@@ -126,6 +126,13 @@ export interface Parts {
   /** when the sync's switch can be pressed: `side-by-side` (the extension's, the default) wherever both sides are shown;
    *  `located` (the website's) there only once the sides can scroll together (both sides' pages laid out), greyed until then */
   sync?: 'side-by-side' | 'located'
+  /** the bar where neither side has anything to show (status.ts `nothingShown`: the original could not be read, and no
+   *  translation is to be had now, its layer refused for now or for the paper): `whole` (the extension's, the default) every
+   *  control, over the failure's card; `bare` (the website's: the interface review of 2026-11-03, v-modes-disabled) the lead's
+   *  slot and the reading options alone, as its page for a paper arXiv does not have draws its bar: no contents, title,
+   *  switch, side-by-side pair, zoom, language, host's own trail or progress line, and the reading options without a paper's
+   *  rows (the appearance, the dimming and the host's own last rows) */
+  bar?: 'whole' | 'bare'
   /** a failure's reason as a sentence */
   reason(kind: ProviderErrorKind): string
   /** where the host's settings are, for the capsule's way there while they cannot be read (S-R-21); none: no link */

@@ -12,8 +12,9 @@
 // - **Laying, one page at a time.** The near pages are laid the page in the middle of the view first (then the pages after it
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
 //   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
-//   or its faces (asked in one wave for the near pages, the middle page first). Committed is final: a late row changes nothing on
-//   screen until the language, the toggles or the paper change.
+//   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
+//   still waiting for rows asks meanwhile those of the rows it has). Committed is final: a late row changes nothing on screen
+//   until the language, the toggles or the paper change.
 // - **What stays the original's.** A page with no part (no layout), a page laid with nothing hidden, a page whose part or lay
 //   or drawing failed (asked again on a zoom, coming near or the next scroll), a page whose drawing is not in place PAGE_MS after
 //   its commit (one warning; asked again on the next scroll), and a member whose groups the composed document does not hold.
@@ -40,6 +41,7 @@ import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { cropsFor, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
+import { ATTRIBUTE, decideOn } from './text-rendering.ts'
 
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
@@ -110,7 +112,7 @@ export interface ComposerOptions {
   links: LinkHooks
   /** the reader's clock (default the browser's timers) */
   clock?: Clock
-  /** the reader's root (the marks read the sheet's paddings there) */
+  /** the reader's root (the marks read the sheet's paddings there; the overlay's text rendering is written on it) */
   root?: HTMLElement
   /** what the right shows of a page not laid (the panes' originalOf); default its own page view of the original */
   original?(n: number, settled: boolean): PageContent | null
@@ -206,6 +208,8 @@ export function createComposer(o: ComposerOptions): Composer {
     o.warn?.(what, e)
   }
   const marks = createMarks({ root: o.root ?? document.documentElement, clock })
+  /** whether the overlay's text rendering is decided (text-rendering.ts, at the first overlay whose page tells) */
+  let textDecided = false
 
   // ---------------------------------------------------------------- the rows a lay reads: a unit of a kind the toggles hide
   // reads as no translation (it stays the original's), whatever was translated
@@ -218,7 +222,10 @@ export function createComposer(o: ComposerOptions): Composer {
     get done() {
       return rows?.done ?? false
     },
+    kept: (id) => rows?.kept?.(id) ?? false,
   }
+  /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
+  const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
 
   // ---------------------------------------------------------------- what a slot shows
   const originalOf = (n: number, isSettled: boolean): PageContent | null => {
@@ -267,10 +274,16 @@ export function createComposer(o: ComposerOptions): Composer {
   async function overlay(n: number, page: Page, doc: PDFDocumentProxy, g: Groups, at: SlotAt) {
     counts.overlays++
     const t0 = performance.now()
-    const faceIds = new Set<string>()
+    // (each face with the texts it draws: a served face's slices are those texts')
+    const drawn = new Map<string, string>()
     for (const m of page.members)
-      for (const [, , , items] of m.lines) for (const it of items) if ('face' in it) faceIds.add(it.face)
-    await faces.ready(faceIds)
+      for (const [, , , items] of m.lines)
+        for (const it of items) if ('face' in it) drawn.set(it.face, (drawn.get(it.face) ?? '') + it.s)
+    await faces.ready([...drawn])
+    // (the overlay's text rendering, decided once a reader by the first laid page whose words tell, in its faces just loaded,
+    // before its drawing is made: `auto` where the browser lays them out alike under geometricPrecision and under it, else the
+    // sheet's geometricPrecision; text-rendering.ts. Written before the page is put in place, so that it is laid out once)
+    if (!textDecided && !disposed && o.root) textDecided = decideOn(o.root, page, faces) !== null
     const el = document.createElement('div')
     el.className = 'axt-over'
     // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
@@ -320,7 +333,7 @@ export function createComposer(o: ComposerOptions): Composer {
   /** the commit holding the next lay (until its drawing is in place, HOLD_MS at most) */
   let holding: { n: number; key: string; timer: number } | null = null
   /** the faces the pages laid this round wait for, asked in one wave once the round is laid */
-  const wave = new Map<number, string[]>()
+  const wave = new Map<number, readonly (readonly [string, string])[]>()
   function partFor(n: number): Promise<Part | null> {
     let p = parts.get(n)
     if (!p && layer) {
@@ -424,13 +437,11 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     pages.set(n, page)
     if (page.wait.faces.length) {
-      wave.set(
-        n,
-        page.wait.faces.map(([f]) => f),
-      )
+      wave.set(n, page.wait.faces)
       return
     }
     if (!committed(page)) {
+      early(n, part)
       markSoon()
       return
     }
@@ -456,19 +467,41 @@ export function createComposer(o: ComposerOptions): Composer {
     })
     return changed ? { ...page, members: out } : page
   }
-  /** the faces the round's pages wait for, in one wave: the page in the middle of the view first */
+  /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */
+  const earlyLeft = new Map<number, number>()
+  /** a near page waiting for rows: the faces of the rows it has asked meanwhile, as it would wait for them were the rows ended
+   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (staging,
+   *  2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its 49 slices,
+   *  2.5 MB, in 16 s). Asked again only once more of its rows are in */
+  function early(n: number, part: Part) {
+    const left = pages.get(n)?.wait.rows.length ?? 0
+    if (!left || rows?.done || (earlyLeft.get(n) ?? Number.POSITIVE_INFINITY) <= left) return
+    earlyLeft.set(n, left)
+    let want: Page['wait']['faces']
+    try {
+      want = o.lay(part, endedView).wait.faces
+    } catch {
+      return
+    }
+    if (want.length) wave.set(n, want)
+  }
+  /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
+   *  again once its own faces are in: never held by another page's (staging, 2026-11-08: 2611.07042v1's page 1, whose own
+   *  faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
   function flushWave() {
     if (!wave.size) return
     const c = stack.centre() || 1
     const order = [...wave.keys()].sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)
-    const ids: string[] = []
-    for (const n of order) for (const f of wave.get(n) ?? []) if (!ids.includes(f)) ids.push(f)
-    wave.clear()
     const mine = gen
-    void faces.ready(ids).then(() => {
-      if (mine !== gen) return
-      for (const n of order) if (stack.near(n)) askLay(n)
-    })
+    // (each page's faces asked in that order: a slice another page asked first is read once, and this page waits for it too;
+    // its loads not begun let go once the page is not near or its generation is gone, its early asks too)
+    for (const n of order) {
+      const wanted = () => !disposed && mine === gen && stack.near(n)
+      void faces.ready(wave.get(n) ?? [], wanted).then(() => {
+        if (wanted()) askLay(n)
+      })
+    }
+    wave.clear()
   }
   function failed(n: number) {
     const P = rec(n)
@@ -555,6 +588,7 @@ export function createComposer(o: ComposerOptions): Composer {
     aheadNothing.clear()
     queue.clear()
     wave.clear()
+    earlyLeft.clear()
     if (holding) clock.clear(holding.timer)
     holding = null
     pages.clear()
@@ -586,8 +620,8 @@ export function createComposer(o: ComposerOptions): Composer {
     })
   }
   /** page n's marks: over each paragraph the parts read so far locate on it, while the page is not laid and can still be (the
-   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one whose rows
-   *  ended with no row of it (it stays the original's) */
+   *  layer open, the page not settled as the original's): none for a unit whose class the toggles hide, nor for one the paper
+   *  keeps as it is (never translated), nor for one whose rows ended with no row of it (it stays the original's) */
   function markPage(n: number) {
     const slot = stack.page(n)
     if (disposed || !layer || !rows || !composed || !shown || !slot || settledOriginal(n)) return marks.unmark(n)
@@ -595,6 +629,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const boxes: MarkBox[] = []
     for (const m of members.values()) {
       if (m.why === 'unlocated' || m.why === 'page' || !kindShown(m.kind, classes)) continue
+      if (typeof m.text === 'string' && rowsView.kept?.(m.text)) continue
       if (rows.done && (typeof m.text !== 'string' || !rowsView.get(m.text)?.ok)) continue
       let x0 = Number.POSITIVE_INFINITY,
         y0 = Number.POSITIVE_INFINITY,
@@ -925,6 +960,7 @@ export function createComposer(o: ComposerOptions): Composer {
       if (holding) clock.clear(holding.timer)
       for (const P of recs.values()) clock.clear(P.clock)
       marks.dispose()
+      o.root?.removeAttribute(ATTRIBUTE)
       o.settle?.(null)
       commits.clear()
       pages.clear()

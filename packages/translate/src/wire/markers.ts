@@ -3,9 +3,12 @@
 // and nowhere else. Restated from the measured facts the PDF engine's wire (mt.mjs) carries, now that the source reader
 // types each piece:
 // - each marker is a hard sentence boundary to the endpoint, so a span that is not `must` goes on no wire: its words join
-//   the sentence and its style may be lost (the decision: such a span may come back unstyled); a span holding the whole
-//   unit goes on no wire either and comes back around the translation; a `must` span is kept as two markers, or as one
-//   when it holds no text;
+//   the sentence and its style may be lost (the decision: such a span may come back unstyled), and its head (accept.ts
+//   headLength: the elements before its first word, a declaration's place, `{\em all}`) is one marker that comes back in a
+//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging, 2026-11-08: all
+//   after "all"'s translation slanted, all after BERT bold); a style that cannot be mapped is dropped, never spread. A
+//   span holding the whole unit goes on no wire either and comes back around the translation; a `must` span is kept as
+//   two markers, or as one when it holds no text;
 // - side-by-side elements, white space alone between them, go as one marker read back as all of them in order (28,203 of
 //   the 53 sweep papers' 97,053 markers touched the one before); a display, and an element its host states `alone`, ends
 //   such a stretch (`display` below is that property and nothing else);
@@ -16,7 +19,7 @@
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
-import { asOut, textOf } from '../accept.ts'
+import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, SAYS } from './text.ts'
 
@@ -86,6 +89,39 @@ function around(content: readonly Piece[]): { ids: string[]; inner: readonly Pie
   }
 }
 
+type El = Extract<Piece, { t: 'el' }>
+/** the last element of pieces, through the groups that hold it: what a marker of them ends with (its display, its own stop),
+ *  a display inside a group inside a span's head too (`{\small $$ x = y. $$} Then…`) */
+function lastEl(content: readonly Piece[]): El | undefined {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const p = content[i] as Piece
+    if (p.t === 'el') return p
+    if (p.t === 'span') {
+      const inner = lastEl(p.content)
+      if (inner) return inner
+    }
+  }
+  return undefined
+}
+
+/** a display, or an element its host states alone: it ends a stretch of elements, and so a marker */
+const ends = (q: El | undefined): boolean => !!q && (q.kind === DISPLAY || q.alone === true)
+const holdsEnd = (content: readonly Piece[]): boolean =>
+  content.some((q) => (q.t === 'el' ? ends(q) : q.t === 'span' && holdsEnd(q.content)))
+/** how much of a head (its first `k` pieces) one marker takes: up to its last element before its first display (that
+ *  display included, where a piece ends with it), so that no marker holds a display before another element */
+function cutOf(content: readonly Piece[], k: number): number {
+  let cut = 0
+  for (let i = 0; i < k; i++) {
+    const q = content[i] as Piece
+    const last = q.t === 'el' ? q : q.t === 'span' ? lastEl(q.content) : undefined
+    if (q.t === 'span' && holdsEnd(q.content) && !ends(last)) break
+    if (q.t === 'el' || (q.t === 'span' && holdsEl(q.content))) cut = i + 1
+    if (ends(last)) break
+  }
+  return cut
+}
+
 function itemsOf(content: readonly Piece[], at0: number): Item[] {
   const items: Item[] = []
   const walk = (ps: readonly Piece[], at: number, depth: number): number => {
@@ -103,22 +139,43 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           stop: p.stop,
         })
         at += 1
-      } else if (!p.must) at = walk(p.content, at, depth)
-      else if (SOLID.test(textOf(p.content))) {
+      } else if (!p.must) {
+        // a span on no wire: its head (the elements before its first word, where TeX sets a declaration that holds
+        // for the rest of the group) one marker in a copy of it, its words the sentence's, back unstyled. The marker ends
+        // at the head's first display (or element alone), whose own stop and boundary are a marker's last element's: the
+        // head is cut after the piece that ends with one, or before a group holding one before its end (its own rule reads
+        // that group); what follows goes as elsewhere, each display its own marker as on the base's wire
+        const k = cutOf(p.content, headLength(p.content))
+        if (k) {
+          const head = p.content.slice(0, k)
+          const len = projLength(head)
+          const last = lastEl(head)
+          items.push({
+            t: 'void',
+            out: [{ t: 'span', id: p.id, content: asOut(head) }],
+            at,
+            len,
+            display: ends(last),
+            stop: last?.stop,
+          })
+          at += len
+        }
+        at = walk(p.content.slice(k), at, depth)
+      } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, at, letters: LETTER.test(textOf(p.content)), depth })
         at = walk(p.content, at, depth + 1)
         items.push({ t: 'close', id: p.id, at })
       } else {
         // a `must` span with no text: one marker for it and what it holds
         const len = projLength(p.content)
-        const last = [...p.content].reverse().find((q) => q.t === 'el')
+        const last = lastEl(p.content)
         items.push({
           t: 'void',
           out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
           at,
           len,
-          display: last?.t === 'el' && (last.kind === DISPLAY || last.alone === true),
-          stop: last?.t === 'el' ? last.stop : undefined,
+          display: ends(last),
+          stop: last?.stop,
         })
         at += len
       }
