@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
-import { laysOf, passesOf } from './pass.ts'
+import { laysOf, passesOf, trackedCells } from './pass.ts'
 import { firstDifference, LAB, ledger } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
@@ -190,6 +190,8 @@ export const readerDump = (pair: string): Dump =>
 export type DisplayResult = {
   units: number
   equal: number
+  /** the cells today's fill letter-spaced, laid untracked by the ruling of 2026-11-08: their size and lines' text today's */
+  ruled: number
   lines: number
   elements: number
   differ: { ord: number; d: string }[]
@@ -204,9 +206,12 @@ export function displayReplay(pair: string): DisplayResult {
   passesOf(pair, lays)
   const off = pieceCrops(pair, lays)
   const v = viewsOf(paperOf(pair))
+  // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its lines' text today's, their extents not)
+  const ruled = trackedCells(pair)
   const out: DisplayResult = {
     units: 0,
     equal: 0,
+    ruled: 0,
     lines: 0,
     elements: 0,
     differ: [],
@@ -222,6 +227,16 @@ export function displayReplay(pair: string): DisplayResult {
     }
     const mine = dumpUnit(p, (pg) => v.get(pg))
     const want = { size: u.size, leading: u.leading, lines: u.lines, ...(u.elements ? { elements: u.elements } : {}) }
+    if (ruled.has(u.ord)) {
+      const d = firstDifference(
+        { size: mine.size, texts: mine.lines.map((l) => l.text) },
+        { size: u.size, texts: u.lines.map((l) => l.text) },
+        '',
+      )
+      if (d) out.differ.push({ ord: u.ord, d })
+      else out.ruled++
+      continue
+    }
     const d = firstDifference(mine, want, '')
     if (d) out.differ.push({ ord: u.ord, d })
     else {

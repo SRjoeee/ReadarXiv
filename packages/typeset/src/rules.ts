@@ -799,13 +799,14 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:2365-2394 fillPass',
     ],
     how: 'ported',
-    ruling: '2026-10-09 one page size',
+    ruling: '2026-10-09 one page size; 2026-11-08 no letter spacing on a table cell',
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
     file: 'shared/fill-page.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a table cell takes no tracking from the page's fill (TeX stretches no tabular entry; the owner's ruling of 2026-11-08), where today's tracked a CJK cell short of its fill: such a cell is laid untracked, its decision otherwise today's (pass.ts trackedCells)",
       replay:
-        "every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2)",
+        "every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2), a cell today tracked untracked",
       cases: 3013,
     },
   },

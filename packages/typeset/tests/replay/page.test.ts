@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { readerDump } from './display.ts'
 import { gatePair } from './gate.ts'
+import { trackedCells } from './pass.ts'
 import { firstDifference, hasDerived, hasTap } from './tap.ts'
 import { hasCache } from './today.ts'
 
@@ -17,16 +18,24 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
         const got = gatePair(pair)
         const want = readerDump(pair).units
         const mine = new Map(got.units.map((u) => [u.ord, u]))
+        // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its size and its lines' text today's)
+        const ruled = trackedCells(pair)
         const differ = want
           .map((u) => {
             const m = mine.get(u.ord)
-            const d = m
-              ? firstDifference(
-                  { size: m.size, leading: m.leading, lines: m.lines, elements: m.elements ?? [] },
-                  { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
-                  `ord ${u.ord}`,
-                )
-              : `ord ${u.ord}: not laid`
+            const d = !m
+              ? `ord ${u.ord}: not laid`
+              : ruled.has(u.ord)
+                ? firstDifference(
+                    { size: m.size, texts: m.lines.map((l) => l.text) },
+                    { size: u.size, texts: u.lines.map((l) => l.text) },
+                    `ord ${u.ord}`,
+                  )
+                : firstDifference(
+                    { size: m.size, leading: m.leading, lines: m.lines, elements: m.elements ?? [] },
+                    { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
+                    `ord ${u.ord}`,
+                  )
             return d
           })
           .filter((d) => d !== null)
