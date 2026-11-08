@@ -11,7 +11,7 @@
 
 const SPACE = /\s/u
 /** a character of the CJK scripts (a boundary between one and a Latin letter is a word boundary, not a letter gap) */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 const OBJ = '￼'
 const r2 = (v) => Math.round(v * 100) / 100
 
