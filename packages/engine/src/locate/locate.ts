@@ -1538,8 +1538,10 @@ const ON_ROW = 0.4
 const SHARED_SEP = 3
 /**
  * Each A page's text frame as TeX shipped it (Instrument.tex.frames, B's pages), by A page: a B page's frame on the A page its
- * glyphs' partners stand on most, moved by their median shift along x (none where A and B share their geometry: arXiv's
- * compile of the same source), the B page with the most partners there where two land on one
+ * glyphs' partners stand on most, moved by the shift along x most of them share (the page set elsewhere as a whole; none where
+ * A and B share their geometry, arXiv's compile of the same source, nor on a page TeX set its lines apart on A and B: a list
+ * of figures whose entries' numbers differ in width moved most of its words by 3 pt and its numbers by none, 2610.19274v1
+ * p67, a median of them 1.9 pt), the B page with the most partners there where two land on one
  */
 function framesOnA(
   frames: readonly (TexFrame | null)[] | undefined,
@@ -1570,8 +1572,10 @@ function framesOnA(
         on = d
       }
     if (!best || on.length <= (most.get(best) ?? 0)) return
-    on.sort((x, y) => x - y)
-    const shift = r2(on[on.length >> 1] as number)
+    const by100 = new Map<number, number>()
+    for (const d of on) by100.set(r2(d), (by100.get(r2(d)) ?? 0) + 1)
+    let shift = 0
+    for (const [d, n] of by100) if (2 * n > on.length) shift = d
     const by = (x: [number, number]): [number, number] => [r2(x[0] + shift), r2(x[1] + shift)]
     most.set(best, on.length)
     out.set(best, { block: by(f.block), columns: f.columns.map(by) })

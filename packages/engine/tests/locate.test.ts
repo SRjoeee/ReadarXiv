@@ -350,6 +350,22 @@ describe('locate: a line’s measure is TeX’s text frame (Instrument.tex.frame
     const L8 = locate(ins, A8, align(B, A8))
     expect(L8.members[0]!.lines[0]!.slice(7, 9)).toEqual([80, 548])
     expect(L8.members[0]!.align).toBe('c')
+    // (lines TeX set apart on A, each its own way, no shift most of the page's partners share (2610.19274v1 p67, a list of
+    // figures: a median of 1.9 pt moved the frame that far): the frame where TeX put it)
+    const three = [
+      { text: 'Abstract', x: 282, y: 690 },
+      { text: 'a'.repeat(30), x: 72, y: 650 },
+      { text: 'b'.repeat(30), x: 72, y: 638 },
+      { text: 'c'.repeat(30), x: 72, y: 626 },
+    ]
+    const B3 = docOf([{ lines: three }])
+    const units3 = [
+      unitOf('heading', 'Abstract'),
+      unitOf('para', `${'a'.repeat(30)} ${'b'.repeat(30)} ${'c'.repeat(30)}`),
+    ]
+    const ins3 = withFrames(instrumentOf(B3, units3, [[0, 1, 1, 1]]), [{ block: [72, 540], columns: [[72, 540]] }])
+    const A3 = docOf([{ lines: [three[0]!, three[1]!, { ...three[2]!, x: 75 }, { ...three[3]!, x: 77 }, stamp] }])
+    expect(locate(ins3, A3, align(B3, A3)).members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
   })
   it('measures a two-column page’s line by its column, never past it into the gutter', () => {
     // (2610.22065v1 p1: the ACM reference format's line ends at its column's edge; its measure ran to the right column's end)
