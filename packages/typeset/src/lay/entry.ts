@@ -549,32 +549,32 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const to = boundTo.get(m.ord)
     if (to !== undefined) leadOf.set(to, m)
   }
-  // (the members laid on the page with their layouts: the owners whose links are drawn with them)
+  // (the members laid on the page with their layouts, and those drawn whole on lines of their own: the owners whose links are
+  // drawn with them)
   const owners = new Map<number, LinkOwner>()
   // (every laid line inked: a CJK run of no fill of its own in CJK_INK, the owner's exception of 2026-11-08; display.ts inkLines)
   const cjkClass = cjkClassRe(!!(R as { cjkQuotes?: boolean }).cjkQuotes)
   const inked = (lines: Laid['lines']): Laid['lines'] => inkLines(lines, cjkClass)
   const out: Laid[] = members.map((m) => {
-    // (a figure text drawn: its translation on its line, its text group off)
+    // (a figure text drawn: its translation on its line, its text group off; its links over its line, a turned one's over the
+    // page's box of it)
     const fl = fig.laid.get(m.ord)
-    if (fl)
-      return {
-        ord: m.ord,
-        page,
-        state: 'laid',
-        off: groupsOn(m, page) & 1,
-        lines: inked(fl),
-        lit: litOfFigure(m, page, fl),
-      }
+    if (fl) {
+      const off = groupsOn(m, page) & 1
+      owners.set(m.ord, { m, off, drawn: fl.map((l) => (m.dir ? pageBoxOf(nameBox(l), m.dir) : nameBox(l))) })
+      return { ord: m.ord, page, state: 'laid', off, lines: inked(fl), lit: litOfFigure(m, page, fl) }
+    }
     // (a name drawn on its own: its word on its line, its text group off)
     const nl = names.get(m.ord)
     if (nl) {
       const here = m.lines[0]![0] === page
+      const off = groupsOn(m, page) & 1
+      owners.set(m.ord, { m, off, drawn: here ? nl.map(nameBox) : [] })
       return {
         ord: m.ord,
         page,
         state: 'laid',
-        off: groupsOn(m, page) & 1,
+        off,
         lines: here ? inked(nl) : [],
         lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
       }
@@ -584,6 +584,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const to = boundTo.get(m.ord)
     if (to !== undefined) {
       const with_ = (byOrd.get(to)?.state ?? state.get(to)) === 'laid'
+      // (its word drawn among its member's lines, no box of its own: its links where its text is off dropped)
+      if (with_) owners.set(m.ord, { m, off: groupsOn(m, page) & 1, drawn: [] })
       return {
         ord: m.ord,
         page,
