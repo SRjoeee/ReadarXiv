@@ -363,8 +363,8 @@ function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space'
  * A run of glyphs (in stream order) with each spacing accent TeX set over its letter joined to that letter: one glyph, the
  * letter's, its text the accented letter. In Unicode an accent set over a letter is one character with it (NFC); TeX's
  * \accent (OT1's, every Computer Modern text font's) sets the accent, moves back over it and sets the letter (or the letter,
- * then the accent over it), so the glyphs read the two apart: "Kl¨otergens" for Klötergens (2602.23285v2 p2's citation; 45
- * element texts of 14 papers of the corpus). The rule is today's, one for every reading of text off a page's glyphs
+ * then the accent over it), so the glyphs read the two apart: "Kl¨otergens" for Klötergens (2602.23285v2 p2's citation; 44
+ * element texts of 11 papers of the corpus). The rule is today's, one for every reading of text off a page's glyphs
  * (today/accents.mjs accentOver: one font, the accent's advance centred on the letter's, its baseline the letter's or raised
  * over it by at most its height; the reader's joinAccents on the page's text items, the prepare's on its ink units' and
  * figures' words), each glyph joined once, the accent's letter the glyph after it, else the one before

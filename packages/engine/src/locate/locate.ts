@@ -828,7 +828,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // today's reader reads it (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage
     // 1b states it). A figure text set turned has its glyphs in `turned` alone: their font, size and fill are its style, as
     // today's figure texts take their turned glyphs' font (layout/figure-text.mjs); read off its level glyphs alone, a bold
-    // axis title was the default serif (35 lines on 11 pages of the corpus)
+    // axis title was the default serif (35 lines on 11 pages of the parity's pairs)
     // (its size today's reader's: the median of its text glyphs' sizes along the line, math fonts aside, facts.ts unitSize;
     // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
     const own: StyleGlyph[] = [
@@ -837,7 +837,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     ]
     const txt = own.filter((g) => /\S/.test(g.u))
     // (its source's text: a babel name's none, its key (`ref`) being no text of it (\refname's is the class's: IEEEtran's
-    // "REFERENCES" in faked small capitals, read against `ref` as capitals at the small capitals' size, 41 names of the corpus))
+    // "REFERENCES" in faked small capitals, read against `ref` as capitals at the small capitals' size: 32 names of 14 papers of
+    // the corpus))
     const source = unit && unit.name === undefined ? sourceText(unit.content) : null
     // (its faked small capitals aside, as today's originalStyle reads its size: smallCapsOf's, facts.ts fakedCaps; their share
     // Style.sc, and whether its text is set in them, today's vote, Style.caps)
