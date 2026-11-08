@@ -1662,6 +1662,45 @@ describe('an element’s ink is what TeX set for it', () => {
     ])
   })
 
+  it('reads one line of TeX’s where a tall fraction’s denominator runs back under the line: its two cuts on one baseline (math.md R1)', () => {
+    // (2610.21026v1 p5 m61: a display-style fraction in a paragraph line, its denominator wholly under the line's band, back
+    // left of the numerator's end; the cut began a line there, the rest of the line's words on it, so the unit had two lines
+    // on one baseline, overlapping, and the fraction two boxes, set side by side. TeX never sets two lines of a paragraph on
+    // one baseline across each other: one line (today's maker: two rows on one baseline that meet are one line of TeX's))
+    const B = docOf([
+      {
+        lines: [
+          { text: 'we write as ', x: 72, y: 700 },
+          { text: '2L', x: 150, y: 707 },
+          { text: 'X+Y', x: 149, y: 690 },
+          { text: ' with more', x: 170, y: 700 },
+          { text: 'next line', x: 72, y: 676 },
+        ],
+      },
+    ])
+    const content = [text('we write as '), el('1', '$\\dfrac{2L}{X+Y}$'), text(' with more next line')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const mem = L.members.find((x) => x.unit === 0)!
+    expect(mem.lines.map((l) => [l[2], l[3], l[4]])).toEqual([
+      [72, 230, 700],
+      [72, 126, 676],
+    ])
+    expect(elementOf(L).ink).toEqual([[1, 149, 688, 167, 714, 700]])
+  })
+
   it('states no text of an element whose glyphs on a line stand on two baselines: a script is no plain text (math.md R4)', () => {
     // (2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹": its text "km s−1 Mpc−1" dropped the scripts' raise and size, drawn as body
     // text; without a text the typesetter crops its ink, as today's reader does a raised script's (layer2.mjs scriptedOf). Its

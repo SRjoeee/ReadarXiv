@@ -1,7 +1,8 @@
 // A unit's lines, cut in its own glyph run in stream order by one rule (design §4.1, "geometry is A's"; spike S1 §2): the next
 // glyph starts a line where it leaves the line's baseline band (half a size about the baseline its body glyphs so far share)
 // and jumps back left of the glyph before it, or far on to its right (two sizes), or more than one and a half sizes up or down
-// (a column's top: no script is that far); and wherever the page changes. A glyph off the band that goes on along it (a
+// (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
+// across each other, are one (a tall fraction's denominator under its line's band). A glyph off the band that goes on along it (a
 // script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
 // baseline is the one most of its body glyphs' characters share (to 0.01 pt; today's maker's rowOf); its extent their
 // advances'; its top and bottom their own ink's; its size today's (lineSize).
@@ -147,7 +148,7 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     }
     prev = g
   }
-  return out.map((l) => {
+  const finish = (l: { page: number; gs: number[]; size: number }): CutLine => {
     // (its baseline the one most of its body glyphs' characters share, to a hundredth: its glyphs within BODY of its size,
     // all where none is; today's rowOf and baselineOf, MAKE:283-291, 397-410)
     const glyphs = l.gs.map((i) => at(i).g)
@@ -175,5 +176,22 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     const base = [...votes].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]![0]
     const most = [...sizes].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]![0]
     return { page: l.page, gs: l.gs, x0, x1, base, top, bottom, size: l.size, most }
-  })
+  }
+  // (two lines cut one after the other on one page, on one baseline, across each other, are one line of TeX's: TeX never sets two
+  // lines of a box on one baseline over each other. A tall fraction's denominator, wholly under its line's band and back left of
+  // its numerator's end, began a line of its own that the rest of its line's words then stood on (2610.21026v1 p5: lines 3
+  // and 4 both on 277.19, 107.25-287.67 and 257.53-504); today's maker read two rows on one baseline that meet as one line)
+  const lines: CutLine[] = []
+  for (const l of out) {
+    const cur = finish(l)
+    const prev = lines.at(-1)
+    if (prev && prev.page === cur.page && prev.base === cur.base && prev.x0 < cur.x1 && cur.x0 < prev.x1)
+      lines[lines.length - 1] = finish({
+        page: cur.page,
+        gs: [...prev.gs, ...cur.gs],
+        size: Math.max(prev.size, cur.size),
+      })
+    else lines.push(cur)
+  }
+  return lines
 }
