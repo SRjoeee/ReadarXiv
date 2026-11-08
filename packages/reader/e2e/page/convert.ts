@@ -144,19 +144,18 @@ export function pagesOf(parts: Map<number, Part>, dump: ReaderDump, faceOf: (m: 
         }
       )
     })
-    // the page's links: moved with the crop of the element that holds one, else where A has them
+    // the page's links: moved with the crop of the element that holds one, else where A has them; each with its own
+    // annotation's border (Link.border), as the typesetter carries it
     const at = new Map(laid.map((l) => [l.ord, l]))
-    const links: Page['links'] = (part.links ?? []).map((k) => {
+    const links: Page['links'] = (part.links ?? []).map((k): Page['links'][number] => {
       const owner = k.owner ? at.get(k.owner[0]) : undefined
       const c = owner?.lines
         .flatMap(([y, , , items]) => items.flatMap((i) => ('src' in i && i.piece === k.owner?.[1] ? [{ i, y }] : [])))
         .at(0)
-      if (c) {
-        const dx = c.i.x - c.i.src[1],
-          dy = c.y - c.i.src[5]
-        return [[r2(k.box[0] + dx), r2(k.box[1] + dy), r2(k.box[2] + dx), r2(k.box[3] + dy)], k.to]
-      }
-      return [k.box, k.to]
+      const dx = c ? c.i.x - c.i.src[1] : 0,
+        dy = c ? c.y - c.i.src[5] : 0
+      const box: Box = c ? [r2(k.box[0] + dx), r2(k.box[1] + dy), r2(k.box[2] + dx), r2(k.box[3] + dy)] : k.box
+      return k.border ? [box, k.to, undefined, k.border] : [box, k.to]
     })
     out.set(page, { page, wait: { rows: [], faces: [] }, members: laid, links })
   }

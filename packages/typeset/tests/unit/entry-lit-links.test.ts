@@ -279,6 +279,45 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(p1.links[0]![0][0]).toBeCloseTo(runsOn(p1).find((it) => it.s === '(Smith ')!.x + 0.5 * f, 6)
     expect(p2.links[0]![0][0]).toBeCloseTo(runsOn(p2).find((it) => it.s === 'Smith ')!.x, 6)
   })
+  it("carries each link's own annotation's border, moved or at A's box, and none where it has none (Link.border)", () => {
+    // (hyperref's green box round a citation: moved with its crop, over the characters it is drawn as, another size than its box
+    // on A (a one-baseline citation set as text), at A's box where its owner is not laid; an \\href's cyan underline over its
+    // group's translation; one with no border on A carries none, and the reader draws none)
+    const green: Link['border'] = [1, 0x00ff00]
+    const link: Link = { ...at([150, 697, 170, 708], [0, '5']), border: green }
+    const crop = only(layPage(part(cite(), [link]), rowsOf([r]), rules, metrics()))
+    expect(crop[0][0]).not.toBeCloseTo(150, 1)
+    expect(crop[3]).toEqual(green)
+    const asText = only(
+      layPage(part(cite({ text: '[3]', style: { role: 'serif', size: 10 } }), [link]), rowsOf([r]), rules, metrics()),
+    )
+    expect(asText[0][2] - asText[0][0]).not.toBeCloseTo(20, 1)
+    expect(asText[3]).toEqual(green)
+    expect(layPage(part(cite(), [link]), rowsOf([], true), rules, metrics()).links).toEqual([
+      [link.box, link.to, 0, green],
+    ])
+    const free: Link = { ...at([400, 600, 420, 610]), border: [1.5, 0xff0000, 'dashed'] }
+    expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([
+      [free.box, free.to, undefined, free.border],
+    ])
+    const m = member({ spans: [['1', { cmd: 'href' }]] })
+    const href: Link = {
+      box: [100, 697, 160, 708],
+      to: { url: 'https://example.org/' },
+      owner: [0, ''],
+      border: [1, 0x00ffff, 'underline'],
+    }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'die Seite' }] },
+      { t: 'text', s: ' dort.' },
+    ])
+    expect(only(layPage(part(m, [href]), rowsOf([rr]), rules, metrics()))[3]).toEqual(href.border)
+    // (none on A, none drawn)
+    expect(
+      only(layPage(part(cite(), [at([150, 697, 170, 708], [0, '5'])]), rowsOf([r]), rules, metrics())),
+    ).toHaveLength(3)
+  })
   it('keeps a link at A’s box where the elements’ group the add-on could not part keeps its ink there, drawn or not (#626 review)', () => {
     // (Placed.fixed 2: the member's elements stay shown however they are drawn; the original citation keeps its anchor, by the
     // crop path and by the text path)

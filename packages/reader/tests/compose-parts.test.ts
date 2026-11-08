@@ -127,7 +127,7 @@ describe("a link's name, order and border (S-R-25)", () => {
     expect(CATALOGUE_WORDS.linkName({ url: 'mailto:a%40b.org' })).toBe('Email a@b.org')
     expect(CATALOGUE_WORDS.linkName({ url: 'ftp://x' })).toBe('Link')
   })
-  it('leaves out a box of no area and an address off the list; orders by the text; draws the PDF border', () => {
+  it('leaves out a box of no area and an address off the list; orders by the text; draws the border its link states', () => {
     expect(LINK_SCHEMES).toEqual(['http:', 'https:', 'mailto:'])
     expect(urlAllowed('javascript:alert(1)')).toBe(false)
     expect(urlAllowed('data:text/html,x')).toBe(false)
@@ -140,38 +140,36 @@ describe("a link's name, order and border (S-R-25)", () => {
       page: 1,
       wait: { rows: [], faces: [] },
       members: [],
+      // (each link's border its own annotation's on A, as the typesetter carries it (Page.links' fourth field), whatever box it
+      // is drawn over now: the reader matches nothing against the original's annotations; the mail link's dashed one past the
+      // widest drawn; the reference's none, none on A)
       links: [
-        [[0, 45, 30, 60], { dest: 'sec' }],
-        [[38, 95, 75, 110], { url: 'https://example.org/' }],
+        [[0, 45, 30, 60], { dest: 'sec' }, 3],
+        [[38, 95, 75, 110], { url: 'https://example.org/' }, undefined, [1, 0xff0000]],
         [[0, 0, 0, 10], { url: 'https://zero.example/' }],
         [[10, 10, 20, 20], { url: 'javascript:x' }],
-        [[300, 300, 320, 320], { url: 'mailto:a@b.org' }],
+        [[300, 300, 320, 320], { url: 'mailto:a@b.org' }, 4, [40, 0x00ffff, 'dashed']],
       ],
     }
     const c = contentOf([item('see the', 0, 100, 35), item('figure', 40, 100, 30), item('other', 0, 50, 25)])
-    const borders = [
-      {
-        to: 'https://example.org/',
-        w: 37,
-        h: 15,
-        box: [38, 95, 75, 110] as [number, number, number, number],
-        border: { width: 1, rgb: [255, 0, 0] as [number, number, number], style: 'solid' as const },
-      },
-    ]
     const opened: string[] = []
     const layer = linkLayer(
       page,
       vp,
       { open: (u) => opened.push(u), follow: () => {}, unnamed: (to) => CATALOGUE_WORDS.linkName(to) },
       c,
-      borders,
     ) as HTMLElement
     const as = [...layer.querySelectorAll<HTMLAnchorElement>('a.axt-link')]
     // (in the text's order: "figure" before "other"; the mail link, over no text, after them)
     expect(as.map((a) => a.getAttribute('aria-label'))).toEqual(['figure', 'other', 'Email a@b.org'])
     expect(as[0]?.dataset.axtBorder).toBe('solid')
+    expect(as[0]?.style.getPropertyValue('--axt-link-border')).toBe('1px')
     expect(as[0]?.style.getPropertyValue('--axt-link-colour')).toBe('rgb(255 0 0)')
     expect(as[1]?.dataset.axtBorder).toBeUndefined()
+    expect(as[1]?.style.getPropertyValue('--axt-link-border')).toBe('')
+    expect(as[2]?.dataset.axtBorder).toBe('dashed')
+    expect(as[2]?.style.getPropertyValue('--axt-link-border')).toBe('20px')
+    expect(as[2]?.style.getPropertyValue('--axt-link-colour')).toBe('rgb(0 255 255)')
     as[0]?.click()
     expect(opened).toEqual(['https://example.org/'])
   })

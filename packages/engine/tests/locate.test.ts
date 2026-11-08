@@ -866,6 +866,63 @@ describe('bundle', () => {
     expect(linksOf(2)).toEqual([own])
     expect(linksOf(3)).toEqual([])
   })
+  it("states each link's border as PDF.js draws it on A (Link.border: /BS or /Border's width, /C's colour, its style)", () => {
+    // (hyperref's boxes: a citation's green, a reference's red dashed, an address's cyan underlined; a link of width 0 (hidelinks,
+    // colorlinks) and one of no colour (/C []) draw none, as PDF.js's annotation layer draws none for them)
+    const rgb = (r: number, g: number, b: number) => new Uint8ClampedArray([r, g, b])
+    const at = (x: number) => [60 + 30 * x, 694, 80 + 30 * x, 706]
+    const list = [
+      {
+        annotationType: 2,
+        rect: at(0),
+        dest: 'cite.a',
+        borderStyle: { width: 1, style: 1 },
+        borderColor: rgb(0, 255, 0),
+      },
+      {
+        annotationType: 2,
+        rect: at(1),
+        dest: 'sec.1',
+        borderStyle: { width: 1.5, style: 2 },
+        borderColor: rgb(255, 0, 0),
+      },
+      {
+        annotationType: 2,
+        rect: at(2),
+        url: 'https://example.org/',
+        borderStyle: { width: 1, style: 5 },
+        borderColor: rgb(0, 255, 255),
+      },
+      {
+        annotationType: 2,
+        rect: at(3),
+        dest: 'cite.b',
+        borderStyle: { width: 0, style: 1 },
+        borderColor: rgb(0, 255, 0),
+      },
+      { annotationType: 2, rect: at(4), dest: 'cite.c', borderStyle: { width: 1, style: 1 }, borderColor: null },
+    ]
+    const L2 = locate(ins, B, align(B, B), { annotations: [[], list, []] })
+    const parts = [
+      ...bundle({
+        ins,
+        located: L2,
+        addOn: addOnOf(L2, 3),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 3 },
+        made: 'test',
+      }),
+    ].filter((o) => o.kind === 'part')
+    const o = parts.find((x) => x.page === 2)!
+    const links = read('part', o.bytes, o.digest).links ?? []
+    expect(links.map((l) => l.border ?? null)).toEqual([
+      [1, 0x00ff00],
+      [1.5, 0xff0000, 'dashed'],
+      [1, 0x00ffff, 'underline'],
+      null,
+      null,
+    ])
+  })
   it('states each link group’s target with its member in every part that holds it (SpanAt.to)', () => {
     // (unit 0 runs on from page 1 to page 2 with an \\href group: both pages' parts state the group's address, so that each pairs
     // the group's translation with its annotation, wherever either falls)

@@ -2,7 +2,7 @@
 // consumes Page only"). The typesetter (packages/typeset, lane L3) makes it; until its `layPage` is exported, the reader states
 // the shape here, word for word, and takes the call that makes one as a dependency (`Lay`), so that lane L3's `layPage`
 // replaces the fixtures' stand-in behind the same call. When typeset exports these types, this file imports them.
-import type { Part, Row } from '@readarxiv/format'
+import type { LinkBorder, Part, Row } from '@readarxiv/format'
 
 export type Box = [x0: number, y0: number, x1: number, y1: number]
 export type Ink = [page: number, x0: number, y0: number, x1: number, y1: number, base: number]
@@ -70,8 +70,9 @@ export interface Page {
   wait: { rows: string[]; faces: [FaceId, string][] }
   /** every member with ink on `page`, in ord order */
   members: Laid[]
-  /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one */
-  links: [box: Box, to: { url: string } | { dest: string }, owner?: number][]
+  /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one;
+   *  `border` its own annotation's on A (Link.border), none where it has none */
+  links: [box: Box, to: { url: string } | { dest: string }, owner?: number, border?: LinkBorder][]
 }
 
 /** the rows a lay reads: a row by unit id, and whether no other row will come; `kept`, a unit the paper keeps as it is, whose

@@ -19,6 +19,7 @@ export {
   Label,
   Line,
   Link,
+  LinkBorder,
   LinkTo,
   ORIGINAL_CHUNK,
   Original,

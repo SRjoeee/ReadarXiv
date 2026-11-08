@@ -171,8 +171,9 @@ export type Page = {
   wait: { rows: Id[]; faces: [FaceId, string][] }
   members: Laid[]
   /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one (Link's
-   *  owner), so that a reader leaving that member the original's puts its links back at A's boxes */
-  links: [box: Box, to: Link['to'], owner?: number][]
+   *  owner), so that a reader leaving that member the original's puts its links back at A's boxes; `border` its own
+   *  annotation's on A (Link.border, moved or not), none where it has none */
+  links: [box: Box, to: Link['to'], owner?: number, border?: Link['border']][]
   ledger?: PageLedger
 }
 
