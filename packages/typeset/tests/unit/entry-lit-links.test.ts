@@ -327,6 +327,51 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(x[0]).toBeCloseTo(x0 + 6 * 0.5 * f, 1)
     expect(y[0]).toBeCloseTo(x0 + 15 * 0.5 * f, 1)
   })
+  it('pairs a member’s \\href groups with its annotations in their order on A, whatever order the PDF lists them in (#626 review)', () => {
+    // (two groups of two addresses; the part keeps the PDF's annotation array's order, which need not be TeX's: listed right to
+    // left, the left group's translation opened the right one's address, Codex's case through layPage)
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href' }],
+        ['3', { cmd: 'href' }],
+      ],
+    })
+    const left = { url: 'https://example.org/left' }
+    const right = { url: 'https://example.org/right' }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    /** the start of each link, by its address */
+    const starts = (links: Link[]) => {
+      const p = layPage(part(m, links), rowsOf([rr]), rules, metrics())
+      const [, x0] = p.members[0]!.lines[0]!
+      const f = p.members[0]!.fit!.size
+      const by = new Map(p.links.map(([b, to]) => ['url' in to ? to.url : '', b[0]] as const))
+      // ("hier" six characters from the line's start, "dort" fifteen: half a size each)
+      return { left: by.get(left.url)! - x0, right: by.get(right.url)! - x0, f, n: p.links.length }
+    }
+    const a = starts([
+      { box: [160, 697, 190, 708], to: right, owner: [0, ''] },
+      { box: [100, 697, 130, 708], to: left, owner: [0, ''] },
+    ])
+    expect(a.n).toBe(2)
+    expect(a.left).toBeCloseTo(6 * 0.5 * a.f, 1)
+    expect(a.right).toBeCloseTo(15 * 0.5 * a.f, 1)
+    // (the left group's link TeX broke over A's two lines, its piece on the second line listed first and the right group's
+    // annotation before both: its two pieces one run of its target, in their order on A, the right group's its own)
+    const b = starts([
+      { box: [150, 685, 180, 696], to: right, owner: [0, ''] },
+      { box: [72, 685, 100, 696], to: left, owner: [0, ''] },
+      { box: [260, 697, 300, 708], to: left, owner: [0, ''] },
+    ])
+    expect(b.n).toBe(2)
+    expect(b.left).toBeCloseTo(6 * 0.5 * b.f, 1)
+    expect(b.right).toBeCloseTo(15 * 0.5 * b.f, 1)
+  })
   it('lays a link that holds the member’s every line over its whole drawing (a contents entry), drops one over part of it', () => {
     const entry = member({ kind: 'inkcontents', lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]] })
     const whole: Link = { box: [71, 696, 301, 709], to: { dest: '"section.1"' }, owner: [0, ''] }

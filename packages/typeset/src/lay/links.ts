@@ -15,7 +15,9 @@
 //   inside one of their boxes, its baseline between their edges);
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
 //   the translation's text over it, today's freezeLinks drops it alike).
-import type { Link, Part, Placed } from '@readarxiv/format'
+// A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
+// list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
+import type { Line, Link, Part, Placed } from '@readarxiv/format'
 import type { Face } from '../breaker/tokens.ts'
 import { lineRuns, runEdge, type TextRun } from '../emit/display.ts'
 import { type Annot, type Cand, placeUnit, type Target } from '../emit/links.ts'
@@ -88,8 +90,9 @@ export function linksOf(
       fate(i, l.owner ? 'unlaid' : 'free')
     } else byOwner.set(l.owner![0], [...(byOwner.get(l.owner![0]) ?? []), i])
   })
-  for (const [ord, ids] of byOwner) {
+  for (const [ord, owned] of byOwner) {
     const { m, layout: L, off, kept, elOf } = laid.get(ord)!
+    const ids = inReading(owned, list, m.lines, page)
     const lines = L.lines.filter((line) => line.page === page).map((line) => ({ line, runs: lineRuns(line, L) }))
     // (each element drawn on the page as a crop or as text, by its id: the first piece of its drawn there)
     const crops = new Map<string, number>(),
@@ -215,6 +218,37 @@ export function linksOf(
     }
   }
   return out
+}
+
+/**
+ * A member's annotations in their order on A, the order TeX set them in: a paragraph's characters are set in the source's order
+ * along its lines, its lines in the member's order (`lines`, Placed.lines). Each is at the member's line it lies on (of those
+ * on its page, one its box overlaps across where any does, the one whose baseline is nearest its box's middle), then at its
+ * box's start along that line; the PDF's annotation array, whose order the part's list keeps, need not be TeX's (#626's review:
+ * two \href groups listed right to left). An annotation of no line of the member (none on its page) keeps its place in the
+ * list after those that have one.
+ */
+function inReading(ids: readonly number[], list: readonly Link[], lines: readonly Line[], page: number): number[] {
+  const at = new Map<number, [number, number]>()
+  for (const i of ids) {
+    const b = list[i]!.box
+    const x0 = Math.min(b[0], b[2]),
+      x1 = Math.max(b[0], b[2]),
+      mid = (b[1] + b[3]) / 2
+    let line = -1,
+      best: [number, number] = [2, 0]
+    lines.forEach((l, j) => {
+      if (l[0] !== page) return
+      const d: [number, number] = [l[3] > x0 && l[2] < x1 ? 0 : 1, Math.abs(l[4] - mid)]
+      if (d[0] < best[0] || (d[0] === best[0] && d[1] < best[1])) {
+        best = d
+        line = j
+      }
+    })
+    at.set(i, line < 0 ? [lines.length, 0] : [line, x0])
+  }
+  const of = (i: number) => at.get(i)!
+  return [...ids].sort((a, b) => of(a)[0] - of(b)[0] || of(a)[1] - of(b)[1] || a - b)
 }
 
 /** annotations in their order, cut into runs of one target (a link TeX broke over lines is one annotation a line) */
