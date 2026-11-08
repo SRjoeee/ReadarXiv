@@ -20,6 +20,7 @@ import {
   fillRunsOf,
   tailOf,
   textOf,
+  urlCopyOf,
 } from '../src/locate/facts.ts'
 import { locate, urlBreaks } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
@@ -319,8 +320,8 @@ describe('locate states the facts on arXiv’s page', () => {
     ])
   })
   it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
-    // (the typesetter cuts the crop's copy text, the source's, with String.slice: a count of glyphs put every cut after "𠮷"
-    // (U+20BB7, two code units) or "ﬁ" (one glyph, two letters in the copy) a character early)
+    // (the typesetter cuts the crop's copy text with String.slice: a count of glyphs put every cut after "𠮷" (U+20BB7, two
+    // code units) or "ﬁ" (one glyph, two letters in a copy that holds its letters) a character early)
     const copy = 'https://𠮷.io/profile/x'
     const glyphs = run('https://𠮷.io/proﬁle/x')
     const asLetters = glyphs.map((x) => (x.u === 'ﬁ' ? { ...x, u: 'fi' } : x))
@@ -330,13 +331,80 @@ describe('locate states the facts on arXiv’s page', () => {
       [150, 14],
       [192, 22],
     ]
-    expect(urlBreaks(glyphs)).toEqual(want)
-    expect(urlBreaks(asLetters)).toEqual(want)
+    expect(urlBreaks(glyphs, copy)).toEqual(want)
+    expect(urlBreaks(asLetters, copy)).toEqual(want)
+    // (and the page's own text, which holds the ligature as PDF.js gives it: its one code unit)
+    expect(urlBreaks(glyphs, textOf(glyphs)).map(([, n]) => textOf(glyphs).slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/proﬁle/',
+    ])
     expect(want.map(([, n]) => copy.slice(0, n))).toEqual([
       'https://',
       'https://𠮷.',
       'https://𠮷.io/',
       'https://𠮷.io/profile/',
+    ])
+  })
+  it('counts a URL’s break offsets in the copy text it states, a space the glyphs stand apart by counted (Devin on #630)', () => {
+    // (2610.22197v1's DOI and the eprint after it, one crop: a gap on a line stays a space in the copy (urlCopyOf), a rule TeX
+    // drew for an underscore or a macro's own space. A count of the glyphs alone put every cut after the space a character
+    // early; an astral character's two code units and both separators after it, before and after the space)
+    const glyphs = [...run('https://𠮷.io/a'), ...run('b/c', 72 + 0.6 * 10 * 15 + 4)]
+    const copy = urlCopyOf(glyphs)
+    expect(copy).toBe('https://𠮷.io/a b/c')
+    const breaks = urlBreaks(glyphs, copy)
+    expect(breaks.map(([, n]) => copy.slice(0, n))).toEqual([
+      'https://',
+      'https://𠮷.',
+      'https://𠮷.io/',
+      'https://𠮷.io/a b/',
+    ])
+    // (a copy the glyphs are not, the source's reading of the URL: no break point stated, rather than one cutting elsewhere)
+    expect(urlBreaks(glyphs, 'https://𠮷.io/a₁b/c')).toEqual([])
+  })
+  it('states a URL TeX set over two lines as one word, no space at the line’s end (#633 review)', () => {
+    // (\url{https://a.io/lo/ng/path} broken after its "/": textOf reads the end of a line as PDF.js does, a space, which the
+    // copy of a URL cannot hold. A break after a url.sty break character leaves no hyphen of TeX's: the url package sets
+    // its characters as written)
+    const B = docOf([{ lines: ['See https://a.io/lo/', 'ng/path ok.'] }])
+    const content: Piece[] = [
+      text('See '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/lo/ng/path}' },
+      text(' ok.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 27 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('https://a.io/lo/ ng/path')
+    expect(el.copy).toBe('https://a.io/lo/ng/path')
+    expect(el.copy).not.toMatch(/\s/)
+  })
+  it('states a URL’s copy text as its glyphs on the page, not the source’s reading of it (#630’s 30 URLs: "_1" read as a subscript)', () => {
+    // (2609.26457v1's "…/3-540-44668-0_13": the instrument's copy, texToText2 over \url{…}, read "_1" as the subscript "₁"; the
+    // crop shows the page's glyphs and copies them, its breaks cut that text after its separators)
+    const B = docOf([{ lines: ['See https://a.io/x_13.'] }])
+    const content: Piece[] = [
+      text('See '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/x_13}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', copy: 'https://a.io/x₁3' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 21 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.copy).toBe('https://a.io/x_13')
+    expect(el.breaks!.map(([, n]) => el.copy!.slice(0, n))).toEqual([
+      'https://',
+      'https://a.',
+      'https://a.io/',
+      'https://a.io/x_',
     ])
   })
   it('keeps a line inside a unit that no unit owns (a held line) as KEPT, in its place', () => {
