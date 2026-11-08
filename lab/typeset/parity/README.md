@@ -155,8 +155,10 @@ sheet (not worse, not nearer).
    under the original's last), v2's differences in the measures the line budget decides, `size` (a size tie holding it too)
    and `line-count`, and their knock-ons on the same unit, `anchor`, `gap` (its start after its head) and `block`, are the
    ruling's (`ruling`), not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its
-   column or text block, `frame`) or crosses a rule of the page the original's lines do not (`cross`). Every other measure on
-   such a unit is judged as anywhere (the highlight's cover and sentences, the erasure, the elements, the style, the weight).
+   column or text block, `frame`) or crosses a rule of the page the original's lines do not (`cross`). So is the highlight's
+   sentence placement on it (a sentence lit as drawn on this page by one side and not the other: a reflow moves it; the
+   coordinator's call); the sentences' granularity stays judged. Every other measure on such a unit is judged as anywhere
+   (the highlight's cover, the erasure, the elements, the style, the weight).
 2. **Body growth** (corrected the same day): body text may grow as today grows it (up to about 1.1×); the effect, by a simpler
    method. A size above the original's is no fault: `size` judges it against the original's as before, v2 nearer today's
    grown size or the original's passing.

@@ -353,3 +353,27 @@ describe("the no-borrowing ruling over a unit today laid with a borrowed line (t
     expect(p.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['size', 'anchor']))
   })
 })
+
+describe("the no-borrowing ruling over hl-sentence's page placement on a unit today laid with a borrowed line", () => {
+  // (a paragraph of 3 sentences on 4 lines, today lighting it by sentence: on arXiv's page each sentence a line's box; as drawn,
+  // today's sentence 3 on the next page (its borrowed line moved it), v2's on this one)
+  const lines = [700, 688, 676, 664].map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
+  const box = (y: number) => [71, y - 3, 301, y + 9]
+  const leftBy = [[box(700)], [box(688)], [box(676), box(664)]]
+  const page = () =>
+    rec({
+      today: { units: [{ id: 26, lines }], lit: [26], litBoxes: { 26: { right: lines.map((l) => box(l.y)), left: lines.map((l) => box(l.y)), by: true, leftBy, rightBy: [[box(700)], [box(688), box(676), box(664)], []] } } },
+      v2: { units: [{ id: 26, lines }], lit: [26] },
+    })
+  const v2With = (right: number[][][], left = leftBy) => v2Of({ members: [laid(26, { left, right })], facts: [{ ord: 26, kind: 'para', align: 'j', style: { size: 10 }, lines: [700, 688, 676, 664].map((y) => factLine(72, 300, y)) }], today: { 26: { today: 26 } } })
+  const sentences = (p: { diffs: { what: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => /sentences paired one by one/.test(d.what))
+  const placed = [[box(700)], [box(688), box(676)], [box(664)]]
+  it("a sentence v2 draws on this page that today drew on the next is the ruling's", () => {
+    expect(sentences(measure(v2With(placed), page()))).toMatchObject([{ worse: true }])
+    expect(sentences(measure(v2With(placed), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: false, nearer: 'ruling' }])
+  })
+  it('the granularity stays judged: v2 lighting the unit whole is worse whatever today borrowed', () => {
+    const whole = [[box(700), box(688), box(676), box(664)]]
+    expect(sentences(measure(v2With(whole, [leftBy.flat()]), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: true }])
+  })
+})
