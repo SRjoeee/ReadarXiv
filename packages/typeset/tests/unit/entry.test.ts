@@ -421,6 +421,29 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.map(([y]) => y)).toEqual([700, 688])
   })
+  it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
+    // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
+    // between two that take 2 of 4. The 2026-10-17 gap rule held the gap under it to the next paragraph's leading too and pulled
+    // it under the leading its own block allows (1810.04805v2 p8 t156: 1.08 among 1.38-1.5, its own 1.14))
+    const zh = rulesFor('zh')
+    const lineAt = (y: number): Placed['lines'][number] => [1, 0, 72, 300, y, y + 7, y - 2, 72, 300, 0, 10]
+    const ids = ['b', 'c', 'd'].map((c) => c.repeat(64))
+    const ys = (y0: number, n: number) => Array.from({ length: n }, (_, i) => lineAt(y0 - 12 * i))
+    const a = member({ ord: 0, text: ids[0], lines: ys(700, 4), room: { below: 5, next: 12 } })
+    const m = member({ ord: 1, text: ids[1], lines: ys(652, 8), room: { below: 5, next: 12 } })
+    const b = member({ ord: 2, text: ids[2], lines: ys(556, 4), room: { below: 200, next: 212 } })
+    const rows = rowsOf(
+      [60, 300, 60].map((n, i) => ({ ...row([{ t: 'text', s: '\u6587'.repeat(n) }]), id: ids[i]! })),
+      true,
+    )
+    const laid = layPage({ ...part(a), flows: [[a, m, b]] }, rows, zh, metrics()).members
+    // (its own leading, 1.14: its 7 lines from its first baseline, the last a leading of its own over the next paragraph's
+    // first; its neighbours as before)
+    expect(laid.map((x) => x.fit?.lead)).toEqual([1.667, 1.14, 1.667])
+    expect(laid.map((x) => x.lines[0]![0])).toEqual([700, 652, 556])
+    expect(laid[1]!.lines.length).toBe(7)
+    expect(laid[1]!.lines.at(-1)![0] - 556).toBeGreaterThanOrEqual(1.14 * 12 - 0.05)
+  })
   it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
     // (the page fill's one size, today's effect (the owner, 2026-11-08: it should look about as today's does), found with the fewest lays:
     // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph

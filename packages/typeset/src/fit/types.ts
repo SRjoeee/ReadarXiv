@@ -26,7 +26,6 @@ export type FitState = {
   scale: number
   knob: string
   fitTrack?: number
-  next?: number
   box?: number
   /** by block, the leading of a frame before the unit's last (a page's, a column's), where the page fill set it looser than
    *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block */

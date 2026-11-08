@@ -85,6 +85,36 @@ export function ruledIn(pair: string): { borrowed: Set<number>; pages: Set<numbe
   return out
 }
 
+const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
+/**
+ * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:
+ * fill-page.ts, slots.mjs footFloorAt) changes of a pair's record: the units a pass of today's decided with the next
+ * paragraph's leading over its own (`floored`: the decision's `next` above its `lead`, which today's state carried), the pages
+ * of those passes (`pages`), and every unit with a line on one of them (`units`: the pass's size reads every body unit it
+ * fills, and one no longer set closer may be short of its fill). A replay of a page or of a fill that differs there is the
+ * ruling's
+ */
+export function flooredIn(pair: string): { floored: Set<number>; pages: Set<number>; units: Set<number> } {
+  const got = flooredOf.get(pair)
+  if (got) return got
+  const L = ledger(pair)
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const floored = new Set<number>(),
+    pages = new Set<number>()
+  for (const pass of L.passes as { page: number; units: { id: number; lead?: number; next?: number | null }[] }[])
+    for (const u of pass.units)
+      if (typeof u.next === 'number' && typeof u.lead === 'number' && u.next > u.lead + 1e-9) {
+        floored.add(u.id)
+        pages.add(pass.page)
+      }
+  const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
+  const out = { floored, pages, units }
+  flooredOf.set(pair, out)
+  return out
+}
+
 /** a capture of the tap, as its sample file holds it */
 export type Capture = { rule: string; round: number; value: unknown }
 export type Entry = {
