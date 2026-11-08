@@ -1044,6 +1044,49 @@ describe('locate: the room under a unit', () => {
     expect(plain.room.runs).toBeUndefined()
     expect(plain.room.sep).toBeUndefined()
   })
+  it('reads the room under a run of lines across their own extent, a single line’s to its column’s end', () => {
+    // (2602.23285v2 p5 t32: a paragraph set beside a figure, its lines' ink ending at 315.84 of a column to 504, the figure's
+    // strokes beside every line: a translation's lines are laid across its block's own lines (the typesetter's measure, their
+    // hull), one borrowed under it at its last line's, so the figure is no ink under them; read to the column's end it was,
+    // under each line, and cut the paragraph into a run a line. A run of one line is widened to its column (U.decor), and read
+    // so: its row's tail beside a float, 2608.16117v1 p19 t59)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'wrapped one', y: 700 },
+          { text: 'wrapped two', y: 688 },
+          { text: 'wrapped end', y: 676 },
+          { text: 'the next paragraph across the column', y: 560 },
+        ],
+        // (the figure's strokes beside the paragraph, each just under a line's bottom, at x 320-480)
+        boxes: [
+          [11, 1, 320, 640, 480, 696],
+          [22, 1, 320, 640, 480, 684],
+          [33, 1, 320, 640, 480, 672],
+        ],
+      },
+    ])
+    const units = [
+      unitOf('para', 'wrapped one wrapped two wrapped end'),
+      unitOf('para', 'the next paragraph across the column'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 0, 0, 1]])
+    const framed: Instrument = {
+      ...ins,
+      tex: {
+        frames: [{ block: [72, 540], columns: [[72, 540]], foot: 500 }],
+        skips: [{ unit: 0, baselineskip: 12, parskip: 0 }],
+      },
+    }
+    const para = locate(framed, B, align(B, B)).members[0]!
+    expect(para.lines.map((l) => [l[2], l[3], l[8]])).toEqual([
+      [72, 138, 540],
+      [72, 138, 540],
+      [72, 138, 540],
+    ])
+    // (one run, its last line 116 pt over the next paragraph's baseline, 176 over TeX's bottom)
+    expect(para.room.runs).toEqual([[2, 116, 176]])
+  })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
     // paragraph of TeX's the front end cut at the figure into two units, each fitted alone, the one at its size, the other shrunk;

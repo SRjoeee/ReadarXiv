@@ -2135,8 +2135,11 @@ function roomOf(
   // of its own only down to that row. A run: its lines on one page each standing above the one under it and across its column
   // (its lines' measures), with no other ink between the two (the first ink under the upper the lower's own: a float TeX set
   // between two lines of a paragraph ends a run, as today's blocks end at its gap), to a kept row. Its room is read across it as
-  // its lines are laid (today's block's extent): from its lines' own start (a member's first line on a row it shares starts
-  // there) to its column's end (a single line widened to it, RUN:1576). Stated where TeX states its page's text block bottom
+  // its lines are laid (today's block's extent, the typesetter's measure): its lines' own hull, from their start (a member's
+  // first line on a row it shares starts there) to their furthest end, a line borrowed under it laid at its last line's (a
+  // paragraph set beside a figure, 2602.23285v2 p5 t32: read to the column's end, the figure beside it was the ink under every
+  // line); a run of one line to its column's end (a single line widened to it, U.decor, RUN:1576). Stated where TeX states its
+  // page's text block bottom
   // (TeX's frame, Instrument.tex.frames' foot): the depth under the run's last baseline of the next ink's baseline (a glyph's;
   // a box's top), the page's bottom edge where none, and of that bottom)
   const runs: [number, number, number][] = []
@@ -2149,22 +2152,25 @@ function roomOf(
     let mx0 = Math.min(end[7], end[2])
     let mx1 = Math.max(end[8], end[3])
     let ox0 = end[2]
+    let ox1 = end[3]
     let from = e
     for (let q = e - 1; q >= 0; q--) {
       const l = mem.lines[q] as Line
       const lower = mem.lines[q + 1] as Line
       if (l[9] & 1 || l[0] !== end[0] || l[4] <= lower[4] || Math.max(l[8], l[3]) <= mx0 || Math.min(l[7], l[2]) >= mx1)
         break
-      // (another's ink between: the first under the upper higher than the lower's own top, its hundredth aside)
-      if (inkBelow(l[0], l[6] - 0.5, Math.min(ox0, l[2]), Math.max(mx1, l[8], l[3])) > lower[5] + 0.005) break
+      // (another's ink between, across the two lines' hull: the first under the upper higher than the lower's own top, its
+      // hundredth aside)
+      if (inkBelow(l[0], l[6] - 0.5, Math.min(ox0, l[2]), Math.max(ox1, l[3])) > lower[5] + 0.005) break
       mx0 = Math.min(mx0, l[7], l[2])
       mx1 = Math.max(mx1, l[8], l[3])
       ox0 = Math.min(ox0, l[2])
+      ox1 = Math.max(ox1, l[3])
       from = q
     }
     const foot = tex.frames.get(end[0])?.foot
     if (foot !== undefined) {
-      const next = ink.next(end[0], end[6] - 0.5, ox0, mx1)
+      const next = ink.next(end[0], end[6] - 0.5, ox0, from === e ? mx1 : ox1)
       const pg = inkA.pages[end[0] - 1]!
       runs.push([e, r2(end[4] - (Number.isFinite(next) ? next : pg.view[1])), r2(end[4] - foot)])
     }
