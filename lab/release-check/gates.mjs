@@ -425,6 +425,9 @@ export const GATES = [
       const text = steps.at(-1)?.text ?? ''
       const m = /parity: (\d+) pages of (\d+) pairs; (\d+) worse than today/.exec(text)
       const numbers = m ? { pages: num(m[1]), pairs: num(m[2]), worse: num(m[3]) } : {}
+      // (what keeps the run from being judged whole: an asked pair or page not drawn, a page that failed; any fails the gate)
+      const inc = /^incomplete: (\d+)/m.exec(text)
+      if (inc) numbers.incomplete = num(inc[1])
       for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
       return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
     },
