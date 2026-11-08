@@ -18,7 +18,7 @@ import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, recount, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, pastRoomPass, recount, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
@@ -91,6 +91,11 @@ for (const [pair, raw] of drawn) {
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
   const mine = []
   for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
+  // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
+  pastRoomPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
   // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
   labelsPass(
     mine.filter((p) => !p.error),

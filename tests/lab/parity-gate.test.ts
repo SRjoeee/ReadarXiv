@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage } from '../../lab/typeset/parity/verdict.mjs'
+import { measurePage, pastRoomPass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 
@@ -151,6 +151,25 @@ describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11
     expect(of('block')(p)).toEqual([])
     expect(of('size')(p)).toMatchObject([{ worse: true }])
     expect(p.diffs.filter((d: { nearer: string }) => d.nearer === 'ruling')).toEqual([])
+  })
+  it("today borrowing past TeX's text block bottom is today's fault: v2's smaller size and fewer lines inside the room are not worse", () => {
+    // (2608.16117v1 p23 t86: today's last line 12 pt past TeX's bottom, on the page number; v2 keeps the room, shrunk. The
+    // coordinator's call of 2026-11-09 under the owner's ruling: the size and line count today bought with a line past TeX's
+    // room are today's fault, never v2's)
+    const f = para([[3, 60, 24]])
+    const p = measure(f, sides(26, lines(10, 652, 640, 628), lines(9.5, 652)))
+    expect(of('block')(p)).toMatchObject([{ worse: false, nearer: 'v2' }])
+    expect(of('size')(p)).toMatchObject([{ worse: false, nearer: 'v2' }])
+    expect(p.faults.size.today).toBe(1)
+    expect(p.faults.size.todaySays[0]).toMatch(/past TeX's room/)
+    // (its line count too: today its 4 lines, the last one 36 pt under its third, past the bottom at 640; v2 3 inside it)
+    const t4 = [700, 688, 676, 628].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10))
+    const r = measure(f, sides(26, t4, lines(9.5).slice(0, 3)))
+    expect(of('line-count')(r)).toMatchObject([{ worse: false, nearer: 'v2' }])
+    expect(r.faults['line-count'].today).toBe(1)
+    // (unless v2 breaks the room itself: judged as any)
+    const q = measure(f, sides(26, lines(10, 652, 640, 628), lines(9.5, 652, 640, 628)))
+    expect(of('size')(q)).toMatchObject([{ worse: true }])
   })
   it('a line over the unit’s own lower lines in its column is not judged: no borrowing under its last line', () => {
     // (2608.16117v1 p17 t57: its first line a row's tail at 700, its other lines under a figure from 600; a translation laid on
@@ -340,6 +359,32 @@ describe("labels: the target word everywhere, consistent within a paper (the own
     labelsPass(pages, recount)
     expect(pages[0]!.worse).toBe(0)
     expect(pages[1]!.diffs).toMatchObject([{ flag: 'labels', unit: 't9 caption', worse: true }])
+  })
+})
+
+describe("a unit's size today bought past TeX's room on one page is today's fault on every page of it (the paper's pass)", () => {
+  // (2608.16117v1 t86: today's line past TeX's text block bottom on page 23, its one size on pages 23 to 25: v2's smaller
+  // size inside the room is no worse on page 25 than on page 23)
+  type Page = { page: number; worse: number; diffs: { flag: string; unit?: string; worse: boolean; nearer?: string }[]; faults: Record<string, { today: number; v2: number; todaySays: string[]; v2Says: string[] }>; pastRoom?: { today: string[]; v2: string[] } }
+  const recount = (p: Page) => {
+    p.worse = p.diffs.filter((d) => d.worse).length
+  }
+  const size = (unit: string) => ({ flag: 'size', unit, worse: true, nearer: 'today' })
+  it('converts the size on the unit’s other pages, unless v2 breaks the room on any of them', () => {
+    const pages: Page[] = [
+      { page: 23, worse: 0, diffs: [], faults: {}, pastRoom: { today: ['t86'], v2: [] } },
+      { page: 25, worse: 2, diffs: [size('t86 para'), size('t90 para')], faults: {}, pastRoom: { today: [], v2: [] } },
+    ]
+    pastRoomPass(pages, recount)
+    expect(pages[1]!.diffs).toMatchObject([{ unit: 't86 para', worse: false, nearer: 'v2' }, { unit: 't90 para', worse: true }])
+    expect(pages[1]!.worse).toBe(1)
+    expect(pages[1]!.faults.size!.today).toBe(1)
+    const broken: Page[] = [
+      { page: 23, worse: 0, diffs: [], faults: {}, pastRoom: { today: ['t86'], v2: ['t86'] } },
+      { page: 25, worse: 1, diffs: [size('t86 para')], faults: {}, pastRoom: { today: [], v2: [] } },
+    ]
+    pastRoomPass(broken, recount)
+    expect(broken[1]!.diffs).toMatchObject([{ worse: true }])
   })
 })
 

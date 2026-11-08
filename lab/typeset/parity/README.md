@@ -154,8 +154,14 @@ The gate judges by them where they and today's output differ.
    bottom in its column, nor bringing the next ink under it nearer than TeX's paragraph separation (`\baselineskip` and
    `\parskip` where the paragraph ends, as the marked compile states them): a line past either is a fault (`block`). Its
    size and its line count are judged against today's as any unit's (`size`, `line-count`, and their knock-ons, `anchor`,
-   `gap`, the highlight's placement): no ruling stands between them now. The ruling it replaced recorded v2's line-budget
-   differences on a unit today laid with a borrowed line as `ruling`; a sheet measured before it may show them.
+   `gap`, the highlight's placement), but where today bought them with a line past TeX's room (a `block` fault of today's on
+   the unit, or on a member of its size tie) and v2 breaks none: then v2's smaller size or fewer lines inside the room is
+   nearer, not worse, and the size or line count today's fault (the coordinator's call of 2026-11-09: today's last line on
+   the page number, 2608.16117v1 p23 t86). The ruling it replaced recorded v2's line-budget differences on a unit today laid
+   with a borrowed line as `ruling`; a sheet measured before it may show them. A known limit: a heading states no separation
+   (the marked compile's line probe, `AXT-LINES`, is not set at a heading's marks, nor at the front matter's or a caption
+   measured in a box alone), so v2 never borrows for one and shrinks it to its lines where today borrows (2608.16117v1 p4
+   t12); stating it is new TeX and a recompile of the corpus, not done for one case.
    Which of its sentences a page holds is no finding anywhere (the highlight's granularity, below the measures).
 2. **Body growth** (corrected the same day): body text may grow as today grows it (up to about 1.1×); the effect, by a simpler
    method. A size above the original's is no fault: `size` judges it against the original's as before, v2 nearer today's
