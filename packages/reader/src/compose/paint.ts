@@ -245,6 +245,9 @@ export async function cropsFor(
   )
   out.setAttribute('aria-hidden', 'true')
   const ctx = out.getContext('2d') as CanvasRenderingContext2D
+  // (each crop darkened in, as the canvas is into the page: one drawn after another, their margins overlapping where two lines
+  // are drawn nearer than their sources stand, never covers the other's ink with its paper)
+  ctx.globalCompositeOperation = 'darken'
   const devOf =
     (v: PageViewport) =>
     ([x0, y0, x1, y1]: [number, number, number, number]) => {

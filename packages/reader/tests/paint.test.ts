@@ -89,6 +89,48 @@ describe("a laid page's crops", () => {
     expect(drawn[0]![3]).toBeCloseTo((800 - 80.13) * 2)
     expect(drawn[1]![3]).toBeCloseTo((792 - 707) * 2)
   })
+  it('darkens each crop into the crops’ canvas, so that one drawn after another never covers its ink with its paper', async () => {
+    // (two formulas on consecutive drawn lines whose sources' margins overlap where they are drawn, 0.55 pt: 2610.21504v1-zh p5
+    // t81; drawn over, the later one's paper took the earlier one's descenders' tips)
+    const crop = (x: number, y: number, piece: string) =>
+      ({ s: piece, x, src: [5, x, y - 3, x + 150, y + 7, y], k: 1, piece }) as const
+    const page: Page = {
+      page: 5,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        {
+          ord: 81,
+          page: 5,
+          state: 'laid',
+          off: 3,
+          lit: { left: [], right: [], own: [] },
+          lines: [
+            [600, 72, 300, [crop(72, 600, '28')]],
+            [590.45, 72, 300, [crop(72, 590.45, '30')]],
+          ],
+        },
+      ],
+    }
+    const modes: string[] = []
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function () {
+      return {
+        globalCompositeOperation: 'source-over',
+        drawImage(this: { globalCompositeOperation: string }) {
+          modes.push(this.globalCompositeOperation)
+        },
+      } as never
+    })
+    const pdfPage = {
+      getViewport: () => viewportOf(792, 2),
+      render: () => ({ promise: Promise.resolve(), cancel: () => {} }),
+    }
+    await cropsFor(page, async () => pdfPage as never, viewportOf(792, 2) as never, Promise.resolve({} as never), {
+      sx: 1,
+      sy: 1,
+    })
+    expect(modes).toEqual(['darken', 'darken'])
+  })
   it('draws a crop through the rectangles it states, so that another piece’s ink in its rectangle stays behind', async () => {
     // (2610.21312v1-zh p5 t58: line 1's formula, its source reaching 0.3 pt under its ink into line 2's glyph tops, drawn in
     // place; its clip its own ink's box and the rest of its source clear of line 2's)
