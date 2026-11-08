@@ -67,6 +67,21 @@ describe('a page measured from what each side drew', () => {
     const asOriginal = measure(v2Of(), rec({ original: 3, today: { shownOriginal: true, links: 0, linksDrawn: 0 }, v2: { linksDrawn: 3 } }))
     expect(worse(asOriginal)).toEqual([])
   })
+  it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {
+    // (hyperref's boxes: three bordered annotations; v2 drawing its anchors with none is worse, whatever its links; a drawing of
+    // before the borders were read judges none)
+    const bordered = (o: object) => ({ ...rec(o), original: { links: 3, bordered: 3 } })
+    const lost = measure(v2Of(), bordered({ today: { linksDrawn: 3, bordersDrawn: 3 }, v2: { linksDrawn: 3, bordersDrawn: 0 } }))
+    expect(worse(lost)).toEqual(['borders'])
+    expect(lost.measures.borders).toEqual({ original: 3, today: 3, v2: 0 })
+    const kept = measure(v2Of(), bordered({ today: { linksDrawn: 3, bordersDrawn: 3 }, v2: { linksDrawn: 3, bordersDrawn: 3 } }))
+    expect(worse(kept)).toEqual([])
+    const asOriginal = measure(v2Of(), bordered({ today: { shownOriginal: true }, v2: { linksDrawn: 3, bordersDrawn: 2 } }))
+    expect(worse(asOriginal)).toEqual(['borders'])
+    const before = measure(v2Of(), rec({ original: 3, today: { linksDrawn: 3 }, v2: { linksDrawn: 3 } }))
+    expect(worse(before)).toEqual([])
+    expect(before.measures.borders).toBeNull()
+  })
   it('a page either side did not draw is an error, not a page judged', () => {
     expect(measure(v2Of(), { ...rec(), error: 'screenshot failed' } as never).error).toBe('screenshot failed')
     // (a drawing of before today's sentence boxes were read: today's highlight cannot be judged on its cover)

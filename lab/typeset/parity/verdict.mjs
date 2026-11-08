@@ -87,6 +87,7 @@ export const WEIGHT = {
   labels: 2,
   size: 1,
   links: 1,
+  borders: 1,
   highlight: 1,
   folio: 1,
   ink: 1,
@@ -108,6 +109,7 @@ export const SAYS = {
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
+  borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
   over: "a side's text drawn over ink that stays (the copy's, a crop's, the original's it keeps): device pixels of its text over other ink (the original: none)",
@@ -557,6 +559,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // Each side's links as its layout gave them kept beside, for diagnosis)
   const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
+  // (their borders, as each side draws them: the anchors drawn with one against the original's annotations PDF.js draws one round
+  // (a border width above 0 and a colour), a page today shows as arXiv's the original's; a drawing of before they were read
+  // judges none)
+  const B =
+    rec.original?.bordered === undefined || rec.v2.bordersDrawn === undefined || (!rec.today.shownOriginal && rec.today.bordersDrawn === undefined)
+      ? null
+      : { original: rec.original.bordered, today: rec.today.shownOriginal ? rec.original.bordered : rec.today.bordersDrawn, v2: rec.v2.bordersDrawn }
+  if (B) judge('borders', null, "link borders missing against the original's bordered annotations", B.original, { value: B.today, d: Math.max(0, B.original - B.today) }, { value: B.v2, d: Math.max(0, B.original - B.v2) }, 0.5)
   // (the highlight is a feature of today's for the units today highlights: there each side's sentence boxes are judged by the
   // lines they leave uncovered, its drawn lines on the right and its original's lines on arXiv's page on the left, and v2 is
   // worse where it leaves more of them than today does (today's own misses are not held against v2), nearer where fewer.
@@ -664,6 +674,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   out.measures = {
     links: { ...L, todayLaid: rec.today.links, v2Laid: rec.v2.links },
+    borders: B,
     highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length, ...hl },
     sentences: { today: paired.today, paired: paired.paired, whole: paired.whole, apart: paired.apart, unread: paired.unread },
     darkness: dk ?? null,

@@ -126,6 +126,12 @@ const p = {
       // (the links a reader can follow on the page: the overlay's anchors on a laid page, PDF.js's annotation layer's on a page
       // the reader shows as arXiv's)
       linksDrawn: el?.querySelectorAll('.axt-links a, .annotationLayer a').length ?? 0,
+      // (those drawn with a border: the overlay's anchors its link states one for, PDF.js's sections it gives a border width)
+      bordersDrawn:
+        (el?.querySelectorAll('.axt-links a[data-axt-border]').length ?? 0) +
+        [...(el?.querySelectorAll<HTMLElement>('.annotationLayer section') ?? [])].filter(
+          (x) => !!x.querySelector('a') && Number.parseFloat(x.style.borderWidth) > 0,
+        ).length,
       lit: (got?.members ?? []).filter((m) => m.state === 'laid' && m.lit.right.some((b) => b.length)).map((m) => m.ord),
     }
   },
