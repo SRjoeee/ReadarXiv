@@ -204,7 +204,8 @@ export function factsOf({
     })
     const sizeOf = (j: number) => mostOf((mem.lineGlyphs[j] ?? []).map((a) => r2(gA(a).size))) ?? mem.style.size
     const own = mem.lines.map((l, j) => [l, j] as const).filter(([l]) => !(l[9] & 1))
-    mem.read.push('measure')
+    // (its measure read off A, where TeX did not ship its pages' frame: a hull of the page's lines)
+    if (!mem.lines.every((l) => framed.has(l[0]))) mem.read.push('measure')
 
     // -- its elements
     const pieces = unit ? elsOf(unit.content) : new Map()

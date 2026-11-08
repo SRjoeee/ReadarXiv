@@ -338,6 +338,9 @@ describe('locate: a line’s measure is TeX’s text frame (Instrument.tex.frame
     const L = locate(ins, A, align(B, A))
     expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
     expect(L.members[0]!.align).toBe('c')
+    // (TeX's, no longer read off A)
+    expect(L.members[0]!.read).not.toContain('measure')
+    expect(locate(instrumentOf(B, units, [[0, 1, 1]]), A, align(B, A)).members[0]!.read).toContain('measure')
     expect(L.members[1]!.lines.map((l) => l.slice(7, 9))).toEqual([
       [72, 540],
       [72, 540],
