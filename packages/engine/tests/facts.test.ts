@@ -174,6 +174,37 @@ describe('a label’s parts (B16)', () => {
   })
 })
 
+describe('a float label’s parts: TeX’s \\fnum@<type>, its name, a tie, its number', () => {
+  it('reads its number as its last word: a roman one, and one whose tie a justified line set tight', () => {
+    // (IEEEtran's "TABLE I.": no digit, so no number was read and the name was "TABLEI"; 2610.30875v1 p15's "Table S2:", its tie
+    // 0.19 em on a justified line, under the 0.2 em that keeps a capital before a digit the name's: name "TableS". The tie on
+    // the 87 papers' float labels measured 0.19 to 0.48 em, a kern inside their words -0.09 to 0)
+    const any = expect.anything()
+    expect(labelParts(run('TABLE I.'), 1, true)).toMatchObject({
+      name: ['TABLE', any],
+      num: ['I', any],
+      punct: ['.', any],
+    })
+    const tight = run('TableS2:').map((x, k) => (k >= 5 ? { ...x, x0: x.x0 + 1.9, x1: x.x1 + 1.9 } : x))
+    expect(labelParts(tight, 1, true)).toMatchObject({ name: ['Table', any], num: ['S2', any], punct: [':', any] })
+    expect(labelParts(run('Table IV:'), 1, true)).toMatchObject({ name: ['Table', any], num: ['IV', any] })
+    // (as before where the number is no last word of its own: one word, a number with a digit read already)
+    expect(labelParts(run('Fig. 4.'), 1, true)).toMatchObject({
+      name: ['Fig.', any],
+      num: ['4', any],
+      punct: ['.', any],
+    })
+    expect(labelParts(run('Figure 1.1 –'), 1, true)).toMatchObject({ name: ['Figure', any], num: ['1.1', any] })
+    expect(labelParts(run('Fig.S1'), 1, true)).toMatchObject({ name: ['Fig.', any], num: ['S1', any] })
+    expect(labelParts(run('(a)'), 1, true).name?.[0]).toBe('a')
+    expect(labelParts(run('(a)'), 1, true).num).toBeUndefined()
+    // (an unnumbered label's last word is its name's: no number)
+    expect(labelParts(run('Figure:'), 1, true).num).toBeUndefined()
+    // (a head's label as before)
+    expect(labelParts(run('Theorem 2.1.'), 1)).toMatchObject({ name: ['Theorem', any], num: ['2.1', any] })
+  })
+})
+
 describe('forced breaks and the room after them (C14)', () => {
   it('states the line TeX ended and its room in pitches, by the unit’s other lines', () => {
     const lines = [L(72, 300, 700), L(72, 200, 688), L(72, 300, 664), L(72, 300, 652)]

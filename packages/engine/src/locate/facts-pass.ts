@@ -416,7 +416,9 @@ export function factsOf({
     // -- its label's parts and style
     if (mem.labelAt && mem.label.length) {
       const lg = mem.label.map(gA)
-      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0]), { style: styleOf(lg, mem.labelAt.style.size) })
+      Object.assign(mem.labelAt, labelParts(lg, mem.labelAt.ink[0], mem.labelAt.kind === 'float'), {
+        style: styleOf(lg, mem.labelAt.style.size),
+      })
     }
 
     // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line

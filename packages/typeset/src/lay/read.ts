@@ -374,7 +374,24 @@ function labelOf(m: Placed, designs: PaperReading['designs']): UnitLabel | undef
     size: lb.style.size,
     st,
   }))
-  return { x1: Math.max(...chars.map((c) => c.x1)), text: chars.map((c) => c.ch).join(' '), chars }
+  // (a caption's float type, where its part states one: its parts after its name, and whether they hold its every glyph, from
+  // its ink's start to its end, its own 1/100 grid)
+  const float =
+    lb.kind === 'float' && lb.float && lb.name
+      ? {
+          type: lb.float,
+          name: lb.name[0],
+          rest: chars.slice(1),
+          num: !!lb.num,
+          whole: lb.name[1][1] <= lb.ink[1] + 0.01 && (lb.punct ?? lb.num ?? lb.name)[1][3] >= lb.ink[3] - 0.01,
+        }
+      : undefined
+  return {
+    x1: Math.max(...chars.map((c) => c.x1)),
+    text: chars.map((c) => c.ch).join(' '),
+    chars,
+    ...(float ? { float } : {}),
+  }
 }
 
 /** what the tokens set before the translation (RUN:2196): a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,

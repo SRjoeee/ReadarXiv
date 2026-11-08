@@ -486,6 +486,20 @@ export function textsOf(texts) {
  * OPS } and `documentOptions` the host's (the same as wrapFinal is given, so that the pages read are its); `made` { compiler,
  * tree, front }. Returns the Instrument, and `today` (the ownership's own records, for the lab's checks)
  */
+/**
+ * What the instrument states of each of the paper's units from the front end's facts beside them (live.mjs openPaper), by
+ * index: `float`, a caption's float type (LaTeX's \\@captype there, `floatTypes`: the part's Label.float, by which its label
+ * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: its names (nameCells) and the body
+ * of an algorithm float (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the
+ * float's, translated)
+ */
+export function unitFactsOf(paper) {
+  const float = new Map(paper.floatTypes ?? [])
+  const kept = new Set(paper.pseudocode ?? [])
+  paper.units.forEach((u, i) => { if (paper.kept?.has(u)) kept.add(i) })
+  return { float, kept }
+}
+
 export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pdfjs, documentOptions = {}, made = {} }) {
   const units = paper.units
   const bundle = bundleUnitsOf(paper)
@@ -512,6 +526,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const out = []
   const kindOf = p => classOf(p) ?? 'other'
   const classesBy = []
+  const facts = unitFactsOf(paper)
   units.forEach((u, i) => {
     const content = contentOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null })
     const id = unitId(u.kind, content)
@@ -519,7 +534,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(paper.kept?.has(u) ? { kept: true } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))

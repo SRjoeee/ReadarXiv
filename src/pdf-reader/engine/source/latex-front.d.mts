@@ -9,9 +9,11 @@ export declare function inMemory(map: Map<string, Uint8Array>): { list(): string
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
 /** `inFloat`: the indices in `units` (rising) of the units written inside a float — figure, table (starred or not), wrapfigure,
  *  sidewaystable, algorithm, listing, and whatever they hold; a longtable is none. Beside the units, in no unit's hash, text,
- *  bundle row or patched source. `texOrder`: the indices in `units` in the order the walk met them, TeX's, where it is not
+ *  bundle row or patched source. `floatTypes`: each caption's float type, [index, type], LaTeX's \@captype there (its float
+ *  environment's, \captionof's, a sub-caption's `sub` type). `pseudocode`: the indices of the units of an algorithm float's
+ *  body (not its captions). `texOrder`: the indices in `units` in the order the walk met them, TeX's, where it is not
  *  theirs (an author block's later units and the bibliography's entries are numbered after the rest), else null */
-export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; texOrder: number[] | null; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
+export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; floatTypes: [number, string][]; pseudocode: number[]; texOrder: number[] | null; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
 /** the paper's macros that read nothing past their own arguments, as [name, arity], from their definitions in the package's files */
 export declare function completeMacros(files: readonly { file?: string; text: string }[]): [string, number][]
 /** which definitions stand inside another's body (o.k < d.at < o.e), each { at, k, e }: its match's start, its body's first

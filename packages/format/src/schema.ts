@@ -175,7 +175,9 @@ export const SpanAt = z.object({
 })
 /** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
  *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's
- *  base), absent where it stands on none (a part made before states none) */
+ *  base), absent where it stands on none (a part made before states none); `float` a caption's float type, LaTeX's \@captype
+ *  where its \caption runs (`figure`, `table`, `algorithm`, `subfigure`, …: its float environment's, \captionof's), absent
+ *  where the source tells none */
 export const Label = z.object({
   kind: z.enum(['float', 'head', 'number', 'mark']),
   ink: Ink,
@@ -184,6 +186,10 @@ export const Label = z.object({
   num: z.tuple([z.string(), Ink]).optional(),
   punct: z.tuple([z.string(), Ink]).optional(),
   line: int.optional(),
+  float: z
+    .string()
+    .regex(/^[a-z][a-z0-9]{0,31}$/)
+    .optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`

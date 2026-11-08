@@ -527,6 +527,29 @@ export function tailOf(after: readonly DocGlyph[], ends: readonly string[] | nul
  *  letters, combining marks, stops, apostrophes and hyphens; a float's "Fig." in labelInTarget L2:1184): an abbreviation's
  *  stop is the name's; a glyph's text may be more than one of them (a ligature's "fi") */
 const NAME_WORD = /^[\p{L}\p{M}.'’-]+$/u
+/** the gap between two glyphs' advances that is a tie, TeX's interword glue, a tenth of their size or more: on the 87 papers'
+ *  float labels it measured 0.19 em at its tightest (a justified line's, shrunk) and 0.48 at its widest, a kern inside a word
+ *  -0.09 to 0 (2608.06701v1, 2610.19274v1, 2610.30875v1, 2610.42112v1) */
+const FLOAT_TIE = 0.1
+/** a word LaTeX prints a counter as (\arabic with its prefixes, "S2", "A.4"; \roman, \Roman; \alph, \Alph) */
+const COUNTER_WORD = /\p{N}|^(?:[IVXLCDM]+|[ivxlcdm]+|\p{L})$/u
+/** where the last word of glyphs `t` before `e` begins, a tie before it and a word before that (a letter in it), where it is a
+ *  counter's word (COUNTER_WORD); else `e` */
+function lastWordOf(t: readonly DocGlyph[], e: number): number {
+  let k = e - 1
+  while (k > 0) {
+    const a = t[k - 1] as DocGlyph,
+      b = t[k] as DocGlyph
+    if (b.x0 - a.x1 >= FLOAT_TIE * Math.max(a.size, b.size)) break
+    k--
+  }
+  if (k <= 0 || !t.slice(0, k).some((g) => /\p{L}/u.test(g.u))) return e
+  const word = t
+    .slice(k, e)
+    .map((g) => g.u)
+    .join('')
+  return COUNTER_WORD.test(word) ? k : e
+}
 /** a label's parts by its glyphs' classes: the name (its word before the number, from its first letter, with the marks the
  *  word holds: "Figure", "Theorem", an abbreviation's "Fig.", "Thm."), the number (digits with the dots, letters and dashes
  *  between them: "3", "2.1", "A.4"; a stop or dash before its first digit or letter stands between none of them, and is the
@@ -535,6 +558,7 @@ const NAME_WORD = /^[\p{L}\p{M}.'’-]+$/u
 export function labelParts(
   gs: readonly DocGlyph[],
   page: number,
+  float = false,
 ): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink] } {
   const t = gs.filter(real)
   // (across their advances, as the label's own ink and today's characters, which U.decor and U.label read the parts as: a
@@ -559,9 +583,15 @@ export function labelParts(
       inkOf(t.slice(e)),
     ]
   let s = e
-  while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
+  // (a float's label is TeX's \fnum@<type>, \<type>name~\the<type>: its number the word after its last tie, where that word is
+  // a number as LaTeX prints a counter (a digit in it, a roman one, a letter alone): IEEEtran's "TABLE I", a supplement's
+  // "Table S2" whose tie a justified line set tight (FLOAT_TIE))
+  const lastWord = float ? lastWordOf(t, e) : e
+  if (lastWord < e) s = lastWord
+  else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
   // (a letter of the number: "A.4", "S1" — a letter with a digit or a dot after it in the number)
   while (
+    lastWord === e &&
     s > 0 &&
     /\p{Lu}/u.test((t[s - 1] as DocGlyph).u) &&
     /[\p{N}.]/u.test((t[s] as DocGlyph | undefined)?.u ?? '')
@@ -572,7 +602,7 @@ export function labelParts(
   }
   // (the stops and dashes before the number's first digit or letter, where a name stands before them: the name's)
   if (t.slice(0, s).some((g) => /\p{L}/u.test(g.u))) while (s < e && /^[.\-–]$/u.test((t[s] as DocGlyph).u)) s++
-  if (s < e && t.slice(s, e).some((g) => /\p{N}/u.test(g.u)))
+  if (s < e && (lastWord < e || t.slice(s, e).some((g) => /\p{N}/u.test(g.u))))
     out.num = [
       t
         .slice(s, e)

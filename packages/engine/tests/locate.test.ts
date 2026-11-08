@@ -1290,6 +1290,53 @@ describe('review of #605', () => {
       { rule: 'cells', cells: [[0], [1], [2], [3], [4]], head: 1 },
     ])
   })
+  it('states a caption label’s float type, LaTeX’s \\@captype, and its number as its last word (TeX’s \\fnum@)', () => {
+    // (the owner's ruling of 2026-11-08: a figure's and a table's label in the target's word by its float type, one form a
+    // paper; 2610.11256v1's "Table A1:" was kept by the label rule's spelling of the number, its "Table 1" relabelled, and
+    // IEEEtran's "TABLE I." had no number read, its name "TABLEI")
+    const B = docOf([
+      {
+        lines: [
+          { text: 'TABLE I.', x: 72, y: 700 },
+          { text: 'The scores', x: 130, y: 700 },
+          { text: 'Figure 2:', x: 72, y: 600 },
+          { text: 'A figure', x: 130, y: 600 },
+        ],
+      },
+    ])
+    const units = [unitOf('caption', 'The scores', { float: 'table' }), unitOf('caption', 'A figure')]
+    const ins = instrumentOf(B, units, [[0, 0, 1, 1]], [[ROLE.label, ROLE.text, ROLE.label, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const original = new Uint8Array(70000).map((_, i) => i & 255)
+    const objs = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original,
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = read(
+      'part',
+      (objs.find((o) => o.kind === 'part') as Extract<(typeof objs)[number], { kind: 'part' }>).bytes,
+    )
+    const [table, figure] = part.flows.flat().sort((a, b) => a.ord - b.ord)
+    expect(table!.label).toMatchObject({
+      kind: 'float',
+      name: ['TABLE', expect.anything()],
+      num: ['I', expect.anything()],
+      float: 'table',
+    })
+    // (a caption whose source tells no type: none stated)
+    expect(figure!.label).toMatchObject({
+      kind: 'float',
+      name: ['Figure', expect.anything()],
+      num: ['2', expect.anything()],
+    })
+    expect(figure!.label!.float).toBeUndefined()
+  })
   it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
     // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine,
     // every one of the second's: a link round its whole text)

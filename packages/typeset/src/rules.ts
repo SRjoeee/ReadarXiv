@@ -164,6 +164,7 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:2029-2042',
     ],
     how: 'ported',
+    ruling: "2026-11-08 a figure's and a table's label in one form a paper, by its float's type",
     reads: [
       'words',
       'captions',
@@ -171,7 +172,12 @@ const SPECS: readonly RuleSpec[] = [
       "the paper's own names (Part.paper.names, their rows: ownNamesOf)",
     ],
     file: 'unit/label.ts',
-    state: { is: 'ported', replay: "samples/U.label.json.gz (+ today's rules/tex-names.json)", cases: 15 },
+    state: {
+      is: 'changed',
+      why: "a caption whose part states its float's type (Label.float) is relabelled by the type, its number as printed (today's spelling of the name and the number read only where no type is stated): 'Table A1', 'Figure S3' relabelled beside 'Table 1', an algorithm's label kept",
+      replay: "samples/U.label.json.gz (+ today's rules/tex-names.json); tests/unit/label-float.test.ts",
+      cases: 15,
+    },
   },
   {
     id: 'U.lead',

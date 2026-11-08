@@ -139,7 +139,12 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
     p.spans = [...spans]
   }
-  if (mem.labelAt) p.label = mem.labelAt
+  // (a caption's label: its float's type, by which its name is drawn in the target's word)
+  if (mem.labelAt)
+    p.label =
+      mem.labelAt.kind === 'float' && unit?.float && /^[a-z][a-z0-9]{0,31}$/.test(unit.float)
+        ? { ...mem.labelAt, float: unit.float }
+        : mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir
   if (mem.run) p.run = mem.run

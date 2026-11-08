@@ -111,7 +111,8 @@ export const listsMissing = (r, main) => { const log = unwrapped(lastTexLog(r.lo
 export const notFound = log => new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map(m => m[1]))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
- *  float (`inFloat`, their indices, latex-front.mjs loadProject's) and the order TeX sets them in where it is not theirs
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
+ *  units of an algorithm float's body (`pseudocode`, their indices) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
  *  after the rest, latex-front.mjs entriesLast) */
 export function openPaper(files) {
@@ -124,7 +125,7 @@ export function openPaper(files) {
   const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
   // layout/own.mjs)
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, floatTypes: project.floatTypes ?? [], pseudocode: project.pseudocode ?? [], texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
 }
 
 /**
