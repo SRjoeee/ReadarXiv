@@ -150,7 +150,9 @@ export type DecorAfter = { carried: boolean; heading: boolean; numbered: boolean
 
 /** U.decor after U.blocks: each block's decorations set on it, in today's order (RUN:2112-2137) */
 export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter {
-  if (i.luFlush && i.kind !== 'cell') for (const b of blocks) if (!b.centred) b.flush = i.luFlush
+  // (a cell's too, which today's never kept (RUN:2112: no fact told a cell's then): its flush is the class LaTeX built its
+  // column's template from, TeX's own (docs/PDF-READER.md §18.12), so an r column's translation ends where its original ends)
+  if (i.luFlush) for (const b of blocks) if (!b.centred) b.flush = i.luFlush
   const b0 = blocks[0]
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))

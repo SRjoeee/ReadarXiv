@@ -74,6 +74,39 @@ describe('U.decor', () => {
     expect([head.x0, head.x1]).toEqual([72, 290.27])
   })
 
+  it('keeps a cell’s flush as TeX set its column, as any unit’s: an r column’s cell ends where its original ends', () => {
+    // (2610.17024v1 p14's "Points", a header over right-aligned numbers, the class LaTeX built its column from r: its translation
+    // ends at the original's end and, clipped there, widens to its left; a cell of an l column is never justified)
+    const after = {
+      title: false,
+      front: false,
+      label: null,
+      firstX0: undefined,
+      s: 9,
+      relabels: false,
+      lead: false,
+      labelHides: false,
+      firstPage: 1,
+      firstX: 300,
+      kept: null,
+      shortSkips: [],
+      lineInfo: null,
+      side: () => undefined,
+    } as const
+    const right = block({ rects: [[1, 300, 650, 330, 659]], x0: 300, x1: 330 })
+    decorAfter([right], { ...after, kind: 'cell', luFlush: 'right' })
+    expect(right.flush).toBe('right')
+    widen(right, { column: [250, 340], left: [270], right: [] })
+    expect([right.x0, right.x1]).toEqual([270, 330])
+    const left = block({ rects: [[1, 300, 650, 330, 659]], x0: 300, x1: 330 })
+    decorAfter([left], { ...after, kind: 'cell', luFlush: 'left' })
+    expect(left.flush).toBe('left')
+    // (a cell centred by its column keeps its centring: a flush is never set over it)
+    const centred = block({ centred: true, rects: [[1, 300, 650, 330, 659]], x0: 300, x1: 330 })
+    decorAfter([centred], { ...after, kind: 'cell', luFlush: 'right' })
+    expect(centred.flush).toBeUndefined()
+  })
+
   it('sets a carried label by its line’s own characters’ baseline, else its block’s', () => {
     const label = {
       x1: 120,
