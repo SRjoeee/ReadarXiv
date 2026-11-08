@@ -346,6 +346,37 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.fit!.borrowed).toBe(0)
     expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
   })
+  it('caps a size tie by scale, not by points: a run-in head of a smaller size keeps the original’s ratio (S3)', () => {
+    // (2610.30034v1 p2: a head at 8.97 and its paragraph at 9.96, both laid at their size, the paragraph capped at 8.97, 0.9 of
+    // its own; one paragraph's text even (the maintainer's ruling) is one scale for both)
+    const idB = 'b'.repeat(64)
+    const head = (o: Partial<Placed> = {}) =>
+      member({
+        ord: 0,
+        kind: 'heading',
+        style: { role: 'serif', size: 9, bold: 1, design: 'NimbusRomNo9L-Medi' },
+        lines: [[1, 0, 72, 300, 700, 706.3, 698.2, 72, 300, 0, 9]],
+        room: { below: 0, next: 300 },
+        ...o,
+      })
+    const para = member({
+      ord: 1,
+      text: idB,
+      lines: [[1, 0, 72, 300, 600, 607, 598, 72, 300, 0, 10]],
+      room: { below: 0, next: 300 },
+    })
+    const sizes = (h: Placed, headText: string) => {
+      const pt: Part = { ...part(h), flows: [[h], [para]], ties: [{ rule: 'size', ords: [0, 1] }] }
+      const rows = rowsOf([row([{ t: 'text', s: headText }]), { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }])
+      return layPage(pt, rows, rules, metrics()).members.map((m) => m.fit?.size)
+    }
+    // (both at their own size: the paragraph is not capped at the head's 9)
+    expect(sizes(head(), 'Kopf')).toEqual([9, 10])
+    // (the head shrunk to fit its line, the paragraph at the head's scale, not at its size in points)
+    const [h, p] = sizes(head(), 'wort '.repeat(12).trim())
+    expect(h).toBeLessThan(9)
+    expect(p).toBeCloseTo((10 * h!) / 9, 6)
+  })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
     const name = member({

@@ -29,10 +29,13 @@ export type PreparedPage = {
   members: PageMember[]
   passes: { page: number; target: FillTarget | null }[]
   tables: { cells: number[]; why: string | null }[]
-  /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its size */
-  fits: [ord: number, size: number][]
+  /** every member laid in the call, on any page (a member of a tie the page's part holds may have no line on it): its scale of
+   *  its own size */
+  fits: [ord: number, scale: number][]
 }
 
+/** two scales of a tie alike: within the fit's thousandths (its caps are floored to them: U.params, a cell's cap) */
+const SAME = 0.0005
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 
@@ -42,9 +45,12 @@ export type PageTie = { rule: 'cells'; cells: readonly number[] } | { rule: 'siz
 
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
- * size tie laid on the page at one size, the smallest any of them is laid at: each laid larger is capped there (its fit's states
- * from that scale down, P.capScale) and the page laid once more (the checkpoint's free-9: a paragraph's first part at its size,
- * its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even)
+ * size tie laid on the page at one scale of their own sizes, the smallest any of them is laid at: each laid larger is capped there
+ * (its fit's states from that scale down, P.capScale) and the page laid once more (the checkpoint's free-9: a paragraph's first
+ * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
+ * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
+ * for being of another size (the coordinator's decision under that ruling, 2026-11-08: 2610.30034v1 p2's head at 8.97 capped its
+ * paragraph at 8.97, 0.9 of its 9.96)
  */
 export function layPagePrepared(
   page: number,
@@ -66,7 +72,7 @@ export function layPagePrepared(
     const laid = t.ords.filter((o) => fitOf.has(o))
     if (laid.length < 2) continue
     const least = Math.min(...laid.map((o) => fitOf.get(o) as number))
-    for (const o of laid) if ((fitOf.get(o) as number) > least + 0.005) cap.set(o, Math.min(cap.get(o) ?? least, least))
+    for (const o of laid) if ((fitOf.get(o) as number) > least + SAME) cap.set(o, Math.min(cap.get(o) ?? least, least))
   }
   if (!cap.size) return first
   // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
@@ -75,9 +81,7 @@ export function layPagePrepared(
   const capped = flows.map((f) =>
     f.map((m) => {
       const c = cap.get(m.ord)
-      return c === undefined
-        ? m
-        : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, Math.max(c / m.s, floor)) } }
+      return c === undefined ? m : { ...m, P: { ...m.P, capScale: Math.min(m.P.capScale ?? 1, Math.max(c, floor)) } }
     }),
   )
   return layPageTied(page, capped, cells, R, trace)
@@ -252,6 +256,6 @@ function layPageOnce(
         slots,
       }
     })
-  const fits = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.f] as [number, number]] : []))
+  const fits = all.flatMap((x) => (x.unit?.layout ? [[x.m.ord, x.unit.layout.scale] as [number, number]] : []))
   return { page, members, passes, tables, fits }
 }
