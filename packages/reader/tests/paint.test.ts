@@ -2,7 +2,7 @@
 // drawn where its item stands. A member laid across a page break may carry an element of one page onto a line of the other
 // (triage-1 B: 2608.16117v1-de t11, its p3 element on p4's line): its pixels are its own page's, as today's crops were.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Page } from '../src/compose/page.ts'
+import type { Item, Page } from '../src/compose/page.ts'
 import { cropsFor, cropsOf } from '../src/compose/paint.ts'
 
 /** a viewport of a page `h` points high at `scale`, upright: PDF units to CSS px, y down */
@@ -92,8 +92,13 @@ describe("a laid page's crops", () => {
   it('darkens each crop into the crops’ canvas, so that one drawn after another never covers its ink with its paper', async () => {
     // (two formulas on consecutive drawn lines whose sources' margins overlap where they are drawn, 0.55 pt: 2610.21504v1-zh p5
     // t81; drawn over, the later one's paper took the earlier one's descenders' tips)
-    const crop = (x: number, y: number, piece: string) =>
-      ({ s: piece, x, src: [5, x, y - 3, x + 150, y + 7, y], k: 1, piece }) as const
+    const crop = (x: number, y: number, piece: string): Item => ({
+      s: piece,
+      x,
+      src: [5, x, y - 3, x + 150, y + 7, y],
+      k: 1,
+      piece,
+    })
     const page: Page = {
       page: 5,
       wait: { rows: [], faces: [] },
