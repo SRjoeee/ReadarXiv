@@ -219,6 +219,30 @@ describe('locate', () => {
     expect(three.labelAt?.ink[5]).toBe(702.8)
     expect(three.labelAt?.line).toBe(0)
   })
+  it('chains a footnote to the footnote before it on its row, a body paragraph between them in the stream (footmisc’s para)', () => {
+    // (2608.06701v1 p5: footnote 1 is set inside paragraph 72, footnote 2 inside paragraph 74; footmisc's para sets the page's
+    // footnotes as one paragraph in the footnote insert, the second on the first's row. B ships the body, then the notes)
+    const lines = [
+      { text: 'first paragraph', x: 72, y: 700 },
+      { text: 'second paragraph', x: 72, y: 688 },
+      { text: 'note one', x: 72, y: 100 },
+      { text: 'note two', x: 132, y: 100 },
+    ]
+    const B2 = docOf([{ lines }])
+    const units2 = [
+      unitOf('para', 'first paragraph'),
+      unitOf('footnote', 'note one'),
+      unitOf('para', 'second paragraph'),
+      unitOf('footnote', 'note two'),
+    ]
+    const ins2 = instrumentOf(B2, units2, [[0, 2, 1, 3]])
+    const L = locate(ins2, B2, align(B2, B2))
+    expect(L.flows).toEqual([[0], [1, 3], [2]])
+    expect(L.members[3]!.join).toEqual([132 - (72 + 8 * 6)])
+    // (footnotes each a paragraph of their own: the first's end between them, apart)
+    ins2.tex = { paragraphEnds: [[15 + 16 + 8]] }
+    expect(locate(ins2, B2, align(B2, B2)).flows).toEqual([[0], [1], [2], [3]])
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)

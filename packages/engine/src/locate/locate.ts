@@ -1101,10 +1101,17 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
   let body: number | null = null
+  // (a footnote's text is set in the footnote insert, TeX's \footins, the page's notes one after the other there: the member
+  // before a footnote is the footnote before it, the body between them in the stream passed over (footmisc's para sets the
+  // notes as one paragraph, a note on the row the one before ends: 2608.06701v1 p5), but a member made on A that B printed
+  // right before it)
+  let note: number | null = null
   for (let q = 0; q < seq.length; q++) {
     const mem = seq[q]!
     let k = q - 1
     if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
+    else if (mem.kind === 'footnote' && note !== null && !(k >= 0 && standsBefore.get(mem.ord)?.includes(seq[k]!.ord)))
+      k = note
     const prev = k >= 0 ? seq[k]! : null
     // (the paragraph ends between the two that are not inside the inserts between them)
     const insideInsert = (e: number) => {
@@ -1145,6 +1152,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flowOf.set(mem.ord, flow)
     }
     if (!insert(mem) && !madeOnA(mem)) body = q
+    if (mem.kind === 'footnote') note = q
   }
   // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
   flows.sort((f, g) => Math.min(...f) - Math.min(...g))
