@@ -1203,12 +1203,9 @@ describe('review of #605', () => {
     const units = [unitOf('footnote', 'a note that runs on')]
     const back = { annotationType: 2, rect: [55, 695, 63, 708], dest: 'enz.3.backref' }
     const text = { annotationType: 2, rect: [71, 695, 85, 708], dest: 'x' }
-    const L = locate(
-      instrumentOf(B, units, [[0, 0, 0]], [[ROLE.label, ROLE.text, ROLE.text]]),
-      B,
-      align(B, B),
-      { annotations: [[back, text]] },
-    )
+    const L = locate(instrumentOf(B, units, [[0, 0, 0]], [[ROLE.label, ROLE.text, ROLE.text]]), B, align(B, B), {
+      annotations: [[back, text]],
+    })
     expect(L.links.get(1)).toEqual([
       { box: [55, 695, 63, 708], to: { dest: '"enz.3.backref"' }, owner: [0, ''], text: '3', label: 1 },
       { box: [71, 695, 85, 708], to: { dest: '"x"' }, owner: [0, ''], text: 'a' },

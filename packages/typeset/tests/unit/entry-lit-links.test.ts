@@ -660,9 +660,15 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
       expect(to).toEqual(comma.to)
       // (paired by order alone, its characters not found among the drawn ones: none, never over the whole piece, placeText)
       const f2: LinkFate[] = []
-      const q = layPage(part(member({ els: [['5', ref()]] }), [{ ...comma, text: '9,' }]), rowsOf([r7]), rules, metrics(), {
-        linkFates: f2,
-      })
+      const q = layPage(
+        part(member({ els: [['5', ref()]] }), [{ ...comma, text: '9,' }]),
+        rowsOf([r7]),
+        rules,
+        metrics(),
+        {
+          linkFates: f2,
+        },
+      )
       expect([f2, q.links]).toEqual([['unplaced'], []])
       // (over the drawn "7" alone: the comma is the text's, drawn after it)
       const seven = p.members[0]!.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.startsWith('7'))!
@@ -671,7 +677,9 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     })
     it('lays a footnote’s mark the same way, and pairs a reference and a \\hyperref group in their source’s order', () => {
       // (a nested footnote's mark "1" with the full stop after it, Hfootnote.2: 2608.25210v2-zh p1)
-      const mark = member({ els: [['5', { kind: 'num', mark: 1, nested: 1, text: '1', ink: [[1, 150, 703, 153, 707, 700]] }]] })
+      const mark = member({
+        els: [['5', { kind: 'num', mark: 1, nested: 1, text: '1', ink: [[1, 150, 703, 153, 707, 700]] }]],
+      })
       const stop: Link = { box: [149, 697, 157, 708], to: { dest: '"Hfootnote.2"' }, owner: [0, ''], text: '1.' }
       const fates: LinkFate[] = []
       layPage(part(mark, [stop]), rowsOf([r7]), rules, metrics(), { linkFates: fates })

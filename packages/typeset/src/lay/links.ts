@@ -76,7 +76,11 @@ const kindOf = (to: Link['to']): 'cite' | 'note' | 'internal' | 'url' => {
 /** the kind an element's link is of by its source (links.mjs linkKindOf, by the command and the nested mark the part states): a
  *  footnote's mark, a reference; null for any other (a citation's goes by its key, which the part does not state) */
 const elKindOf = (e: { cmd?: string; nested?: 1 }): 'note' | 'internal' | null =>
-  e.nested || /^(?:footnote|footnotemark)\*?$/.test(e.cmd ?? '') ? 'note' : REF_CMD.test(e.cmd ?? '') ? 'internal' : null
+  e.nested || /^(?:footnote|footnotemark)\*?$/.test(e.cmd ?? '')
+    ? 'note'
+    : REF_CMD.test(e.cmd ?? '')
+      ? 'internal'
+      : null
 const boxOf = (b: readonly number[]) =>
   [Math.min(b[0]!, b[2]!), Math.min(b[1]!, b[3]!), Math.max(b[0]!, b[2]!), Math.max(b[1]!, b[3]!)] as const
 const holds = (a: readonly number[], b: readonly number[]) => {
@@ -213,7 +217,8 @@ export function linksOf(
     // is no link of the element's own, and the text's; searched first among the element's, it took the whole drawing and left
     // the element's own unplaced, 2610.10069v1-zh p10)
     for (const [id, is] of byEl) {
-      const other = (i: number, j: number) => j !== i && pageOf(j) === pageOf(i) && key(list[j]!.to) !== key(list[i]!.to)
+      const other = (i: number, j: number) =>
+        j !== i && pageOf(j) === pageOf(i) && key(list[j]!.to) !== key(list[i]!.to)
       const round = is.filter((i) => is.some((j) => other(i, j) && holds(list[i]!.box, list[j]!.box)))
       if (!round.length) continue
       byEl.set(
@@ -263,7 +268,11 @@ export function linksOf(
       const runs = runsOf(as, list)
       const to = (i: number, p: (typeof pieces)[number]) => {
         tierOf.set(i, 'order')
-        if (p.el !== null) byEl.set(p.el, [...(byEl.get(p.el) ?? []), i].sort((a, b) => rank.get(a)! - rank.get(b)!))
+        if (p.el !== null)
+          byEl.set(
+            p.el,
+            [...(byEl.get(p.el) ?? []), i].sort((a, b) => rank.get(a)! - rank.get(b)!),
+          )
         else {
           byOrder.set(i, p.id)
           taken.add(p.id)
@@ -272,7 +281,8 @@ export function linksOf(
       const oneTarget = runs.every((r) => key(list[r[0]!]!.to) === key(list[runs[0]![0]!]!.to))
       if (!pieces.length) continue
       if (pieces.length === as.length) for (const [j, i] of as.entries()) to(i, pieces[j]!)
-      else if (pieces.length === runs.length) for (const [j, run] of runs.entries()) for (const i of run) to(i, pieces[j]!)
+      else if (pieces.length === runs.length)
+        for (const [j, run] of runs.entries()) for (const i of run) to(i, pieces[j]!)
       else if (pieces.length === 1 && oneTarget) for (const i of as) to(i, pieces[0]!)
       else continue
       text = text.filter((i) => !as.includes(i) || byOrder.has(i))
