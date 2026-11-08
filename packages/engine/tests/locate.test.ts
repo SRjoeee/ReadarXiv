@@ -562,6 +562,58 @@ describe('locate: the room under a unit', () => {
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
   })
+  it('states the room under each run of its text lines with its page’s lowest unit line: at a page’s foot, over its own kept row', () => {
+    // (today's freeFor, RUN:1677 given every block at RUN:2193: a paragraph running on from page 1 borrows at page 1's foot, under
+    // that page's lowest unit line, not the next page's (2608.16117v1-de t23, 2602.23285v2-ja t29); and the room under the text
+    // over a row of its own that stays ends at that row (2608.16117v1-de p27 t89: a paragraph's lines borrowed over its display))
+    const B = docOf([
+      {
+        lines: [
+          { text: 'para one', y: 700 },
+          { text: 'para two', y: 688 },
+          { text: 'other unit', y: 600 },
+        ],
+      },
+      {
+        lines: [
+          { text: 'para three', y: 700 },
+          { text: 'held row', x: 80, y: 688 },
+          { text: 'para four', y: 676 },
+          { text: 'last unit', y: 500 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('para', 'para one para two para three para four'),
+      unitOf('para', 'other unit'),
+      unitOf('para', 'last unit'),
+    ]
+    const L = locate(
+      instrumentOf(B, units, [
+        [0, 0, 1],
+        [0, -1, 0, 2],
+      ]),
+      B,
+      align(B, B),
+    )
+    const para = L.members[0]!
+    expect(para.lines.map((l) => [l[0], l[4], l[9] & 1])).toEqual([
+      [1, 700, 0],
+      [1, 688, 0],
+      [2, 700, 0],
+      [2, 688, 1],
+      [2, 676, 0],
+    ])
+    // (each [the run's last line, the free depth under it to the first ink, the page's lowest unit baseline]: page 1's foot over
+    // the other unit 79 pt down, its page's lowest line 600; the text over the kept row 3 pt down to it; its last line 167 pt
+    // over the last unit, page 2's lowest line 500)
+    expect(para.room.ends).toEqual([
+      [1, 79, 600],
+      [2, 3, 500],
+      [4, 167, 500],
+    ])
+    expect(para.room.below).toBe(167)
+  })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
     // paragraph of TeX's the front end cut at the figure into two units, each fitted alone, the one at its size, the other shrunk;

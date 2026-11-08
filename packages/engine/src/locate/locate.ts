@@ -976,7 +976,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   }
   columnsAndMeasures(members, inkA, gA)
-  for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
+  const floors = floorsOf(members)
+  for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA, floors)
   // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
   // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
   // aside), that glyph its first, on the name's baseline on B (0.5 pt, leadAt's) from the name's end on (0.05 pt, leadAt's).
@@ -1341,55 +1342,96 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
   }
 }
 
+/** each page's lowest unit baseline: the lowest line there of its members' but a figure text's, an ink figure's and a name's
+ *  (today's pageBottom, RUN:911: no unit borrows below it) */
+function floorsOf(members: readonly Member[]): Map<number, number> {
+  const out = new Map<number, number>()
+  for (const mem of members) {
+    if (mem.figure || mem.kind === 'inkfigures' || mem.kind === 'name') continue
+    for (const l of mem.lines) out.set(l[0], Math.min(out.get(l[0]) ?? Number.POSITIVE_INFINITY, l[4]))
+  }
+  return out
+}
+
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
- *  bottom edge where there is none; and the distance to the next text line of its column, baseline to baseline */
-function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
+ *  bottom edge where there is none; the same under each run of its text lines, with its page's lowest unit baseline (`ends`);
+ *  and the distance to the next text line of its column, baseline to baseline */
+function roomOf(mem: Member, inkA: Doc, offA: Int32Array, floors: ReadonlyMap<number, number>): Room {
   const last = mem.lines.at(-1)!
-  // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
-  // block — the lines of its own on that page stacked over it, each standing above the one under it and across it (a caption
-  // whose short last line keeps to one column of a block across both), never a column of its before a column break — the
-  // page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text, label
-  // and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next ink
-  // the fill meets); of the highest, those within half a size, their median baseline)
+  // (a run of its text lines, from its line `at` up: its lines on the page each standing above the one under it and across its
+  // column, to a kept row (a display, a held line: today's blocks split there); across: the run's column, its lines' measures, as
+  // design-a's "the next text line of its column" reads it, which a translation's last line may fill whatever the original's
+  // extent; never a column of its before a column break (a caption whose short last line keeps to one column of a block across
+  // both stands in the run of the block over it))
+  const runOf = (at: number) => {
+    const end = mem.lines[at] as Line
+    let x0 = Math.min(end[7], end[2])
+    let x1 = Math.max(end[8], end[3])
+    let over = end[4]
+    let from = at
+    for (let q = at - 1; q >= 0; q--) {
+      const l = mem.lines[q] as Line
+      if (l[9] & 1 || l[0] !== end[0] || l[4] <= over || Math.max(l[8], l[3]) <= x0 || Math.min(l[7], l[2]) >= x1) break
+      x0 = Math.min(x0, l[7], l[2])
+      x1 = Math.max(x1, l[8], l[3])
+      over = l[4]
+      from = q
+    }
+    return { from, x0, x1 }
+  }
+  // (the free depth under a line across x0..x1: from its bottom to the first ink under it, a page-sized box aside, whoever's it
+  // is: its own kept rows and elements under it are ink a line borrowed there meets)
+  const depthUnder = (l: Line, x0: number, x1: number): number => {
+    const pg = inkA.pages[l[0] - 1]!
+    const bottom = l[6]
+    const foot = bottom - 0.5
+    let next = Number.NEGATIVE_INFINITY
+    // (ink nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink under it: the paper there is free)
+    for (const g of pg.glyphs)
+      if (g.top < foot && g.x1 > x0 && g.x0 < x1 && g.top > next && /\S/.test(g.u) && !g.unseen) next = g.top
+    const W = pg.view[2] - pg.view[0]
+    const H = pg.view[3] - pg.view[1]
+    for (let b = 0; b < pg.kinds.length; b++) {
+      const qx0 = pg.boxes[4 * b]!
+      const qy0 = pg.boxes[4 * b + 1]!
+      const qx1 = pg.boxes[4 * b + 2]!
+      const qy1 = pg.boxes[4 * b + 3]!
+      if (qy1 < foot && qx1 > x0 && qx0 < x1 && qy1 > next && !(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H))
+        next = qy1
+    }
+    return r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
+  }
+  // (its last text line: the last line not kept, the first where every line is; its run)
   let at = mem.lines.length - 1
   while (at > 0 && (mem.lines[at] as Line)[9] & 1) at--
   const lastText = mem.lines[at] as Line
   const tp = lastText[0]
-  // (its last block: from that line up, its lines on the page each standing above the one under it and across its column, to a
-  // kept row (a display, a held line: today's blocks split there); across: the block's column, its lines' measures, as design-a's
-  // "the next text line of its column" reads it, which a translation's last line may fill whatever the original's extent)
-  let bx0 = Math.min(lastText[7], lastText[2])
-  let bx1 = Math.max(lastText[8], lastText[3])
-  let over = lastText[4]
-  for (let q = at - 1; q >= 0; q--) {
-    const l = mem.lines[q] as Line
-    if (l[9] & 1 || l[0] !== tp || l[4] <= over || Math.max(l[8], l[3]) <= bx0 || Math.min(l[7], l[2]) >= bx1) break
-    bx0 = Math.min(bx0, l[7], l[2])
-    bx1 = Math.max(bx1, l[8], l[3])
-    over = l[4]
+  const { x0: bx0, x1: bx1 } = runOf(at)
+  // (the room below: from its last line's bottom to the first ink under it across its last run (its lines' measures, as for the
+  // next line: a translation's lines span the run, so a line borrowed under a short last line meets what stands under the run's
+  // full lines, a display, the checkpoint's free-11))
+  const [p, , lx0, lx1] = last
+  const below = depthUnder(last, p === tp ? Math.min(lx0, bx0) : lx0, p === tp ? Math.max(lx1, bx1) : lx1)
+  // (the room under each run of its text lines, from its last up (today's freeFor, RUN:1677, which RUN:2193 gives every block:
+  // a member running on to the next page or column borrows at the foot of the one it leaves, and a run over a kept row of its
+  // own only down to that row), with its page's lowest unit baseline; a page with none states no room there)
+  const ends: [number, number, number][] = []
+  for (let e = mem.lines.length - 1; e >= 0; ) {
+    const l = mem.lines[e] as Line
+    if (l[9] & 1) {
+      e--
+      continue
+    }
+    const run = runOf(e)
+    const floor = floors.get(l[0])
+    if (floor !== undefined) ends.push([e, depthUnder(l, run.x0, run.x1), r2(floor)])
+    e = run.from - 1
   }
-  // (the room below: from its last line's bottom to the first ink under it across its last block (its lines' measures, as for
-  // the next line: a translation's lines span the block, so a line borrowed under a short last line meets what stands under
-  // the block's full lines, a display, the checkpoint's free-11), a page-sized box aside)
-  const [p, , lx0, lx1, , , bottom] = last
-  const x0 = p === tp ? Math.min(lx0, bx0) : lx0
-  const x1 = p === tp ? Math.max(lx1, bx1) : lx1
-  const pg = inkA.pages[p - 1]!
-  const foot = bottom - 0.5
-  let next = Number.NEGATIVE_INFINITY
-  // (ink nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink under it: the paper there is free)
-  for (const g of pg.glyphs)
-    if (g.top < foot && g.x1 > x0 && g.x0 < x1 && g.top > next && /\S/.test(g.u) && !g.unseen) next = g.top
-  const W = pg.view[2] - pg.view[0]
-  const H = pg.view[3] - pg.view[1]
-  for (let b = 0; b < pg.kinds.length; b++) {
-    const qx0 = pg.boxes[4 * b]!
-    const qy0 = pg.boxes[4 * b + 1]!
-    const qx1 = pg.boxes[4 * b + 2]!
-    const qy1 = pg.boxes[4 * b + 3]!
-    if (qy1 < foot && qx1 > x0 && qx0 < x1 && qy1 > next && !(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H)) next = qy1
-  }
-  const below = r2(Math.min(H, Math.max(0, bottom - (Number.isFinite(next) ? next : pg.view[1]))))
+  ends.reverse()
+  // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
+  // run, the page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text,
+  // label and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next
+  // ink the fill meets); of the highest, those within half a size, their median baseline)
   const travels = new Set<number>([...mem.text, ...mem.label])
   for (const [id, l] of mem.els) if (!mem.elements.find(([k]) => k === id)?.[1].keep) for (const a of l) travels.add(a)
   const T = lastText[4] - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
@@ -1407,5 +1449,9 @@ function roomOf(mem: Member, inkA: Doc, offA: Int32Array): Room {
       .sort((a, b) => a - b)
     nextBase = ys[(ys.length - 1) >> 1] as number
   }
-  return { below, ...(nextBase !== null ? { next: r2(lastText[4] - nextBase) } : {}) }
+  return {
+    below,
+    ...(nextBase !== null ? { next: r2(lastText[4] - nextBase) } : {}),
+    ...(ends.length ? { ends } : {}),
+  }
 }

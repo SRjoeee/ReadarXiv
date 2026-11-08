@@ -171,13 +171,17 @@ export const Label = z.object({
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
- *  crowded) */
+ *  crowded); `ends` the room under each run of its text lines (a run's last line: the next line on another page or column, a
+ *  kept row, or none), each [that line's index, the free depth under it to the first ink across the run, its own kept rows
+ *  and elements too, its page's lowest unit baseline (but a figure text's, an ink figure's and a name's)]: what a translation
+ *  may borrow there, on each page it runs over (`below` is its last line's alone, which a part made before states) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
   side: z.tuple([num, num]).optional(),
   band: z.tuple([num, num]).optional(),
   under: num.optional(),
+  ends: z.array(z.tuple([int, num, num])).optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({
