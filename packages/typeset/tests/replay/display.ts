@@ -14,7 +14,7 @@ import type { Layout } from '../../src/fit/types.ts'
 import { displayLines } from '../../src/emit/display.ts'
 import type { PassUnit } from '../../src/shared/fill-pass.ts'
 import { framed, laysOf, passesOf, trackedCells } from './pass.ts'
-import { firstDifference, flooredIn, LAB, ledger, ruledIn } from './tap.ts'
+import { firstDifference, flooredIn, LAB, ledger } from './tap.ts'
 import { CACHE, paperOf } from './today.ts'
 
 /** the harness's CSS pixels a PDF unit (reader-entry.mjs SCALE; dpr 1: its audit's device pixels too) */
@@ -196,12 +196,11 @@ export type DisplayResult = {
   /** the dump's laid units the chain did not lay */
   unlaid: number[]
   chains: string[]
-  /** the dump's units today laid with a borrowed line (tap.ts ruledIn), not replayed; and those on a page one stands on that
-   *  the port lays otherwise (the page's fill reads them all): the ruling's; and those whose frames the port fills each at its
-   *  own leading (pass.ts framed) that it lays otherwise; and the cells today's fill letter-spaced, laid untracked by the ruling
-   *  of 2026-11-08 (pass.ts trackedCells), whose size and lines' text are today's; and those on a page where today's held a
-   *  paragraph's gap to the next one's leading that it lays otherwise (tap.ts flooredIn: the gap ruling of 2026-11-08) */
-  ruled: { borrowed: number; onPage: number; frames: number; cells: number; gap: number }
+  /** the dump's units whose frames the port fills each at its own leading (pass.ts framed) that it lays otherwise; the cells
+   *  today's fill letter-spaced, laid untracked by the ruling of 2026-11-08 (pass.ts trackedCells), whose size and lines' text
+   *  are today's; and those on a page where today's held a paragraph's gap to the next one's leading that it lays otherwise
+   *  (tap.ts flooredIn: the gap ruling of 2026-11-08) */
+  ruled: { frames: number; cells: number; gap: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
@@ -220,15 +219,10 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
-    ruled: { borrowed: 0, onPage: 0, frames: 0, cells: 0, gap: 0 },
+    ruled: { frames: 0, cells: 0, gap: 0 },
   }
-  const ruled = ruledIn(pair)
   const gap = flooredIn(pair)
   for (const u of readerDump(pair).units) {
-    if (ruled.borrowed.has(u.ord)) {
-      out.ruled.borrowed++
-      continue
-    }
     out.units++
     const p = lays.get(u.ord)
     if (!p) {
@@ -243,15 +237,13 @@ export function displayReplay(pair: string): DisplayResult {
         { size: u.size, texts: u.lines.map((l) => l.text) },
         '',
       )
-      if (d && ruled.units.has(u.ord)) out.ruled.onPage++
-      else if (d && gap.units.has(u.ord)) out.ruled.gap++
+      if (d && gap.units.has(u.ord)) out.ruled.gap++
       else if (d) out.differ.push({ ord: u.ord, d })
       else out.ruled.cells++
       continue
     }
     const d = firstDifference(mine, want, '')
-    if (d && ruled.units.has(u.ord)) out.ruled.onPage++
-    else if (d && framed(p)) out.ruled.frames++
+    if (d && framed(p)) out.ruled.frames++
     else if (d && gap.units.has(u.ord)) out.ruled.gap++
     else if (d) out.differ.push({ ord: u.ord, d })
     else {

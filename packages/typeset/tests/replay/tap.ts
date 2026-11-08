@@ -20,71 +20,14 @@ export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.js
 
 export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileSync(file)).toString('utf8'))
 
-/**
- * Today's record read through the owner's rulings that removed a rule from the port, so that what the ruling leaves alike
- * compares alike and what it changes stands out. 2026-11-08, no borrowing: a fit state of today's that borrowed nothing
- * (`borrow: 0`, every state before the walk's borrow knob, and after it where no block had a line of room) is the port's state,
- * which has no such field; one that borrowed (`borrow` > 0) is kept, and differs: a case `borrowed` names, which a replay
- * leaves out as the ruling's. In place, over a value read whole
- */
-export function ruled<T>(v: T): T {
-  const go = (x: unknown): void => {
-    if (x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) {
-      for (const e of x) go(e)
-      return
-    }
-    const o = x as Record<string, unknown>
-    if (o.borrow === 0 && 'knob' in o) delete o.borrow
-    // (and a block's room to borrow, none before the walk measured it: the port's blocks have no such field)
-    if (o.free === 0 && 'B' in o && 'pitch' in o) delete o.free
-    for (const e of Object.values(o)) go(e)
-  }
-  go(v)
-  return v
-}
-/** today's rule params (resolveRules') less the fields the ruling removed from the port's rule set (lab/typeset/rules-data.mjs
- *  RULED_OUT: `borrow`, `borrowGap`, the walk's 'borrow' knob) */
+/** today's rule params (resolveRules') less the fields an owner's ruling removed from the port's rule set (lab/typeset/
+ *  rules-data.mjs RULED_OUT: `borrowGap`, the clearance a borrowed line kept over the next ink, which TeX's paragraph separation
+ *  replaces, 2026-11-08) */
 export function ruledParams<T>(params: T): T {
   const o = { ...(params as Record<string, unknown>) }
-  delete o.borrow
   delete o.borrowGap
-  if (Array.isArray(o.order)) o.order = o.order.filter((k) => k !== 'borrow')
   return o as T
 }
-/** a layout of today's (a slot's summary, a state) that borrowed lines: the ruling's (`ruled`), no replay of the port's */
-export const borrowed = (layout: unknown): boolean =>
-  !!layout && typeof layout === 'object' && Number((layout as { state?: { borrow?: unknown } }).state?.borrow ?? 0) > 0
-/** whether a value holds a fit state of today's that borrowed lines (`borrow` > 0 beside its `knob`), anywhere in it */
-const holdsBorrow = (x: unknown): boolean => {
-  if (x === null || typeof x !== 'object') return false
-  if (Array.isArray(x)) return x.some(holdsBorrow)
-  const o = x as Record<string, unknown>
-  if ('knob' in o && Number(o.borrow ?? 0) > 0) return true
-  return Object.values(o).some(holdsBorrow)
-}
-const ruledOf = new Map<string, { borrowed: Set<number>; pages: Set<number>; units: Set<number> }>()
-/**
- * What the no-borrowing ruling (`ruled`) changes of a pair's record: the units today laid with a borrowed line in any round
- * (`borrowed`), the pages they stand on (`pages`: their U.admit pages), and every unit with a line on one of those pages
- * (`units`: the page's fill reads every unit on it, its target and its one size, so each is laid otherwise once one is). A
- * replay of a page or of a fill leaves them out, counted
- */
-export function ruledIn(pair: string): { borrowed: Set<number>; pages: Set<number>; units: Set<number> } {
-  const got = ruledOf.get(pair)
-  if (got) return got
-  const L = ledger(pair)
-  const pagesOf = (u: Ledger['units'][number]) =>
-    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
-      []) as number[]
-  const borrowedUnits = new Set(L.units.filter((u) => holdsBorrow(u.slots)).map((u) => u.ord))
-  const pages = new Set(L.units.filter((u) => borrowedUnits.has(u.ord)).flatMap(pagesOf))
-  const units = new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord))
-  const out = { borrowed: borrowedUnits, pages, units }
-  ruledOf.set(pair, out)
-  return out
-}
-
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:
@@ -130,7 +73,7 @@ export type Entry = {
 }
 export type Sample = { rule: string; branches: Record<string, { count: number; sample: unknown[] }>; entries: Entry[] }
 
-export const sample = (rule: string): Sample => ruled(readGz(join(TAP, 'samples', `${rule}.json.gz`))) as Sample
+export const sample = (rule: string): Sample => readGz(join(TAP, 'samples', `${rule}.json.gz`)) as Sample
 export const derived = <T>(name: string): T => readGz(join(DERIVED, `${name}.json.gz`)) as T
 
 /** a pair's ledger (TAP.md §5): every unit's slots of every round, the fill passes, the table groups */
@@ -143,7 +86,7 @@ export type Ledger = {
 }
 const ledgers = new Map<string, Ledger>()
 export const ledger = (pair: string): Ledger => {
-  const l = ledgers.get(pair) ?? (ruled(readGz(join(TAP, 'ledgers', `${pair}.ledger.json.gz`))) as Ledger)
+  const l = ledgers.get(pair) ?? (readGz(join(TAP, 'ledgers', `${pair}.ledger.json.gz`)) as Ledger)
   ledgers.set(pair, l)
   return l
 }

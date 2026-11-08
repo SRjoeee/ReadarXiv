@@ -112,7 +112,7 @@ export const SAYS = {
   'line-count': "a unit's line count on the page against the original's",
   over: "a side's text drawn over ink that stays (the copy's, a crop's, the original's it keeps): device pixels of its text over other ink (the original: none)",
   frame: "a laid line past its column or the original's text block (a cell: past its own room, the owner's ruling 3), points (the original: none)",
-  block: "lines laid in space the original leaves empty, under its last line (the owner's ruling 1: no borrowing)",
+  block: "lines borrowed past TeX's room: under its text block bottom, or the next ink nearer than its paragraph separation (the owner's ruling 1)",
   elements: "an element drawn otherwise than the original sets it: pieces TeX set on one line drawn apart, its scripts set flat as text, drawn as nothing where TeX set ink",
   erased: "the original's glyphs a side shows in part inside its translated units' regions (an erasure's sliver)",
   groups: "a table's grid group translated or kept whole as today decides (the owner's ruling 3); a group v2 is handed already decided is not exercised, apart",
@@ -130,7 +130,7 @@ export const SAYS = {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, ruled }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -526,29 +526,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     band,
     NEAR,
   }
-  const { borrowed, past } = measureFidelity(fc)
+  const { borrowed } = measureFidelity(fc)
   judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
   judgeJoined(fc, joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band), new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
-  // (the owner's ruling 1, no borrowing: a unit today laid with a borrowed line, by today's own record (`ruled`, its ledger: a
-  // fit state that borrowed lines, in any round of its page's fill), or whose drawn lines today stand in space the original
-  // leaves empty (`block`'s reading). v2's differences on it in the measures the line budget decides, its size and its line
-  // count, and their knock-ons on the same unit (its first line's anchor, its gap after its head, its block) are the ruling's,
-  // not v2's fault; unless v2 itself breaks the original's block (a line under its last, or past its column or text block) or
-  // crosses a rule of the page the original's lines do not. Every other measure on it is judged as anywhere: the highlight's
-  // cover, the erasure, the elements, the style are no line budget's. The one exception within the highlight: its sentences'
-  // page placement (sentences.mjs: v2 lights nothing of it as drawn on a page today lights it), which a reflow moves
-  // (the coordinator's call, 2026-11-08); the sentences' granularity stays judged: a difference holding any other finding
-  // (lit whole, other counts, a sentence meeting another of today's on arXiv's page) stays worse)
-  const RULED = new Set(['size', 'line-count', 'anchor', 'gap', 'block'])
-  // (sentences.mjs's one placement finding: v2 lights nothing of the unit as drawn on a page today lights it, its translation
-  // moved off the page; which of its sentences a page holds is the layout's and no finding there, hl-sentence's 15dbb0f91)
-  const PLACED = /^not lit as drawn on this page, lit by today$/
-  const placement = (d) =>
-    d.flag === 'highlight' && /sentences paired one by one/.test(d.what) && String(d.v2?.value ?? '').split('; ').every((x) => PLACED.test(x))
-  const borrowedToday = (k) => (borrowed.today.get(k) ?? 0) > 0 || (k.startsWith('t') && !!ruled?.has(Number(k.slice(1))))
-  const posOf = (k) => Math.max(NEAR.positionMin, NEAR.position * (orig.get(k)?.size || 10))
-  const v2Breaks = (k) =>
-    (borrowed.v2.get(k) ?? 0) > 0 || (past.v2.get(k) ?? 0) > posOf(k) || (events.v2.get(k) ?? []).some((w) => w.includes('across the rule'))
+  // (no ruling stands between v2's line budget and today's: the no-borrowing ruling of 2026-11-08 that made v2's size, line
+  // count and their knock-ons on a unit today laid with a borrowed line the ruling's was replaced the same day by borrowing
+  // bounded by TeX's facts, which `block` judges; size and line count are judged against today again, but where today's
+  // budget was bought past TeX's room, below)
 
   // ------------------------------------------------ page measures: links, the highlight, darkness, pixels
   const px = rec.px ?? {}
@@ -677,19 +661,45 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       b = faults.v2[f] ?? []
     if (a.length || b.length) out.faults[f] = { today: a.length, v2: b.length, todaySays: a.slice(0, 6), v2Says: b.slice(0, 6) }
   }
-  // (the no-borrowing ruling over the page's differences, every measure's made: RULED's and the sentences' placement above)
-  for (const d of out.diffs) {
-    if (!d.worse || !(RULED.has(d.flag) || placement(d)) || !d.unit) continue
-    const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
-    if (keys.some(borrowedToday) && !keys.some(v2Breaks)) {
-      d.worse = false
-      d.nearer = 'ruling'
-      d.ruling = "no borrowing (the owner's ruling 1): today laid this unit with a borrowed line, v2 keeps the original's block"
-    }
-  }
+  // (the units each side laid with a line past TeX's room on this page, `block`'s faults: a size or a line count today bought
+  // so is today's fault, here and on the unit's other pages, the paper's pass)
+  const pastOf = (side) => [...borrowed[side]].filter(([, k]) => k > 0).map(([key]) => key)
+  out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
+  budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
   recount(out)
   out.units = units
   return out
+}
+
+/**
+ * A size or a line count today bought with a line past TeX's room (its text block bottom, or the next ink nearer than the
+ * paragraph separation: a `block` fault of today's on the unit, or on a member of its size tie, `today` keys) is today's
+ * fault, and v2 keeping the room nearer, never worse, where v2 itself breaks it nowhere (`v2` keys): the coordinator's call
+ * of 2026-11-09 under the owner's ruling, today's last line on the page number (2608.16117v1 p23 t86). Over a page's
+ * differences, its faults updated; the caller recounts
+ */
+function budgetPastRoom(p, today, v2) {
+  for (const d of p.diffs) {
+    if (!d.worse || (d.flag !== 'size' && d.flag !== 'line-count') || !d.unit) continue
+    const keys = d.unit.startsWith('tie ') ? d.unit.slice(4).split(', ') : [d.unit.split(' ')[0]]
+    if (!keys.some((k) => today.has(k)) || keys.some((k) => v2.has(k))) continue
+    d.worse = false
+    d.nearer = 'v2'
+    d.why = "today's bought with a line past TeX's room (block): today's fault"
+    const f = (p.faults[d.flag] ??= { today: 0, v2: 0, todaySays: [], v2Says: [] })
+    f.today++
+    if (f.todaySays.length < 6) f.todaySays.push(`${d.unit}: its ${d.flag === 'size' ? 'size' : 'line count'} bought with a line past TeX's room`)
+  }
+}
+/** the paper's pass of budgetPastRoom: a unit's size and line count today bought past TeX's room on any of its pages is
+ *  today's fault on each (its size is the unit's one; a line borrowed on one page moves its lines on the next) */
+export function pastRoomPass(pages, recount) {
+  const today = new Set(pages.flatMap((p) => p.pastRoom?.today ?? []))
+  const v2 = new Set(pages.flatMap((p) => p.pastRoom?.v2 ?? []))
+  for (const p of pages) {
+    budgetPastRoom(p, today, v2)
+    recount(p)
+  }
 }
 
 /** a page's differences ordered, its worse ones counted and its score (each measure's worse differences, 8 at most, times its

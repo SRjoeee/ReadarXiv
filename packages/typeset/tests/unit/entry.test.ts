@@ -305,51 +305,78 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
   // (a translation longer than its original by a line: 165 characters at half a size each, 45 to a line of 228 pt at 10 pt)
   const longer = 'wort '.repeat(33).trim()
-  it('borrows no line at the foot of a page it runs on from: the whole paragraph shrinks evenly to its own lines', () => {
-    // (the owner's ruling of 2026-11-08: no translation takes a line in space the original leaves empty, not at a page's or a
-    // column's foot, not above the next unit; where it does not fit its own lines the whole paragraph shrinks, one size. A part
-    // made before the ruling still states the room under each run of its lines (Room.ends: page 1's foot 79 pt down to the first
-    // ink): it is read by nothing)
-    const a = member({
+  // (the owner's ruling of 2026-11-08, borrowing bounded by TeX's facts: a paragraph may take lines in the empty space under a
+  // run of its lines, never past TeX's text block bottom in its column (Room.runs' third: the depth of that bottom under the
+  // run's last baseline) nor so that the next ink under it (Room.runs' second: the depth of its baseline) stands nearer than
+  // TeX's paragraph separation (Room.sep, \baselineskip and \parskip); before its size: a page's body keeps one size)
+  const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+  const overBreak = (room: Placed['room']) =>
+    member({
       lines: [
         [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
         [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
         [2, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10],
       ],
-      room: {
-        below: 0,
-        next: 300,
-        ends: [
-          [1, 79, 600],
-          [2, 0, 650],
-        ],
-      } as Placed['room'],
+      room,
     })
-    // (the page's fill off: its growth is its own question)
-    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
-    const lay = (page: number) =>
+  it('borrows a line at the foot of a page it runs on from, down to TeX’s text block bottom, before it shrinks', () => {
+    // (2608.16117v1-de t23, 2602.23285v2-ja t29: a paragraph running on from page 1 to page 2; page 1's text block bottom 12 pt
+    // under its last line there, the next ink 200 pt down (the page's foot line): one line of room)
+    const lay = (a: Placed, page: number) =>
       layPage({ ...part(a), page }, rowsOf([row([{ t: 'text', s: longer }])]), still, metrics()).members[0]!
-    const [p1, p2] = [lay(1), lay(2)]
-    expect(p1.state).toBe('laid')
-    expect(p1.fit!.size).toBeLessThan(10)
-    expect(p2.fit!.size).toBe(p1.fit!.size)
-    // (on the original's baselines alone: two lines on page 1, one on page 2)
-    expect(p1.lines.map(([y]) => y)).toEqual([700, 688])
+    const a = overBreak({
+      below: 0,
+      next: 300,
+      runs: [
+        [1, 200, 12],
+        [2, 100, 650],
+      ],
+      sep: 12,
+    })
+    const [p1, p2] = [lay(a, 1), lay(a, 2)]
+    expect([p1.state, p1.fit?.size, p1.fit?.borrowed]).toEqual(['laid', 10, 1])
+    expect(p1.lines.map(([y]) => y)).toEqual([700, 688, 676])
     expect(p2.lines.map(([y]) => y)).toEqual([700])
+    // (TeX's bottom 11 pt under it: no line's room, never past it; the whole paragraph shrinks evenly to its own lines)
+    const short = overBreak({ below: 0, next: 300, runs: [[1, 200, 11]], sep: 12 })
+    const [q1, q2] = [lay(short, 1), lay(short, 2)]
+    expect(q1.fit!.size).toBeLessThan(10)
+    expect(q2.fit!.size).toBe(q1.fit!.size)
+    expect(q1.lines.map(([y]) => y)).toEqual([700, 688])
   })
-  it('borrows no line above the next unit: it shrinks where the room under its block would hold a line (Room.below)', () => {
-    // (2602.23285v2-ja p4 t26: a paragraph's fifth line laid in the skip above heading 4.1, the heading glued to it; a part made
-    // before Room.ends states its last line's room alone, 40 pt down to the next paragraph here)
+  it('borrows a line above the next unit only where the next ink keeps TeX’s paragraph separation under it', () => {
+    // (2602.23285v2-ja p4 t26: a paragraph's fifth line laid in the skip above heading 4.1. The next ink's baseline 30 pt under
+    // its last line: with \baselineskip and \parskip 15 pt one line of room (its baseline 15 pt over the next one's); with 19,
+    // 11 pt, none: it shrinks)
     const idB = 'b'.repeat(64)
-    const a = member({ room: { below: 40, next: 52 } })
-    const b = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 636, 643, 634, 72, 300, 0, 10]] })
+    const b = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 658, 665, 656, 72, 300, 0, 10]] })
     const text = 'wort '.repeat(20).trim()
     const rows = rowsOf([row([{ t: 'text', s: text }]), { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }])
-    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
-    const [laid] = layPage({ ...part(a), flows: [[a], [b]] }, rows, still, metrics()).members
-    expect(laid!.state).toBe('laid')
-    expect(laid!.fit!.size).toBeLessThan(10)
-    expect(laid!.lines.map(([y]) => y)).toEqual([700, 688])
+    const lay = (sep: number) => {
+      const a = member({ room: { below: 20, next: 30, runs: [[1, 30, 200]], sep } })
+      return layPage({ ...part(a), flows: [[a], [b]] }, rows, still, metrics()).members[0]!
+    }
+    const [roomy, tight] = [lay(15), lay(19)]
+    expect([roomy.state, roomy.fit?.size]).toEqual(['laid', 10])
+    expect(roomy.lines.map(([y]) => y)).toEqual([700, 688, 676])
+    expect(tight.fit!.size).toBeLessThan(10)
+    expect(tight.lines.map(([y]) => y)).toEqual([700, 688])
+  })
+  it('borrows nothing where the part states no TeX room: a part made before, its runs’ room or its separation unstated', () => {
+    // (a part made before 2026-11-08 may state the room under each run otherwise, Room.ends: read by nothing; its last line's
+    // room alone, Room.below: no fact of TeX's bounds it. A run stated, no separation (a unit TeX set no paragraph for): none)
+    const lay = (room: Placed['room']) =>
+      layPage({ ...part(overBreak(room)), page: 1 }, rowsOf([row([{ t: 'text', s: longer }])]), still, metrics())
+        .members[0]!
+    for (const room of [
+      { below: 40, next: 300, ends: [[1, 79, 600]] } as Placed['room'],
+      { below: 40, next: 300 },
+      { below: 40, next: 300, runs: [[1, 200, 50]] } as Placed['room'],
+    ]) {
+      const p = lay(room)
+      expect(p.fit!.size).toBeLessThan(10)
+      expect(p.lines.map(([y]) => y)).toEqual([700, 688])
+    }
   })
   it('lays no line through a row of its own that stays under its text (P2: 2608.16117v1-de p27 t89 over its display)', () => {
     // (its last line a kept row (a held line, a display's row): its lines laid over the row, none under it)

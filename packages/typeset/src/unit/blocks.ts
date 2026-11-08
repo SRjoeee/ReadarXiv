@@ -64,6 +64,8 @@ export type Block = {
   G?: number[]
   pitch0: number | null
   E?: number[]
+  /** the room under its last line a translation may borrow (lay/adapt.ts: TeX's facts, Room.runs and Room.sep), 0 none */
+  free: number
   flow: number
   through?: boolean
 }
@@ -133,7 +135,7 @@ export function measureOn(Y: readonly number[], at: (i: number) => [number, numb
   return at(Y.length - 1)
 }
 
-type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'flow'> & { after?: number }
+type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | 'flow'> & { after?: number }
 
 /** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
 export function blocksOf2(i: BlocksInput): Raw[] {
@@ -289,6 +291,7 @@ export function blocks(i: BlocksInput): Block[] {
       ...(G ? { G } : {}),
       pitch0,
       ...(E ? { E } : {}),
+      free: 0,
       flow: 0,
     }
   })

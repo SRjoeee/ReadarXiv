@@ -16,7 +16,7 @@ import { fin, layoutOf, linesOf } from './trace.ts'
 export type PageMember = {
   ord: number
   state: 'laid' | Unlaid
-  fit?: { size: number; lead: number; track: number }
+  fit?: { size: number; lead: number; track: number; borrowed: number }
   lines: DisplayLine[]
   /** the unit as its lay and its fill left it (the gate's dump reads it) */
   lay?: PassUnit
@@ -75,7 +75,7 @@ export function layPagePrepared(
   // (each laid larger capped at the least and the page laid again, until none is: the members of one paragraph share a row, and
   // one laid at the least the first time, laid again beside one capped (its last line ending sooner), can come out larger
   // (2608.16117v1-de p19: t57 capped at t59's 0.875, t59 then 0.975). A member laid at the least is not capped: capped at its
-  // own scale its walk sets it otherwise (t115 p38, 15 lines at 0.875 and 14 capped there, when it borrowed). Each round lowers a cap, never
+  // own scale its walk sets it otherwise (t115 p38, 15 lines borrowed at 0.875, 14 capped there). Each round lowers a cap, never
   // under the floor: it ends)
   const cap = new Map<number, number>()
   let laid = first
@@ -264,6 +264,7 @@ function layPageOnce(
                 size: L.f,
                 lead: L.state.lead,
                 track: L.state.track,
+                borrowed: L.state.borrow,
               },
             }
           : {}),

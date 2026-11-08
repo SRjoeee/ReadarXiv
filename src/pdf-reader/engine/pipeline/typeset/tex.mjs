@@ -9,7 +9,9 @@ import { lastTexLog, PARA_END_TEX } from '../../source/latex-front.mjs'
  *  once whichever comes first. A message alone: nothing typeset changes */
 export const END_TEX = String.raw`\ifdefined\AddToHook\ifdefined\axtendhook\else\let\axtendhook\relax\AddToHook{enddocument/afterlastpage}{\message{^^JAXT-END^^J}}\fi\fi
 `
-/** a unit's line count and leading at its paragraph's end (PARA_END_TEX), in the log. Through \message: \typeout
+/** a unit's line count, leading, size and \parskip at its paragraph's end (PARA_END_TEX), in the log: its \baselineskip and
+ *  \parskip are TeX's normal paragraph separation there, which the next ink under a borrowed line keeps (the borrowing ruling
+ *  of 2026-11-08, marks/channels.ts readSkips; readLines reads the rest). Through \message: \typeout
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
  *  mode, where a caption is measured in an \hbox. And each column the output routine makes at a forced break
  *  (\outputpenalty -10000: \newpage, \clearpage's, \pagebreak; LaTeX's float passes run below it), as AXT-FORCED: where
@@ -17,7 +19,7 @@ export const END_TEX = String.raw`\ifdefined\AddToHook\ifdefined\axtendhook\else
  *  so that the marked compile's TeX, and every cache keyed by it, stays as it was). And once the last page is out, AXT-END
  *  (END_TEX): the readings are the whole paper's (completeLog) */
 export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
-\def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size}}
+\def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size\space\the\parskip}}
 \def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}

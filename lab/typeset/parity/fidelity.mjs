@@ -210,23 +210,47 @@ export function measureFidelity(c) {
     judge('frame', name(key), kindOf(key) === 'cell' ? "a line past the cell's own room (its original's extent), points" : "a line past its column or the original's text block, points", 0, { value: r2(t), d: t }, { value: r2(v), d: v }, pos(key))
   }
 
-  // ---------------- block: lines in space the original leaves empty (the owner's ruling 1: no borrowing; the whole paragraph
-  // shrinks instead): each side's drawn lines under the original's last line on the page
+  // ---------------- block: lines borrowed past TeX's room (the owner's ruling of 2026-11-08: a paragraph may take lines in the
+  // space under a run of its lines, never past TeX's text block bottom in its column, nor bringing the next ink nearer than
+  // TeX's paragraph separation): each side's drawn lines under a run's last original line on the page, the part's room under
+  // it (Room.runs: the depth of the next ink's baseline, of TeX's text block bottom; Room.sep, \baselineskip and \parskip),
+  // a line under the lowest baseline that room allows by more than `pos` a fault. A drawn line is judged where it stands under
+  // the unit's lowest original line on the page whose column (TeX's measure) it meets, the space below its own last line
+  // there: a line over another of its own original lines in its column (laid on from the unit before over the rows it left,
+  // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
+  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
   const borrowed = { today: new Map(), v2: new Map() }
+  const roomOf = (key) => {
+    const o = orig.get(key)
+    const m = o?.part !== null && o?.part !== undefined ? c.facts.get(o.part) : null
+    if (!m?.lines?.length || /figure/.test(o.kind ?? '')) return null
+    const runs = new Map((m.room?.runs ?? []).map(([j, ink, foot]) => [j, { ink, foot }]))
+    return { lines: m.lines.map((l, j) => ({ j, y: l[4], m0: Math.min(l[7], l[2]), m1: Math.max(l[8], l[3]), kept: l[9] & 1 })).filter((l, j) => m.lines[j][0] === n), runs, sep: m.room?.sep }
+  }
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
-      const o = orig.get(key)
-      if (!o?.lines.length || /figure/.test(o.kind ?? '')) continue
-      const last = Math.min(...o.lines.map((l) => l.y))
-      const k = flat(ls).filter((l) => l.y < last - pos(key)).length
+      const r = roomOf(key)
+      if (!r?.runs.size) continue
+      let k = 0
+      for (const l of flat(ls)) {
+        const column = r.lines.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
+        const over = column.length && column.every((o) => o.y > l.y + pos(key)) ? column.sort((a, b) => a.y - b.y)[0] : null
+        const run = over && r.runs.get(over.j)
+        if (!run) continue
+        const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
+        const past = over.y - Math.max(0, free) - l.y
+        if (!(past > pos(key))) continue
+        k++
+        fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
+      }
       borrowed[side].set(key, k)
-      if (k) fault(side, 'block', `${name(key)}: ${k} line${k > 1 ? 's' : ''} under the original's last (no borrowing: the owner's ruling)`)
     }
   for (const key of [...both, ...v2Only]) {
-    const t = T.has(key) ? borrowed.today.get(key) : 0,
-      v = borrowed.v2.get(key)
-    if (t === undefined || v === undefined || t === v) continue
-    diff('block', name(key), "lines in space the original leaves empty (under its last line): the owner's ruling, no borrowing", 0, { value: t, off: t }, { value: v, off: v }, v > t, v < t ? 'v2' : 'today')
+    const t = T.has(key) ? (borrowed.today.get(key) ?? 0) : 0,
+      v = borrowed.v2.get(key) ?? 0
+    if (!borrowed.v2.has(key) && !borrowed.today.has(key)) continue
+    if (t === v) continue
+    diff('block', name(key), "lines borrowed past TeX's room: under its text block bottom, or the next ink nearer than its paragraph separation", 0, { value: t, off: t }, { value: v, off: v }, v > t, v < t ? 'v2' : 'today')
   }
 
   // ---------------- over: a side's text drawn over ink that stays (its text over the copy's ink, its crops', the original's

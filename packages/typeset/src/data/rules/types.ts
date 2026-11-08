@@ -3,12 +3,13 @@
 
 /** a script's fields: the fit's, the breaking's, the cells', the faces' (rules/layout.mjs SCRIPT_FIELDS) */
 export type ScriptRules = {
-  order: readonly ('track' | 'lead' | 'shrink')[]
+  order: readonly ('track' | 'borrow' | 'lead' | 'shrink')[]
   leadBase: number
   leadFloor: number
   trackMin: number
   compressMax: 0 | 1 | 2
   centredPunct: boolean
+  borrow: 0 | 1
   floor: number
   step: number
   further: readonly ('widen' | 'shrink')[]

@@ -1,6 +1,6 @@
 // rulesFor replayed: for each target of the tap's pairs, today's resolveRules(BUILTIN_RULES, target) as derive.mjs wrote it
 // (lanes/L3/replay/rules.json.gz: the params, the patterns, the float labels) equals the port's over the data files, less the
-// fields an owner's ruling removed from the port (tap.ts ruledParams: no borrowing, 2026-11-08).
+// fields an owner's ruling removed from the port (tap.ts ruledParams: a borrowed line's clearance, `borrowGap`, 2026-11-08).
 import { describe, expect, it } from 'vitest'
 import { resolveRules, rulesFor } from '../../src/rules-for.ts'
 import { derived, firstDifference, hasDerived, ruledParams } from './tap.ts'

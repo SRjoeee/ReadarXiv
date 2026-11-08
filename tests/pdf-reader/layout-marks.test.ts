@@ -282,11 +282,12 @@ const SOURCES = {
   table: '\\documentclass{article}\n\\begin{document}\nA paragraph with a note\\footnote{The note\'s own text, with $y$.} and a citation \\cite{k} and Fig.~\\ref{t}.\n\n\\begin{table}\\centering\n\\begin{tabular}{lc}\n\\hline\nName & Value $x$ \\\\\n\\cline{1-2}\nFirst cell & \\texttt{code} \\\\\n\\end{tabular}\n\\caption{The table\'s caption.}\\label{t}\n\\end{table}\n\\end{document}\n',
   display: '\\documentclass{article}\n\\newcommand\\bert{BERT}\n\\begin{document}\n\\section{The $x$ model}\nWe set \\bert{} as\n\\[ a = b \\]\nfor every $n$, see \\eqref{e} and \\url{https://x.org}.\n\\begin{equation}\\label{e} c = d \\end{equation}\n\\end{document}\n',
 }
-/** originalFiles' main.tex at 3cb5a733 (the pin), SHA-256, recorded before the layout option was added */
+/** originalFiles' main.tex at 3cb5a733 (the pin), SHA-256, recorded before the layout option was added; with the line probes
+ *  (`lines`), LINES_TEX's as it states each paragraph's \parskip too (the borrowing ruling of 2026-11-08) */
 const PIN: Record<string, { plain: string; lines: string }> = {
-  plain: { plain: '0b6fe69122e06d17b3d9716a34dbaa1d87ac0596b0b70fee4dfbed6f5f696a2e', lines: 'aee572dd44df82135abf35dc3ca68ec21e03054cafbcd779481f3c7e0ca7a63a' },
-  table: { plain: '3d2f67c0fe4d6b2bd8adcea768bbb2b018b02d5b9650c73427612dc86ee2bdfe', lines: 'e452222e5da1e031c444ea7e740776946437ce3dc96657864cf9095d1a6ecc44' },
-  display: { plain: 'f521d7df749a560de860e34b2df4b428e48cb91d6e9e0e9d09ba9d25a2c1390d', lines: '1087c8399dd09aa4db2eb65c622b2c067e4e26803f52ebdf83a7393eef14e7df' },
+  plain: { plain: '0b6fe69122e06d17b3d9716a34dbaa1d87ac0596b0b70fee4dfbed6f5f696a2e', lines: '4e4fd26b8effb203ad1d83110e1a3b54da39bd8a346091ece3acf98ed15fa03a' },
+  table: { plain: '3d2f67c0fe4d6b2bd8adcea768bbb2b018b02d5b9650c73427612dc86ee2bdfe', lines: '9ed40c4269744cbeb22cdf89922b176f2c0412b0f11303d0f78356662bf4f686' },
+  display: { plain: 'f521d7df749a560de860e34b2df4b428e48cb91d6e9e0e9d09ba9d25a2c1390d', lines: '908d0b0776ae045c42080edb85ad94f779e9eb23e7c6f2304f99a85c877e6a68' },
 }
 const paperOf = (src: string) => openPaper(new Map([['main.tex', new TextEncoder().encode(src)]]))
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
@@ -696,7 +697,9 @@ describe('LAYOUT_TEX', () => {
     // \columnwidth and \textwidth, where TeX shipped its box's left edge): a saved position and a \write delayed to the
     // shipout, to the log alone, in every engine's primitives (zref-savepos's), none where an engine has none
     expect(POINTS_TEX).toContain('\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi')
-    expect(POINTS_TEX).toContain('\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx}}\\axt@bw}')
+    // (and the depth of the text block's bottom under the page's top edge, as LaTeX's \@outputpage ships it: TeX's text block
+    // bottom, the borrowing ruling's foot, 2026-11-08; a dimension, the same in every engine)
+    expect(POINTS_TEX).toContain('\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}')
     expect(POINTS_TEX.indexOf('\\def\\axt@body#1')).toBeLessThan(POINTS_TEX.indexOf('cmd/@makecol/before'))
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first

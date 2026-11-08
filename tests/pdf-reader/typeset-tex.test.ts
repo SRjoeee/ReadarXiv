@@ -22,6 +22,12 @@ describe('the log the line probes write', () => {
   it('reports lines through \\message (\\typeout reads \\prevgraf as 0)', () => {
     expect(LINES_TEX).toContain('\\message{^^JAXT-LINES #1')
   })
+  it('states the paragraph\'s \\parskip after its size, which the line reading passes over (the borrowing ruling, 2026-11-08)', () => {
+    // (TeX's normal paragraph separation, \\baselineskip and \\parskip as the paragraph ends: the next ink under a borrowed line
+    // keeps it; marks/channels.ts readSkips reads both)
+    expect(LINES_TEX).toContain('{\\the\\prevgraf\\space\\the\\baselineskip\\space\\f@size\\space\\the\\parskip}')
+    expect(readLines('AXT-LINES 3 5 13.6pt 10.95 0.0pt plus 1.0pt\n').get(3)).toEqual({ lines: 5, bs: 13.6, size: 10.95 })
+  })
   it('reads the last TeX pass of the browser compiler\'s joined log, not its earlier passes or the terminal\'s echo', () => {
     // one step as BusyTeX's pipeline writes it (parked/tex-page/poc-site/tex.js): the step's log, then the terminal's output, which
     // repeats every \message

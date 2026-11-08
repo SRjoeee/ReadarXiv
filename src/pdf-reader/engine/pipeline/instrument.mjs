@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, headEnd, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { lastTexLog } from '../source/latex-front.mjs'
@@ -604,6 +604,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
   // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
   const frames = framesOf(pages, lastTexLog(log))
+  // (each unit's \baselineskip and \parskip where its paragraph ends, LINES_TEX's AXT-LINES: TeX's paragraph separation there)
+  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip]]) => ({ unit, baselineskip, parskip }))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -618,7 +620,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   for (const [k, e] of ends) if (e === 3) known.add(k)
   empty.push(...besideEmpty(pages, own.glyphs, units, { classes: classesBy, known }))
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}), ...(skips.length ? { skips } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

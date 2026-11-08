@@ -2720,6 +2720,44 @@ of today's fill read a pass where today's decision carried the next paragraph's 
 (`packages/typeset/tests/replay/tap.ts` `flooredIn`): over the corpus's 2,883 passes, 785 are this ruling's alone and none
 differs otherwise.
 
+**A paragraph borrows the room TeX's facts leave under it, before it shrinks.** The same day's first ruling had no
+translation borrow a line: where it did not fit its own lines the whole paragraph shrank, and a German body that today sets at
+11.96 pt fell to 9.86-10.46 pt beside paragraphs at full size (2608.16117v1), a Japanese one from 9.96 to 8.97-9.22. The owner
+then ruled that borrowing comes back, bounded by TeX's facts: a paragraph may take lines in the empty space under a run of its
+own lines (today's freeFor, which every block but a cell's reads), never past TeX's text block bottom in its column, and never
+bringing the next ink under it nearer than the page's normal paragraph separation; before its size, so that a page's body
+keeps one size; no share of a pitch and no reading of the page's pixels stand in for TeX's numbers (today's 0.35 pitch over an
+ink map at a quarter of the canvas, which read a line of room where there was just under one, 2602.23285v2 page 4, and none
+where there was one).
+
+The marked compile states both. The text block's bottom: each body's statement (`AXT-BODY`) gains the depth of `\textheight`'s
+foot under the page's top edge as LaTeX's `\@outputpage` ships it, an inch, `\voffset`, `\topmargin`, `\headheight`,
+`\headsep`, `\textheight`: a dimension, the same in every engine (pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx state
+675.27 pt for one twocolumn article on A4, whose flush-bottom column ends at 169.14, the page's top less it). A saved position
+was the other way: XeTeX measures it from the foot of a page of its shipped box where no `\pdfpageheight` is set (67 pt off),
+and the column box's own bottom is the main text's, over a column's footnotes and bottom floats, which then could never
+borrow. The separation: each unit's line probe (`AXT-LINES`) gains `\parskip` beside the `\baselineskip` it stated, both as
+the paragraph ends (the context's own: a list's `\parsep`); their natural sum. A unit TeX sets no paragraph for (a heading,
+the front matter's, a caption measured in a box alone) states none, and borrows nothing. The engine states, under each run of
+a member's lines (to its last line on a page or in a column, over a kept row of its own, over another's ink between two of
+its lines), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
+(`Room.runs`), and the member's separation (`Room.sep`); a block may borrow down to the smaller of the bottom and the next
+ink's baseline less the separation; a run of several lines is read across its own lines, as they are laid (a paragraph set
+beside a figure meets no figure under it), a single line to its column's end. Nothing of B moves: over the corpus's 87
+papers each marked original and final pass is byte for byte what it was; 690 of the parts' 2,321 pages have a paragraph's
+last line on the stated bottom within half a point, 85 of the 87 papers one such page at least, and 27 paragraph runs of
+about 14,500 stand under it (TeX's own overfull pages and revtex4's text block, which ships otherwise than `\@outputpage`):
+there the room is none, never more.
+
+Measured on the pages where the first ruling and today differed (2608.16117v1-de, 21 pages; 2602.23285v2-ja pages 4, 5, 9,
+10, 18; 2610.17024v1-zh pages 4-6; 2610.21312v1-zh page 10; 1810.04805v2-zh page 3; drawn by the parity check): of 200
+laid units, 20 come back larger and none smaller, 18 borrow, and none of v2's lines passes TeX's bottom or comes nearer
+the next ink than the separation; today's do on 9 pages, a line 1.4-12.1 pt past the bottom (above a page number, where
+today's last line stood on the folio). Where today borrowed past TeX's bottom v2 shrinks instead (2608.16117v1 units 23,
+57, 65, 86, 99, 115; 2602.23285v2 units 29 and 167; 2610.17024v1 unit 86), and a heading, which states no separation,
+shrinks to its line where today borrowed one (2608.16117v1 page 4). 2602.23285v2 page 4's paragraph over heading 4 keeps its
+four lines, as today: the heading's baseline 25.36 pt under it, its separation 16.94 (a 6 pt `\parskip`), no line's room.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

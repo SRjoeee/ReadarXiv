@@ -195,8 +195,13 @@ export const Label = z.object({
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
- *  crowded). No room under each run of its lines (`ends`, which a part made before 2026-11-08 states and nothing reads): no
- *  translation borrows a line (the owner's ruling of 2026-11-08) */
+ *  crowded). `runs`: the room under each run of its text lines (to its last line on a page or in a column, over a kept row of
+ *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
+ *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top), the depth under
+ *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
+ *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural:
+ *  what a translation may borrow under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of
+ *  2026-11-08). A part made before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -210,6 +215,8 @@ export const Room = z.object({
   // today's paperTo; a part made before states none, every side a glyph's)
   wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   under: num.optional(),
+  runs: z.array(z.tuple([int, num, num])).optional(),
+  sep: num.optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({

@@ -10,7 +10,7 @@ import { MissingMeasure } from '../../src/metrics/table.ts'
 import { fillPass, type PassUnit } from '../../src/shared/fill-pass.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { chain } from './round.ts'
-import { derived, firstDifference, flooredIn, ledger, ruledIn } from './tap.ts'
+import { derived, firstDifference, flooredIn, ledger } from './tap.ts'
 
 type Raw = Record<string, unknown>
 type Pass = {
@@ -23,10 +23,9 @@ type Pass = {
   told: Raw | null
   size?: Raw
 }
-/** a pass replayed: its first difference, the units the chain did not lay, how many it filled; `ruled` a pass on a page a unit
- *  today laid with a borrowed line stands on (tap.ts ruledIn) that is not replayed (it holds that unit) or differs, or one that
- *  differs and holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`), or one
- *  that differs where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08 */
+/** a pass replayed: its first difference, the units the chain did not lay, how many it filled; `ruled` a pass that differs and
+ *  holds a unit over a page or column break whose frames the port fills each at its own leading (`framed`), or one that differs
+ *  where today's held a unit's gap to the next paragraph's leading (tap.ts flooredIn): the owner's 2026-11-08 */
 export type PassResult = { page: number; d: string | null; missing?: number[]; filled: number; ruled?: true }
 
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
@@ -37,15 +36,13 @@ let rules: { targets: Record<string, { params: Raw }> } | null = null
  *  owner's word of 2026-11-08: each paragraph fills the original's block), which today's held to one leading */
 export const framed = (p: PassUnit | undefined): boolean =>
   !!p && (!!p.fillLeads || (p.runs ?? []).some((q) => !!(q as PassUnit).fillLeads))
-/** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences. A unit today laid with a
- *  borrowed line is not laid (tap.ts ruledIn: the ruling's) */
+/** every unit of a pair laid by the chain, at its last round, by ord; and the chains' differences (a unit today laid with a
+ *  borrowed line too: the chain borrows from the room today's walk had, its block's `free`) */
 export function laysOf(pair: string): { lays: Map<number, PassUnit>; differ: string[] } {
   const L = ledger(pair)
   const lays = new Map<number, PassUnit>(),
     differ: string[] = []
-  const { borrowed } = ruledIn(pair)
   for (const u of L.units) {
-    if (borrowed.has(u.ord)) continue
     const rounds = [...new Set(u.slots.filter((s) => s.by === 'X.cut').map((s) => s.round))]
     const last = rounds.at(-1)
     if (last === undefined) continue
@@ -84,7 +81,6 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
   const untracked = trackedCells(pair)
   const cells = new Set(L.units.filter((u) => u.kind === 'cell').map((u) => u.ord))
   const out: PassResult[] = []
-  const { pages, borrowed } = ruledIn(pair)
   const gap = flooredIn(pair)
   for (const pass0 of L.passes as Pass[]) {
     // (a cell the fill found short: untracked by the ruling, so not full (a cell's `full` is read by nothing: no cell is a
@@ -99,10 +95,6 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
       ...(pass0.filled ? { filled: pass0.filled.filter((f) => !untracked.has(f.id as number)) } : {}),
     }
     const ids = [...pass.begun, ...pass.continuing]
-    if (ids.some((id) => borrowed.has(id))) {
-      out.push({ page: pass.page, d: null, filled: 0, ruled: true })
-      continue
-    }
     const missing = ids.filter((id) => !lays.has(id))
     if (missing.length) {
       out.push({ page: pass.page, d: null, missing, filled: 0 })
@@ -171,7 +163,7 @@ export function passesOf(pair: string, lays: Map<number, PassUnit>): PassResult[
         `L10 ord ${id}`,
       )
     }
-    const ruled = !!d && (pages.has(pass.page) || gap.pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
+    const ruled = !!d && (gap.pages.has(pass.page) || ids.some((id) => framed(lays.get(id))))
     out.push({ page: pass.page, d: ruled ? null : d, filled: took.length, ...(ruled ? { ruled: true as const } : {}) })
   }
   return out

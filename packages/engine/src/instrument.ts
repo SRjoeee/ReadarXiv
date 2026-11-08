@@ -135,15 +135,21 @@ export interface Instrument {
      *  each \columnwidth at both edges of the block on a page TeX set in two columns, else the block; null where TeX stated
      *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */
     frames?: (TexFrame | null)[]
+    /** each unit's \baselineskip and \parskip, natural, in PDF units, where its paragraph ends (marks/channels.ts readSkips,
+     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; a unit TeX set no paragraph for states none */
+    skips?: { unit: number; baselineskip: number; parskip: number }[]
   }
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
 }
 
-/** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself) */
+/** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself); and
+ *  its bottom where TeX states it (\textheight's foot as LaTeX's \@outputpage ships it: no line of a column's text stands
+ *  under it) */
 export interface TexFrame {
   block: [number, number]
   columns: [number, number][]
+  foot?: number
 }
 
 /** the empty owners of a page of n glyphs */

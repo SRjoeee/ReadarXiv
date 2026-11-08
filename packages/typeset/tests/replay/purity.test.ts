@@ -1,6 +1,6 @@
 // I6 on table metrics (design-a §1.4, design-b §1.8): the composition is deterministic. A pair laid page by page twice from the
 // same prepared members (gate.ts gatePair) gives deep-equal dumps, and each member on two pages is laid alike from each page's
-// part.
+// part. The walk writes nothing on a block: its borrow room is stated (lay/adapt.ts from Room.runs and Room.sep).
 import { describe, expect, it } from 'vitest'
 import { gatePair } from './gate.ts'
 import { hasDerived, hasTap } from './tap.ts'

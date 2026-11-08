@@ -379,14 +379,14 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     ruling: "2026-11-08 the gap under a paragraph its own leading's alone",
-    reads: ['tex.predisplay', 'k.SHORT_SKIP 0.3'],
+    reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3'],
     file: 'breaker/slots.mjs',
     state: {
       is: 'changed',
-      why: "the owner's ruling of 2026-11-08, no borrowing: a block's foot is its last baseline, never lower by a borrowed line (today's lowOf less min(free, borrow pitches)); and the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The walk's states carry no `next`: its replay is unchanged",
+      why: "the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The walk's states carry no `next`: its replay is unchanged",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
-      cases: 145,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rulings of 2026-11-08)",
+      cases: 164,
     },
   },
   {
@@ -450,14 +450,22 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T31', '1F:layout'],
     ports: ['L2:4041-4080 statesOf', 'L2:4085 sharedStates', 'L2:4102-4137 layoutUnit2'],
     how: 'ported',
-    reads: ['fit.order', 'fit.leadBase', 'fit.leadFloor', 'fit.trackMin', 'fit.compressMax', 'fit.floor', 'fit.step'],
+    reads: [
+      'fit.order',
+      'fit.leadBase',
+      'fit.leadFloor',
+      'fit.trackMin',
+      'fit.compressMax',
+      'fit.borrow',
+      'fit.floor',
+      'fit.step',
+    ],
     file: 'fit/walk.ts',
     state: {
-      is: 'changed',
-      why: "the owner's ruling of 2026-11-08, no borrowing: the walk has no borrow knob (today's statesOf borrowed lines under a block, into room the original leaves empty, before its leading and size); a unit that does not fit its own lines shrinks, one size",
+      is: 'ported',
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
-      cases: 145,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164, a borrowed line's 19 among them), as on the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
+      cases: 164,
     },
   },
   {
@@ -801,7 +809,7 @@ const SPECS: readonly RuleSpec[] = [
       is: 'changed',
       why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400); and a table cell takes no tracking from the page's fill (TeX stretches no tabular entry; the owner's ruling of 2026-11-08), where today's tracked a CJK cell short of its fill: such a cell is laid untracked, its decision otherwise today's (pass.ts trackedCells); and the next paragraph's leading is no longer read (the owner's gap ruling of 2026-11-08, B.slots): no unit is set closer for it, so a decision tells neither `next` nor `closer`, and a pass where today's held a gap to the next paragraph's leading lays otherwise (tap.ts flooredIn)",
       replay:
-        "every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways; and every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2), a cell today tracked untracked",
+        "every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the gap ruling or a frame's own leading changes; the 344 pages of the parity pairs laid both ways; and every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2), a cell today tracked untracked",
       cases: 3013,
     },
   },
@@ -928,8 +936,11 @@ const SPECS: readonly RuleSpec[] = [
     home: 'fact',
     step: 'prepare',
     owns: ['E20', 'A19', 'A20', 'A23', '3.2'],
-    // (today's freeFor, RUN:1677-1687, the room a block borrowed under it, not ported: the owner's ruling of 2026-11-08)
-    ports: ['RUN:1557-1573 columnOf', 'RUN:1699-1729 paperTo'],
+    // (today's freeFor, RUN:1677-1687, the room a block borrowed under it: its rule ported, its room TeX's (the owner's ruling of
+    // 2026-11-08): the engine states the depth under each run's last baseline of the next ink's baseline and of TeX's text
+    // block bottom, and the paragraph's \baselineskip and \parskip (Room.runs, Room.sep, the marked compile's AXT-BODY and
+    // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap))
+    ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],
     state: L1,
