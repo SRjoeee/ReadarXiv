@@ -208,7 +208,9 @@ if (located) for (const [o, b] of located.born) {
 // id, at its place (its first line's page and box) or,
 // with no line, at its ord (today's bundle's order, which the dump keeps), with how it reads otherwise: its cause where it stays
 // the original's, or its characters in another order, piece by piece)
-if (BASELINE) {
+// A paper the baseline holds no dump of (one the corpus gained after it, as 2402.10294v1: today's prepare cannot be run for
+// it offline) has none of its units to state: its dump is the candidate's alone, which the differential lists so.
+if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
