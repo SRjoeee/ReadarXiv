@@ -92,7 +92,20 @@ describe('today’s ink makers in the engine package', () => {
   it('make the same figure texts, ledger lines, ink units, claims and kept blocks as today’s', () => {
     const today = run(TODAY)
     const copy = run(T as unknown as Impl)
-    expect(copy).toEqual(today)
+    // (the copy's one addition to them: each kept run's glyphs by its placeholder's piece, `glyphs.runs`, which part today's `ph`)
+    type Glyphs = { ph: [number, number][]; runs?: [number, [number, number][]][] }
+    const runsOf = (u: unknown) => (u as { glyphs: Glyphs }).glyphs.runs
+    const bare = (u: unknown) => {
+      const { runs: _, ...glyphs } = (u as { glyphs: Glyphs }).glyphs
+      return { ...(u as object), glyphs }
+    }
+    expect({ ...copy, ink: copy.ink.map(bare) }).toEqual(today)
+    for (const u of copy.ink) {
+      const runs = runsOf(u) ?? []
+      expect(runs.flatMap(([, gs]) => gs)).toEqual((u as unknown as { glyphs: Glyphs }).glyphs.ph)
+      for (const [k] of runs) expect(u.pieces[k]?.t).toBe('ph')
+    }
+    expect(copy.ink.some((u) => (runsOf(u)?.length ?? 0) > 0)).toBe(true)
     // (and the page makes what the test means it to: a head, notes or orphans, a figure text, contents lines and an entry)
     expect(today.ink.map((u) => u.kind)).toEqual(expect.arrayContaining(['inkheads', 'inkorphan', 'inkcontents', 'inkreferences']))
     expect(today.fig.units.map((u) => u.text)).toEqual(['Accuracy'])

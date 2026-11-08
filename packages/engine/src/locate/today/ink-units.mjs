@@ -1,6 +1,6 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but two changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased): run
+// marked COPY, nothing else but three changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// head's number of its phrase no folio, phrased; each kept run's glyphs by its placeholder stated, `glyphs.runs`): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -314,8 +314,10 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
  * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
  * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
- * [[page, g]], ph: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the face's name at 7),
- * frames, erase, ph } }]
+ * [[page, g]], ph: [[page, g]], runs: [[k, [[page, g]]]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the
+ * face's name at 7), frames, erase, ph } }]: `runs` each kept run's glyphs by its placeholder's index among the pieces (CHANGED:
+ * today's states them all as one list, `ph`, its file each placeholder's segments, rows.ph; locate gives each element the glyphs
+ * it is told, and told one list gave the first every run's ink)
  */
 export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const fams = new Map(), faces = new Map()
@@ -492,7 +494,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (e !== undefined && (cls === 'orphan' || cls === 'notes') && unitClass(units[e]) === 'names') cls = 'names'
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
     if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
-    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
+    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), runs: kept.map(p => [p.k, p.gs]) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
 }
