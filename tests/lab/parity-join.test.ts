@@ -110,4 +110,15 @@ describe("an ink unit that echoes a source unit is joined by what it is: the ink
     ])
     expect(got[50]).toEqual({ today: 60 })
   })
+  it("a figure text whose glyphs set a run apart is today's unit of its text alone: today's figure reading states no run", () => {
+    // (2608.25210v2 p2: "Data Extraction Task" a group of its own, set in its family's bold (locate/ink.ts); today's unit is the
+    // one text of the line, its id the format's unitId over 'inkfigures' and that text)
+    const runs = [
+      { t: 'span', id: '0', style: 'bold', must: 1, content: text('Answer') },
+      { t: 'text', s: ': Officer Anderson' },
+    ] as unknown as Content
+    const fig = bundle({ 1: [member(50, 'figure', G)] }, [{ id: G, kind: 'inkfigures', content: runs }])
+    const got = todayJoin(pagesOf({ 1: [[50, 'laid']] }), fig, [{ ord: 61, id: unitId('inkfigures', text('Answer: Officer Anderson')) }])
+    expect(got[50]).toEqual({ today: 61 })
+  })
 })
