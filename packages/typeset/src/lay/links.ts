@@ -20,6 +20,8 @@
 // never at its box, which is its own page's (`away`); a member's \href groups are paired with its annotations of all its pages.
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
 // list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
+// Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
+// links back at A's boxes (composer.ts held()).
 import type { Line, Link, Part, Placed } from '@readarxiv/format'
 import type { Face } from '../breaker/tokens.ts'
 import { lineRuns, runEdge, type TextRun } from '../emit/display.ts'
@@ -90,7 +92,8 @@ export function linksOf(
   // draws, never at its box, which is that page's)
   const here = (i: number) => (list[i]!.page ?? page) === page
   const atBox = (i: number, f: LinkFate) => {
-    if (here(i)) out.push([list[i]!.box, list[i]!.to])
+    const owner = list[i]!.owner
+    if (here(i)) out.push([list[i]!.box, list[i]!.to, ...(owner ? [owner[0]] : [])] as Page['links'][number])
     fate(i, here(i) ? f : 'away')
   }
   const byOwner = new Map<number, number[]>()
@@ -241,7 +244,7 @@ export function linksOf(
       for (const [, i] of r.sources.annots) fate(i, drawOf.get(i) ?? 'unplaced')
       const to = list[r.sources.annots[0]![1]]!.to
       const b = r.rec.boxes
-      for (let j = 0; j + 3 < b.length; j += 4) out.push([[b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to])
+      for (let j = 0; j + 3 < b.length; j += 4) out.push([[b[j]!, b[j + 1]!, b[j + 2]!, b[j + 3]!], to, ord])
     }
   }
   return out

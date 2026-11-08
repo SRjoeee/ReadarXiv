@@ -127,7 +127,7 @@ describe('Laid.lit: every member lit whole (no part states cuts)', () => {
     const [laid] = p.members
     expect(laid!.state).toBe('laid')
     expect(laid!.off).toBe(1)
-    expect(p.links).toEqual([[link.box, link.to]])
+    expect(p.links).toEqual([[link.box, link.to, 0]])
     expect(laid!.lit.own).toEqual([['5', [[250, 698, 270, 707]]]])
   })
   it('lights a babel name drawn on its own on both panes: its line on A, its word as drawn', () => {
@@ -241,17 +241,17 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(cropOf(crop.members[0]!)).toBeDefined()
     const fixedCrop = layPage(part({ ...cite({}), fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
     expect(fixedCrop.members[0]!.off & 2).toBe(0)
-    expect(fixedCrop.links).toEqual([[link.box, link.to]])
+    expect(fixedCrop.links).toEqual([[link.box, link.to, 0]])
     const asText = cite({ text: '[3]', style: { role: 'serif', size: 10 } })
     const fixedText = layPage(part({ ...asText, fixed: 2 }, [link]), rowsOf([r]), rules, metrics())
     expect(cropOf(fixedText.members[0]!)).toBeUndefined()
-    expect(fixedText.links).toEqual([[link.box, link.to]])
+    expect(fixedText.links).toEqual([[link.box, link.to, 0]])
   })
   it('keeps at A’s box a link no member owns, and one whose owner is not laid', () => {
     const free = at([400, 600, 420, 610])
     expect(layPage(part(cite(), [free]), rowsOf([r]), rules, metrics()).links).toEqual([[free.box, free.to]])
     const owned = at([150, 697, 170, 708], [0, '5'])
-    expect(layPage(part(cite(), [owned]), rowsOf([], true), rules, metrics()).links).toEqual([[owned.box, owned.to]])
+    expect(layPage(part(cite(), [owned]), rowsOf([], true), rules, metrics()).links).toEqual([[owned.box, owned.to, 0]])
   })
   it('keeps every link at A’s box on a page that waits for its rows or its faces, the original shown there (#626 review)', () => {
     const owned = at([150, 697, 170, 708], [0, '5'])
@@ -260,7 +260,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const forRows = layPage(part(cite(), [owned, free]), rowsOf([]), rules, metrics())
     expect(forRows.wait.rows.length).toBeGreaterThan(0)
     expect(forRows.links).toEqual([
-      [owned.box, owned.to],
+      [owned.box, owned.to, 0],
       [free.box, free.to],
     ])
     // (its row in, a face not loaded yet: the page waits for the face)
@@ -272,7 +272,7 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     )
     expect(forFaces.wait.faces.length).toBeGreaterThan(0)
     expect(forFaces.links).toEqual([
-      [owned.box, owned.to],
+      [owned.box, owned.to, 0],
       [free.box, free.to],
     ])
   })

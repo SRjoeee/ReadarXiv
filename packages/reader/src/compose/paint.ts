@@ -1,8 +1,10 @@
 // A laid page painted over its page view (design §4.5 "Painting"): the SVG painter, today's look (layer2.mjs svgOfUnit: a
 // <text> a line at its baseline, a <tspan> a run of one face at its own place, an oblique run skewed about its baseline, a line
 // set turned turned about its origin as svgOfFigure turns a figure's text), drawn
-// from `Page` alone; and the crops, each element's (or label's) own ink cut from the page's crop render and drawn where its item
-// stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4).
+// from `Page` alone; and the crops, each element's (or label's) own ink cut from the crop render of the page it stands on and
+// drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A member laid
+// across a page break may carry an element of one page onto a line of the other (its Ink's page): that crop is cut from its own
+// page's render, as today's were (triage-1 B, 2608.16117v1-de t11's p3 element on p4's line).
 //
 // The painting is in the page's own units (an SVG viewBox of the page, a canvas over the page's frame), so that a zoom scales it
 // by CSS with the page view's own canvas, and nothing of it is made again at a scale (the crops are drawn again only where the
@@ -104,22 +106,28 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
   return svg
 }
 
-/** each crop of the page: its source ink and where it is drawn, both in PDF units [x0, y0, x1, y1] */
-export function cropsOf(
-  page: Page,
-): { src: [number, number, number, number]; at: [number, number, number, number]; piece: string; ord: number }[] {
+/** each crop of the page: the page its ink is cut from (its Ink's), its source ink and where it is drawn, both in PDF units
+ *  [x0, y0, x1, y1] */
+export function cropsOf(page: Page): {
+  from: number
+  src: [number, number, number, number]
+  at: [number, number, number, number]
+  piece: string
+  ord: number
+}[] {
   const out: ReturnType<typeof cropsOf> = []
   for (const m of page.members) {
     if (m.state !== 'laid') continue
     for (const [y, , , items] of m.lines)
       for (const it of items) {
         if (!isCrop(it)) continue
-        const [, x0, y0, x1, y1, base] = it.src
+        const [from, x0, y0, x1, y1, base] = it.src
         const p = CLIP_PAD
         // (an edge cut between two glyphs of its element, a URL broken: no margin, the next glyph's ink a fraction of a point off)
         const pl = (it.cut ?? 0) & 1 ? 0 : p,
           pr = (it.cut ?? 0) & 2 ? 0 : p
         out.push({
+          from,
           src: [x0 - pl, y0 - p, x1 + pr, y1 + p],
           at: [it.x - pl * it.k, y - (base - y0 + p) * it.k, it.x + (x1 - x0 + pr) * it.k, y + (y1 - base + p) * it.k],
           piece: it.piece,
@@ -130,27 +138,18 @@ export function cropsOf(
   return out
 }
 
-/**
- * The page's crops drawn on a canvas over its frame: the page rendered once in the crop configuration (`crops`: every unit's text
- * group off) at the page view's own resolution, each crop's source cut from it and drawn at its place. Null where the page has
- * none. `scale`: device pixels per CSS px (the page view's output scale). `vp`: the frame drawn in (a turned page's upright
- * viewport, `uprightOf`: the canvas is turned with the page)
- */
-export async function cropsFor(
-  page: Page,
+/** a page rendered in the crop configuration at the page view's resolution, on a canvas of its own; null where the render was
+ *  let go (a page that leaves the view) */
+async function cropRender(
   pdfPage: PDFPageProxy,
   vp: PageViewport,
   crops: Promise<OptionalContentConfig>,
   scale: { sx: number; sy: number },
   signal?: AbortSignal,
 ): Promise<HTMLCanvasElement | null> {
-  const list = cropsOf(page)
-  if (!list.length || signal?.aborted) return null
-  const w = Math.max(1, Math.floor(vp.width * scale.sx)),
-    h = Math.max(1, Math.floor(vp.height * scale.sy))
   const source = document.createElement('canvas')
-  source.width = w
-  source.height = h
+  source.width = Math.max(1, Math.floor(vp.width * scale.sx))
+  source.height = Math.max(1, Math.floor(vp.height * scale.sy))
   const sctx = source.getContext('2d', { alpha: false }) as CanvasRenderingContext2D
   // (a crop render of a page that leaves the view is cancelled before it is drawn: its drawing let go)
   const task = pdfPage.render({
@@ -173,30 +172,66 @@ export async function cropsFor(
   } finally {
     signal?.removeEventListener('abort', stop)
   }
+  return source
+}
+
+/**
+ * The page's crops drawn on a canvas over its frame: each page a crop is cut from rendered once in the crop configuration
+ * (`crops`: every unit's text group off) at the page view's own resolution (this page, and another page of a member laid
+ * across a page break), each crop's source cut from its own page's render and drawn at its place. Null where the page has
+ * none. `pageOf`: the document's page n. `scale`: device pixels per CSS px (the page view's output scale). `vp`: the frame
+ * drawn in (a turned page's upright viewport, `uprightOf`: the canvas is turned with the page); another page's is its own
+ * upright viewport at the same scale
+ */
+export async function cropsFor(
+  page: Page,
+  pageOf: (n: number) => Promise<PDFPageProxy>,
+  vp: PageViewport,
+  crops: Promise<OptionalContentConfig>,
+  scale: { sx: number; sy: number },
+  signal?: AbortSignal,
+): Promise<HTMLCanvasElement | null> {
+  const list = cropsOf(page)
+  if (!list.length || signal?.aborted) return null
   const out = document.createElement('canvas')
   out.className = 'axt-crops'
-  out.width = w
-  out.height = h
+  out.width = Math.max(1, Math.floor(vp.width * scale.sx))
+  out.height = Math.max(1, Math.floor(vp.height * scale.sy))
   out.setAttribute('aria-hidden', 'true')
   const ctx = out.getContext('2d') as CanvasRenderingContext2D
-  const dev = ([x0, y0, x1, y1]: [number, number, number, number]) => {
-    const [ax, ay] = vp.convertToViewportPoint(x0, y1) as [number, number],
-      [bx, by] = vp.convertToViewportPoint(x1, y0) as [number, number]
-    return [
-      Math.min(ax, bx) * scale.sx,
-      Math.min(ay, by) * scale.sy,
-      Math.abs(bx - ax) * scale.sx,
-      Math.abs(by - ay) * scale.sy,
-    ] as const
+  const devOf =
+    (v: PageViewport) =>
+    ([x0, y0, x1, y1]: [number, number, number, number]) => {
+      const [ax, ay] = v.convertToViewportPoint(x0, y1) as [number, number],
+        [bx, by] = v.convertToViewportPoint(x1, y0) as [number, number]
+      return [
+        Math.min(ax, bx) * scale.sx,
+        Math.min(ay, by) * scale.sy,
+        Math.abs(bx - ax) * scale.sx,
+        Math.abs(by - ay) * scale.sy,
+      ] as const
+    }
+  const at = devOf(vp)
+  for (const from of new Set(list.map((c) => c.from))) {
+    const pdfPage = await pageOf(from)
+    const v = from === page.page ? vp : pdfPage.getViewport({ scale: vp.scale, rotation: 0 })
+    const source = signal?.aborted ? null : await cropRender(pdfPage, v, crops, scale, signal)
+    if (!source) {
+      out.width = 0
+      out.height = 0
+      return null
+    }
+    const src = devOf(v)
+    for (const c of list) {
+      if (c.from !== from) continue
+      const [sx, sy, sw, sh] = src(c.src),
+        [dx, dy, dw, dh] = at(c.at)
+      if (sw <= 0 || sh <= 0) continue
+      ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh)
+    }
+    source.width = 0
+    source.height = 0
   }
-  for (const c of list) {
-    const [sx, sy, sw, sh] = dev(c.src),
-      [dx, dy, dw, dh] = dev(c.at)
-    if (sw <= 0 || sh <= 0) continue
-    ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh)
-  }
-  source.width = 0
-  source.height = 0
   return out
 }
 

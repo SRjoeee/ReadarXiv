@@ -12,13 +12,15 @@
 // whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
-// made before) read as before. A CJK cell's bands are read over the rules its Room.band states.
-import type { OutPiece, Part, Placed } from '@readarxiv/format'
+// made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
+// off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides
+// each page's own: a member laid across a page break turns off on the other page none of the groups of this one.
+import { LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
 import { type NameRow, setNameOf } from '../shared/names.ts'
-import type { Tokens } from '../fit/types.ts'
+import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import type { TextItem } from '../emit/display.ts'
 import { adapt, rectOf } from './adapt.ts'
@@ -43,6 +45,62 @@ export type EntryOptions = {
 }
 
 const LABEL_KEPT = 4
+
+/**
+ * The groups member `m` has on page `page`, as the add-on wraps them (format's groupName `axt:<ord>.<page>.<t|e|l>`, one of each
+ * a page): its text where a line of it stands, its elements where one's ink is, its label where its box is. A Page turns off
+ * nothing else there: a group the document does not hold leaves the whole member the original's (the reader's held()), and a
+ * member laid across a page break turned off on one page the groups of the other (triage-1 B: 2608.16117v1-de p4's t11, its
+ * p3 element drawn on p4; 2608.25210v2-zh p10's t196, its label on p9). Today's hide.mjs: a placeholder's group hidden where
+ * one with segments on the page moved, the label where its box is on the page
+ */
+function groupsOn(m: Placed, page: number): number {
+  return (
+    (m.lines.some((l) => l[0] === page) ? 1 : 0) |
+    (m.els?.some(([, e]) => e.ink.some((k) => k[0] === page)) ? 2 : 0) |
+    (m.label?.ink[0] === page ? LABEL_KEPT : 0)
+  )
+}
+
+/** each crop a member's layout draws, on any of its pages: the page its ink is cut from, and whether it is an element's (its
+ *  piece) or its label's (D.display's crop: `k` its element, none its label) */
+function cutsOf(L: Layout | undefined): { page: number; el: boolean }[] {
+  const out: { page: number; el: boolean }[] = []
+  for (const line of L?.lines ?? [])
+    for (const it of line.items) {
+      const c = (it.t as { crop?: { page: number; k?: number } }).crop
+      if (c) out.push({ page: c.page, el: c.k !== undefined })
+    }
+  return out
+}
+
+/**
+ * A CJK cell's rules as U.params' cellBands reads them, [x0, y0, x1, y1] each, on the page of its first line: the rule over its
+ * lines and the rule under them, which its own Room.band states (the clear band between them), across its lines. Its own alone:
+ * a cell's single line widened into its row (U.decor's widen) spans its neighbours, whose bands' edges stand over and under no
+ * line of its (triage-1 S1: 1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at 0.615).
+ * A band edge is no rule of its where no rule stands on that side (Room.bandOpen: 1 under, 2 over; the band states the line's
+ * own bottom or top there) or where the rule reaches into its line's own glyphs: the edge over its first line under their top,
+ * the edge under its last line over their bottom, both as the part states them (Line's top and bottom: the PDF's ink, as the
+ * rule's edges are). Today's rule: cell-rules.mjs pageRules took a rule through a line's own glyphs' band for none of its
+ * own (the same top and bottom: 2610.21880v1 p2's tightly set table, its \hline 0.01 under t15's glyphs' top, cap 1 where the
+ * band read as its rules gave 0.817; t22's under its glyphs' bottom, 0.897 where the band gave 0.827). Today's cellBands
+ * (L2:352) then read those rules over the cell's own rectangle, never widened (RUN:2116)
+ */
+function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
+  const band = m.room.band
+  // (its own lines, those whose ink is not kept: the band's, Room.band's bandOf)
+  const own = m.lines.filter((l) => !(l[9] & LINE_FLAG.KEPT))
+  const first = own[0],
+    last = own.at(-1)
+  if (!band || !first || !last) return () => undefined
+  const x0 = Math.min(...own.map((l) => l[2])),
+    x1 = Math.max(...own.map((l) => l[3]))
+  const rules: number[] = []
+  if (m.room.bandOpen !== 2 && band[1] >= first[5]) rules.push(x0, band[1], x1, band[1])
+  if (m.room.bandOpen !== 1 && band[0] <= last[6]) rules.push(x0, band[0], x1, band[0])
+  return (pg) => (pg === first[0] && rules.length ? rules : undefined)
+}
 
 /** the page's lowest unit line, as today's pageBottom (RUN:911: a line's band bottom and 0.24 of its height, the lowest of the
  *  page's units' but a figure's): no unit borrows below it */
@@ -186,18 +244,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
-  // (a page's table rules as U.params' cellBands reads them, [x0, y0, x1, y1] each: the rule over a cell's lines and the rule
-  // under them, which its Room.band states (the clear band between them), across the cell's lines)
-  const rules0 = new Map<number, number[]>()
-  for (const m of members) {
-    const band = m.room.band
-    if (!band || !m.lines.length) continue
-    const pg = m.lines[0]![0]
-    const x0 = Math.min(...m.lines.map((l) => l[2])),
-      x1 = Math.max(...m.lines.map((l) => l[3]))
-    const list = rules0.get(pg) ?? rules0.set(pg, []).get(pg)!
-    list.push(x0, band[1], x1, band[1], x0, band[0], x1, band[0])
-  }
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   const state = new Map<number, Unlaid>()
   // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
@@ -351,7 +397,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       measure,
       patterns: rules.hyph as never,
       view: () => undefined,
-      rulesOf: (pg) => rules0.get(pg),
+      rulesOf: bandRulesOf(m),
       lineskip,
       reading: {
         tokens,
@@ -457,7 +503,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         ord: m.ord,
         page,
         state: 'laid',
-        off: 1,
+        off: groupsOn(m, page) & 1,
         lines: fl,
         lit: { left: [[boxOfA(m.lines[0]!)]], right: [fl.map(nameBox)], own: [] },
       }
@@ -469,7 +515,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         ord: m.ord,
         page,
         state: 'laid',
-        off: 1,
+        off: groupsOn(m, page) & 1,
         lines: here ? nl : [],
         lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
       }
@@ -483,7 +529,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         ord: m.ord,
         page,
         state: with_ ? 'laid' : 'bound',
-        off: with_ ? 1 : 0,
+        off: with_ ? groupsOn(m, page) & 1 : 0,
         lines: [],
         lit: with_ ? { left: [], right: [], own: [] } : litOfA(m, page),
       }
@@ -493,16 +539,19 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const lines = (x?.lines ?? []).map(
       ([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number],
     )
-    // (its groups turned off: its text where laid, its elements where one is drawn otherwise than kept where it stands (a crop on
-    // a laid line, or text in the translation: today's hide.mjs), its label where it is drawn anew or carried as a crop)
-    const crops = lines.flatMap((l) => l[3]).filter((it): it is Extract<Item, { src: unknown }> => 'src' in it)
+    // (its groups turned off, each only where it has it on this page (groupsOn): its text where laid, its elements where one with
+    // ink here is drawn otherwise than kept where it stands (a crop cut from this page, on a line of either page, or text in the
+    // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop)
+    const layout = x?.lay?.layout
+    const cuts = cutsOf(layout).filter((c) => c.page === page)
     const off =
       (st !== 'laid'
         ? 0
         : 1 |
-          (moved.has(m.ord) || crops.some((c) => c.piece !== 'label' && c.piece !== 'counter') ? 2 : 0) |
-          (relabelled.has(m.ord) || crops.some((c) => c.piece === 'label') ? LABEL_KEPT : 0)) & ~(m.fixed ?? 0)
-    const layout = x?.lay?.layout
+          (moved.has(m.ord) || cuts.some((c) => c.el) ? 2 : 0) |
+          (relabelled.has(m.ord) || cuts.some((c) => !c.el) ? LABEL_KEPT : 0)) &
+      groupsOn(m, page) &
+      ~(m.fixed ?? 0)
     const kept = keptIn.get(m.ord) ?? new Set<string>()
     const pieces = read.get(m.ord)?.pieces
     if (st === 'laid' && layout && pieces)

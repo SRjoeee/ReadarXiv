@@ -4,8 +4,9 @@
 // for the checkpoint's dumps (the reading from the part, the layered metrics), items-hook.mjs handing each member over. Each
 // laid member: its part's ord, its fit, its display lines with their items in design-a's Item (a run's face named by its weight
 // and slant, `w400`, `w700i`; a run's `rise` and `track`, which design-a's Item does not carry, dropped as the reader would
-// drop them, and counted), and its groups off by layPage's rule (packages/typeset/src/lay/entry.ts:195-203: its text; its
-// elements where a crop of an element is on a laid line; its label where its reading draws it anew or a label crop is drawn).
+// drop them, and counted), and its groups off as layPage turns them off (packages/typeset/src/lay/entry.ts groupsOn: its text;
+// its elements where a crop of an element is cut from the page; its label where its reading draws it anew or a label crop is
+// drawn, on every page of the member here, the runner's member not stating where its label stands; `--entry`: the entry's own).
 // Heavy: run through heavy-slot.sh test.
 import { writeFileSync } from 'node:fs'
 import { register } from 'node:module'
@@ -49,7 +50,7 @@ for (const { pair, pages } of asks) {
       items.map((it) => {
         if ('src' in it) {
           if (it.piece === 'label') labelCrop = true
-          else if (it.piece !== 'counter') crop = true
+          else if (it.piece !== 'counter' && it.src[0] === pg) crop = true
           return { s: it.s, x: it.x, src: it.src, k: it.k, piece: it.piece }
         }
         if (it.rise) dropped.rise++
