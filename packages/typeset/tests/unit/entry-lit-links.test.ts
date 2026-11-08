@@ -1,5 +1,6 @@
-// design-a's entry over hand-made parts: what each pane lights of a member (Laid.lit: every member lit whole until a part states
-// `cuts`, on A from its lines' boxes, as drawn from its laid lines', its kept ink the same on both) and the page's links as drawn
+// design-a's entry over hand-made parts: what each pane lights of a member (Laid.lit: a member whose row has no sentences lit
+// whole, on A from its lines' boxes, as drawn from its laid lines', its kept ink the same on both; by sentence:
+// lit-sentences.test.ts) and the page's links as drawn
 // (Page.links: moved with the pieces they are over, else at A's boxes, dropped where their ink is off and nothing of it drawn).
 // The reader's highlight (packages/reader compose/highlight.ts) and link layer (compose/links.ts) read these as they are.
 import type { Link, OutPiece, Part, Placed, Row } from '@readarxiv/format'
@@ -61,7 +62,7 @@ const cropOf = (laid: Laid) =>
     ),
   )[0]
 
-describe('Laid.lit: every member lit whole (no part states cuts)', () => {
+describe('Laid.lit: a member lit whole (its row has no sentences)', () => {
   it('lights a laid member from its lines on A on the left and its laid lines as drawn on the right, one entry each', () => {
     const p = layPage(
       part(member()),

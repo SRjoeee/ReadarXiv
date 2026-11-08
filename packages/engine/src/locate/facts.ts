@@ -284,7 +284,7 @@ export function rightToLeft(content: readonly Piece[]): boolean {
  *  line (its baseline moved by more than half the size: an end of line), is a space after it in the text layer */
 export const TRACKING_SPACE_FACTOR = 0.102
 /** whether glyph `g` is set on another line than `p`, the one before it: its baseline moved by more than half the size */
-const lineChange = (p: DocGlyph, g: DocGlyph) => Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size)
+export const lineChange = (p: DocGlyph, g: DocGlyph) => Math.abs(g.y - p.y) > 0.5 * Math.max(p.size, g.size)
 /** the hyphens a line may end in, TeX's own and a word's */
 const HYPHENS = new Set(['-', '\u2010', '\u00ad'])
 const LETTERS = /^\p{L}+$/u
@@ -292,7 +292,7 @@ const LETTERS = /^\p{L}+$/u
 const LEFT_HYPHEN_MIN = 2
 const RIGHT_HYPHEN_MIN = 3
 /** whether glyph `b` stands apart from `a` before it, as PDF.js reads a space: past it by more than TRACKING_SPACE_FACTOR */
-const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_FACTOR * (a.along ?? a.size)
+export const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_FACTOR * (a.along ?? a.size)
 /** what a reading of an element's text knows of its source: `literal` (a URL, a code mark: TeX sets its characters as written),
  *  `source` (the TeX the element and its unit are written in, where the word a line's end breaks may be stated) */
 export interface LineEndOptions {
@@ -325,7 +325,7 @@ function stated(source: string, before: string, after: string): 'hyphen' | 'join
  * (`literal`: a URL, a code mark). And a change of case across the hyphen is a compound's own hyphen, TeX's falling inside a
  * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
  */
-function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
+export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
   if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'

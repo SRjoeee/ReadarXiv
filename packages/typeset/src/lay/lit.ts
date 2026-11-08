@@ -1,23 +1,34 @@
 // Laid.lit (design-a §1.2; docs/PDF-READER.md §17): what each pane lights of a member on a page, per sentence, from the same
-// boxes on both panes' terms. No part states `cuts` yet (the shared cutter's sentence starts placed on A), so every member
-// lights whole, one entry a pane (design-a's rule for an offset on no cut: its unit lit whole on both panes):
-// - on the left, A: its lines' boxes on the page (each line's ink across, its fonts' boxes up and down), its label where it is
-//   drawn anew and the babel name it is led by widening the line they stand on (today's unitRuns: a label or a lead with no row
-//   of its own widens its unit's row);
-// - on the right, as drawn: its laid lines' boxes (each line over its tokens' slots and bands, D.sentences' tokenBox) and the
-//   lines it keeps where they stand (a held line: its ink stays);
+// boxes on both panes' terms. A member lights by sentence where its row carries its sentences (Row.sentences: where each
+// sentence after the first begins in the unit's source projection and in its translation's, the translator's own cuts) and
+// its part places its words on A (Placed.words, which the prepare states for a unit lit by sentence, Unit.sentences): each
+// start found on both panes, one entry a sentence, numbered alike on every page the member is on (an entry empty on a page
+// that holds none of that sentence). Else it lights whole, one entry a pane, both panes together (a unit never lights by
+// sentence on one pane and whole on the other). Today's rule (anchors.mjs sentenceStarts, words.mjs, highlight.mjs):
+// - on the left, A: a start at its sentence's first word the part places, its second or third where the first is not
+//   (LATE), past that none; its lines' boxes (each line's ink across, its fonts' boxes up and down) cut at the starts' glyphs;
+//   its label where it is drawn anew and the babel name it is led by widening its first sentence's row (today's unitRuns: a
+//   label or a lead with no row of its own widens its unit's row);
+// - on the right, as drawn: its laid lines' tokens (D.sentences' tokenBox), each token's sentence its place in the translation
+//   (a text token's, an element's at its piece's, one of neither its neighbour's: words.mjs addUnitWords), the start the token
+//   of the sentence's first word; and the lines it keeps where they stand (a held line: its ink stays), in the sentence they
+//   stand in on A;
 // - `own`: its own ink the page keeps (D.groups' shown: a display, its rows, a block of its own; a piece or a label kept where it
-//   stands), the same boxes on both panes.
-// A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left. A figure
-// text the original sets turned (Placed.dir, its run Placed.run) is lit turned with its text: its boxes in its run's frame
+//   stands), the same boxes on both panes. Lit by sentence, a kept piece lights with its sentence, a label with the first, a
+//   kept character with the token beside it (words.mjs: the owner, 2026-10-30), a display alone (a block of its own).
+// A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left (by
+// sentence where its row's starts are found on A). A figure text the original sets turned (Placed.dir, its run Placed.run) is
+// lit whole, turned with its text: its boxes in its run's frame
 // (Laid.lit's `dir`), on A its run's box, as drawn its line along it, never the level box its turned box stands in on the page
 // (a label set at 30° stands in a level box about twice its height, over its neighbours': 336 of the 1,887 turned figure texts
 // over the 87 corpus bundles).
 import type { Box, Ink, Placed } from '@readarxiv/format'
-import { type GroupEl, groupsOff } from '../emit/groups.ts'
-import { lineBoxes, onDisplay } from '../emit/sentences.ts'
+import { plainTracker, shown, type TextPiece } from '../breaker/text.ts'
+import { type GroupEl, groupsOff, type Shown } from '../emit/groups.ts'
+import { lineBoxes, onDisplay, tokenBox } from '../emit/sentences.ts'
 import type { Layout } from '../fit/types.ts'
 import type { Laid } from '../types.ts'
+import type { V0Piece } from '../unit/breaks.ts'
 
 type Line = Placed['lines'][number]
 type Lit = Laid['lit']
@@ -113,25 +124,255 @@ export function runBoxOfA(m: Placed, page: number): Box | null {
   return [os + run[0], ot + band[0], os + run[1], ot + band[1]]
 }
 
-/** a member lit from A on both panes (not laid, or waiting): its lines on the page, its label with the line it stands on; a
- *  turned figure text its run's box, turned with it */
-export function litOfA(m: Placed, page: number): Lit {
+// ---------------------------------------------------------------- the sentences on each pane
+/** a row's sentences: where each sentence after the first begins in the unit's source projection and in its translation's */
+export type Sentences = { src: readonly number[]; tr: readonly number[] }
+/** a place on A: the index of a line in Placed.lines, an x on it */
+type At = [line: number, x: number]
+/** how many words after a sentence's first its start may be found at (today's anchors.mjs LATE) */
+const LATE = 2
+const after = (a: At, b: At) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
+
+/**
+ * Where each sentence after the first begins on A (today's anchors.mjs sentenceStarts): row start `o` at the first of the
+ * part's words (Placed.words) at or after it that the part places, among its sentence's first three (LATE) and before the
+ * next start's; each after the one before and after the unit's own first word. Null where one is not found
+ */
+export function startsOnA(words: readonly (readonly [number, number, number])[], src: readonly number[]): At[] | null {
+  const firstAt = (o: number) => {
+    let lo = 0,
+      hi = words.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (words[mid]![0] < o) lo = mid + 1
+      else hi = mid
+    }
+    return lo
+  }
+  const at = src.map(firstAt)
+  const head = words.find((w) => w[1] >= 0)
+  if (!head || !src.length) return null
+  let prev: At = [head[1], head[2]]
+  const out: At[] = []
+  for (let j = 0; j < at.length; j++) {
+    const end = Math.min(at[j]! + 1 + LATE, j + 1 < at.length ? at[j + 1]! : words.length)
+    let w: readonly [number, number, number] | undefined
+    for (let i = at[j]!; i < end && !w; i++) if (words[i]![1] >= 0) w = words[i]
+    if (!w) return null
+    const p: At = [w[1], w[2]]
+    if (!after(p, prev)) return null
+    out.push(p)
+    prev = p
+  }
+  return out
+}
+
+/** the sentence (0 the first) that line `j` of A stands in from its start `x0`: the starts at or before it */
+const sentenceAtLine = (starts: readonly At[], j: number, x0: number) =>
+  starts.filter((a) => a[0] < j || (a[0] === j && a[1] <= x0)).length
+
+/**
+ * A member's lines on A on `page` cut into its sentences at `starts` (each line by its index in Placed.lines): sentence s from
+ * its start (the unit's beginning for the first) to the next one's, the lines between whole; `extra` (a label drawn anew, the
+ * name it is led by) widening the first one's row
+ */
+function cutOnA(m: Placed, page: number, keep: (l: Line) => boolean, starts: readonly At[], extra: readonly Ink[]) {
+  const out: Box[][] = Array.from({ length: starts.length + 1 }, () => [])
+  m.lines.forEach((l, j) => {
+    if (l[0] !== page || !keep(l)) return
+    const [x0, y0, x1, y1] = boxOfLine(l)
+    for (let s = 0; s <= starts.length; s++) {
+      const from = starts[s - 1],
+        to = starts[s]
+      if ((from && from[0] > j) || (to && to[0] < j)) continue
+      const lo = from && from[0] === j ? Math.max(x0, from[1]) : x0
+      const hi = to && to[0] === j ? Math.min(x1, to[1]) : x1
+      if (hi > lo) out[s]!.push([lo, y0, hi, y1])
+    }
+  })
+  out[0] = widened(out[0]!, extra, page)
+  return out
+}
+
+/**
+ * Each place a row's pieces take in the translation's plain text (words.mjs pieceOffsets: every piece that is no text a
+ * space, white space one, trimmed: the text the tokens' `at` count in, breaker/tokens.ts), and each offset of the
+ * translation's projection there (Row.sentences.tr counts in it: text pieces as the row writes them, each element one
+ * character, a group's edges none). Null where a text's shown form cannot be read back character by character
+ */
+function placesOf(pieces: readonly V0Piece[]): { piece: number[]; at(o: number): number; text: string } | null {
+  const tracker = plainTracker()
+  const piece: number[] = []
+  // (each stretch of the projection: its first offset, its plain offsets by character)
+  const runs: { from: number; to: number[] }[] = []
+  let text = ''
+  for (const [k, p] of pieces.entries()) {
+    if (p.t !== 'text') {
+      tracker.gap()
+      piece[k] = tracker.space()
+      if (p.t === 'ph' || p.t === 'nested') {
+        runs.push({ from: text.length, to: [piece[k]!] })
+        text += OBJ
+      }
+      continue
+    }
+    const sh = shown(p as TextPiece)
+    const back = shownIndex(p as TextPiece, sh)
+    if (!back) return null
+    const at = tracker.text(sh)
+    const i = sh.search(/\S/)
+    piece[k] = i >= 0 ? at[i]! : tracker.next()
+    runs.push({ from: text.length, to: back.map((c) => at[c] ?? tracker.next()) })
+    text += p.s
+  }
+  return {
+    piece,
+    text,
+    at(o) {
+      for (let r = runs.length - 1; r >= 0; r--) {
+        const run = runs[r]!
+        if (o >= run.from) return run.to[Math.min(o - run.from, run.to.length - 1)] ?? -1
+      }
+      return -1
+    },
+  }
+}
+const OBJ = '\ufffc'
+/** each character of a text piece's string by the index of the character of its shown form it becomes (breaker/text.ts
+ *  shown: a translation's TeX escapes undone, each one character); null where they do not read back so */
+function shownIndex(p: TextPiece, sh: string): number[] | null {
+  if (sh === p.s) return Array.from({ length: p.s.length }, (_, i) => i)
+  if (!p.tr) return null
+  const out: number[] = []
+  let built = ''
+  const re = /\\(?:(textbackslash|textasciitilde|textasciicircum)\{\}|([#$%&_{}]))/g
+  let last = 0
+  for (const m of p.s.matchAll(re)) {
+    for (let i = last; i < m.index; i++) out.push(built.length + (i - last))
+    built += p.s.slice(last, m.index)
+    for (let i = 0; i < m[0].length; i++) out.push(built.length)
+    built += m[1] ? ' ' : m[2]!
+    last = m.index + m[0].length
+  }
+  for (let i = last; i < p.s.length; i++) out.push(built.length + (i - last))
+  built += p.s.slice(last)
+  return built === sh ? out : null
+}
+
+/** a token of a laid line on the page, its box and its place in the translation (-1 none of its own) */
+type Placed_ = { line: number; box: Box; place: number }
+/** the member's laid tokens on `page`, in its text's order, each with a place: its own (a text token's `at`), its piece's (an
+ *  element drawn as a crop or as text), else the token's before it, else after it (words.mjs addUnitWords) */
+function tokensOn(L: Layout, page: number, pieceAt: readonly number[]): Placed_[] {
+  const out: Placed_[] = []
+  L.lines.forEach((line, j) => {
+    if (line.page !== page) return
+    for (const it of line.items) {
+      const t = it.t as { space?: boolean; at?: number; k?: number; crop?: { k?: number | null } }
+      if (t.space) continue
+      const b = tokenBox(it, line, L)
+      if (!b) continue
+      const k = t.crop ? t.crop.k : t.k
+      const place = t.at ?? (Number.isInteger(k) ? (pieceAt[k as number] ?? -1) : -1)
+      out.push({ line: j, box: [b.l, b.bottom, b.r, b.top], place })
+    }
+  })
+  for (let n = 1; n < out.length; n++) if (out[n]!.place < 0) out[n]!.place = out[n - 1]!.place
+  for (let n = out.length - 2; n >= 0; n--) if (out[n]!.place < 0) out[n]!.place = out[n + 1]!.place
+  return out
+}
+
+/**
+ * Where each sentence after the first begins in the translation's plain text: its start in the row (Row.sentences.tr) at its
+ * first word (a letter or a digit at or after it, before the next start), as the source's is found at its first word (today's
+ * mt.mjs sentencesOf: a sentence starts at its first word). Null where one has none
+ */
+function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: readonly number[]): number[] | null {
+  const out: number[] = []
+  for (let j = 0; j < tr.length; j++) {
+    const end = j + 1 < tr.length ? tr[j + 1]! : places.text.length
+    let o = tr[j]!
+    while (o < end && !/[\p{L}\p{N}]/u.test(places.text[o]!)) o++
+    if (o >= end) return null
+    const p = places.at(o)
+    if (p < 0 || (out.length && p <= out.at(-1)!)) return null
+    out.push(p)
+  }
+  return out
+}
+/** the sentence a place in the translation's plain text is in */
+const sentenceOf = (starts: readonly number[], place: number) => starts.filter((p) => p <= place).length
+
+/** the boxes of a pane's tokens, one a line a sentence: its tokens on the line across, up and down */
+function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number): Box[][] {
+  const out: Box[][] = Array.from({ length: n }, () => [])
+  const at = new Map<string, Box>()
+  for (const t of tokens) {
+    const key = `${t.s}:${t.line}`
+    const b = at.get(key)
+    if (!b) {
+      const nb: Box = [...t.box]
+      at.set(key, nb)
+      out[t.s]!.push(nb)
+    } else {
+      b[0] = Math.min(b[0], t.box[0])
+      b[1] = Math.min(b[1], t.box[1])
+      b[2] = Math.max(b[2], t.box[2])
+      b[3] = Math.max(b[3], t.box[3])
+    }
+  }
+  return out
+}
+
+/** the sentence of the token beside a box on its band (words.mjs placeBeside: a kept character at its neighbour's place) */
+function besideOf(tokens: readonly (Placed_ & { s: number })[], [x0, y0, x1, y1]: Box): number {
+  const x = (x0 + x1) / 2,
+    y = (y0 + y1) / 2
+  let best = -1,
+    far = Number.POSITIVE_INFINITY
+  for (const t of tokens) {
+    if (y < t.box[1] || y > t.box[3]) continue
+    const d = x < t.box[0] ? t.box[0] - x : x > t.box[2] ? x - t.box[2] : 0
+    if (d < far) {
+      far = d
+      best = t.s
+    }
+  }
+  return best
+}
+
+/** a member lit from A on both panes (not laid, or waiting): its lines on the page, its label with the line it stands on, by
+ *  sentence where its row's starts (`src`, Row.sentences) are found on A (today's mirror: a unit shown as the original's lights
+ *  by the left's starts on both panes); a turned figure text its run's box, turned with it */
+export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
   const run = runBoxOfA(m, page)
   if (run) return { ...mirrored([run]), dir: m.dir! }
+  const label = m.label ? [m.label.ink] : []
+  const starts = src && m.words ? startsOnA(m.words, src) : null
+  if (starts) {
+    const per = cutOnA(m, page, () => true, starts, label)
+    return { left: per, right: per, own: [] }
+  }
   const lines = m.lines.filter((l) => l[0] === page).map(boxOfLine)
-  return mirrored(widened(lines, m.label ? [m.label.ink] : [], page))
+  return mirrored(widened(lines, label, page))
 }
 
 /**
  * A laid member's boxes on page `page`. `L` its layout; `off` its groups turned off on the page as the entry decides them (its
  * elements: 2, the ink it keeps shown follows it; a label drawn anew: 4); `kept` its elements kept where they stand by its
- * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it
+ * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it; `by` its row's sentences and the
+ * pieces its reading laid (rowPieces), where its row has sentences
  */
 export function litLaid(
   m: Placed,
   page: number,
   L: Layout | undefined,
-  o: { off: number; kept: ReadonlySet<string>; lead: Placed | null },
+  o: {
+    off: number
+    kept: ReadonlySet<string>
+    lead: Placed | null
+    by?: { sentences: Sentences; pieces: readonly V0Piece[] } | undefined
+  },
 ): Lit {
   const els: GroupEl[] = (m.els ?? []).map(([id, e]) => ({
     k: Number(id),
@@ -152,12 +393,15 @@ export function litLaid(
   })
   const displays = shown.filter((s) => s.kind === 'display')
   // (a KEPT line is a display's row, its display's block, or a held line: its ink stays, on both panes in its unit's shape)
-  const mine = m.lines.filter((l) => l[0] === page && !(l[9] & KEPT && onDisplay(displays, l[2], l[6], l[3], l[5])))
-  const held = mine.filter((l) => l[9] & KEPT).map(boxOfLine)
+  const keep = (l: Line) => !(l[9] & KEPT && onDisplay(displays, l[2], l[6], l[3], l[5]))
+  const mine = m.lines.filter((l) => l[0] === page && keep(l))
   const extra = [
     ...(relabelled && m.label ? [m.label.ink] : []),
     ...(o.lead?.lines[0] ? [inkOfLine(o.lead.lines[0])] : []),
   ]
+  const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown) : null
+  if (by) return by
+  const held = mine.filter((l) => l[9] & KEPT).map(boxOfLine)
   const left = widened(mine.map(boxOfLine), extra, page)
   const right = [...(L ? lineBoxes(L, page) : []), ...held]
   const own = new Map<string, Box[]>()
@@ -168,4 +412,69 @@ export function litLaid(
   return left.length || right.length
     ? { left: [left], right: [right], own: [...own] }
     : { left: [], right: [], own: [...own] }
+}
+
+/**
+ * A laid member lit by sentence on page `page`, or null where it lights whole: a start not found on A (startsOnA), a start of
+ * the translation's with no token of its in the layout on any page (the right finds none), or a translation's text whose
+ * places cannot be read. Decided from the whole member (its words on every page, its layout's every line), so every page of it
+ * decides alike
+ */
+function bySentence(
+  m: Placed,
+  page: number,
+  L: Layout,
+  by: { sentences: Sentences; pieces: readonly V0Piece[] },
+  keep: (l: Line) => boolean,
+  extra: readonly Ink[],
+  shown: readonly Shown[],
+): Lit | null {
+  const { src, tr } = by.sentences
+  if (!m.words || !src.length || src.length !== tr.length) return null
+  const starts = startsOnA(m.words, src)
+  const places = starts && placesOf(by.pieces)
+  const plain = places && startsInPlain(places, tr)
+  if (!starts || !places || !plain) return null
+  const n = src.length + 1
+  // (every sentence's first word drawn: a text token of it in the layout, on any of its pages)
+  const found = new Set<number>()
+  for (const line of L.lines)
+    for (const it of line.items) {
+      const at = (it.t as { at?: number }).at
+      if (at !== undefined) found.add(sentenceOf(plain, at))
+    }
+  for (let s = 0; s < n; s++) if (!found.has(s)) return null
+  const left = cutOnA(m, page, keep, starts, extra)
+  const tokens = tokensOn(L, page, places.piece).map((t) => ({ ...t, s: sentenceOf(plain, t.place) }))
+  const right = rowsBySentence(tokens, n)
+  // (a held line: its ink stays where it stands, in the sentence it stands in on A)
+  m.lines.forEach((l, j) => {
+    if (l[0] === page && keep(l) && l[9] & KEPT) right[sentenceAtLine(starts, j, l[2])]!.push(boxOfLine(l))
+  })
+  const own = new Map<string, Box[]>()
+  const both = (s: number, b: Box) => {
+    left[s]!.push(b)
+    right[s]!.push(b)
+  }
+  for (const x of shown) {
+    if (x.kind === 'display') {
+      own.set(String(x.k), [...(own.get(String(x.k)) ?? []), x.box])
+      continue
+    }
+    const s =
+      x.kind === 'label'
+        ? 0
+        : x.kind === 'piece'
+          ? (() => {
+              const k = by.pieces.findIndex((p) => (p.t === 'ph' || p.t === 'nested') && p.k === x.k)
+              return k >= 0 ? sentenceOf(plain, places.piece[k]!) : -1
+            })()
+          : besideOf(tokens, x.box)
+    if (s >= 0) both(s, x.box)
+    else {
+      const key = x.kind === 'piece' ? String(x.k) : x.kind
+      own.set(key, [...(own.get(key) ?? []), x.box])
+    }
+  }
+  return { left, right, own: [...own] }
 }

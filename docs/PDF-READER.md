@@ -2222,6 +2222,25 @@ within noise.
   floats and their inputs go; its drawing gives them again. Inputs that throw are let go with one warning, and the page
   has no floats.
 
+### 17.9 On the rebuilt reader (`packages/`): the starts stated by the prepare
+
+- **What pairs the sentences** is the row's starts (Row.sentences: the translator's own, offsets in the unit's projection and
+  its translation's) found on each pane, as on the layer path: on arXiv's page at the sentence's first word, its second or third
+  where the first is not found, else the unit lights whole on both (`packages/typeset` lay/lit.ts `startsOnA`); as drawn, the
+  laid token of that word (each token's sentence its place in the translation, an element's its piece's, else its
+  neighbour's). `Laid.lit` holds an entry a sentence, numbered alike on every page of the unit; the reader paints and hits the
+  entry under the pointer on both panes (`{id, s}`), nothing on a page that holds none of it.
+- **The prepare states where each word stands on A** (format's `Placed.words`: each word of the projection, its line and its
+  first glyph's x0; `packages/engine` locate/words.ts: the projection's letters and the unit's glyphs' matched in order,
+  Myers', each side's word breaks kept), and marks the units a translator is to cut (`Unit.sentences`: every kind but a heading,
+  a cell, a figure's text and a babel name, the layer path's NOT_RUNNING). Every word, not the shared cutter's starts alone:
+  of Microsoft's 40,409 stored starts over the corpus (13,149 units, 96 paper-targets, 2026-11-08), 82.4 % are among the
+  shared cutter's cuts and 82.9 % among Unicode's sentence boundaries, and what precedes the rest is no closed set ("." 73 %,
+  an element 16 %, ";" 6 %, "(" 1 %, a comma, a letter). Placed: 8,608 of 8,610 words on 1810.04805v2, 8,293 of 8,299 on
+  2010.11929v2; a part states them only for the members with ink on its page.
+- Until 2026-11-08 the rebuilt reader lit every unit whole: the prepare marked no unit for sentences (no translator was
+  asked to cut, no row carried any) and placed no start on A (the maintainer's staging review of converge-7, 225f0959f).
+
 ## 18. Rules and their versions
 
 Three kinds of rule decide what the reader shows, and they change at three different costs. Each has its own identity,
