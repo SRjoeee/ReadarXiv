@@ -975,7 +975,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
     }
   }
-  columnsAndMeasures(members, inkA, gA)
+  columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined))
   for (const mem of members) if (mem.lines.length) mem.room = roomOf(mem, inkA, m.offA)
   // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
   // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
@@ -1290,7 +1290,12 @@ const ON_ROW = 0.4
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */
-function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => DocGlyph): void {
+function columnsAndMeasures(
+  members: Member[],
+  inkA: Doc,
+  gA: (a: number) => DocGlyph,
+  tableOf: (mem: Member) => number | undefined,
+): void {
   const byPage = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (byPage.get(l[0]) ?? byPage.set(l[0], []).get(l[0])!).push(l)
   for (const [p, lines] of byPage) {
@@ -1355,6 +1360,30 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
       const on = lb && lb[0] === l[0] && Math.abs(lb[5] - l[4]) < ON_ROW * (l[10] ?? mem.style.size) && lb[1] < l[2]
       measures.set(l, columnOf(l, on ? lb[1] : l[2]))
     }
+  // (a table's cell: its line's room is its table's extent on the page where the table reaches past its text column, a float set
+  // across both columns of a two-column page (2610.17024v1 p15's cell, whose room ended at the left column's edge, short of the
+  // next cell's ink; today's widen ran on to it, its block's middle over the gutter giving it the page's text area): the hull of
+  // the table's cells' lines there, the column's measure widened to it. A table inside one column keeps its column's measure)
+  const tables = new Map<string, [number, number]>()
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      if (l[9] & 1) continue
+      const k = `${t}|${l[0]}`
+      const h = tables.get(k)
+      tables.set(k, h ? [Math.min(h[0], l[2]), Math.max(h[1], l[3])] : [l[2], l[3]])
+    }
+  }
+  for (const mem of members) {
+    const t = tableOf(mem)
+    if (t === undefined) continue
+    for (const l of mem.lines) {
+      const h = tables.get(`${t}|${l[0]}`)
+      const own = measures.get(l)
+      if (h && own) measures.set(l, [Math.min(own[0], h[0]), Math.max(own[1], h[1])])
+    }
+  }
   for (const [l, [m0, m1]] of measures) {
     l[7] = r2(m0)
     l[8] = r2(m1)

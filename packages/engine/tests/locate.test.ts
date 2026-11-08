@@ -861,6 +861,43 @@ describe('review of #605', () => {
     expect(L.members[0]!.room.band).toEqual([680.26, 720])
     expect(L.members[1]!.room.band).toEqual([680.26, 720])
   })
+  it('gives a cell of a table set across both columns its table’s room, not its text column’s', () => {
+    // (2610.17024v1 p15's cell "GPT" of a table set across a two-column page: its line ends at 287, past the left column's
+    // measure (286), the next cell's ink at 330. Measured as the left column, its room ended at its own end and it could not
+    // widen, where today's widen ran on to the next cell; a table inside one column keeps its column's measure)
+    const L40 = 'x'.repeat(40)
+    const B = docOf([
+      {
+        lines: [
+          { text: L40, x: 46, y: 700 },
+          { text: L40, x: 46, y: 688 },
+          { text: L40, x: 46, y: 676 },
+          { text: L40, x: 310, y: 700 },
+          { text: L40, x: 310, y: 688 },
+          { text: L40, x: 310, y: 676 },
+          { text: 'Model', x: 60, y: 400 },
+          { text: 'GPT', x: 269, y: 400 },
+          { text: 'next', x: 330, y: 400 },
+          { text: 'last', x: 500, y: 400 },
+        ],
+      },
+    ])
+    const cell = (s: string, col: number) => unitOf('cell', s, { cell: { table: 0, row: 0, col } })
+    const units = [
+      unitOf('para', `${L40} ${L40} ${L40}`),
+      unitOf('para', `${L40} ${L40} ${L40}`),
+      cell('Model', 0),
+      cell('GPT', 1),
+      cell('next', 2),
+      cell('last', 3),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 3, 4, 5]]), B, align(B, B))
+    const gpt = L.members[3]!
+    expect(gpt.lines.map((l) => [l[2], l[3], l[7], l[8]])).toEqual([[269, 287, 46, 524]])
+    expect(gpt.room.side).toEqual([90, 330])
+    // (the paragraphs' measures are their columns' as before)
+    expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([46, 286])
+  })
   it('gives a link to the member that owns most of the glyphs under it, and within it to the element that does', () => {
     // (two members on one line: x 72-90 and 96-150; a link over x 89-151 holds one glyph of the first and the second's nine)
     const B = docOf([
