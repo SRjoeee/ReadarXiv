@@ -374,6 +374,70 @@ describe('the session: the open, wherever the document lacks what the visit need
     expect(opens(m)).toEqual([])
     expect(m.has('rows')).toBe(true)
   })
+  /** a visit whose rows are made here (the extension's), the original open and the gate open */
+  const hereNow = () => {
+    const m = machine({ here: true })
+    m.feed({ i: 'original.opened', t: m.live('original'), pages: 4, bytes: 9 }, { i: 'panes.drawn' })
+    return m
+  }
+  /** the new build's layer, of other units than the stale one's */
+  const rebuilt = (rev: number) =>
+    doc(rev, {
+      prepare: prep('done', { attempt: 2, units: NEW }),
+      layer: { catalog: CATALOG2, units: NEW, format: 1, stale: false },
+    })
+  it('rows made here over a stale layer: opened once, naming no target; followed while the paper is prepared again, the old layer drawn and its rows made meanwhile; the new catalog taken when it lands, then nothing more asked of our server (#634 review)', () => {
+    const m = hereNow()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    expect(opens(m)).toEqual([{ slot: 'open', target: null }])
+    // (a stale layer is served while the paper is prepared again: its replacement is still to come, so the follow stays)
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    expect(m.has('composed')).toBe(true)
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: UNITS })
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: stale(2, { prepare: prep('running', { attempt: 2 }) }) })
+    expect(opens(m)).toEqual([])
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(3, { prepare: prep('running', { attempt: 2, units: NEW }) }) })
+    expect(m.has('link')).toBe(true)
+    m.feed({ i: 'paper', t: m.live('link'), doc: rebuilt(4) })
+    expect(m.s.layer).toMatchObject({ s: 'ready', catalog: CATALOG2, head: null })
+    // (the layer our server runs: nothing more can come for rows made here)
+    expect(m.has('link') || m.has('open')).toBe(false)
+    // (a prepare running over the layer our server runs (the harness's `recatalog`): its end writes a layer, so followed too)
+    const p = hereNow()
+    p.feed({
+      i: 'paper',
+      t: p.live('link'),
+      doc: { ...ready(1), prepare: prep('running', { attempt: 2 }), targets: {} },
+    })
+    expect(p.has('link')).toBe(true)
+    expect(opens(p)).toEqual([])
+  })
+  it("rows made here that ended over one layer are made again for a newer catalog's units once its head is read; a newer catalog of the same units keeps them", () => {
+    const m = hereNow()
+    m.feed({ i: 'paper', t: m.live('link'), doc: stale(1) })
+    m.feed({ i: 'code.loaded', t: m.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    m.feed({ i: 'rows.end', t: m.live('rows'), got: 1, total: 1, lost: 0 })
+    expect(m.has('rows')).toBe(false)
+    // (the open's answer carries the new build's layer: a prepare another visit asked ended meanwhile)
+    m.feed({ i: 'open.answered', t: m.live('open'), doc: rebuilt(2) })
+    expect(m.has('rows')).toBe(false)
+    m.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
+    expect([...resources(m.s).values()]).toContainEqual({ slot: 'rows', target: ZH, from: 'here', units: NEW })
+    const same = hereNow()
+    same.feed({ i: 'paper', t: same.live('link'), doc: stale(1) })
+    same.feed({ i: 'code.loaded', t: same.live('code') }, { i: 'head', digest: CATALOG.sha256, head: HEAD })
+    same.feed({ i: 'rows.end', t: same.live('rows'), got: 1, total: 1, lost: 0 })
+    same.feed({
+      i: 'open.answered',
+      t: same.live('open'),
+      doc: doc(2, { prepare: prep('done', { attempt: 2 }), layer: { catalog: CATALOG2, units: UNITS, format: 1 } }),
+    })
+    same.feed({ i: 'head', digest: CATALOG2.sha256, head: HEAD })
+    expect(same.s.rows.s).toBe('complete')
+    expect(same.has('rows')).toBe(false)
+  })
   it('nothing asked where what the visit needs is there or in flight: the target running or done on the layer, a prepare running over a stale layer or none; rows made here name no target', () => {
     const cases: Doc[] = [
       ready(1),
@@ -673,7 +737,7 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.s.prepare.spent).toBe(0)
     expect(m.has('link')).toBe(true)
   })
-  it('rows made here need nothing more of our server once the layer is ready', () => {
+  it('rows made here need nothing more of our server once the layer is final: ready, of the build our server runs, no prepare running', () => {
     const m = composedNow({ here: true })
     expect(m.has('link')).toBe(false)
     expect(m.has('rows')).toBe(true)

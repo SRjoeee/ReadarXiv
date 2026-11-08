@@ -1210,6 +1210,60 @@ await check(
   },
 )
 await check(
+  "reader: a stale layer under the extension's host (rows made here): opened once naming no target, after the first follow; followed while the paper is prepared again, the old layer drawn meanwhile; the new catalog taken when it lands and laid from its own parts (#634 review)",
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'stale', prepareMs: 1500 }
+    const from = v2log.length
+    const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'ext' }))
+      const seen = []
+      const t0 = Date.now()
+      for (;;) {
+        const s = await page.evaluate(() => {
+          const x = window.__h.readers[0]
+          const marks = window.__h.marks
+          const gen = Math.max(0, ...marks.filter((m) => m.what === 'lay-asked').map((m) => m.gen))
+          return {
+            layer: x.reader.state().layer.s,
+            rows: x.reader.state().rows.s,
+            laid: x.reader.probe().laidPages,
+            asked: x.asked.map((a) => a.url),
+            lays: marks.filter((m) => m.what === 'lay' && m.gen === gen).map((m) => [m.page, m.members]),
+          }
+        })
+        if (seen.at(-1) !== s.layer) seen.push(s.layer)
+        const unread = fresh.filter((d) => !s.asked.some((u) => u.endsWith(d)))
+        // (rows made here end over the old layer before the new one lands: done once the new catalog's pages are laid)
+        const laidNew = s.lays.length && s.lays.every(([n, k]) => k === rebuilt[seg].members[n])
+        if (!unread.length && laidNew && s.rows === 'complete' && s.laid > 0) break
+        if (Date.now() - t0 > 25_000)
+          throw new Error(
+            `the new catalog not laid in 25 s: ${JSON.stringify({ layer: s.layer, rows: s.rows, laid: s.laid, unread: unread.length, seen, v2: v2log.slice(from).map((x) => x.what) })}`,
+          )
+        await page.waitForTimeout(50)
+      }
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
+      const opens = mine.filter((x) => x.what === 'open')
+      assert(opens.length === 1 && opens[0].ask.target === null, `opens ${JSON.stringify(opens)}`)
+      assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
+      assert(
+        mine.every((x) => x.what === 'open' || !/[?&]t=/.test(x.query)),
+        `a target named: ${JSON.stringify(mine)}`,
+      )
+      // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
+      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
+await check(
   'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
   async () => {
     const seg = indexOf['s1-columns'].seg

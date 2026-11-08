@@ -8,15 +8,15 @@
 // `step = settle ∘ apply`: `apply` folds the input into its region; `settle` mints the tickets now wanted and clears the ones no
 // longer wanted, in this order (design-b §1.3): the original while there is a paper; `engaged` once a translated display is chosen
 // in a visible document (never back within a visit); the link while engaged, online and shown, the target one the reader sets,
-// the layer not refused, the look not stopped, the layer still wanted of our server, and no open asked meanwhile of a paper the
-// follow says is not opened; the open (our server's: a follow never starts work, the open starts what is missing) once for each
-// need of the visit the document shows that nothing in flight will meet, while the link would be wanted (`needsOf`: as our
-// server's open would start it), with a timer for the soonest wait our server names for one; the gate open on the left's first
-// page drawn, its 1.5 s, or the original's failure; the layer's code while it is ready and the gate open; the composed document
-// while the code is in, the head read and drawing, and the original open; the rows while engaged, for a target the reader sets,
-// once a units digest is known (rows made here: once a head that draws is read), until complete or failed for that target (and
-// again for a run our server starts again); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry,
-// wait and deadline held.
+// the layer not refused, the look not stopped, something still to come of our server (rows made here: until the layer is final),
+// and no open asked meanwhile of a paper the follow says is not opened; the open (our server's: a follow never starts work, the
+// open starts what is missing) once for each need of the visit the document shows that nothing in flight will meet, while the
+// link would be wanted (`needsOf`: as our server's open would start it), with a timer for the soonest wait our server names for
+// one; the gate open on the left's first page drawn, its 1.5 s, or the original's failure; the layer's code while it is ready and
+// the gate open; the composed document while the code is in, the head read and drawing, and the original open; the rows while
+// engaged, for a target the reader sets, once a units digest is known (rows made here: once a head that draws is read), until
+// complete or failed for that target (and again for a run our server starts again; rows made here, for a newer layer of other
+// units); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry, wait and deadline held.
 //
 // Today's pacing of our server (R session/run.ts, PDF-READER §11.10, UI.md S-R-24, S-R-26): a 429 waits its time (at least a
 // second, at most ten minutes) and asks again, REFUSED_ASKS times in a row at most, then the look stops until a retry, which asks
@@ -443,13 +443,18 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
   return { s: 'none' }
 }
 
-/** the rows as a document read for their target states them (rows made here are the host's, never the server's). Rows that
- *  ended are taken again (those held kept: reader.ts rows) for a run our server started again (a retry, a prepare's new units),
- *  whether it is heard running or only ended (frames coalesce, a follow asked again lands after the end): the target's run
- *  running, or another attempt or rows than the document before named (`was`) */
-function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string]): RowsRegion {
+/** the rows as a document read for their target states them. Rows that ended are taken again (those held kept, the missing
+ *  alone asked: reader.ts rows) for a run our server started again (a retry, a prepare's new units), whether it is heard running
+ *  or only ended (frames coalesce, a follow asked again lands after the end): the target's run running, or another attempt or
+ *  rows than the document before named (`was`). Rows made here are the host's, of the layer's units: those that ended are taken
+ *  again where the layer is now of other units than the one before (`before`: a stale layer's replacement) */
+function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string], before: LayerRegion): RowsRegion {
   const r = s.rows
-  if (s.here || s.docFor !== r.target) return r
+  if (s.here) {
+    const same = before.s === 'ready' && s.layer.s === 'ready' && sameRefs(before.units, s.layer.units)
+    return r.s === 'complete' && s.layer.s === 'ready' && !same ? { s: 'none', target: r.target } : r
+  }
+  if (s.docFor !== r.target) return r
   const t = d.targets[r.target]
   if (!t) return r
   const ended = r.s === 'complete' || (r.s === 'failed' && r.why.kind === 'server')
@@ -470,10 +475,11 @@ function heard(s: State, d: Doc, target: string | null) {
   const now = s.here ? null : targetOf(s)
   if (s.doc && (target === s.docFor ? !newer(s.doc, d) : target !== now)) return
   const was = s.docFor === target && target !== null ? s.doc?.targets[target] : undefined
+  const before = s.layer
   s.doc = d
   s.docFor = target
   s.layer = layerOfDoc(s, d)
-  s.rows = rowsOfDoc(s, d, was)
+  s.rows = rowsOfDoc(s, d, was, before)
 }
 /** a need of the visit (`needsOf`): its name, which carries the attempt it follows (an open is asked once for each), and the
  *  time our server's wait for it ends (null: none, or over) */
@@ -515,6 +521,10 @@ export function needsOf(s: State): Need[] {
   }
   return out
 }
+/** whether the layer shown is our server's last word on it: ready, of the build our server runs, and no prepare running. A layer
+ *  is replaced by a prepare alone: one running (its end writes a layer), or one to come (a stale layer is served while the paper
+ *  is prepared again). Rows made here take nothing else of our server: past this, nothing more can come for them */
+const layerFinal = (s: State) => s.layer.s === 'ready' && !s.doc?.layer?.stale && s.doc?.prepare.state !== 'running'
 /** whether the open is asked for some need now: one whose wait is over, not yet asked this visit */
 const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
 /** a 429: waited out and asked again (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks at once */
@@ -821,10 +831,10 @@ export function settle(s0: State): State {
   const lasting = s.layer.s === 'refused' && LASTING.has(s.layer.why)
   const target = targetOf(s)
   const sets = supported(s, target)
-  // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, the look not stopped, the layer
-  // still wanted of our server (rows made here: nothing more once the layer is ready), and no open wanted or under way of a paper
-  // the follow says is not opened (no 404s in a row); none while the page is put away (the follow let go, an open under way
-  // given back, to be asked again once it is shown)
+  // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, the look not stopped, something
+  // still to come of our server (rows made here: until the layer is final, `layerFinal`), and no open wanted or under way of a
+  // paper the follow says is not opened (no 404s in a row); none while the page is put away (the follow let go, an open under
+  // way given back, to be asked again once it is shown)
   if (s.away && s.open.t) s.open = { ...s.open, t: null, for: [] }
   const opening = s.open.missing
   // (offline with no layer: out of reach, as every ask of today's failed at once)
@@ -838,7 +848,7 @@ export function settle(s0: State): State {
     sets &&
     s.layer.s !== 'refused' &&
     !opening &&
-    !(s.here && s.layer.s === 'ready')
+    !(s.here && layerFinal(s))
   const linkTarget = s.here ? null : target
   if (s.link.s === 'stopped') {
     if (lasting) s.link = { s: 'off' }
