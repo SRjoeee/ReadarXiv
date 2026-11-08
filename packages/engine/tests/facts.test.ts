@@ -821,6 +821,38 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     const M = locate(ins, B, align(B, B)).members[0]!
     expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
   })
+  it('places a break at TeX’s paragraph end in a block TeX set centred, past a line TeX wrapped itself', () => {
+    // (2610.21504v1 p1's title "Receiver-Specific Interventional Valuation of / Semantic Atoms for\\ Budget-…": TeX wraps the
+    // first line, the break ends the second; centred, every line short, two line ends for one break. TeX states the title
+    // centred (`c`), where `\\` is \@centercr and its paragraph end, qe, stands at the break)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Receiver Specific Valuation of', x: 90 },
+          { text: 'Semantic Atoms for', x: 126 },
+          'Budget Constrained Multi Agent Talk',
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('Receiver Specific Valuation of Semantic Atoms for'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('\nBudget Constrained Multi Agent Talk'),
+    ]
+    const unit = (align?: 'c'): InstrumentUnit => ({
+      id: unitId('heading', content),
+      kind: 'heading',
+      content,
+      ...(align ? { align } : {}),
+    })
+    const ends = (u: InstrumentUnit) => {
+      const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[48]] } }
+      return locate(ins, B, align(B, B)).members[0]!.elements.find(([k]) => k === '1')?.[1].ends
+    }
+    expect(ends(unit('c'))).toEqual([1, 0])
+    // (TeX states no alignment: the paragraph's end may be the source's own, and the window states nothing)
+    expect(ends(unit())).toBeUndefined()
+  })
   it('reads short ends between two points only, where the breaks there are as many: one window’s count is not another’s', () => {
     // (a paragraph with a natural line end and a break, text on both sides of it, between the unit's start and a formula's
     // point, then a break at the unit's end: the window holds two line ends and one break, read by the short one; the break at

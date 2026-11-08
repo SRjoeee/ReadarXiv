@@ -293,10 +293,12 @@ export function factsOf({
     // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
     //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
     //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
-    //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else where as many of those lines end
-    //   short of their column's right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none
-    //   over a held line, they are the groups', in order, the lines read; else no break of the window is stated. A window's
-    //   count is its own: another's, or a break at the unit's end, leaves it as it is)
+    //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
+    //   or ragged (InstrumentUnit.align), where its paragraph ends there are as many as its groups, each is one's point, past
+    //   the lines TeX wrapped itself (2610.21504v1's title); else where as many of its line ends end short of their column's
+    //   right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none over a held line, they
+    //   are the groups', in order, the lines read; else no break of the window is stated. A window's count is its own:
+    //   another's, or a break at the unit's end, leaves it as it is)
     if (unplaced.length && unit && mem.bFirst >= 0) {
       const seq = flatOf(unit.content)
       const classes = new Map(unit.classes ?? [])
@@ -366,8 +368,24 @@ export function factsOf({
         const lineEnds = seen.slice(0, -1)
         // (a line of its own text, the next one too: no held line's)
         const textual = (j: number) => !((mem.lines[j] as Line)[9] & 1) && !((mem.lines[j + 1] as Line)[9] & 1)
+        // (the lines TeX's paragraph ends inside it close)
+        const closed: number[] = []
+        for (const e of ends) {
+          if (e >= w.hi) break
+          if (e > w.lo && (unitB[e - 1] as number) === mem.unit) {
+            const j = lineBefore(e)
+            if (j !== undefined && j !== closed.at(-1)) closed.push(j)
+          }
+        }
         let lines: number[] | null = null
         if (lineEnds.length === w.groups.length && lineEnds.every(textual)) lines = lineEnds
+        else if (
+          unit.align !== undefined &&
+          unit.align !== 'j' &&
+          closed.length === w.groups.length &&
+          closed.every((j) => lineEnds.includes(j) && textual(j))
+        )
+          lines = closed
         else {
           const short = lineEnds.filter((j) => {
             const l = mem.lines[j] as Line
