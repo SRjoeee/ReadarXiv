@@ -66,6 +66,13 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   from v2.mjs; a Page whose faces are not loaded is answered with `wait.faces`, so the composer loads them and lays again).
   The page's left margin in the pane is fixed (`v2page/index.html`): centred, an A4 page stands at a fraction of a pixel
   and the compositor resamples it, which is the screenshot's, not the drawing's.
+- **The page boxes**: every side's page stands in a box of whole CSS px, its canvas that box at the device ratio, drawn at the
+  page's exact scale from its top-left corner (PDF.js's page view: the box floored, the canvas cut): arXiv's page and
+  today's copy as `today/entry.mjs` draws them (today's place is PDF.js's page box, its copy `round(box × ratio)`), v2's page
+  view and crops as the reader draws them. A canvas shown in a box of a fraction of a CSS px (the page's own 793.7 px of an
+  A4 page) is resampled by the compositor to the whole px it snaps the box to: before 2026-11-08 arXiv's page and today's
+  were drawn so, 1587 device px shown in 1588 (+0.063 % across, +0.045 % down), which put every rule of a page's lower right
+  a device px off v2's (the first run's `pixels`, triage-1 P1).
 - **The rows**: the pair's door rows (`packages/typeset/tests/replay/rows.ts`: the release's stored rows), taken whole by
   today's door and handed to the entry as its Rows (gate-l1.ts `outOfDoor`): the same translation of every unit on both
   sides. Both lay under the default toggles (references and the author block the original's).

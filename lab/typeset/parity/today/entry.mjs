@@ -9,6 +9,11 @@
 // (view/text-rendering.mjs applyLayerText). arXiv's own page drawn beside it by PDF.js (the original). What is read back is
 // what was drawn: each character of the SVG where the browser placed it, in the face, weight, style and size it was set in.
 // Two choices are not the product's, both the baseline's (NOTES.md §4): `fillsMs: Infinity` and `records: true`.
+// Both pages stand in a page box as PDF.js's page view sizes one (its viewer's page div, which today's place is): the page's
+// size at the scale floored to whole CSS px, the canvas that box at the device ratio, drawn at the page's exact scale from its
+// top-left corner and cut at the box (pdf_viewer.mjs PDFPageView draw: floorToDivide, outputScale). A canvas shown in a box of
+// a fraction of a CSS px is resampled by the compositor to the whole px it snaps the box to (1587 device px shown in 1588:
+// +0.063 %), which no reader's page view is.
 import * as pdfjs from 'pdfjs-dist'
 import INDEX from '@web/fonts/static/index.json'
 import { faceSourcesOf, groupsAt, tableUrlsOf } from '@web/layer/faces.ts'
@@ -42,6 +47,13 @@ let layer = null,
   head = null
 const faceSources = faceSourcesOf(INDEX, groupsAt(tableUrlsOf(INDEX)))
 const stage = () => document.getElementById('stage')
+/** a page view's box at a viewport: its CSS px, whole (PDF.js floors them to a multiple of its pixel fraction's denominator, 1
+ *  at an integral device ratio), and its canvas's pixels (that box at the ratio) */
+const boxOf = (vp, dpr) => {
+  if (!Number.isInteger(dpr)) throw new Error(`the parity's page box is PDF.js's at an integral device ratio, not ${dpr}`)
+  const css = [Math.floor(vp.width), Math.floor(vp.height)]
+  return { css, px: [css[0] * dpr, css[1] * dpr] }
+}
 
 window.today = {
   async open(desc) {
@@ -83,16 +95,17 @@ window.today = {
     const p = await orig.getPage(n)
     const vp = p.getViewport({ scale })
     const dpr = window.devicePixelRatio
+    const box = boxOf(vp, dpr)
     const canvas = document.createElement('canvas')
-    canvas.width = Math.floor(vp.width * dpr)
-    canvas.height = Math.floor(vp.height * dpr)
-    Object.assign(canvas.style, { width: `${vp.width}px`, height: `${vp.height}px`, display: 'block' })
+    canvas.width = box.px[0]
+    canvas.height = box.px[1]
+    Object.assign(canvas.style, { width: `${box.css[0]}px`, height: `${box.css[1]}px`, display: 'block' })
     canvas.className = 'axt-original'
     await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
     const links = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action)).length
     stage().replaceChildren(canvas)
     p.cleanup()
-    return { view: [...p.view], links, size: [vp.width, vp.height] }
+    return { view: [...p.view], links, size: box.css }
   },
   /** page n laid by the door and drawn as the reading view draws it, at `scale` CSS px a point; what was drawn read back */
   async page(n, scale) {
@@ -113,8 +126,10 @@ window.today = {
     }
     const dpr = window.devicePixelRatio
     const k = scale * dpr
-    const width = Math.max(1, Math.round(vp.width * dpr)),
-      height = Math.max(1, Math.round(vp.height * dpr))
+    // (the copy of the place's box at the ratio, pixel for pixel: layer-side.mjs copyAt, `round(box × r)`, box the place's)
+    const box = boxOf(vp, dpr)
+    const width = Math.max(1, Math.round(box.css[0] * dpr)),
+      height = Math.max(1, Math.round(box.css[1] * dpr))
     // (a delta's replaced page keeps the original's /Annots: the layer draws its own links, so the copy draws none: layer-side copyAt)
     const replaced = head.base.kind === 'delta' && pagesOf(head.base.replaced ?? []).includes(n)
     const canvas = await layer.copyOf(n, { k, width, height, context: { alpha: false }, ...(replaced ? { annotationMode: pdfjs.AnnotationMode.DISABLE } : {}) })
@@ -131,7 +146,7 @@ window.today = {
     wrap.append(canvas, laid.svg, ...(links ? [links] : []))
     const place = document.createElement('div')
     place.className = 'axt-place'
-    Object.assign(place.style, { position: 'relative', width: `${vp.width}px`, height: `${vp.height}px` })
+    Object.assign(place.style, { position: 'relative', width: `${box.css[0]}px`, height: `${box.css[1]}px` })
     place.style.setProperty('--total-scale-factor', String(scale))
     place.append(wrap)
     stage().replaceChildren(place)
