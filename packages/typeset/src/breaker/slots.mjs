@@ -17,10 +17,12 @@ const lowOf = (b) => b.B.at(-1)
  * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
  * page's head): a first line moved under it by half the leading drifted from the original by (L - 1) / 2 of a pitch on 56 %
  * of the paragraph starts in CJK, 70 % of them with a leading's room over them already (the maintainer's question). So the
- * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than a leading, L p0, of
- * either paragraph (its own, `lead`, or the next one's, `next`, the page fill's: run.mjs fillPage) and the original's own
- * skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that line's plus L p0 of the
- * larger and the skip, its fill spread over a shorter height
+ * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than its own leading,
+ * L p0, and the original's own skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that
+ * line's plus L p0 and the skip, its fill spread over a shorter height. Its own leading alone, never the next paragraph's
+ * (the owner's ruling of 2026-11-08, chosen on a preview of the rules: today's held the gap to the larger of both, and a
+ * paragraph whose translation nearly fills its block was pulled under the leading its own block allows, 1810.04805v2 p8 t156
+ * at 1.08 among neighbours at 1.38-1.5, its own 1.14)
  * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
  * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
  * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
@@ -28,7 +30,7 @@ const lowOf = (b) => b.B.at(-1)
  * last frame of one line (no room to give), no line under it
  */
 function footFloorAt(blocks, st, P, s) {
-  const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
+  const e = P.halfLead, L = st.lead
   if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
   const bl = blocks.at(-1), low = lowOf(bl)
   if (!(bl.B[0] - low > 0.05)) return null
@@ -39,7 +41,7 @@ function footFloorAt(blocks, st, P, s) {
   const floor = bl.B.at(-1) - e.below + L * p0 + skip
   return floor > low + 1e-9 ? floor : null
 }
-/** footFloorAt for the page fill's guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
+/** footFloorAt for the fill leadings' guesses of a closer leading (run.mjs guessCloser): the floor a state asks, or null */
 export const footFloorOf = (blocks, st, P, s) => footFloorAt(blocks, st, P, s)
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent (TeX's
  *  \abovedisplayshortskip, nothing but stretch, sets one that near; its \abovedisplayskip does not) */

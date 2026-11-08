@@ -378,11 +378,12 @@ const SPECS: readonly RuleSpec[] = [
       'L2:3061 inFlow',
     ],
     how: 'ported',
+    ruling: "2026-11-08 the gap under a paragraph its own leading's alone",
     reads: ['tex.predisplay', 'k.SHORT_SKIP 0.3'],
     file: 'breaker/slots.mjs',
     state: {
       is: 'changed',
-      why: "the owner's ruling of 2026-11-08, no borrowing: a block's foot is its last baseline, never lower by a borrowed line (today's lowOf less min(free, borrow pitches))",
+      why: "the owner's ruling of 2026-11-08, no borrowing: a block's foot is its last baseline, never lower by a borrowed line (today's lowOf less min(free, borrow pitches)); and the owner's ruling of 2026-11-08 on the gap, chosen on a preview of two rules: footFloorAt holds the gap under a paragraph to its own leading alone, where today's held it to the larger of its own and the next paragraph's (the page fill's `next`), which pulled a paragraph whose translation nearly fills its block under the leading its own block allows (1810.04805v2 p8 t156 1.08 among 1.38-1.5, its own 1.14; 229 of 3,900 units of the 22 parity pairs, 228 looser by a median 0.02). The walk's states carry no `next`: its replay is unchanged",
       replay:
         "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
       cases: 145,
@@ -756,7 +757,13 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L9',
     owns: ['E30', '1F:fillLead', '1F:fillTop', '1F:fitLines'],
-    ports: ['RUN:512-558 fillLeadsOf', 'RUN:2617-2624 unitFillLeads'],
+    // (closerLead and guessCloser, which the page fill read too until the gap ruling of 2026-11-08, are the fill leadings' alone)
+    ports: [
+      'RUN:512-558 fillLeadsOf',
+      'RUN:2617-2624 unitFillLeads',
+      'RUN:569-579 closerLead',
+      'RUN:587-595 guessCloser',
+    ],
     how: 'ported',
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
     file: 'shared/fill-leads.mjs',
@@ -784,21 +791,15 @@ const SPECS: readonly RuleSpec[] = [
     home: 'shared',
     step: 'L10',
     owns: ['T33', '1F:fillable'],
-    ports: [
-      'RUN:325-327 fillUnitsOf',
-      'RUN:365-490 fillPage',
-      'RUN:569-579 closerLead',
-      'RUN:587-595 guessCloser',
-      'L2:4407-4424 keepsShare',
-      'RUN:2365-2394 fillPass',
-    ],
+    ports: ['RUN:325-327 fillUnitsOf', 'RUN:365-490 fillPage', 'L2:4407-4424 keepsShare', 'RUN:2365-2394 fillPass'],
     how: 'ported',
-    ruling: '2026-10-09 one page size; 2026-11-08 no letter spacing on a table cell',
+    ruling:
+      "2026-10-09 one page size; 2026-11-08 no letter spacing on a table cell; 2026-11-08 the gap under a paragraph its own leading's alone",
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
     file: 'shared/fill-page.ts',
     state: {
       is: 'changed',
-      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400); and a table cell takes no tracking from the page's fill (TeX stretches no tabular entry; the owner's ruling of 2026-11-08), where today's tracked a CJK cell short of its fill: such a cell is laid untracked, its decision otherwise today's (pass.ts trackedCells)",
+      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400); and a table cell takes no tracking from the page's fill (TeX stretches no tabular entry; the owner's ruling of 2026-11-08), where today's tracked a CJK cell short of its fill: such a cell is laid untracked, its decision otherwise today's (pass.ts trackedCells); and the next paragraph's leading is no longer read (the owner's gap ruling of 2026-11-08, B.slots): no unit is set closer for it, so a decision tells neither `next` nor `closer`, and a pass where today's held a gap to the next paragraph's leading lays otherwise (tap.ts flooredIn)",
       replay:
         "every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways; and every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2), a cell today tracked untracked",
       cases: 3013,

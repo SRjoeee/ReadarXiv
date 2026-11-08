@@ -13,7 +13,7 @@ import { TAP } from '../../packages/typeset/tests/replay/tap.ts'
 const pairs = process.argv.slice(2).length
   ? process.argv.slice(2)
   : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort()
-const count = { pairs: 0, passes: 0, equal: 0, differ: 0, notReplayed: 0, threw: 0, filled: 0, chainsDiffer: 0 }
+const count = { pairs: 0, passes: 0, equal: 0, ruled: 0, differ: 0, notReplayed: 0, threw: 0, filled: 0, chainsDiffer: 0 }
 const classes = new Map(), missing = []
 const t0 = performance.now()
 for (const pair of pairs) {
@@ -26,6 +26,7 @@ for (const pair of pairs) {
     count.passes++
     if (r.missing) { count.notReplayed++; missing.push(`${pair} p${r.page}: ${r.missing.join(',')}`); continue }
     count.filled += r.filled
+    if (r.ruled) { count.ruled++; continue }
     if (!r.d) { count.equal++; continue }
     count.differ++
     const cls = r.d.replace(/\[\d+\]/g, '[]').replace(/ord \d+/, 'ord').replace(/:.*/, '')
