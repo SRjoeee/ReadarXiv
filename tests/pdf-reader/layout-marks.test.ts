@@ -610,13 +610,14 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // three messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts) and a colour piece's fill
-    // (AXT-COLOUR, readColours), and one write to the log at the shipout, each bracketed body's frame (AXT-BODY, readBodies):
-    // each a line of its own, which no reader of the log but theirs reads, and nothing typeset changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(3)
+    // four messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
+    // cell's column class at its template's end (AXT-CELL, the engine's readAlign) and a colour piece's fill (AXT-COLOUR,
+    // readColours), and one write to the log at the shipout, each bracketed body's frame (AXT-BODY, readBodies): each a line of
+    // its own, which no reader of the log but theirs reads, and nothing typeset changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(4)
     expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(1)
     expect(LAYOUT_TEX).toContain('\\write-1{AXT-BODY ')
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-COLOUR', 'AXT-BODY'])
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')

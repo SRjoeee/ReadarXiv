@@ -770,10 +770,11 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
 // ---------------------------------------------------------------- the TeX
 /**
  * The TeX that goes after MARK_DEF in the marked original. One line, no comment: the paper's lines keep their numbers
- * in the log. Allocates no register and writes to the log one line a unit, its alignment (below), and else nothing: no
- * line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's lists as the paper's, a
- * destination (a whatsit) beside them:
- * - **The alignment.** For a unit's or a heading's end mark (`<i>e`, `h<i>e`; not a cell's), a message to the log,
+ * in the log. Allocates no register and writes to the log one line a unit, its alignment (below), a cell's column class
+ * (below), and else nothing: no line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's
+ * lists as the paper's, a destination (a whatsit) beside them:
+ * - **The alignment.** For a unit's, a heading's or a cell's end mark (`<i>e`, `h<i>e`, `t<i>e`: its line names it as the
+ *   mark does, `h<i>`, `t<i>`, which today's readAlign passes over for a cell), a message to the log,
  *   `AXT-ALIGN <i> <mode> <lo> <ls> <ro> <rs> <po> <ps>`: the mode TeX is in (p a paragraph, h an \hbox's restricted
  *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip (readAlign):
  *   the author's own alignment, \centering's both skips infinite and its \parfillskip none. TeX breaks a paragraph's lines
@@ -791,6 +792,19 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   the hook that runs later at another paragraph's \par writes nothing: it wrote the keywords' \raggedright for
  *   2608.16117v1's abstract. In an \hbox, or after the paragraph ended (v), the skips at the mark. Through \message, hooks
  *   and \aftergroup, which put nothing in any list
+ * - **The cell's column.** A cell of an l, c or r column is set in TeX's restricted horizontal mode, an \hbox's, whose skips
+ *   tell nothing: where it goes in its column is its template's \hfil, on the side or sides the slack goes, which a macro
+ *   cannot read (it sees the last node of its list alone, and the template's right side comes after the cell's last mark).
+ *   So the class LaTeX built the template from rides on the template itself: every \@mkpream (LaTeX's tabular and array,
+ *   array.sty's, longtable, tabularx, colortbl, siunitx's S, which is array's c; \multicolumn's own spec) has each
+ *   column's template end in `\axt@te{<\@chnum>}` (0 c, 1 l, 2 r, 3 m, 4 p, 5 b: LaTeX's reading of the column's letter
+ *   after \newcolumntype and *{n}{…}), wrapped at begindocument/end over whatever \@mkpream and \@classz the packages left.
+ *   A cell's start mark (`t<i>s`) defines its index in its own cell's group, carried out through the groups around the
+ *   mark (the paper's braces, a template's \begingroup, colortbl's box, a p column's \vtop) by \aftergroup to the
+ *   innermost alignment entry's (\currentgrouptype 6), never past it; the template's end writes `AXT-CELL <i> <class>`
+ *   where the index is defined at its own group level, so that a cell of a tabular inside the cell, whose group is deeper,
+ *   never writes the outer cell's. A cell no template of LaTeX's sets (a plain \halign, tabularray's tblr) writes none.
+ *   Assignments, \aftergroup and \message: no node
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -1115,7 +1129,11 @@ export const LAYOUT_TEX = [
   '\\def\\axt@agw#1#2{\\ifnum\\currentgrouplevel>\\z@\\axt@agbox{\\axt@agz{#1}{#2}\\axt@agmsg}{\\axt@agplain{\\axt@agz{#1}{#2}\\axt@agup}{}}\\fi}\\def\\axt@agz#1#2#3{\\expandafter\\gdef\\csname axt@agw@#2\\endcsname{#3{#1}{#2}}\\expandafter\\aftergroup\\csname axt@agw@#2\\endcsname}\\def\\axt@agup#1#2{\\axt@agopen{#2}{\\ifhmode\\axt@agw{#1}{#2}\\fi}}',
   '\\def\\axt@agpar#1{\\xdef\\axt@agn{\\the\\numexpr\\axt@agn+1}\\axt@agcap{\\axt@agn}\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}{\\axt@agn}}\\noexpand\\axt@agw{#1}{\\axt@agn}}\\axt@agt}',
   '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi\\fi}',
-  '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
+  '\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{}\\axt@alg#1e\\@nil}\\def\\axt@tcs t#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@cs{#1}\\fi}',
+  '\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else\\ifnum\\currentgrouplevel>\\z@\\expandafter\\gdef\\csname axt@cu@#1\\endcsname{\\axt@cs{#1}}\\expandafter\\aftergroup\\csname axt@cu@#1\\endcsname\\fi\\fi}',
+  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\def\\axt@ate{\\xdef\\@preamble{\\@preamble\\axt@te{\\the\\@chnum}}}',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\let\\axt@cz\\@classz\\def\\@classz{\\axt@cz\\axt@ate}\\axt@mkp{#1}\\let\\@classz\\axt@cz}}\\fi',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
   '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',
@@ -1190,7 +1208,8 @@ const alignCode = (lo, ls, ro, rs, po, ps) => {
  * Each unit's alignment as TeX set its paragraph, from the marked original's log (LAYOUT_TEX's AXT-ALIGN at its end mark, the
  * last pass's: lastTexLog): [[unit, code]], ids rising, the code ALIGN_CODES'. A unit's last line counts (a caption measured
  * in a box and then set as a paragraph: the paragraph's). One TeX set in an \hbox (mode h: a caption \@makecaption centres
- * on one line, \centerline, a table's cell) tells nothing of its alignment, and has no entry; nor has one with no line. A
+ * on one line, \centerline, a table's cell) tells nothing of its alignment, and has no entry; nor has one with no line (a
+ * cell's own lines, `AXT-ALIGN t<i>`, and its column's class, AXT-CELL, are passed over: the engine's readAlign reads them). A
  * unit whose paragraphs TeX set in two alignments has none: its text set again elsewhere, from a file TeX wrote (an author's
  * name in an e-mail footnote, layout/guard.mjs copiesOutOfPlace), and the log does not say which paragraph is the unit's own,
  * as readColours takes a piece set in two colours. A line not of the form is passed over: a log cut short or a template that

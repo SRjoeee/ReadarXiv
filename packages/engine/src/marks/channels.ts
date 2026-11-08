@@ -12,6 +12,9 @@ const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, p
   if (L && R) return !F || po < Math.min(lo, ro) ? 'c' : 'j'
   return L ? 'r' : R ? 'l' : 'j'
 }
+/** LaTeX's column classes (\@chnum: c, l, r, m, p, b) as the alignment they set a cell's line by; m, p and b's lines are a
+ *  paragraph's */
+const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
 /**
  * Each unit's alignment as its end mark states it (AXT-ALIGN, its 79-column wrap joined, in the order TeX set the paragraphs):
  * none for one TeX set last in an \hbox (marks.mjs readAlign: a caption set as a paragraph and then in a box). A unit TeX set
@@ -19,14 +22,20 @@ const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, p
  * instrument's ownership; pdfTeX keeps a destination set twice at its first), the text a template sets again after it its
  * copy, never its own (2608.25210v2's title and authors, centred by \maketitle and set again ragged right in VLDB's "PVLDB
  * Reference Format"; 2610.22065v1's title in ACM's reference format, justified; an author's name in an e-mail footnote): an
- * alignment TeX stated is never dropped for a copy's, the full line its title fills read off A as justified
+ * alignment TeX stated is never dropped for a copy's, the full line its title fills read off A as justified.
+ * A table cell's (its end mark `t<i>e`) is its own paragraph's where TeX set it one (a p, m or b column, X, a \parbox, tblr's
+ * cells), else the class LaTeX built the cell's column template from (AXT-CELL <i> <class>, written at the template's end:
+ * LaTeX's \@chnum, its reading of the column's letter after \newcolumntype and *{n}{…}, \multicolumn's own spec where the cell
+ * is one): c centred, l flush left, r flush right (TeX's \hfil on the side or sides the slack goes); m, p and b none, their
+ * lines a paragraph's. The cell's first (tabularx sets its table once for each trial width, the same). A cell no template of
+ * LaTeX's set (a plain \halign) states nothing
  */
 export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
   const last = new Map<number, 'j' | 'l' | 'c' | 'r' | null>()
   const told = new Map<number, 'j' | 'l' | 'c' | 'r'>()
   const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
   for (const m of text.matchAll(
-    /^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm,
+    /^AXT-ALIGN [ht]?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm,
   )) {
     const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number) as [number, number, number, number, number, number]
     if (!v.every(Number.isFinite)) continue
@@ -40,7 +49,16 @@ export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
     const t = told.get(id)
     if (c !== null && t !== undefined) out.set(id, t)
   }
-  return out
+  // (a cell's class, where its own paragraph tells nothing)
+  const classed = new Set<number>()
+  for (const m of text.matchAll(/^AXT-CELL (\d{1,9}) ([0-5]) *$/gm)) {
+    const id = Number(m[1])
+    if (classed.has(id)) continue
+    classed.add(id)
+    const code = CELL_CLASS[Number(m[2])]
+    if (code && !out.has(id)) out.set(id, code)
+  }
+  return new Map([...out].sort((a, b) => a[0] - b[0]))
 }
 const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
 const BP_PER_PT = 72 / 72.27

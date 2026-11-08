@@ -696,7 +696,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
 
   // ---- the units
-  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's, marks/channels.ts)
+  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's; a cell's, its own
+  // paragraph's, else the class LaTeX built its column's template from: marks/channels.ts)
   const align = readAlign(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
