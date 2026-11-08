@@ -172,9 +172,10 @@ export const Label = z.object({
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
  *  crowded); `ends` the room under each run of its text lines (a run's last line: the next line on another page or column, a
- *  kept row, or none), each [that line's index, the free depth under it to the first ink across the run, its own kept rows
- *  and elements too, its page's lowest unit baseline (but a figure text's, an ink figure's and a name's)]: what a translation
- *  may borrow there, on each page it runs over (`below` is its last line's alone, which a part made before states) */
+ *  kept row, under another's ink (a float set inside the paragraph), or none), each [that line's index, the free depth under it
+ *  to the first ink across the run (its lines' own start to their column's end), its own kept rows and elements too, its page's
+ *  lowest unit baseline (but a figure text's, an ink figure's and a name's)]: what a translation may borrow there, on each page
+ *  it runs over (`below` is its last line's alone, which a part made before states) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
