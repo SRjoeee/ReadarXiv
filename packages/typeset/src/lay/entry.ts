@@ -135,10 +135,12 @@ function bottomsOf(part: Part): Map<number, number> {
  */
 const holdsTable = (why: Unlaid, spanning: boolean) => why !== 'unwrapped' || spanning
 
-/** a member's row content, or why it has none to be set from */
+/** a member's row content, or why it has none to be set from: a unit the paper keeps as it is (Unit.kept: its names, an
+ *  algorithm's body) has none whatever row is given of it (one stored before the unit was kept), never translated */
 function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
   if (m.why) return m.why
   if (typeof m.text !== 'string') return m.kind === 'name' ? 'name' : 'kind'
+  if (rows.kept?.(m.text)) return 'none'
   const row = rows.get(m.text)
   if (!row) return 'none'
   if (!row.ok) return row.why.kind

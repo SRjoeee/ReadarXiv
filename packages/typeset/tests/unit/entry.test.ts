@@ -58,6 +58,13 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p.wait).toEqual({ rows: [], faces: [] })
     expect(p.members[0]).toMatchObject({ state: 'none', off: 0 })
   })
+  it('lays nothing of a member whose unit the paper keeps as it is, a row of it given or not (Unit.kept: never translated)', () => {
+    // (2608.25210v2-zh p7's Algorithm 1, its algorithm2e lines kept as the original (the owner's ruling of 2026-11-08): a row
+    // of the unit stored before it was kept, or today's door row the parity hands in, drew it erased and set as one line)
+    const kept: Rows = { ...rowsOf([row([{ t: 'text', s: 'ein Satz' }])], true), kept: (k) => k === id }
+    const p = layPage(part(member()), kept, rules, metrics())
+    expect(p.members[0]).toMatchObject({ state: 'none', off: 0, lines: [] })
+  })
   it('waits for a face not loaded, as for a row', () => {
     const p = layPage(
       part(member()),

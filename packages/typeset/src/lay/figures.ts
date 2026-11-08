@@ -60,8 +60,11 @@ export function figuresOf(
   for (const m of members) {
     const l = m.lines[0]
     if (!l || l[0] !== page) continue
-    const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
+    // (a unit the paper keeps as it is has no row, whatever row is given of it: the entry's contentOf)
+    const kept = typeof m.text === 'string' && !!rows.kept?.(m.text)
+    const row = typeof m.text === 'string' && !kept ? rows.get(m.text) : undefined
     if (m.why) why.set(m.ord, m.why)
+    else if (kept) why.set(m.ord, 'none')
     else if ((m.dir && !m.run) || m.lines.length !== 1 || m.align === 'j') why.set(m.ord, 'kind')
     // (a row that failed: its reason kept, as the entry's contentOf keeps it, #631's review; S.figures fits no set over it)
     else if (row && !row.ok) why.set(m.ord, row.why.kind)
