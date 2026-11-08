@@ -94,6 +94,10 @@ for (const pair of pairs) {
           style: m.style,
           lines: m.lines,
           ...(m.label ? { label: m.label } : {}),
+          // (TeX's room under each run of its lines and its paragraph separation, where the part states them: the block measure's)
+          ...(m.room?.runs || m.room?.sep !== undefined
+            ? { room: { ...(m.room.runs ? { runs: m.room.runs } : {}), ...(m.room.sep !== undefined ? { sep: m.room.sep } : {}) } }
+            : {}),
           // (its elements: each [piece, kind, its ink's boxes on this page [x0, y0, x1, y1, base], how many boxes its ink has on
           // every page, its text (1 stated: its glyphs' reading; 2 stated empty: TeX set nothing; 0 none; a symbol is drawn from
           // its source's name, by its kind), raised (a mark, a raised symbol), kept)

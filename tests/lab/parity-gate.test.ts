@@ -91,8 +91,8 @@ describe('the highlight: a crop is its own line\'s, and a full-width colon or qu
 })
 
 /** a unit both sides draw, member `ord` joined to today's `ord`, its original lines `lines` (factLine) */
-const one = (ord: number, kind: string, lines: number[][], o: { els?: unknown[]; style?: object; label?: object } = {}) =>
-  v2Of({ members: [laid(ord)], facts: [{ ord, kind, align: 'j', style: { size: 10, ...o.style }, lines, ...(o.els ? { els: o.els } : {}), ...(o.label ? { label: o.label } : {}) }], today: { [ord]: { today: ord } } })
+const one = (ord: number, kind: string, lines: number[][], o: { els?: unknown[]; style?: object; label?: object; room?: object } = {}) =>
+  v2Of({ members: [laid(ord)], facts: [{ ord, kind, align: 'j', style: { size: 10, ...o.style }, lines, ...(o.els ? { els: o.els } : {}), ...(o.label ? { label: o.label } : {}), ...(o.room ? { room: o.room } : {}) }], today: { [ord]: { today: ord } } })
 const sides = (ord: number, t: Line[], v: Line[], o: { today?: object; v2?: object; original?: object; px?: object } = {}) =>
   rec({ today: { units: [{ id: ord, lines: t }], ...o.today }, v2: { units: [{ id: ord, lines: v }], ...o.v2 }, original: o.original, px: o.px })
 /** render.mjs's fidelity readings of a page (analyse.mjs), every side's reading empty but those given */
@@ -122,20 +122,39 @@ describe("frame: a line past its column or the original's text block (2610.22065
   })
 })
 
-describe("block: no borrowing, the owner's ruling 1", () => {
-  // (a paragraph of 4 lines on A, 700 to 664; today lays 5 lines at full size, its fifth in the gap under the original;
-  // v2 keeps the block, 4 lines shrunk to 9.5)
-  const f = one(26, 'para', [700, 688, 676, 664].map((y) => factLine(72, 300, y)))
-  const t = [700, 688, 676, 664, 652].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10)),
-    v = [700, 688, 676, 664].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.5))
-  it("today borrowing past the original's block and v2 shrinking: no size or line-count fault of v2's, the ruling's", () => {
-    const p = measure(f, sides(26, t, v))
-    expect(of('block')(p)).toMatchObject([{ unit: 't26 para', worse: false, nearer: 'v2' }])
-    expect([...of('size')(p), ...of('line-count')(p)].filter((d) => (d as { worse?: boolean }).worse)).toEqual([])
-    expect(of('size')(p)).toMatchObject([{ nearer: 'ruling' }])
+describe("block: borrowing bounded by TeX's facts, the owner's ruling of 2026-11-08", () => {
+  // (a paragraph of 4 lines on A, 700 to 664; the part states the room under its last line (Room.runs: [its line, the depth of
+  // the next ink's baseline under it, the depth of TeX's text block bottom]) and its separation (Room.sep, \baselineskip and
+  // \parskip): a translation may borrow down to that bottom, the next ink staying the separation under its lowest baseline)
+  const ys = [700, 688, 676, 664]
+  const lines = (sz: number, ...more: number[]) => [...ys, ...more].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), sz))
+  const para = (runs: number[][], sep = 12) => one(26, 'para', ys.map((y) => factLine(72, 300, y)), { room: { runs, sep } })
+  it("a line past TeX's text block bottom is v2's fault, worse where today keeps within it", () => {
+    // (the bottom 24 pt under its last line, at 640; the next ink 60 pt down: today's fifth line at 652 inside, v2's seventh at
+    // 628 past it)
+    const f = para([[3, 60, 24]])
+    const p = measure(f, sides(26, lines(10, 652), lines(10, 652, 640, 628)))
+    expect(of('block')(p)).toMatchObject([{ unit: 't26 para', worse: true, v2: { value: 1 }, today: { value: 0 } }])
+    expect(p.faults.block.v2Says[0]).toMatch(/past TeX's text block bottom/)
   })
-  it("v2 borrowing where today keeps the block: worse", () => {
-    expect(of('block')(measure(f, sides(26, v, t)))).toMatchObject([{ unit: 't26 para', worse: true }])
+  it('a line bringing the next ink nearer than TeX’s paragraph separation is a fault', () => {
+    // (the next ink's baseline 30 pt under its last line, the separation 12: a borrowed baseline no lower than 646)
+    const f = para([[3, 30, 200]])
+    const p = measure(f, sides(26, lines(10, 652), lines(10, 652, 640)))
+    expect(of('block')(p)).toMatchObject([{ unit: 't26 para', worse: true }])
+    expect(p.faults.block.v2Says[0]).toMatch(/nearer the next ink than TeX's paragraph separation/)
+  })
+  it("a line borrowed within TeX's room is no fault; v2's smaller size and fewer lines where today borrowed are judged as any", () => {
+    // (today's fifth line inside the room at full size; v2 keeping the block, shrunk to 9.5: no ruling stands between them now)
+    const f = para([[3, 60, 24]])
+    const p = measure(f, sides(26, lines(10, 652), lines(9.5)), { ruled: new Set([26]) })
+    expect(of('block')(p)).toEqual([])
+    expect(of('size')(p)).toMatchObject([{ worse: true }])
+    expect(p.diffs.filter((d: { nearer: string }) => d.nearer === 'ruling')).toEqual([])
+  })
+  it('a part that states no room under the run: no line is judged', () => {
+    const f = one(26, 'para', ys.map((y) => factLine(72, 300, y)))
+    expect(of('block')(measure(f, sides(26, lines(10), lines(10, 652, 640, 628))))).toEqual([])
   })
 })
 
@@ -318,43 +337,21 @@ describe("lead: a paragraph set tighter than the original's leading while its bl
   })
 })
 
-describe("the no-borrowing ruling over a unit today laid with a borrowed line (today's ledger: the tap's ruledIn)", () => {
-  // (a paragraph of 4 lines on A, 700 to 664 at 10 pt; today, its ledger says, laid it with a borrowed line (in a round of its
-  // page's fill, the line elsewhere on the page) in 4 lines at full size on the original's baselines; v2 keeps its block, 4
-  // lines at 9.4 pt from 2 pt under the original's first baseline)
+describe("a unit today laid with a borrowed line is judged as any (the borrowing ruling of 2026-11-08 replaced no-borrowing's)", () => {
+  // (a paragraph of 4 lines on A, 700 to 664 at 10 pt; today, its ledger says, laid it with a borrowed line in a round of its
+  // page's fill; v2 4 lines at 9.4 pt from 2 pt under the original's first baseline: its size and anchor worse, as before the
+  // no-borrowing ruling)
   const f = one(26, 'para', [700, 688, 676, 664].map((y) => factLine(72, 300, y)))
   const t = [700, 688, 676, 664].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 10)),
     v = [698, 686.7, 675.4, 664.1].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
-  const ruledOf = (p: { diffs: { flag: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.nearer === 'ruling').map((d) => d.flag)
-  it("v2's smaller size and its other anchor on such a unit are the ruling's, not worse, where its drawn lines borrow nothing on A", () => {
-    const before = measure(f, sides(26, t, v))
-    expect(before.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['size', 'anchor']))
+  it("v2's smaller size and its other anchor stay worse whatever today's ledger says", () => {
     const p = measure(f, sides(26, t, v), { ruled: new Set([26]) })
-    expect(p.diffs.filter((d: { worse: boolean }) => d.worse)).toEqual([])
-    expect(ruledOf(p)).toEqual(expect.arrayContaining(['size', 'anchor']))
-  })
-  it('its line count and its follower gap too', () => {
-    // (v2 lays it in 3 lines where today lays 4, the original's 4)
-    const v3 = [698, 686.7, 675.4].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
-    const p = measure(f, sides(26, t, v3), { ruled: new Set([26]) })
-    expect(p.diffs.filter((d: { worse: boolean }) => d.worse)).toEqual([])
-    expect(ruledOf(p)).toEqual(expect.arrayContaining(['size', 'line-count']))
-  })
-  it('unless v2 itself breaks the original\'s block: a line under its last stays worse', () => {
-    const vb = [698, 686.7, 675.4, 664.1, 652.8].map((y) => drawnLine(72, 300, y, 'x'.repeat(20), 9.4))
-    const p = measure(f, sides(26, t, vb), { ruled: new Set([26]) })
-    expect(p.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['block', 'size']))
-  })
-  it('unless v2 crosses a rule of the page the original does not: its differences stay worse', () => {
-    // (a column rule at x 315, right of the original's lines (72–300); v2's lines run to 330, across it)
-    const rules = { rules: [[315, 640, 315.8, 720]] }
-    const vr = [698, 686.7, 675.4, 664.1].map((y) => drawnLine(72, 330, y, 'x'.repeat(20), 9.4))
-    const p = measure(f, sides(26, t, vr, { px: rules }), { ruled: new Set([26]) })
     expect(p.diffs.filter((d: { worse: boolean }) => d.worse).map((d: { flag: string }) => d.flag)).toEqual(expect.arrayContaining(['size', 'anchor']))
+    expect(p.diffs.filter((d: { nearer: string }) => d.nearer === 'ruling')).toEqual([])
   })
 })
 
-describe("the no-borrowing ruling over hl-sentence's page placement on a unit today laid with a borrowed line", () => {
+describe("hl-sentence's page placement on a unit today laid with a borrowed line, judged as any", () => {
   // (a paragraph of 3 sentences on 4 lines, today lighting it by sentence: on arXiv's page each sentence a line's box; as drawn,
   // today's sentence 3 on the next page (its borrowed line moved it), v2's on this one)
   const lines = [700, 688, 676, 664].map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
@@ -374,11 +371,11 @@ describe("the no-borrowing ruling over hl-sentence's page placement on a unit to
     expect(sentences(measure(v2With(placed), page()))).toEqual([])
     expect(sentences(measure(v2With(placed), page(), { ruled: new Set([26]) }))).toEqual([])
   })
-  it("v2 lighting nothing of the unit as drawn on a page today lights it is worse, and the ruling's where today borrowed", () => {
-    // (its translation a reflow moved off this page: v2 keeps the block where today's borrowed line held its last sentence here)
+  it('v2 lighting nothing of the unit as drawn on a page today lights it is worse, wherever today borrowed', () => {
+    // (its translation a reflow moved off this page: no ruling excuses it now, 2026-11-08)
     const none = [[], [], []]
     expect(sentences(measure(v2With(none), page()))).toMatchObject([{ worse: true }])
-    expect(sentences(measure(v2With(none), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: false, nearer: 'ruling' }])
+    expect(sentences(measure(v2With(none), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: true }])
   })
   it('the granularity stays judged: v2 lighting the unit whole is worse whatever today borrowed', () => {
     const whole = [[box(700), box(688), box(676), box(664)]]

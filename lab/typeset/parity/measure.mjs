@@ -14,7 +14,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
-import { LAB, ledger, ruledIn } from '../../../packages/typeset/tests/replay/tap.ts'
+import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
@@ -89,11 +89,8 @@ for (const [pair, raw] of drawn) {
   const frame = frameOf(v2.facts)
   const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
-  // (today's units laid with a borrowed line, by its own record: the owner's ruling 1 makes v2's line-budget differences on them
-  // the ruling's)
-  const ruled = ruledIn(pair).borrowed
   const mine = []
-  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], ruled }))
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
   // (the paper's labels in one form, the owner's ruling 4: judged over the paper's pages)
   labelsPass(
     mine.filter((p) => !p.error),
@@ -159,7 +156,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}${d.ruling ? ` <i>(${esc(d.ruling)})</i>` : ''}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'ruling' ? 'ruling' : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const fl = FLAGS.filter((f) => p.faults[f])
