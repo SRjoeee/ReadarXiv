@@ -348,6 +348,20 @@ export function textOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): string 
   })
   return out.replace(/\s+/g, ' ').trim()
 }
+/** a URL's copy text, its glyphs' text as textOf reads it but for a line's end: TeX's url package breaks a URL after one of its
+ *  characters with no space, and sets no hyphen of its own (a hyphen at a line's end is the URL's, 9 of the corpus's 343 URLs
+ *  over lines), so a line change adds nothing and drops nothing. A gap between two glyphs on one line stays a space: it is a
+ *  rule TeX drew for an underscore, or the space of a macro's text (an eprint's "id [cs.SE]"), which the glyphs cannot tell
+ *  apart and a space does not lose */
+export function urlCopyOf(gs: readonly DocGlyph[]): string {
+  let out = ''
+  gs.forEach((g, q) => {
+    const p = gs[q - 1]
+    if (p && !lineChange(p, g) && apart(p, g)) out += ' '
+    out += g.u
+  })
+  return out.replace(/\s+/g, ' ').trim()
+}
 /** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
  *  before it), [text, fill] each, a line's end as textOf reads it; null where every glyph's fill is one (its style's) */
 export function fillRunsOf(gs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
