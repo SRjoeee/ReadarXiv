@@ -89,6 +89,9 @@ export interface Member {
   bLast: number
   /** the class's marks after its text (C20) */
   tail?: [string, Style][]
+  /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
+   *  line */
+  spanOpens?: Map<string, number>
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** each line's glyphs on A (global), by line, for the facts read after the lines */
@@ -814,7 +817,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     // where it has none, the most common size of its glyphs, `read` 'size:lines': today then reads it off its lines' bands)
     const txt = mem.text.map(gA).filter((g) => /\S/.test(g.u))
     // (its faked small capitals aside, as today's originalStyle reads its size: smallCapsOf's, facts.ts fakedCaps; their share
-    // Style.sc)
+    // Style.sc, and whether its text is set in them, today's vote, Style.caps)
     const caps = fakedCaps(txt, unit ? sourceText(unit.content) : null, mem.kind.startsWith('ink'))
     const read = unitSize(caps.small.size ? txt.filter((g) => !caps.small.has(g)) : txt)
     const size =
@@ -830,6 +833,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       size,
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
+      ...(caps.caps ? { caps: 1 as const } : {}),
     }
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)

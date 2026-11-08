@@ -292,3 +292,29 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
     expect(L.members[2]!.lines[0]!.slice(7, 9)).toEqual([72, 472])
   })
 })
+
+describe('a unit set in small capitals, today’s vote (L2:933 capsVote, L2:1094)', () => {
+  // (today drew a unit's Latin translation in small capitals where most of its letters that can tell are: a faked small
+  // capital votes for, a letter its source writes lowercase set as itself against, the rest (digits, the source's own
+  // capitals) nothing, a tie against; Style.sc alone, the share, is stated wherever one faked small capital stands)
+  const word = (s: string, x: number, size: number) => [...s].map((u, i) => g(u, x + 5 * i, 700, size))
+  it('states it of a heading whose lowercase letters are faked small capitals', () => {
+    const head = [g('E', 72, 700, 9.96), ...word('XPERIMENTS', 80, 7.97)]
+    expect(fakedCaps(head, 'Experiments')).toMatchObject({ ratio: 0.8, caps: true })
+  })
+  it('states none of a paragraph with one word in them, its share stated', () => {
+    const mixed = [
+      ...word('We use the', 72, 9.96),
+      g('A', 130, 700, 9.96),
+      ...word('CME', 136, 7.97),
+      ...word('tool', 160, 9.96),
+    ]
+    const caps = fakedCaps(mixed, 'We use the \\textsc{Acme} tool')
+    expect(caps.ratio).toBe(0.8)
+    expect(caps.caps).toBeUndefined()
+  })
+  it('states it of an ink unit whose capitals are faked small ones (its source its own text)', () => {
+    const refs = [g('R', 72, 700, 12), ...word('EFERENCES', 80, 9.6)]
+    expect(fakedCaps(refs, 'REFERENCES', true)).toMatchObject({ ratio: 0.8, caps: true })
+  })
+})

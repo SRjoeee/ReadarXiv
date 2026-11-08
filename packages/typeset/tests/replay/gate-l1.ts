@@ -7,11 +7,11 @@
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
 import type { OutPiece, Part, Row } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
+import { ownNamesOf } from '../../src/unit/rename.ts'
 import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
-import { readFileSync } from 'node:fs'
-import { adapt, rectOf } from '../../src/lay/adapt.ts'
+import { adapt, type Reading, rectOf } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
@@ -26,7 +26,6 @@ import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { V0Piece } from '../../src/unit/breaks.ts'
 import { doorRows } from './rows.ts'
-import { todayFile } from './tap.ts'
 import { layPagePrepared, type PageMember } from '../../src/lay/page.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
@@ -394,8 +393,6 @@ export function tokensDiff(mine: readonly Tok[], today: readonly Tok[]): string 
   }
   return null
 }
-let heads: Record<string, { heads: Record<string, string> }> | null = null
-
 /** the inputs a named correction's effect substitutes, today's value for the part's: `free` the borrow room under each block
  *  (Room.below's freeFor), `measure` each block's measure x0..x1 (the column's), `next` the room under the last line
  *  (Room.next: U.params' halfLead.below), `side` the widened blocks (X.further's), `all` the whole prepared member (the
@@ -510,10 +507,8 @@ export function gateL1Pair(
   if (doors)
     for (const u of L.units) if (u.id && doors.has(u.ord) && !doorById.has(u.id)) doorById.set(u.id, doors.get(u.ord)!)
   let paperR: PaperReading | null = null
-  if (o.reading === 'part' && part0) {
+  if (o.reading === 'part' && part0)
     paperR = paperReading(part0.paper.faces.fonts, L.target, rulesFor(L.target as never).cjkFaces as never)
-    heads ??= (JSON.parse(readFileSync(todayFile('rules/tex-names.json'), 'utf8')) as { targets: typeof heads }).targets
-  }
   // (each page's lowest unit line, as today's pageBottom: RUN:911 over every unit's rectangles but a figure's)
   const bottoms = new Map<number, number>()
   for (const part of bundle.parts.values())
@@ -563,6 +558,19 @@ export function gateL1Pair(
     const u = todayById.get(x.m.text)?.[k]
     if (u) unitOf.set(ord, u)
   }
+  // (the paper's own name units' door rows, by the ids the part states them by (Part.paper.names): what a head reads where the
+  // target's packages name it not, as the entry reads them from its rows, ownNamesOf)
+  const nameRows = new Map<string, Row>()
+  if (doors)
+    for (const [, id] of part0?.paper.names ?? []) {
+      const u = todayById.get(id)?.[0]
+      const row = u ? doors.get(u.ord) : undefined
+      const src = bundle.units.get(id)
+      if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial')) continue
+      const content = outOfDoor(row[1], sourcePieces(src.content))
+      if (content) nameRows.set(id, { id, ok: true, by: String(row[3]), content })
+    }
+  const ownNames = ownNamesOf(part0?.paper.names, nameRows)
   const adapted = new Map<number, FlowMember>()
   let patternsSeen: Record<string, unknown> | undefined
   for (const [ord, x] of byOrd) {
@@ -590,7 +598,7 @@ export function gateL1Pair(
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
-    let reading = {
+    let reading: Reading = {
       tokens: c.tokens as never,
       labelDrawn: label?.drawn ?? null,
       lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
@@ -655,9 +663,10 @@ export function gateL1Pair(
           labels: {
             words: (rules!.targets[L.target] as { labels?: Record<string, string> }).labels ?? null,
             captions: { figure: 'target', table: 'target' },
-            heads: heads?.[L.target]?.heads ?? null,
-            names: null,
+            heads: rules0.heads,
+            names: ownNames,
           },
+          refs: rules0.refs,
           relabels: !!mm.label && !((mm.fixed ?? 0) & 4),
           lead: nameLead?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
@@ -698,6 +707,7 @@ export function gateL1Pair(
         lead: rd.lead,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
+        breaks: rd.breaks,
         own: true,
       }
     }
@@ -782,7 +792,7 @@ export function gateL1Pair(
   // (the entry's rows: each member's door row as the translation package's Result, by its unit's id)
   let entryRows: Rows | null = null
   if (out.entry && doors) {
-    const byId = new Map<string, Row>()
+    const byId = new Map<string, Row>(nameRows)
     for (const [ord, x] of byOrd) {
       const u = unitOf.get(ord)
       const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
@@ -847,10 +857,7 @@ export function gateL1Pair(
         entryRows,
         { ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} },
         metrics,
-        {
-          heads: heads?.[L.target]?.heads ?? null,
-          linkFates,
-        },
+        { linkFates },
       )
       out.entry.ms.push(performance.now() - t1)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)

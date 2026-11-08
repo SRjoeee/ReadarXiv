@@ -8,15 +8,18 @@
 //   drawing (`sym`), a footnote's mark (`mark`), kept where it stands (`keep`: a display, ink outside the unit's lines);
 // - drawnAs (L2:1757) over a rendering whose source knows its ink (a segment's box, `box.top` set): a crop of the box, or the
 //   page's text for a citation, a reference, a macro and a formula over lines;
-// - U.breaks' regions (finishUnit's maps) over the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
+// - U.breaks over what TeX states (El.ends, El.opens, SpanAt.opens: statedBreaks, in the translation's order) and finishUnit's
+//   maps over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
 // - U.label over the label's parts (Label.name, num, punct) as its glyphs;
 // - the unit's base style, its size and its colour from Style (today's originalStyle and measuredOf over its characters), the
 //   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
 //   from Part.paper.faces (today's page-1 tally and familyOfFonts);
+// - U.rename over the resolutions drawn as the page's text: a generated reference's or a citation's note's names in the
+//   target's (the rules' reference names, babel's, the paper's own name units'), where the reader draws labels anew;
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
 // A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
-// state yet is passed as today does without it, each named where it is read: U.rename's names, a rendering's runs of one fill
-// and its faked small capitals, a colour piece's run.
+// state yet is passed as today does without it, each named where it is read: a rendering's runs of one fill and its faked
+// small capitals, a colour piece's run.
 import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
@@ -25,11 +28,13 @@ import { noStart } from '../breaker/script.ts'
 import { type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
-import { breaks, type V0Piece } from '../unit/breaks.ts'
+import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
 import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
+import { type RefNames, rename } from '../unit/rename.ts'
 import { cjkAdvance } from '../unit/params.ts'
+import { SMALL_CAPS_SHARE } from '../shared/names.ts'
 import { type Rect, rectKey } from '../util.ts'
 
 type Line = Placed['lines'][number]
@@ -131,7 +136,8 @@ export function paperOf(fonts: readonly (readonly [string, number])[], to: strin
   return { designs, roles: rolesFor(to, family, cjkFaces), family }
 }
 
-/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant) */
+/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant; its small
+ *  capitals its face's, or today's vote over its faked ones, Style.caps) */
 export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']): TStyle {
   const c = st.design ? classifyFont(st.design) : null
   const fam = st.role
@@ -139,7 +145,7 @@ export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']):
     fam,
     bold: !!st.bold,
     italic: !!st.slant,
-    caps: !!c?.caps,
+    caps: !!c?.caps || !!st.caps,
     design: c && c.fam === fam ? c.design : designs[fam],
     ...(c ? { known: c.known, name: c.name } : {}),
     ...(st.upper ? { upper: true } : {}),
@@ -399,6 +405,9 @@ export type ReadInput = {
   /** U.label's names: the target's float names, the reader's caption choice, translator's head names, the paper's own names;
    *  null where the reader draws no label anew */
   labels: Pick<LabelInput, 'words' | 'captions' | 'heads' | 'names'> | null
+  /** U.rename's names: the packages' reference names for the target (Rules.refs), read with `labels`' babel words and the
+   *  paper's own names; none renamed where `labels` is null (today's renameRefs ran where the reader draws labels anew) */
+  refs?: RefNames | null
   /** the reader draws the member's label anew (its label group can be turned off) */
   relabels: boolean
   /** a babel name's lead (lay/lead.ts ledBy: U.lead, the name the part binds to the member): set before the translation, its
@@ -413,6 +422,9 @@ export type ReadOut = {
   lead: boolean
   cjkSize: number | undefined
   referenced: ReadonlySet<number>
+  /** U.breaks' maps the blocks read (the kept lines in runs, a break's region or its frame's pitch on its next line, a
+   *  paragraph's first line), by the lines' rectangles' keys */
+  breaks: Pick<Breaks, 'regionOf' | 'breakAt' | 'joinAt' | 'paraAt'>
   /** T4: the first placeholder the file cannot draw (U.admit refuses the unit `unproven`), or -1 */
   unproven: number
   resolutions: Map<number, Res>
@@ -433,19 +445,13 @@ export function readMember(i: ReadInput): ReadOut {
   const held = L.filter((l) => l.kept && !displayLines.has(l.key)).map((l) => l.key)
   const el = elements({ pieces, cls2, readings, held, macros: new Map(), touched: [...displayLines], shown: i.shown })
   const res = el.resolutions
-  // U.breaks: the kept lines in runs, each kept resolution's region (no forced break nor paragraph: the adapter stops those)
+  // U.breaks: TeX's forced breaks and the paragraphs it opened, paired with the row in its order; the kept lines in runs, each
+  // kept resolution's region
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
-  const br = breaks({
-    lu: null,
+  const read = (m.read ?? []).includes('breaks')
+  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read }, pieces, cls2), {
     pieces,
-    cls2,
-    kOf: null,
-    lineskip: null,
-    source: null,
-    pieceLines: null,
-    fileLines: { rects: [...i.rects], j: i.rects.map((_, j) => j) },
-    held,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),
     keep: el.keep,
@@ -453,6 +459,10 @@ export function readMember(i: ReadInput): ReadOut {
     resolved: new Set(res.keys()),
   })
   for (const [k, x] of br.marks) Object.assign(res.get(k)!, x)
+  // U.rename: the names cleveref and \autoref generate in its references, and a citation's note's, in the target's (RUN:2026)
+  if (i.labels && i.refs)
+    for (const [k, x] of rename(res, i.refs, i.labels.words ?? null, i.labels.names ?? null))
+      (res.get(k) as Res & { rename?: typeof x }).rename = x
   // U.marks' facts: the original's first mark after a display the drawing breaks at, after a kept piece on a held line (El.after)
   for (const [k, r0] of res) {
     const r = r0 as Res & { region?: number; origAfter?: string | null }
@@ -536,6 +546,17 @@ export function readMember(i: ReadInput): ReadOut {
       }),
     ),
     smallCaps: new Map(),
+    // (a rendering wholly in the page's faked small capitals, where its unit is set in them (Style.sc): its glyphs all capitals
+    // set at most SMALL_CAPS_SHARE of the unit's size (El.style), as today's smallCapsAt read its characters: a paper's macro
+    // in a small-capitals heading, drawn at the unit's capsRatio, triage S6)
+    fakedCaps: new Set(
+      m.style.sc === undefined
+        ? []
+        : pieces.flatMap((p, k) => {
+            const e = p.t === 'ph' || p.t === 'nested' ? els.get(String(p.k)) : undefined
+            return e?.style?.upper && e.text && e.style.size <= SMALL_CAPS_SHARE * m.style.size ? [k] : []
+          }),
+    ),
     cls2,
     spacedSource: false,
     to: i.to,
@@ -560,6 +581,7 @@ export function readMember(i: ReadInput): ReadOut {
     lead: !!i.lead,
     cjkSize,
     referenced: br.referenced,
+    breaks: { regionOf: br.regionOf, breakAt: br.breakAt, joinAt: br.joinAt, paraAt: br.paraAt },
     unproven: el.unproven,
     resolutions: res,
   }

@@ -585,8 +585,8 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       { t: 'el', id: '1' },
       { t: 'text', s: ' am Ende.' },
     ])
-    const on = (page: number) =>
-      layPage({ ...part(m), page }, rowsOf([r]), rules, metrics(), { heads: { Theorem: 'Satz' } }).members[0]!
+    // (its label drawn anew in the target's word, "Satz": the rules' head names, Rules.heads)
+    const on = (page: number) => layPage({ ...part(m), page }, rowsOf([r]), rules, metrics()).members[0]!
     // (the groups the member has on a page: its text where a line of it stands, its elements where one's ink is, its label
     // where its box is)
     const has = (page: number) =>
@@ -687,6 +687,102 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
 })
 
+describe('a theorem-like head in the target, laid as the reader lays a page (PDF-READER §19.14: no options)', () => {
+  // (today's headOf: translator's or ctex's word for the head (the rule set's heads), else the paper's own name unit's
+  // translation (its row, through the part's paper.names); triage-1 S4: the reader called layPage with neither, every head
+  // English. Its number and punctuation the original's)
+  const idName = 'n'.repeat(64)
+  const theorem = member({
+    kind: 'theorem',
+    label: {
+      kind: 'head',
+      ink: [1, 72, 698, 130, 707, 700],
+      style: { role: 'serif', size: 10, bold: 1 },
+      name: ['Theorem', [1, 72, 698, 110, 707, 700]],
+      num: ['1.1', [1, 112, 698, 126, 707, 700]],
+      punct: ['.', [1, 126, 698, 130, 707, 700]],
+    },
+    lines: [
+      [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+    ],
+  })
+  const headOf = (to: string, names: Part['paper']['names'], list: Row[]) => {
+    const pt: Part = { ...part(theorem), paper: { ...part(theorem).paper, ...(names ? { names } : {}) } }
+    const p = layPage(pt, rowsOf([row([{ t: 'text', s: 'x' }]), ...list], true), rulesFor(to), metrics())
+    const m = p.members[0]!
+    return [
+      m.state,
+      m.off & 4,
+      m.lines[0]?.[3]
+        .map((it) => it.s)
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ]
+  }
+  const nameRow = (s: string): Row => ({ id: idName, ok: true, by: 'test', content: [{ t: 'text', s }] })
+  // (the head's word: U+5B9A U+7406, "theorem" in both targets)
+  const word = '\u5b9a\u7406'
+  it("relabels it in zh by ctex's word, its number and stop kept", () => {
+    expect(headOf('zh', undefined, [])).toEqual(['laid', 4, `${word} 1.1. x`])
+  })
+  it("relabels it in ja, whose packages name no head, by the paper's own name unit's row", () => {
+    // (the row's own full stop dropped, as today's nameOfRow)
+    expect(headOf('ja', [['Theorem', idName]], [nameRow(`${word}\u3002`)])).toEqual(['laid', 4, `${word} 1.1. x`])
+    // (no row of the name unit: the head the original's, the member laid after it)
+    expect(headOf('ja', [['Theorem', idName]], [])).toEqual(['laid', 0, 'x'])
+  })
+})
+
+describe('a small-capitals unit’s element in the page’s faked small capitals (triage S6)', () => {
+  // (a heading TeX sets in faked small capitals (Style.sc 0.8 at 10 pt), its paper's macro's text all capitals at the small
+  // capitals' size, 8 pt (El.style): today drew it in the layer's small capitals at the unit's capsRatio (smallCapsAt over
+  // its characters, each set at most SMALL_CAPS_SHARE of the unit's size), never in full capitals at the unit's size)
+  const id = 'h'.repeat(64)
+  const heading = (elSize: number) =>
+    member({
+      kind: 'heading',
+      text: id,
+      align: 'c',
+      style: { role: 'serif', size: 10, sc: 0.8, design: 'NimbusRomNo9L-Regu' },
+      els: [
+        [
+          '0',
+          {
+            kind: 'umacro',
+            ink: [[1, 100, 698, 140, 706, 700]],
+            text: 'ACME',
+            style: { role: 'serif', size: elSize, upper: 1, design: 'NimbusRomNo9L-Regu' },
+          },
+        ],
+      ],
+      lines: [[1, 0, 100, 200, 700, 707, 698, 72, 300, 0, 8]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+  const sizeOf = (elSize: number) => {
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'el', id: '0' },
+        { t: 'text', s: ' \u65b9\u6cd5' },
+      ],
+    }
+    const [laid] = layPage(part(heading(elSize)), rowsOf([r], true), rulesFor('zh'), metrics()).members
+    return laid!.lines[0]![3].filter((it) => 'face' in it && /ACME/.test(it.s)).map((it) =>
+      'size' in it ? it.size : 0,
+    )
+  }
+  it('draws it at the unit’s capsRatio', () => {
+    expect(sizeOf(8)).toEqual([8])
+  })
+  it('draws an element of full capitals (an acronym at the unit’s size) at its size', () => {
+    expect(sizeOf(10)).toEqual([10])
+  })
+})
+
 describe('a row’s pieces from the member’s facts (rowPieces): each test a rule makes of a source answers as on the source', () => {
   it('makes a glue, a declaration, a forced break, a citation’s note, an identity and a group of what El and SpanAt state', () => {
     expect(srcOfEl('3', { kind: 'space', ink: [], glue: [1 / 6, 'em'] })).toBe('\\kern 0.16666666666666666em')
@@ -709,5 +805,218 @@ describe('a row’s pieces from the member’s facts (rowPieces): each test a ru
       { t: 'close', src: '}', id: 0 },
       { t: 'nested', k: 2 },
     ])
+  })
+})
+
+describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragraphs it opened inside a unit (triage L1)', () => {
+  // (today's U.breaks (forcedBreaks, paragraphBreaks, finishUnit's maps) paired with the row in the translation's order: the
+  // adapter stopped every member a break or a paragraph point names, its translation never laid (33 members over the corpus))
+  const textOf = (l: { 3: Item[] }) =>
+    l[3]
+      .map((it) => it.s)
+      .join('')
+      .trim()
+  const lay = (m: Placed, content: OutPiece[]) => {
+    const [laid] = layPage(part(m), rowsOf([row(content)], true), rules, metrics()).members
+    return laid!
+  }
+  const lineAt = (base: number, x0: number, x1: number): Placed['lines'][number] => [
+    1,
+    0,
+    x0,
+    x1,
+    base,
+    base + 7,
+    base - 2,
+    72,
+    300,
+    0,
+    10,
+  ]
+  it('ends the laid line where TeX’s forced break ended its line, the text after it on TeX’s next baseline (design-a §2.5)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Premier vers' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'la suite du paragraphe, assez longue' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(textOf(laid.lines[0]!)).toBe('Premier vers')
+    expect(laid.lines[1]![0]).toBe(688)
+  })
+  it('starts a block where the break’s next line opens another frame: no pitch tells its room (a title’s two lines)', () => {
+    const m = member({
+      kind: 'heading',
+      align: 'c',
+      lines: [lineAt(700, 120, 250), lineAt(680, 90, 280)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Ein Titel' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'und seine zweite Zeile' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.map((l) => [l[0], textOf(l)])).toEqual([
+      [700, 'Ein Titel'],
+      [680, 'und seine zweite Zeile'],
+    ])
+  })
+  it('takes no read break whose line an element of the row before it stands under (today’s check of a read pairing)', () => {
+    // (the line read by its short end (Placed.read 'breaks'), not TeX's point: an element the row sets before the break whose
+    // ink stands on a later line says the pairing is wrong, and the unit is laid as one paragraph, as today's forcedBreaks did
+    // (TEX:161-181); a break TeX's point states needs no such check)
+    const m = (read: string[]) =>
+      member({
+        lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+        els: [
+          ['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }],
+          ['2', { kind: 'other', ink: [[1, 100, 686, 120, 695, 688]], copy: 'x' }],
+        ],
+        read,
+      })
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Vers avec ' },
+      { t: 'el', id: '2' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'la suite' },
+    ]
+    expect(lay(m(['breaks']), content).lines.map(textOf)).toEqual(['Vers avec xla suite'])
+    expect(lay(m([]), content).lines.map(textOf)).toEqual(['Vers avec x', 'la suite'])
+  })
+  it('takes no break the translation sets with no text after it (T19: a group of breaks between texts)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Premier vers la suite du paragraphe' },
+      { t: 'el', id: '1' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.length).toBe(1)
+  })
+  // (2608.25210v2 p3 t57: an item's text, then `\mypython{…}`, its prompt a paragraph of its own TeX set in a frame at another
+  // measure and size; today split the member there and laid the prompt from its own first line)
+  const boxed = (opens: Placed['spans']) =>
+    member({
+      lines: [
+        lineAt(700, 72, 300),
+        lineAt(688, 72, 150),
+        [1, 0, 82, 290, 672, 678, 670, 72, 300, 0, 8],
+        [1, 0, 82, 290, 663, 669, 661, 72, 300, 0, 8],
+        [1, 0, 82, 230, 654, 660, 652, 72, 300, 0, 8],
+      ],
+      spans: opens,
+    })
+  const boxedRow: OutPiece[] = [
+    { t: 'text', s: 'Ein Punkt der Liste, der zwei Zeilen lang ist: ' },
+    { t: 'span', id: '4', content: [{ t: 'text', s: 'Der Kasten mit seinem eigenen Absatz darin.' }] },
+  ]
+  it('starts the text of a group TeX set as a paragraph of its own on that paragraph’s first line (SpanAt.opens, T20)', () => {
+    const laid = lay(boxed([['4', { cmd: 'mypython', opens: 2 }]]), boxedRow)
+    expect(laid.state).toBe('laid')
+    const at = laid.lines.findIndex((l) => l[3].some((it) => /Kasten/.test(it.s)))
+    expect(laid.lines[at]![0]).toBe(672)
+    expect(laid.lines[at]![1]).toBe(82)
+    expect(textOf(laid.lines[at]!)).toMatch(/^Der Kasten/)
+  })
+  it('lays such a group as the paragraph’s text where the row holds it with no text before it (T20: between texts)', () => {
+    const laid = lay(boxed([['4', { cmd: 'mypython', opens: 2 }]]), [boxedRow[1]!, boxedRow[0]!])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines[0]![0]).toBe(700)
+    expect(textOf(laid.lines[0]!)).toMatch(/^Der Kasten/)
+  })
+  it('starts at an element TeX opened a paragraph at, the element first on that line (El.opens)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 300), lineAt(688, 72, 150), lineAt(676, 72, 300), lineAt(664, 72, 200)],
+      els: [['3', { kind: 'other', ink: [[1, 72, 674, 90, 683, 676]], copy: 'x', opens: 2 }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Der erste Absatz, der ganze zwei Zeilen lang ist.' },
+      { t: 'el', id: '3' },
+      { t: 'text', s: ' und der zweite Absatz danach' },
+    ])
+    expect(laid.state).toBe('laid')
+    const at = laid.lines.findIndex((l) => l[3].some((it) => 'src' in it))
+    expect(laid.lines[at]![0]).toBe(676)
+    expect('src' in laid.lines[at]![3][0]!).toBe(true)
+    expect(textOf(laid.lines[at - 1]!)).toMatch(/ist\.$/)
+  })
+})
+
+describe('a reference TeX’s cross-referencing packages generate, in the target’s names (U.rename, PDF-READER §19.11)', () => {
+  // (today's renameRefs: cleveref's "Figure 3" drawn with its name in the target's (cleveref's, hyperref's words, translator's,
+  // babel's, the paper's own name units'), its number the original's; a citation's note so; layPage derives it from the rules
+  // and the part, no caller option)
+  const ref = (cmd: string, text: string, note?: string) =>
+    member({
+      els: [
+        [
+          '1',
+          {
+            kind: cmd === 'cref' ? 'num' : 'cite',
+            cmd,
+            ...(note !== undefined ? { note } : {}),
+            copy: '?',
+            ink: [[1, 150, 698, 190, 707, 700]],
+            text,
+            style: { role: 'serif', size: 10 },
+          },
+        ],
+      ],
+    })
+  const shown = (m: Placed, to: string) => {
+    const r = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' für mehr.' },
+    ])
+    const [laid] = layPage(part(m), rowsOf([r], true), rulesFor(to as never), metrics()).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines.map((l) => l[3].map((it) => it.s).join('')).join(' ')
+  }
+  it('draws cleveref’s name in the target’s word, its number kept', () => {
+    expect(shown(ref('cref', 'Figure 3'), 'de')).toContain('Abbildung 3')
+    expect(shown(ref('cref', 'Figure 3'), 'de')).not.toContain('Figure')
+  })
+  it('draws a citation’s note’s name in the target’s word, the cited work’s own text kept', () => {
+    expect(shown(ref('citep', '[Smith, 2020, Section 2]', 'Section~2'), 'de')).toContain('[Smith, 2020, Abschnitt 2]')
+  })
+})
+
+describe('a unit set in small capitals, its Latin translation in them (today’s caps vote: Style.caps)', () => {
+  // (today's base caps where most of its letters that can tell are faked small capitals (capsVote): its translation's Latin
+  // letters drawn in the layer's small capitals at its capsRatio (Style.sc); a unit with one such word, its share stated and
+  // no vote, keeps its translation in its own case)
+  const head = (caps: boolean) =>
+    member({
+      kind: 'heading',
+      align: 'l',
+      style: { role: 'serif', size: 10, sc: 0.8, ...(caps ? { caps: 1 as const } : {}), design: 'NimbusRomNo9L-Regu' },
+      lines: [[1, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+  const runs = (caps: boolean) => {
+    const [laid] = layPage(
+      part(head(caps)),
+      rowsOf([row([{ t: 'text', s: 'Versuche' }])], true),
+      rules,
+      metrics(),
+    ).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines[0]![3].flatMap((it) => ('size' in it && it.s.trim() ? [[it.s.trim(), it.size]] : []))
+  }
+  it('draws its lowercase letters as small capitals at its share', () => {
+    expect(runs(true)).toEqual([
+      ['V', 10],
+      ['ERSUCHE', 8],
+    ])
+  })
+  it('draws a unit with no vote in its own case', () => {
+    expect(runs(false)).toEqual([['Versuche', 10]])
   })
 })

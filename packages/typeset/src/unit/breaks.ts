@@ -16,6 +16,9 @@
 // - `lineskip` ← Part.paper.lineskip
 // The SHORT test (a line ending half an em short of its frame's measure) is a guard of the re-derivation: TeX states the line
 // a forced break ends (El.ends), which makes it void once stated.
+// What the part states is paired by `statedBreaks` (the layPage's reading): each break's line and room TeX's (El.ends), each
+// paragraph's line TeX's paragraph point (El.opens, SpanAt.opens); the translation's order decides the rest, as today's.
+import type { El, Placed, SpanAt } from '@readarxiv/format'
 import { blocksOf2, measureOf } from './blocks.ts'
 import { type Rect, rectKey } from '../util.ts'
 
@@ -309,6 +312,21 @@ export function breaks(i: BreaksInput): Breaks {
   const measure = measuresOfLines(i.fileLines, i.held)
   for (const [k, b] of paragraphBreaks(i.lu, i.pieces, i.source, i.pieceLines, out, measure))
     if (!out.has(k)) out.set(k, b)
+  return breakMaps(out, i)
+}
+
+/** what finishUnit's maps read besides the breaks: the row's pieces, the unit's lines as laid and their rows, the lines it
+ *  keeps, the lines each kept resolution holds, the row pieces U.elements resolved */
+export type MapsInput = Pick<BreaksInput, 'pieces' | 'rects' | 'lineInfo' | 'keep' | 'kept' | 'resolved'>
+
+/**
+ * finishUnit's maps over the row's breaks (L2:1484-1525): the kept lines in runs (regions), a break whose next line opens
+ * another frame a region of its own before that line (`breakAt`), one inside a frame its frame's pitch on its next line
+ * (`joinAt`), a paragraph's first line a block of its own (`paraAt`); each resolved piece's region or break, and a piece at
+ * which TeX opened a paragraph (a group's open, or an element: drawn, the text before it ending its block) its region
+ * (`openBreaks`)
+ */
+export function breakMaps(out: ReadonlyMap<number, Break>, i: MapsInput): Breaks {
   const keepSet = new Set(i.keep)
   const regionOf = new Map<string, number>(),
     breakAt = new Map<string, number>(),
@@ -361,9 +379,9 @@ export function breaks(i: BreaksInput): Breaks {
     }
   }
   let openBreaks: Map<number, number> | null = null
-  for (const [k, { next, room }] of out) {
-    if (!i.resolved.has(k)) {
-      const g = room === null && i.pieces[k]?.t === 'open' ? breakOf.get(next) : undefined
+  for (const [k, { next, room, paragraph }] of out) {
+    if (!i.resolved.has(k) || paragraph) {
+      const g = room === null && (i.pieces[k]?.t === 'open' || paragraph) ? breakOf.get(next) : undefined
       if (g !== undefined) {
         openBreaks ??= new Map()
         openBreaks.set(k, g)
@@ -380,5 +398,125 @@ export function breaks(i: BreaksInput): Breaks {
     Object.assign(mark(k), { region: g, brk: true })
     referenced.add(g)
   }
-  return { breaks: out, regionOf, breakAt, joinAt, paraAt, referenced, openBreaks, marks }
+  return { breaks: new Map(out), regionOf, breakAt, joinAt, paraAt, referenced, openBreaks, marks }
+}
+
+/** what U.breaks reads of a member the part states (Placed): its lines, and its elements' and groups' facts by id; whether
+ *  its breaks' lines are read off the page by their short ends, not stated by TeX's points (Placed.read 'breaks') */
+export type StatedFacts = {
+  lines: Placed['lines']
+  els: ReadonlyMap<string, El>
+  spans: ReadonlyMap<string, SpanAt>
+  read?: boolean
+}
+
+/**
+ * U.breaks' pairing over what TeX states (design-a §1.1: El.ends, El.opens, SpanAt.opens), in the translation's order (T19,
+ * T20), as today's forcedBreaks and paragraphBreaks pair the lines they read (TEX:120-199, 222-255):
+ * - forced breaks: the row's breaks in groups (one after the other, nothing drawn between them), a group between two texts a
+ *   break (one the translation sets at its start or its end, or next to a display, none); its line the one TeX ended at its
+ *   first break (El.ends), the text after it on the next; its room TeX's (El.ends) where the next line is in the frame (the run
+ *   of lines on one page and column) and the frame's pitch is known (the median of its own consecutive lines' gaps, a break's
+ *   line and a kept line aside), else none (`room` null: the next line opens a block of its own, as today's break that opens
+ *   another frame or whose frame has no pitch). Where TeX's points state each break's line, the guards of today's
+ *   re-derivation are void (its SHORT test, the count of short lines, one column a page). Where the lines are read by their
+ *   short ends (`read`: the marked compile set no point for them, the engine paired them in the source's order), today's
+ *   check of that pairing holds: every element of the row with ink on the unit's lines stands on a line between the breaks
+ *   its place in the row says, else no forced break is taken (TEX:161-181);
+ * - paragraphs: a group's open piece or an element at which TeX opened a paragraph (SpanAt.opens, El.opens: its first line),
+ *   where the row holds it between two texts of its own (T20) and that line and the one before are the unit's own text lines,
+ *   no forced break's next line: the text from it starts on that line in a block of its own (`paragraph`). Today's SHORT and
+ *   justified-unit tests read the paragraph's end off the page, which TeX's point states
+ */
+export function statedBreaks(
+  f: StatedFacts,
+  pieces: readonly V0Piece[],
+  cls2: readonly (string | null)[],
+): Map<number, Break> {
+  const out = new Map<number, Break>()
+  const L = f.lines,
+    n = L.length
+  const KEPT = 1
+  const elOf = (p: V0Piece | undefined) => (p && p.t === 'ph' ? f.els.get(String(p.k)) : undefined)
+  // (each line's frame: its run of lines on one page and column)
+  const frameOf: number[] = []
+  L.forEach((l, j) => {
+    const p = L[j - 1]
+    frameOf.push(!j ? 0 : p![0] === l[0] && p![1] === l[1] ? frameOf[j - 1]! : frameOf[j - 1]! + 1)
+  })
+  const brkLines = new Set<number>()
+  for (const e of f.els.values()) if (e.ends) brkLines.add(e.ends[0])
+  const gaps = new Map<number, number[]>()
+  for (let j = 0; j + 1 < n; j++) {
+    if (brkLines.has(j) || L[j]![9] & KEPT || L[j + 1]![9] & KEPT || frameOf[j] !== frameOf[j + 1]) continue
+    const g = gaps.get(frameOf[j]!) ?? gaps.set(frameOf[j]!, []).get(frameOf[j]!)!
+    g.push(L[j]![4] - L[j + 1]![4])
+  }
+  // forced breaks, in groups in the row's order (TEX:125-137)
+  type Group = { members: number[]; before: string | null; after: string | null }
+  const groups: Group[] = []
+  let group: Group | null = null,
+    before: string | null = null
+  for (const [i, p] of pieces.entries()) {
+    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) {
+      if (!group) {
+        group = { members: [], before, after: null }
+        groups.push(group)
+      }
+      group.members.push(i)
+      continue
+    }
+    const cls = p.t === 'nested' ? 'num' : p.t === 'ph' ? cls2[i] : null
+    if (!(p.t === 'text' ? /\S/.test(p.s ?? '') : !!cls && VISIBLE.has(cls))) continue
+    const kind = cls === 'display' ? 'display' : 'text'
+    if (group) {
+      group.after = kind
+      group = null
+    }
+    before = kind
+  }
+  const taken: { members: number[]; line: number; room: number }[] = []
+  for (const g of groups) {
+    if (g.before !== 'text' || g.after !== 'text') continue
+    const ends = g.members.map((i) => elOf(pieces[i])?.ends).find((e) => e !== undefined)
+    if (!ends || ends[0] + 1 >= n) continue
+    taken.push({ members: g.members, line: ends[0], room: ends[1] })
+  }
+  // (a read pairing checked: each element's ink, on the line of its page nearest its baseline, after the line the break before
+  // it in the row ends and not after the one the break after it ends)
+  const lineOf = (page: number, base: number) => {
+    let best = -1
+    L.forEach((l, j) => {
+      if (l[0] === page && (best < 0 || Math.abs(l[4] - base) < Math.abs(L[best]![4] - base))) best = j
+    })
+    return best
+  }
+  let side = 0
+  const misread =
+    !!f.read &&
+    pieces.some((p, i) => {
+      while (side < taken.length && taken[side]!.members[0]! < i) side++
+      const e = elOf(p)
+      return (e?.ink ?? []).some((k) => {
+        const j = lineOf(k[0], k[5])
+        return j >= 0 && ((side > 0 && j <= taken[side - 1]!.line) || (side < taken.length && j > taken[side]!.line))
+      })
+    })
+  if (!misread)
+    for (const { members, line: j, room: stated } of taken) {
+      const pitch = frameOf[j] === frameOf[j + 1] ? pitchOf(gaps.get(frameOf[j]!) ?? []) : null
+      const room = pitch === null ? null : stated
+      for (const i of members) out.set(i, { next: j + 1, room, pitch })
+    }
+  // paragraphs TeX opened at a group or an element (TEX:222-255)
+  const forcedNext = new Set([...out.values()].map((b) => b.next))
+  const said = (p: V0Piece) => p.t === 'text' && /\S/.test(p.s ?? '')
+  pieces.forEach((p, i) => {
+    const j = p.t === 'open' ? f.spans.get(String(p.k))?.opens : elOf(p)?.opens
+    if (j === undefined || j <= 0 || j >= n || out.has(i) || forcedNext.has(j)) return
+    if (L[j - 1]![9] & KEPT || L[j]![9] & KEPT) return
+    if (pieces.slice(0, i).some(said) && pieces.slice(i + 1).some(said))
+      out.set(i, { next: j, room: null, pitch: null, paragraph: true })
+  })
+  return out
 }

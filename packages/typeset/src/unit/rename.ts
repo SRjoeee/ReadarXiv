@@ -15,6 +15,8 @@
 // - `labels`: babel's names in the target (Rules.words); `own`: the paper's own name units' translations (other rows,
 //   `nameOfRow`: A6)
 
+import type { OutPiece, Row } from '@readarxiv/format'
+
 /** rules/tex-names.json as the rule reads it: each form's counter type, cleveref's English conjunctions and singulars, and
  *  per target the heads' (translator's), the references' (cleveref's, hyperref's) and the conjunctions' words */
 export type TexNamesData = {
@@ -228,6 +230,15 @@ export function rename<K>(
 
 /** a row of today's (rows.mjs unitOf) as nameOfRow reads it */
 export type NameRow = { kind?: string; src?: unknown; state?: string; pieces?: readonly { t?: string; s?: unknown }[] }
+/** a name's translation as the target's word: its text pieces joined, white space one space, an ideographic full stop the
+ *  translator ends a word with gone (L2:1269) */
+const wordOf = (texts: readonly string[]) =>
+  texts
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[\u3002\uff0e]$/u, '')
+    .trim()
 /** a structural name's row as [its English, the target's word for it]: its source's text and its translation's text
  *  pieces joined, white space one space, an ideographic full stop at its end gone; null for another unit, a row of no
  *  translation or an empty one (L2:1266 nameOfRow) */
@@ -240,13 +251,33 @@ export function nameOfRow(u: NameRow | null | undefined): [english: string, word
   )
     return null
   const english = u.src.replace(/\s+/g, ' ').trim()
-  const word = u.pieces
-    .filter((q) => q?.t === 'text' && typeof q.s === 'string')
-    .map((q) => q.s as string)
-    .join('')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/[\u3002\uff0e]$/u, '')
-    .trim()
+  const word = wordOf(u.pieces.filter((q) => q?.t === 'text' && typeof q.s === 'string').map((q) => q.s as string))
   return english && word ? [english, word] : null
+}
+
+/** a row's text pieces in order, its groups' with them (a v0 row's text between a group's open and close is its own) */
+function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {
+  for (const q of content)
+    if (q.t === 'text') out.push(q.s)
+    else if (q.t === 'span') textsOf(q.content, out)
+  return out
+}
+/**
+ * The paper's own names in the target, English → its word (today's ownNames, RUN:813-819, each row nameOfRow's): the name
+ * units the part states (Part.paper.names, [English, unit id]), each by its row where it is in and a translation. Never
+ * waited for (lay/wait.ts): one not in yet is no word, and its heads and references keep the original's
+ */
+export function ownNamesOf(
+  names: readonly (readonly [string, string])[] | undefined,
+  rows: { get(id: string): Row | undefined },
+): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const [en, id] of names ?? []) {
+    const row = rows.get(id)
+    if (!row?.ok) continue
+    const english = en.replace(/\s+/g, ' ').trim(),
+      word = wordOf(textsOf(row.content))
+    if (english && word) out.set(english, word)
+  }
+  return out
 }

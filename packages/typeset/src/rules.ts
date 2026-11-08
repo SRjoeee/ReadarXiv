@@ -164,7 +164,12 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:2029-2042',
     ],
     how: 'ported',
-    reads: ['words', 'captions'],
+    reads: [
+      'words',
+      'captions',
+      "the target's head names (Rules.heads: data/rules/heads.ts, from rules/tex-names.json)",
+      "the paper's own names (Part.paper.names, their rows: ownNamesOf)",
+    ],
     file: 'unit/label.ts',
     state: { is: 'ported', replay: "samples/U.label.json.gz (+ today's rules/tex-names.json)", cases: 15 },
   },

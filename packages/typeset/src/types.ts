@@ -3,6 +3,7 @@
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
+import type { RefNames } from './unit/rename.ts'
 
 /** a target language's tag (BCP 47, as the rule set's `languages` names it) */
 export type Lang = string
@@ -68,6 +69,12 @@ export type Rules = Readonly<{
   set: RuleParams
   /** the float labels and babel's names in the target (A5) */
   labels: Readonly<Record<string, string>>
+  /** a theorem-like head's names in the target (translator's dictionaries, ctex's: the rule set's heads.ts, from
+   *  rules/tex-names.json), English → the target's; empty where its packages name none, null for a target the file names not */
+  heads: Readonly<Record<string, string>> | null
+  /** the names TeX's cross-referencing packages generate (cleveref's, hyperref's: "Figure 3", a citation's note), prepared for
+   *  the target (U.rename's RefNames: the rule set's refs.ts, from rules/tex-names.json; `target` null where it names none) */
+  refs: RefNames
   /** the languages whose hyphenation patterns it reads: English's for every Latin word, the target's own Latin and Cyrillic */
   patterns: readonly string[]
   /** each of those languages' patterns, as the host loaded them (hyph.ts hyphenationOf); a language absent has none */

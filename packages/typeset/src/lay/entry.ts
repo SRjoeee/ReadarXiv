@@ -14,12 +14,16 @@
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
 // made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
 // off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides
-// each page's own: a member laid across a page break turns off on the other page none of the groups of this one.
+// each page's own: a member laid across a page break turns off on the other page none of the groups of this one. A
+// theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
+// name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
+// citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
 import { LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
 import { type NameRow, setNameOf } from '../shared/names.ts'
+import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import type { TextItem } from '../emit/display.ts'
@@ -35,11 +39,9 @@ import { CJK } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { waitOf } from './wait.ts'
 
-/** what laying a page reads besides its part and its rows: the target's head names (translator's dictionary, a data file of
- *  the rules: rules/tex-names.json), the paper's own name units' words; each absent where none is known */
+/** what a caller may ask of a lay besides its Page. A head's names are no option: the target's are the rules' (Rules.heads),
+ *  the paper's own its name units' rows (Part.paper.names, ownNamesOf), so that every caller lays one page alike */
 export type EntryOptions = {
-  heads?: Readonly<Record<string, string>> | null
-  names?: ReadonlyMap<string, string> | null
   /** where given, what became of each of the part's links (lay/links.ts LinkFate, by its index): the gate's count */
   linkFates?: LinkFate[]
 }
@@ -247,6 +249,9 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
+  // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
+  // §19.14, today's ownNames)
+  const ownNames = ownNamesOf(part.paper.names, rows)
   const state = new Map<number, Unlaid>()
   // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
   const unmeant = new Set<number>()
@@ -340,7 +345,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
           to: rules.target,
           P: R as never,
           paper,
-          labels: { words: rules.labels, captions: rules.captions, heads: o.heads ?? null, names: o.names ?? null },
+          labels: { words: rules.labels, captions: rules.captions, heads: rules.heads, names: ownNames },
+          refs: rules.refs,
           relabels,
           lead: led?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
@@ -407,6 +413,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         lead: rd.lead,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
+        breaks: rd.breaks,
         own: true,
       },
       bottomOf: (pg) => bottoms.get(pg),

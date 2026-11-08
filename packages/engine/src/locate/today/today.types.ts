@@ -91,6 +91,8 @@ export const UNIT_FLAG = deps.UNIT_FLAG as Readonly<
   Record<'CENTRED' | 'FLUSH_LEFT' | 'FLUSH_RIGHT' | 'JUSTIFIED', number>
 >
 export const classOf = deps.classOf as (piece: TodayPiece) => string | null
+/** the letters a text is told by, without accents, lower case (stream.mjs spellOf) */
+export const spellOf = deps.spellOf as (s: string) => string
 /** each glyph's and box's region by the page's brackets (stream.mjs regionsOf): depth * 2 + 1 in a column's body */
 export const regionsOf = deps.regionsOf as (page: {
   glyphs: { n: number }

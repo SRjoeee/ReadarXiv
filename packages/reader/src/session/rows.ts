@@ -1,7 +1,8 @@
-// The rows made here, as today's run makes them (R session/run.ts §6, `rank`, `contextOf`; docs/PDF-READER.md §11.10): the units
-// nearest the page in view first (the units that page and the next wait on), then ahead before behind, a unit behind the reading
-// place counted twice as far; the paper's title and abstract as an LLM's context; a retry asking for the units with no row alone
-// (those translated are held). Pure: the reader gives it the units, the rows held and the reading place.
+// The rows made here, as today's run makes them (R session/run.ts §6, `rank`, `contextOf`; docs/PDF-READER.md §11.10): the paper's
+// own names first (§19.14), then the units nearest the page in view (the units that page and the next wait on), then ahead before
+// behind, a unit behind the reading place counted twice as far; the paper's title and abstract as an LLM's context; a retry
+// asking for the units with no row alone (those translated are held). Pure: the reader gives it the units, the rows held and the
+// reading place.
 import type { Row, Unit } from '@readarxiv/format'
 import { committed, type Page } from '../compose/page.ts'
 import { plainOf } from './contents.ts'
@@ -28,12 +29,19 @@ export function contextOf(units: readonly Unit[], title: string): PaperContext {
 }
 
 /**
- * The units in the order they are asked for (R run.ts `rank`): those `near` names (the units the page in view and the next wait
- * on) first, in their own order; then by their distance from the reading place (`anchor`, an index into `units`: the first near
- * unit's, else the page's share of the paper), ahead before behind, a unit behind counted twice as far
+ * The units in the order they are asked for (R run.ts `rank`): the paper's own names (units of kind `name`, which no page waits
+ * on and every theorem head of their name reads: today's namesFirst, rows.mjs, PDF-READER §19.14) first, so that the first
+ * batch carries them; then those `near` names (the units the page in view and the next wait on), in their own order; then by
+ * their distance from the reading place (`anchor`, an index into `units`: the first near unit's, else the page's share of the
+ * paper), ahead before behind, a unit behind counted twice as far
  */
-export function ranked<U extends { id: string }>(units: readonly U[], near: ReadonlySet<string>, anchor: number): U[] {
+export function ranked<U extends { id: string; kind?: string }>(
+  units: readonly U[],
+  near: ReadonlySet<string>,
+  anchor: number,
+): U[] {
   const rank = (i: number, u: U) => {
+    if (u.kind === 'name') return -1
     if (near.has(u.id)) return 0
     const d = i - anchor
     return d >= 0 ? 1 + d : 1 - 2 * d
