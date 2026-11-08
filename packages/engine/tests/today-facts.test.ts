@@ -243,9 +243,11 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
     },
   ]
   const B = docOf(pages)
-  const a = para('a b c')
-  const d = para('d')
-  const e = para('e')
+  // (each unit's text its glyphs': a member claims no more letters than its source writes)
+  const text0 = (n: number) => (pages[0]!.lines[n] as { text: string }).text
+  const a = para(`${text0(0)} ${text0(1)} ${text0(2)}`)
+  const d = para(text0(3))
+  const e = para(`${text0(4)} ${text0(5)}`)
   // (glyph j of the page: the first three lines unit 0's, the fourth's twelve unit 1's, the rest unit 2's)
   const own = (_: number, j: number): [number, number, number] =>
     j < 44 + 44 + 45 ? [0, ROLE.text, -1] : j < 44 + 44 + 45 + 12 ? [1, ROLE.text, -1] : [2, ROLE.text, -1]
@@ -281,14 +283,18 @@ describe('a line pinned and its measure, as today’s reader reads them (RUN:155
       },
     ])
     const cap: InstrumentUnit = {
-      id: unitId('caption', [text('T9. c')]),
+      id: unitId('caption', [text(`T9. ${'c'.repeat(37)}`)]),
       kind: 'caption',
-      content: [text('T9. c')],
+      content: [text(`T9. ${'c'.repeat(37)}`)],
     }
     // (glyph j: each column's lines a paragraph of its own, then the caption's label and words)
     const own = (_: number, j: number): [number, number, number] =>
       j < 120 ? [Math.floor(j / 20) % 2, ROLE.text, -1] : j < 123 ? [2, ROLE.label, -1] : [2, ROLE.text, -1]
-    const L = locate(instrument(B2, [para(left), para(right), cap], own), B2, align(B2, B2))
+    const L = locate(
+      instrument(B2, [para(`${left} ${left} ${left}`), para(`${right} ${right} ${right}`), cap], own),
+      B2,
+      align(B2, B2),
+    )
     expect(L.members[2]!.lines[0]!.slice(7, 9)).toEqual([72, 472])
   })
 })

@@ -24,6 +24,7 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
+import { TEXT_SYMBOLS } from '../source/tables.ts'
 import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
@@ -57,6 +58,8 @@ export interface Member {
   /** A's boxes ([page, index]) by role */
   textBoxes: [number, number][]
   elBoxes: Map<string, [number, number][]>
+  /** each element box's partner on B ([page index, index]), by piece id, in elBoxes' order: where TeX shipped it in B's stream */
+  elBoxesB: Map<string, [number, number][]>
   /** A's turned glyphs ([page, index among the page's turned]): a figure text set turned */
   turned: [number, number][]
   lines: Line[]
@@ -146,6 +149,9 @@ const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
+/** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
+ *  its source where it has no ink): one of no ink is drawn as nothing, which is right only where TeX set nothing for it */
+const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
@@ -163,6 +169,16 @@ function piecesOf(content: readonly Piece[], out = new Map<string, Piece>()): Ma
     }
   }
   return out
+}
+
+/** the letters of a text, a modifier letter aside (a spacing accent TeX sets as a glyph of its own: ˇ, ˆ), a decomposed character's
+ *  marks aside (č is one letter, as its source's \\v{c} is) */
+const lettersIn = (t: string): number => (t.normalize('NFKD').match(/[\p{Lu}\p{Ll}\p{Lt}\p{Lo}]/gu) ?? []).length
+/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the source reader's table: marks/classes.ts symbolText's
+ *  reading, read here so that the back half needs nothing of the front half but the table */
+const symbolText = (src: string): string | null => {
+  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
+  return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
 }
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
@@ -340,6 +356,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     els: new Map(),
     textBoxes: [],
     elBoxes: new Map(),
+    elBoxesB: new Map(),
     turned: [],
     lines: [],
     elements: [],
@@ -353,6 +370,64 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     read: [],
     lineGlyphs: [],
   })
+
+  /** the first element of unit u whose ink TeX's points show it set and its unit's ownership gives none of: of a class drawn
+   *  from its ink (INKED_CLASSES; a paper's own macro aside, which the typesetter leaves unproven where it has neither ink nor
+   *  text), both its points stated with a glyph of B between them, none of its own; a text macro whose glyphs there are its
+   *  unit's text is found as that text (its El.text, the reading between its points). `element not found`, null where none is */
+  const notFound = (u: number, list: readonly number[], boxes: readonly [number, number][]): string | null => {
+    const unit = ins.units[u]!
+    if (!unit.classes?.length) return null
+    const found = new Set<number>()
+    for (const b of list) if (roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) found.add(pieceB[b] as number)
+    for (const [p, x] of boxes)
+      if (ins.boxes[p]!.role[x] === ROLE.element && (ins.boxes[p]!.piece[x] as number) >= 0)
+        found.add(ins.boxes[p]!.piece[x] as number)
+    const classes = new Map(unit.classes)
+    for (const [id, piece] of piecesOf(unit.content)) {
+      const c = classes.get(id)
+      if (piece.t !== 'el' || !c || !INKED_CLASSES.has(c.cls) || c.unknown || found.has(Number(id))) continue
+      const span = placeSpan.get(`${u}|${id}`)
+      if (!span || !(span[0] < span[1]) || emptyPiece.has(`${u}|${id}`)) continue
+      let set = false
+      let text = false
+      for (let b = span[0]; b < span[1]; b++) {
+        if (!/\S/.test(gB(b).u)) continue
+        set = true
+        if (unitB[b] === u && roleB[b] === ROLE.text) text = true
+      }
+      if (!set || ((c.cls === 'macro' || c.cls === 'umacro') && text)) continue
+      return 'element not found'
+    }
+    return null
+  }
+  /** the letters unit u's text may hold: those its text pieces write, and those of the pieces whose glyphs its ownership gives
+   *  its text, as TeX's facts state them: a text symbol's character; a text macro's, its unit's text glyphs between its two
+   *  points on B (the reading El.text takes), else the text the probe showed it sets */
+  const writtenOf = (u: number): number => {
+    const unit = ins.units[u]!
+    const classes = new Map(unit.classes ?? [])
+    let n = 0
+    const walk = (ps: readonly Piece[]) => {
+      for (const p of ps) {
+        if (p.t === 'text') n += lettersIn(p.s)
+        else if (p.t === 'span') walk(p.content)
+        else if (p.t === 'el') {
+          const c = classes.get(p.id)
+          n += lettersIn(symbolText(p.src) ?? c?.sym?.[0] ?? '')
+          if (c?.cls !== 'macro' && c?.cls !== 'umacro') continue
+          const span = placeSpan.get(`${u}|${p.id}`)
+          let between = 0
+          if (span)
+            for (let b = span[0]; b < span[1]; b++)
+              if (unitB[b] === u && roleB[b] === ROLE.text) between += lettersIn(gB(b).u)
+          n += between || lettersIn(c.text ?? '')
+        }
+      }
+    }
+    walk(unit.content)
+    return n
+  }
 
   /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
   const place = (
@@ -469,6 +544,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         },
       )
     }
+    // (an element TeX set ink for between its two points that its unit's ownership gives none of, glyph or box: its ink is not
+    // found, which is no statement that TeX set none (today's LOST, make.mjs, against its EMPTY: both its points stated and
+    // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
+    // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
+    // The unit stays the original's)
+    if (!bad) bad = notFound(u, list, boxes)
     if (bad || (!aIdx.length && !turnedA.length)) {
       for (const [a] of claims) claimedA[a] = HELD
       mem.cause = bad ?? 'no ink'
@@ -497,6 +578,25 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           roleAt.delete(a)
         }
     }
+    // (its text no more letters than its source writes: TeX sets a text's letters as written, and the ownership gives a unit's
+    // text the glyphs of its text pieces, its text symbols and its text macros alone. Glyphs past them are another piece's
+    // ink read as the text, which its text group would erase and no translation draws again: 2608.25210v2 p7's Algorithm 1,
+    // its formulas' and keywords' glyphs claimed as its text (200 letters where its text pieces write 6), erased with its 21
+    // lines and one drawn. The unit stays the original's. A count, no threshold: fewer is TeX's (a ligature's one glyph
+    // for its letters, a word the class does not print), more is never)
+    if (name === undefined) {
+      let claimed = 0
+      for (const [a, [role, k]] of roleAt)
+        if (role !== ROLE.label && !(role === ROLE.element && k >= 0)) claimed += lettersIn(gA(a).u)
+      const written = writtenOf(u)
+      if (claimed > written) {
+        for (const [a] of claims) claimedA[a] = HELD
+        mem.located = false
+        mem.turned = []
+        mem.cause = 'text past its source'
+        return mem
+      }
+    }
     for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
       claimedA[a] = mem.ord
       if (role === ROLE.label) mem.label.push(a)
@@ -515,6 +615,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const l = mem.elBoxes.get(id)
         if (l) l.push([ap, ai])
         else mem.elBoxes.set(id, [[ap, ai]])
+        const lb = mem.elBoxesB.get(id)
+        if (lb) lb.push([p, x])
+        else mem.elBoxesB.set(id, [[p, x]])
       } else mem.textBoxes.push([ap, ai])
     }
     // where it stands on A against B
@@ -866,8 +969,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (mem.lines.length) mem.read.push('style', 'lead')
     pitches.sort((x, y) => x - y)
     mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
-    // elements: each one's own ink, one box per line it stands on (its glyphs and its rules)
+    // elements: each one's own ink, one box per line of TeX's it stands on (its glyphs and its rules)
     const unitText = unit ? sourceText(unit.content) : ''
+    // (the line of the unit's own each of its glyphs was cut into, its KEPT lines aside: the line TeX set it on)
+    const lineOfA = new Map<number, number>()
+    mem.lineGlyphs.forEach((gs, j) => {
+      if (!((mem.lines[j] as Line)[9] & 1)) for (const a of gs) lineOfA.set(a, j)
+    })
     for (const [id, p0] of pieces) {
       if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
@@ -876,25 +984,77 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // the part says which of the unit's pieces are its nested units: the instrument's class `nested`)
       const p = p0.t === 'unit' ? { kind: 'note-mark' } : p0
       const bx = mem.elBoxes.get(id) ?? []
-      // (each line's box of its own ink: across its glyphs' advances and their outlines (an italic glyph's overhang past its
-      // advance is its ink), top to bottom; on the baseline of the unit's own text line it stands on, where it stands on one (the line TeX
-      // set it on: a radical's glyph origin is at its bar, a subscript's below the line), else its own. As today's file's
-      // segment of a piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. A
-      // display's rows are its own lines)
+      const bxB = mem.elBoxesB.get(id) ?? []
+      // (its glyphs by line of TeX's, each line's box of its own ink: across its glyphs' advances and their outlines (an italic
+      // glyph's overhang past its advance is its ink), top to bottom, on that line's baseline. As today's file's segment of a
+      // piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. An element in the
+      // unit's text stands on the unit's lines, each glyph on the line the unit's text was cut into: an overline's nucleus, a
+      // fraction's denominator back under its numerator, a big delimiter, a script are their line's whatever their own baselines
+      // (today's file: both its points on one line of the unit, the whole piece one segment of that line's, make.mjs), and one
+      // TeX broke over lines has a box on each. Cut alone, a fraction's denominator, which runs back left under its numerator,
+      // read as a line of its own (2608.06701v1 p8's 2×|LCS(X,Y)| / (|X|+|Y|), set as two crops side by side). One outside the
+      // unit's lines (a mark in a margin, kept where it stands) is cut into lines of its own, each on the baseline of the unit's
+      // line it stands on where it stands on one, else its own. A display's rows are its own lines)
       const onLine = (page: number, lo: number, hi: number, own: number) => {
         const j = standsOn(mem.lines, page, lo, hi, own)
         return j >= 0 ? (mem.lines[j] as Line)[4] : own
       }
-      const ink: Ink[] =
-        p.kind === 'display'
-          ? (displayRows.get(id) ?? []).map((l) => [l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base] as Ink)
-          : cutLines(gl, atA).map((l) => {
-              const outlined = l.gs.map(gA).filter((g) => g.ix1 > g.ix0)
-              const x0 = Math.min(l.x0, ...outlined.map((g) => g.ix0))
-              const x1 = Math.max(l.x1, ...outlined.map((g) => g.ix1))
-              return [l.page, r2(x0), r2(l.bottom), r2(x1), r2(l.top), onLine(l.page, l.bottom, l.top, l.base)] as Ink
-            })
-      for (const [ap, ai] of bx) {
+      const shown = gl.filter((a) => /\S/.test(gA(a).u))
+      const groups: number[][] = []
+      const ink: Ink[] = []
+      /** each of the unit's lines its box, by the line's index */
+      const byLine = new Map<number, number>()
+      const boxOfGlyphs = (gs: readonly number[], base: number): Ink => {
+        const g = gs.map(gA)
+        const outlined = g.filter((x) => x.ix1 > x.ix0)
+        return [
+          pageA[gs[0] as number] as number,
+          r2(Math.min(...g.map((x) => x.x0), ...outlined.map((x) => x.ix0))),
+          r2(Math.min(...g.map((x) => x.bottom))),
+          r2(Math.max(...g.map((x) => x.x1), ...outlined.map((x) => x.ix1))),
+          r2(Math.max(...g.map((x) => x.top))),
+          base,
+        ]
+      }
+      if (p.kind === 'display')
+        for (const l of displayRows.get(id) ?? []) {
+          groups.push(l.gs)
+          ink.push([l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base])
+        }
+      else if (shown.length && shown.every((a) => lineOfA.has(a))) {
+        for (const a of shown) {
+          const j = lineOfA.get(a) as number
+          const q = byLine.get(j)
+          if (q === undefined) {
+            byLine.set(j, groups.length)
+            groups.push([a])
+          } else groups[q]!.push(a)
+        }
+        for (const [j, q] of byLine) ink[q] = boxOfGlyphs(groups[q]!, (mem.lines[j] as Line)[4])
+      } else
+        for (const l of cutLines(gl, atA)) {
+          groups.push(l.gs)
+          ink.push(boxOfGlyphs(l.gs, onLine(l.page, l.bottom, l.top, l.base)))
+        }
+      // (its rules and images: each with the box of the line its neighbour in B's stream stands on, TeX shipping a rule among its
+      // nucleus's glyphs (an overline's, a fraction's bar, a radical's), of its two neighbours the one nearer it where they stand on
+      // two lines; a display's with the row whose band holds it (rows.ts: a row's band its boxes' too); one of an element with no
+      // glyph on its page with the unit's line it stands on, where it stands on one, else a box of its own. Before, a rule joined
+      // a line's box only within 0.5 pt of its ink, and an overline's, 1.03 to 1.24 pt over its nucleus, was a box of its own on
+      // its own baseline, which the typesetter set after the formula as an underscore: 2610.10069v1 p10's "H = H ▁")
+      const inkOfA = new Map<number, number>()
+      groups.forEach((gs, q) => {
+        for (const a of gs) inkOfA.set(a, q)
+      })
+      const onB = new Map<number, [number, number][]>()
+      for (const a of shown) {
+        const b = m.aToB[a] as number
+        if (b < 0 || !inkOfA.has(a)) continue
+        const pb = (pageB[b] as number) - 1
+        ;(onB.get(pb) ?? onB.set(pb, []).get(pb)!).push([b, a])
+      }
+      for (const l of onB.values()) l.sort((x, y) => x[0] - y[0])
+      bx.forEach(([ap, ai], q) => {
         const pg = inkA.pages[ap - 1]!
         const [x0, y0, x1, y1] = [
           pg.boxes[4 * ai]!,
@@ -902,14 +1062,54 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           pg.boxes[4 * ai + 2]!,
           pg.boxes[4 * ai + 3]!,
         ]
-        const hit = ink.find((k) => k[0] === ap && y1 >= k[2] - 0.5 && y0 <= k[4] + 0.5)
+        const cx = (x0 + x1) / 2
+        const cy = (y0 + y1) / 2
+        let k = -1
+        if (p.kind === 'display') k = ink.findIndex((r) => r[0] === ap && cy >= r[2] && cy <= r[4])
+        else {
+          const [pb, xb] = bxB[q] ?? [-1, -1]
+          const on = onB.get(pb) ?? []
+          const at = B.pages[pb]?.boxAt ?? []
+          const o = (m.offB[pb] as number) ?? 0
+          // (the last of its glyphs TeX shipped before the box, and the first after it)
+          let before: number | undefined
+          let after: number | undefined
+          for (const [b, a] of on) {
+            if ((at[b - o] as number) <= xb) before = a
+            else {
+              after = a
+              break
+            }
+          }
+          const near = [before, after].filter((a): a is number => a !== undefined)
+          const ks = [...new Set(near.map((a) => inkOfA.get(a) as number))]
+          if (ks.length === 1) k = ks[0] as number
+          else if (ks.length === 2) {
+            const d = (a: number) => {
+              const g = gA(a)
+              return Math.hypot((g.x0 + g.x1) / 2 - cx, g.y - cy)
+            }
+            k = inkOfA.get(
+              d(near[0] as number) <= d(near[1] as number) ? (near[0] as number) : (near[1] as number),
+            ) as number
+          } else {
+            const j = standsOn(mem.lines, ap, y0, y1, y0)
+            if (j >= 0 && byLine.has(j)) k = byLine.get(j) as number
+            else if (j >= 0) {
+              byLine.set(j, ink.length)
+              ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), (mem.lines[j] as Line)[4]])
+              return
+            }
+          }
+        }
+        const hit = k >= 0 ? ink[k] : undefined
         if (hit) {
           hit[1] = r2(Math.min(hit[1], x0))
           hit[2] = r2(Math.min(hit[2], y0))
           hit[3] = r2(Math.max(hit[3], x1))
           hit[4] = r2(Math.max(hit[4], y1))
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
-      }
+      })
       const el: El = { kind: p.kind, ink }
       if (p.kind === 'display' || outside.has(id)) el.keep = 1
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
@@ -929,12 +1129,36 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         TEXT_CLASSES.has(classOf.get(id)?.cls ?? '') ||
         ink.length > 1 ||
         !!bracketsOf(gl.map(gA))
-      if (asText && gl.length && !gl.some((a) => gA(a).nu)) {
+      // (and, where the typesetter draws it as the page's text (a citation, a reference, a macro: TEXT_CLASSES; by its kind where
+      // the instrument states no class), only where that text is a reading of its ink: its glyphs on each line on one baseline,
+      // no rule or image among them. Plain text carries no shift and no size: a script's raise or drop, a fraction's parts, a
+      // rule TeX set over or under it are none of it, and such an element is drawn as its ink (the typesetter's crop of El.ink
+      // where it has no text). TeX sets one box's glyphs on one baseline, equal on the engine's hundredth of a point: no
+      // threshold. 2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹", was drawn as the text "km s−1 Mpc−1"; today's reader crops a
+      // text macro raised 0.1 em or more over its baseline (layer2.mjs scriptedOf) and draws a lowered one as text (1810.04805v2's
+      // BERT_base, wrong too). A formula's text is no drawing (it is cropped, its text read for its brackets), nor a display's)
+      const cls0 = classOf.get(id)?.cls
+      const level =
+        !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
+        (!bx.length &&
+          groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1))
+      if (asText && level && gl.length && !gl.some((a) => gA(a).nu)) {
         el.text = textOf(gl.map(gA), lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
         const runs = fillRunsOf(gl.map(gA), lineEnds)
         if (runs) el.fills = runs
       }
+      // (a text macro drawn as its ink for its scripts: its copy text its glyphs', where the source's reading has none (a paper's
+      // own macro), so that the crop's selection reads what it shows, as a URL's is its glyphs' (urlCopyOf))
+      if (
+        !level &&
+        asText &&
+        (cls0 === 'macro' || cls0 === 'umacro') &&
+        !classOf.get(id)?.copy &&
+        gl.length &&
+        !gl.some((a) => gA(a).nu)
+      )
+        el.copy = textOf(gl.map(gA), lineEnds)
       // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
       // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30

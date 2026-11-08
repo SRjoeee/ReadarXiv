@@ -797,7 +797,12 @@ describe('locate: the room under a unit', () => {
         ],
       },
     ])
-    const units = [unitOf('caption', 'a caption'), unitOf('para', 'right'), unitOf('para', 'left')]
+    // (each unit's text its glyphs': a member claims no more letters than its source writes)
+    const units = [
+      unitOf('caption', `${wide} ${wide} short end`),
+      unitOf('para', 'right column text one '.repeat(3)),
+      unitOf('para', 'left column text one '.repeat(3)),
+    ]
     const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
     expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
     expect(L.members[0]!.room.next).toBe(14)
@@ -1512,5 +1517,293 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
       B,
     )
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
+  })
+})
+
+describe('an element’s ink is what TeX set for it', () => {
+  /** an instrument whose B lines each give their glyphs one owner, `lines[p][line]` its [unit, role, piece] (piece -1 none), and
+   *  each box `boxes[p][box]` one */
+  const ownedBy = (
+    B: Doc,
+    units: InstrumentUnit[],
+    lines: [number, number, number][][],
+    boxes: [number, number, number][][] = [],
+  ): Instrument => ({
+    ink: B,
+    units,
+    glyphs: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.glyphs.length)
+      pg.glyphs.forEach((g, j) => {
+        const [u, role, piece] = lines[p]?.[g.n] ?? [-1, 0, -1]
+        O.unit[j] = u
+        O.role[j] = role
+        O.piece[j] = piece
+      })
+      return O
+    }),
+    boxes: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.kinds.length)
+      pg.kinds.forEach((_, x) => {
+        const [u, role, piece] = boxes[p]?.[x] ?? [-1, 0, -1]
+        O.unit[x] = u
+        O.role[x] = role
+        O.piece[x] = piece
+      })
+      return O
+    }),
+    tex: {},
+    made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+  })
+  const el = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'math', src })
+  const paraOf = (content: InstrumentUnit['content'], classes: InstrumentUnit['classes']): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    classes,
+  })
+  const T = ROLE.text
+  const E = ROLE.element
+  const elementOf = (L: ReturnType<typeof locate>, id = '1') =>
+    new Map(L.members.find((x) => x.unit === 0)!.elements).get(id)!
+
+  it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
+    // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'
+    // ink in the parts; joined to the element's glyphs only within 0.5 pt, it was an ink of its own on its own baseline, which the
+    // typesetter read as a formula broken over lines and set after it: "H = H ▁")
+    const B = docOf([
+      {
+        lines: [
+          { text: 'so ', x: 72, y: 700 },
+          { text: 'H=H', x: 90, y: 700 },
+          { text: ' agree', x: 108, y: 700 },
+        ],
+        boxes: [[5, 0, 102, 708.2, 108, 708.6]],
+      },
+    ])
+    const content = [text('so '), el('1', '$\\vH=\\overline{\\vH}$'), text(' agree')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 90, 698, 108, 708.6, 700]])
+  })
+
+  it('states one box for an inline fraction on its line, its denominator back under its numerator (math.md R1)', () => {
+    // (2608.06701v1 p8's 2×|LCS(X,Y)| / (|X|+|Y|): cut alone, the element's glyphs made two lines, the denominator one of its own
+    // where it runs back left under the numerator, each on the unit line they stand on; the typesetter set the two crops side by
+    // side. The unit's own lines keep them one line of TeX's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'as ', x: 72, y: 700 },
+          { text: '2L', x: 90, y: 704, size: 7 },
+          { text: 'X+Y', x: 88.5, y: 696, size: 7 },
+          { text: ' with', x: 110, y: 700 },
+        ],
+        boxes: [[5, 0, 88.5, 700.9, 101.5, 701.3]],
+      },
+    ])
+    const content = [text('as '), el('1', '$\\frac{2L}{X+Y}$'), text(' with')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 88.5, 694.6, 101.5, 708.9, 700]])
+  })
+
+  it('states a box a line for a formula TeX broke over two lines, a rule with the glyph TeX shipped it beside (math.md R1)', () => {
+    // (each rule with its neighbour in B's stream, the one of its two neighbours nearer it where they stand on two lines: an
+    // overline over the second line's nucleus, shipped right before it and after the first line's last glyph)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'a+', x: 96, y: 700 },
+          { text: 'b', x: 72, y: 688 },
+          { text: ' is', x: 78, y: 688 },
+        ],
+        boxes: [[6, 0, 72, 696.2, 78, 696.6]],
+      },
+    ])
+    const content = [text('see '), el('1', '$a+\\overline{b}$'), text(' is')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([
+      [1, 96, 698, 108, 707, 700],
+      [1, 72, 686, 78, 696.6, 688],
+    ])
+  })
+
+  it('reads one line of TeX’s where a tall fraction’s denominator runs back under the line: its two cuts on one baseline (math.md R1)', () => {
+    // (2610.21026v1 p5 m61: a display-style fraction in a paragraph line, its denominator wholly under the line's band, back
+    // left of the numerator's end; the cut began a line there, the rest of the line's words on it, so the unit had two lines
+    // on one baseline, overlapping, and the fraction two boxes, set side by side. TeX never sets two lines of a paragraph on
+    // one baseline across each other: one line (today's maker: two rows on one baseline that meet are one line of TeX's))
+    const B = docOf([
+      {
+        lines: [
+          { text: 'we write as ', x: 72, y: 700 },
+          { text: '2L', x: 150, y: 707 },
+          { text: 'X+Y', x: 149, y: 690 },
+          { text: ' with more', x: 170, y: 700 },
+          { text: 'next line', x: 72, y: 676 },
+        ],
+      },
+    ])
+    const content = [text('we write as '), el('1', '$\\dfrac{2L}{X+Y}$'), text(' with more next line')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const mem = L.members.find((x) => x.unit === 0)!
+    expect(mem.lines.map((l) => [l[2], l[3], l[4]])).toEqual([
+      [72, 230, 700],
+      [72, 126, 676],
+    ])
+    expect(elementOf(L).ink).toEqual([[1, 149, 688, 167, 714, 700]])
+  })
+
+  it('states no text of an element whose glyphs on a line stand on two baselines: a script is no plain text (math.md R4)', () => {
+    // (2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹": its text "km s−1 Mpc−1" dropped the scripts' raise and size, drawn as body
+    // text; without a text the typesetter crops its ink, as today's reader does a raised script's (layer2.mjs scriptedOf). Its
+    // copy text stays its glyphs')
+    const B = docOf([
+      {
+        lines: [
+          { text: 'H0 is ', x: 72, y: 700 },
+          { text: 'km s', x: 108, y: 700 },
+          { text: '−1', x: 132, y: 703.6, size: 7 },
+          { text: ' Mpc', x: 140.4, y: 700 },
+          { text: '−1', x: 164.4, y: 703.6, size: 7 },
+          { text: ' e.g.', x: 172.8, y: 700 },
+          { text: ' now', x: 196.8, y: 700 },
+        ],
+      },
+    ])
+    const content = [text('H0 is '), el('1', '\\kmsMpc'), el('2', '\\eg'), text(' now')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'macro' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 2],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const km = elementOf(L)
+    expect(km.text).toBeUndefined()
+    expect(km.copy).toBe('km s−1 Mpc−1')
+    expect(km.ink).toHaveLength(1)
+    expect(elementOf(L, '2').text).toBe('e.g.')
+  })
+
+  it('leaves a unit the original’s where an element TeX set ink for has none: not found is not "TeX set none" (math.md R3)', () => {
+    // (a formula whose two points hold glyphs the ownership gave the unit's text, none its own: read as "TeX set no ink", it was
+    // drawn as nothing and its glyphs erased with the text, as 2608.25210v2 p7's Algorithm 1 lost its 21 lines. Today's file
+    // states such a piece LOST, its unit unproven; EMPTY only where both its points hold nothing between them, or TeX said it
+    // sets none: a paper's macro the instrument states empty, a formula whose points stand at one glyph)
+    const B = docOf([{ lines: [{ text: 'Return P if x', x: 72, y: 700 }] }, { lines: [{ text: 'Return P', y: 700 }] }])
+    const content = [text('Return '), el('1', '$P$'), text(' if '), el('3', '$x$')]
+    const content2 = [text('Return P'), el('1', '\\papertext{x}'), el('2', '$\\phantom{}$')]
+    const units = [
+      paraOf(content, [
+        ['1', { cls: 'other' }],
+        ['3', { cls: 'other' }],
+      ]),
+      {
+        ...paraOf(content2, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'other' }],
+        ]),
+      },
+    ]
+    const ins: Instrument = {
+      ...ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]),
+      places: [
+        { unit: 0, piece: '1', page: 1, glyph: 7, end: false },
+        { unit: 0, piece: '1', page: 1, glyph: 8, end: true },
+        { unit: 0, piece: '3', page: 1, glyph: 12, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 13, end: true },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: false },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: true },
+      ],
+      empty: [{ unit: 1, piece: '1' }],
+    }
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'element not found' })
+    expect(L.members[1]).toMatchObject({ located: true })
+  })
+
+  it('leaves a unit the original’s whose text holds more letters than its source writes: another piece’s ink (math.md R3)', () => {
+    // (2608.25210v2 p7's Algorithm 1 again, its formulas and keywords marked by no point: 200 letters claimed as its text where its
+    // text pieces write 6 ("Return"); its text group would erase them and no translation draws them. TeX sets a text's letters as
+    // written, a ligature's one glyph for its two, an accent and its letter one: no more letters, ever)
+    const B = docOf([
+      { lines: [{ text: 'Return rank(T) if x', y: 700 }] },
+      { lines: [{ text: 'the ﬁrst élan ˇc', y: 700 }] },
+    ])
+    const units = [
+      paraOf(
+        [text('Return '), el('1', '$\\mathrm{rank}(T)$'), text(' if '), el('3', '$x$')],
+        [
+          ['1', { cls: 'other' }],
+          ['3', { cls: 'other' }],
+        ],
+      ),
+      paraOf([text('the first élan č')], []),
+    ]
+    const L = locate(ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]), B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'text past its source' })
+    expect(L.members[1]).toMatchObject({ located: true })
   })
 })

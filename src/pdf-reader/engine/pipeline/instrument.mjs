@@ -256,12 +256,16 @@ export function classesOf(pieces, colours = null, texts = null) {
   return out
 }
 
-/** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it on its page,
- *  else the last one opened (spike S1's rule), by the glyphs' (or boxes') counts the points carry. A unit's start point closes
- *  every point of its own opened before it: a head piece's (marks.mjs \\axthpk), whose ink ends where the unit's text begins */
-function piecesByPoints(points, count, groupAt, by) {
+/** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it, else the last
+ *  one opened on its page (spike S1's rule), by the glyphs' (or boxes') counts the points carry. A unit's start point closes
+ *  every point of its own opened before it: a head piece's (marks.mjs \\axthpk), whose ink ends where the unit's text begins.
+ *  `open` the points open at the page's start, by unit (the pages before's, read in order: the caller's, carried): TeX's
+ *  stream runs on across a page break, and a point opened and not closed on one page is open on the next. marks.mjs sets a
+ *  placeholder's opening point before the glue in front of it, so a line TeX breaks there that ends a page leaves the point at
+ *  that page's end and the piece's glyphs on the next; and a piece TeX breaks over the page break has glyphs on both */
+function piecesByPoints(points, count, groupAt, by, open = new Map()) {
   const out = new Int32Array(count).fill(-1)
-  const open = new Map(), last = new Map()
+  const last = new Map()
   let q = 0
   for (let j = 0; j <= count; j++) {
     while (q < points.length && points[q][by] <= j) {
@@ -312,10 +316,11 @@ function leadParts(u, id, texts, names) {
  * mark goes, 1810.04805v2's `\\bertbase (Single)`; its ink TeX set right before the start point, claimed by the text the probe
  * showed the macro sets): its lead's pieces (leadParts) by their texts, nearest the start first, each glyph read against the
  * text from its end (marks.mjs leadStep), case aside, as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
- * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before
+ * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before. `open` the points open
+ * at the page's start (piecesByPoints'), the pages read in order with one map
  */
-export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set() } = {}) {
-  const out = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph')
+export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set(), open = new Map() } = {}) {
+  const out = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph', open)
   const runs = new Map()
   for (let j = 0; j < pg.glyphs.length; j++) {
     const m = out[j] < 0 ? /^u(\d+)\.p$/.exec(row[j] ?? '') : null
@@ -533,11 +538,13 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
 
   // ---- the owners of B's glyphs and boxes
   const glyphs = [], boxes = [], turnedOwners = []
+  // (the points open at each page's start, carried from page to page in order: one map for the glyphs' reading, one for the boxes')
+  const openG = new Map(), openX = new Map()
   pages.forEach((pg, i) => {
     const G = ownersOf(pg.glyphs.length), X = ownersOf(pg.boxes.length / 4)
     const row = own.glyphs[i] ?? [], brow = own.boxes[i] ?? []
-    const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names })
-    const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box')
+    const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names, open: openG })
+    const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box', openX)
     const set = (O, j, g, piece) => {
       let m = /^u(\d+)(\.[pl])?$/.exec(g ?? '')
       if (m) { O.unit[j] = Number(m[1]); O.role[j] = m[2] === '.p' ? ROLE.element : m[2] === '.l' ? ROLE.label : ROLE.text; if (m[2] === '.p') O.piece[j] = piece[j]; return }

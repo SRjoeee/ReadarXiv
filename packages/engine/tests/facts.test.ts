@@ -481,7 +481,7 @@ describe('locate states the facts on arXiv’s page', () => {
     const u: InstrumentUnit = {
       id: unitId('para', [text('x')]),
       kind: 'para',
-      content: [text('first line of it a here last line of it')],
+      content: [text('first line of it a line here last line of it')],
     }
     const ins = instrument(B, [u], (_, n, j) => (n === 1 && j >= 18 && j <= 22 ? [-1, 0, -1] : [0, ROLE.text, -1]))
     const M = locate(ins, B, align(B, B)).members[0]!
