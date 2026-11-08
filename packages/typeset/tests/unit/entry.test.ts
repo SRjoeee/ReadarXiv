@@ -514,6 +514,54 @@ describe('a theorem-like head in the target, laid as the reader lays a page (PDF
   })
 })
 
+describe('a small-capitals unit’s element in the page’s faked small capitals (triage S6)', () => {
+  // (a heading TeX sets in faked small capitals (Style.sc 0.8 at 10 pt), its paper's macro's text all capitals at the small
+  // capitals' size, 8 pt (El.style): today drew it in the layer's small capitals at the unit's capsRatio (smallCapsAt over
+  // its characters, each set at most SMALL_CAPS_SHARE of the unit's size), never in full capitals at the unit's size)
+  const id = 'h'.repeat(64)
+  const heading = (elSize: number) =>
+    member({
+      kind: 'heading',
+      text: id,
+      align: 'c',
+      style: { role: 'serif', size: 10, sc: 0.8, design: 'NimbusRomNo9L-Regu' },
+      els: [
+        [
+          '0',
+          {
+            kind: 'umacro',
+            ink: [[1, 100, 698, 140, 706, 700]],
+            text: 'ACME',
+            style: { role: 'serif', size: elSize, upper: 1, design: 'NimbusRomNo9L-Regu' },
+          },
+        ],
+      ],
+      lines: [[1, 0, 100, 200, 700, 707, 698, 72, 300, 0, 8]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+  const sizeOf = (elSize: number) => {
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'el', id: '0' },
+        { t: 'text', s: ' \u65b9\u6cd5' },
+      ],
+    }
+    const [laid] = layPage(part(heading(elSize)), rowsOf([r], true), rulesFor('zh'), metrics()).members
+    return laid!.lines[0]![3].filter((it) => 'face' in it && /ACME/.test(it.s)).map((it) =>
+      'size' in it ? it.size : 0,
+    )
+  }
+  it('draws it at the unit’s capsRatio', () => {
+    expect(sizeOf(8)).toEqual([8])
+  })
+  it('draws an element of full capitals (an acronym at the unit’s size) at its size', () => {
+    expect(sizeOf(10)).toEqual([10])
+  })
+})
+
 describe('a row’s pieces from the member’s facts (rowPieces): each test a rule makes of a source answers as on the source', () => {
   it('makes a glue, a declaration, a forced break, a citation’s note, an identity and a group of what El and SpanAt state', () => {
     expect(srcOfEl('3', { kind: 'space', ink: [], glue: [1 / 6, 'em'] })).toBe('\\kern 0.16666666666666666em')

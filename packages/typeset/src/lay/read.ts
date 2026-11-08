@@ -30,6 +30,7 @@ import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
 import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
 import { cjkAdvance } from '../unit/params.ts'
+import { SMALL_CAPS_SHARE } from '../shared/names.ts'
 import { type Rect, rectKey } from '../util.ts'
 
 type Line = Placed['lines'][number]
@@ -533,6 +534,17 @@ export function readMember(i: ReadInput): ReadOut {
       }),
     ),
     smallCaps: new Map(),
+    // (a rendering wholly in the page's faked small capitals, where its unit is set in them (Style.sc): its glyphs all capitals
+    // set at most SMALL_CAPS_SHARE of the unit's size (El.style), as today's smallCapsAt read its characters: a paper's macro
+    // in a small-capitals heading, drawn at the unit's capsRatio, triage S6)
+    fakedCaps: new Set(
+      m.style.sc === undefined
+        ? []
+        : pieces.flatMap((p, k) => {
+            const e = p.t === 'ph' || p.t === 'nested' ? els.get(String(p.k)) : undefined
+            return e?.style?.upper && e.text && e.style.size <= SMALL_CAPS_SHARE * m.style.size ? [k] : []
+          }),
+    ),
     cls2,
     spacedSource: false,
     to: i.to,

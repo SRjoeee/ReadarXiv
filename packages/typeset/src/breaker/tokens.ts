@@ -14,7 +14,8 @@
 //   `measured` (the base style and pieces' colours its glyphs hold ← TeX's font state, Placed.style / spans), `capsRatio`
 //   (Style.sc), `orig.size` (Style.size), `openBreaks` / `referenced` (U.breaks), `tail` / `tailOwn` (Placed.tail)
 // - `colourOf`, `fillOf`: a colour piece's run's fill and an element's (TeX's log, A's glyphs) ← SpanAt.style.fill, El.style.fill
-// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today) ← El.style
+// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today) ← El.style;
+//   `fakedCaps`: the renderings set wholly in them ← El.style (all capitals at the small size) of a Style.sc unit
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
@@ -138,6 +139,9 @@ export type TokensInput = {
   fillOf: (k: number) => number | null
   fills: ReadonlyMap<number, { text: string; fill: number }[] | null>
   smallCaps: ReadonlyMap<number, readonly boolean[] | null>
+  /** the renderings the part states in the page's faked small capitals, by piece (lay/read.ts: an element all capitals at its
+   *  small-capitals unit's small size, El.style and Style.sc), drawn in the layer's small capitals; the tap's rounds hold none */
+  fakedCaps?: ReadonlySet<number>
   cls2: readonly (string | null)[]
   spacedSource: boolean
   to: string
@@ -680,7 +684,7 @@ export function tokens(i: TokensInput): Tokens {
       pushText(' ', style())
       return
     }
-    const own: TStyle = r.math
+    const own0: TStyle = r.math
       ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false }
       : r.mode === 'orig-text' && r.st && r.st.fam !== 'math'
         ? {
@@ -689,7 +693,13 @@ export function tokens(i: TokensInput): Tokens {
             design: r.st.fam === 'mono' ? designs.mono : style().design,
           }
         : style()
-    if (r.math && own.upper) own.upper = false
+    if (r.math && own0.upper) own0.upper = false
+    // (a rendering the part states in the page's faked small capitals (`fakedCaps`): in the layer's small capitals, every
+    // capital a small one at capsRatio (caseRuns' smallAt), never in full capitals at the unit's size, whatever its unit's
+    // base; triage S6)
+    const faked =
+      r.mode === 'orig-text' && !r.math && !r.sup && !r.rename?.length && !own0.upper && !!i.fakedCaps?.has(k)
+    const own: TStyle = faked && !own0.caps ? { ...own0, caps: true } : own0
     const fill = i.fillOf(k)
     const st = !own.colourRun && Number.isInteger(fill) && fill! >= 0 ? { ...own, color: hexOf(fill!) } : own
     const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? (i.fills.get(k) ?? null) : null
@@ -706,7 +716,11 @@ export function tokens(i: TokensInput): Tokens {
         : null
     if (renamed) runs = renamed
     const flags =
-      !renamed && r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? (i.smallCaps.get(k) ?? null) : null
+      !renamed && r.mode === 'orig-text' && !r.math && own.caps && !own.upper
+        ? faked
+          ? Array.from({ length: r.text.length }, () => true)
+          : (i.smallCaps.get(k) ?? null)
+        : null
     const capsAt = flags ? (x: number) => !!flags[x] : null
     if (r.sup) {
       for (const run of runs ?? [{ text: r.text, st }]) {
