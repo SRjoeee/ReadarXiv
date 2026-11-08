@@ -24,7 +24,7 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
-import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize } from './facts.ts'
+import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
@@ -928,11 +928,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const runs = fillRunsOf(gl.map(gA), lineEnds)
         if (runs) el.fills = runs
       }
-      // (a URL's copy text, its crop's: its glyphs as the page's text reads them (El.text), what the crop shows. The instrument's
-      // copy is the source's reading (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro
-      // prints (a DOI's, an eprint's): 30 of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630.
-      // Where TeX set it on one line, where its url package lets TeX break it, counted in that text (urlBreaks))
-      if (p.kind === 'url' && el.text !== undefined) el.copy = el.text
+      // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
+      // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
+      // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
+      // of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630. Where TeX set it on one line,
+      // where its url package lets TeX break it, counted in that text (urlBreaks))
+      if (p.kind === 'url' && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
       if (p.kind === 'url' && ink.length === 1) {
         const breaks = urlBreaks(gl.map(gA), el.copy ?? classOf.get(id)?.copy ?? '')
         if (breaks.length) el.breaks = breaks
@@ -1289,8 +1290,8 @@ const lettersOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normaliz
  * break after "https:" or "https:/" would leave "//…" or "/…" to start a line), at the middle of the paper between the run's
  * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text `copy`
  * stands before it, in UTF-16 code units, the unit the typesetter slices it in: read off the text itself, each glyph found in
- * it in turn, so that a space it holds between two glyphs (textOf's, where they stand apart), an astral character's two units
- * and a ligature's letters are counted as the text has them (a count of the glyphs misplaced every cut after any of them,
+ * it in turn, so that a space it holds between two glyphs (urlCopyOf's, where they stand apart on a line), an astral
+ * character's two units and a ligature's letters are counted as the text has them (a count of the glyphs misplaced every cut after any of them,
  * Devin on #630). None where the glyphs are not that text: a cut there would fall elsewhere than after a break. Its glyphs in
  * their order on the line
  */

@@ -20,6 +20,7 @@ import {
   fillRunsOf,
   tailOf,
   textOf,
+  urlCopyOf,
 } from '../src/locate/facts.ts'
 import { locate, urlBreaks } from '../src/locate/locate.ts'
 import { mappedOf, unmapped } from '../src/read.ts'
@@ -346,12 +347,12 @@ describe('locate states the facts on arXiv’s page', () => {
       'https://𠮷.io/profile/',
     ])
   })
-  it('counts a URL’s break offsets in the copy text it states, a space the text reads between two glyphs counted (Devin on #630)', () => {
-    // (the copy is the URL's glyphs as the page's text layer reads them (textOf), which sets a space between two glyphs that stand
-    // apart: 2610.22197v1's DOI and the eprint after it, one crop. A count of the glyphs alone put every cut after the space a
-    // character early; an astral character's two code units and both separators after it, before and after the space)
+  it('counts a URL’s break offsets in the copy text it states, a space the glyphs stand apart by counted (Devin on #630)', () => {
+    // (2610.22197v1's DOI and the eprint after it, one crop: a gap on a line stays a space in the copy (urlCopyOf), a rule TeX
+    // drew for an underscore or a macro's own space. A count of the glyphs alone put every cut after the space a character
+    // early; an astral character's two code units and both separators after it, before and after the space)
     const glyphs = [...run('https://𠮷.io/a'), ...run('b/c', 72 + 0.6 * 10 * 15 + 4)]
-    const copy = textOf(glyphs)
+    const copy = urlCopyOf(glyphs)
     expect(copy).toBe('https://𠮷.io/a b/c')
     const breaks = urlBreaks(glyphs, copy)
     expect(breaks.map(([, n]) => copy.slice(0, n))).toEqual([
@@ -362,6 +363,24 @@ describe('locate states the facts on arXiv’s page', () => {
     ])
     // (a copy the glyphs are not, the source's reading of the URL: no break point stated, rather than one cutting elsewhere)
     expect(urlBreaks(glyphs, 'https://𠮷.io/a₁b/c')).toEqual([])
+  })
+  it('states a URL TeX set over two lines as one word, no space at the line’s end (#633 review)', () => {
+    // (\url{https://a.io/lo/ng/path} broken after its "/": textOf reads the end of a line as PDF.js does, a space, which the
+    // copy of a URL cannot hold. A break after a url.sty break character leaves no hyphen of TeX's: the url package sets
+    // its characters as written)
+    const B = docOf([{ lines: ['See https://a.io/lo/', 'ng/path ok.'] }])
+    const content: Piece[] = [
+      text('See '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://a.io/lo/ng/path}' },
+      text(' ok.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 27 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('https://a.io/lo/ ng/path')
+    expect(el.copy).toBe('https://a.io/lo/ng/path')
+    expect(el.copy).not.toMatch(/\s/)
   })
   it('states a URL’s copy text as its glyphs on the page, not the source’s reading of it (#630’s 30 URLs: "_1" read as a subscript)', () => {
     // (2609.26457v1's "…/3-540-44668-0_13": the instrument's copy, texToText2 over \url{…}, read "_1" as the subscript "₁"; the
