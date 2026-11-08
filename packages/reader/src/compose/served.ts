@@ -48,6 +48,9 @@ export const BUSY_MAX_MS = 60_000
 
 /** a pseudo-face the default engine's lay waits on while a language's patterns come (compose/typeset.ts): `ready` loads them */
 export const HYPH_WAIT = 'axt-hyph'
+/** the face the overlay's text rendering is probed in (Faces.probeFace, text-rendering.ts): Computer Modern's serif, the
+ *  served Latin face of the most papers' text (TeX's default, the role table's `cm` design) */
+export const PROBE_FACE = '400 100px "axt-cmun-serif"'
 
 interface Slice {
   key: string
@@ -577,6 +580,10 @@ export function createServed(o: {
       return c
     },
     familyOf,
+    async probeFace(text) {
+      await load(PROBE_FACE, text, () => true).catch((e) => o.warn?.(`the faces of ${PROBE_FACE}`, e))
+      return metrics.ready(PROBE_FACE, text) === true ? PROBE_FACE : null
+    },
     async ready(items, wanted = () => true) {
       const waits: Promise<unknown>[] = []
       for (const it of items) {
