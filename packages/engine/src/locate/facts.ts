@@ -7,7 +7,9 @@
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
 import { r2 } from './lines.ts'
-import { accentOver, COMBINING } from './today/today.types.ts'
+// @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
+// back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
+import * as accents from './today/accents.mjs'
 
 // ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
 /** the PostScript name without its subset tag */
@@ -359,6 +361,12 @@ function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space'
     classifyFont(h.base).fam !== 'mono'
   return tex ? 'drop' : 'join'
 }
+/** a glyph as accents.mjs reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
+type AccentGlyph = Pick<DocGlyph, 'u' | 'font' | 'size' | 'x0' | 'x1' | 'y' | 'top'>
+/** each spacing accent's combining mark (accents.mjs COMBINING) */
+const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
+/** whether spacing accent `a` is set over letter `l` by TeX's \accent: the letter's accented form (NFC), or null */
+const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
 /**
  * A run of glyphs (in stream order) with each spacing accent TeX set over its letter joined to that letter: one glyph, the
  * letter's, its text the accented letter. In Unicode an accent set over a letter is one character with it (NFC); TeX's
