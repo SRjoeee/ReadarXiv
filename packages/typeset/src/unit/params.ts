@@ -174,7 +174,9 @@ export function params(i: ParamsInput): Params {
     lastLines: i.heading && !i.numbered,
     // (a line of the page's head or foot keeps its size: no step of the fit or past it shrinks it; where its free row does not
     // hold it at its size it is left the original's)
-    ...(HEAD_FOOT.has(i.kind) && i.blocks.length === 1 && i.blocks[0]!.rects.length === 1 ? { floor: 1, floorMin: 1 } : {}),
+    ...(HEAD_FOOT.has(i.kind) && i.blocks.length === 1 && i.blocks[0]!.rects.length === 1
+      ? { floor: 1, floorMin: 1 }
+      : {}),
   }
   const clear = i.P.cjk && i.kind === 'cell' ? cellBands(i.blocks, i.rulesOf, i.s, i.P) : null
   if (clear && clear.cap < 1) P.capScale = clear.cap

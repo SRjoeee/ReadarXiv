@@ -443,15 +443,7 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T31', '1F:layout'],
     ports: ['L2:4041-4080 statesOf', 'L2:4085 sharedStates', 'L2:4102-4137 layoutUnit2'],
     how: 'ported',
-    reads: [
-      'fit.order',
-      'fit.leadBase',
-      'fit.leadFloor',
-      'fit.trackMin',
-      'fit.compressMax',
-      'fit.floor',
-      'fit.step',
-    ],
+    reads: ['fit.order', 'fit.leadBase', 'fit.leadFloor', 'fit.trackMin', 'fit.compressMax', 'fit.floor', 'fit.step'],
     file: 'fit/walk.ts',
     state: {
       is: 'changed',
