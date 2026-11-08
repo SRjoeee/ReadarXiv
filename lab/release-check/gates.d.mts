@@ -19,6 +19,8 @@ export interface Gate {
   disk?: boolean
   network?: 'live'
   private?: boolean
+  /** a cut-over blocker: the report's cut-over verdict is NO-GO until it passes */
+  cutover?: boolean
   judge?: (ctx: Ctx, steps: StepRun[]) => Judged
 }
 export interface Invariant { id: string; says: string; gap: string | null }

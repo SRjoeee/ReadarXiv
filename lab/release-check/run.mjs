@@ -27,7 +27,7 @@ import { arch, availableParallelism, homedir, platform, totalmem } from 'node:os
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GATES, INVARIANTS, TIERS } from './gates.mjs'
-import { gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from './verdict.mjs'
+import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from './verdict.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const argv = process.argv.slice(2)
@@ -165,12 +165,15 @@ const invariants = INVARIANTS.map(i => invariantLine(i, GATES, tier, results))
 // (with --only the verdict is the chosen gates': a job that runs part of a tier, CI.md)
 const judged = only ? tierGates.filter(g => only.includes(g.id)) : tierGates
 const { verdict, why } = verdictOf(only ? 'part' : tier, judged, results, invariants)
+// (the cut-over's own verdict: its blockers, whatever the tier)
+const cutover = cutoverOf(GATES, judged, results)
 const report = {
   format: 'readarxiv/release-check 1',
   tier,
   only,
   verdict,
   why,
+  cutover,
   commit: candidate,
   dirty: git('status', '--porcelain', '--untracked-files=no') !== '',
   started,
@@ -188,4 +191,5 @@ writeFileSync(join(out, 'release-check.json'), `${JSON.stringify(report, null, 1
 writeFileSync(join(out, 'release-check.md'), markdownOf(report))
 console.log(`release-check: tier ${tier}: ${verdict}; ${join(relative(ROOT, out) || '.', 'release-check.md')}`)
 for (const w of why) console.log(`  ${w}`)
+console.log(`release-check: cut-over: ${cutover.verdict}${cutover.why.length ? ` (${cutover.why.join('; ')})` : ''}`)
 process.exit(verdict === 'GO' ? 0 : 1)
