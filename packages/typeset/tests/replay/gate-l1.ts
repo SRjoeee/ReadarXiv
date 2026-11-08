@@ -11,7 +11,7 @@ import { ownNamesOf } from '../../src/unit/rename.ts'
 import type { LinkFate } from '../../src/lay/links.ts'
 import { keptBefore, ledBy } from '../../src/lay/lead.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
-import { adapt, rectOf } from '../../src/lay/adapt.ts'
+import { adapt, type Reading, rectOf } from '../../src/lay/adapt.ts'
 import {
   paperOf as paperReading,
   type PaperReading,
@@ -559,7 +559,7 @@ export function gateL1Pair(
     const up = c.slot('U.params')
     const nextUnit = x.after ? unitOf.get(x.after.ord) : undefined
     // (the reading and the tokens from the part (lay/read.ts) where asked, with today's as the oracle: E1's input level)
-    let reading = {
+    let reading: Reading = {
       tokens: c.tokens as never,
       labelDrawn: label?.drawn ?? null,
       lead: !!(c.slot('U.lead', 'lead')?.lead ?? null),
@@ -671,6 +671,7 @@ export function gateL1Pair(
         front: false,
         cjkSize: rd.cjkSize,
         referenced: rd.referenced,
+        breaks: rd.breaks,
         own: true,
       }
     }

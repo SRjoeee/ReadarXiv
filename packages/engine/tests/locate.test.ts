@@ -972,3 +972,110 @@ describe('the element classes the part states', () => {
     ])
   })
 })
+
+describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens)', () => {
+  // (2608.25210v2 p3 unit 57: an item's text, then `\mypython{\small …}`, a frame TeX set as a paragraph of its own; TeX's
+  // paragraph end (its qe point) between "sentences." and the frame's first word, no point of the group's own and none of
+  // `\small`'s, which sets no ink: the group is found where the unit's text meets the end)
+  const partOf = (ins: Instrument, B: Doc) => {
+    const L = locate(ins, B, align(B, B))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    return read('part', part.bytes).flows.flat()[0]!
+  }
+  // (each glyph's owner by line, and an element's glyphs by their index on the page: [glyph, piece])
+  const owned = (B: Doc, units: InstrumentUnit[], els: [number, number][], ends: number[]): Instrument => {
+    const ins = instrumentOf(B, units, [[0, 0, 0]])
+    for (const [g, piece] of els) {
+      ins.glyphs[0]!.role[g] = ROLE.element
+      ins.glyphs[0]!.piece[g] = piece
+    }
+    return { ...ins, tex: { paragraphEnds: [ends] } }
+  }
+  it('states the group whose open the unit’s text meets at TeX’s paragraph end, its first line there', () => {
+    const B = docOf([{ lines: ['An item ends with sentences.', 'llm equal two: Determine', 'whether the two agree'] }])
+    const content = [
+      text('An item ends with sentences. '),
+      {
+        t: 'span' as const,
+        id: '1',
+        style: 'other',
+        open: '\\mypython{',
+        close: '}',
+        content: [
+          text('\n'),
+          { t: 'el' as const, id: '2', kind: 'other', src: '\\small' },
+          text(' llm equal two: Determine whether the two agree'),
+        ],
+      },
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [['2', { cls: 'zero', cmd: 'small', bare: true }]],
+        spans: [['1', { cmd: 'mypython' }]],
+      },
+    ]
+    const m = partOf(owned(B, units, [], [28]), B)
+    expect(m.spans).toEqual([['1', { cmd: 'mypython', opens: 1 }]])
+    expect(m.els?.find(([id]) => id === '2')?.[1].opens).toBeUndefined()
+    // (an end the unit's text does not meet at the group's open, inside the group's text before "Determine": no group stated)
+    expect(partOf(owned(B, units, [], [43]), B).spans).toEqual([['1', { cmd: 'mypython' }]])
+  })
+  it('states no group that closes before the text TeX’s paragraph begins with (today’s: the group holds that text)', () => {
+    // (2610.20716v1's centred title, `…Bound Dark\texorpdfstring{\\}{} theory and …`: TeX's \\ in a centred block ends the
+    // paragraph inside the group, and the text after the end stands after the group's close)
+    const B = docOf([{ lines: ['The unified Bound Dark', 'theory and constraints'] }])
+    const content = [
+      text('The unified Bound Dark'),
+      {
+        t: 'span' as const,
+        id: '1',
+        style: 'other',
+        open: '\\texorpdfstring{',
+        close: '}',
+        content: [{ t: 'el' as const, id: '2', kind: 'other', src: '\\\\' }],
+      },
+      text('\ntheory and constraints'),
+    ]
+    const units: InstrumentUnit[] = [
+      { id: unitId('heading', content), kind: 'heading', content, classes: [['2', { cls: 'space', brk: true }]] },
+    ]
+    expect(partOf(owned(B, units, [], [22]), B).spans?.some(([, x]) => x.opens !== undefined) ?? false).toBe(false)
+  })
+  it('states the element whose first glyph opens TeX’s paragraph, and none whose own glyphs the end falls inside', () => {
+    const B = docOf([{ lines: ['A first paragraph ends.', 'X and the second one', 'runs on'] }])
+    const content = [
+      text('A first paragraph ends. '),
+      { t: 'el' as const, id: '3', kind: 'other', src: '\\figmark' },
+      text(' and the second one runs on'),
+    ]
+    const units: InstrumentUnit[] = [
+      { id: unitId('para', content), kind: 'para', content, classes: [['3', { cls: 'other' }]] },
+    ]
+    const at = partOf(owned(B, units, [[23, 3]], [23]), B)
+    expect(at.els?.find(([id]) => id === '3')?.[1].opens).toBe(1)
+    // (the element's ink from "ends." on: the paragraph TeX ended inside it opened at none of the unit's pieces)
+    const inside = partOf(
+      owned(
+        B,
+        units,
+        [17, 18, 19, 20, 21, 22, 23].map((g) => [g, 3] as [number, number]),
+        [23],
+      ),
+      B,
+    )
+    expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
+  })
+})

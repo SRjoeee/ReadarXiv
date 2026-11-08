@@ -613,12 +613,14 @@ export function tokens(i: TokensInput): Tokens {
       return
     }
     plain?.gap()
+    // (a piece TeX opened a paragraph at, U.breaks' openBreaks: a group's open (paragraphBreaks), or an element (El.opens, drawn
+    // after it): the text before it ends its block, the piece starts the paragraph's)
+    const opened = resolved.openBreaks?.get(k)
+    if (opened !== undefined && resolved.referenced?.has(opened)) {
+      while (tokens.at(-1)?.space) tokens.pop()
+      if (tokens.at(-1)?.blockTo !== opened) tokens.push({ blockTo: opened, w100: 0, brk: true })
+    }
     if (p.t === 'open') {
-      const g = resolved.openBreaks?.get(k)
-      if (g !== undefined && resolved.referenced?.has(g)) {
-        while (tokens.at(-1)?.space) tokens.pop()
-        if (tokens.at(-1)?.blockTo !== g) tokens.push({ blockTo: g, w100: 0, brk: true })
-      }
       const next = applyCmd(p.src, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })

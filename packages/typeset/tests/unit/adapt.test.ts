@@ -107,7 +107,7 @@ describe('adapt: a member set from its part’s facts', () => {
     if (!('member' in led)) throw new Error(led.stop)
     expect(led.member.rowStart?.row).toMatchObject({ id: 3, page: 1, baseline: 676, x1: 68 })
   })
-  it('says what stops it: the prepare’s reason, a forced break U.breaks would pair', () => {
+  it('says what stops it: the prepare’s reason, a forced break where the reading hands no U.breaks maps (today’s tokens)', () => {
     expect(adapt(input(member({ why: 'unlocated' })))).toEqual({ stop: 'unlocated' })
     expect(adapt(input(member({ els: [['1', { kind: 'other', ink: [], ends: [0, 0] }]] })))).toEqual({
       stop: 'breaks (U.breaks not adapted)',

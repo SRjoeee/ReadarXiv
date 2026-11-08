@@ -1,6 +1,7 @@
 // The adapter (design-b §1.6 L6, stage one): a part's member (lane L1's Placed) made the composition's prepared member, its
 // setting through the ported unit rules from the facts the part states: U.blocks (blocks2 over the member's lines: each Line
-// a rectangle and its line facts, KEPT lines kept, TeX's \lineskip), U.decor (decorBefore and decorAfter: the alignment
+// a rectangle and its line facts, KEPT lines kept, TeX's \lineskip, where TeX's forced breaks and the paragraphs it opened
+// end its lines: U.breaks' maps, the reading's), U.decor (decorBefore and decorAfter: the alignment
 // stated, the label's ink, the room beside its lines Room.side, the row kept after it, the displays set with the short
 // skip), U.params (the size the style states, the edges its lines' PINNED flags and Room.next state, a CJK cell's bands over
 // the page's rules), and, within its flow, the shared row it starts on and the row it leaves (Placed.join, the members before
@@ -13,6 +14,7 @@ import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
 import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
+import type { Breaks } from '../unit/breaks.ts'
 import {
   carriedCrop,
   type DecorLabel,
@@ -45,6 +47,10 @@ export type Reading = {
   cjkSize: number | undefined
   /** the kept regions (runs of KEPT lines, in order) the translation passes (U.breaks' referenced): what its tokens block to */
   referenced: ReadonlySet<number>
+  /** U.breaks' maps (lay/read.ts: TeX's forced breaks and paragraphs paired with the row), which number the regions
+   *  `referenced` names; absent where the reading is not the part's (the gate's runner hands today's tokens), and a member
+   *  whose part states a break or a paragraph point is then not set */
+  breaks?: Pick<Breaks, 'regionOf' | 'breakAt' | 'joinAt' | 'paraAt'>
   /** the tokens are the unit's own (lay/read.ts): the adapter sets a carried label's crop before them (RUN:2225-2238), which
    *  today's tokens handed in already hold */
   own?: boolean
@@ -113,7 +119,12 @@ export function adapt(i: AdaptInput): Adapted {
   const { m, R } = i
   if (m.why) return { stop: m.why }
   if (!m.lines.length) return { stop: 'no lines' }
-  if (m.els?.some(([, e]) => e.ends || e.opens !== undefined)) return { stop: 'breaks (U.breaks not adapted)' }
+  const br = i.reading.breaks
+  if (
+    !br &&
+    (m.els?.some(([, e]) => e.ends || e.opens !== undefined) || m.spans?.some(([, x]) => x.opens !== undefined))
+  )
+    return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
   const rects = lines.map((l) => rectOf(l, m))
   // (each line's frame: its run of lines on one page and column)
@@ -138,7 +149,7 @@ export function adapt(i: AdaptInput): Adapted {
     lineInfo.set(rectKeyNoX0(rects[j]!), info)
   })
   // (the KEPT lines: a display's rows, a held line; each run of them a region, as U.breaks numbers them where no forced
-  // break opens one)
+  // break opens one; the reading's numbering where it hands U.breaks' maps)
   const keepKeys = lines.flatMap((l, j) => (l[9] & KEPT ? [rectKey(rects[j]!)] : []))
   const regionOf = new Map<string, number>()
   let region = -1
@@ -175,8 +186,11 @@ export function adapt(i: AdaptInput): Adapted {
     pageViews: Array.from({ length: Math.max(...pages) }, (_, k) => i.view(k + 1)),
     keep: keepKeys.length ? new Set(keepKeys) : null,
     lineInfo,
-    regionOf: keepKeys.length ? regionOf : null,
-    referenced: keepKeys.length ? new Set(i.reading.referenced) : null,
+    regionOf: br ? br.regionOf : keepKeys.length ? regionOf : null,
+    referenced: br || keepKeys.length ? new Set(i.reading.referenced) : null,
+    breakAt: br?.breakAt ?? null,
+    joinAt: br?.joinAt ?? null,
+    paraAt: br?.paraAt ?? null,
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]

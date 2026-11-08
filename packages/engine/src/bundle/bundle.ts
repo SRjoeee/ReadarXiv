@@ -122,8 +122,14 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     const cls = new Map(unit?.classes ?? [])
     p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
   }
-  // (each group's command and fill, as the instrument reads its source)
-  if (unit?.spans?.length) p.spans = unit.spans.map(([id, x]) => [id, { ...x }])
+  // (each group's command and fill, as the instrument reads its source; the paragraph TeX opened at it, as locate read it)
+  if (unit?.spans?.length || mem.spanOpens?.size) {
+    const spans = new Map(
+      (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
+    )
+    for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
+    p.spans = [...spans]
+  }
   if (mem.labelAt) p.label = mem.labelAt
   if (st.fixed) p.fixed = st.fixed
   if (mem.dir) p.dir = mem.dir

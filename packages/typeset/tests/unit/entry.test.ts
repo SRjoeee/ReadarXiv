@@ -586,3 +586,143 @@ describe('a row’s pieces from the member’s facts (rowPieces): each test a ru
     ])
   })
 })
+
+describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragraphs it opened inside a unit (triage L1)', () => {
+  // (today's U.breaks (forcedBreaks, paragraphBreaks, finishUnit's maps) paired with the row in the translation's order: the
+  // adapter stopped every member a break or a paragraph point names, its translation never laid (33 members over the corpus))
+  const textOf = (l: { 3: Item[] }) =>
+    l[3]
+      .map((it) => it.s)
+      .join('')
+      .trim()
+  const lay = (m: Placed, content: OutPiece[]) => {
+    const [laid] = layPage(part(m), rowsOf([row(content)], true), rules, metrics()).members
+    return laid!
+  }
+  const lineAt = (base: number, x0: number, x1: number): Placed['lines'][number] => [
+    1,
+    0,
+    x0,
+    x1,
+    base,
+    base + 7,
+    base - 2,
+    72,
+    300,
+    0,
+    10,
+  ]
+  it('ends the laid line where TeX’s forced break ended its line, the text after it on TeX’s next baseline (design-a §2.5)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Premier vers' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'la suite du paragraphe, assez longue' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(textOf(laid.lines[0]!)).toBe('Premier vers')
+    expect(laid.lines[1]![0]).toBe(688)
+  })
+  it('starts a block where the break’s next line opens another frame: no pitch tells its room (a title’s two lines)', () => {
+    const m = member({
+      kind: 'heading',
+      align: 'c',
+      lines: [lineAt(700, 120, 250), lineAt(680, 90, 280)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Ein Titel' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'und seine zweite Zeile' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.map((l) => [l[0], textOf(l)])).toEqual([
+      [700, 'Ein Titel'],
+      [680, 'und seine zweite Zeile'],
+    ])
+  })
+  it('takes no read break whose line an element of the row before it stands under (today’s check of a read pairing)', () => {
+    // (the line read by its short end (Placed.read 'breaks'), not TeX's point: an element the row sets before the break whose
+    // ink stands on a later line says the pairing is wrong, and the unit is laid as one paragraph, as today's forcedBreaks did
+    // (TEX:161-181); a break TeX's point states needs no such check)
+    const m = (read: string[]) =>
+      member({
+        lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+        els: [
+          ['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }],
+          ['2', { kind: 'other', ink: [[1, 100, 686, 120, 695, 688]], copy: 'x' }],
+        ],
+        read,
+      })
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Vers avec ' },
+      { t: 'el', id: '2' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: 'la suite' },
+    ]
+    expect(lay(m(['breaks']), content).lines.map(textOf)).toEqual(['Vers avec xla suite'])
+    expect(lay(m([]), content).lines.map(textOf)).toEqual(['Vers avec x', 'la suite'])
+  })
+  it('takes no break the translation sets with no text after it (T19: a group of breaks between texts)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 180), lineAt(688, 72, 300), lineAt(676, 72, 240)],
+      els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Premier vers la suite du paragraphe' },
+      { t: 'el', id: '1' },
+    ])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.length).toBe(1)
+  })
+  // (2608.25210v2 p3 t57: an item's text, then `\mypython{…}`, its prompt a paragraph of its own TeX set in a frame at another
+  // measure and size; today split the member there and laid the prompt from its own first line)
+  const boxed = (opens: Placed['spans']) =>
+    member({
+      lines: [
+        lineAt(700, 72, 300),
+        lineAt(688, 72, 150),
+        [1, 0, 82, 290, 672, 678, 670, 72, 300, 0, 8],
+        [1, 0, 82, 290, 663, 669, 661, 72, 300, 0, 8],
+        [1, 0, 82, 230, 654, 660, 652, 72, 300, 0, 8],
+      ],
+      spans: opens,
+    })
+  const boxedRow: OutPiece[] = [
+    { t: 'text', s: 'Ein Punkt der Liste, der zwei Zeilen lang ist: ' },
+    { t: 'span', id: '4', content: [{ t: 'text', s: 'Der Kasten mit seinem eigenen Absatz darin.' }] },
+  ]
+  it('starts the text of a group TeX set as a paragraph of its own on that paragraph’s first line (SpanAt.opens, T20)', () => {
+    const laid = lay(boxed([['4', { cmd: 'mypython', opens: 2 }]]), boxedRow)
+    expect(laid.state).toBe('laid')
+    const at = laid.lines.findIndex((l) => l[3].some((it) => /Kasten/.test(it.s)))
+    expect(laid.lines[at]![0]).toBe(672)
+    expect(laid.lines[at]![1]).toBe(82)
+    expect(textOf(laid.lines[at]!)).toMatch(/^Der Kasten/)
+  })
+  it('lays such a group as the paragraph’s text where the row holds it with no text before it (T20: between texts)', () => {
+    const laid = lay(boxed([['4', { cmd: 'mypython', opens: 2 }]]), [boxedRow[1]!, boxedRow[0]!])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines[0]![0]).toBe(700)
+    expect(textOf(laid.lines[0]!)).toMatch(/^Der Kasten/)
+  })
+  it('starts at an element TeX opened a paragraph at, the element first on that line (El.opens)', () => {
+    const m = member({
+      lines: [lineAt(700, 72, 300), lineAt(688, 72, 150), lineAt(676, 72, 300), lineAt(664, 72, 200)],
+      els: [['3', { kind: 'other', ink: [[1, 72, 674, 90, 683, 676]], copy: 'x', opens: 2 }]],
+    })
+    const laid = lay(m, [
+      { t: 'text', s: 'Der erste Absatz, der ganze zwei Zeilen lang ist.' },
+      { t: 'el', id: '3' },
+      { t: 'text', s: ' und der zweite Absatz danach' },
+    ])
+    expect(laid.state).toBe('laid')
+    const at = laid.lines.findIndex((l) => l[3].some((it) => 'src' in it))
+    expect(laid.lines[at]![0]).toBe(676)
+    expect('src' in laid.lines[at]![3][0]!).toBe(true)
+    expect(textOf(laid.lines[at - 1]!)).toMatch(/ist\.$/)
+  })
+})

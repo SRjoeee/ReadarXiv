@@ -89,6 +89,9 @@ export interface Member {
   bLast: number
   /** the class's marks after its text (C20) */
   tail?: [string, Style][]
+  /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
+   *  line */
+  spanOpens?: Map<string, number>
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** each line's glyphs on A (global), by line, for the facts read after the lines */

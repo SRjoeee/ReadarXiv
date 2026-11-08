@@ -8,7 +8,8 @@
 //   drawing (`sym`), a footnote's mark (`mark`), kept where it stands (`keep`: a display, ink outside the unit's lines);
 // - drawnAs (L2:1757) over a rendering whose source knows its ink (a segment's box, `box.top` set): a crop of the box, or the
 //   page's text for a citation, a reference, a macro and a formula over lines;
-// - U.breaks' regions (finishUnit's maps) over the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
+// - U.breaks over what TeX states (El.ends, El.opens, SpanAt.opens: statedBreaks, in the translation's order) and finishUnit's
+//   maps over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
 // - U.label over the label's parts (Label.name, num, punct) as its glyphs;
 // - the unit's base style, its size and its colour from Style (today's originalStyle and measuredOf over its characters), the
 //   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
@@ -25,7 +26,7 @@ import { noStart } from '../breaker/script.ts'
 import { type TokenRules, type TStyle, tokens as tokensOf } from '../breaker/tokens.ts'
 import type { Tokens } from '../fit/types.ts'
 import type { Metrics } from '../types.ts'
-import { breaks, type V0Piece } from '../unit/breaks.ts'
+import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/breaks.ts'
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
 import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
@@ -411,6 +412,9 @@ export type ReadOut = {
   lead: boolean
   cjkSize: number | undefined
   referenced: ReadonlySet<number>
+  /** U.breaks' maps the blocks read (the kept lines in runs, a break's region or its frame's pitch on its next line, a
+   *  paragraph's first line), by the lines' rectangles' keys */
+  breaks: Pick<Breaks, 'regionOf' | 'breakAt' | 'joinAt' | 'paraAt'>
   /** T4: the first placeholder the file cannot draw (U.admit refuses the unit `unproven`), or -1 */
   unproven: number
   resolutions: Map<number, Res>
@@ -431,19 +435,13 @@ export function readMember(i: ReadInput): ReadOut {
   const held = L.filter((l) => l.kept && !displayLines.has(l.key)).map((l) => l.key)
   const el = elements({ pieces, cls2, readings, held, macros: new Map(), touched: [...displayLines], shown: i.shown })
   const res = el.resolutions
-  // U.breaks: the kept lines in runs, each kept resolution's region (no forced break nor paragraph: the adapter stops those)
+  // U.breaks: TeX's forced breaks and the paragraphs it opened, paired with the row in its order; the kept lines in runs, each
+  // kept resolution's region
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
-  const br = breaks({
-    lu: null,
+  const read = (m.read ?? []).includes('breaks')
+  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read }, pieces, cls2), {
     pieces,
-    cls2,
-    kOf: null,
-    lineskip: null,
-    source: null,
-    pieceLines: null,
-    fileLines: { rects: [...i.rects], j: i.rects.map((_, j) => j) },
-    held,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),
     keep: el.keep,
@@ -569,6 +567,7 @@ export function readMember(i: ReadInput): ReadOut {
     lead: !!i.lead,
     cjkSize,
     referenced: br.referenced,
+    breaks: { regionOf: br.regionOf, breakAt: br.breakAt, joinAt: br.joinAt, paraAt: br.paraAt },
     unproven: el.unproven,
     resolutions: res,
   }
