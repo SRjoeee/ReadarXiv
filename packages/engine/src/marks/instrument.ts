@@ -25,7 +25,7 @@
 import { type Piece, unitId } from '@readarxiv/format'
 import type { Doc } from '../doc.ts'
 import { type Instrument, type InstrumentUnit, type Owners, ownersOf, ROLE } from '../instrument.ts'
-import { framesOf, readAlign, readLineskip } from './channels.ts'
+import { framesOf, readAlign, readLineskip, readSkips } from './channels.ts'
 import type { SourceDoc } from '../source/read.ts'
 import { classOf, symbolText } from './classes.ts'
 import { runIns } from './run-ins.ts'
@@ -818,8 +818,10 @@ export function instrumentFromPlan({
     if (state) states.push({ unit: m.unit, piece: m.kind === 'open' ? m.pieceId : null, state })
   }
   const lineskip = stated ?? readLineskip(log)
-  // ---- each page's text frame as TeX shipped it (AXT-BODY at each body's opening point)
+  // ---- each page's text frame as TeX shipped it (AXT-BODY at each body's opening point, its foot under AXT-PAGE's corner)
   const frames = framesOf(pages, log)
+  // ---- each unit's \baselineskip and \parskip where its paragraph ends (LINES_TEX's AXT-LINES): TeX's paragraph separation
+  const skips = [...readSkips(log)].map(([unit, [baselineskip, parskip]]) => ({ unit, baselineskip, parskip }))
   return {
     ink,
     units,
@@ -831,6 +833,7 @@ export function instrumentFromPlan({
       ...(lineskip ? { lineskip } : {}),
       paragraphEnds: pages.map((pg) => (pg.paraEnds ?? []).map((x) => x.glyph)),
       ...(frames.some(Boolean) ? { frames } : {}),
+      ...(skips.length ? { skips } : {}),
       states,
       ...(sentences.length ? { sentences } : {}),
       ...(colours.length ? { colours } : {}),

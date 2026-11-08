@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ROLE } from '../../src/instrument.ts'
-import { framesOf, readBodies } from '../../src/marks/channels.ts'
+import { framesOf, readBodies, readSkips } from '../../src/marks/channels.ts'
 import { instrumentFromPlan, type PageRead, readAlign, WorkBound } from '../../src/marks/instrument.ts'
 import { markSource } from '../../src/marks/mark.ts'
 import { NO_DEFINITIONS } from '../../src/source/definitions.ts'
@@ -444,5 +444,47 @@ describe('framesOf: each page’s text frame as TeX shipped it (LAYOUT_TEX’s A
     expect(g!.columns[0]).toEqual([x0, Math.round((x0 + bp(246)) * 100) / 100])
     expect(mc).toBeNull()
     expect(one!.columns).toEqual([one!.block])
+  })
+  it('states the page’s text block bottom where TeX states it: the depth of \\textheight’s foot under the page’s top', () => {
+    // (the borrowing ruling of 2026-11-08: no translation's line past TeX's text block bottom in its column. LaTeX's
+    // \@outputpage ships the text block an inch, \voffset, \topmargin, \headheight and \headsep under the page's top edge, its
+    // bottom \textheight under that: what pdfLaTeX, XeLaTeX, LuaLaTeX and latex + dvipdfmx each wrote for one bare twocolumn
+    // article on A4, whose right column, set flush to its bottom, ends at 169.14. A dimension, no saved position: every engine's
+    // alike. A compile made before the statement states none)
+    const told = [
+      'AXT-BODY 1 1 229.5pt 469.0pt 4736286 675.26999pt',
+      'AXT-BODY 2 2 229.5pt 469.0pt 20432158 675.26999pt',
+      'AXT-BODY 3 0 469.0pt 469.0pt 4736286 675.26999pt',
+    ].join('\n')
+    expect(readBodies(told).get(1)!.foot).toBeCloseTo((675.26999 * 72) / 72.27, 6)
+    const view = [0, 0, 595.28, 841.89]
+    const [two, one] = framesOf(
+      [
+        { ...pts('c2-1', 'bs1', 'bs2'), view },
+        { ...pts('c1-2', 'bs3'), view },
+      ],
+      told,
+    )
+    expect(two!.foot).toBe(169.14)
+    expect(one!.foot).toBe(169.14)
+    expect(framesOf([{ ...pts('c2-1', 'bs1', 'bs2'), view }], log)[0]!.foot).toBeUndefined()
+  })
+})
+
+describe('readSkips: each unit’s \\baselineskip and \\parskip at its paragraph’s end (LINES_TEX’s AXT-LINES)', () => {
+  it('reads both skips’ natural sizes in PDF units, by unit; a statement made before \\parskip was logged tells none', () => {
+    const s = readSkips(
+      [
+        'AXT-LINES 3 5 13.6pt 10.95 0.0pt plus 1.0pt',
+        'AXT-LINES 7 1 12.0pt 10',
+        'AXT-LINES 8 2 12.0pt plus 1.0pt 10 5.5pt minus 1.0pt',
+        'AXT-LINES 9 2 12.0pt 10 x',
+      ].join('\n'),
+    )
+    expect([...s.keys()]).toEqual([3, 8])
+    expect(s.get(3)![0]).toBeCloseTo((13.6 * 72) / 72.27, 6)
+    expect(s.get(3)![1]).toBe(0)
+    expect(s.get(8)![0]).toBeCloseTo((12 * 72) / 72.27, 6)
+    expect(s.get(8)![1]).toBeCloseTo((5.5 * 72) / 72.27, 6)
   })
 })

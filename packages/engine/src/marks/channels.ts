@@ -60,22 +60,52 @@ export function readLineskip(log: string): [number, number] | null {
 /** a TeX scaled point in PDF units (65,536 sp a TeX point) */
 const BP_PER_SP = BP_PER_PT / 65536
 /** a body TeX shipped as it states it (AXT-BODY): which column it is (1 the left, 2 the right; 0 a one-column page's body or a
- *  text block shipped whole), the column's and the text block's widths and its box's left edge on its page, in PDF units */
-export type TexBody = { side: 0 | 1 | 2; column: number; text: number; x: number }
+ *  text block shipped whole), the column's and the text block's widths and its box's left edge on its page, in PDF units; and,
+ *  where TeX states it, the depth of the text block's bottom under the page's top edge (\textheight's foot as \@outputpage
+ *  ships it) */
+export type TexBody = { side: 0 | 1 | 2; column: number; text: number; x: number; foot?: number }
 /**
- * Each bracketed body's statement (marks.mjs LAYOUT_TEX's `AXT-BODY <n> <side> <\columnwidth> <\textwidth> <x>`, written at
- * the shipout beside the body's opening point `bs<n>`), by its serial: the first (a box shipped twice states it twice, the
- * same). A line not of the form is passed over: a compile made before the statement, or an engine with no saved position
- * (its x empty), states none
+ * Each bracketed body's statement (marks.mjs LAYOUT_TEX's `AXT-BODY <n> <side> <\columnwidth> <\textwidth> <x> <depth>`,
+ * written at the shipout beside the body's opening point `bs<n>`), by its serial: the first (a box shipped twice states it
+ * twice, the same). A line not of the form is passed over: a compile made before the statement, or an engine with no saved
+ * position (its x empty), states none; one made before the depth states no foot
  */
 export function readBodies(log: string): Map<number, TexBody> {
   const out = new Map<number, TexBody>()
-  for (const m of log.matchAll(/^AXT-BODY (\d{1,9}) ([012]) (\d+(?:\.\d+)?)pt (\d+(?:\.\d+)?)pt (-?\d{1,12}) *$/gm)) {
+  for (const m of log.matchAll(
+    /^AXT-BODY (\d{1,9}) ([012]) (\d+(?:\.\d+)?)pt (\d+(?:\.\d+)?)pt (-?\d{1,12})(?: (\d+(?:\.\d+)?)pt)? *$/gm,
+  )) {
     const n = Number(m[1])
     if (out.has(n)) continue
     const [column, text, x] = [Number(m[3]) * BP_PER_PT, Number(m[4]) * BP_PER_PT, Number(m[5]) * BP_PER_SP]
     if (!(column > 0 && text > 0 && column <= text + 0.5 && Number.isFinite(x))) continue
-    out.set(n, { side: Number(m[2]) as 0 | 1 | 2, column, text, x })
+    const foot = m[6] !== undefined ? Number(m[6]) * BP_PER_PT : undefined
+    out.set(n, {
+      side: Number(m[2]) as 0 | 1 | 2,
+      column,
+      text,
+      x,
+      ...(foot !== undefined && foot > 0 ? { foot } : {}),
+    })
+  }
+  return out
+}
+/**
+ * Each unit's \baselineskip and \parskip, natural, where its paragraph ends (LINES_TEX's `AXT-LINES <unit> <\prevgraf>
+ * <\baselineskip> <size> <\parskip>`, the last TeX pass's), in PDF units, by unit index: TeX's normal paragraph separation
+ * there, their sum, which the next ink under a borrowed line keeps (the owner's ruling of 2026-11-08). A unit TeX set no
+ * paragraph for (a caption measured in a box alone, a heading, the front matter's) states none; nor does a compile made
+ * before \parskip was stated
+ */
+export function readSkips(log: string): Map<number, [number, number]> {
+  const out = new Map<number, [number, number]>()
+  const glue =
+    '(-?\\d+(?:\\.\\d+)?)pt(?: plus -?\\d+(?:\\.\\d+)?(?:pt|fil{1,3}))?(?: minus -?\\d+(?:\\.\\d+)?(?:pt|fil{1,3}))?'
+  const re = new RegExp(`^AXT-LINES (\\d{1,9}) \\d+ ${glue} \\d+(?:\\.\\d+)? ${glue} *$`, 'gm')
+  // (a statement longer than the log's 79 columns wrapped: joined)
+  for (const m of log.replace(/^(AXT-LINES .{69})\n/gm, '$1').matchAll(re)) {
+    const [bs, ps] = [Number(m[2]) * BP_PER_PT, Number(m[3]) * BP_PER_PT]
+    if (Number.isFinite(bs) && Number.isFinite(ps) && bs > 0) out.set(Number(m[1]), [bs, ps])
   }
   return out
 }
@@ -91,7 +121,10 @@ const COLUMNS_POINT = /^c([12])-\d+$/
  * each \columnwidth at both edges of the block (LaTeX's \@outputdblcol), else the block. Null for a page no stated body stands
  * on, and for one of two columns whose width TeX gave as the block's (multicol's columns, set inside one body: unstated)
  */
-export function framesOf(pages: readonly { points: readonly { name: string }[] }[], log: string): (TexFrame | null)[] {
+export function framesOf(
+  pages: readonly { points: readonly { name: string }[]; view?: readonly number[] }[],
+  log: string,
+): (TexFrame | null)[] {
   const bodies = readBodies(log)
   const r2 = (v: number) => Math.round(v * 100) / 100
   return pages.map((pg) => {
@@ -107,7 +140,10 @@ export function framesOf(pages: readonly { points: readonly { name: string }[] }
     if (!body) return null
     const x0 = body.side === 2 ? body.x - (body.text - body.column) : body.x
     const block: [number, number] = [r2(x0), r2(x0 + body.text)]
-    if (body.side === 0 && !two) return { block, columns: [block] }
+    // (the text block's bottom on its page: the page's top edge less its stated depth, every column's)
+    const top = pg.view?.[3]
+    const foot = top !== undefined && body.foot !== undefined ? { foot: r2(top - body.foot) } : {}
+    if (body.side === 0 && !two) return { block, columns: [block], ...foot }
     if (body.text - body.column < 1) return null
     return {
       block,
@@ -115,6 +151,7 @@ export function framesOf(pages: readonly { points: readonly { name: string }[] }
         [r2(x0), r2(x0 + body.column)],
         [r2(x0 + body.text - body.column), r2(x0 + body.text)],
       ],
+      ...foot,
     }
   })
 }

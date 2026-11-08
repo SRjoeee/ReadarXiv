@@ -977,9 +977,12 @@ describe('locate: the room under a unit', () => {
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
   })
-  it('states no room under each run of its text lines, its last line’s alone (Room.below): no translation borrows a line', () => {
-    // (the owner's ruling of 2026-11-08: a translation keeps to its own lines, so nothing reads the room under a run of them (Room.ends,
-    // today's freeFor given every block); a paragraph running on from page 1, a row of its own kept between its lines)
+  it('states the room under each run of its text lines to the next ink and to TeX’s column foot, and its separation', () => {
+    // (the owner's ruling of 2026-11-08, borrowing bounded by TeX's facts: a paragraph may take lines in the empty space under
+    // a run of its lines (today's freeFor given every block, RUN:2193) never past TeX's text block bottom in its column, nor so
+    // that the next ink under it stands nearer than TeX's paragraph separation, \baselineskip and \parskip. A paragraph running
+    // on from page 1, a row of its own kept between its lines on page 2. Each run's end: [its line, the depth under its baseline
+    // of the next ink's baseline (a glyph's; a box's top), the depth under it of TeX's text block bottom])
     const B = docOf([
       {
         lines: [
@@ -987,6 +990,8 @@ describe('locate: the room under a unit', () => {
           { text: 'para two', y: 688 },
           { text: 'other unit', y: 600 },
         ],
+        // (a rule across the column 47 pt under page 1's last line of the paragraph: a box, its top the next ink)
+        boxes: [[16, 1, 72, 640, 300, 641]],
       },
       {
         lines: [
@@ -1002,15 +1007,21 @@ describe('locate: the room under a unit', () => {
       unitOf('para', 'other unit'),
       unitOf('para', 'last unit'),
     ]
-    const L = locate(
-      instrumentOf(B, units, [
-        [0, 0, 1],
-        [0, -1, 0, 2],
-      ]),
-      B,
-      align(B, B),
-    )
-    const para = L.members[0]!
+    const ins = instrumentOf(B, units, [
+      [0, 0, 1],
+      [0, -1, 0, 2],
+    ])
+    const framed: Instrument = {
+      ...ins,
+      tex: {
+        frames: [
+          { block: [72, 540], columns: [[72, 540]], foot: 580 },
+          { block: [72, 540], columns: [[72, 540]], foot: 480 },
+        ],
+        skips: [{ unit: 0, baselineskip: 12, parskip: 3 }],
+      },
+    }
+    const para = locate(framed, B, align(B, B)).members[0]!
     expect(para.lines.map((l) => [l[0], l[4], l[9] & 1])).toEqual([
       [1, 700, 0],
       [1, 688, 0],
@@ -1018,9 +1029,20 @@ describe('locate: the room under a unit', () => {
       [2, 688, 1],
       [2, 676, 0],
     ])
-    expect((para.room as { ends?: unknown }).ends).toBeUndefined()
-    // (its last line 167 pt over the last unit)
+    // (page 1's run: the rule 47 pt down, page 1's foot 108; page 2's text over its kept row: the row's baseline 12 pt down; its
+    // last line: the last unit's baseline 176 pt down, page 2's foot 196)
+    expect(para.room.runs).toEqual([
+      [1, 47, 108],
+      [2, 12, 220],
+      [4, 176, 196],
+    ])
+    expect(para.room.sep).toBe(15)
+    // (its last line's room as before: 167 pt over the last unit)
     expect(para.room.below).toBe(167)
+    // (no foot stated, no compile of the statements: no room under a run; no separation stated: none)
+    const plain = locate(ins, B, align(B, B)).members[0]!
+    expect(plain.room.runs).toBeUndefined()
+    expect(plain.room.sep).toBeUndefined()
   })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
