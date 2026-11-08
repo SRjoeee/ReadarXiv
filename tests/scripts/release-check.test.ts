@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, sameSum, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, GATES, type Gate, INVARIANTS, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { cutoverOf, gatesOf, invariantLine, markdownOf, privateResultOf, targetLines, verdictOf } from '../../lab/release-check/verdict.mjs'
 
 const dirs: string[] = []
@@ -142,12 +142,9 @@ describe("a gate's output, read as the gate states it", () => {
     expect(c.over).toEqual(['q: no add-on', 'r: no line (the canvas did not report it)'])
   })
 
-  it("holds the canvas's papers to the bound its header names, and the marks' sum to the owner's record but for its compiles", () => {
+  it("holds the canvas's papers to the bound its header names", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
-    const sum = (ms: number, same: number) => `${JSON.stringify({ papers: 87, glyphs: { compared: 9, same }, compiles: { made: 8, read: 80, ms } })}\n   12  1 p  glyph: a class`
-    expect(sameSum(sum(1, 7), sum(177262, 7))).toBe(true)
-    expect(sameSum(sum(1, 6), sum(177262, 7))).toBe(false)
   })
 })
 
@@ -218,22 +215,6 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'pass' }, display: { status: 'fail' } }).verdict).toBe('NO-GO')
     expect(cutoverOf(GATES, [other, blocker], { typecheck: { status: 'fail' }, display: { status: 'pass' } })).toMatchObject({ verdict: 'GO', why: [] })
     expect(markdownOf({ tier: 'full', verdict: 'NO-GO', why: [], cutover: { verdict: 'NO-GO', why: ['display: fail'], blockers: ['display'] }, invariants: [], gates: [], targets: [] })).toContain('**Cut-over: NO-GO.**')
-  })
-
-  it("judges the marks' replay by the census in the tree where it is (lab/marks/census.mjs), else by run 6's census r13", () => {
-    const withCensus = mkdtempSync(join(tmpdir(), 'release-check-root-'))
-    dirs.push(withCensus)
-    mkdirSync(join(withCensus, 'lab/marks'), { recursive: true })
-    writeFileSync(join(withCensus, 'lab/marks/census.mjs'), '')
-    const now = gate('marks-replay').steps!(ctxAt(withCensus, '/work'))
-    expect(now[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-replay'])
-    expect(gate('marks-replay').needs!(ctxAt(withCensus, '/work')).map(n => n.what)).not.toContain("run 6's census (r13)")
-    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(0, 'PASS')]).pass).toBe(true)
-    expect(gate('marks-replay').judge!(ctxAt(withCensus, '/work'), [run(0), run(1, 'FAIL: a class moved')])).toMatchObject({ pass: false })
-    const before = gate('marks-replay').steps!(ctxAt('/no-census', '/work'))
-    expect(before[1]?.cmd).toEqual(['node', 'lab/marks/gate-sum.mjs', '/work/marks-replay'])
-    expect(gate('marks-replay').needs!(ctxAt('/no-census', '/work')).map(n => n.what)).toContain("run 6's census (r13)")
-    expect(gate('marks-gate').steps!(ctxAt(withCensus, '/work'))[1]?.cmd).toEqual(['node', 'lab/marks/census.mjs', '/work/marks-gate'])
   })
 })
 

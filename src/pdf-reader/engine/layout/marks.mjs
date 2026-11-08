@@ -901,7 +901,7 @@ export const POINTS_TEX = [
   // column it is (1 the left one, 2 the right one, LaTeX's \\if@firstcolumn where \\if@twocolumn; 0 a one-column page's body,
   // or a text block its class shipped whole) and where TeX shipped the body's box, its left edge (\\pdflastxpos, LuaTeX's
   // \\lastxpos, in sp from the page's left: zref-savepos's primitives, in every engine and mode), the page's text frame as TeX
-  // set it (marks/instrument.ts readBodies). A \\write delayed to the shipout beside a saved position: two whatsits beside the
+  // set it (packages/engine/src/marks/channels.ts readBodies). A \\write delayed to the shipout beside a saved position: two whatsits beside the
   // point, before its \\penalty10000, so that no place to break is made or lost and nothing moves; written to the log alone)
   '\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi',
   '\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx}}\\axt@bw}',

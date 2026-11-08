@@ -1,5 +1,6 @@
-// TRANSITION CODE (the rebuild's stage 1a; stage 1c deletes it with today's front end): the one adapter from today's front end,
-// marks and compile outputs to the prepare's seam, the Instrument (packages/engine/src/instrument.ts). The only code that knows
+// The front half's adapter (the rebuild's stage 1a; the one front half since the rebuilt one was deleted on 2026-11-09, DESIGN
+// §16): the one adapter from today's front end, marks and compile outputs to the prepare's seam, the Instrument
+// (packages/engine/src/instrument.ts). The only code that knows
 // today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
 // reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
@@ -82,7 +83,7 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
       default: throw new Error(`a piece the front end does not make (${String(p.t).slice(0, 20)})`)
     }
   })
-  // (its run-in labels `must`, as the source reader states them: packages/engine/src/marks/run-ins.ts)
+  // (its run-in labels `must`: packages/engine/src/marks/run-ins.ts)
   return runIns(stack.length ? stack[0].outer : level)
 }
 
@@ -545,7 +546,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
 
   // ---- the units
-  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's, marks/instrument.ts)
+  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's, marks/channels.ts)
   const align = readAlign(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()

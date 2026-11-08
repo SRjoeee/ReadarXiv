@@ -1,7 +1,6 @@
 // The marked compile's log channels and what they state with B's points: each unit's alignment (AXT-ALIGN), the paper's
-// \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by both front halves: the
-// marks' instrument (instrument.ts) and today's adapter (src/pdf-reader/engine/pipeline/instrument.mjs, through the package's
-// entry). Of the instrument's types alone, so that the entry exports them without the marks writer's modules.
+// \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by the front half's adapter
+// (src/pdf-reader/engine/pipeline/instrument.mjs, through the package's entry). Of the instrument's types alone.
 import type { TexFrame } from '../instrument.ts'
 
 /** the code of a paragraph's skips (marks.mjs alignCode): both sides stretching and \parfillskip none past them, centred;

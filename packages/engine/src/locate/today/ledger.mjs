@@ -1,7 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
 // marked COPY, nothing else but one change, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
 // the formula's): run by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts,
-// the change apart. Today's file stays the production prepare's until stage 1c.
+// the change apart. Today's file stays the production prepare's until the cut-over.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
 // class (rules/content-classes.mjs), so that what no class explains — an orphan — is counted, listed and gated (the sweep's
 // invariant (o): orphan letters, none). Read from what the maker child already has: the pages pageInk read (`indices`, with

@@ -20,11 +20,9 @@ import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
-// (--front=<dir>: the instrument from lane L2's rebuilt front half (front-new.mjs), its data under --l2data (defs/,
-// marks/answers.json, marks/bbl/, marks/compiles/: its compiles join the caches); --baseline=<dir> the baseline's prepare
-// dumps, whose units the new front half does not make the dump states, by its paper's stage 1c class where it has one)
-const FRONT = argOf('front'), L2DATA = argOf('l2data'), BASELINE = argOf('baseline')
-const CACHES = [...(argOf('caches') ?? '').split(':').filter(Boolean), ...(FRONT && L2DATA ? [join(L2DATA, 'marks/compiles')] : [])]
+// (--baseline=<dir>: the baseline's prepare dumps, read for the units of today's the candidate makes otherwise: `if (BASELINE)`)
+const BASELINE = argOf('baseline')
+const CACHES = (argOf('caches') ?? '').split(':').filter(Boolean)
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 'utf8'))
 const E = join(ROOT, 'src/pdf-reader/engine'), im = f => import(pathToFileURL(join(E, f)).href)
@@ -101,16 +99,8 @@ if (!refusal) {
   const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
   paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
   if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
-  if (FRONT) {
-    const { newInstrument } = await import('./front-new.mjs')
-    const { readPdf } = await import('@readarxiv/engine')
-    const r = await newInstrument({ front: FRONT, id, paper, source, compile, year, day, defs: join(L2DATA, 'defs'), answers: join(L2DATA, 'marks/answers.json'), bbl: join(L2DATA, 'marks/bbl'), pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, readPdf })
-    if (r.refused) paperOut.front = r.refused
-    else ins = r.instrument
-  } else {
-    const r = await instrumentOf({ paper, finalPdf, options: made.options ?? {}, log: made.log ?? '', pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, made: { compiler: paperOut.tex.compiler, tree: year, front: 'today' } })
-    ins = r.instrument
-  }
+  const r = await instrumentOf({ paper, finalPdf, options: made.options ?? {}, log: made.log ?? '', pdfjs: { getDocument, OPS }, documentOptions: { ...docOpts, ...LITE }, made: { compiler: paperOut.tex.compiler, tree: year, front: 'today' } })
+  ins = r.instrument
   if (process.env.DEBUG_B) console.error('B', ins.ink.pages.slice(0, 3).map(pg => [pg.glyphs.length, pg.glyphs.filter(g => g.form).length, pg.unread]))
 }
 const tIns = performance.now()
@@ -217,9 +207,8 @@ if (located) for (const [o, b] of located.born) {
 // units and figure texts, a unit made on arXiv's page that stands for it, read otherwise there: of its kind, no baseline unit's
 // id, at its place (its first line's page and box) or,
 // with no line, at its ord (today's bundle's order, which the dump keeps), with how it reads otherwise: its cause where it stays
-// the original's, or its characters in another order, piece by piece. --front: else its paper's stage 1c class)
+// the original's, or its characters in another order, piece by piece)
 if (BASELINE) {
-  const { STAGE_1C } = FRONT ? await import('./front-new.mjs') : { STAGE_1C: {} }
   const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
@@ -241,16 +230,13 @@ if (BASELINE) {
   }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) { have.set(u.id, have.get(u.id) - 1); continue }
-    // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts: a source unit the candidate does
-    // not make is the front half's, by its stage 1c class)
+    // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)
     const c = /^ink/.test(u.kind) ? standsFor(u) : null
     // (none: a kept block of its kind at its place, no text of it sent: its lines the ledger reads as no unit's text, a formula's
     // interior (ledger.mjs CHANGED))
     const L0 = u.lines?.[0]
     const kept = !c && /^ink/.test(u.kind) && L0 ? units.find(k => k.kind === u.kind && !k.pieces?.length && !k.replaced && k.lines?.some(l => meets(L0, l))) : null
-    // (a unit no source unit is, today's ink units and figure texts, is none of the instrument's: the rebuilt instrument states
-    // source units alone, and locate makes units only of the glyphs B never printed; a stage 1c class is a source unit's)
-    const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : kept ? "kept on arXiv's page as the original's, no text of it sent" : !FRONT ? null : /^ink/.test(u.kind) ? `locate makes no such unit on arXiv's page: ${u.kind}` : STAGE_1C[id] ? `stage 1c: ${STAGE_1C[id]}` : 'the new front half makes no such unit'
+    const why = c ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}` : kept ? "kept on arXiv's page as the original's, no text of it sent" : null
     if (why === null) continue
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++

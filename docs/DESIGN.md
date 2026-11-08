@@ -1002,17 +1002,23 @@ only how it meets the rest of the extension.
   read: widths come from a metrics table (`tableMetrics`), so the same inputs give the same display list
   (`packages/typeset/tests/replay/purity.test.ts`), and the gates measure what the product runs (`lab/typeset/gate.mjs` over
   today's members, `lab/typeset/gate-l1.mjs` over the prepare's parts, both against the frozen baseline).
-- **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half reads a
-  paper's source into units (`packages/engine/src/source/`), writes the marks that bracket each unit for TeX
-  (`packages/engine/src/marks/`) and compiles the marked source once, as an instrument no reader sees
-  (`packages/engine/src/compile/`: the plan, its cache, the bounded recovery of a compile that fails); what it gives is the
-  instrument, the owner of each glyph of that compile. The back half, `prepareBack(instrument, arXiv's PDF)`, reads arXiv's
-  PDF once, carries that ownership onto arXiv's glyphs by aligning the two glyph sequences (`align`, `locate`), wraps
-  arXiv's own runs in optional content groups by unit (`wrap`) and makes the bundle's objects (`bundle`; their schema is
-  `@readarxiv/format`'s). Both panes then show arXiv's own page: the left as it is, the right with the laid units' groups
-  off and their translations in their place. Until the rebuilt front half passes its gate, the instrument is made by
-  today's front half through an adapter (`src/pdf-reader/engine/pipeline/instrument.mjs`). The halves' gates are
-  `lab/pdf/prepare-back/` and `lab/marks/`, run by `pnpm release-check` (§11).
+- **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half is
+  today's front end: it reads a paper's source into units (`src/pdf-reader/engine/source/latex-front.mjs`), writes the
+  marks that bracket each unit for TeX and compiles the marked source, an instrument no reader sees
+  (`layout/paper.mjs`, `layout/marks.mjs`); its adapter (`src/pdf-reader/engine/pipeline/instrument.mjs`) states what it
+  gives, the instrument: the owner of each glyph of that compile (`layout/own.mjs`) and what the source says of each
+  element and group. The back half, `prepareBack(instrument, arXiv's PDF)`, reads arXiv's PDF once, carries that ownership
+  onto arXiv's glyphs by aligning the two glyph sequences (`align`, `locate`), wraps arXiv's own runs in optional content
+  groups by unit (`wrap`) and makes the bundle's objects (`bundle`; their schema is `@readarxiv/format`'s). Both panes then
+  show arXiv's own page: the left as it is, the right with the laid units' groups off and their translations in their
+  place. The halves' gates are `lab/pdf/prepare-back/`, run by `pnpm release-check` (§11).
+  **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
+  writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
+  the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element
+  classes, spans, cells, float types and kept units the back half and the typesetter read, and its drafts-only compile
+  lost 314 units against the frozen baseline where today's loses 3 and made 6,614 figure ticks and labels into units,
+  for a saving (two compiles instead of three, TeX 15 % less at the median) that was the very final pass those figure
+  texts need.
 - **One set of settings** (§9). The service, the language, the prompt and the highlight are the extension's.
   `pdfReader` (v19) holds the reader's own; its appearance became the extension's `theme` at v20, and what it translates
   (`classes`, "What to translate") joined it at v21, in the place of the image switch, which is the HTML page's alone since. The
