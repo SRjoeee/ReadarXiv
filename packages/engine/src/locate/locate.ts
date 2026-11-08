@@ -1155,8 +1155,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // segments make no crops))
       // (a line's end inside a word of its text, facts.ts lineEnd: decided by the source where it states the word, its own TeX
       // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
+      // (a URL: a \url's, or a piece the instrument states sets one, PieceClass.url: a \urldef'd control sequence a macro shows)
+      const isUrl = p.kind === 'url' || !!classOf.get(id)?.url
       const lineEnds = {
-        literal: !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code',
+        literal: !!classOf.get(id)?.literal || isUrl || p.kind === 'code',
         source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
       }
       const asText =
@@ -1199,8 +1201,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
       // of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630. Where TeX set it on one line,
       // where its url package lets TeX break it, counted in that text (urlBreaks))
-      if (p.kind === 'url' && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
-      if (p.kind === 'url' && ink.length === 1) {
+      if (isUrl && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
+      if (isUrl && ink.length === 1) {
         const breaks = urlBreaks(gl.map(gA), el.copy ?? classOf.get(id)?.copy ?? '')
         if (breaks.length) el.breaks = breaks
       }

@@ -144,6 +144,34 @@ describe('the instrument adapter’s element classes', () => {
   })
 })
 
+describe('a control sequence \\urldef defines, shown by a later piece of its unit (url.sty)', () => {
+  // (ACM-Reference-Format's `\urldef\tempurl%\n\url{https://doi.org/…}` then `\showDOI{\tempurl}`: \urldef stores the URL as \url
+  // sets it, robust, and the macro sets that; read by its command, a paper's own macro, the piece was a text macro drawn as text,
+  // the DOI flat over one line and its link annotations not paired with it: 2610.22065v1 p7 t126, 2402.10294v1's references)
+  const pieces = [
+    { t: 'text', s: 'A. Author. 2021. A title.\n' },
+    ph('\\newblock'),
+    ph('\\urldef'),
+    ph('\\tempurl'),
+    ph('\\url{https://doi.org/10.1145/3411764.3445131}'),
+    { t: 'text', s: '\n' },
+    ph('\\showDOI{\\tempurl}'),
+    ph('\\showURL{%\n\\tempurl}'),
+    ph('\\other{\\tempurlx}'),
+  ]
+  it('states the piece that sets it a URL, the URL its copy, as a \\url piece is', () => {
+    const got = new Map((classesOf as unknown as (p: unknown[]) => [string, Record<string, unknown>][])(pieces))
+    const url = got.get('4')!
+    for (const k of ['6', '7']) {
+      expect(got.get(k), k).toMatchObject({ cls: url.cls, literal: true, url: true, copy: 'https://doi.org/10.1145/3411764.3445131' })
+      expect(got.get(k)!.unknown, k).toBeUndefined()
+    }
+    expect(got.get('6')!.cmd).toBe('showDOI')
+    expect(got.get('8')).toMatchObject({ cls: 'umacro', unknown: true })
+    expect(got.get('8')!.url).toBeUndefined()
+  })
+})
+
 describe('the instrument adapter’s places', () => {
   it('closes a head macro’s span at its unit’s start point, opens a trailing one’s at its unit’s end point', () => {
     // (a head macro's point \\axthpk's, p3.0a, closed by 3s; two head pieces, p4.0a and p4.1a, each to the next; a trailing

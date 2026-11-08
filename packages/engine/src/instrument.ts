@@ -84,6 +84,10 @@ export interface PieceClass {
   mark?: true
   /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
   literal?: true
+  /** it sets a URL as url.sty's \url does, whatever its own command: a control sequence \urldef defined as one earlier in the
+   *  unit, which the piece sets (ACM's `\urldef\tempurl\url{…}` then `\showDOI{\tempurl}`); its copy text and break points
+   *  are its glyphs', as a \url's are */
+  url?: true
   // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
   // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
   /** its glue as TeX sets it (today's glueOf): a length in the font's em or in PDF units, and whether a line may break at it */

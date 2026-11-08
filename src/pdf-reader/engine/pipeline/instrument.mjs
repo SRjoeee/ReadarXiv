@@ -228,9 +228,39 @@ export function spansOf(pieces, colours = null) {
 /** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
  *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id;
  *  and what the rest of the rules read of its source (sourceFactsOf), `colours` the unit's colour pieces' fills by index */
+/** a control sequence url.sty's \\urldef defines (`\\urldef\\cs\\url{…}`, a url command's), stored as that command sets it */
+const URL_DEF = /^\\urldef\s*$/, CS = /^\\[A-Za-z@]+\s*$/, URL_CMD = /^\\(?:url|nolinkurl|path|burl)\s*[{|!+]/
+/** a piece that sets a control sequence, alone or as a command's one argument (a comment's line end inside it): its name */
+const setsCs = src => /^(?:\\[A-Za-z@]+\*?\s*\{(?:\s|%[^\n]*\n)*)?(\\[A-Za-z@]+)(?:\s|%[^\n]*\n)*\}?\s*$/.exec(src)?.[1] ?? null
+/**
+ * The pieces of a unit that set a URL \\urldef stored earlier in it (url.sty: `\\urldef\\tempurl\\url{…}` defines \\tempurl as that
+ * \\url sets its argument, robust; ACM-Reference-Format's entries then `\\showDOI{\\tempurl}` or `\\showURL{%\n\\tempurl}`), each with the
+ * \\url piece it sets, by index: the piece sets the URL as the \\url piece would where it stands (a crop of its glyphs, its copy
+ * and break points theirs), the \\url piece nothing where it stands (the definition stores it). Read by its own command, a paper's
+ * macro, the piece was a text macro drawn as text, its line breaks lost and its link annotations unpaired: 2610.22065v1 p7 t126
+ */
+function urlsShown(pieces) {
+  const out = new Map(), defined = new Map()
+  pieces.forEach((p, k) => {
+    if (p.t !== 'ph') return
+    const src = unicodeOf(p.src)
+    if (URL_DEF.test(src)) {
+      // (\urldef, then its control sequence, then the url command: three placeholders in a row, white space between)
+      const next = []
+      for (let j = k + 1; j < pieces.length && next.length < 2; j++) if (pieces[j].t === 'ph') next.push(j); else if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s ?? '')) break
+      if (next.length === 2 && CS.test(unicodeOf(pieces[next[0]].src)) && URL_CMD.test(unicodeOf(pieces[next[1]].src))) defined.set(unicodeOf(pieces[next[0]].src).trim(), next[1])
+      return
+    }
+    const cs = defined.size ? setsCs(src) : null
+    if (cs !== null && defined.has(cs) && !URL_DEF.test(unicodeOf(pieces[k - 1]?.src ?? ''))) out.set(k, defined.get(cs))
+  })
+  return out
+}
+
 export function classesOf(pieces, colours = null, texts = null) {
   const out = []
   const first = new Map()
+  const shown = urlsShown(pieces)
   pieces.forEach((p, k) => {
     // (a nested unit: its mark a footnote mark's, placeholdersOf L2:1066)
     if (p.t === 'nested') { out.push([String(k), { cls: 'num', copy: texToText2('\\footnotemark') || '', mark: true, nested: true }]); return }
@@ -253,6 +283,12 @@ export function classesOf(pieces, colours = null, texts = null) {
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
     Object.assign(x, sourceFactsOf(src, k, first, colours))
+    // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
+    if (shown.has(k)) {
+      const u = unicodeOf(pieces[shown.get(k)].src), uc = phClassProven(u), copy = texToText2(u) || ''
+      for (const f of ['unknown', 'text', 'sym']) delete x[f]
+      Object.assign(x, { cls: uc.cls, ...(copy ? { copy } : {}), literal: true, url: true })
+    }
     out.push([String(k), x])
   })
   return out

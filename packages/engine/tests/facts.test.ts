@@ -410,6 +410,32 @@ describe('locate states the facts on arXiv’s page', () => {
       [264, 15],
     ])
   })
+  it('reads a piece the instrument states sets a URL as a URL whatever its command: a \\urldef’d one shown by a macro', () => {
+    // (ACM's references: `\urldef\tempurl\url{…}` stores the URL, `\showDOI{\tempurl}` sets it; the piece is a paper's macro by its
+    // command, read as a text macro, its copy the glyphs with a space at a line's end and no break point, drawn as text: its
+    // link annotations could not pair with what it drew, 2610.22065v1 p7 t126's \showURL)
+    const B = docOf([{ lines: ['We release it at https://a.io/b_c.'] }])
+    const content: Piece[] = [
+      text('We release it at '),
+      { t: 'el', id: '1', kind: 'macro', src: '\\showDOI{\\tempurl}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', literal: true, url: true, copy: 'https://a.io/b_c', cmd: 'showDOI' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 17 && j < 33 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.copy).toBe('https://a.io/b_c')
+    expect(el.breaks).toEqual([
+      [222, 8],
+      [234, 10],
+      [252, 13],
+      [264, 15],
+    ])
+  })
   it('counts what stands before a URL’s break in its copy text’s code units: an astral character two, a ligature its letters (Devin on #630)', () => {
     // (the typesetter cuts the crop's copy text with String.slice: a count of glyphs put every cut after "𠮷" (U+20BB7, two
     // code units) or "ﬁ" (one glyph, two letters in a copy that holds its letters) a character early)
