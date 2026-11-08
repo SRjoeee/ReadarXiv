@@ -399,7 +399,8 @@ export function factsOf({
       // fraction's bar its element's: 1512.03385v1 p5's "conv2_x" read its own as the rule over it, 2610.21924v1 p21's cells
       // the row's above and below)
       const band = bandOf(mem.lines, (p) => boxes(p).filter((b) => b.rule && !ownedBox.has(`${p}|${b.j}`)))
-      if (band) mem.room.band = band
+      if (band) mem.room.band = band.band
+      if (band?.open) mem.room.bandOpen = band.open
     }
 
     // -- its alignment, where TeX did not state it: the maker's reading (MAKE:2121-2135); a single-line cell by its column

@@ -196,7 +196,9 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const x0 = Math.min(...m.lines.map((l) => l[2])),
       x1 = Math.max(...m.lines.map((l) => l[3]))
     const list = rules0.get(pg) ?? rules0.set(pg, []).get(pg)!
-    list.push(x0, band[1], x1, band[1], x0, band[0], x1, band[0])
+    // (a side Room.bandOpen states no rule stands on is none: the band states the line's own top or bottom there)
+    if (m.room.bandOpen !== 2) list.push(x0, band[1], x1, band[1])
+    if (m.room.bandOpen !== 1) list.push(x0, band[0], x1, band[0])
   }
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   const state = new Map<number, Unlaid>()

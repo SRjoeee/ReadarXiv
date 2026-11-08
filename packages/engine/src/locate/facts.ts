@@ -557,12 +557,14 @@ export function sideOf(
 /**
  * A cell's clear band between the rules over and under its lines (Room.band; today's cellBands L2:352): over, the lowest
  * rule at or above its first line's baseline, under, the highest at or below its last line's, each across its lines by more
- * than half a point; undefined where no rule stands over or under it. `rules` the page's painted boxes
+ * than half a point; undefined where no rule stands over or under it. Where one stands on one side alone, the other side is
+ * open (Room.bandOpen: 1 under, 2 over; today's cellBands found no rule there and capped nothing from it), the band there the
+ * line's own bottom or top as before. `rules` the page's painted boxes
  */
 export function bandOf(
   lines: readonly Line[],
   rules: (page: number) => readonly InkBox[],
-): [number, number] | undefined {
+): { band: [number, number]; open?: 1 | 2 } | undefined {
   const own = lines.filter((l) => !(l[9] & 1))
   const first = own[0]
   const last = own.at(-1)
@@ -580,10 +582,13 @@ export function bandOf(
     if (R.y1 <= last[4]) under = Math.max(under, R.y1)
   }
   if (over === Number.POSITIVE_INFINITY && under === Number.NEGATIVE_INFINITY) return undefined
-  return [
+  const band: [number, number] = [
     r2(under === Number.NEGATIVE_INFINITY ? last[6] : under),
     r2(over === Number.POSITIVE_INFINITY ? first[5] : over),
   ]
+  if (under === Number.NEGATIVE_INFINITY) return { band, open: 1 }
+  if (over === Number.POSITIVE_INFINITY) return { band, open: 2 }
+  return { band }
 }
 
 /** whether a line shares its baseline with ink that stays (Line PINNED; today's edgesOf `alone` RUN:1638, its baseline band

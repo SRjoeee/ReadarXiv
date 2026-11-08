@@ -172,7 +172,7 @@ describe('room beside a line, a cell’s band, a line pinned (E13, E24, E23)', (
       { x0: 50, x1: 400, y0: 695, y1: 695.4 },
       { x0: 500, x1: 600, y0: 705, y1: 705.4 },
     ]
-    expect(bandOf([L(100, 200, 700)], () => rules)).toEqual([695.4, 712])
+    expect(bandOf([L(100, 200, 700)], () => rules)).toEqual({ band: [695.4, 712] })
     expect(bandOf([L(100, 200, 700)], () => [])).toBeUndefined()
   })
   it('pins a line whose baseline holds ink that stays beside it', () => {
