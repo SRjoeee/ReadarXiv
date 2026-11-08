@@ -280,8 +280,10 @@ function piecesByPoints(points, count, groupAt, by) {
   return out
 }
 
-/** a glyph's text as own.mjs spells a lead by it (MR 5b's `norm`): NFKC, white space out */
-const leadNorm = t => t.normalize('NFKC').replace(/\s/gu, '')
+/** a text as a lead is spelled by its glyphs, as today's maker finds a head piece (make.mjs besideMarks, charsOf): NFKC, in
+ *  lower case, white space out. Case aside: faked small capitals set the source's lowercase letters as capitals, which the
+ *  page's text reads as such (2608.06701v1's \\textsc{LivePlan} "LIVEPLAN") */
+const leadNorm = t => t.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 /** a unit's lead as own.mjs reads it (MR 5b's leadText): its pieces of ink before its first text, up to a footnote's call or a
  *  piece with a point of its own, each with the text the probe showed it sets (a text symbol's, its character); null where one's
  *  text is not known. Its macros alone, in order: own.mjs gives a text symbol's glyphs the unit's text */
@@ -305,7 +307,7 @@ function leadParts(u, id, texts, names) {
  * and where no point of its unit opened before it, a lead's (own.mjs MR 5b: a cell that opens with a paper's macro, where no
  * mark goes, 1810.04805v2's `\\bertbase (Single)`; its ink TeX set right before the start point, claimed by the text the probe
  * showed the macro sets): its lead's pieces (leadParts) by their texts, nearest the start first, each glyph read against the
- * text from its end (marks.mjs leadStep), as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
+ * text from its end (marks.mjs leadStep), case aside, as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
  * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before
  */
 export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set() } = {}) {

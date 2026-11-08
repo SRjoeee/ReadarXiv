@@ -161,6 +161,20 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
     const got = glyphPiecesOf({ ...at(11, 12), glyphs: glyphs('OK#BERTBASEx') }, row, { units, texts, names: new Set(['t5s', 't5e']) })
     expect([...got]).toEqual([0, 0, -1, ...Array(8).fill(2), -1])
   })
+  it('reads a head piece’s glyphs against its text case aside, as today’s maker finds it (small capitals)', () => {
+    // (2608.06701v1 p2: a paragraph that opens with `\\approach`, \\textsc{LivePlan}: the probe shows "LivePlan", the page's
+    // small capitals read "LIVEPLAN"; make.mjs besideMarks compares both in lower case (charsOf), so its piece's ink was found
+    // and drawn as the page reads it, where the probe's letters stood in for it with none)
+    const para: unknown[] = []
+    para[5] = { kind: 'para', pieces: [ph('\\approach'), { t: 'text', s: ' has three parts.' }] }
+    const row = [...Array(8).fill('u5.p'), ...Array(4).fill('u5')]
+    const got = glyphPiecesOf({ ...at(8, 12), glyphs: glyphs('LIVEPLANhas.') }, row, {
+      units: para,
+      texts: new Map([['\\approach', 'LivePlan']]),
+      names: new Set(['t5s', 't5e']),
+    })
+    expect([...got]).toEqual([...Array(8).fill(0), ...Array(4).fill(-1)])
+  })
   it('gives none where the text does not spell the run, or the piece has a point of its own', () => {
     const units = cell(ph('\\bertbase'), { t: 'text', s: ' (Single)' })
     const row = [...Array(9).fill('u5.p'), 'u5']
