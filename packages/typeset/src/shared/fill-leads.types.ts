@@ -17,6 +17,9 @@ export type FillUnit = {
   fillLead?: number | null
   fillTop?: number
   fitLines?: number
+  /** a unit over a page or column break: the fill leading of each frame before its last, by block, and of its last */
+  fillLeads?: (number | undefined)[]
+  lastLead?: number
 }
 /** the target's rules the fill leadings read */
 export type FillRules = { fillLead: number | null; fillLeadRel: number | null; leadFloor?: number }

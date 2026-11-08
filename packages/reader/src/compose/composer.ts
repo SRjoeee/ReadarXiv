@@ -41,7 +41,7 @@ import { createMarks, type MarkBox } from './marks.ts'
 import { committed, type Lay, type Laid, type Page, type Rows } from './page.ts'
 import { cropGrid, cropsFor, type Rounding, svgOf, turned, uprightOf } from './paint.ts'
 import { canvasMeasure, laidText, releaseText, type TextContent, textContentOf, textLayerOf } from './text.ts'
-import { ATTRIBUTE, decideOn } from './text-rendering.ts'
+import { ATTRIBUTE, decideOnce } from './text-rendering.ts'
 
 /** a page view's box rounding as PDF.js set it on the page box it drew (--scale-round-x, -y; where it set none, its sheet's
  *  1 px): the crops' canvas is floored to it, as that box is (paint.ts cropGrid) */
@@ -216,8 +216,12 @@ export function createComposer(o: ComposerOptions): Composer {
     o.warn?.(what, e)
   }
   const marks = createMarks({ root: o.root ?? document.documentElement, clock })
-  /** whether the overlay's text rendering is decided (text-rendering.ts, at the first overlay whose page tells) */
-  let textDecided = false
+  /** the overlay's text rendering, decided once a reader by the fixed probe (text-rendering.ts decideOnce): asked as the pages
+   *  are first to be laid, so that it is in before the first page commits, and awaited by every overlay before its drawing is
+   *  made (so that no page is laid out under one rendering and then restyled, and every page is drawn under the same one) */
+  let rendering: Promise<unknown> | null = null
+  const renderingOnce = () =>
+    (rendering ??= o.root ? decideOnce(o.root, faces, () => !disposed).catch(() => null) : Promise.resolve(null))
 
   // ---------------------------------------------------------------- the rows a lay reads: a unit of a kind the toggles hide
   // reads as no translation (it stays the original's), whatever was translated
@@ -287,11 +291,9 @@ export function createComposer(o: ComposerOptions): Composer {
     for (const m of page.members)
       for (const [, , , items] of m.lines)
         for (const it of items) if ('face' in it) drawn.set(it.face, (drawn.get(it.face) ?? '') + it.s)
-    await faces.ready([...drawn])
-    // (the overlay's text rendering, decided once a reader by the first laid page whose words tell, in its faces just loaded,
-    // before its drawing is made: `auto` where the browser lays them out alike under geometricPrecision and under it, else the
-    // sheet's geometricPrecision; text-rendering.ts. Written before the page is put in place, so that it is laid out once)
-    if (!textDecided && !disposed && o.root) textDecided = decideOn(o.root, page, faces) !== null
+    // (and the overlay's text rendering, decided once a reader before any drawing is made: written before the page is put in
+    // place, so that it is laid out once)
+    await Promise.all([faces.ready([...drawn]), renderingOnce()])
     const el = document.createElement('div')
     el.className = 'axt-over'
     // (the frame is the page's own, unturned: rawDims; a turned page's drawing is made in it and turned with the page, the text
@@ -907,6 +909,7 @@ export function createComposer(o: ComposerOptions): Composer {
       layer = next
       unrows?.()
       rows = nextRows
+      if (layer && rows) void renderingOnce()
       unrows =
         rows?.on(() => {
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have

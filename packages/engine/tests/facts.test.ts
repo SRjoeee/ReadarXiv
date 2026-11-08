@@ -481,7 +481,7 @@ describe('locate states the facts on arXiv’s page', () => {
     const u: InstrumentUnit = {
       id: unitId('para', [text('x')]),
       kind: 'para',
-      content: [text('first line of it a here last line of it')],
+      content: [text('first line of it a line here last line of it')],
     }
     const ins = instrument(B, [u], (_, n, j) => (n === 1 && j >= 18 && j <= 22 ? [-1, 0, -1] : [0, ROLE.text, -1]))
     const M = locate(ins, B, align(B, B)).members[0]!
@@ -838,5 +838,38 @@ describe('an element’s text in runs of one fill (today’s fillRunsOf)', () =>
       [')', 0],
     ])
     expect(fillRunsOf([g('a'), g('b', 78)])).toBeNull()
+  })
+})
+
+describe('an element’s text with each accent TeX set over its letter joined to it (\\accent; Unicode’s NFC)', () => {
+  it('reads a spacing accent set over its letter as the accented letter, before it or after it, in its text and its runs', () => {
+    // (2602.23285v2 p2's citation "(Klötergens et al." as OT1's \accent sets it: the accent, a move back over it, the letter; the
+    // text read "(Kl¨otergens")
+    const kl = [g('('), g('K', 78), g('l', 84), g('¨', 90), g('o', 90), ...run('tergens', 96)]
+    expect(textOf(kl)).toBe('(Klötergens')
+    // (the letter first, its accent set back over it; a capital's accent raised over it, by its height less the x-height)
+    expect(textOf([g('e'), g('´', 72, 701.5)])).toBe('é')
+    expect(textOf([g('P'), g('E', 78), g('´', 78, 702)])).toBe('PÉ')
+    // (a dotless i under its accent is the dotted letter's: Física)
+    expect(textOf([g('F'), g('´', 78), g('ı', 78), ...run('sica', 84)])).toBe('Física')
+    // (a mark that advances as any glyph does is no letter's accent: a URL's "~user"; nor one of another font, a formula's \hat)
+    expect(textOf([g('~'), g('u', 78)])).toBe('~u')
+    expect(textOf([g('a'), g('´', 72, 700, { base: 'CMMI10', font: 'CMMI10' })])).toBe('a´')
+    // (its runs of one fill: the accented letter in its letter's)
+    const blue = { fill: 0xff }
+    expect(
+      fillRunsOf([
+        g('('),
+        g('K', 78, 700, blue),
+        g('l', 84, 700, blue),
+        g('¨', 90, 700, blue),
+        g('o', 90, 700, blue),
+        g(')', 96),
+      ]),
+    ).toEqual([
+      ['(', 0],
+      ['Klö', 0xff],
+      [')', 0],
+    ])
   })
 })

@@ -1,9 +1,10 @@
 // X.walk (design-b §1.5, T31): the fit's states, from the most natural, each knob taken to its bound before the next, and a
 // unit laid at the first state at which every token is placed. Ported from engine 065c1d973 layer2.mjs L2:4040-4134
 // (statesOf, sameState, sharedStates, layoutUnit2; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript),
-// held by the walk's, the chain's and the fill's replays on the corpus. As today, a block whose borrow room is not stated
-// (`freeOf`) has it measured once and written on it (`free`): the parts state it (Room.ends under each run of a member's lines;
-// Room.below in a part made before), so a stated block is not written.
+// held by the walk's, the chain's and the fill's replays on the corpus. Changed, the owner's ruling of 2026-11-08: no state
+// borrows a line under a block (today's `borrow` knob, its lines laid in the room the original leaves empty under a block, at a
+// page's or a column's foot or above the next unit): a translation keeps to its own lines, and where it does not fit them the
+// whole unit shrinks, one size.
 import { breakLines } from '../breaker/break.types.ts'
 import { laidOut } from '../breaker/place.types.ts'
 import { slotsAt } from '../breaker/slots.types.ts'
@@ -25,7 +26,6 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
     track: R ? R.track : t0,
     trackLatin: R ? R.trackLatin : 0,
     compress: R ? R.compress : P.compressMax > 0 ? 1 : 0,
-    borrow: 0,
     scale: top,
     knob: (P.capScale as number) < 1 ? 'clear' : 'none',
   }
@@ -39,23 +39,6 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
       for (let t = (P.cjk ? st.track : st.trackLatin) - 0.01; t >= P.trackMin - 1e-9; t -= 0.01) {
         if (P.cjk) st.track = t
         else st.trackLatin = t
-        yield { ...st, knob }
-      }
-    } else if (knob === 'borrow') {
-      if (!P.borrow) continue
-      // the free space is measured here, the first time a unit needs it (an ink map of its page, made once)
-      for (const b of blocks as FitBlock[])
-        if (b.freeOf) {
-          b.free = b.freeOf()
-          b.freeOf = null
-        }
-      const most = Math.max(0, ...blocks.map((b) => Math.floor((b.free as number) / (b.pitch0 ?? 1.2 * s) + 1e-6)))
-      for (let n = 1; n <= Math.min(most, 6); n++) {
-        st.borrow = n
-        yield { ...st, knob }
-      }
-      if (most > 0) {
-        st.borrow = 99
         yield { ...st, knob }
       }
     } else if (knob === 'lead') {
@@ -86,7 +69,6 @@ const sameState = (x: FitState, y: FitState) =>
   x.track === y.track &&
   x.trackLatin === y.trackLatin &&
   x.compress === y.compress &&
-  x.borrow === y.borrow &&
   x.scale === y.scale &&
   x.knob === y.knob
 /** how many first states the fits of P and of `failed` share (statesOf), on the same blocks and size */

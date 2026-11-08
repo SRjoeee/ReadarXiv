@@ -317,6 +317,149 @@ describe('locate', () => {
   })
 })
 
+describe('locate: a line’s measure is TeX’s text frame (Instrument.tex.frames), never a hull of the page’s ink', () => {
+  // (a title page: too few paragraph lines for a column of them, and arXiv's stamp, ink no compile of the source sets, turned up
+  // the left margin at x 24: today's hull of the page's members took it in, 2610.40645v1 p1 and 2610.10069v1 p1)
+  const withFrames = (ins: Instrument, frames: NonNullable<Instrument['tex']['frames']>): Instrument => ({
+    ...ins,
+    tex: { ...ins.tex, frames },
+  })
+  const stamp = { text: 'arXiv:2610.00000v1', x: 24, y: 400 }
+  it('measures a one-column page’s line by the text block and reads a name centred on the block’s middle', () => {
+    const lines = [
+      { text: 'Abstract', x: 282, y: 690 },
+      { text: 'x'.repeat(78), x: 72, y: 650 },
+      { text: 'a shorter last line.', x: 72, y: 638 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('heading', 'Abstract'), unitOf('para', `${'x'.repeat(78)} a shorter last line.`)]
+    const ins = withFrames(instrumentOf(B, units, [[0, 1, 1]]), [{ block: [72, 540], columns: [[72, 540]] }])
+    const A = docOf([{ lines: [...lines, stamp] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
+    expect(L.members[0]!.align).toBe('c')
+    // (TeX's, no longer read off A)
+    expect(L.members[0]!.read).not.toContain('measure')
+    expect(locate(instrumentOf(B, units, [[0, 1, 1]]), A, align(B, A)).members[0]!.read).toContain('measure')
+    expect(L.members[1]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+    // (A set 8 pt to the right of B, every partner moved alike: TeX's frame moved with them)
+    const A8 = docOf([{ lines: [...lines.map((l) => ({ ...l, x: l.x + 8 })), stamp] }])
+    const L8 = locate(ins, A8, align(B, A8))
+    expect(L8.members[0]!.lines[0]!.slice(7, 9)).toEqual([80, 548])
+    expect(L8.members[0]!.align).toBe('c')
+    // (lines TeX set apart on A, each its own way, no shift most of the page's partners share (2610.19274v1 p67, a list of
+    // figures: a median of 1.9 pt moved the frame that far): the frame where TeX put it)
+    const three = [
+      { text: 'Abstract', x: 282, y: 690 },
+      { text: 'a'.repeat(30), x: 72, y: 650 },
+      { text: 'b'.repeat(30), x: 72, y: 638 },
+      { text: 'c'.repeat(30), x: 72, y: 626 },
+    ]
+    const B3 = docOf([{ lines: three }])
+    const units3 = [
+      unitOf('heading', 'Abstract'),
+      unitOf('para', `${'a'.repeat(30)} ${'b'.repeat(30)} ${'c'.repeat(30)}`),
+    ]
+    const ins3 = withFrames(instrumentOf(B3, units3, [[0, 1, 1, 1]]), [{ block: [72, 540], columns: [[72, 540]] }])
+    const A3 = docOf([{ lines: [three[0]!, three[1]!, { ...three[2]!, x: 75 }, { ...three[3]!, x: 77 }, stamp] }])
+    expect(locate(ins3, A3, align(B3, A3)).members[0]!.lines[0]!.slice(7, 9)).toEqual([72, 540])
+  })
+  it('measures a two-column page’s line by its column, never past it into the gutter', () => {
+    // (2610.22065v1 p1: the ACM reference format's line ends at its column's edge; its measure ran to the right column's end)
+    const lines = [
+      { text: 'L'.repeat(40), x: 54, y: 600 },
+      { text: 'left last.', x: 54, y: 588 },
+      { text: 'R'.repeat(40), x: 318, y: 600 },
+      { text: 'right last.', x: 318, y: 588 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('para', `${'L'.repeat(40)} left last.`), unitOf('para', `${'R'.repeat(40)} right last.`)]
+    const frame = {
+      block: [54, 558] as [number, number],
+      columns: [
+        [54, 294],
+        [318, 558],
+      ] as [number, number][],
+    }
+    const ins = withFrames(instrumentOf(B, units, [[0, 0, 1, 1]]), [frame])
+    const A = docOf([{ lines: [...lines, stamp] }])
+    const L = locate(ins, A, align(B, A))
+    expect(L.members[0]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [54, 294],
+      [54, 294],
+    ])
+    expect(L.members[1]!.lines.map((l) => l.slice(7, 9))).toEqual([
+      [318, 558],
+      [318, 558],
+    ])
+  })
+})
+
+describe('locate: a line’s writing direction (LINE_FLAG.RTL)', () => {
+  it('flags the lines of a unit whose paragraph runs right to left, its first strong letter’s (UAX #9 P2-P3)', () => {
+    const B = docOf([{ lines: ['abc', 'def', '(1) xyz'] }])
+    const units = [
+      unitOf('para', 'שלום עולם'),
+      {
+        ...unitOf('para', 'x'),
+        content: [
+          { t: 'text' as const, s: '(1) ' },
+          { t: 'text' as const, s: 'مرحبا' },
+        ],
+      },
+      unitOf('para', '(1) xyz'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2]]), B, align(B, B))
+    expect(L.members.map((m) => m.lines.map((l) => l[9] & 8))).toEqual([[8], [8], [0]])
+  })
+})
+
+describe('locate: a single line’s alignment is its TeX line’s, the row it shares read whole', () => {
+  it('reads a run-in theorem head justified whose fragment’s middle is the column’s, its label and text on its row', () => {
+    // (2610.30034v1 p5: "Lemma 3 (Bellman-objective decomposition): Let …", the note's middle at the column's by the note's
+    // length; between full justified lines its own extent's stack read it centred, and its translation was set from the
+    // fragment's middle, 36 pt into the column. Its row, label to text, is a justified line)
+    const note = 'n'.repeat(60)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: 'Lemma 3 (', x: 72, y: 688 },
+      { text: note, x: 126, y: 688 },
+      { text: 'Let A be', x: 492, y: 688 },
+      { text: 'y'.repeat(78), x: 72, y: 676 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('heading', note),
+      unitOf('para', `Let A be ${'y'.repeat(78)}`),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 1, 2, 2]], [[ROLE.text, ROLE.label, ROLE.text, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]!.labelAt?.ink[1]).toBe(72)
+    expect(L.flows).toContainEqual([1, 2])
+    expect(L.members[1]!.align).toBe('j')
+  })
+  it('keeps a line its block centres where it stands alone on its row', () => {
+    // (an author block's name, place and e-mail, each centred under the one over it: 2303.11366v4 p1)
+    const lines = [
+      { text: 'Ada Lovelace', x: 270, y: 700 },
+      { text: 'Institute of Technology', x: 237, y: 688 },
+      { text: 'ada@example.org', x: 261, y: 676 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('author', 'Ada Lovelace'),
+      unitOf('author', 'Institute of Technology'),
+      unitOf('author', 'ada@example.org'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2]]), B, align(B, B))
+    expect(L.members.map((m) => m.align)).toEqual(['c', 'c', 'c'])
+  })
+})
+
 describe('locate: the glyphs of A with no partner on B inside a unit', () => {
   const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
   const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
@@ -797,7 +940,12 @@ describe('locate: the room under a unit', () => {
         ],
       },
     ])
-    const units = [unitOf('caption', 'a caption'), unitOf('para', 'right'), unitOf('para', 'left')]
+    // (each unit's text its glyphs': a member claims no more letters than its source writes)
+    const units = [
+      unitOf('caption', `${wide} ${wide} short end`),
+      unitOf('para', 'right column text one '.repeat(3)),
+      unitOf('para', 'left column text one '.repeat(3)),
+    ]
     const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
     expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
     expect(L.members[0]!.room.next).toBe(14)
@@ -829,10 +977,9 @@ describe('locate: the room under a unit', () => {
     expect(make(true).side?.[1]).not.toBe(140)
     expect(make(true).below).toBe(41)
   })
-  it('states the room under each run of its text lines with its page’s lowest unit line: at a page’s foot, over its own kept row', () => {
-    // (today's freeFor, RUN:1677 given every block at RUN:2193: a paragraph running on from page 1 borrows at page 1's foot, under
-    // that page's lowest unit line, not the next page's (2608.16117v1-de t23, 2602.23285v2-ja t29); and the room under the text
-    // over a row of its own that stays ends at that row (2608.16117v1-de p27 t89: a paragraph's lines borrowed over its display))
+  it('states no room under each run of its text lines, its last line’s alone (Room.below): no translation borrows a line', () => {
+    // (the owner's ruling of 2026-11-08: a translation keeps to its own lines, so nothing reads the room under a run of them (Room.ends,
+    // today's freeFor given every block); a paragraph running on from page 1, a row of its own kept between its lines)
     const B = docOf([
       {
         lines: [
@@ -871,51 +1018,9 @@ describe('locate: the room under a unit', () => {
       [2, 688, 1],
       [2, 676, 0],
     ])
-    // (each [the run's last line, the free depth under it to the first ink, the page's lowest unit baseline]: page 1's foot over
-    // the other unit 79 pt down, its page's lowest line 600; the text over the kept row 3 pt down to it; its last line 167 pt
-    // over the last unit, page 2's lowest line 500)
-    expect(para.room.ends).toEqual([
-      [1, 79, 600],
-      [2, 3, 500],
-      [4, 167, 500],
-    ])
+    expect((para.room as { ends?: unknown }).ends).toBeUndefined()
+    // (its last line 167 pt over the last unit)
     expect(para.room.below).toBe(167)
-  })
-  it('ends a run of its lines where other ink stands between two of them, and measures it across its own lines from their start', () => {
-    // (2608.16117v1-de p19 t59: its first line the end of a row it shares, then a figure TeX set inside the paragraph, its lines
-    // under it: today's blocks end at the figure's gap and the room under the row's end is read across its own line (from its
-    // start to the column's end), beside the figure; one run read across the measure met the figure and stated none)
-    const B = docOf([
-      {
-        lines: [
-          { text: 'row tail', x: 200, y: 700 },
-          { text: 'caption text here', y: 580 },
-          { text: 'para continues', y: 560 },
-          { text: 'and ends', y: 548 },
-          { text: 'footer text that is long', y: 100 },
-        ],
-        // (the figure: an image left of the row's end, between the row and the paragraph's next line)
-        boxes: [[8, -3, 72, 600, 190, 690]],
-      },
-    ])
-    const units = [
-      unitOf('para', 'row tail para continues and ends'),
-      unitOf('caption', 'caption text here'),
-      unitOf('para', 'footer text that is long'),
-    ]
-    const L = locate(instrumentOf(B, units, [[0, 1, 0, 0, 2]]), B, align(B, B))
-    const para = L.members[0]!
-    expect(para.lines.map((l) => [l[2], l[4]])).toEqual([
-      [200, 700],
-      [72, 560],
-      [72, 548],
-    ])
-    // (the row's end: across 200..248, beside the figure, down to the footer's top at 107; its last line down to the footer too;
-    // the page's lowest unit line the footer's, 100)
-    expect(para.room.ends).toEqual([
-      [0, 591, 100],
-      [2, 439, 100],
-    ])
   })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
@@ -1512,5 +1617,515 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
       B,
     )
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
+  })
+})
+
+describe('an element’s ink is what TeX set for it', () => {
+  /** an instrument whose B lines each give their glyphs one owner, `lines[p][line]` its [unit, role, piece] (piece -1 none), and
+   *  each box `boxes[p][box]` one */
+  const ownedBy = (
+    B: Doc,
+    units: InstrumentUnit[],
+    lines: [number, number, number][][],
+    boxes: [number, number, number][][] = [],
+  ): Instrument => ({
+    ink: B,
+    units,
+    glyphs: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.glyphs.length)
+      pg.glyphs.forEach((g, j) => {
+        const [u, role, piece] = lines[p]?.[g.n] ?? [-1, 0, -1]
+        O.unit[j] = u
+        O.role[j] = role
+        O.piece[j] = piece
+      })
+      return O
+    }),
+    boxes: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.kinds.length)
+      pg.kinds.forEach((_, x) => {
+        const [u, role, piece] = boxes[p]?.[x] ?? [-1, 0, -1]
+        O.unit[x] = u
+        O.role[x] = role
+        O.piece[x] = piece
+      })
+      return O
+    }),
+    tex: {},
+    made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+  })
+  const el = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'math', src })
+  const paraOf = (content: InstrumentUnit['content'], classes: InstrumentUnit['classes']): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    classes,
+  })
+  const T = ROLE.text
+  const E = ROLE.element
+  const elementOf = (L: ReturnType<typeof locate>, id = '1') =>
+    new Map(L.members.find((x) => x.unit === 0)!.elements).get(id)!
+
+  it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
+    // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'
+    // ink in the parts; joined to the element's glyphs only within 0.5 pt, it was an ink of its own on its own baseline, which the
+    // typesetter read as a formula broken over lines and set after it: "H = H ▁")
+    const B = docOf([
+      {
+        lines: [
+          { text: 'so ', x: 72, y: 700 },
+          { text: 'H=H', x: 90, y: 700 },
+          { text: ' agree', x: 108, y: 700 },
+        ],
+        boxes: [[5, 0, 102, 708.2, 108, 708.6]],
+      },
+    ])
+    const content = [text('so '), el('1', '$\\vH=\\overline{\\vH}$'), text(' agree')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 90, 698, 108, 708.6, 700]])
+  })
+
+  it('states one box for an inline fraction on its line, its denominator back under its numerator (math.md R1)', () => {
+    // (2608.06701v1 p8's 2×|LCS(X,Y)| / (|X|+|Y|): cut alone, the element's glyphs made two lines, the denominator one of its own
+    // where it runs back left under the numerator, each on the unit line they stand on; the typesetter set the two crops side by
+    // side. The unit's own lines keep them one line of TeX's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'as ', x: 72, y: 700 },
+          { text: '2L', x: 90, y: 704, size: 7 },
+          { text: 'X+Y', x: 88.5, y: 696, size: 7 },
+          { text: ' with', x: 110, y: 700 },
+        ],
+        boxes: [[5, 0, 88.5, 700.9, 101.5, 701.3]],
+      },
+    ])
+    const content = [text('as '), el('1', '$\\frac{2L}{X+Y}$'), text(' with')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 88.5, 694.6, 101.5, 708.9, 700]])
+  })
+
+  it('states a box a line for a formula TeX broke over two lines, a rule with the glyph TeX shipped it beside (math.md R1)', () => {
+    // (each rule with its neighbour in B's stream, the one of its two neighbours nearer it where they stand on two lines: an
+    // overline over the second line's nucleus, shipped right before it and after the first line's last glyph)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'a+', x: 96, y: 700 },
+          { text: 'b', x: 72, y: 688 },
+          { text: ' is', x: 78, y: 688 },
+        ],
+        boxes: [[6, 0, 72, 696.2, 78, 696.6]],
+      },
+    ])
+    const content = [text('see '), el('1', '$a+\\overline{b}$'), text(' is')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([
+      [1, 96, 698, 108, 707, 700],
+      [1, 72, 686, 78, 696.6, 688],
+    ])
+  })
+
+  it('reads one line of TeX’s where a tall fraction’s denominator runs back under the line: its two cuts on one baseline (math.md R1)', () => {
+    // (2610.21026v1 p5 m61: a display-style fraction in a paragraph line, its denominator wholly under the line's band, back
+    // left of the numerator's end; the cut began a line there, the rest of the line's words on it, so the unit had two lines
+    // on one baseline, overlapping, and the fraction two boxes, set side by side. TeX never sets two lines of a paragraph on
+    // one baseline across each other: one line (today's maker: two rows on one baseline that meet are one line of TeX's))
+    const B = docOf([
+      {
+        lines: [
+          { text: 'we write as ', x: 72, y: 700 },
+          { text: '2L', x: 150, y: 707 },
+          { text: 'X+Y', x: 149, y: 690 },
+          { text: ' with more', x: 170, y: 700 },
+          { text: 'next line', x: 72, y: 676 },
+        ],
+      },
+    ])
+    const content = [text('we write as '), el('1', '$\\dfrac{2L}{X+Y}$'), text(' with more next line')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const mem = L.members.find((x) => x.unit === 0)!
+    expect(mem.lines.map((l) => [l[2], l[3], l[4]])).toEqual([
+      [72, 230, 700],
+      [72, 126, 676],
+    ])
+    expect(elementOf(L).ink).toEqual([[1, 149, 688, 167, 714, 700]])
+  })
+
+  it('states no text of an element whose glyphs on a line stand on two baselines: a script is no plain text (math.md R4)', () => {
+    // (2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹": its text "km s−1 Mpc−1" dropped the scripts' raise and size, drawn as body
+    // text; without a text the typesetter crops its ink, as today's reader does a raised script's (layer2.mjs scriptedOf). Its
+    // copy text stays its glyphs')
+    const B = docOf([
+      {
+        lines: [
+          { text: 'H0 is ', x: 72, y: 700 },
+          { text: 'km s', x: 108, y: 700 },
+          { text: '−1', x: 132, y: 703.6, size: 7 },
+          { text: ' Mpc', x: 140.4, y: 700 },
+          { text: '−1', x: 164.4, y: 703.6, size: 7 },
+          { text: ' e.g.', x: 172.8, y: 700 },
+          { text: ' now', x: 196.8, y: 700 },
+        ],
+      },
+    ])
+    const content = [text('H0 is '), el('1', '\\kmsMpc'), el('2', '\\eg'), text(' now')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'macro' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 2],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const km = elementOf(L)
+    expect(km.text).toBeUndefined()
+    expect(km.copy).toBe('km s−1 Mpc−1')
+    expect(km.ink).toHaveLength(1)
+    expect(elementOf(L, '2').text).toBe('e.g.')
+  })
+
+  it('leaves a unit the original’s where an element TeX set ink for has none: not found is not "TeX set none" (math.md R3)', () => {
+    // (a formula whose two points hold glyphs the ownership gave the unit's text, none its own: read as "TeX set no ink", it was
+    // drawn as nothing and its glyphs erased with the text, as 2608.25210v2 p7's Algorithm 1 lost its 21 lines. Today's file
+    // states such a piece LOST, its unit unproven; EMPTY only where both its points hold nothing between them, or TeX said it
+    // sets none: a paper's macro the instrument states empty, a formula whose points stand at one glyph)
+    const B = docOf([{ lines: [{ text: 'Return P if x', x: 72, y: 700 }] }, { lines: [{ text: 'Return P', y: 700 }] }])
+    const content = [text('Return '), el('1', '$P$'), text(' if '), el('3', '$x$')]
+    const content2 = [text('Return P'), el('1', '\\papertext{x}'), el('2', '$\\phantom{}$')]
+    const units = [
+      paraOf(content, [
+        ['1', { cls: 'other' }],
+        ['3', { cls: 'other' }],
+      ]),
+      {
+        ...paraOf(content2, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'other' }],
+        ]),
+      },
+    ]
+    const ins: Instrument = {
+      ...ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]),
+      places: [
+        { unit: 0, piece: '1', page: 1, glyph: 7, end: false },
+        { unit: 0, piece: '1', page: 1, glyph: 8, end: true },
+        { unit: 0, piece: '3', page: 1, glyph: 12, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 13, end: true },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: false },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: true },
+      ],
+      empty: [{ unit: 1, piece: '1' }],
+    }
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'element not found' })
+    expect(L.members[1]).toMatchObject({ located: true })
+  })
+
+  it('leaves a unit the original’s whose text holds more letters than its source writes: another piece’s ink (math.md R3)', () => {
+    // (2608.25210v2 p7's Algorithm 1 again, its formulas and keywords marked by no point: 200 letters claimed as its text where its
+    // text pieces write 6 ("Return"); its text group would erase them and no translation draws them. TeX sets a text's letters as
+    // written, a ligature's one glyph for its two, an accent and its letter one: no more letters, ever)
+    const B = docOf([
+      { lines: [{ text: 'Return rank(T) if x', y: 700 }] },
+      { lines: [{ text: 'the ﬁrst élan ˇc', y: 700 }] },
+    ])
+    const units = [
+      paraOf(
+        [text('Return '), el('1', '$\\mathrm{rank}(T)$'), text(' if '), el('3', '$x$')],
+        [
+          ['1', { cls: 'other' }],
+          ['3', { cls: 'other' }],
+        ],
+      ),
+      paraOf([text('the first élan č')], []),
+    ]
+    const L = locate(ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]), B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'text past its source' })
+    expect(L.members[1]).toMatchObject({ located: true })
+  })
+})
+
+describe('a member’s style read off all of its glyphs, as TeX set them', () => {
+  it('reads a figure text set turned off its turned glyphs: their weight, design, fill and size (an axis title in bold)', () => {
+    // (2608.04322v1 p8's y-axis title "Refusal Rate (XSTest)", set a quarter turned in TimesNewRomanPS-BoldMT: its glyphs are the
+    // member's turned ones, none upright, and it read as the default serif at its first glyph's size)
+    const withTurned = () => {
+      const d = docOf([{ lines: ['a caption under it'] }])
+      d.pages[0]!.turned = [...'Rate'].map(
+        (u, j): DocTurned => ({
+          u,
+          code: u.codePointAt(0) as number,
+          base: 'TimesNewRomanPS-BoldMT',
+          n: 1,
+          k: j,
+          at: 18,
+          box: -1,
+          ox: 60,
+          oy: 400 + 6 * j,
+          ex: 60,
+          ey: 406 + 6 * j,
+          ux: 0,
+          uy: 1,
+          size: j ? 5.11 : 6,
+          ascent: 0.7,
+          descent: -0.2,
+          form: false,
+          fill: 0x1f77b4,
+        }),
+      )
+      return d
+    }
+    const B = withTurned()
+    const A = withTurned()
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      unitOf('inkfigures', 'Rate', { figure: { set: 0, dir: [0, 1] } }),
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const fig = locate(ins, A, align(B, A)).members[1]!
+    expect(fig.style).toMatchObject({
+      role: 'serif',
+      bold: 1,
+      design: 'TimesNewRomanPS-BoldMT',
+      fill: 0x1f77b4,
+      size: 5.11,
+    })
+    // (its size the median of its glyphs', as an upright text's: no size read off its band)
+    expect(fig.read).not.toContain('size:lines')
+  })
+
+  it('sets a babel name in faked small capitals at its capitals’ size: its key is no text of it (IEEE’s REFERENCES)', () => {
+    // (2610.21880v1 p5: \refname set as IEEEtran's faked small capitals, "R" at 9.96 and "EFERENCES" at 7.97; the name's source is
+    // babel's key `ref`, not the text TeX printed for it, and the name read as capitals at the small capitals' 7.97)
+    const B = docOf([
+      {
+        lines: ['REFERENCES', 'Body text here'],
+        points: [
+          ['n1.ref.s', 0],
+          ['n1.ref.e', 10],
+        ],
+      },
+    ])
+    B.pages[0]!.glyphs.forEach((x, j) => {
+      if (j < 10) x.size = j ? 7.97 : 9.96
+    })
+    const units = [unitOf('para', 'Body text here'), { ...unitOf('name', 'ref'), name: 'ref' }]
+    const ins = instrumentOf(B, units, [[1, 0]], [[ROLE.name, ROLE.text]])
+    const name = locate(ins, B, align(B, B)).members.find((m) => m.name === 'ref')!
+    expect(name.style).toMatchObject({ size: 9.96, sc: 0.8, caps: 1 })
+    expect(name.style.upper).toBeUndefined()
+    // (true capitals keep their size, and are in the text's capitals: no glyph smaller than the others)
+    const C = docOf([
+      {
+        lines: ['ABSTRACT', 'Body text here'],
+        points: [
+          ['n1.abstract.s', 0],
+          ['n1.abstract.e', 8],
+        ],
+      },
+    ])
+    C.pages[0]!.glyphs.forEach((x, j) => {
+      if (j < 8) x.size = 9.96
+    })
+    const caps = locate(
+      instrumentOf(
+        C,
+        [unitOf('para', 'Body text here'), { ...unitOf('name', 'abstract'), name: 'abstract' }],
+        [[1, 0]],
+        [[ROLE.name, ROLE.text]],
+      ),
+      C,
+      align(C, C),
+    ).members.find((m) => m.name === 'abstract')!
+    expect(caps.style).toMatchObject({ size: 9.96, upper: 1 })
+    expect(caps.style.sc).toBeUndefined()
+  })
+})
+
+describe('the alignment of a line of the page’s head or foot', () => {
+  it('reads a head or foot line that ends at its measure’s end and starts within it set flush right (TeX’s \\hfil before it)', () => {
+    // (2609.36054v2's foot, "page 13 of 14" at the text block's right edge, read justified: its translation was laid from the
+    // original's start and shrunk to 0.825 of its size; a head or foot line is a box of the text's width, the place TeX's \hfil
+    // left it in that box its alignment. A paragraph's single line indented and full is no such line: it stays justified)
+    const body = 'w'.repeat(70)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'A running title', y: 760 },
+          { text: body, y: 700 },
+          { text: body, y: 688 },
+          { text: body, y: 676 },
+          { text: body, y: 664 },
+          { text: 'w'.repeat(65), x: 102, y: 640 },
+          { text: 'page 2 of 9', x: 426, y: 60 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('inkheads', 'A running title'),
+      unitOf('para', 'the body'),
+      unitOf('para', 'one full line'),
+      unitOf('inkheads', 'page 2 of 9'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 1, 1, 1, 2, 3]]), B, align(B, B))
+    const at = (u: number) => L.members.find((m) => m.unit === u)!
+    expect(at(3).lines[0]!.slice(2, 4)).toEqual([426, 492])
+    expect([at(0).align, at(1).align, at(2).align, at(3).align]).toEqual(['j', 'j', 'j', 'r'])
+  })
+})
+
+describe('the places on A where a sentence may begin (Placed.words, Unit.sentences)', () => {
+  const partsOf = (ins: Instrument, L: ReturnType<typeof locate>, pages: number) => [
+    ...bundle({
+      ins,
+      located: L,
+      addOn: addOnOf(L, pages),
+      original: new Uint8Array(10),
+      paper: { id: '2501.00001', version: 1, pages },
+      made: 'test',
+    }),
+  ]
+  it('states each word of a running unit’s projection at its first glyph on A, its line and x; a heading none', () => {
+    const B = docOf([{ lines: ['One two three. Four', 'five six. Seven eight.', 'A heading'] }])
+    const units = [unitOf('para', 'One two three. Four five six. Seven eight.'), unitOf('heading', 'A heading')]
+    const ins = instrumentOf(B, units, [[0, 0, 1]])
+    const L = locate(ins, B, align(B, B))
+    // (6 pt a glyph from x 72: "Four" the 16th glyph of the first line, "Seven" the 11th of the second)
+    expect(L.members[0]!.words).toEqual([
+      [0, 0, 72],
+      [4, 0, 96],
+      [8, 0, 120],
+      [15, 0, 162],
+      [20, 1, 72],
+      [25, 1, 102],
+      [30, 1, 132],
+      [36, 1, 168],
+    ])
+    expect(L.members[1]!.words).toBeUndefined()
+    // (the part states them; the units say which a translator cuts into sentences)
+    const objects = partsOf(ins, L, 1)
+    const part = read('part', (objects.find((o) => o.kind === 'part') as { bytes: Uint8Array }).bytes)
+    const placed = part.flows.flat()
+    expect(placed.find((m) => m.kind === 'para')!.words).toEqual(L.members[0]!.words)
+    expect(placed.find((m) => m.kind === 'heading')!.words).toBeUndefined()
+    const us = read('units', (objects.find((o) => o.kind === 'units') as { bytes: Uint8Array }).bytes).units
+    expect(us.find((u) => u.kind === 'para')!.sentences).toBe(true)
+    expect(us.find((u) => u.kind === 'heading')!.sentences).toBeUndefined()
+  })
+  it('states a member’s words in the parts of the pages it has ink on, not in one that carries it for another page', () => {
+    // (page 2's part carries page 1's flows, its second paragraph's first line being there: the first paragraph lights on page 1
+    // alone, the second on both)
+    const B = docOf([{ lines: ['First para here.', 'Second one runs'] }, { lines: ['on to page two.'] }])
+    const units = [unitOf('para', 'First para here.'), unitOf('para', 'Second one runs on to page two.')]
+    const ins = instrumentOf(B, units, [[0, 1], [1]])
+    const L = locate(ins, B, align(B, B))
+    const parts = partsOf(ins, L, 2)
+      .filter((o) => o.kind === 'part')
+      .map((o) => read('part', (o as { bytes: Uint8Array }).bytes))
+    const wordsIn = (p: number) => parts[p - 1]!.flows.flat().map((m) => [m.ord, m.words?.length ?? 0])
+    expect(wordsIn(1)).toEqual([
+      [0, 3],
+      [1, 7],
+    ])
+    expect(wordsIn(2)).toEqual([
+      [0, 0],
+      [1, 7],
+    ])
+  })
+  it('places a word where its letters are the page’s in order, a macro’s text beside it none of its; one TeX never set at -1', () => {
+    // (a text macro set as "BERT" before the unit's own "-based": the word "based" at its own "b", never at BERT's; and "two",
+    // which the compile never printed, not placed)
+    const B = docOf([{ lines: ['BERT-based models. They', 'work. One three.'] }])
+    const content = [
+      { t: 'el' as const, id: '0', kind: 'macro', src: '\\bert' },
+      text('-based models. They work. One two three.'),
+    ]
+    // (its class as the front states a text macro whose glyphs are the unit's text: the probe's text, which the unit's letter
+    // count reads, rc-ink's conservation: without it "BERT" is 4 letters no piece writes and the unit stays the original's)
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['0', { cls: 'macro', text: 'BERT' }]],
+    }
+    const L = locate(instrumentOf(B, [u], [[0, 0]]), B, align(B, B))
+    const words = L.members[0]!.words!
+    // (a word's offset in the projection: the macro one character, then the text)
+    const off = (w: string) => 1 + '-based models. They work. One two three.'.indexOf(w)
+    const at = (w: string) => words.find((x) => x[0] === off(w))
+    expect(words.map((x) => x[0])).toEqual(['based', 'models', 'They', 'work', 'One', 'two', 'three'].map(off))
+    expect(at('based')).toEqual([off('based'), 0, 72 + 5 * 6])
+    expect(at('They')).toEqual([off('They'), 0, 72 + 19 * 6])
+    expect(at('work')).toEqual([off('work'), 1, 72])
+    expect(at('two')).toEqual([off('two'), -1, 0])
+    expect(at('three')).toEqual([off('three'), 1, 72 + 10 * 6])
   })
 })

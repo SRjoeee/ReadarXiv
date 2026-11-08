@@ -1,7 +1,6 @@
 // I6 on table metrics (design-a §1.4, design-b §1.8): the composition is deterministic. A pair laid page by page twice from the
 // same prepared members (gate.ts gatePair) gives deep-equal dumps, and each member on two pages is laid alike from each page's
-// part. The walk writes `free` only on a block whose borrow room is not stated (`freeOf`, today's lazy measure; the parts
-// state it as Room.ends, a part made before as Room.below).
+// part.
 import { describe, expect, it } from 'vitest'
 import { gatePair } from './gate.ts'
 import { hasDerived, hasTap } from './tap.ts'

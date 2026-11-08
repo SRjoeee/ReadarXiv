@@ -8,7 +8,15 @@ import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
 import type { Timers } from '../src/bytes/source.ts'
 import { WAVE_SLOTS } from '../src/compose/faces.ts'
-import { BUSY_MAX_MS, createServed, HYPH_WAIT, partsOf, type Platform, unicodeRangeOf } from '../src/compose/served.ts'
+import {
+  BUSY_MAX_MS,
+  createServed,
+  HYPH_WAIT,
+  PROBE_FACE,
+  partsOf,
+  type Platform,
+  unicodeRangeOf,
+} from '../src/compose/served.ts'
 import { typesetLay } from '../src/compose/typeset.ts'
 import { REQUEST_MS, RETRY_MS } from '../src/session/client.ts'
 
@@ -20,7 +28,17 @@ const TABLES: Record<string, unknown> = {
   '/static-fonts/index.json': {
     schema: 1,
     fonts: '6',
-    faces: { 'nimbus-roman-regular': { group: 'nimbus-roman' }, 'shs-sc-regular': { group: 'shs-sc' } },
+    faces: {
+      'nimbus-roman-regular': { group: 'nimbus-roman' },
+      'shs-sc-regular': { group: 'shs-sc' },
+      'cmun-serif-regular': { group: 'cmun-serif' },
+    },
+  },
+  '/static-fonts/cmun-serif.json?fonts=6': {
+    schema: 1,
+    group: 'cmun-serif',
+    slices: [LATIN],
+    faces: { 'cmun-serif-regular': [{ path: 'static-fonts/0000000000000004.woff2' }] },
   },
   '/static-fonts/nimbus-roman.json?fonts=6': {
     schema: 1,
@@ -156,6 +174,32 @@ function handTimers() {
 }
 
 describe('the served faces and the Metrics over them', () => {
+  it("the text rendering's probe face: a served Latin face, Computer Modern's serif, loaded for the probe's text; none where it cannot be had", async () => {
+    const { s, asked, faces } = site()
+    expect(PROBE_FACE).toBe('400 100px "axt-cmun-serif"')
+    expect(await s.faces.probeFace('Sphinx')).toBe(PROBE_FACE)
+    expect(s.metrics.ready(PROBE_FACE, 'Sphinx')).toBe(true)
+    expect(asked).toEqual([
+      '/static-fonts/index.json',
+      '/static-fonts/cmun-serif.json?fonts=6',
+      '/static-fonts/0000000000000004.woff2',
+    ])
+    expect(faces).toEqual([{ family: 'axt-cmun-serif', range: unicodeRangeOf(LATIN), added: true }])
+    // (its slice not there, or its table: no probe face, the sheet's geometricPrecision (a system face would tell nothing), and
+    // no face lost told for it: no page draws in it; told once a page's text asks it)
+    const FACE = '400 100px "axt-cmun-serif"'
+    const gone = site({ missing: ['/static-fonts/0000000000000004.woff2'] })
+    expect(await gone.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(gone.lost).toEqual([])
+    await gone.s.faces.ready([[FACE, 'Satz']])
+    expect([gone.s.metrics.ready(FACE, 'Satz'), gone.lost]).toEqual(['never', ['cmun-serif-regular']])
+    const table = site({ missing: ['/static-fonts/cmun-serif.json?fonts=6'] })
+    expect(await table.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(table.lost).toEqual([])
+    await table.s.faces.ready([[FACE, 'Satz']])
+    expect(table.lost).toEqual(['cmun-serif-regular'])
+    s.faces.dispose()
+  })
   it('nothing ready before the tables are read; the slices a text needs loaded, no other; a character no face holds never ready', async () => {
     const { s, asked, faces } = site()
     expect(s.metrics.ready(FONT, 'Satz')).toBe(false)

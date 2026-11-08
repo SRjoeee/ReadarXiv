@@ -69,9 +69,6 @@ export type AdaptInput = {
   rulesOf: (page: number) => readonly number[] | null | undefined
   lineskip: readonly [number, number] | null
   reading: Reading
-  /** for a part made before (no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911: a rectangle's bottom
-   *  and 0.24 of its height, the lowest of the page's units'): no unit borrows below it; undefined where the page has none */
-  bottomOf?: (page: number) => number | undefined
   /** the middle of the free paper it shares on its baseline with a member that may widen into it too, left and right
    *  (sharedPaper; NaN where it shares none) */
   shared?: readonly [number, number]
@@ -240,40 +237,6 @@ export function adapt(i: AdaptInput): Adapted {
     lineskip: i.lineskip,
     centred: before.centredFlag,
   }) as FitBlock[]
-  // (the room each block may borrow under it, read where the walk asks (today's freeFor RUN:1677, which RUN:2193 gives every
-  // block but a cell's): a block that ends a run of its text lines takes the room the part states under that line (Room.ends:
-  // the free depth to the first ink, its own kept rows and elements too, and its page's lowest unit baseline), so that a member
-  // running on to the next page or column borrows at the foot of the one it leaves and none through a display of its own; down
-  // from a third of its size under its last baseline to that ink, a borrowGap of pitches clear of it, never past that lowest
-  // line. A part made before states its last line's room alone (Room.below): its last block's, the page's lowest unit line the
-  // part's (`bottomOf`), as before)
-  const ends = m.room.ends
-  const roomUnder = (b: FitBlock): { inkTop: number; floor: number } | null => {
-    if (ends) {
-      const r = b.rects.at(-1) as Rect
-      const j = (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
-      const e = j === undefined ? undefined : ends.find((x) => x[0] === j)
-      return e ? { inkTop: lines[j!]![6] - e[1], floor: e[2] } : null
-    }
-    const floor = b === blocks.at(-1) ? i.bottomOf?.(b.page) : undefined
-    return floor === undefined ? null : { inkTop: lines.at(-1)![6] - m.room.below, floor }
-  }
-  const gap = Number((R as { borrowGap?: number }).borrowGap ?? 0)
-  // (set after the size below is read)
-  const borrowRoom = (s: number) => {
-    if (ends && kind === 'cell') return
-    for (const b of blocks) {
-      const room = roomUnder(b)
-      if (!room) continue
-      const last = b.B.at(-1)!
-      const yStart = last - 0.3 * s,
-        yLimit = room.floor - 0.3 * s
-      if (yLimit >= yStart) continue
-      const pitch = b.pitch0 ?? 1.2 * s
-      const lowest = room.inkTop <= yLimit + 0.01 ? room.floor : room.inkTop + gap * pitch + 0.3 * s
-      b.free = Math.max(0, last - lowest)
-    }
-  }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
   // lines' bands over 0.894 (RUN:2088). In a CJK target smaller where its base is set in small capitals: the tokens' base
   // (baseOf over the row's groups), else its style's (its face's, or today's vote, Style.caps), as unitSizeOf reads it)
@@ -284,7 +247,6 @@ export function adapt(i: AdaptInput): Adapted {
   const s =
     (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps } } }, R) : undefined) ??
     (heights[heights.length >> 1] as number) / 0.894
-  borrowRoom(s)
   // (the row kept after it: the next member's join says ink stays between the two on their shared line)
   const last = lines.at(-1)!
   const after = i.after

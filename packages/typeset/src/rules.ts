@@ -372,13 +372,14 @@ const SPECS: readonly RuleSpec[] = [
       'L2:3061 inFlow',
     ],
     how: 'ported',
-    reads: ['fit.borrow', 'tex.predisplay', 'k.SHORT_SKIP 0.3'],
+    reads: ['tex.predisplay', 'k.SHORT_SKIP 0.3'],
     file: 'breaker/slots.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner's ruling of 2026-11-08, no borrowing: a block's foot is its last baseline, never lower by a borrowed line (today's lowOf less min(free, borrow pitches))",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
+      cases: 145,
     },
   },
   {
@@ -442,22 +443,14 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T31', '1F:layout'],
     ports: ['L2:4041-4080 statesOf', 'L2:4085 sharedStates', 'L2:4102-4137 layoutUnit2'],
     how: 'ported',
-    reads: [
-      'fit.order',
-      'fit.leadBase',
-      'fit.leadFloor',
-      'fit.trackMin',
-      'fit.compressMax',
-      'fit.borrow',
-      'fit.floor',
-      'fit.step',
-    ],
+    reads: ['fit.order', 'fit.leadBase', 'fit.leadFloor', 'fit.trackMin', 'fit.compressMax', 'fit.floor', 'fit.step'],
     file: 'fit/walk.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner's ruling of 2026-11-08, no borrowing: the walk has no borrow knob (today's statesOf borrowed lines under a block, into room the original leaves empty, before its leading and size); a unit that does not fit its own lines shrinks, one size",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units today laid without a borrowed line (145; 19 the ruling's), as on the corpus before the ruling (lab/typeset/replay-fit.mjs: 32,588 of 32,589)",
+      cases: 145,
     },
   },
   {
@@ -744,9 +737,10 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fill.lead', 'fill.leadRel', 'fit.leadFloor'],
     file: 'shared/fill-leads.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the owner on staging, 2026-11-08 (each paragraph fills the original's block, as its neighbours): a unit over a page or column break has each frame's own fill leading beside its own (frameLeadsOf), where today's held every frame to the one its fullest frame allowed (1810.04805v2 p6: four lines at the original's pitch in a frame of five). The unit's fill leading, top and line count, its L9 slot, as today's",
       replay:
-        'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out)',
+        "chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (31,612 rounds that reach their out); the frames' own leadings in the page replays where they differ",
       cases: 31612,
     },
   },
@@ -779,10 +773,11 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fill.band', 'fill.track', 'fill.size', 'fit.step'],
     file: 'shared/fill-page.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "the page's one size found a step up at a time, the first a body unit no longer holds ending it, where today's halved the steps (the owner's word of 2026-11-08: today's effect, by the simplest search and the fewest lays); a page that grows not at all is tried once, not twice. Every page's size today's halving gives (the 22 parity pairs' 344 pages laid both ways, 2026-11-08: growth's lays 223 to 153 of about 89,400)",
       replay:
-        "every pass of the corpus (tests/replay/pass.ts, lab/typeset/replay-fill.mjs): each unit laid by the chain from F2, the pass's target, each unit's decision, the page's size, each unit filled and each begun unit's L10 slot (3,013 of 3,014; the other holds the one unit whose walk differs at F2)",
-      cases: 3013,
+        'every pass of the corpus before the change (tests/replay/pass.ts, lab/typeset/replay-fill.mjs: 3,013 of 3,014), and of the three pairs tests/replay/fill-page.test.ts replays but a pass the no-borrowing ruling changes; the 344 pages of the parity pairs laid both ways',
+      cases: 344,
     },
   },
   {
@@ -908,9 +903,10 @@ const SPECS: readonly RuleSpec[] = [
     home: 'fact',
     step: 'prepare',
     owns: ['E20', 'A19', 'A20', 'A23', '3.2'],
-    ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
+    // (today's freeFor, RUN:1677-1687, the room a block borrowed under it, not ported: the owner's ruling of 2026-11-08)
+    ports: ['RUN:1557-1573 columnOf', 'RUN:1699-1729 paperTo'],
     how: 'moved',
-    reads: ['fit.borrowGap'],
+    reads: [],
     state: L1,
   },
   {

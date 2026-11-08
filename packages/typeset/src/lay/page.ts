@@ -16,7 +16,7 @@ import { fin, layoutOf, linesOf } from './trace.ts'
 export type PageMember = {
   ord: number
   state: 'laid' | Unlaid
-  fit?: { size: number; lead: number; track: number; borrowed: number }
+  fit?: { size: number; lead: number; track: number }
   lines: DisplayLine[]
   /** the unit as its lay and its fill left it (the gate's dump reads it) */
   lay?: PassUnit
@@ -67,12 +67,15 @@ export function layPagePrepared(
   // page a tie is laid for caps alike; read off the page's members alone, a member on pages 1-2 tied to one on page 2 was laid
   // at its own size for page 1 and at the other's for page 2)
   // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
-  // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not)
+  // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not. A member's own floor where
+  // U.params sets one: a line of the page's head or foot keeps its size)
   const floor = Number((R as unknown as { floor?: number }).floor ?? 0)
+  const floorOf = new Map<number, number>()
+  for (const f of flows) for (const m of f) floorOf.set(m.ord, Math.max(floor, Number(m.P.floor ?? floor)))
   // (each laid larger capped at the least and the page laid again, until none is: the members of one paragraph share a row, and
   // one laid at the least the first time, laid again beside one capped (its last line ending sooner), can come out larger
   // (2608.16117v1-de p19: t57 capped at t59's 0.875, t59 then 0.975). A member laid at the least is not capped: capped at its
-  // own scale its walk sets it otherwise (t115 p38, 15 lines borrowed at 0.875, 14 capped there). Each round lowers a cap, never
+  // own scale its walk sets it otherwise (t115 p38, 15 lines at 0.875 and 14 capped there, when it borrowed). Each round lowers a cap, never
   // under the floor: it ends)
   const cap = new Map<number, number>()
   let laid = first
@@ -83,12 +86,13 @@ export function layPagePrepared(
       const on = t.ords.filter((o) => fitOf.has(o))
       if (on.length < 2) continue
       const least = Math.min(...on.map((o) => fitOf.get(o) as number))
-      const c = Math.max(least, floor)
-      for (const o of on)
-        if ((fitOf.get(o) as number) > least + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
+      for (const o of on) {
+        const c = Math.max(least, floorOf.get(o) ?? floor)
+        if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
           cap.set(o, c)
           lowered = true
         }
+      }
     }
     if (!lowered) return laid
     const capped = flows.map((f) =>
@@ -260,7 +264,6 @@ function layPageOnce(
                 size: L.f,
                 lead: L.state.lead,
                 track: L.state.track,
-                borrowed: L.state.borrow,
               },
             }
           : {}),

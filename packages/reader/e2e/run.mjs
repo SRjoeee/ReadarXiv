@@ -1490,7 +1490,7 @@ async function linesInk(page, lines = null) {
   return { ...state, ratio: +(sum('svg') / Math.max(1, sum('canvas'))).toFixed(3), lines: out }
 }
 await check(
-  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink: geometricPrecision, or auto where the first laid page's words lay out alike under both (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
+  "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
   async () => {
     if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
     const out = {}
@@ -1534,8 +1534,9 @@ await check(
         Math.abs(got.ratio - 1) <= 0.06,
         `${name}: the overlay's ink ${got.ratio} of the canvas's ${JSON.stringify(got.lines)}`,
       )
+      // (in the layer's ink, the PDF's own black: the owner's ruling of 2026-11-08, #141414 before)
       assert(
-        got.lines.every((l) => l.fill !== 'rgb(0, 0, 0)'),
+        got.lines.every((l) => l.fill === 'rgb(0, 0, 0)'),
         `${name}: a run of no fill of its own drawn in ${got.lines.map((l) => l.fill)}`,
       )
     }

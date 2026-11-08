@@ -8,8 +8,8 @@
 // whole or not at all, a size tie's members at one size), and the members as drawn (D.display). The reader's leave
 // (Rules.leave: the unit kinds it shows untranslated) leaves a member of such a kind the original's (`left`), nothing of it
 // off and no row of it waited for. A babel name is set on its own (S.names over the part, nameOf), or, bound by the part to the
-// member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: lit
-// whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
+// member after it in its flow, as that member's lead (lay/lead.ts). Each member's boxes on both panes (Laid.lit, lay/lit.ts: by
+// sentence where its row's sentences are found on both, Placed.words placing them on A; else whole) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
 // made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
@@ -102,23 +102,6 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
   if (m.room.bandOpen !== 2 && band[1] >= first[5]) rules.push(x0, band[1], x1, band[1])
   if (m.room.bandOpen !== 1 && band[0] <= last[6]) rules.push(x0, band[0], x1, band[0])
   return (pg) => (pg === first[0] && rules.length ? rules : undefined)
-}
-
-/** for a part made before (one whose members state no Room.ends): the page's lowest unit line, as today's pageBottom (RUN:911:
- *  a line's band bottom and 0.24 of its height, the lowest of the page's units' but a figure's), read off the part: no unit
- *  borrows below it. A part of now states each page's own under each run of a member's lines, the page's every member read
- *  (this part holds a member running on to the next page, not that page's others) */
-function bottomsOf(part: Part): Map<number, number> {
-  const out = new Map<number, number>()
-  for (const flow of part.flows)
-    for (const m of flow) {
-      if (m.kind === 'figure' || m.kind === 'inkfigures' || m.kind === 'name') continue
-      for (const l of m.lines) {
-        const r = rectOf(l, m)
-        out.set(r[0], Math.min(out.get(r[0]) ?? Number.POSITIVE_INFINITY, r[2] + 0.24 * (r[4] - r[2])))
-      }
-    }
-  return out
 }
 
 /**
@@ -247,7 +230,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const R = rules.set
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
-  const bottoms = bottomsOf(part)
   // (the free paper two members share on one baseline, each its half: two cells of a row)
   const shared = sharedPaper(part.flows, page)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
@@ -420,7 +402,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         breaks: rd.breaks,
         own: true,
       },
-      bottomOf: (pg) => bottoms.get(pg),
       ...(shared.has(m.ord) ? { shared: shared.get(m.ord)! } : {}),
     })
     if ('stop' in got) {
@@ -574,6 +555,9 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
     const off = offOn(page)
     const kept = keptIn.get(m.ord) ?? new Set<string>()
     const pieces = read.get(m.ord)?.pieces
+    // (its row's sentences, where its translator cut them: the panes light by sentence where both find every start, lit.ts)
+    const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
+    const sentences = row?.ok ? row.sentences : undefined
     if (st === 'laid' && layout && pieces)
       owners.set(m.ord, {
         m,
@@ -593,7 +577,15 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       off,
       ...(x?.fit ? { fit: x.fit } : {}),
       lines,
-      lit: st === 'laid' ? litLaid(m, page, layout, { off, kept, lead: leadOf.get(m.ord) ?? null }) : litOfA(m, page),
+      lit:
+        st === 'laid'
+          ? litLaid(m, page, layout, {
+              off,
+              kept,
+              lead: leadOf.get(m.ord) ?? null,
+              by: sentences && pieces ? { sentences, pieces } : undefined,
+            })
+          : litOfA(m, page, sentences?.src),
     }
   })
   return {

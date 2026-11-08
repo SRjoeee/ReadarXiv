@@ -17,6 +17,7 @@ import { createFaces, type Faces, WAVE_SLOTS } from '../src/compose/faces.ts'
 import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
+import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import type { PageContent, Stack, StackEvents } from '../src/stack/stack.ts'
 
@@ -256,12 +257,19 @@ const groupsStub = (holds: (ord: number) => boolean = () => true): Groups =>
     set: vi.fn(() => []),
     clear: vi.fn(),
   }) as unknown as Groups
-const facesStub = (loaded?: Set<string>): Faces & { waves: string[][] } => {
+const facesStub = (loaded?: Set<string>): Faces & { waves: string[][]; probes: string[] } => {
   const waves: string[][] = []
+  const probes: string[] = []
   return {
     waves,
+    probes,
     classOf: () => 'f',
     familyOf: () => 'sans-serif',
+    // (the text rendering's probe face, asked with the probe's text: none here, so the sheet's geometricPrecision)
+    probeFace: async (text: string) => {
+      probes.push(text)
+      return null
+    },
     // (a face asked with the texts the pages wait on it for: told here by the face, once a wave)
     ready: async (ids: Iterable<string | readonly [string, string]>) => {
       const list = [...new Set([...ids].map((x) => (typeof x === 'string' ? x : x[0])))]
@@ -299,6 +307,7 @@ function world(
     ready?: Set<string>
     lay?: ReturnType<typeof standInLay>
     faces?: ReturnType<typeof facesStub>
+    root?: HTMLElement
   } = {},
 ): World {
   const parts =
@@ -328,6 +337,7 @@ function world(
     aheadGo,
     ...(o.classes ? { classes: o.classes } : {}),
     ...(o.ahead !== undefined ? { ahead: o.ahead } : {}),
+    ...(o.root ? { root: o.root } : {}),
     warn: (w) => warns.push(w),
   })
   composer.setDocuments({ original: {} as never, composed: {} as never, groups: groupsStub(o.holds) })
@@ -388,6 +398,25 @@ describe('laying, one page at a time (layer-side.mjs hold)', () => {
     expect(w.composer.laid(1)).not.toBeNull()
     // (the first page in place lets the pages ahead go)
     expect(w.aheadGo).toHaveBeenCalled()
+  })
+})
+
+describe("the overlay's text rendering, decided once a reader (text-rendering.ts)", () => {
+  it('is asked of the fixed probe when the pages are first to be laid, once, whatever the pages, targets and toggles', async () => {
+    const root = document.createElement('div')
+    document.body.append(root)
+    const w = world({ root })
+    w.stack.setNear([1, 2])
+    expect(w.faces.probes).toEqual([])
+    open(w, rowsOf('de', allIds(w)))
+    await settle()
+    expect(w.faces.probes).toEqual([PROBE_TEXT])
+    // (another target, a toggle: the same decision)
+    open(w, rowsOf('fr', allIds(w)))
+    w.composer.setClasses({ figures: false, tables: true, heads: true, references: true, names: true })
+    await settle()
+    expect(w.faces.probes).toEqual([PROBE_TEXT])
+    w.composer.dispose()
   })
 })
 
@@ -896,6 +925,34 @@ describe('the faces, in one wave', () => {
       await four
       expect(asked.filter((u) => u === 'gone').length).toBe(1)
       expect(asked.filter((u) => u === 'busy').length).toBe(2)
+    } finally {
+      ;(globalThis as { FontFace?: unknown }).FontFace = was
+      Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })
+    }
+  })
+  it("names the text rendering's probe face: the table's first face read from a file, once loaded; none of a system's", async () => {
+    const answers: Record<string, number> = { sans: 200, gone: 404 }
+    const fetch = vi.fn(async (u: string) => new Response(new Uint8Array(4), { status: answers[u] ?? 200 }))
+    const was = globalThis.FontFace
+    ;(globalThis as { FontFace?: unknown }).FontFace = class {
+      load = async () => this
+    }
+    const fonts = (document as { fonts?: unknown }).fonts
+    Object.defineProperty(document, 'fonts', { value: { add() {}, delete() {} }, configurable: true })
+    try {
+      const table = { cjk: { local: 'Songti SC' }, sans: { src: 'sans' }, serif: { src: 'serif' } }
+      const faces = createFaces({ table, fetch: fetch as never, root: document.body })
+      expect(await faces.probeFace('Sphinx')).toBe('sans')
+      expect(fetch.mock.calls.map(([u]) => u)).toEqual(['sans'])
+      // (a face of the system's alone: none, as one that cannot be read)
+      expect(
+        await createFaces({ table: { cjk: table.cjk }, fetch: fetch as never, root: document.body }).probeFace('x'),
+      ).toBeNull()
+      expect(
+        await createFaces({ table: { gone: { src: 'gone' } }, fetch: fetch as never, root: document.body }).probeFace(
+          'x',
+        ),
+      ).toBeNull()
     } finally {
       ;(globalThis as { FontFace?: unknown }).FontFace = was
       Object.defineProperty(document, 'fonts', { value: fonts, configurable: true })

@@ -21,6 +21,7 @@ import {
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
+import { bySentence } from '../locate/words.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
 export type BundleObject =
@@ -141,8 +142,13 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   if (mem.plain !== undefined) p.plain = mem.plain
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
+  if (mem.words) p.words = mem.words
   return p
 }
+
+/** whether a member has ink on page `p`: a line, an element's or its label's */
+const inkOn = (x: Placed, p: number) =>
+  x.lines.some((l) => l[0] === p) || !!x.els?.some(([, e]) => e.ink.some((k) => k[0] === p)) || x.label?.ink[0] === p
 
 /** Units windows: each distinct unit once, at its first occurrence, cut under the Units bound */
 function unitWindows(units: Unit[]): Unit[][] {
@@ -185,10 +191,18 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       kind: u.kind,
       content: u.content,
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
+      // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)
+      ...(!u.kept && bySentence(u.kind, !!u.figure) ? { sentences: true as const } : {}),
       ...(u.kept ? { kept: true as const } : {}),
     })
   }
-  for (const [ord, b] of located.born) add({ id: members[ord]!.id, kind: b.kind, content: b.content })
+  for (const [ord, b] of located.born)
+    add({
+      id: members[ord]!.id,
+      kind: b.kind,
+      content: b.content,
+      ...(bySentence(b.kind) ? { sentences: true as const } : {}),
+    })
   const unitDigests: string[] = []
   for (const w of unitWindows(units)) {
     const { bytes, digest } = write('units', { format: 1, units: w })
@@ -265,7 +279,16 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
         ...(ins.tex.lineskip ? { lineskip: ins.tex.lineskip } : {}),
         ...(names.length ? { names } : {}),
       },
-      flows: take.map((i) => located.flows[i]!.map((o) => placed[o]!)),
+      // (a member's words where it has ink on the page, a line, an element's or its label's: one carried for another page's sake,
+      // in a flow or a tie it shares, lights there, not here)
+      flows: take.map((i) =>
+        located.flows[i]!.map((o) => {
+          const x = placed[o]!
+          if (!x.words || inkOn(x, p)) return x
+          const { words: _, ...rest } = x
+          return rest
+        }),
+      ),
       ...(ties.length ? { ties } : {}),
       ...(links.length ? { links } : {}),
     }

@@ -3,7 +3,7 @@
 // today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
 // reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
-// statements in the marked compile's log (the units' alignments, \lineskip). It writes nothing and wraps nothing: the back half
+// statements in the marked compile's log (the units' alignments, \lineskip, each page's text frame). It writes nothing and wraps nothing: the back half
 // carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (today's
 // ledger, ink-units.mjs, figure-text.mjs) are made by the back half's locate on arXiv's page, of the glyphs no source unit owns
 // there (packages/engine/src/locate/ink.ts), from B's marks the Doc carries (its points and DocPage.marks).
@@ -13,9 +13,10 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { linkTargetOf, ownersOf, readPdf, ROLE, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, headEnd, leadStep, readAlign, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { classOf, followsOf, headEnd, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
+import { lastTexLog } from '../source/latex-front.mjs'
 import { columnsAt } from '../layout/stream.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -54,7 +55,8 @@ const SPAN_STYLES = [
 const styleOf = src => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
- *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close */
+ *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; its
+ *  run-in labels `must` (runIns) */
 export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
   let level = []
   const stack = []
@@ -80,7 +82,8 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
       default: throw new Error(`a piece the front end does not make (${String(p.t).slice(0, 20)})`)
     }
   })
-  return stack.length ? stack[0].outer : level
+  // (its run-in labels `must`, as the source reader states them: packages/engine/src/marks/run-ins.ts)
+  return runIns(stack.length ? stack[0].outer : level)
 }
 
 // ---- today's reader's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
@@ -256,12 +259,16 @@ export function classesOf(pieces, colours = null, texts = null) {
   return out
 }
 
-/** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it on its page,
- *  else the last one opened (spike S1's rule), by the glyphs' (or boxes') counts the points carry. A unit's start point closes
- *  every point of its own opened before it: a head piece's (marks.mjs \\axthpk), whose ink ends where the unit's text begins */
-function piecesByPoints(points, count, groupAt, by) {
+/** the piece of each `.p` glyph (and rule): the innermost placeholder point `p<u>.<k>a` of its unit open before it, else the last
+ *  one opened on its page (spike S1's rule), by the glyphs' (or boxes') counts the points carry. A unit's start point closes
+ *  every point of its own opened before it: a head piece's (marks.mjs \\axthpk), whose ink ends where the unit's text begins.
+ *  `open` the points open at the page's start, by unit (the pages before's, read in order: the caller's, carried): TeX's
+ *  stream runs on across a page break, and a point opened and not closed on one page is open on the next. marks.mjs sets a
+ *  placeholder's opening point before the glue in front of it, so a line TeX breaks there that ends a page leaves the point at
+ *  that page's end and the piece's glyphs on the next; and a piece TeX breaks over the page break has glyphs on both */
+function piecesByPoints(points, count, groupAt, by, open = new Map()) {
   const out = new Int32Array(count).fill(-1)
-  const open = new Map(), last = new Map()
+  const last = new Map()
   let q = 0
   for (let j = 0; j <= count; j++) {
     while (q < points.length && points[q][by] <= j) {
@@ -312,10 +319,11 @@ function leadParts(u, id, texts, names) {
  * mark goes, 1810.04805v2's `\\bertbase (Single)`; its ink TeX set right before the start point, claimed by the text the probe
  * showed the macro sets): its lead's pieces (leadParts) by their texts, nearest the start first, each glyph read against the
  * text from its end (marks.mjs leadStep), case aside, as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
- * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before
+ * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before. `open` the points open
+ * at the page's start (piecesByPoints'), the pages read in order with one map
  */
-export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set() } = {}) {
-  const out = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph')
+export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new Set(), open = new Map() } = {}) {
+  const out = piecesByPoints(pg.points, pg.glyphs.length, j => row[j], 'glyph', open)
   const runs = new Map()
   for (let j = 0; j < pg.glyphs.length; j++) {
     const m = out[j] < 0 ? /^u(\d+)\.p$/.exec(row[j] ?? '') : null
@@ -385,6 +393,25 @@ export function placesOf(pages, count) {
     })
   })
   return places
+}
+
+/** The pieces whose span the instrument states empty, TeX setting no ink for them where they stand, by unit index and piece
+ *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and a text
+ *  macro (classesOf's macro or umacro) the marking never marks, its rendering never ink by the marking's own reading (marks.mjs
+ *  classOf null: INVISIBLE, STRUCTURE, textless; a .bbl's \newblock, \ttfamily, \sloppy), whose places therefore no compile
+ *  states. Today's reader drew such a piece as nothing, proven (tex.mjs inklessOf: a text macro the file holds no row for sets
+ *  no ink, and the file holds a row for each marked piece alone); stated nothing, the typesetter leaves its unit unproven (a
+ *  paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` today's, `classes` each
+ *  unit's classesOf by piece id */
+export function inklessPieces(units, { classes, inkless = null }) {
+  const noInk = new Set(inkless ?? [])
+  const out = []
+  units.forEach((u, i) => (u?.pieces ?? []).forEach((p, k) => {
+    if (p.t !== 'ph') return
+    const marked = classOf(p), cls = classes[i]?.get(String(k))?.cls
+    if ((marked === 'macro' && noInk.has(p.src)) || (marked === null && (cls === 'macro' || cls === 'umacro'))) out.push({ unit: i, piece: String(k) })
+  }))
+  return out
 }
 
 /** a glyph beside a unit's mark is of the run there within this many of its own size of the run's edge (today's maker's
@@ -504,7 +531,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless), names: paper.theoremNames ?? null })
 
   // ---- the units
-  const align = new Map(readAlign(log))
+  // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's, marks/instrument.ts)
+  const align = readAlign(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -533,11 +561,13 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
 
   // ---- the owners of B's glyphs and boxes
   const glyphs = [], boxes = [], turnedOwners = []
+  // (the points open at each page's start, carried from page to page in order: one map for the glyphs' reading, one for the boxes')
+  const openG = new Map(), openX = new Map()
   pages.forEach((pg, i) => {
     const G = ownersOf(pg.glyphs.length), X = ownersOf(pg.boxes.length / 4)
     const row = own.glyphs[i] ?? [], brow = own.boxes[i] ?? []
-    const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names })
-    const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box')
+    const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names, open: openG })
+    const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box', openX)
     const set = (O, j, g, piece) => {
       let m = /^u(\d+)(\.[pl])?$/.exec(g ?? '')
       if (m) { O.unit[j] = Number(m[1]); O.role[j] = m[2] === '.p' ? ROLE.element : m[2] === '.l' ? ROLE.label : ROLE.text; if (m[2] === '.p') O.piece[j] = piece[j]; return }
@@ -556,13 +586,13 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const lineskip = options.lineskip ?? readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map(x => x.glyph))
+  // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
+  const frames = framesOf(pages, lastTexLog(log))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
-  // (the pieces TeX said set no ink (the probe's `inkless`): their span stated empty, by unit index and piece id)
-  const noInk = new Set(inkless ?? [])
-  const empty = []
-  units.forEach((u, i) => u.pieces.forEach((p, k) => { if (p.t === 'ph' && classOf(p) === 'macro' && noInk.has(p.src)) empty.push({ unit: i, piece: String(k) }) }))
+  // (the pieces TeX sets no ink for (inklessPieces): their span stated empty, by unit index and piece id)
+  const empty = inklessPieces(units, { classes: classesBy, inkless })
   // (and a head or tail macro that sets nothing on its unit's line, by the line beside the unit's mark (besideEmpty): those whose
   // ink, span or no ink the instrument states already passed over)
   const known = new Set(empty.map(x => `${x.unit}|${x.piece}`))
@@ -572,7 +602,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   for (const [k, e] of ends) if (e === 3) known.add(k)
   empty.push(...besideEmpty(pages, own.glyphs, units, { classes: classesBy, known }))
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

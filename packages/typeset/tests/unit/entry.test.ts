@@ -298,16 +298,17 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
   })
   // (a translation longer than its original by a line: 165 characters at half a size each, 45 to a line of 228 pt at 10 pt)
   const longer = 'wort '.repeat(33).trim()
-  it('borrows a line at the foot of the page a member runs on from, under that page’s room (Room.ends: today’s freeFor, every block)', () => {
-    // (2608.16117v1-de t23, 2602.23285v2-ja t29: the member's last block, on the next page, has no room, and the room of its block
-    // at the earlier page's foot was never asked: it shrank where today borrowed one line there and stayed at its size)
+  it('borrows no line at the foot of a page it runs on from: the whole paragraph shrinks evenly to its own lines', () => {
+    // (the owner's ruling of 2026-11-08: no translation takes a line in space the original leaves empty, not at a page's or a
+    // column's foot, not above the next unit; where it does not fit its own lines the whole paragraph shrinks, one size. A part
+    // made before the ruling still states the room under each run of its lines (Room.ends: page 1's foot 79 pt down to the first
+    // ink): it is read by nothing)
     const a = member({
       lines: [
         [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
         [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
         [2, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10],
       ],
-      // (page 1's foot: 79 pt down to the first ink, page 1's lowest unit line at 600; page 2's last line: no room)
       room: {
         below: 0,
         next: 300,
@@ -315,19 +316,36 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
           [1, 79, 600],
           [2, 0, 650],
         ],
-      },
+      } as Placed['room'],
     })
     // (the page's fill off: its growth is its own question)
     const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
-    const [laid] = layPage(part(a), rowsOf([row([{ t: 'text', s: longer }])]), still, metrics()).members
-    expect(laid!.state).toBe('laid')
-    expect(laid!.fit).toMatchObject({ size: 10, borrowed: 1 })
-    // (the borrowed line under the earlier page's last, a pitch down)
-    expect(laid!.lines.map(([y]) => y)).toEqual([700, 688, 676])
+    const lay = (page: number) =>
+      layPage({ ...part(a), page }, rowsOf([row([{ t: 'text', s: longer }])]), still, metrics()).members[0]!
+    const [p1, p2] = [lay(1), lay(2)]
+    expect(p1.state).toBe('laid')
+    expect(p1.fit!.size).toBeLessThan(10)
+    expect(p2.fit!.size).toBe(p1.fit!.size)
+    // (on the original's baselines alone: two lines on page 1, one on page 2)
+    expect(p1.lines.map(([y]) => y)).toEqual([700, 688])
+    expect(p2.lines.map(([y]) => y)).toEqual([700])
   })
-  it('borrows no line through a row of its own that stays under its text (P2: 2608.16117v1-de p27 t89 over its display)', () => {
-    // (its last line a kept row (a held line, a display's row): the room under that row was given to the text over it, and its
-    // lines were laid over the row; the room under the text ends at the row, 3 pt down)
+  it('borrows no line above the next unit: it shrinks where the room under its block would hold a line (Room.below)', () => {
+    // (2602.23285v2-ja p4 t26: a paragraph's fifth line laid in the skip above heading 4.1, the heading glued to it; a part made
+    // before Room.ends states its last line's room alone, 40 pt down to the next paragraph here)
+    const idB = 'b'.repeat(64)
+    const a = member({ room: { below: 40, next: 52 } })
+    const b = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 636, 643, 634, 72, 300, 0, 10]] })
+    const text = 'wort '.repeat(20).trim()
+    const rows = rowsOf([row([{ t: 'text', s: text }]), { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }])
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    const [laid] = layPage({ ...part(a), flows: [[a], [b]] }, rows, still, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.fit!.size).toBeLessThan(10)
+    expect(laid!.lines.map(([y]) => y)).toEqual([700, 688])
+  })
+  it('lays no line through a row of its own that stays under its text (P2: 2608.16117v1-de p27 t89 over its display)', () => {
+    // (its last line a kept row (a held line, a display's row): its lines laid over the row, none under it)
     const idB = 'b'.repeat(64)
     const a = member({
       lines: [
@@ -335,7 +353,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
         [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
         [1, 0, 100, 250, 676, 683, 674, 72, 300, 1, 10],
       ],
-      room: { below: 100, next: 300, ends: [[1, 3, 500]] },
+      room: { below: 100, next: 300 },
     })
     const b = member({ ord: 1, text: idB, lines: [[1, 0, 72, 300, 500, 507, 498, 72, 300, 0, 10]] })
     const pt: Part = { ...part(a), flows: [[a], [b]] }
@@ -343,8 +361,119 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const text = 'wort '.repeat(20).trim()
     const [laid] = layPage(pt, rowsOf([row([{ t: 'text', s: text }])], true), rules, metrics()).members
     expect(laid!.state).toBe('laid')
-    expect(laid!.fit!.borrowed).toBe(0)
     expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
+  })
+  it('fills each frame of a paragraph over a page break at its own leading: a roomy frame is not held to a full one’s', () => {
+    // (the owner on staging, 2026-11-08: 1810.04805v2 p6's "Our best performing system", the last paragraph of a column going on
+    // to the next page, set at the original's pitch with its frame's last line empty, among paragraphs spread to 1.33. One
+    // leading a unit: its part on the next page, two lines in two, held its part here, four lines in five, to the original's
+    // pitch. Each frame of a paragraph is filled over its own block, as a run between displays is, at the paragraph's one size)
+    const zh = rulesFor('zh')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idB] = ['b'.repeat(64), 'c'.repeat(64)]
+    // (two paragraphs over it on the page, each two lines of translation in four: the page's leading theirs, spread)
+    const a = member({
+      ord: 0,
+      text: idA,
+      lines: [700, 688, 676, 664].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [640, 628, 616, 604].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const m = member({
+      ord: 2,
+      lines: [...[580, 568, 556, 544, 532].map((y) => lineAt(1, y)), lineAt(2, 700), lineAt(2, 688)],
+      room: { below: 200, next: 212 },
+    })
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(250) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idB },
+    ])
+    const laid = (page: number) =>
+      layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
+    const [p1, p2] = [laid(1), laid(2)]
+    expect([p1.state, p2.state, p1.fit?.size, p2.fit?.size]).toEqual(['laid', 'laid', 10, 10])
+    // (four lines over the five of its frame here, to its foot; two in two on the next page)
+    expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
+    expect(p2.lines.map(([y]) => y)).toEqual([700, 688])
+  })
+  it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
+    // (the page fill's one size, today's effect (the owner, 2026-11-08: it should look about as today's does), found with the fewest lays:
+    // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph
+    // of two lines at the original's pitch is short of its frame; with room on its lines it grows (to 1.075), and filling them it
+    // holds no step: tried at the first alone, whatever the cap (each try lays it: its lines' extents read, Metrics.ink, once
+    // each). Today's halving tried 1.05 and then 1.025)
+    const de = rulesFor('de')
+    const grown = (x1: number, cap: number) => {
+      let reads = 0
+      const counted: Metrics = { ...metrics(), ink: () => (reads++, [0.7, 0.2, 0]) }
+      const m = member({
+        lines: [
+          [1, 0, 72, x1, 700, 707, 698, 72, x1, 0, 10],
+          [1, 0, 72, x1, 688, 695, 686, 72, x1, 0, 10],
+        ],
+        room: { below: 200, next: 212 },
+      })
+      const R = {
+        ...de,
+        set: { ...de.set, adaptiveFill: { ...(de.set.adaptiveFill as object), size: cap } },
+      } as unknown as typeof de
+      const [laid] = layPage(part(m), rowsOf([row([{ t: 'text', s: 'wort '.repeat(18).trim() }])]), R, counted).members
+      return { size: laid!.fit!.size, reads }
+    }
+    expect(grown(300, 1.1).size).toBe(10.75)
+    const [none, one, all] = [grown(286, 1), grown(286, 1.025), grown(286, 1.1)]
+    expect([none.size, one.size, all.size]).toEqual([10, 10, 10])
+    expect(one.reads).toBeGreaterThan(none.reads)
+    expect(all.reads).toBe(one.reads)
+  })
+  it('keeps a page number’s size and its end: a foot line set flush right grows leftwards into its free row', () => {
+    // (the owner's ruling of 2026-11-08: 2609.36054v2's "page 13 of 14" at the text block's right edge (548.28) was laid from the
+    // original's start and shrunk to 0.825 of its size; its translation keeps the original's size and ends where it ends)
+    const foot = (o: Partial<Placed> = {}) =>
+      member({
+        kind: 'inkheads',
+        align: 'r',
+        lines: [[1, 1, 494.57, 548.28, 34.64, 41.31, 32.69, 302.19, 550.02, 0, 10]],
+        room: { below: 32.69, side: [302.19, 550.02] },
+        ...o,
+      })
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    // (15 characters at half a size each: 75 pt, the original's line 53.71 pt)
+    const [laid] = layPage(part(foot()), rowsOf([row([{ t: 'text', s: 'Seite 13 von 14' }])]), still, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.fit!.size).toBe(10)
+    // (its text from 473.28 to the original's end, its line the free row's from 302.19: a flush-right line's slack before it)
+    const [, x0, x1, items] = laid!.lines[0]!
+    expect([x0, items[0]!.x, x1]).toEqual([302.19, 473.28, 548.28])
+    // (longer than the free row before it (the ink on its baseline at 480, half a size off: 63.28 pt), which it would fit at
+    // 0.825 of its size: never shrunk, left the original's)
+    const crowded = foot({ room: { below: 32.69, side: [480, 550.02] } })
+    const [left] = layPage(
+      part(crowded),
+      rowsOf([row([{ t: 'text', s: 'Seite 13 von 14' }])]),
+      still,
+      metrics(),
+    ).members
+    expect(left!.state).not.toBe('laid')
+    expect(left!.fit).toBeUndefined()
   })
   it('caps a size tie by scale, not by points: a run-in head of a smaller size keeps the original’s ratio (S3)', () => {
     // (2610.30034v1 p2: a head at 8.97 and its paragraph at 9.96, both laid at their size, the paragraph capped at 8.97, 0.9 of

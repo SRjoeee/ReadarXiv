@@ -56,6 +56,12 @@ function fillLeadsOf(p, P) {
     // (the layout found there kept for the page's fill, which lays the unit at that very state wherever the band leaves it its
     // fill leading: fillPage `at`)
     p.fillLaid = { state: st, lead: p.fillLead, l: laid }
+    // (and each frame of a unit over a page or column break its own: framesLeadsOf)
+    const own = frameLeadsOf(p, bx, p.fillLead, hi, laid)
+    if (own) {
+      p.fillLeads = own.leads
+      p.lastLead = own.last
+    }
     return
   }
   if (!at(p, st)) { p.fillLead = null; return }
@@ -65,6 +71,62 @@ function fillLeadsOf(p, P) {
   const floor = Math.max(1, P.leadFloor ?? 1), K = Math.ceil((lo - floor) / 0.01 - 1e-9), L = k => (k >= K ? floor : r3(lo - k * 0.01))
   const found = K > 0 ? closerLead(K, k => at(p, { ...bx, lead: L(k) }), guessCloser(p, K, L, lead => footFloorOf(p.blocks, { ...bx, lead }, p.P, p.s))) : null
   p.fillLead = found ? L(found.k) : lo
+}
+/** each block's frame, a page's or a column's: consecutive blocks on one page that overlap across (pageCutsOf's frames) */
+function framesOf(blocks) {
+  const of = []
+  blocks.forEach((b, bi) => {
+    const a = blocks[bi - 1]
+    of.push(!a ? 0 : a.page === b.page && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) ? of[bi - 1] : of[bi - 1] + 1)
+  })
+  return of
+}
+/**
+ * Each frame of a unit over a page or column break filled over its own block (the owner on staging, 2026-11-08: 1810.04805v2
+ * p6's last paragraph of a column, going on to the next page, held to the original's pitch with its frame's last line empty:
+ * its two lines on the next page filled their two, and one leading a unit held the four here, in five, to theirs). From the
+ * unit's fill leading `lo` (its every frame's), each frame in turn, the earlier ones first, the loosest leading up to `hi` at
+ * which the unit is still set whole and keeps its pages (no line on a later page than its fit set it: keepsPages), the others
+ * at theirs. A frame of one block first tried where its lines at `lo` (`laid`) would end on its last baseline, arithmetic, and
+ * one step looser (no layout more where a frame has no room: most are full), any other first one step looser; then by
+ * halving, as the unit's own. The leadings
+ * of the frames before the last by block (`leads`, the state's), the last frame's (`last`, the state's `lead`); null where the
+ * unit lies in one frame or no frame of it is set looser
+ */
+function frameLeadsOf(p, bx, lo, hi, laid) {
+  const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.ceil((hi - lo) / 0.01 - 1e-9)
+  if (n < 2 || !(steps > 0)) return null
+  const r3 = x => Math.round(x * 1000) / 1000, L = k => Math.min(hi, r3(lo + k * 0.01))
+  const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens) }
+  const leads = p.blocks.map(() => undefined)
+  let last = lo
+  const stateAt = () => ({ ...bx, lead: last, leads: leads.slice() })
+  for (let f = 0; f < n; f++) {
+    const put = v => { if (f === n - 1) last = v; else of.forEach((g, bi) => { if (g === f) leads[bi] = v }) }
+    // (the guess: a frame of one block before the last, its m lines from its first baseline to its last, (m - 1) pitches)
+    const bis = of.flatMap((g, bi) => (g === f ? [bi] : [])), b = p.blocks[bis[0]]
+    const m = laid.lines.filter(l => of[l.block] === f).length, p0 = b.pitch0 ?? 1.2 * p.s
+    const guess = bis.length !== 1 || f === n - 1 ? null : m < 2 ? steps : Math.max(0, Math.min(steps, Math.floor(((b.B[0] - b.B.at(-1)) / ((m - 1) * p0) - lo) / 0.01 + 1e-6)))
+    let ok = 0, no = steps + 1
+    if (guess !== null) {
+      put(L(guess))
+      if (guess === 0 || sets(stateAt())) {
+        ok = guess
+        if (guess === steps) no = ok + 1
+        else { put(L(guess + 1)); if (!sets(stateAt())) no = guess + 1; else ok = guess + 1 }
+      } else no = guess
+    } else {
+      // (a frame of more blocks, or the last, whose gap under it the floor reads: first one step looser, which a full frame,
+      // or the one that held the unit's leading, does not take)
+      put(L(1))
+      if (sets(stateAt())) ok = 1
+      else no = 1
+    }
+    while (no - ok > 1) { const k = (ok + no) >> 1; put(L(k)); if (sets(stateAt())) ok = k; else no = k }
+    put(L(ok))
+  }
+  if (!(last > lo + 1e-9) && !leads.some(v => v !== undefined && v > lo + 1e-9)) return null
+  return { leads, last }
 }
 /**
  * The loosest leading of a closer search's grid at which a unit sets (fillLeadsOf, fillPage): L(k) for k from 1 to K, closer

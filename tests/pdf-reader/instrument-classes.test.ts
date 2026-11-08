@@ -9,6 +9,7 @@ import {
   FORCED_BREAK,
   glueOf,
   glyphPiecesOf,
+  inklessPieces,
   placesOf,
   spansOf,
   textsOf,
@@ -235,6 +236,31 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
   })
 })
 
+describe('the piece of a glyph a page after its opening point (TeX’s stream runs on across a page break)', () => {
+  // (marks.mjs puts a placeholder's opening point before the glue in front of it, so where TeX breaks the line there and the
+  // break is a page's, the point `p<u>.<k>a` stands at the previous page's end and the piece's glyphs on the next: read one page
+  // at a time, no point of the unit was open there and every glyph got no piece, held as A's ink in no group, the translation
+  // drawn over it (2608.16117v1 p11's 𝒫ᵢ(1) = (α₁, β₁), 2609.36054v2 p13, 2610.20967v1 p4); and a piece TeX broke over the
+  // break, its glyphs on both pages (2610.10069v1 p10's citation), lost the next page's)
+  const glyphs = (s: string) => [...s].map((u) => ({ u }))
+  it('keeps a point opened on one page open on the next, until it closes', () => {
+    const open = new Map()
+    const p1 = { points: [{ name: 'p5.3a', glyph: 4 }], glyphs: glyphs('With') }
+    const p2 = { points: [{ name: 'p5.3b', glyph: 3 }], glyphs: glyphs('x=1 is') }
+    expect([...glyphPiecesOf(p1, Array(4).fill('u5'), { open })]).toEqual(Array(4).fill(-1))
+    const got = glyphPiecesOf(p2, [...Array(3).fill('u5.p'), ...Array(3).fill('u5')], { open })
+    expect([...got]).toEqual([3, 3, 3, -1, -1, -1])
+  })
+  it('gives a piece broken over the break its glyphs on both pages', () => {
+    const open = new Map()
+    const p1 = { points: [{ name: 'p5.1a', glyph: 2 }], glyphs: glyphs('a (Mc') }
+    const p2 = { points: [{ name: 'p5.1b', glyph: 7 }], glyphs: glyphs('Fadden) is') }
+    expect([...glyphPiecesOf(p1, ['u5', 'u5', 'u5.p', 'u5.p', 'u5.p'], { open })]).toEqual([-1, -1, 1, 1, 1])
+    const got = glyphPiecesOf(p2, [...Array(7).fill('u5.p'), ...Array(3).fill('u5')], { open })
+    expect([...got]).toEqual([...Array(7).fill(1), -1, -1, -1])
+  })
+})
+
 describe('a head or tail macro that sets nothing on its unit’s line (today’s maker, make.mjs besideMarks)', () => {
   // (the marking gives a paper's macro at a unit's head no point, and one after its last word an opening point alone where its
   // closing one would follow a control word: TeX set its ink, if any, before the start mark or after the end mark, never on the
@@ -299,5 +325,43 @@ describe('a head or tail macro that sets nothing on its unit’s line (today’s
     const cs = classes(probed)
     ;(cs[5] as Map<string, { text?: string }>).get('0')!.text = 'TensorCast'
     expect(besideEmpty(pages as never, rows, probed as never, { classes: cs as never, known: new Set() })).toEqual([])
+  })
+})
+
+describe('the pieces TeX sets no ink for, as the instrument states them (Instrument `empty`)', () => {
+  const units: unknown[] = []
+  units[3] = {
+    kind: 'reference',
+    pieces: [
+      { t: 'text', s: '\nA. Author and B. Author.\n' },
+      ph('\\newblock'),
+      { t: 'text', s: ' A title.\n' },
+      ph('\\newblock'),
+      { t: 'text', s: ' In ' },
+      ph('\\sys'),
+      ph('~'),
+      ph('\\ttfamily'),
+      { t: 'text', s: ', 2019.' },
+    ],
+  }
+  const classes = units.map((u) => (u ? new Map(classesOf((u as { pieces: never[] }).pieces)) : null))
+  it('states a text macro the marking never marks, its rendering never ink (marks.mjs classOf null), as today’s reader drew it', () => {
+    // (a .bbl's \newblock, a declaration: today's file held no row of it and its reader drew it as nothing, proven (tex.mjs
+    // inklessOf); stated nothing, the typesetter left every BibTeX entry unproven, English: 2010.11929v2 p10, 20 of 20)
+    expect(classes[3]!.get('1')).toMatchObject({ cls: 'umacro', unknown: true })
+    expect(inklessPieces(units as never, { classes: classes as never })).toEqual([
+      { unit: 3, piece: '1' },
+      { unit: 3, piece: '3' },
+      { unit: 3, piece: '7' },
+    ])
+  })
+  it('states a paper’s macro the marking marks only where its probe said it sets none; a space never', () => {
+    // (\sys is marked: TeX may set its glyphs as the unit's text, which only the probe tells)
+    expect(inklessPieces(units as never, { classes: classes as never, inkless: ['\\sys'] })).toEqual([
+      { unit: 3, piece: '1' },
+      { unit: 3, piece: '3' },
+      { unit: 3, piece: '5' },
+      { unit: 3, piece: '7' },
+    ])
   })
 })

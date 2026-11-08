@@ -115,7 +115,7 @@ function laidOf(m: Placed, u: DumpUnit, page: number, faceOf: (m: Placed) => Fac
     page,
     state: 'laid',
     off: 1 | (used.size ? 2 : 0) | (relabelled ? 4 : 0),
-    fit: { size: u.size, lead: r2(u.leading * m.lead), track: 0, borrowed: 0 },
+    fit: { size: u.size, lead: r2(u.leading * m.lead), track: 0 },
     lines: out,
     lit: { left: [lineBoxes(m, page)], right: [right], own },
   }

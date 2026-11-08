@@ -7,8 +7,9 @@ import { measureOf, measureOn } from '../unit/blocks.ts'
  *  layout file with only the unit's own lines between, in one frame, and no kept region the text passes; every other block
  *  a flow of its own) */
 const inFlow = (a, b) => a.flow === b.flow
-/** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows */
-const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 ?? 1.2 * s))
+/** a block's foot: the lowest baseline a line of it is laid at, its last (no state borrows under it: the owner's ruling of
+ *  2026-11-08) */
+const lowOf = (b) => b.B.at(-1)
 /**
  * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
  * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
@@ -29,7 +30,7 @@ const lowOf = (b, st, s) => b.B.at(-1) - Math.min(b.free, st.borrow * (b.pitch0 
 function footFloorAt(blocks, st, P, s) {
   const e = P.halfLead, L = Math.max(st.lead, st.next ?? 0)
   if (!e?.foot || !(L > 1 + 1e-9) || !blocks.length || !Number.isFinite(e.below)) return null
-  const bl = blocks.at(-1), low = lowOf(bl, st, s)
+  const bl = blocks.at(-1), low = lowOf(bl)
   if (!(bl.B[0] - low > 0.05)) return null
   // (and the original's own skip at that boundary, its room past its pitch, capped at a pitch as the gate's measure caps
   // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
@@ -90,11 +91,11 @@ function flowMeasureAt(b, y) {
  *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
 function slotsAt(blocks, st, P, s) {
   const out = []
-  // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves
+  // (each block's foot, the lowest a line of it is laid at: its last baseline; a line TeX's rule moves
   // down may go on past it into the next block of its flow where blocks2 found nothing kept between them, `through`, to
   // the foot of the last block it so runs into, `foot`; the page fill's states (`box`) the unit's last frame's no lower than
   // a leading over the next line of its column, footFloorAt)
-  const lows = blocks.map(b => lowOf(b, st, s))
+  const lows = blocks.map(lowOf)
   const floor = st.box ? footFloorAt(blocks, st, P, s) : null
   if (floor !== null) lows[lows.length - 1] = floor
   const feet = lows.slice()
@@ -104,8 +105,11 @@ function slotsAt(blocks, st, P, s) {
   const base = P.blockBase ?? 0
   for (const [bi, b] of blocks.entries()) {
     const p0 = b.pitch0 ?? 1.2 * s
-    const pitch = p0 * st.lead
-    const onGrid = Math.abs(st.lead - 1) < 1e-6
+    // (a block of a frame before the unit's last filled at a leading of its own, `leads` (S.fill.leads: each frame of a paragraph
+    // over a page or column break filled over its own block); the unit's last frame's the state's)
+    const lead = st.leads?.[bi] ?? st.lead
+    const pitch = p0 * lead
+    const onGrid = Math.abs(lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's

@@ -31,6 +31,12 @@ export declare function placesOf(
   pages: readonly { points: readonly { name: string; glyph: number; box?: number }[] }[],
   count: number,
 ): NonNullable<Instrument['places']>
+/** the pieces TeX sets no ink for where they stand, as Instrument `empty` pieces: a paper's macro the probe said sets none
+ *  (`inkless`), and a text macro the marking never marks (marks.mjs classOf null: its rendering is never ink) */
+export declare function inklessPieces(
+  units: readonly ({ pieces?: readonly { t: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; inkless?: readonly string[] | null },
+): NonNullable<Instrument['empty']>
 /** the paper's macros at a unit's head and after its last text that set nothing on the unit's lines (today's maker's
  *  besideMarks): no glyph of no unit's beside the unit's mark on its line, in its column; as Instrument `empty` pieces */
 export declare function besideEmpty(
@@ -43,11 +49,17 @@ export declare function besideEmpty(
   units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
   o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; known?: ReadonlySet<string> },
 ): NonNullable<Instrument['empty']>
-/** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known) */
+/** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known); `open`
+ *  the placeholder points open at the page's start by unit, carried by the caller from page to page in order (it is updated) */
 export declare function glyphPiecesOf(
   pg: { points: readonly { name: string; glyph: number; box?: number }[]; glyphs: readonly { u?: string }[] },
   row: readonly (string | null | undefined)[],
-  o?: { units?: readonly unknown[]; texts?: ReadonlyMap<string, string> | null; names?: ReadonlySet<string> },
+  o?: {
+    units?: readonly unknown[]
+    texts?: ReadonlyMap<string, string> | null
+    names?: ReadonlySet<string>
+    open?: Map<number, number[]>
+  },
 ): Int32Array
 /** the texts the marking's probe showed the paper's macros set, by source (null where none is given) */
 export declare function textsOf(texts: unknown): ReadonlyMap<string, string> | null

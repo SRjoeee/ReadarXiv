@@ -1,5 +1,6 @@
-// design-a's entry over hand-made parts: what each pane lights of a member (Laid.lit: every member lit whole until a part states
-// `cuts`, on A from its lines' boxes, as drawn from its laid lines', its kept ink the same on both) and the page's links as drawn
+// design-a's entry over hand-made parts: what each pane lights of a member (Laid.lit: a member whose row has no sentences lit
+// whole, on A from its lines' boxes, as drawn from its laid lines', its kept ink the same on both; by sentence:
+// lit-sentences.test.ts) and the page's links as drawn
 // (Page.links: moved with the pieces they are over, else at A's boxes, dropped where their ink is off and nothing of it drawn).
 // The reader's highlight (packages/reader compose/highlight.ts) and link layer (compose/links.ts) read these as they are.
 import type { Link, OutPiece, Part, Placed, Row } from '@readarxiv/format'
@@ -61,7 +62,7 @@ const cropOf = (laid: Laid) =>
     ),
   )[0]
 
-describe('Laid.lit: every member lit whole (no part states cuts)', () => {
+describe('Laid.lit: a member lit whole (its row has no sentences)', () => {
   it('lights a laid member from its lines on A on the left and its laid lines as drawn on the right, one entry each', () => {
     const p = layPage(
       part(member()),
@@ -485,6 +486,37 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b.n).toBe(2)
     expect(b.left).toBeCloseTo(6 * 0.5 * b.f, 1)
     expect(b.right).toBeCloseTo(15 * 0.5 * b.f, 1)
+  })
+  it('pairs a right-to-left line’s groups with its annotations in its own direction, the rightmost first (Codex on #634)', () => {
+    // (a Hebrew paragraph's two \href groups: TeX set the first group's text at the line's right; sorted left to right, the first
+    // group's translation took the second's address)
+    const rtl = (l: Placed['lines'][number]) => [...l.slice(0, 9), 8, ...l.slice(10)] as Placed['lines'][number]
+    const m = member({
+      spans: [
+        ['1', { cmd: 'href' }],
+        ['3', { cmd: 'href' }],
+      ],
+    })
+    const first = { url: 'https://example.org/first' }
+    const second = { url: 'https://example.org/second' }
+    const rr = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: 'hier' }] },
+      { t: 'text', s: ' und ' },
+      { t: 'span', id: '3', content: [{ t: 'text', s: 'dort' }] },
+      { t: 'text', s: ' nach.' },
+    ])
+    const links: Link[] = [
+      { box: [100, 697, 130, 708], to: second, owner: [0, ''] },
+      { box: [160, 697, 190, 708], to: first, owner: [0, ''] },
+    ]
+    const p = layPage(part({ ...m, lines: m.lines.map(rtl) }, links), rowsOf([rr]), rules, metrics())
+    const [, x0] = p.members[0]!.lines[0]!
+    const f = p.members[0]!.fit!.size
+    const by = new Map(p.links.map(([b, to]) => ['url' in to ? to.url : '', b[0]] as const))
+    expect(p.links).toHaveLength(2)
+    expect(by.get(first.url)! - x0).toBeCloseTo(6 * 0.5 * f, 1)
+    expect(by.get(second.url)! - x0).toBeCloseTo(15 * 0.5 * f, 1)
   })
   it('pairs a member’s link groups with its annotations by the target each group states where their counts differ', () => {
     // (an \href to one address and a \hyperlink to a destination, and between them a link over text that is no group's: three
@@ -973,7 +1005,7 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     // paragraph's reading, its fit and its line), these numbers that entry's own on this part)
     const { plain: _, ...older } = label()
     const m = layPage(part(older), rowsOf([rowF('Loss')]), rules, metrics()).members[0]!
-    expect(m).toMatchObject({ state: 'laid', off: 1, fit: { size: 8, lead: 1, track: 0, borrowed: 0 } })
+    expect(m).toMatchObject({ state: 'laid', off: 1, fit: { size: 8, lead: 1, track: 0 } })
     expect(m.lines.map(([y, x0, x1, items]) => [y, x0, x1, items.map((it) => [it.s, it.x])])).toEqual([
       [400, 124, 158, [['Loss ', 142]]],
     ])

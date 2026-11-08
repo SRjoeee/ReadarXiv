@@ -109,11 +109,12 @@ export const Style = z.object({
 })
 
 /** a line on A: page, column, x0, x1 (its ink), baseline, top, bottom (its fonts' boxes), m0, m1 (TeX's measure for it),
- *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; unknown bits ignored), and
+ *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; 8 RTL: its characters run right
+ *  to left, its unit's paragraph direction (UAX #9 P2-P3); unknown bits ignored), and
  *  its size (the median of its main glyphs' sizes, the glyphs within 0.85 of its largest where they set a quarter of its
  *  characters: today's line size, MAKE:382-401, by which the typesetter draws the line's band; absent: the member's size) */
 export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int, num.optional()])
-export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4 })
+export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 8 })
 
 /** an element on A. `kind` the class it is drawn by (today's placeholder class, layer2.mjs placeholdersOf's phClassProven,
  *  stated so that no rule of the typesetter reads a source: cite, num, display, other, symbol, macro, umacro, space, zero),
@@ -188,11 +189,8 @@ export const Label = z.object({
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
  *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
- *  crowded); `ends` the room under each run of its text lines (a run's last line: the next line on another page or column, a
- *  kept row, under another's ink (a float set inside the paragraph), or none), each [that line's index, the free depth under it
- *  to the first ink across the run (its lines' own start to their column's end), its own kept rows and elements too, its page's
- *  lowest unit baseline (but a figure text's, an ink figure's and a name's)]: what a translation may borrow there, on each page
- *  it runs over (`below` is its last line's alone, which a part made before states) */
+ *  crowded). No room under each run of its lines (`ends`, which a part made before 2026-11-08 states and nothing reads): no
+ *  translation borrows a line (the owner's ruling of 2026-11-08) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -202,7 +200,6 @@ export const Room = z.object({
   // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
   bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
   under: num.optional(),
-  ends: z.array(z.tuple([int, num, num])).optional(),
 })
 /** a generated word (a babel name's key, Rules.words), its counter where it leads one */
 export const Word = z.object({
@@ -228,7 +225,13 @@ export const Placed = z.object({
   label: Label.optional(),
   tail: z.array(z.tuple([z.string(), Style])).optional(),
   room: Room,
-  cuts: z.array(z.tuple([int, int, num])).optional(),
+  // where on A a sentence of its may begin: each word of its source projection (the text a row's `sentences.src` counts in:
+  // text pieces joined, each element and nested unit one character, a group's edges none), in order, as [its offset there, the
+  // index in `lines` of the line its first glyph stands on, that glyph's x0]; a word whose letters are not the page's in order
+  // [offset, -1, 0]. Stated for a unit lit by sentence (Unit.sentences); a row's start is found at its sentence's first word
+  // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
+  // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
+  words: z.array(z.tuple([int, int, num])).optional(),
   fixed: int.optional(),
   plain: z.string().optional(),
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's

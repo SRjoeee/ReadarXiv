@@ -20,11 +20,11 @@ export const stateOf = (st: FitState | Raw | null | undefined): Json => {
     track: fin(s.track),
     trackLatin: fin(s.trackLatin),
     compress: fin(s.compress),
-    borrow: fin(s.borrow),
     knob: (s.knob ?? null) as Json,
     ...(s.box ? { box: true } : {}),
     ...(s.next !== undefined ? { next: fin(s.next) } : {}),
     ...(s.fitTrack !== undefined ? { fitTrack: fin(s.fitTrack) } : {}),
+    ...(Array.isArray(s.leads) ? { leads: (s.leads as unknown[]).map(fin) } : {}),
   }
 }
 

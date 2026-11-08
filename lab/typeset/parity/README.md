@@ -136,6 +136,15 @@ unit.
 | `lead` | a text's leading tighter than the original's while its block has room: its drawn pitch over its size (the median of its consecutive baselines' gaps under 2.5 sizes) against the original's lines', the tightening as a share of it, counted where its last drawn line stands a pitch or more over the original's last (a block it fills may be tightened to fit, the owner's ruling 1); the original's 0 (1810.04805 p8's "We first examine…", 2010.11929 p5) | a twentieth of it | 0.6 pt of a 12 pt pitch, a step a reader sees between neighbouring paragraphs |
 | `ink` | the units both draw whose original ink is black (arXiv's page reaches luminance 0.05 or less in their lines) and whose drawn fill is not black (the owner's ruling 7: the PDF's own black) | any | the owner's ruling |
 
+The highlight's granularity is judged apart from its coverage (`sentences.mjs`, under the `highlight` flag), since boxes
+that cover a unit's lines tell nothing of whether they are the unit's or a sentence's (the maintainer found on staging,
+2026-11-08, v2 lighting every unit whole where today pairs sentence by sentence: coverage passed it). A unit today lights by
+sentence, of two sentences or more (today's `litBoxes` kept per sentence, `leftBy`/`rightBy`), is worse where v2 lights it
+whole, pairs another count of sentences, lights a sentence on arXiv's page whose boxes meet most another of today's sentences
+there or none of its own, or lights on a page as drawn a sentence today does not (or not one it does). A unit of one sentence
+is lit as that sentence's shape, the unit whole, alike on both; a drawing of before the per-sentence boxes is not judged by it
+(`measures.sentences.unread`).
+
 ## The maintainer's rulings (2026-11-08)
 
 The gate judges by them where they and today's output differ; a difference the ruling decides is recorded as `ruling` on the

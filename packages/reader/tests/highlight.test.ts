@@ -93,3 +93,69 @@ describe('the highlight of a figure text set turned', () => {
     for (const el of Object.values(els)) el.remove()
   })
 })
+
+describe('the highlight by sentence', () => {
+  // (a member of three sentences, lit by sentence on both panes (Laid.lit: one entry a sentence): on the left its lines on A cut at
+  // its starts, on the right its laid lines' tokens)
+  const left: Box[][] = [
+    [[72, 698, 200, 707]],
+    [
+      [200, 698, 300, 707],
+      [72, 686, 150, 695],
+    ],
+    [
+      [150, 686, 300, 695],
+      [72, 674, 200, 683],
+    ],
+  ]
+  const right: Box[][] = [
+    [[80, 690, 150, 700]],
+    [
+      [150, 690, 300, 700],
+      [80, 676, 120, 686],
+    ],
+    [[120, 676, 280, 686]],
+  ]
+  const page: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [{ ord: 3, page: 1, state: 'laid', off: 1, lines: [], lit: { left, right, own: [] } }],
+  }
+  it('lights the sentence under the pointer and its translation, and only it, on both panes', () => {
+    const { els, hl } = setUp(page)
+    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.left)
+    // (a point of the second sentence's second row on A, x 100, y 690 up: 110 down)
+    const t = hl.at('left', 100, 110)
+    expect(t).toEqual({ id: 3, s: 1 })
+    hl.light(t)
+    expect(hl.bands()).toEqual({ left: 1, right: 1 })
+    // (the second sentence's rows on each pane, one shape of two rows: from x 72 on the left, 80 on the right, less the pad)
+    const shape = (side: 'left' | 'right') => els[side].querySelector<HTMLElement>('.axt-hl')!
+    expect(shape('left').getAttribute('class')).toContain('axt-hl-shape')
+    expect(shape('left').style.left).toBe(`${72 - PAD}px`)
+    expect(shape('right').getAttribute('class')).toContain('axt-hl-shape')
+    expect(shape('right').style.left).toBe(`${80 - PAD}px`)
+    // (its translation's third sentence from the right: one row there, two on A)
+    spy.mockReturnValue(els.right)
+    const third = hl.at('right', 200, 800 - 680)
+    expect(third).toEqual({ id: 3, s: 2 })
+    hl.light(third)
+    expect(shape('right').getAttribute('class')).not.toContain('axt-hl-shape')
+    expect(shape('left').style.left).toBe(`${72 - PAD}px`)
+    expect(shape('left').getAttribute('class')).toContain('axt-hl-shape')
+    // (lit whole: every sentence's shape)
+    hl.light({ id: 3, s: -1 })
+    expect(hl.bands()).toEqual({ left: 3, right: 3 })
+    spy.mockRestore()
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('paints nothing on a page that holds none of the sentence lit (its kept ink on another page, lit alone)', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 3, s: 3 })
+    expect(hl.bands()).toEqual({ left: 0, right: 0 })
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
