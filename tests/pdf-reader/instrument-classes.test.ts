@@ -13,6 +13,7 @@ import {
   outsidePieces,
   placesOf,
   spansOf,
+  splitInkOf,
   tailInkOf,
   textsOf,
 } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
@@ -609,5 +610,57 @@ describe('the ink TeX set past a unit’s end point for its tail pieces that no 
     const page = { glyphs: glyphs('at[1]%Next'), points: [pt('5s', 0), pt('5e', 2), pt('p5.1a', 2), pt('p5.1b', 5), pt('6s', 6)] }
     const row = [...fill(2, 'u5'), ...fill(3, null), null, ...fill(4, 'u6')]
     expect(run(page, row, units, [5, [['1', { cls: 'cite' }], ['2', { cls: 'symbol', copy: '%', sym: ['%'] }]]])).toEqual([{ unit: 5, piece: '2', page: 0, glyphs: [5], role: 1 }])
+  })
+})
+
+describe('the ink of a macro of its opening point alone and the one unmarked piece after it (splitInkOf)', () => {
+  // (2608.25210v2 u41, `We introduce \sys\footnote{…}, a provenance …`: \sys may read ahead, so its opening point is alone and no
+  // mark may stand before the call after it; own.mjs parts the two by \sys's text only where its next mark is the unit's next
+  // one, and here the unit runs on past the column's end: "BLIP" and the call's "3" stayed the unit's text, the call had no ink,
+  // and the typesetter left the paragraph English on p2 and p3 (owner comment #50). TeX states \sys's text (its probe's) and the
+  // text after the call as written: the call's ink is what stands between them)
+  type G = { u: string }
+  const glyphs = (s: string): G[] => [...s].map((u) => ({ u }))
+  const pt = (name: string, glyph: number) => ({ name, glyph, box: 0 })
+  const owners = (row: (string | null)[]) => {
+    const O = { unit: new Int32Array(row.length).fill(-1), role: new Uint8Array(row.length), piece: new Int32Array(row.length).fill(-1) }
+    row.forEach((g, j) => {
+      const m = /^u(\d+)(?:\.(\d+))?$/.exec(g ?? '')
+      if (!m) return
+      O.unit[j] = Number(m[1])
+      O.role[j] = m[2] === undefined ? 1 : 2
+      if (m[2] !== undefined) O.piece[j] = Number(m[2])
+    })
+    return O
+  }
+  const blip = (pieces: unknown[]) => {
+    const units: unknown[] = []
+    units[41] = { kind: 'para', pieces }
+    return units
+  }
+  const source = [{ t: 'text', s: 'We introduce ' }, ph('\\sys'), { t: 'nested', unit: {} }, { t: 'text', s: ',\n' }, { t: 'open', src: '{' }, ph('\\em'), { t: 'text', s: ' a provenance' }, { t: 'close', src: '}' }]
+  const classes: [string, unknown][] = [['1', { cls: 'umacro', unknown: true, text: 'BLIP' }], ['2', { cls: 'num', mark: true, nested: true }], ['5', { cls: 'zero' }]]
+  const page = { glyphs: glyphs('WeintroduceBLIP3,aprovenance'), points: [pt('41s', 0), pt('p41.1a', 11), pt('be1', 28)] }
+  const run = (pg: { glyphs: G[]; points: unknown[] }, row: (string | null)[], units = blip(source), cls = classes) => {
+    const by: unknown[] = []
+    by[41] = new Map(cls)
+    return splitInkOf([{ boxes: [], ...pg }] as never, units as never, { glyphs: [owners(row)], classes: by } as never)
+  }
+  it('gives the macro the glyphs from its opening point that spell its text, and the call what stands before the text after it', () => {
+    expect(run(page, Array(28).fill('u41'))).toEqual([
+      { unit: 41, piece: '1', page: 0, glyphs: [11, 12, 13, 14], role: 2 },
+      { unit: 41, piece: '2', page: 0, glyphs: [15], role: 2 },
+    ])
+  })
+  it('gives none where the macro’s text is not spelled there, another unit owns a glyph, or the call would own nothing', () => {
+    expect(run({ ...page, glyphs: glyphs('WeintroduceBLOP3,aprovenance') }, Array(28).fill('u41'))).toEqual([])
+    expect(run(page, [...Array(15).fill('u41'), 'u42', ...Array(12).fill('u41')])).toEqual([])
+    expect(run({ ...page, glyphs: glyphs('WeintroduceBLIP,aprovenance') }, Array(27).fill('u41'))).toEqual([])
+  })
+  it('gives none where two pieces of no point follow it, or the ownership gave the macro ink', () => {
+    // (a paper's macro of ink after the call: which of the two set what stands between is not stated)
+    const two = [...source.slice(0, 3), ph('\\cmark'), ...source.slice(3)]
+    expect(run(page, Array(28).fill('u41'), blip(two), [...classes, ['3', { cls: 'umacro', unknown: true }]])).toEqual([])
+    expect(run(page, [...Array(11).fill('u41'), ...Array(4).fill('u41.1'), ...Array(13).fill('u41')])).toEqual([])
   })
 })

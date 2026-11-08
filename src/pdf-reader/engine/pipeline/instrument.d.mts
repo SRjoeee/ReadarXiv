@@ -75,6 +75,17 @@ export declare function tailInkOf(
   ink: { unit: number; piece: string; page: number; glyphs: number[]; role: number }[]
   unfound: { unit: number; piece: string }[]
 }
+/** the ink of a macro of its opening point alone and of the one unmarked piece after it, where the ownership's reading stops: each
+ *  claim's unit, piece id, page index from 0, glyphs and role */
+export declare function splitInkOf(
+  pages: readonly {
+    glyphs: readonly { u?: string; blank?: boolean }[]
+    boxes?: readonly number[]
+    points?: readonly { name: string; glyph: number; box?: number }[]
+  }[],
+  units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  o?: { glyphs?: readonly Owners[]; classes?: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[] },
+): { unit: number; piece: string; page: number; glyphs: number[]; role: number }[]
 /** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known); `open`
  *  the placeholder points open at the page's start by unit, carried by the caller from page to page in order (it is updated) */
 export declare function glyphPiecesOf(

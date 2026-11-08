@@ -17,7 +17,7 @@
 import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
-import { regionsOf } from '../layout/stream.mjs'
+import { regionsOf, WANT } from '../layout/stream.mjs'
 import { lastTexLog, startOf } from '../source/latex-front.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
@@ -608,6 +608,56 @@ const BRACKET_POINT = /^[bf][se]\d+$/
 /** a text as its glyphs spell it: NFKC, case aside (TeX may set it in capitals, \MakeUppercase or faked small capitals, which the
  *  probe's box does not: own.mjs's and the maker's lead reading, leadNorm), white space out */
 const spelled = t => (t ?? '').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+/** what the readings of a piece's ink below share: each unit's and piece's point by name ([page, index]) and the units whose points
+ *  TeX set more than once; each page's regions (stream.mjs regionsOf); the last glyph the ownership gave each unit's element (by
+ *  `${unit}|${piece}`); what TeX states a piece sets (`setting`: a text symbol's character, the unit's text; the probe's text of a
+ *  paper's macro, a literal piece's characters, the element's), a place to read from (`placeAt`: its page, its glyph, the first
+ *  point index past it, its region) and the glyph a reading from it stops at (`stopOf`: the stream's next point but a body's or a
+ *  float's bracket and the unit's own end point) */
+function pieceReading(pages, { glyphs = [], classes = [] } = {}) {
+  const at = new Map(), twice = new Set()
+  pages.forEach((pg, p) => (pg.points ?? []).forEach((pt, q) => {
+    const m = START_POINT.exec(pt.name) ?? END_POINT.exec(pt.name) ?? OWN_POINT.exec(pt.name)
+    if (!m) return
+    if (at.has(pt.name)) twice.add(Number(m[1]))
+    at.set(pt.name, [p, q])
+  }))
+  const regions = new Map()
+  const regionOf = p => regions.get(p) ?? regions.set(p, regionsOf({ glyphs: { n: pages[p].glyphs.length }, boxes: pages[p].boxes ?? [], points: pages[p].points ?? [] })).get(p)
+  const lastOwned = new Map()
+  glyphs.forEach((O, p) => { for (let j = 0; j < (O?.unit.length ?? 0); j++) if (O.unit[j] >= 0 && O.role[j] === ROLE.element && O.piece[j] >= 0) lastOwned.set(`${O.unit[j]}|${O.piece[j]}`, [p, j]) })
+  const setting = (u, k, piece) => {
+    const sym = piece.t === 'ph' ? symbolText(piece.src) : null
+    if (sym !== null) return { want: spelled(sym), role: ROLE.text }
+    const c = classes[u]?.get(String(k))
+    const t = (c?.cls === 'macro' || c?.cls === 'umacro') && typeof c.text === 'string' ? c.text : (c?.literal || c?.url) && c.copy ? c.copy : ''
+    return spelled(t) ? { want: spelled(t), role: ROLE.element } : null
+  }
+  const placeAt = ([p, q]) => ({ p, g: pages[p].points[q].glyph, q: q + 1, r: regionOf(p).at[q] })
+  const stopOf = (u, from) => {
+    const pts = pages[from.p].points ?? []
+    for (let x = from.q; x < pts.length; x++) {
+      const name = pts[x].name, e = END_POINT.exec(name)
+      if (!BRACKET_POINT.test(name) && !(e && Number(e[1]) === u)) return pts[x].glyph
+    }
+    return pages[from.p].glyphs.length
+  }
+  return { at, twice, regionOf, lastOwned, setting, placeAt, stopOf }
+}
+/** the glyphs of `pages` from `from` (pieceReading's place) up to `stop` in its region that spell `want` from the first, character
+ *  for character (spelled, a blank glyph passed over), each one `mine` allows; null where they do not */
+function spelledRun(pages, regionOf, from, stop, want, mine) {
+  const pg = pages[from.p], R = regionOf(from.p), got = []
+  let n = 0
+  for (let j = from.g; j < stop && n < want.length; j++) {
+    if (R.glyph[j] !== from.r || !inked(pg.glyphs[j])) continue
+    const t = spelled(pg.glyphs[j].u)
+    if (!mine(from.p, j) || !t || !want.startsWith(t, n)) return null
+    got.push(j)
+    n += t.length
+  }
+  return n === want.length ? got : null
+}
 /**
  * The ink TeX set for a unit's tail pieces past its end point (lanes/past-end.md). The marking sets a unit's end point after its last
  * text, so a piece of ink after that text with no closing point of its own — a paper's macro that may read ahead, its opening point
@@ -629,53 +679,12 @@ const spelled = t => (t ?? '').normalize('NFKC').toLowerCase().replace(/\s/gu, '
  * said set no ink
  */
 export function tailInkOf(pages, units, { glyphs = [], classes = [], inkless = null } = {}) {
-  const at = new Map(), twice = new Set()
-  pages.forEach((pg, p) => (pg.points ?? []).forEach((pt, q) => {
-    const m = START_POINT.exec(pt.name) ?? END_POINT.exec(pt.name) ?? OWN_POINT.exec(pt.name)
-    if (!m) return
-    if (at.has(pt.name)) twice.add(Number(m[1]))
-    at.set(pt.name, [p, q])
-  }))
-  const regions = new Map()
-  const regionOf = p => regions.get(p) ?? regions.set(p, regionsOf({ glyphs: { n: pages[p].glyphs.length }, boxes: pages[p].boxes ?? [], points: pages[p].points ?? [] })).get(p)
-  // (the last glyph the ownership gave each unit's element, by unit and piece)
-  const lastOwned = new Map()
-  glyphs.forEach((O, p) => { for (let j = 0; j < (O?.unit.length ?? 0); j++) if (O.unit[j] >= 0 && O.role[j] === ROLE.element && O.piece[j] >= 0) lastOwned.set(`${O.unit[j]}|${O.piece[j]}`, [p, j]) })
+  const { at, twice, regionOf, lastOwned, setting, placeAt, stopOf } = pieceReading(pages, { glyphs, classes })
   const noInk = new Set(inkless ?? [])
   const claimed = new Set()
   const free = (p, j) => (glyphs[p]?.unit[j] ?? -1) < 0 && !claimed.has(`${p}|${j}`)
   const real = q => q?.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : '')
-  /** what TeX sets for a piece, and whose its glyphs are: a text symbol's character the text's, else the element's */
-  const setting = (u, k, piece) => {
-    const sym = piece.t === 'ph' ? symbolText(piece.src) : null
-    if (sym !== null) return { want: spelled(sym), role: ROLE.text }
-    const c = classes[u]?.get(String(k))
-    const t = (c?.cls === 'macro' || c?.cls === 'umacro') && typeof c.text === 'string' ? c.text : (c?.literal || c?.url) && c.copy ? c.copy : ''
-    return spelled(t) ? { want: spelled(t), role: ROLE.element } : null
-  }
-  /** a place in B's stream to read from: its page, its glyph, the first point index past it, its region */
-  const placeAt = ([p, q]) => ({ p, g: pages[p].points[q].glyph, q: q + 1, r: regionOf(p).at[q] })
-  /** the glyphs from `from` that spell `want`, as above; null where they do not */
-  const read = (u, from, want) => {
-    const pg = pages[from.p], pts = pg.points ?? [], R = regionOf(from.p)
-    let stop = pg.glyphs.length
-    for (let x = from.q; x < pts.length; x++) {
-      const name = pts[x].name, e = END_POINT.exec(name)
-      if (BRACKET_POINT.test(name) || (e && Number(e[1]) === u)) continue
-      stop = pts[x].glyph
-      break
-    }
-    const got = []
-    let n = 0
-    for (let j = from.g; j < stop && n < want.length; j++) {
-      if (R.glyph[j] !== from.r || !inked(pg.glyphs[j])) continue
-      const t = spelled(pg.glyphs[j].u)
-      if (!free(from.p, j) || !t || !want.startsWith(t, n)) return null
-      got.push(j)
-      n += t.length
-    }
-    return n === want.length ? got : null
-  }
+  const read = (u, from, want) => spelledRun(pages, regionOf, from, stopOf(u, from), want, free)
   const ink = [], unfound = []
   const take = (u, k, p, run, role) => {
     for (const j of run) claimed.add(`${p}|${j}`)
@@ -724,6 +733,70 @@ export function tailInkOf(pages, units, { glyphs = [], classes = [], inkless = n
     }
   })
   return { ink, unfound }
+}
+
+/**
+ * The ink of a piece TeX gave its opening point alone and of the one unmarked piece after it (lanes/past-end.md): a paper's macro
+ * that may read ahead has no closing point, and where the piece right after it is one no mark may stand before (`\\sys\\footnote{…}`:
+ * nothing of ours may stand between a macro that reads ahead and what it may read), neither has a point between them. own.mjs parts
+ * the two by the macro's text only where its next mark is the unit's own next one (stream.mjs ownedOf's `split`); where the unit
+ * runs on past its column's end, its reading stops, the two glyph runs stay the unit's text, and the second piece, of no ink, leaves
+ * its unit unproven: 2608.25210v2 u41, `We introduce \\sys\\footnote{…}, a provenance …`, English on p2 and p3 in both readers (owner
+ * comment #50). TeX states both bounds: the macro's text (pieceReading's `setting`, its probe's), which the glyphs from its opening
+ * point spell, and the text after the second piece as written, which no piece between sets; so the macro's ink is that run and the
+ * second piece's what stands from its end to where the glyphs spell the text after it (its first WANT characters, stream.mjs's, white
+ * space out; to the reading's stop where it runs on past it), at least one glyph. Only where the second is the one piece of ink
+ * between (white space aside), neither has a point of its own or ink the ownership gave it, and every glyph read is no unit's or the
+ * unit's own text; a text symbol's glyph stays its unit's text. Returns the claims as tailInkOf's `ink`
+ */
+export function splitInkOf(pages, units, { glyphs = [], classes = [] } = {}) {
+  const { at, twice, regionOf, lastOwned, setting, placeAt, stopOf } = pieceReading(pages, { glyphs, classes })
+  const ink = []
+  units.forEach((unit, u) => {
+    const P = unit?.pieces ?? []
+    if (twice.has(u)) return
+    const point = k => ['a', 'b', 'g'].some(x => at.has(`p${u}.${k}${x}`) || at.has(`n${u}.${k}${x}`))
+    // (glyphs the reading may take: no unit's, or the unit's own text, which own.mjs gives what stands between its points)
+    const mine = (p, g) => { const O = glyphs[p]; return (O?.unit[g] ?? -1) < 0 || (O.unit[g] === u && O.role[g] === ROLE.text) }
+    P.forEach((piece, k) => {
+      const a = at.get(`p${u}.${k}a`) ?? at.get(`n${u}.${k}a`)
+      if (!a || piece.t !== 'ph' || at.has(`p${u}.${k}b`) || at.has(`n${u}.${k}b`) || at.has(`p${u}.${k}g`) || lastOwned.has(`${u}|${k}`)) return
+      let j = k + 1
+      while (j < P.length && P[j].t === 'text' && !/\S/.test(P[j].s ?? '')) j++
+      if (j >= P.length || (P[j].t !== 'ph' && P[j].t !== 'nested') || classOf(P[j]) === null || point(j) || lastOwned.has(`${u}|${j}`)) return
+      // (the text after it, to the next piece of ink: its groups' opens and closes and the pieces that set nothing passed over)
+      let after = ''
+      for (let q = j + 1; q < P.length && after.length < WANT; q++) {
+        const x = P[q]
+        if (x.t === 'text') after += spelled(x.s)
+        else if (x.t !== 'open' && x.t !== 'close' && classOf(x) !== null) break
+      }
+      const want = after.slice(0, WANT), set = setting(u, k, piece)
+      if (!want || !set) return
+      const from = placeAt(a), stop = stopOf(u, from)
+      const run = spelledRun(pages, regionOf, from, stop, set.want, mine)
+      if (!run) return
+      const R = regionOf(from.p), pg = pages[from.p], rest = []
+      for (let g = run.at(-1) + 1; g < stop; g++) if (R.glyph[g] === from.r && inked(pg.glyphs[g])) rest.push(g)
+      // (where the text after it begins: the first glyph past one of the second piece's from which they spell it, or spell the
+      // start of it up to the reading's stop)
+      const begins = x => {
+        let n = 0
+        for (let y = x; y < rest.length && n < want.length; y++) {
+          const t = spelled(pg.glyphs[rest[y]].u)
+          if (!mine(from.p, rest[y]) || !t || !want.startsWith(t, n)) return false
+          n += t.length
+        }
+        return n > 0
+      }
+      let e = 1
+      while (e < rest.length && !begins(e)) e++
+      if (e >= rest.length || rest.slice(0, e).some(g => !mine(from.p, g))) return
+      if (set.role === ROLE.element) ink.push({ unit: u, piece: String(k), page: from.p, glyphs: run, role: ROLE.element })
+      if (P[j].t === 'nested' || symbolText(P[j].src) === null) ink.push({ unit: u, piece: String(j), page: from.p, glyphs: rest.slice(0, e), role: ROLE.element })
+    })
+  })
+  return ink
 }
 
 /**
@@ -861,6 +934,16 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (the ink TeX set for a unit's tail pieces past its end point that no point of theirs bounds, its glyphs no unit's that spell
   // what TeX sets for each; and the text macros there whose ink it does not find, whose probe's text then says no more than
   // TeX's: their glyphs are no text of their unit's, past its end point (tailInkOf). classesBy's are the units' PieceClass objects)
+  // (the ink of a macro of its opening point alone and of the one unmarked piece after it, where own.mjs's reading of the two
+  // stops: splitInkOf)
+  for (const c of splitInkOf(pages, units, { glyphs, classes: classesBy })) {
+    const O = glyphs[c.page]
+    for (const j of c.glyphs) {
+      O.unit[j] = c.unit
+      O.role[j] = c.role
+      O.piece[j] = Number(c.piece)
+    }
+  }
   const tail = tailInkOf(pages, units, { glyphs, classes: classesBy, inkless })
   for (const c of tail.ink) {
     const O = glyphs[c.page]
