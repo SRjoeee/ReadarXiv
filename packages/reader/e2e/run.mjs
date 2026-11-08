@@ -51,7 +51,9 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
 }
 const indexOf = {}
 /** the stand-in of our server's v2 routes: each paper's document; a scenario a check sets (`modes[seg]`): 'not-opened' (a 404
- *  until the open, then preparing for `prepareMs`, then the document), else the document at once; and every ask, logged */
+ *  until the open, then preparing for `prepareMs`, then the document), 'stale' (a layer of another build and no run of the
+ *  target until the open, then that layer while the paper is prepared again for `prepareMs`, then a newer catalog with the
+ *  target's rows), else the document at once; and every ask, logged */
 const docs = {},
   rowsObjects = new Map(),
   modes = {},
@@ -60,8 +62,10 @@ const docs = {},
 const DELTAS = 10
 const deltasOf = {}
 /** each paper's twin head: its head's bytes and a newline, another catalog digest over the same layer (a scenario's newer
- *  catalog, `recatalog`), its object by path */
+ *  catalog, `recatalog`), its object by path; and its layer made again (`stale`'s new build): a head whose parts are its own,
+ *  each part without its last flow (a page laid from it lays one member fewer than one laid from the part before) */
 const twins = {},
+  rebuilt = {},
   twinObjects = new Map()
 for (const [name, f] of Object.entries(fixtures)) {
   const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
@@ -77,6 +81,27 @@ for (const [name, f] of Object.entries(fixtures)) {
     const sha256 = createHash('sha256').update(bytes).digest('hex')
     twins[seg] = { path: `p/${seg}/fx/${sha256}`, sha256, bytes: bytes.length }
     twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, bytes)
+  }
+  {
+    const object = (b) => {
+      const sha256 = createHash('sha256').update(b).digest('hex')
+      twinObjects.set(`/api/v2/o/p/${seg}/fx/${sha256}`, b)
+      return { path: `p/${seg}/fx/${sha256}`, sha256, bytes: b.length }
+    }
+    const h = JSON.parse(readFileSync(join(f.bundle, `${headDigest}.head`), 'utf8'))
+    const members = {}
+    const parts = h.parts.map((d) => {
+      if (!d) return d
+      const part = JSON.parse(readFileSync(join(f.bundle, `${d}.part`), 'utf8'))
+      const flows = part.flows.length > 1 ? part.flows.slice(0, -1) : part.flows
+      members[part.page] = flows.flat().length
+      return object(Buffer.from(JSON.stringify({ ...part, flows }))).sha256
+    })
+    rebuilt[seg] = {
+      catalog: object(Buffer.from(JSON.stringify({ ...h, parts }))),
+      parts: parts.filter(Boolean),
+      members,
+    }
   }
   indexOf[name] = {
     paper: `${head.paper.id}v${head.paper.version}`,
@@ -215,6 +240,15 @@ const fixtureRoute = {
     return res.end(readFileSync(at))
   },
 }
+/** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
+ *  work made by the open and not started (none of the wanted units told yet) */
+const staleOpened = (d, target) => ({
+  ...d,
+  rev: 3,
+  prepare: { ...d.prepare, attempt: 2, state: 'running', stage: 'compiling' },
+  layer: { ...d.layer, stale: true },
+  targets: target ? { [target]: { ...d.targets[target], attempt: 0, state: 'none', rows: [], done: 0, total: 0 } } : {},
+})
 const v2Route = {
   prefix: '/api/v2/',
   handle(req, res, url) {
@@ -276,6 +310,26 @@ const v2Route = {
           },
         })
       }
+      // (a layer of another build than the one our server runs and no run of the target (staging, 2026-11-08: PIPELINE 77 to 78,
+      // 1706.03762v7): served as it is, nothing started, until an open; then the old layer while the paper is prepared again,
+      // the target's run made and not started; then the new build's catalog, a head of parts of its own, and the target's rows)
+      if (m?.kind === 'stale') {
+        if (!m.opened)
+          return json(200, {
+            ...d,
+            rev: 2,
+            prepare: { ...d.prepare, attempt: 1 },
+            layer: { ...d.layer, stale: true },
+            targets: {},
+          })
+        if (performance.now() - m.opened < m.prepareMs) return json(200, staleOpened(d, url.searchParams.get('t')))
+        return json(200, {
+          ...d,
+          rev: 4,
+          prepare: { ...d.prepare, attempt: 2 },
+          layer: { ...d.layer, catalog: rebuilt[d.pv].catalog },
+        })
+      }
       // (a newer catalog once the check says so: the same layer under the twin head. Our server makes one by a prepare again,
       // the layer before it served meanwhile, and the follow keeps its pace of a run while that prepare runs: a document in
       // which nothing runs is followed again a minute on, client.ts IDLE_MS)
@@ -295,6 +349,7 @@ const v2Route = {
         if (!d) return json(404, { error: 'not-found' })
         const m = modes[d.pv]
         if (m) m.opened ??= performance.now()
+        if (m?.kind === 'stale') return json(200, { doc: staleOpened(d, ask.target), follow: null })
         json(200, {
           doc: {
             ...d,
@@ -1103,6 +1158,57 @@ await check('reader: a paper being prepared, opened and followed to its layer (w
   assert(seen.has('preparing') && seen.has('ready'), `layer states ${[...seen]}`)
   return { layer: [...seen] }
 })
+await check(
+  'reader: a stale layer (another build than our server runs) with no run of the target: opened once, after the first follow; the old layer drawn and followed meanwhile; the new catalog, its own parts and its rows taken when they land (staging, 2026-11-08)',
+  async () => {
+    const seg = indexOf['s2-splits'].seg
+    modes[seg] = { kind: 'stale', prepareMs: 1500 }
+    const from = v2log.length
+    try {
+      const { page, context, errors } = await newPage()
+      await page.evaluate(() => window.__h.reader('s2-splits', { host: 'web' }))
+      const seen = []
+      const t0 = Date.now()
+      for (;;) {
+        const s = await page.evaluate(() => {
+          const r = window.__h.readers[0].reader
+          return { layer: r.state().layer.s, rows: r.state().rows.s, laid: r.probe().laidPages }
+        })
+        if (seen.at(-1) !== s.layer) seen.push(s.layer)
+        if (s.rows === 'complete' && s.laid > 0) break
+        if (Date.now() - t0 > 25_000)
+          throw new Error(`not laid in 25 s: ${JSON.stringify({ s, seen, v2: v2log.slice(from).map((x) => x.what) })}`)
+        await page.waitForTimeout(50)
+      }
+      const asked = await page.evaluate(() => window.__h.readers[0].asked.map((a) => a.url))
+      // (what the composer laid the new catalog's pages from: the parts it was given, as the engine's lay is handed them)
+      const lays = await page.evaluate(() => {
+        const marks = window.__h.marks
+        const gen = Math.max(...marks.filter((m) => m.what === 'lay-asked').map((m) => m.gen))
+        return marks.filter((m) => m.what === 'lay' && m.gen === gen).map((m) => [m.page, m.members])
+      })
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const mine = v2log.slice(from).filter((x) => x.what === 'open' || x.seg === seg)
+      const opens = mine.filter((x) => x.what === 'open')
+      assert(opens.length === 1 && opens[0].ask.target === 'de', `opens ${JSON.stringify(opens)}`)
+      assert(mine[0]?.what === 'follow', `the follow first: ${JSON.stringify(mine.slice(0, 2))}`)
+      // (the old layer kept while the paper is prepared again: ready from its first document on, never let go)
+      assert(seen.join() === 'none,ready', `layer states ${seen}`)
+      // (the new catalog's pages laid from its own parts, never from the parts of the head before: staging, 1706.03762v7)
+      const fresh = [rebuilt[seg].catalog.sha256, ...rebuilt[seg].parts]
+      const unread = fresh.filter((d) => !asked.some((u) => u.endsWith(d)))
+      assert(!unread.length, `the new layer's objects not read: ${unread}`)
+      assert(
+        lays.length && lays.every(([n, k]) => k === rebuilt[seg].members[n]),
+        `the new catalog's pages laid from the parts before: ${JSON.stringify({ lays, members: rebuilt[seg].members })}`,
+      )
+      return { layer: seen, follows: mine.length - opens.length, parts: rebuilt[seg].parts.length }
+    } finally {
+      delete modes[seg]
+    }
+  },
+)
 await check(
   'reader: the page put away into the back-forward cache: our server not followed while away, followed anew once shown from it, the panes kept; a page that navigates away and back restored from the cache where the browser keeps it (L11 third round, item 8)',
   async () => {

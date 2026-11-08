@@ -8,12 +8,15 @@
 // `step = settle ∘ apply`: `apply` folds the input into its region; `settle` mints the tickets now wanted and clears the ones no
 // longer wanted, in this order (design-b §1.3): the original while there is a paper; `engaged` once a translated display is chosen
 // in a visible document (never back within a visit); the link while engaged, online and shown, the target one the reader sets,
-// the layer not refused, nothing asked of the open meanwhile, the look not stopped, and the layer still wanted of our server; the
-// open once the follow says the paper is not opened; the gate open on the left's first page drawn, its 1.5 s, or the original's
-// failure; the layer's code while it is ready and the gate open; the composed document while the code is in, the head read and
-// drawing, and the original open; the rows while engaged, for a target the reader sets, once a units digest is known (rows made
-// here: once a head that draws is read), until complete or failed for that target; arXiv's HTML version once the bilingual one
-// cannot be had; a timer for each retry, wait and deadline held.
+// the layer not refused, the look not stopped, the layer still wanted of our server, and no open asked meanwhile of a paper the
+// follow says is not opened; the open (our server's: a follow never starts work, the open starts what is missing) once for each
+// need of the visit the document shows that nothing in flight will meet, while the link would be wanted (`needsOf`: as our
+// server's open would start it), with a timer for the soonest wait our server names for one; the gate open on the left's first
+// page drawn, its 1.5 s, or the original's failure; the layer's code while it is ready and the gate open; the composed document
+// while the code is in, the head read and drawing, and the original open; the rows while engaged, for a target the reader sets,
+// once a units digest is known (rows made here: once a head that draws is read), until complete or failed for that target (and
+// again for a run our server starts again); arXiv's HTML version once the bilingual one cannot be had; a timer for each retry,
+// wait and deadline held.
 //
 // Today's pacing of our server (R session/run.ts, PDF-READER §11.10, UI.md S-R-24, S-R-26): a 429 waits its time (at least a
 // second, at most ten minutes) and asks again, REFUSED_ASKS times in a row at most, then the look stops until a retry, which asks
@@ -100,11 +103,15 @@ export interface Doc {
     retryAt: number | null
     stage: string | null
     units: Ref[]
+    /** the prepare's attempt, numbered by our server (0 before any; none: it does not say) */
+    attempt?: number
     /** after a prepare that cannot be made (`cannot`, `too-large`): whether arXiv has an HTML version of the paper, as our
      *  server knows it (null, or none: it does not say) */
     html?: boolean | null
   }
-  layer: { catalog: Ref; units: Ref[]; format: number } | null
+  /** `stale`: made by another build than the one our server runs, served while the paper is prepared again */
+  layer: { catalog: Ref; units: Ref[]; format: number; stale?: boolean } | null
+  /** the target the document was asked for, alone: its run, where an open made one */
   targets: Record<
     string,
     | {
@@ -114,6 +121,9 @@ export interface Doc {
         rows: Ref[]
         done: number
         total: number
+        /** the run's attempt (0 before any), and the units it was given (null before it is) */
+        attempt?: number
+        units?: Ref[] | null
       }
     | undefined
   >
@@ -135,7 +145,7 @@ export type LinkRegion =
   /** the look stopped: waiting a 429's time (`retryAt`, its timer), or until a retry (`retryAt` null) */
   | { s: 'stopped'; why: StopWhy; retryAt: number | null; timer: Ticket | null }
 export type LayerRegion =
-  | { s: 'none'; asked: Ticket | null }
+  | { s: 'none' }
   | { s: 'preparing'; stage: string | null; position: number | null; progress: number | null; units: Ref[] }
   | {
       s: 'ready'
@@ -163,6 +173,19 @@ export type RowsRegion =
       retryAt: number | null
       timer: Ticket | null
     }
+/** the open (POST /api/v2/open: our server starts what the paper lacks): the ask under way (`t`, for the needs `for`, its target
+ *  `target`), the needs an answered open was asked for this visit (`asked`: each once; a refused or failed ask gives its needs
+ *  back), whether the follow said the paper is not opened (`missing`), and the timer of the soonest wait our server names for a
+ *  need not yet asked (`at`) */
+export interface OpenRegion {
+  t: Ticket | null
+  for: readonly string[]
+  target: string | null
+  asked: readonly string[]
+  missing: boolean
+  at: number | null
+  timer: Ticket | null
+}
 /** arXiv's HTML version of the paper, asked once a visit and again where our server's word on it changes: not yet, under way
  *  (the answer before kept meanwhile, where there was one), or its address (null: arXiv has none). `said`: our server's word the
  *  ask was made on (its document's `prepare.html`; null where it said none), which the answer is taken from first */
@@ -202,7 +225,10 @@ export interface State {
   held: boolean
   original: OriginalRegion
   doc: Doc | null
+  /** the target the document held was read for (null: none named): its `targets` speak for that one alone */
+  docFor: string | null
   link: LinkRegion
+  open: OpenRegion
   /** the 429s answered in a row (REFUSED_ASKS): none since an answer moved the paper on, or a retry */
   refusals: number
   /** how long the prepare has been followed with the tab shown (its deadline's), since when it is now, and the deadline's timer */
@@ -333,10 +359,12 @@ export function init(o: Init): State {
     held: false,
     original: { s: 'opening', t: '', pin: false, loaded: 0, total: 0 },
     doc: null,
+    docFor: null,
     link: { s: 'off' },
+    open: { t: null, for: [], target: null, asked: [], missing: false, at: null, timer: null },
     refusals: 0,
     prepare: { spent: 0, since: null, timer: null },
-    layer: { s: 'none', asked: null },
+    layer: { s: 'none' },
     bound: null,
     rows: { s: 'none', target: '' },
     title: '',
@@ -361,6 +389,8 @@ export function init(o: Init): State {
 
 /** a document is newer than the one held: another epoch, or a higher revision */
 const newer = (held: Doc | null, d: Doc) => !held || d.epoch !== held.epoch || d.rev > held.rev
+const sameRefs = (a: readonly Ref[], b: readonly Ref[]) =>
+  a.length === b.length && a.every((x, i) => x.sha256 === b[i]?.sha256)
 
 const backoff = (tries: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** Math.max(0, tries - 1))
 const WHY: Record<string, LayerWhy> = {
@@ -410,24 +440,83 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
       retryAt: p.retryAt,
       timer: l.s === 'refused' ? l.timer : null,
     }
-  return l.s === 'none' ? l : { s: 'none', asked: null }
+  return { s: 'none' }
 }
 
-/** the rows as a document states them, for the target followed (rows made here are the host's, never the server's) */
-function rowsOfDoc(s: State, d: Doc): RowsRegion {
+/** the rows as a document read for their target states them (rows made here are the host's, never the server's). Rows that
+ *  ended are taken again (those held kept: reader.ts rows) for a run our server started again (a retry, a prepare's new units),
+ *  whether it is heard running or only ended (frames coalesce, a follow asked again lands after the end): the target's run
+ *  running, or another attempt or rows than the document before named (`was`) */
+function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string]): RowsRegion {
   const r = s.rows
-  if (s.here || r.s !== 'arriving') return r
+  if (s.here || s.docFor !== r.target) return r
   const t = d.targets[r.target]
   if (!t) return r
-  return { ...r, got: t.done, total: t.total }
+  const ended = r.s === 'complete' || (r.s === 'failed' && r.why.kind === 'server')
+  const again =
+    t.state === 'running' ||
+    !was ||
+    (t.attempt ?? 0) !== (was.attempt ?? 0) ||
+    t.rows.some((x) => !was.rows.some((y) => y.sha256 === x.sha256))
+  if (ended && again) return { s: 'none', target: r.target }
+  return r.s === 'arriving' ? { ...r, got: t.done, total: t.total } : r
 }
-/** a document heard: held where it is newer, the layer and the rows as it states them */
-function heard(s: State, d: Doc) {
-  if (!newer(s.doc, d)) return
+/**
+ * A document heard, read for `target` (null: none named): held where it is newer, the layer and the rows as it states them. One
+ * read for another target than the one held is newer where it is the visit's target now: our server's revision is the paper's,
+ * not the view's, and a document names the asked target alone (a language switched to is answered at the revision held)
+ */
+function heard(s: State, d: Doc, target: string | null) {
+  const now = s.here ? null : targetOf(s)
+  if (s.doc && (target === s.docFor ? !newer(s.doc, d) : target !== now)) return
+  const was = s.docFor === target && target !== null ? s.doc?.targets[target] : undefined
   s.doc = d
+  s.docFor = target
   s.layer = layerOfDoc(s, d)
-  s.rows = rowsOfDoc(s, d)
+  s.rows = rowsOfDoc(s, d, was)
 }
+/** a need of the visit (`needsOf`): its name, which carries the attempt it follows (an open is asked once for each), and the
+ *  time our server's wait for it ends (null: none, or over) */
+export interface Need {
+  id: string
+  at: number | null
+}
+/**
+ * What the paper lacks for this visit that nothing in flight will bring, as our server's open would start it (its R3: worker v2
+ * machine.ts `wantPrepare`, `wantTranslate` by an open), each with the end of the wait our server names for it:
+ * - the paper itself, and the target's run with it, where the follow says the paper is not opened;
+ * - the prepare, where there is no layer or the layer is stale, none runs, and no failure of the paper's own stands (failed with
+ *   no retry: our server prepares it again under another build alone, which the document does not say);
+ * - the target's run (rows made here: none), where the document read for the target names none (only an open makes one), or,
+ *   over a layer with no prepare running (a prepare's units start a run our server has; with neither, nothing can start one),
+ *   one not started, failed, or done on other units than the layer's
+ */
+export function needsOf(s: State): Need[] {
+  const target = s.here ? null : targetOf(s)
+  if (s.open.missing) return [{ id: 'paper', at: null }, ...(target ? [{ id: `${target}#0`, at: null }] : [])]
+  const d = s.doc
+  if (!d) return []
+  const due = (at: number | null) => (at === null || at <= s.now ? null : at)
+  const out: Need[] = []
+  const p = d.prepare
+  if ((!d.layer || d.layer.stale) && p.state !== 'running' && !(p.state === 'failed' && p.retryAt === null))
+    out.push({ id: `prepare#${p.attempt ?? 0}`, at: due(p.retryAt) })
+  if (target !== null && s.docFor === target) {
+    const t = d.targets[target]
+    if (!t) out.push({ id: `${target}#0`, at: null })
+    else if (
+      p.state !== 'running' &&
+      !!d.layer &&
+      (t.state === 'none' ||
+        t.state === 'failed' ||
+        (t.state === 'done' && !!t.units && !sameRefs(t.units, d.layer.units)))
+    )
+      out.push({ id: `${target}#${t.attempt ?? 0}`, at: due(t.retryAt) })
+  }
+  return out
+}
+/** whether the open is asked for some need now: one whose wait is over, not yet asked this visit */
+const openWanted = (s: State) => needsOf(s).some((n) => n.at === null && !s.open.asked.includes(n.id))
 /** a 429: waited out and asked again (REFUSED_ASKS in a row at most), then the look stopped until a retry, which asks at once */
 function refusedFor(s: State, why: 'busy' | 'limit', afterMs: number | null | undefined) {
   s.refusals++
@@ -465,11 +554,12 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       else if (s.original.s === 'failed' && x.t === s.original.timer)
         s.original = { ...s.original, retryAt: null, timer: null }
       else if (s.link.s === 'stopped' && x.t === s.link.timer) s.link = { s: 'off' }
+      else if (x.t === s.open.timer) s.open = { ...s.open, at: null, timer: null }
       else if (x.t === s.prepare.timer) {
         // (the prepare followed past its deadline: given up for now, a retry asks again)
         s.prepare = { spent: PREPARE_DEADLINE_MS, since: null, timer: null }
         outOfReach(s)
-      } else if (s.layer.s === 'refused' && x.t === s.layer.timer) s.layer = { s: 'none', asked: null }
+      } else if (s.layer.s === 'refused' && x.t === s.layer.timer) s.layer = { s: 'none' }
       else if (s.rows.s === 'failed' && x.t === s.rows.timer) s.rows = { s: 'none', target: s.rows.target }
       break
     case 'prefs.read':
@@ -524,50 +614,53 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       break
     case 'paper':
       if (s.link.s === 'on' && x.t === s.link.t) {
+        const target = s.link.target
         s.link = { ...s.link, heard: true, lost: false }
-        // (an answer that moves the paper on ends a run of 429s)
-        s.refusals = 0
-        heard(s, x.doc)
+        heard(s, x.doc, target)
+        // (an answer that moves the paper on ends a run of 429s: one in which the paper lacks nothing the open is wanted for, as
+        // today's catalog or prepare under way; one of a paper still lacking it does not, as today's 404 between two prepares)
+        if (!openWanted(s)) s.refusals = 0
       }
       break
     case 'follow.lost':
       if (s.link.s === 'on' && x.t === s.link.t) {
+        const target = s.link.target
         s.link = { s: 'off' }
         if (x.why === 'not-opened') {
           // (a paper the server has not opened: the open asked, once a visit; still not opened after it, it cannot be had)
-          if (s.layer.s === 'none' && s.layer.asked === 'done')
+          if (s.open.asked.includes('paper'))
             s.layer = { s: 'refused', why: 'cannot-prepare', retryAt: null, timer: null }
-          else if (s.layer.s === 'none' && !s.layer.asked) s.layer = { s: 'none', asked: 'want' }
+          else s.open = { ...s.open, missing: true }
         } else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
         else if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
         else if (x.why === 'busy' || x.why === 'limit') {
-          if (x.doc) heard(s, x.doc)
+          if (x.doc) heard(s, x.doc, target)
           refusedFor(s, x.why, x.afterMs)
         } else outOfReach(s)
       }
       break
     case 'open.answered':
-      if (s.layer.s === 'none' && x.t === s.layer.asked) {
-        if (x.doc) heard(s, x.doc)
-        if (x.refused) {
-          // (a prepare refused was not taken: given back, so that the look after the wait asks it again)
-          if (s.layer.s === 'none') s.layer = { s: 'none', asked: null }
-          refusedFor(s, x.refused.why === 'quota' ? 'limit' : 'busy', x.refused.afterMs)
-        } else {
+      if (x.t === s.open.t) {
+        const o = s.open
+        // (refused for capacity, nothing was started: its needs given back, so that the look after the wait asks them again)
+        s.open = { ...o, t: null, for: [], missing: false, asked: x.refused ? o.asked : [...o.asked, ...o.for] }
+        if (x.doc) heard(s, x.doc, o.target)
+        if (x.refused) refusedFor(s, x.refused.why === 'quota' ? 'limit' : 'busy', x.refused.afterMs)
+        else {
           s.refusals = 0
-          if (s.layer.s === 'none') s.layer = { s: 'none', asked: 'done' }
+          // (the follow asked again at once: one of a paper in which nothing ran asks again a minute on, client.ts IDLE_MS,
+          // and what the open started is followed at its own pace)
+          if (s.link.s === 'on') s.link = { s: 'off' }
         }
       }
       break
     case 'open.failed':
-      if (s.layer.s === 'none' && x.t === s.layer.asked) {
+      if (x.t === s.open.t) {
+        s.open = { ...s.open, t: null, for: [], missing: false }
         if (x.why === 'update') s.layer = { s: 'refused', why: 'outdated', retryAt: null, timer: null }
         else if (x.why === 'not-found') s.layer = { s: 'refused', why: 'not-found', retryAt: null, timer: null }
-        else {
-          // (a prepare that never reached our server: given back, so that a retry asks it again)
-          s.layer = { s: 'none', asked: null }
-          outOfReach(s)
-        }
+        // (an open that never reached our server: given back, so that a retry asks it again)
+        else outOfReach(s)
       }
       break
     case 'head':
@@ -587,7 +680,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
       if (s.layer.s === 'ready' && (x.digest === s.layer.catalog.sha256 || x.why === 'bad'))
         s.layer =
           x.why === 'gone'
-            ? { s: 'none', asked: null }
+            ? { s: 'none' }
             : { s: 'refused', why: x.why === 'network' ? 'unreachable' : 'broken', retryAt: null, timer: null }
       break
     case 'code.loaded':
@@ -674,7 +767,9 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
         !LASTING.has(s.layer.why) &&
         (s.layer.retryAt === null || s.layer.retryAt <= s.now)
       )
-        s.layer = { s: 'none', asked: null }
+        s.layer = { s: 'none' }
+      // (the reader's retry asks our server again for what the paper still lacks, each need once more)
+      s.open = { ...s.open, asked: [] }
       if (s.rows.s === 'failed' && (s.rows.retryAt === null || s.rows.retryAt <= s.now))
         s.rows = { s: 'none', target: s.rows.target }
       // (a 429's wait under way: the look asks again once it has passed, never sooner; a look stopped asks at once, the 429s
@@ -726,12 +821,12 @@ export function settle(s0: State): State {
   const lasting = s.layer.s === 'refused' && LASTING.has(s.layer.why)
   const target = targetOf(s)
   const sets = supported(s, target)
-  // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, no open under way, the look not
-  // stopped, and the layer still wanted of our server (rows made here: nothing more once the layer is ready); none while the page is
-  // put away (the follow let go, an open under way given back, to be asked again once it is shown)
-  if (s.away && s.layer.s === 'none' && s.layer.asked && s.layer.asked !== 'want' && s.layer.asked !== 'done')
-    s.layer = { s: 'none', asked: 'want' }
-  const opening = s.layer.s === 'none' && !!s.layer.asked && s.layer.asked !== 'done'
+  // 3. the link: engaged, online and shown, a target the reader sets, the layer not refused, the look not stopped, the layer
+  // still wanted of our server (rows made here: nothing more once the layer is ready), and no open wanted or under way of a paper
+  // the follow says is not opened (no 404s in a row); none while the page is put away (the follow let go, an open under way
+  // given back, to be asked again once it is shown)
+  if (s.away && s.open.t) s.open = { ...s.open, t: null, for: [] }
+  const opening = s.open.missing
   // (offline with no layer: out of reach, as every ask of today's failed at once)
   if (s.engaged && !s.online && sets && s.layer.s !== 'ready' && s.layer.s !== 'refused' && s.link.s !== 'stopped')
     s.link = { s: 'stopped', why: 'unreachable', retryAt: null, timer: null }
@@ -751,18 +846,19 @@ export function settle(s0: State): State {
   } else if (!wantLink) s.link = { s: 'off' }
   else if (s.link.s === 'off') s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
   else if (s.link.target !== linkTarget) s.link = { s: 'on', t: take('link'), target: linkTarget, heard: false }
-  // (the open: asked once the follow says the paper is not opened, while the link would be wanted)
-  if (
-    s.layer.s === 'none' &&
-    s.layer.asked === 'want' &&
-    s.engaged &&
-    s.online &&
-    s.visible &&
-    !s.away &&
-    sets &&
-    s.link.s !== 'stopped'
-  )
-    s.layer = { s: 'none', asked: take('open') }
+  // (the open: once for each need the document shows (needsOf) whose wait is over, while the link would be wanted, the layer not
+  // refused; the soonest wait of one not yet asked timed)
+  const may = s.engaged && s.online && s.visible && !s.away && sets && s.layer.s !== 'refused' && s.link.s !== 'stopped'
+  if (may && !s.open.t) {
+    const needs = needsOf(s).filter((n) => !s.open.asked.includes(n.id))
+    const now = needs.filter((n) => n.at === null).map((n) => n.id)
+    if (now.length) s.open = { ...s.open, t: take('open'), for: now, target: linkTarget, at: null, timer: null }
+    else {
+      const at = needs.reduce<number | null>((a, n) => (n.at !== null && (a === null || n.at < a) ? n.at : a), null)
+      if (at === null) s.open = { ...s.open, at: null, timer: null }
+      else if (at !== s.open.at || !s.open.timer) s.open = { ...s.open, at, timer: take('timer') }
+    }
+  } else if (s.open.timer) s.open = { ...s.open, at: null, timer: null }
   // (the prepare's deadline: the time it is followed with the tab shown)
   const timing = s.layer.s === 'preparing' && s.link.s === 'on'
   if (timing && s.prepare.since === null) s.prepare = { ...s.prepare, since: s.now }
@@ -838,8 +934,8 @@ export function resources(s: State): Map<Ticket, Spec> {
       slot: 'timer',
       at: (s.prepare.since ?? s.now) + PREPARE_DEADLINE_MS - s.prepare.spent,
     })
-  if (s.layer.s === 'none' && s.layer.asked && s.layer.asked !== 'want' && s.layer.asked !== 'done')
-    out.set(s.layer.asked, { slot: 'open', target: s.here ? null : targetOf(s) })
+  if (s.open.t) out.set(s.open.t, { slot: 'open', target: s.open.target })
+  if (s.open.timer) out.set(s.open.timer, { slot: 'timer', at: s.open.at ?? s.now })
   if (s.layer.s === 'ready') {
     if (s.layer.code) out.set(s.layer.code, { slot: 'code' })
     if (s.layer.composed && s.layer.head) out.set(s.layer.composed, { slot: 'composed', head: s.layer.head })

@@ -882,7 +882,13 @@ const h = {
             parts,
           )
           return (part, rows) => {
-            h.marks.push({ what: 'lay', at: performance.now() - t0, gen, page: part.page })
+            h.marks.push({
+              what: 'lay',
+              at: performance.now() - t0,
+              gen,
+              page: part.page,
+              members: part.flows.flat().length,
+            })
             return laid(part, rows)
           }
         },
