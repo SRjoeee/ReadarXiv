@@ -136,7 +136,8 @@ export function paperOf(fonts: readonly (readonly [string, number])[], to: strin
   return { designs, roles: rolesFor(to, family, cjkFaces), family }
 }
 
-/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant) */
+/** a Style as today's character style (fonts.mjs classifyFont over its font's name; the part's role, weight, slant; its small
+ *  capitals its face's, or today's vote over its faked ones, Style.caps) */
 export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']): TStyle {
   const c = st.design ? classifyFont(st.design) : null
   const fam = st.role
@@ -144,7 +145,7 @@ export function tstyleOf(st: Placed['style'], designs: PaperReading['designs']):
     fam,
     bold: !!st.bold,
     italic: !!st.slant,
-    caps: !!c?.caps,
+    caps: !!c?.caps || !!st.caps,
     design: c && c.fam === fam ? c.design : designs[fam],
     ...(c ? { known: c.known, name: c.name } : {}),
     ...(st.upper ? { upper: true } : {}),

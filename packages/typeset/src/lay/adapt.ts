@@ -9,6 +9,7 @@
 // the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
+import { classifyFont } from '../breaker/font-names.types.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Tokens } from '../fit/types.ts'
 import type { Row } from '../shared/row-start.ts'
@@ -214,11 +215,14 @@ export function adapt(i: AdaptInput): Adapted {
     lastBlock.free = Math.max(0, last - lowest)
   }
   // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
-  // lines' bands over 0.894 (RUN:2088))
+  // lines' bands over 0.894 (RUN:2088). In a CJK target smaller where its base is set in small capitals: the tokens' base
+  // (baseOf over the row's groups), else its style's (its face's, or today's vote, Style.caps), as unitSizeOf reads it)
   const fromText = !(m.read ?? []).includes('size:lines')
   const heights = rects.map((r) => r[4] - r[2]).sort((a, b) => a - b)
+  const base = (i.reading.tokens as { base?: { caps?: boolean } }).base
+  const caps = base ? !!base.caps : !!m.style.caps || (!!m.style.design && classifyFont(m.style.design).caps)
   const s =
-    (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps: !!m.style.sc } } }, R) : undefined) ??
+    (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps } } }, R) : undefined) ??
     (heights[heights.length >> 1] as number) / 0.894
   borrowRoom(s)
   // (the row kept after it: the next member's join says ink stays between the two on their shared line)

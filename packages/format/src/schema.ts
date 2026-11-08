@@ -94,13 +94,15 @@ export const Units = z.object({ format, units: z.array(Unit) })
 
 // ---------------------------------------------------------------- what laying a page reads
 /** TeX's font state, the fill read from A: role, size, bold, slant (1 italic, 2 slanted), faked small capitals' size share,
- *  upper case, fill 0xRRGGBB, the design where it is not the paper's */
+ *  set in small capitals (a placement's: most of its letters that can tell are faked small capitals, today's vote; a face of
+ *  real small capitals is its design's), upper case, fill 0xRRGGBB, the design where it is not the paper's */
 export const Style = z.object({
   role: z.enum(['serif', 'sans', 'mono']),
   size: num,
   bold: flag.optional(),
   slant: z.union([z.literal(1), z.literal(2)]).optional(),
   sc: num.optional(),
+  caps: flag.optional(),
   upper: flag.optional(),
   fill: int.optional(),
   design: z.string().optional(),

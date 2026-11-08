@@ -766,3 +766,36 @@ describe('a reference TeX’s cross-referencing packages generate, in the target
     expect(shown(ref('citep', '[Smith, 2020, Section 2]', 'Section~2'), 'de')).toContain('[Smith, 2020, Abschnitt 2]')
   })
 })
+
+describe('a unit set in small capitals, its Latin translation in them (today’s caps vote: Style.caps)', () => {
+  // (today's base caps where most of its letters that can tell are faked small capitals (capsVote): its translation's Latin
+  // letters drawn in the layer's small capitals at its capsRatio (Style.sc); a unit with one such word, its share stated and
+  // no vote, keeps its translation in its own case)
+  const head = (caps: boolean) =>
+    member({
+      kind: 'heading',
+      align: 'l',
+      style: { role: 'serif', size: 10, sc: 0.8, ...(caps ? { caps: 1 as const } : {}), design: 'NimbusRomNo9L-Regu' },
+      lines: [[1, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [72, 300] },
+    })
+  const runs = (caps: boolean) => {
+    const [laid] = layPage(
+      part(head(caps)),
+      rowsOf([row([{ t: 'text', s: 'Versuche' }])], true),
+      rules,
+      metrics(),
+    ).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines[0]![3].flatMap((it) => ('size' in it && it.s.trim() ? [[it.s.trim(), it.size]] : []))
+  }
+  it('draws its lowercase letters as small capitals at its share', () => {
+    expect(runs(true)).toEqual([
+      ['V', 10],
+      ['ERSUCHE', 8],
+    ])
+  })
+  it('draws a unit with no vote in its own case', () => {
+    expect(runs(false)).toEqual([['Versuche', 10]])
+  })
+})

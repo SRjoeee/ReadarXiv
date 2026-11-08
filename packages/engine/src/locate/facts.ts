@@ -150,13 +150,17 @@ const medianOf = (xs: readonly number[]) => {
  * no size to tell a small capital by, and none is (drawn at the unit's size, theirs, the target's capitals look as the page's
  * do: REVTeX's "RELATED WORK"; today's walk answers none there). A unit whose source is its own case (an ink unit, or none
  * told): every letter that can tell a capital, two at least, none faked small (a running head's "ABSTRACT"; "BERT (Ours)" is
- * set in its own case; today's inkSmallCaps answers none)
+ * set in its own case; today's inkSmallCaps answers none). `caps`, set in small capitals where it has faked ones: today's vote
+ * (capsVote L2:933, read at L2:1094) over the letters the walk read, a faked small capital or a glyph of a face of real small
+ * capitals for, a letter the source writes lowercase set as itself against, the rest (digits, the source's own capitals)
+ * nothing, a tie against; an ink unit's faked ones alone can tell, so it is set in them (Style.caps: its Latin translation is
+ * drawn in small capitals, Style.sc the share it is drawn at)
  */
 export function fakedCaps(
   gs: readonly DocGlyph[],
   source: string | null,
   ink = false,
-): { small: Set<DocGlyph>; ratio?: number; upper?: true } {
+): { small: Set<DocGlyph>; ratio?: number; upper?: true; caps?: true } {
   const none = { small: new Set<DocGlyph>() }
   const t = gs.filter((g) => real(g) && classifyFont(g.base).fam !== 'math' && g.size > 0)
   if (!t.length) return none
@@ -172,7 +176,7 @@ export function fakedCaps(
     const ref = medianOf(t.filter((g) => g.size > SMALL_CAPS_SHARE * big).map((g) => g.size))
     const small = new Set(cased.filter((g) => g.size <= SMALL_CAPS_SHARE * ref))
     return small.size
-      ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100 }
+      ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100, caps: true }
       : { ...none, ...upper }
   }
   const isLow = (ch: string) => /\p{Ll}/u.test(ch)
@@ -183,6 +187,8 @@ export function fakedCaps(
   // (each glyph's letter the source's next one that spells it, case aside: the walk today makes over a word's characters)
   const changed: DocGlyph[] = []
   const same: number[] = []
+  // (each glyph the walk read, and whether its source letter is a lowercase one: the letters today's vote reads)
+  const walked: [DocGlyph, boolean][] = []
   let lower = 0
   let at = 0
   for (const g of t) {
@@ -193,6 +199,7 @@ export function fakedCaps(
     at = k + 1
     const s0 = src[k]!
     const low = casedChar(s0) && s0 === s0.toLowerCase()
+    walked.push([g, low])
     if (low) lower++
     if (low && casedChar(g.u) && g.u === g.u.toUpperCase()) changed.push(g)
     else same.push(g.size)
@@ -204,9 +211,18 @@ export function fakedCaps(
   // can tell (today's `upper`, L2:1099); a faked small capital is none)
   const upperN = changed.length - small.size
   const upper = upperN > 0 && 2 * upperN > lower ? { upper: true as const } : {}
-  return small.size
-    ? { small, ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100, ...upper }
-    : { ...none, ...upper }
+  if (!small.size) return { ...none, ...upper }
+  let yes = 0
+  let no = 0
+  for (const [g, low] of walked)
+    if (small.has(g) || classifyFont(g.base).caps) yes++
+    else if (low) no++
+  return {
+    small,
+    ratio: Math.round((100 * medianOf([...small].map((g) => g.size))) / ref) / 100,
+    ...upper,
+    ...(yes > no ? { caps: true as const } : {}),
+  }
 }
 
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
