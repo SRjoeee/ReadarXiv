@@ -1,6 +1,7 @@
 // @vitest-environment node
 // The display gate's verdict (lab/typeset/parity/verdict.mjs, #629's review): a page is judged from what each side drew, and the
-// gate passes only over the whole of what the run asked. Synthetic pages: one unit or figure text or link drawn or not.
+// gate passes only over the whole of what the run asked. Synthetic pages: one unit or figure text or link drawn or not, a
+// unit only v2 draws with its sentence boxes or without.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
@@ -45,8 +46,8 @@ describe('a page measured from what each side drew', () => {
     const lost = measure(v2, rec({ today }))
     expect(worse(lost)).toEqual(['figures'])
     expect(lost.measures.figures).toEqual({ today: 1, v2: 0, v2Laid: 1 })
-    const drawn = measure(v2, rec({ today, v2: { units: [{ id: 50, lines: [line(300, 4)] }], lit: [50] } }))
-    expect(worse(drawn)).toEqual([])
+    const drawn = measure(v2, rec({ today, v2: { units: [{ id: 50, lines: [line(300, 4)] }] } }))
+    expect(worse(drawn)).not.toContain('figures')
   })
   it('links are the anchors each side drew; a page today shows as arXiv\'s has the original\'s', () => {
     const lost = measure(v2Of(), rec({ original: 3, today: { links: 3, linksDrawn: 3 }, v2: { links: 3, linksDrawn: 2 } }))
@@ -60,6 +61,45 @@ describe('a page measured from what each side drew', () => {
     expect(measure(v2Of(), rec({ today: { error: 'lay threw' } })).error).toBe("today's page not laid: lay threw")
     const { v2: _gone, ...noV2 } = rec()
     expect(measure(v2Of(), noV2 as never).error).toBe("v2's side not drawn")
+  })
+})
+
+/** a line of the part's facts on page N: [page, -, x0, x1, baseline, top, bottom, m0, m1, -, size] */
+const factLine = (x0: number, x1: number, y: number, size = 10) => [N, 0, x0, x1, y, y + 0.8 * size, y - 0.2 * size, 48, 300, 0, size]
+const drawnLine = (x0: number, x1: number, y: number, text: string, size = 10): Line => ({ ...line(y, text.length), x0, x1, size, text })
+
+describe('the highlight: units both sides draw judged against each other, a unit only v2 draws against arXiv', () => {
+  // (a figure text only v2 draws: its member laid, its one line drawn at 100–140 on 300, its original's line there on A)
+  const fig = (lit: object) =>
+    v2Of({
+      members: [{ ord: 50, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }],
+      facts: [{ ord: 50, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100, 140, 300, 8)] }],
+    })
+  const drawnFig = rec({ v2: { units: [{ id: 50, lines: [drawnLine(100, 140, 300, 'abcd', 8)] }] } })
+  const box = (x0: number, x1: number, y: number, size = 8) => [x0 - 0.5, y - 0.25 * size, x1 + 0.5, y + 0.9 * size]
+
+  it("a unit only v2 draws with no sentence boxes is v2's defect, never compared with today's absent highlight", () => {
+    const p = measure(fig({}), drawnFig)
+    const d = p.diffs.filter((x: { flag: string }) => x.flag === 'highlight')
+    expect(d).toHaveLength(1)
+    expect(d[0]).toMatchObject({ unit: 'p50 figure', worse: true })
+  })
+  it('its boxes covering its drawn line on the right and its original line on the left pass', () => {
+    const p = measure(fig({ right: [[box(100, 140, 300)]], left: [[box(100, 140, 300)]] }), drawnFig)
+    expect(worse(p)).toEqual([])
+  })
+  it('boxes that miss its original on the left, or cover part of its drawn line on the right, fail', () => {
+    const left = measure(fig({ right: [[box(100, 140, 300)]], left: [[box(100, 140, 200)]] }), drawnFig)
+    expect(worse(left)).toEqual(['highlight'])
+    const right = measure(fig({ right: [[box(100, 118, 300)]], left: [[box(100, 140, 300)]] }), drawnFig)
+    expect(worse(right)).toEqual(['highlight'])
+  })
+  it('a unit both sides draw is judged against today: v2 without boxes where today has them is worse', () => {
+    const v2 = v2Of({ members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }], facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [] }], today: { 11: { today: 7 } } })
+    const both = { today: { units: [{ id: 7, lines: [line(400)] }], lit: [7] }, v2: { units: [{ id: 11, lines: [line(400)] }] } }
+    const p = measure(v2, rec(both))
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'highlight')).toMatchObject([{ unit: null, worse: true }])
+    expect(worse(measure(v2, rec({ ...both, today: { ...both.today, lit: [] } })))).toEqual([])
   })
 })
 

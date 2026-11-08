@@ -69,7 +69,7 @@ export const SAYS = {
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
-  highlight: "the laid units with no sentence boxes for the highlight (the original's every unit has its sentences)",
+  highlight: "the units both sides draw with no sentence boxes for the highlight, against each other; a unit only v2 draws, its boxes against its drawn lines and its original's (the original's every unit has its sentences)",
   'line-count': "a unit's line count on the page against the original's",
 }
 
@@ -363,9 +363,31 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   // Each side's links as its layout gave them kept beside, for diagnosis)
   const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
-  const litT = rec.today.lit.filter((id) => T.has(`t${id}`)).length,
-    litV = rec.v2.lit.filter((o) => V.has(keyOfPart(o))).length
-  judge('highlight', null, 'laid units with no sentence boxes', 0, { value: `boxes on ${litT} of ${T.size}`, d: T.size - litT }, { value: `boxes on ${litV} of ${V.size}`, d: V.size - litV }, 0.5)
+  // (the highlight: the units both sides draw judged against each other, each side's count with no sentence boxes; a unit only
+  // v2 draws, a translation today does not have (a figure text, a gain), never against today's absent highlight: judged
+  // against arXiv's geometry, its sentence boxes covering its drawn lines on the right and its original's lines on the left)
+  const both = [...T.keys()].filter((k) => V.has(k))
+  const litT = new Set(rec.today.lit.map((id) => `t${id}`)),
+    litV = new Set(rec.v2.lit.map(keyOfPart))
+  const noT = both.filter((k) => !litT.has(k)).length,
+    noV = both.filter((k) => !litV.has(k)).length
+  judge('highlight', null, 'units both sides draw with no sentence boxes', 0, { value: `boxes on ${both.length - noT} of ${both.length}`, d: noT }, { value: `boxes on ${both.length - noV} of ${both.length}`, d: noV }, 0.5)
+  const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  let alone = 0
+  for (const [key, ls] of V) {
+    if (T.has(key)) continue
+    alone++
+    const ord = ordOfKey.get(key)
+    const lit = laidV2.get(ord)?.lit ?? { left: [], right: [] }
+    const right = ls.map(band),
+      left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: l[6], x1: l[3], y1: l[5] }))
+    const r = right.filter((b) => !covered(b, lit.right.flat())).length,
+      lf = left.filter((b) => !covered(b, lit.left.flat())).length
+    if (!r && !lf) continue
+    const name = `${key} ${facts.get(ord)?.kind ?? ''}`.trim()
+    fault('v2', 'highlight', `${name}: ${r} of ${right.length} drawn lines, ${lf} of ${left.length} original lines without its sentence boxes`)
+    diff('highlight', name, "a unit only v2 draws: its sentence boxes over its drawn lines (right) and its original's lines (left)", 'covered', { value: 'not drawn', off: null }, { value: `${r} of ${right.length} drawn, ${lf} of ${left.length} original lines not covered`, off: null }, true, 'today')
+  }
   const dk = px.darkness
   const ref = dk?.originalText?.mean ?? dk?.original?.mean ?? null
   if (T.size && V.size && ref && dk?.today?.mean && dk?.v2?.mean && dk.today.pixels >= NEAR.weightPixels && dk.v2.pixels >= NEAR.weightPixels)
@@ -377,7 +399,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   }
   out.measures = {
     links: { ...L, todayLaid: rec.today.links, v2Laid: rec.v2.links },
-    highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length },
+    highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length, both: both.length, v2Alone: alone },
     darkness: dk ?? null,
     diff: px.diff ?? null,
     rules: rules.length,
@@ -415,6 +437,30 @@ function raised(lines) {
     host.letter = Math.max(host.letter, l.letter)
   }
   return keep.sort((a, b) => b.y - a.y)
+}
+
+/** whether a box {x0, y0, x1, y1} is covered by the union of boxes [x0, y0, x1, y1], each of its edges within `tol` points */
+function covered(b, boxes, tol = NEAR.positionMin) {
+  const inset = (a, c) => (c - a > 2 * tol ? [a + tol, c - tol] : [(a + c) / 2, (a + c) / 2])
+  const [x0, x1] = inset(b.x0, b.x1),
+    [y0, y1] = inset(b.y0, b.y1)
+  // (in each slab between the boxes' edges, the boxes across it must cover y0..y1 between them)
+  const slab = (xm) => {
+    let at = y0,
+      got = false
+    for (const [a, c] of boxes.filter((q) => q[0] <= xm && q[2] >= xm).map((q) => [q[1], q[3]]).sort((p, q) => p[0] - q[0])) {
+      if (a > at) break
+      if (c >= at) {
+        got = true
+        at = Math.max(at, c)
+      }
+    }
+    return got && at >= y1
+  }
+  const xs = [...new Set([x0, x1, ...boxes.flatMap((q) => [q[0], q[2]]).filter((x) => x > x0 && x < x1)])].sort((p, q) => p - q)
+  if (xs.length === 1) return slab(x0)
+  for (let i = 0; i + 1 < xs.length; i++) if (!slab((xs[i] + xs[i + 1]) / 2)) return false
+  return true
 }
 
 function band(l) {
