@@ -721,6 +721,163 @@ describe('forced breaks with no point on B, set one after the other', () => {
   })
 })
 
+describe('forced breaks with no point on B, placed by TeX’s points around them', () => {
+  it('places a break by the next piece’s point, nothing that sets ink between, whatever a break at the unit’s end reads', () => {
+    // (2608.16117v1 p3 t11: "… concludes our paper.\\\\ \n$\textbf{Notation}$: …from 1 to 2.\\\\": the author's empty line
+    // before "Notation", and two more breaks at the paragraph's end on its last line. One short line against two groups paired
+    // nothing, and the translation ran on through the blank line)
+    const B = docOf([
+      {
+        lines: [
+          'a long first line of it here',
+          'short',
+          { text: 'Notation and a third line ok', y: 664 },
+          { text: 'end', y: 652 },
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'other', src: '\\\\' },
+      text('\n'),
+      { t: 'el', id: '3', kind: 'math', src: '$\\textbf{Notation}$' },
+      text(' and a third line ok end'),
+      { t: 'el', id: '4', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '5', kind: 'other', src: '\\\\' },
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (_, _n, j) => (j >= 33 && j <= 40 ? [0, ROLE.element, 3] : [0, ROLE.text, -1])),
+      places: [
+        { unit: 0, piece: '3', page: 1, glyph: 33, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 41, end: true },
+      ],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    const ends = (id: string) => M.elements.find(([k]) => k === id)?.[1].ends
+    expect(ends('1')?.[0]).toBe(1)
+    expect(ends('2')?.[0]).toBe(1)
+    expect(ends('1')?.[1]).toBeCloseTo(1, 1)
+    // (the breaks at the end end its last line: no line after them to state)
+    expect(ends('4')).toBeUndefined()
+    expect(ends('5')).toBeUndefined()
+    // (TeX's point placed it: no line read by its short end)
+    expect(M.read).not.toContain('breaks')
+  })
+  it('places a break by the point before it, across a page, where its line fills the measure', () => {
+    // (the text before the break fills its line, the last of page 1, and the formula after it opens page 2: no short end to
+    // read, the formula's point states the line)
+    const B = docOf([
+      { lines: ['a long first line of it here', 'a long second one fills it x'] },
+      { lines: ['xy and more text of the unit', 'end'] },
+    ])
+    const content: Piece[] = [
+      text('a long first line of it here a long second one fills it x'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'math', src: '$xy$' },
+      text(' and more text of the unit end'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (p, _n, j) => (p === 1 && j <= 1 ? [0, ROLE.element, 2] : [0, ROLE.text, -1])),
+      places: [
+        { unit: 0, piece: '2', page: 2, glyph: 0, end: false },
+        { unit: 0, piece: '2', page: 2, glyph: 2, end: true },
+      ],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([1, 0])
+  })
+  it('pairs the breaks between two of TeX’s points with the lines that end there, where every one of them ends at a break', () => {
+    // (a centred title "A Much Longer First Title Line\\ Second": its first line the longest, no short end to read; the
+    // unit's start and end bound one line end and one break)
+    const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
+    const content: Piece[] = [
+      text('A Much Longer First Title Line'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('Second'),
+    ]
+    const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
+    expect(M.read).not.toContain('breaks')
+  })
+  it('takes a paragraph’s end TeX states at the break for the break’s own line end (a centred `\\\\`, \\@centercr)', () => {
+    // (2610.30034v1 p1's title: in a centred block LaTeX's `\\` is \@centercr, which ends a paragraph, so TeX's paragraph end
+    // stands at the break; 2608.25210v2 t8's second `\\`, after \raggedright, the same)
+    const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
+    const content: Piece[] = [
+      text('A Much Longer First Title Line'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('Second'),
+    ]
+    const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
+    const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[30]] } }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends).toEqual([0, 0])
+  })
+  it('places a break at TeX’s paragraph end in a block TeX set centred, past a line TeX wrapped itself', () => {
+    // (2610.21504v1 p1's title "Receiver-Specific Interventional Valuation of / Semantic Atoms for\\ Budget-…": TeX wraps the
+    // first line, the break ends the second; centred, every line short, two line ends for one break. TeX states the title
+    // centred (`c`), where `\\` is \@centercr and its paragraph end, qe, stands at the break)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'Receiver Specific Valuation of', x: 90 },
+          { text: 'Semantic Atoms for', x: 126 },
+          'Budget Constrained Multi Agent Talk',
+        ],
+      },
+    ])
+    const content: Piece[] = [
+      text('Receiver Specific Valuation of Semantic Atoms for'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('\nBudget Constrained Multi Agent Talk'),
+    ]
+    const unit = (align?: 'c'): InstrumentUnit => ({
+      id: unitId('heading', content),
+      kind: 'heading',
+      content,
+      ...(align ? { align } : {}),
+    })
+    const ends = (u: InstrumentUnit) => {
+      const ins: Instrument = { ...instrument(B, [u], () => [0, ROLE.text, -1]), tex: { paragraphEnds: [[48]] } }
+      return locate(ins, B, align(B, B)).members[0]!.elements.find(([k]) => k === '1')?.[1].ends
+    }
+    expect(ends(unit('c'))).toEqual([1, 0])
+    // (TeX states no alignment: the paragraph's end may be the source's own, and the window states nothing)
+    expect(ends(unit())).toBeUndefined()
+  })
+  it('reads short ends between two points only, where the breaks there are as many: one window’s count is not another’s', () => {
+    // (a paragraph with a natural line end and a break, text on both sides of it, between the unit's start and a formula's
+    // point, then a break at the unit's end: the window holds two line ends and one break, read by the short one; the break at
+    // the end is no window's, and paired nothing before)
+    const B = docOf([{ lines: ['a long first line of it here', 'short', 'ab xy a long third line of i', 'end'] }])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      text('ab '),
+      { t: 'el', id: '2', kind: 'math', src: '$xy$' },
+      text(' a long third line of i end'),
+      { t: 'el', id: '3', kind: 'other', src: '\\\\' },
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins: Instrument = {
+      ...instrument(B, [u], (_, _n, j) => (j >= 36 && j <= 37 ? [0, ROLE.element, 2] : [0, ROLE.text, -1])),
+      places: [{ unit: 0, piece: '2', page: 1, glyph: 36, end: false }],
+    }
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.elements.find(([k]) => k === '1')?.[1].ends?.[0]).toBe(1)
+    expect(M.read).toContain('breaks')
+    expect(M.elements.find(([k]) => k === '3')?.[1].ends).toBeUndefined()
+  })
+})
+
 describe('a glyph whose Unicode is no reading of it (A17, today’s nu)', () => {
   it('reads a font’s own map and tells a glyph it gives no character of, or one no Unicode stands for', () => {
     const map = mappedOf({ toUnicode: { _map: [undefined, 'a', 'ﬁ', '∑'] } })

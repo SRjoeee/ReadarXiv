@@ -613,8 +613,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     }
     // a URL TeX set whole, broken where its url package lets TeX break it (El.breaks): the most of it that fits, its crop cut
     // between two of its glyphs there, as a word is hyphenated; the rest opens the next line (2303.11366v4 p1's abstract: the
-    // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08)
-    if (t0.crop?.breaks?.length) {
+    // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08). Only on
+    // a line set justified: where TeX set the unit flush left or right or centred (placeItems: at its natural spacing), no line
+    // is stretched, and TeX, whose \rightskip stretch there costs a short line nothing, breaks before the URL rather than inside
+    // it at its url package's penalty: whole on the next line, as the original sets it (2608.25210v2 p1's VLDB footnote,
+    // \raggedright, its URL cut after "https://")
+    if (t0.crop?.breaks?.length && !line.centred && !line.flush) {
       const asp = items[0].asp ?? 0
       const cut = urlCut(t0, cap + shrink - line.x - asp, scale, false)
       if (cut) {
