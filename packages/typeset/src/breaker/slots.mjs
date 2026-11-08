@@ -148,14 +148,16 @@ function slotsAt(blocks, st, P, s) {
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
       // (ink that stays beside the original's lines, no member's (`stays`, Room.stays: amsthm's QED box after a proof's last
       // words, four rules TeX set at the measure's end): a line whose reach meets it, from its descent's (SHORT_SKIP, as a
-      // display's top above) to its em over its baseline (no text glyph rises past its body), ends half an em before it, or,
-      // where it stood before the original's line, starts half an em after it, as the line widened beside a glyph keeps (U.decor
-      // widen). Borrowed or not: a ragged last line missed it by its shortness alone, and a line borrowed under it made the row
-      // full (2610.40645v1-ja p12 t80)
+      // display's top above) to its em over its baseline (no text glyph rises past its body), ends before it, or, where it stood
+      // before the original's line, starts after it, as far off it as TeX set that line (`gap`: 2610.20484v1 p1 t6's start 1.49
+      // pt after an initial) and half an em at most, as the line widened beside a glyph keeps (U.decor widen; a QED box TeX's
+      // \hfill set 101 pt off). Borrowed or not: a ragged last line missed it by its shortness alone, and a line borrowed under it
+      // made the row full (2610.40645v1-ja p12 t80)
       for (const k of b.stays ?? []) {
         if (!(k.y0 < y + em && k.y1 > y - SHORT_SKIP * em)) continue
-        if (k.right) x1 = Math.min(x1, k.x0 - 0.5 * em)
-        else x0 = Math.max(x0, k.x1 + 0.5 * em)
+        const gap = Math.min(0.5 * em, k.gap)
+        if (k.right) x1 = Math.min(x1, k.x0 - gap)
+        else x0 = Math.max(x0, k.x1 + gap)
       }
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue

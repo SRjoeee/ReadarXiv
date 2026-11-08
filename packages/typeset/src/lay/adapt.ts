@@ -260,7 +260,10 @@ export function adapt(i: AdaptInput): Adapted {
   const stayOf = (j: number) =>
     stays
       .filter((k) => k[0] === j)
-      .map((k): Stay => ({ right: k[1] >= lines[j]![3], x0: k[1], y0: k[2], x1: k[3], y1: k[4] }))
+      .map((k): Stay => {
+        const right = k[1] >= lines[j]![3]
+        return { right, x0: k[1], y0: k[2], x1: k[3], y1: k[4], gap: right ? k[1] - lines[j]![3] : lines[j]![2] - k[3] }
+      })
   if (stays.length)
     for (const b of blocks) {
       const own = b.rects.flatMap((r) => {
@@ -317,12 +320,12 @@ export function adapt(i: AdaptInput): Adapted {
       left: [
         ...(side[0] > l[7] + 0.01 ? [side[0] + half] : []),
         ...(Number.isFinite(sl) ? [sl] : []),
-        ...st.filter((k) => !k.right).map((k) => k.x1 + half),
+        ...st.filter((k) => !k.right).map((k) => k.x1 + Math.min(half, k.gap)),
       ],
       right: [
         ...(side[1] < l[8] - 0.01 ? [side[1] - half] : []),
         ...(Number.isFinite(sr) ? [sr] : []),
-        ...st.filter((k) => k.right).map((k) => k.x0 - half),
+        ...st.filter((k) => k.right).map((k) => k.x0 - Math.min(half, k.gap)),
       ],
     }
   }

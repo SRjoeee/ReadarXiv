@@ -20,9 +20,9 @@ export type FitBlock = DecorBlock & {
    *  and the side of the original's line it stood on: every slot whose line reaches it keeps off it (B.slots) */
   stays?: Stay[]
 }
-/** ink beside a unit's line that no translation replaces: its box, and whether it stood after the line's end (else before its
- *  start) */
-export type Stay = { right: boolean; x0: number; y0: number; x1: number; y1: number }
+/** ink beside a unit's line that no translation replaces: its box, whether it stood after the line's end (else before its
+ *  start), and how far off it TeX set that line (`gap`: from the line's end to it, or from it to the line's start) */
+export type Stay = { right: boolean; x0: number; y0: number; x1: number; y1: number; gap: number }
 /** a state of the fit (statesOf): its leading, tracking, compression, borrowing, scale and the knob that set it */
 export type FitState = {
   lead: number

@@ -437,6 +437,37 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(onRow[2]).toBeLessThanOrEqual(290 - 5 + 0.01)
     expect(kept.lines.find(([y]) => Math.abs(y - 676) < 1)![2]).toBeGreaterThan(290)
   })
+  it('keeps off ink that stays no farther than TeX kept its line off it: its own distance, half an em at most', () => {
+    // (2610.20484v1-zh p1 t6: its first line set 1.5 pt after ink no unit owns at its left (an initial two lines high); the line
+    // starts where TeX started it, not half an em off. 2608.25210v2-zh p8 t166: a QED glyph 2 pt after the last row's words;
+    // the row may run to TeX's end, no farther)
+    const text = 'wort '.repeat(20).trim()
+    const lay = (lines: Placed['lines'], stays: Placed['room']['stays']) =>
+      layPage(
+        part(member({ lines, room: { below: 0, next: 300, runs: [[1, 200, 30]], sep: 12, stays } })),
+        rowsOf([row([{ t: 'text', s: text }])]),
+        still,
+        metrics(),
+      ).members[0]!
+    const left = lay(
+      [
+        [1, 0, 100, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      [[0, 80, 698, 98.5, 707]],
+    )
+    expect(left.lines[0]![1]).toBeCloseTo(100, 2)
+    const right = lay(
+      [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      [[1, 202, 686, 207, 693]],
+    )
+    const onRow = right.lines.find(([y]) => Math.abs(y - 688) < 1)!
+    expect(onRow[2]).toBeLessThanOrEqual(200 + 0.01)
+    expect(onRow[2]).toBeGreaterThan(195)
+  })
   it('borrows nothing where the part states no TeX room: a part made before, its runs’ room or its separation unstated', () => {
     // (a part made before 2026-11-08 may state the room under each run otherwise, Room.ends: read by nothing; its last line's
     // room alone, Room.below: no fact of TeX's bounds it. A run stated, no separation (a unit TeX set no paragraph for): none)
