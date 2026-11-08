@@ -2932,13 +2932,28 @@ export function texFilesOf(fsys, main) {
   const dec = decodersOf(own, null, main)
   return own.map(x => { const d = dec.get(x.file); return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text)) })
 }
+/** a file's name as kpathsea's case fold compares it: its directory as it is, its last component's ASCII letters in lower case
+ *  (strcasecmp) */
+const foldOf = f => { const i = f.lastIndexOf('/'); return f.slice(0, i + 1) + f.slice(i + 1).replace(/[A-Z]/g, c => c.toLowerCase()) }
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from
   // the package's root, where TeX runs — and by the name the package holds it under, whatever spelling named it
   // (\input{./sections/a.tex}): the units' file and the translation's key, which must replace that file rather than
-  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract
-  const read = (rel, dirs = []) => { for (const dir of [...dirs, '']) for (const cand of [rel, `${rel}.tex`]) { const key = normalizePath(`${dir}/${cand}`), bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } } return null }
+  // sit beside it — under ./sections/a.tex the compile set the English over every unit of 2608.08350 past its abstract.
+  // Where no file is of a name as given, in any of those directories, kpathsea's case fold (texmf_casefold_search, on in every
+  // TeX Live the box serves: kpsewhich chapters/prompts.tex gives ./chapters/Prompts.tex) opens the one whose last component
+  // is the name's, case aside, in the same directory: 2402.10294v1's \input{chapters/prompts}, its appendix read by TeX and
+  // by no unit, Figure 10's caption English. Where two files fold alike, kpathsea takes the first its directory lists, an
+  // order of the disk's the package does not tell: none
+  const folded = new Map()
+  for (const f of fsys.list()) { const k = foldOf(f); folded.set(k, [...(folded.get(k) ?? []), f]) }
+  const read = (rel, dirs = []) => {
+    const keys = [...dirs, ''].flatMap(dir => [rel, `${rel}.tex`].map(cand => normalizePath(`${dir}/${cand}`)))
+    for (const key of keys) { const bytes = fsys.read(key); if (bytes) return { rel: key, text: texText(bytes) } }
+    for (const key of keys) { const one = folded.get(foldOf(key)); const bytes = one?.length === 1 ? fsys.read(one[0]) : null; if (bytes) return { rel: one[0], text: texText(bytes) } }
+    return null
+  }
   const units = [], files = new Map(), seen = new Set()
   const mainFile = read(main)
   if (!mainFile) throw new Error(`main file ${main} not found`)
@@ -3111,6 +3126,52 @@ export function pseudoTranslate(u, lang) {
   })
 }
 
+/**
+ * Where a unit's start mark goes among its pieces, as patch writes it: [the piece, its cut] (a text piece's cut after its
+ * leading white space; -1, before the piece), or [-1, 0], none (the unit's head passed over, below). The adapter reads it
+ * too: a piece before it TeX set before the unit's start point (pipeline/instrument.mjs).
+ * Before the first word, inside any font command's group (nothing precedes it there to kern with); before an inline
+ * formula or citation that comes first; before the macro when the word is glued to one (\\name's: between the two the
+ * mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any other command at
+ * the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since \\leavevmode ahead of
+ * it would start the paragraph early and indent or move it. A text piece is cut after its leading space, which is
+ * ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1. A group that closes before the
+ * first word holding the unit's first letter as a command alone (LETTER_GROUP: `{\\L}ukasz Kaiser`, a row of
+ * 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's
+ * own ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which
+ * a mark set the entry's text 7 pt right: 2610.20716v1)
+ */
+export function startOf(pieces) {
+  let startAt = -1, startCut = 0, opened = -1
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'text') {
+      const w = /^[ \t\r\n]*(?=[^ \t\r\n])/.exec(p.s)
+      if (!w) continue
+      const prev = pieces[k - 1]
+      if (w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src)) { startAt = k - 1; startCut = -1 } else { startAt = k; startCut = w[0].length }
+      break
+    }
+    if (p.t === 'open') { if (opened < 0) opened = k; continue }
+    if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
+    // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
+    // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
+    // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
+    // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
+    // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
+    // as before: no start mark)
+    if (p.t === 'close') {
+      let q = k + 1
+      while (q < pieces.length && (pieces[q].t === 'close' || (pieces[q].t === 'text' && !/[^ \t\r\n]/.test(pieces[q].s)))) q++
+      if (pieces[q]?.t === 'text') { k = q - 1; continue }
+      break
+    }
+    if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
+    if (p.t !== 'ph') break
+  }
+  return [startAt, startCut]
+}
+
 /** the patched files as bytes (Map path → Uint8Array): each top-level unit's range replaced by its translated pieces, the rest untouched.
  *  Source text keeps its bytes (read as latin1); translated text is written as UTF-8.
  *  `mark(u)` → { start, end } or null: TeX inserted before the unit's first word and after the last character of
@@ -3149,43 +3210,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       bare = false
     }
     const m = mark?.(u)
-    // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
-    // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between
-    // the two the mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any
-    // other command at the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since
-    // \\leavevmode ahead of it would start the paragraph early and indent or move it. A text piece is cut after its
-    // leading space, which is ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1. A group that
-    // closes before the first word holding the unit's first letter as a command alone (LETTER_GROUP: `{\\L}ukasz Kaiser`, a row
-    // of 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's own
-    // ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which a mark
-    // set the entry's text 7 pt right: 2610.20716v1)
-    let startAt = -1, startCut = 0, opened = -1
-    if (m) for (let k = 0; k < pieces.length; k++) {
-      const p = pieces[k]
-      if (p.t === 'text') {
-        const w = /^[ \t\r\n]*(?=[^ \t\r\n])/.exec(p.s)
-        if (!w) continue
-        const prev = pieces[k - 1]
-        if (w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src)) { startAt = k - 1; startCut = -1 } else { startAt = k; startCut = w[0].length }
-        break
-      }
-      if (p.t === 'open') { if (opened < 0) opened = k; continue }
-      if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
-      // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
-      // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
-      // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
-      // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
-      // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
-      // as before: no start mark)
-      if (p.t === 'close') {
-        let q = k + 1
-        while (q < pieces.length && (pieces[q].t === 'close' || (pieces[q].t === 'text' && !/[^ \t\r\n]/.test(pieces[q].s)))) q++
-        if (pieces[q]?.t === 'text') { k = q - 1; continue }
-        break
-      }
-      if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
-      if (p.t !== 'ph') break
-    }
+    let [startAt, startCut] = m ? startOf(pieces) : [-1, 0]
     // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
     // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
     // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,

@@ -83,6 +83,10 @@ export interface PieceClass {
   mark?: true
   /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
   literal?: true
+  /** it sets a URL as url.sty's \url does, whatever its own command: a control sequence \urldef defined as one earlier in the
+   *  unit, which the piece sets (ACM's `\urldef\tempurl\url{…}` then `\showDOI{\tempurl}`); its copy text and break points
+   *  are its glyphs', as a \url's are */
+  url?: true
   // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
   // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
   /** its glue as TeX sets it (today's glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
@@ -121,10 +125,15 @@ export interface Instrument {
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point), those the marking never marks,
    *  their rendering never ink by its own reading (a text macro of today's marks.mjs classOf null: a .bbl's \newblock; the
-   *  adapter's inklessPieces), and those a front whose marking gives a head or tail macro no point to bound it finds set nothing
-   *  on the unit's lines (no glyph of no unit's beside the unit's mark on its line: today's maker's besideMarks, the adapter's):
-   *  their span stated empty, by unit index and piece id */
+   *  adapter's inklessPieces), and those TeX's points prove set nothing of their own: a piece with no point of its own whose two
+   *  nearest points around it in its unit's source order (a piece's, the unit's start and end, else the stream's) hold no glyph
+   *  and no painted box between them, nor text of the unit's (the adapter's boundedEmpty): their span stated empty, by
+   *  unit index and piece id */
   empty?: { unit: number; piece: string }[]
+  /** the pieces TeX set before their unit's start point, the ownership giving the unit's text nothing before it (the marking
+   *  passes over a unit's head): whatever they set is no text of the unit's and is never erased with it, by unit index and
+   *  piece id (the adapter's outsidePieces) */
+  outside?: { unit: number; piece: string }[]
   /** TeX's statements of the paper: \lineskip and \lineskiplimit; and, per B page, the glyph counts at which TeX ended a
    *  paragraph (its `qe<n>` points: a paragraph ends before that glyph), where the marked compile has them */
   tex: {

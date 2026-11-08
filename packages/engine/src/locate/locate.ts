@@ -180,7 +180,8 @@ const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote',
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
- *  its source where it has no ink): one of no ink is drawn as nothing, which is right only where TeX set nothing for it */
+ *  its source where it has no ink): one of no ink states which of three it is, TeX set nothing for it (El.text ''), it stands
+ *  outside the unit's text (El.keep), or neither (its ink not found: the typesetter leaves its unit the original's) */
 const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
@@ -291,8 +292,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (!pl.end) placeSpan.set(k, [at, was?.[1] ?? Number.NaN])
     else placeSpan.set(k, [was?.[0] ?? Number.NaN, at])
   }
-  // (the pieces TeX said set no ink, or that set none on their unit's lines: the instrument's `empty`)
+  // (the pieces TeX said set no ink, or whose points prove they set none of their own: the instrument's `empty`; and those TeX
+  // set before their unit's start point, outside its text: its `outside`)
   const emptyPiece = new Set((ins.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
+  const outsidePiece = new Set((ins.outside ?? []).map((x) => `${x.unit}|${x.piece}`))
+  // (an ink unit's placeholders after its first, whose glyphs are its first's (inkOf: no points tell them apart): what they set is
+  // in that one's ink, none of their own, as the instrument's `empty` states it of a source unit's piece; by unit and piece)
+  const jointPiece = new Set<string>()
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
     for (let j = 0; j < pg.glyphs.length; j++) pageA[(m.offA[p] as number) + j] = p + 1
@@ -731,6 +737,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     for (const x of made) {
       const u = units.length
       units.push(x.unit)
+      if (x.phId !== null)
+        for (const id of piecesOf(x.unit.content).keys()) if (id !== x.phId) jointPiece.add(`${u}|${id}`)
       const mem = empty(u, x.unit.kind, x.unit.id)
       mem.fixed = !!x.unit.fixed
       mem.figure = !!x.unit.figure
@@ -1158,8 +1166,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // segments make no crops))
       // (a line's end inside a word of its text, facts.ts lineEnd: decided by the source where it states the word, its own TeX
       // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
+      // (a URL: a \url's, or a piece the instrument states sets one, PieceClass.url: a \urldef'd control sequence a macro shows)
+      const isUrl = p.kind === 'url' || !!classOf.get(id)?.url
       const lineEnds = {
-        literal: !!classOf.get(id)?.literal || p.kind === 'url' || p.kind === 'code',
+        literal: !!classOf.get(id)?.literal || isUrl || p.kind === 'code',
         source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
       }
       const asText =
@@ -1202,8 +1212,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
       // of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630. Where TeX set it on one line,
       // where its url package lets TeX break it, counted in that text (urlBreaks))
-      if (p.kind === 'url' && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
-      if (p.kind === 'url' && ink.length === 1) {
+      if (isUrl && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
+      if (isUrl && ink.length === 1) {
         const breaks = urlBreaks(gl.map(gA), el.copy ?? classOf.get(id)?.copy ?? '')
         if (breaks.length) el.breaks = breaks
       }
@@ -1221,20 +1231,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         }
         if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA), lineEnds)
       }
-      // (a text macro whose span the instrument states with nothing in it: both its places stated and no glyph of B between them,
-      // or TeX's probe said it sets none: TeX set none for it, its text '' (2610.19159v1's `\trajectoryMark{}`, whose argument
-      // is empty: its end point and the point after its group hold no glyph); or a head or tail macro the instrument states sets
-      // none on the unit's lines (`empty`: nothing beside the unit's mark on its line, 2610.21880v1's `\endgroup`). The reading
-      // draws it as nothing, and may: no glyph of it is erased with any group)
+      // (an element of no ink states which of three it is (rootcause/lave.md §2, math.md §4), of a class the reading draws from
+      // its ink (INKED_CLASSES): TeX set nothing for it, its text '' — both its places stated and no glyph of B between them,
+      // or the instrument's `empty` (its probe said it sets none, or its points prove it set none of its own: 2610.19159v1's
+      // `\trajectoryMark{}`, 2402.10294v1's `\url` in `\urldef\tempurl`) —; or TeX set it before the unit's start point,
+      // outside the unit's text: El.keep, its ink never erased (the instrument's `outside`); with neither, its ink was not
+      // found, and the reading leaves its unit the original's. Before, an empty ink of a visible class read as TeX's nothing:
+      // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year)
       const emptySpan = !!span && span[0] === span[1]
-      const macro = cls ?? p.kind
-      if (
-        !ink.length &&
-        el.text === undefined &&
-        (macro === 'macro' || macro === 'umacro') &&
-        (emptySpan || emptyPiece.has(`${mem.unit}|${id}`))
-      )
-        el.text = ''
+      const stated = cls ?? p.kind
+      if (!ink.length && el.text === undefined && INKED_CLASSES.has(stated)) {
+        if (emptySpan || emptyPiece.has(`${mem.unit}|${id}`) || jointPiece.has(`${mem.unit}|${id}`)) el.text = ''
+        else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
+      }
       mem.elements.push([id, el])
     }
     // its label: the class's mark before it

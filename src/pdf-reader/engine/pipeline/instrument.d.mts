@@ -1,5 +1,5 @@
 // instrument.mjs's types, for the tests
-import type { Instrument, PieceClass, SpanClass } from '@readarxiv/engine'
+import type { Instrument, Owners, PieceClass, SpanClass } from '@readarxiv/engine'
 
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode */
 export declare function unicodeOf(s: unknown): string
@@ -37,18 +37,26 @@ export declare function inklessPieces(
   units: readonly ({ pieces?: readonly { t: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
   o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; inkless?: readonly string[] | null },
 ): NonNullable<Instrument['empty']>
-/** the paper's macros at a unit's head and after its last text that set nothing on the unit's lines (today's maker's
- *  besideMarks): no glyph of no unit's beside the unit's mark on its line, in its column; as Instrument `empty` pieces */
-export declare function besideEmpty(
+/** the pieces TeX's points prove set nothing of their own, as Instrument `empty` pieces: a piece with no point of its own whose
+ *  nearest two around it in its unit's source order (a piece's, the unit's start and end, else the stream's) hold no glyph or
+ *  painted box between them in B's stream (but the ink of the piece whose opening point is the lower), and no text of the unit's between them in its source
+ *  (`owners` the instrument's glyphs' and boxes' by page) */
+export declare function boundedEmpty(
   pages: readonly {
-    glyphs: readonly { u?: string; x0: number; x1: number; y: number; size: number; blank?: boolean }[]
+    glyphs: readonly { u?: string; blank?: boolean }[]
+    boxes?: readonly number[]
     points?: readonly { name: string; glyph: number; box?: number }[]
-    view?: readonly number[]
   }[],
-  rows: readonly (readonly (string | null | undefined)[])[],
   units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
-  o: { classes: readonly (ReadonlyMap<string, PieceClass> | null | undefined)[]; known?: ReadonlySet<string> },
+  owners: { glyphs: readonly Owners[]; boxes: readonly Owners[] },
 ): NonNullable<Instrument['empty']>
+/** the pieces TeX set before their unit's start point, where the ownership gives the unit's text nothing before it, as
+ *  Instrument `outside` pieces */
+export declare function outsidePieces(
+  pages: readonly { points?: readonly { name: string; glyph: number; box?: number }[] }[],
+  units: readonly ({ pieces?: readonly { t: string; s?: string; src?: string; [more: string]: unknown }[] } | null | undefined)[],
+  owners: { glyphs: readonly Owners[] },
+): NonNullable<Instrument['outside']>
 /** the piece of each of a page's glyphs whose group (`row`, the ownership's by glyph) is a unit's `.p` (-1 none known); `open`
  *  the placeholder points open at the page's start by unit, carried by the caller from page to page in order (it is updated) */
 export declare function glyphPiecesOf(

@@ -122,7 +122,10 @@ export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 
  *  source where no ink is found; a URL's, its glyphs' text on A where it has one, El.text), `sym` a symbol's drawn text and
  *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
  *  `other` with a `sym`), `mark` a footnote's mark (drawn raised whatever its rendering), `literal` a text piece (TeX sets its
- *  characters as written: a code or URL mark; no formula) */
+ *  characters as written: a code or URL mark; no formula). One of no ink (`ink` []) of a class drawn from its ink (cite, num,
+ *  other, display, macro, umacro) states which of three it is: `text` '' TeX set nothing for it; `keep` TeX set it outside the
+ *  unit's text (before its start), whatever it set never erased with the unit; neither, its ink was not found, and the
+ *  typesetter leaves the unit the original's */
 export const El = z.object({
   kind: ElKind,
   unknown: flag.optional(),
