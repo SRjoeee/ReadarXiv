@@ -108,7 +108,7 @@ export const SAYS = {
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
-  links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
+  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations, counted alike: how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
@@ -122,6 +122,42 @@ export const SAYS = {
   folio: "a page number at its size, right-aligned (the owner's ruling 6)",
   lead: "a text's leading tighter than the original's while its block has room: its pitch over its size against the original's",
   ink: "a text whose original ink is black drawn in another fill (the owner's ruling 7: the PDF's own black)",
+}
+
+// ---------------------------------------------------------------- links
+/**
+ * A page's links counted per target per drawn line: `boxes` [target, x0, y0, x1, y1] (A's link annotations, or the anchors a side
+ * drew, in its own frame; y up or down alike). The boxes of one target that stand on one line, or on lines one under the other,
+ * are one link: TeX writes one annotation a line for a link it broke over lines (a URL's end on one line, its rest on the next),
+ * which a side may set on one line under one anchor or over two under two. Two boxes are on one line or on adjacent ones where no
+ * line of theirs fits between them: the gap between their vertical extents (negative where they overlap) is under the lower of
+ * their heights. A box of no height is a link of its own. (So a target cited on lines one under the other counts once: a lenient
+ * count, which never makes a side's link missing that a reader can follow)
+ */
+export function linksOf(boxes) {
+  const by = new Map()
+  for (const [to, x0, y0, x1, y1] of boxes) {
+    const b = { lo: Math.min(y0, y1), hi: Math.max(y0, y1) }
+    if (!by.has(to)) by.set(to, [])
+    by.get(to).push(b)
+  }
+  let n = 0
+  for (const list of by.values()) {
+    const sized = list.filter((b) => b.hi > b.lo).sort((a, b) => a.lo - b.lo)
+    n += list.length - sized.length
+    // (sorted by their lower edges, a box joins the link before it where it meets that link's highest box by the rule: chained)
+    let hi = -Infinity,
+      h = 0
+    for (const b of sized) {
+      const bh = b.hi - b.lo
+      if (b.lo - hi >= Math.min(h, bh)) n++
+      if (b.hi > hi) {
+        hi = b.hi
+        h = bh
+      }
+    }
+  }
+  return n
 }
 
 // ---------------------------------------------------------------- one page
@@ -540,8 +576,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const px = rec.px ?? {}
   // (the links a reader can follow: the anchors each side drew; a page today shows as arXiv's is its own page view with the
   // original's link annotations (layer-side.mjs shownOriginal), as v2's original page view is, whose anchors v2page counts.
-  // Each side's links as its layout gave them kept beside, for diagnosis)
-  const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
+  // Each counted per target per drawn line (linksOf), A's annotations alike, where the drawing read their boxes; a drawing of
+  // before, its anchors. Each side's links as its layout gave them kept beside, for diagnosis)
+  const boxed = rec.original?.linkBoxes && rec.v2.linkBoxes && (rec.today.shownOriginal || rec.today.linkBoxes)
+  const L = boxed
+    ? { original: linksOf(rec.original.linkBoxes), today: linksOf(rec.today.shownOriginal ? rec.original.linkBoxes : rec.today.linkBoxes), v2: linksOf(rec.v2.linkBoxes) }
+    : { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
   // (their borders, as each side draws them: the anchors drawn with one against the original's annotations PDF.js draws one round
   // (a border width above 0 and a colour), a page today shows as arXiv's the original's; a drawing of before they were read

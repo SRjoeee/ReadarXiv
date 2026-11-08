@@ -241,6 +241,30 @@ describe('elements: drawn otherwise than the original sets them', () => {
     const p = measure(fe, sides(6, ll, ll, { today: { crops: [crop(6, '19', [300, 597, 356, 610], [300, 597, 356, 610])] }, original: { runs, fonts: ['CMR10'] } }))
     expect(of('elements')(p)).toMatchObject([{ unit: 't6 para', worse: true, v2: { value: 'element 19: its scripts or sizes set flat as text' } }])
   })
+  it('a URL TeX broke over two lines, drawn as text by design, has no scripts to set flat (2608.16117 p34 t202, 2610.22065 p7 t126)', () => {
+    // (\url{https://link.aps.org/doi/10.1103/PhysRevE.110.014502}: its glyphs on A at the end of one line and the start of the
+    // next, two baselines 14.45 apart at one size; the typesetter draws a literal element over lines as its text, every \url's
+    // so, and today its `url` element so too: two lines of a URL are no scripts on either side)
+    const runs = [
+      [360.66, 674.14, 532.92, 685.17, 676.88, 9.96, 0, 'https://link.aps.org/doi/', 0],
+      [91.08, 659.71, 238.73, 670.73, 662.43, 9.96, 0, '10.1103/PhysRevE.110.014502', 0],
+    ]
+    const ink = [
+      [360.66, 674.14, 532.92, 685.17, 676.88],
+      [91.08, 659.71, 238.73, 670.73, 662.43],
+    ]
+    const lines = [factLine(79.37, 532.92, 676.88), factLine(91.08, 434.09, 662.43)]
+    const ll = [drawnLine(79.37, 532.92, 676.88, 'x'.repeat(40)), drawnLine(91.08, 434.09, 662.43, 'x'.repeat(30))]
+    const crop = (ord: number, b: number[]) => [ord, ...b.slice(0, 4), '38', ...b.slice(0, 4), N]
+    // (v2: the literal element drawn as its text, today's a crop of each line)
+    const fe = one(202, 'reference', lines, { els: [['38', 'other', ink, 2, 1, 0, 0, 1]] })
+    const v2Text = measure(fe, sides(202, ll, ll, { today: { crops: ink.map((b) => crop(202, b)) }, original: { runs, fonts: ['CMTT10'] } }))
+    expect(of('elements')(v2Text)).toEqual([])
+    // (today: its `url` element drawn as its text, v2's a crop of each line)
+    const prep = [{ ord: 202, kind: 'reference', elements: [{ k: 38, kind: 'url', flags: [], segs: ink.map(([x0, y0, x1, y1, base]) => ({ page: N, x0, x1, baseline: base, top: y1, bottom: y0 })) }] }]
+    const todayText = measure(fe, sides(202, ll, ll, { v2: { crops: ink.map((b) => crop(202, b)) }, original: { runs, fonts: ['CMTT10'] } }), { prep })
+    expect(of('elements')(todayText)).toEqual([])
+  })
   it("an element of a formula's class with no ink on the page is drawn as nothing even with a text: its points' ink lost (2608.25210 p7)", () => {
     // (the algorithm's El 4, an \\If block: no ink in the part, its copy stated; today's reading lost its ink (LOST))
     const els = [['4', 'other', [], 0, 1, 0, 0]]

@@ -67,6 +67,17 @@ const boxOf = (vp, dpr) => {
   return { css, px: [css[0] * dpr, css[1] * dpr] }
 }
 
+
+/** each drawn anchor's target (its href) and box as drawn ([href, left, top, right, bottom], CSS px): an annotation layer's
+ *  anchor by its section, which PDF.js sizes (verdict.mjs linksOf) */
+function anchorBoxes(as) {
+  return [...as].map((a) => {
+    const sec = a.parentElement?.tagName === 'SECTION' && a.parentElement.parentElement?.classList.contains('annotationLayer') ? a.parentElement : a
+    const r = sec.getBoundingClientRect()
+    return [a.getAttribute('href') ?? '', r.left, r.top, r.right, r.bottom]
+  })
+}
+
 window.today = {
   async open(desc) {
     window.__baseRuns = []
@@ -127,10 +138,12 @@ window.today = {
     await p.render({ canvas, canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined }).promise
     const anns = (await p.getAnnotations()).filter((a) => a.subtype === 'Link' && (a.url || a.dest || a.action))
     const bordered = anns.filter((a) => a.borderStyle?.width > 0 && a.borderColor).length
+    // (each annotation's target and rectangle, PDF units: the links counted per target per drawn line, verdict.mjs linksOf)
+    const linkBoxes = anns.map((a) => [a.url ?? (a.dest !== undefined ? `#${JSON.stringify(a.dest)}` : `action:${JSON.stringify(a.action)}`), ...a.rect])
     const { runs, fonts } = await runsOf(p)
     stage().replaceChildren(canvas)
     p.cleanup()
-    return { view: [...p.view], links: anns.length, bordered, size: box.css, runs, fonts }
+    return { view: [...p.view], links: anns.length, bordered, linkBoxes, size: box.css, runs, fonts }
   },
   /** page n laid by the door and drawn as the reading view draws it, at `scale` CSS px a point; what was drawn read back */
   async page(n, scale) {
@@ -210,6 +223,8 @@ window.today = {
       links: laid.links.length,
       linksDrawn: links ? links.querySelectorAll('a').length : 0,
       bordersDrawn: links ? links.querySelectorAll('a[data-axt-border]').length : 0,
+      // (each anchor's target and box as drawn, CSS px: verdict.mjs linksOf)
+      linkBoxes: links ? anchorBoxes(links.querySelectorAll('a')) : [],
       lit: spans,
       original: laid.words.original,
     }

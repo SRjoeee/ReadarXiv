@@ -67,6 +67,38 @@ describe('a page measured from what each side drew', () => {
     const asOriginal = measure(v2Of(), rec({ original: 3, today: { shownOriginal: true, links: 0, linksDrawn: 0 }, v2: { linksDrawn: 3 } }))
     expect(worse(asOriginal)).toEqual([])
   })
+  it('links are counted per target per drawn line: a URL TeX broke over two lines is one link, however many lines each side draws it on', () => {
+    // (2610.22065 p7 t126: its URL's two annotations on A, one at the end of a line and one at the start of the next (PDF units,
+    // y up, 9.96 pt lines 11.96 apart); today draws two anchors over two lines, v2 one over the one line it sets the URL on; a
+    // citation [5] of another target on a line far under it, on every side)
+    const url = 'https://arxiv.org/abs/1503.02531'
+    const A = [
+      [url, 420, 600, 540, 609.96],
+      [url, 72, 588.04, 160, 598],
+      ['#cite.5', 300, 400, 312, 409.96],
+    ]
+    const T = [
+      [url, 600, 300, 760, 315],
+      [url, 100, 318, 220, 333],
+      ['#cite.5', 400, 600, 416, 615],
+    ]
+    const V = [
+      [url, 300, 300, 560, 315],
+      ['#cite.5', 400, 600, 416, 615],
+    ]
+    const boxed = (o: object, boxes: unknown[][]) => ({ ...rec(o), original: { links: boxes.length, linkBoxes: boxes } })
+    const one = measure(v2Of(), boxed({ today: { linksDrawn: 3, linkBoxes: T }, v2: { linksDrawn: 2, linkBoxes: V } }, A))
+    expect(worse(one)).toEqual([])
+    expect(one.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
+    // (the same target cited on two lines far apart is two links: v2 drawing one of them misses one)
+    const twice = [...A, ['#cite.5', 300, 300, 312, 309.96]]
+    const lost = measure(v2Of(), boxed({ today: { linksDrawn: 4, linkBoxes: [...T, ['#cite.5', 400, 800, 416, 815]] }, v2: { linksDrawn: 2, linkBoxes: V } }, twice))
+    expect(worse(lost)).toEqual(['links'])
+    expect(lost.measures.links).toMatchObject({ original: 3, today: 3, v2: 2 })
+    // (a page today shows as arXiv's has the original's, counted alike)
+    const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linksDrawn: 2, linkBoxes: V } }, A))
+    expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
+  })
   it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {
     // (hyperref's boxes: three bordered annotations; v2 drawing its anchors with none is worse, whatever its links; a drawing of
     // before the borders were read judges none)

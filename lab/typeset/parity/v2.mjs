@@ -100,7 +100,7 @@ for (const pair of pairs) {
             : {}),
           // (its elements: each [piece, kind, its ink's boxes on this page [x0, y0, x1, y1, base], how many boxes its ink has on
           // every page, its text (1 stated: its glyphs' reading; 2 stated empty: TeX set nothing; 0 none; a symbol is drawn from
-          // its source's name, by its kind), raised (a mark, a raised symbol), kept)
+          // its source's name, by its kind), raised (a mark, a raised symbol), kept, literal (a URL, a code mark: El.literal))
           ...(m.els?.length
             ? {
                 els: m.els.map(([k, e]) => [
@@ -111,6 +111,7 @@ for (const pair of pairs) {
                   e.text === '' ? 2 : e.text ? 1 : 0,
                   e.mark || e.sym?.[1] ? 1 : 0,
                   e.keep ? 1 : 0,
+                  e.literal ? 1 : 0,
                 ]),
               }
             : {}),

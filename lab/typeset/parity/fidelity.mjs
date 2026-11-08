@@ -364,6 +364,8 @@ export function measureFidelity(c) {
     return !!s && s.ink > 0 && s.shown >= KEPT_SHARE * s.ink
   }
   const VISIBLE = (kind) => kind !== 'space' && kind !== 'zero'
+  // (today's element kinds that set their characters as written, as the engine's El.literal: a URL, a code mark)
+  const LITERAL_KINDS = new Set(['url', 'code'])
   for (const ord of laidV2.keys()) {
     const m = facts.get(ord)
     if (!m?.els) continue
@@ -371,13 +373,15 @@ export function measureFidelity(c) {
     const today = c.todayOf.get(ord)
     const tu = today !== undefined ? prepByOrd.get(today) : undefined
     const firstLaid = Math.min(...Object.entries(v2.pages).filter(([, p]) => p.members.some((x) => x.ord === ord && x.state === 'laid')).map(([pg]) => Number(pg)))
-    for (const [k, kind, boxes, inkAll, text, raised, keep] of m.els) {
+    for (const [k, kind, boxes, inkAll, text, raised, keep, literal] of m.els) {
       if (!VISIBLE(kind) || keep) continue
       const id = `${ord}:${k}`
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
-      // (with ink here and no crop cut from it, drawn as its text: its scripts flat where its glyphs on A have them)
+      // (with ink here and no crop cut from it, drawn as its text: its scripts flat where its glyphs on A have them; a literal
+      // element (a URL, a code mark: TeX sets its characters as written, so it has no scripts) TeX broke over lines is drawn as
+      // its text by design, its glyphs on two baselines its lines', no scripts)
       if (boxes.length) {
-        if (text === 1 && !raised && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
+        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]]))) note('v2', key, `element ${k}: its scripts or sizes set flat as text`)
         continue
       }
       // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
@@ -400,7 +404,8 @@ export function measureFidelity(c) {
     for (const e of tu?.elements ?? []) {
       const boxes = (e.segs ?? []).filter((g) => g.page === n).map((g) => [g.x0, Math.min(g.top, g.bottom), g.x1, Math.max(g.top, g.bottom)])
       const id = `${key.slice(1)}:${e.k}`
-      if (!boxes.length || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
+      // (today's `url` and `code` elements are literal as v2's: no scripts to set flat)
+      if (!boxes.length || LITERAL_KINDS.has(e.kind) || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
       if (runs && scriptedOf(runs, boxes)) note('today', key, `element ${e.k}: its scripts or sizes set flat as text`)
     }
   }

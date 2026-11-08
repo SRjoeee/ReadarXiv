@@ -126,6 +126,13 @@ const p = {
       // (the links a reader can follow on the page: the overlay's anchors on a laid page, PDF.js's annotation layer's on a page
       // the reader shows as arXiv's)
       linksDrawn: el?.querySelectorAll('.axt-links a, .annotationLayer a').length ?? 0,
+      // (each of those anchors' target (its href) and box as drawn, CSS px, an annotation layer's by its section, which PDF.js
+      // sizes: the links counted per target per drawn line, verdict.mjs linksOf)
+      linkBoxes: [...(el?.querySelectorAll<HTMLAnchorElement>('.axt-links a, .annotationLayer a') ?? [])].map((a) => {
+        const up = a.parentElement
+        const r = (up?.tagName === 'SECTION' && up.parentElement?.classList.contains('annotationLayer') ? up : a).getBoundingClientRect()
+        return [a.getAttribute('href') ?? '', r.left, r.top, r.right, r.bottom]
+      }),
       // (those drawn with a border: the overlay's anchors its link states one for, PDF.js's sections it gives a border width)
       bordersDrawn:
         (el?.querySelectorAll('.axt-links a[data-axt-border]').length ?? 0) +
