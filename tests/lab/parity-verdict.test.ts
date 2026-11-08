@@ -1,7 +1,8 @@
 // @vitest-environment node
 // The display gate's verdict (lab/typeset/parity/verdict.mjs, #629's review): a page is judged from what each side drew, and the
 // gate passes only over the whole of what the run asked. Synthetic pages: one unit or figure text or link drawn or not, a
-// unit only v2 draws with its sentence boxes or without, a head's label relabelled or kept.
+// unit's sentence boxes where today highlights it, where today draws it without, and where only v2 translates it, a head's
+// label relabelled or kept.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
@@ -23,8 +24,9 @@ const v2Of = (o: { members?: object[]; facts?: object[]; today?: Record<number, 
   facts: { [N]: { members: o.facts ?? [], links: 0 } },
   today: o.today ?? {},
 })
-const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>) =>
-  measurePage('p-zh', v2, r, { prepByOrd: new Map(), todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])), turned: new Set() })
+/** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
+const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = []) =>
+  measurePage('p-zh', v2, r, { prepByOrd: new Map(prep.map((u) => [u.ord, u])), todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])), turned: new Set() })
 const worse = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.worse).map((d) => d.flag)
 
 describe('a page measured from what each side drew', () => {
@@ -68,38 +70,61 @@ describe('a page measured from what each side drew', () => {
 const factLine = (x0: number, x1: number, y: number, size = 10) => [N, 0, x0, x1, y, y + 0.8 * size, y - 0.2 * size, 48, 300, 0, size]
 const drawnLine = (x0: number, x1: number, y: number, text: string, size = 10): Line => ({ ...line(y, text.length), x0, x1, size, text })
 
-describe('the highlight: units both sides draw judged against each other, a unit only v2 draws against arXiv', () => {
-  // (a figure text only v2 draws: its member laid, its one line drawn at 100–140 on 300, its original's line there on A)
+describe("the highlight: today's feature for the units today highlights; elsewhere v2 judged on not drawing a wrong one", () => {
+  // (a figure text v2 draws: its member laid, its one line drawn at 100–140 on 300, its original's line there on A)
   const fig = (lit: object) =>
     v2Of({
       members: [{ ord: 50, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }],
       facts: [{ ord: 50, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100, 140, 300, 8)] }],
     })
-  const drawnFig = rec({ v2: { units: [{ id: 50, lines: [drawnLine(100, 140, 300, 'abcd', 8)] }] } })
+  const v2Fig = { units: [{ id: 50, lines: [drawnLine(100, 140, 300, 'abcd', 8)] }] }
   const box = (x0: number, x1: number, y: number, size = 8) => [x0 - 0.5, y - 0.25 * size, x1 + 0.5, y + 0.9 * size]
+  const right = { right: [[box(100, 140, 300)]], left: [[box(100, 140, 300)]] }
+  const missLeft = { right: [[box(100, 140, 300)]], left: [[box(100, 140, 200)]] }
+  const highlights = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'highlight')
+  // (the same figure text translated by today too: its own group (g[data-f]) drawn at the figure's place, its unit in today's
+  // prepare dump at the original's box)
+  const todayFig = { figures: [{ id: 'f0', lines: [drawnLine(100, 146, 300, 'wxyz', 8)] }] }
+  const prepFig = [{ ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 140, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }]
 
-  it("a unit only v2 draws with no sentence boxes is v2's defect, never compared with today's absent highlight", () => {
-    const p = measure(fig({}), drawnFig)
-    const d = p.diffs.filter((x: { flag: string }) => x.flag === 'highlight')
-    expect(d).toHaveLength(1)
-    expect(d[0]).toMatchObject({ unit: 'p50 figure', worse: true })
+  describe('a unit only v2 translates (today left it English)', () => {
+    it('no sentence boxes: no fault, today has none either', () => {
+      expect(highlights(measure(fig({}), rec({ v2: v2Fig })))).toEqual([])
+    })
+    it('boxes covering its drawn line (right) and its original line (left): no fault', () => {
+      expect(highlights(measure(fig(right), rec({ v2: v2Fig })))).toEqual([])
+    })
+    it("boxes that miss its original on the left, or part of its drawn line on the right: v2's fault, worse", () => {
+      expect(highlights(measure(fig(missLeft), rec({ v2: v2Fig })))).toMatchObject([{ unit: 'p50 figure', worse: true }])
+      const short = { right: [[box(100, 118, 300)]], left: [[box(100, 140, 300)]] }
+      expect(highlights(measure(fig(short), rec({ v2: v2Fig })))).toMatchObject([{ unit: 'p50 figure', worse: true }])
+    })
   })
-  it('its boxes covering its drawn line on the right and its original line on the left pass', () => {
-    const p = measure(fig({ right: [[box(100, 140, 300)]], left: [[box(100, 140, 300)]] }), drawnFig)
-    expect(worse(p)).toEqual([])
+  describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
+    it('v2 without boxes: equal', () => {
+      expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])
+    })
+    it('v2 with boxes that cover it: better', () => {
+      expect(highlights(measure(fig(right), rec({ today: todayFig, v2: v2Fig }), prepFig))).toMatchObject([{ unit: 'p50 figure', worse: false, nearer: 'v2' }])
+    })
+    it('v2 with boxes that miss: worse', () => {
+      expect(highlights(measure(fig(missLeft), rec({ today: todayFig, v2: v2Fig }), prepFig))).toMatchObject([{ unit: 'p50 figure', worse: true }])
+    })
   })
-  it('boxes that miss its original on the left, or cover part of its drawn line on the right, fail', () => {
-    const left = measure(fig({ right: [[box(100, 140, 300)]], left: [[box(100, 140, 200)]] }), drawnFig)
-    expect(worse(left)).toEqual(['highlight'])
-    const right = measure(fig({ right: [[box(100, 118, 300)]], left: [[box(100, 140, 300)]] }), drawnFig)
-    expect(worse(right)).toEqual(['highlight'])
-  })
-  it('a unit both sides draw is judged against today: v2 without boxes where today has them is worse', () => {
-    const v2 = v2Of({ members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }], facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [] }], today: { 11: { today: 7 } } })
-    const both = { today: { units: [{ id: 7, lines: [line(400)] }], lit: [7] }, v2: { units: [{ id: 11, lines: [line(400)] }] } }
-    const p = measure(v2, rec(both))
-    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'highlight')).toMatchObject([{ unit: null, worse: true }])
-    expect(worse(measure(v2, rec({ ...both, today: { ...both.today, lit: [] } })))).toEqual([])
+  describe('a unit both sides draw', () => {
+    const v2 = (lit: object = {}) =>
+      v2Of({ members: [{ ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }], facts: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 400)] }], today: { 11: { today: 7 } } })
+    const page = (todayLit: number[], v2Lit: number[]) => rec({ today: { units: [{ id: 7, lines: [line(400)] }], lit: todayLit }, v2: { units: [{ id: 11, lines: [line(400)] }], lit: v2Lit } })
+    const its = { right: [[[71, 397, 301, 409]]], left: [[[71, 397, 301, 409]]] }
+    it('today highlights it, v2 does not: worse (the highlight is a feature of today\'s there)', () => {
+      expect(highlights(measure(v2(), page([7], [])))).toMatchObject([{ unit: null, worse: true }])
+      expect(highlights(measure(v2(its), page([7], [11])))).toEqual([])
+    })
+    it('today does not highlight it: v2 none is equal, v2 covering it better, v2 missing it worse', () => {
+      expect(highlights(measure(v2(), page([], [])))).toEqual([])
+      expect(highlights(measure(v2(its), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: false, nearer: 'v2' }])
+      expect(highlights(measure(v2({ right: [[[71, 397, 150, 409]]], left: its.left }), page([], [11])))).toMatchObject([{ unit: 't7 para', worse: true }])
+    })
   })
 })
 

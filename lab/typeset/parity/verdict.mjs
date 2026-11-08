@@ -71,7 +71,7 @@ export const SAYS = {
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's",
   links: "the links a reader can follow on the page (the anchors each side drew) against the original's link annotations: how many are missing",
-  highlight: "the units both sides draw with no sentence boxes for the highlight, against each other; a unit only v2 draws, its boxes against its drawn lines and its original's (the original's every unit has its sentences)",
+  highlight: "the units today highlights: v2 without sentence boxes there; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's",
 }
 
@@ -375,30 +375,46 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   // Each side's links as its layout gave them kept beside, for diagnosis)
   const L = { original: rec.original?.links ?? 0, today: rec.today.shownOriginal ? (rec.original?.links ?? 0) : (rec.today.linksDrawn ?? 0), v2: rec.v2.linksDrawn ?? 0 }
   judge('links', null, "links missing against the original's annotations", L.original, { value: L.today, d: Math.max(0, L.original - L.today) }, { value: L.v2, d: Math.max(0, L.original - L.v2) }, 0.5)
-  // (the highlight: the units both sides draw judged against each other, each side's count with no sentence boxes; a unit only
-  // v2 draws, a translation today does not have (a figure text, a gain), never against today's absent highlight: judged
-  // against arXiv's geometry, its sentence boxes covering its drawn lines on the right and its original's lines on the left)
-  const both = [...T.keys()].filter((k) => V.has(k))
+  // (the highlight is a feature of today's for the units today highlights: there v2 must have its sentence boxes too, judged
+  // against today's. Elsewhere v2 is judged only on not drawing a wrong one: on a unit today draws without boxes (a figure
+  // text both translate among them, matched by its original's box), none is equal, boxes that cover it better; on a unit only
+  // v2 translates, none or covering boxes pass. Boxes that do not cover it are v2's fault and worse: they must cover its drawn
+  // lines on the right and its original's lines on arXiv's page on the left, every edge within a point)
   const litT = new Set(rec.today.lit.map((id) => `t${id}`)),
     litV = new Set(rec.v2.lit.map(keyOfPart))
-  const noT = both.filter((k) => !litT.has(k)).length,
-    noV = both.filter((k) => !litV.has(k)).length
-  judge('highlight', null, 'units both sides draw with no sentence boxes', 0, { value: `boxes on ${both.length - noT} of ${both.length}`, d: noT }, { value: `boxes on ${both.length - noV} of ${both.length}`, d: noV }, 0.5)
+  const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
-  let alone = 0
+  const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
+  const noV = todays.filter((k) => !litV.has(k)).length
+  judge('highlight', null, 'units today highlights and v2 draws, with no sentence boxes', 0, { value: `boxes on ${todays.length} of ${todays.length}`, d: 0 }, { value: `boxes on ${todays.length - noV} of ${todays.length}`, d: noV }, 0.5)
+  const hl = { todays: todays.length, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
   for (const [key, ls] of V) {
-    if (T.has(key)) continue
-    alone++
     const ord = ordOfKey.get(key)
+    const fig = figBoth.get(ord)
+    if (T.has(key) ? litT.has(key) : fig !== undefined && litT.has(`t${fig}`)) continue
+    const both = T.has(key) || fig !== undefined
+    if (T.has(key)) hl.unlit++
+    else if (both) hl.figures++
+    else hl.alone++
     const lit = laidV2.get(ord)?.lit ?? { left: [], right: [] }
+    const rb = lit.right.flat(),
+      lb = lit.left.flat()
+    if (!rb.length && !lb.length) continue
     const right = ls.map(band),
-      left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: l[6], x1: l[3], y1: l[5] }))
-    const r = right.filter((b) => !covered(b, lit.right.flat())).length,
-      lf = left.filter((b) => !covered(b, lit.left.flat())).length
-    if (!r && !lf) continue
-    const name = `${key} ${facts.get(ord)?.kind ?? ''}`.trim()
-    fault('v2', 'highlight', `${name}: ${r} of ${right.length} drawn lines, ${lf} of ${left.length} original lines without its sentence boxes`)
-    diff('highlight', name, "a unit only v2 draws: its sentence boxes over its drawn lines (right) and its original's lines (left)", 'covered', { value: 'not drawn', off: null }, { value: `${r} of ${right.length} drawn, ${lf} of ${left.length} original lines not covered`, off: null }, true, 'today')
+      left = (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
+    const r = right.filter((b) => !covered(b, rb)).length,
+      lf = left.filter((b) => !covered(b, lb)).length
+    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    if (!r && !lf) {
+      if (both) {
+        hl.better++
+        diff('highlight', name, "sentence boxes over its drawn lines (right) and its original's (left) where today draws none", 'covered', { value: 'none', off: 1 }, { value: 'covered', off: 0 }, false, 'v2')
+      }
+      continue
+    }
+    hl.wrong++
+    fault('v2', 'highlight', `${name}: ${r} of ${right.length} drawn lines, ${lf} of ${left.length} original lines outside its sentence boxes`)
+    diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: `${r} of ${right.length} drawn, ${lf} of ${left.length} original lines not covered`, off: null }, true, 'today')
   }
   const dk = px.darkness
   const ref = dk?.originalText?.mean ?? dk?.original?.mean ?? null
@@ -411,7 +427,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   }
   out.measures = {
     links: { ...L, todayLaid: rec.today.links, v2Laid: rec.v2.links },
-    highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length, both: both.length, v2Alone: alone },
+    highlight: { today: rec.today.lit.length, v2: rec.v2.lit.length, ...hl },
     darkness: dk ?? null,
     diff: px.diff ?? null,
     rules: rules.length,
@@ -462,6 +478,52 @@ function labelOf(lines, name) {
   const text = l.text.trimStart()
   if (l.x0 >= name[1][3] - NEAR.positionMin || text.startsWith(OBJ)) return 'kept'
   return text.startsWith(name[0]) ? 'original' : 'translated'
+}
+
+/** the box a list of boxes {x0, y0, x1, y1} spans, or null */
+const spanOf = (bs) =>
+  bs.length ? { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) } : null
+const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
+/** each a of `as` paired with the b of `bs` its box overlaps most, where that a is also the one b's box overlaps most */
+function mutualBest(as, bs) {
+  const best = (x, ys) => {
+    let at = -1,
+      most = 0
+    ys.forEach((y, i) => {
+      const o = overlap(x.box, y.box)
+      if (o > most) [at, most] = [i, o]
+    })
+    return at
+  }
+  const out = new Map()
+  as.forEach((a, i) => {
+    const j = best(a, bs)
+    if (j >= 0 && best(bs[j], as) === i) out.set(a.id, bs[j].id)
+  })
+  return out
+}
+
+/**
+ * The figure texts both sides translate on page n, v2's member ord → today's unit ord: today's own groups (g[data-f], drawn
+ * where their original stands) joined to today's figure units (its prepare dump: the original's box) by the drawn box against
+ * the original's, those units to v2's figure members by the original's box against the original's (the part's lines on A),
+ * each a mutual best overlap
+ */
+function figuresMatched(groups, prep, facts, n) {
+  const figure = (k) => /figure/.test(k ?? '')
+  const g = groups.map((u) => ({ id: u.id, box: spanOf(u.lines.filter((l) => l.n > 0).map(band)) })).filter((x) => x.box)
+  const t = prep
+    .filter((u) => figure(u.kind))
+    .map((u) => ({ id: u.ord, box: spanOf((u.lines ?? []).filter((l) => l.page === n).map((l) => ({ x0: l.x0, y0: Math.min(l.top, l.bottom), x1: l.x1, y1: Math.max(l.top, l.bottom) }))) }))
+    .filter((x) => x.box)
+  const v = facts
+    .filter((m) => figure(m.kind))
+    .map((m) => ({ id: m.ord, box: spanOf(m.lines.filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))) }))
+    .filter((x) => x.box)
+  const drawnByToday = new Set(mutualBest(g, t).values())
+  const out = new Map()
+  for (const [today, ord] of mutualBest(t.filter((x) => drawnByToday.has(x.id)), v)) out.set(ord, today)
+  return out
 }
 
 /** whether a box {x0, y0, x1, y1} is covered by the union of boxes [x0, y0, x1, y1], each of its edges within `tol` points */
