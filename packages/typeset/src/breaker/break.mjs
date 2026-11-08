@@ -47,6 +47,25 @@ export function lineExtent(line, f, scale, m) {
   }
   return { a: Math.max(a, ta), d: Math.max(d, td), text: { a: ta, d: td } }
 }
+/**
+ * A URL's crop cut at the last of its break points (El.breaks: where TeX's url package may break it, the x between two of its
+ * glyphs on the page and the UTF-16 code units of its copy text before it) whose head is no wider than `room` at the layout's
+ * scale: the head, its crop up to the cut and its text the copy text before it, and the tail, from the cut, the break points
+ * after it its own; null where none fits (`least`: the first, where nothing of the line holds anything yet)
+ */
+const urlCut = (t, room, scale, least) => {
+  const c = t.crop, rect = c.crop, text = c.text ?? ''
+  let at = null
+  for (const b of c.breaks) if ((b[0] - rect[0]) * scale <= room + 0.01 || (least && at === null)) at = b
+  if (!at || at[0] <= rect[0] || at[0] >= rect[2]) return null
+  // (`cut`: its edges cut between two glyphs, 1 its left, 2 its right, which the reader draws with no antialiased margin)
+  const head = { ...c, crop: [rect[0], rect[1], at[0], rect[3]], text: text.slice(0, at[1]), breaks: undefined, cut: ((c.cut ?? 0) & 1) | 2 }
+  const rest = c.breaks.filter(b => b[0] > at[0]).map(b => [b[0], b[1] - at[1]])
+  const tail = { ...c, crop: [at[0], rect[1], rect[2], rect[3]], text: text.slice(at[1]), breaks: rest.length ? rest : undefined, cut: ((c.cut ?? 0) & 2) | 1 }
+  // (`of`: the token cut, the whole URL each part is of, which the gate's I4 reads as drawn once where its parts tile it)
+  const of = t.of ?? t
+  return { head: headOfCut(t, { crop: head, cw: at[0] - rect[0], of }), tail: { ...t, crop: tail, cw: rect[2] - at[0], glue: false, asp: false, of } }
+}
 /** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
  *  its width (`kern`) */
 const kernOf = (t, f) => ((t.kernW ?? 0) * f) / 100
@@ -545,6 +564,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
         setToken(i, { ...t0, s: tail, w100: P.measure.w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
+      } else if (t0.crop?.breaks?.length && tokW(t0, f, st, scale) > cap && urlCut(t0, cap, scale, true)) {
+        // (a URL longer than the line by itself: cut at the last of its break points that fits, else at its first)
+        const cut = urlCut(t0, cap, scale, true)
+        line.items.push({ t: cut.head, w: cut.head.cw * scale, shift: 0, asp: 0 })
+        line.x += cut.head.cw * scale
+        setToken(i, cut.tail)
       } else if (t0.ownLabel && lines.length === 1 && li + 1 < slots.length) {
         // (a unit's own label carried to its first line's start (run.mjs ownLabelOnRow), on a shared line that holds it and not
         // its first word: never alone at the line's end (2610.21098v1 p2's "(2)", the end of the line before its item's text).
@@ -584,6 +609,18 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         line.x += cut.hw + asp
         const tail = word.slice(cut.at)
         setToken(i, { ...t0, s: tail, w100: P.measure.w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
+      }
+    }
+    // a URL TeX set whole, broken where its url package lets TeX break it (El.breaks): the most of it that fits, its crop cut
+    // between two of its glyphs there, as a word is hyphenated; the rest opens the next line (2303.11366v4 p1's abstract: the
+    // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08)
+    if (t0.crop?.breaks?.length) {
+      const asp = items[0].asp ?? 0
+      const cut = urlCut(t0, cap + shrink - line.x - asp, scale, false)
+      if (cut) {
+        line.items.push({ t: cut.head, w: cut.head.cw * scale, shift: 0, asp })
+        line.x += cut.head.cw * scale + asp
+        setToken(i, cut.tail)
       }
     }
     // the line is closed: its trailing spaces dropped

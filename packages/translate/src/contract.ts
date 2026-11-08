@@ -17,7 +17,9 @@ export type SpanStyle = string
  * translated; `stop` is the punctuation the element itself sets at its end that is its sentence's (a display's `x = y.`),
  * stated by the source reader, which a wire may write after the element so that the sentence ends there. A `span` holds
  * pieces; `must` marks one that comes back exactly once or the reply is refused (a link, a run-in label); a span without it
- * may come back unstyled
+ * may come back unstyled, its words outside it. Where a wire sends it on no wire (the markers wire, the runs floor), its
+ * head still comes back inside it, in a copy that holds it alone (accept.ts headLength: the elements before its first word,
+ * where TeX sets a declaration that holds for the rest of the group, `{\em all}`; loose, it would hold past the group)
  */
 export type Piece =
   | { t: 'text'; s: string }

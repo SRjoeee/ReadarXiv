@@ -182,13 +182,21 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
     for (const run of lineRuns(line, L)) {
       if ('crop' in run) {
         const it = line.items[run.crop]!
-        const c = it.t.crop as { page: number; crop: number[]; baseline: number; text?: string; k?: number }
+        const c = it.t.crop as {
+          page: number
+          crop: number[]
+          baseline: number
+          text?: string
+          k?: number
+          cut?: 1 | 2 | 3
+        }
         items.push({
           s: c.text ?? '',
           x: it.x!,
           src: [c.page, c.crop[0]!, c.crop[1]!, c.crop[2]!, c.crop[3]!, c.baseline],
           k: seg.scale,
           piece: c.k !== undefined ? String(c.k) : 'label',
+          ...(c.cut ? { cut: c.cut } : {}),
           w: it.w,
         })
         continue

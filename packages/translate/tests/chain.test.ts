@@ -8,6 +8,7 @@ import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
+import { BERT_STRATEGIES } from './adapters/fixtures.ts'
 import { el, span, t, unit } from './pieces.ts'
 
 const all = async (it: AsyncIterable<Result>): Promise<Result[]> => {
@@ -245,6 +246,28 @@ describe('the contract: the runs floor', () => {
         { t: 'span', id: 'l', content: [{ t: 'text', s: 'LINKED TEXT' }] },
         { t: 'text', s: ' x.' },
       ],
+    })
+  })
+  it("a span that is no edge keeps its head: a declaration at a group's head stays in a copy of the group (1810.04805v2)", async () => {
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([BERT_STRATEGIES], 'ja', { translators: [upper] }))
+    const r = rs[0] as Result & { ok: true }
+    expect(r).toMatchObject({ ok: true, by: 'runs:upper:0' })
+    // each `\em` in its group alone, where the source has it; the group's words in the stretch after it, unstyled
+    expect(r.content.filter((p) => p.t === 'span')).toEqual([
+      { t: 'span', id: '1', content: [{ t: 'el', id: '2' }] },
+      { t: 'span', id: '6', content: [{ t: 'el', id: '7' }] },
+      { t: 'span', id: '17', content: [{ t: 'el', id: '18' }] },
+    ])
+    expect(r.content.at(-1)).toEqual({
+      t: 'text',
+      s: ' ALL PRE-TRAINED PARAMETERS. THE TWO APPROACHES SHARE THE SAME OBJECTIVE FUNCTION DURING PRE-TRAINING, WHERE THEY USE UNIDIRECTIONAL LANGUAGE MODELS TO LEARN GENERAL LANGUAGE REPRESENTATIONS.',
     })
   })
   it('`runs:mixed` when its stretches came from two translators; refused when none came back', async () => {

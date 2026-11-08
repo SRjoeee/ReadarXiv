@@ -38,6 +38,7 @@ import {
   type RowsWhy,
   type State,
   targetOf,
+  translationShown,
   wanted,
 } from './session/machine.ts'
 import { abstractPage, htmlVersionOf, originalPdfOf, TRANSLATE_HASH, titleOf, VIEWER_HASH } from './session/paper.ts'
@@ -56,6 +57,7 @@ import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts
 import { ownedClock } from './stack/clock.ts'
 import { createScheduler } from './stack/scheduler.ts'
 import { DEFAULTS } from './prefs.ts'
+import { TYPESET_TARGETS } from './compose/targets.ts'
 import { addSheets } from './styles.ts'
 
 export { DEFAULTS }
@@ -154,8 +156,9 @@ export interface Reader {
   close(): void
 }
 
-/** what lays a page until the typesetter's layPage is exported (lane L3): given by the caller (the harness, a fixture's lay),
- *  with the faces its pages name; a reader given none lays nothing and every page stays arXiv's */
+/** what lays a page: the reader's own typesetter where a host gives none (lane L3's layPage over the rule set's rules, the
+ *  served faces and the reader's Metrics: compose/typeset.ts, served.ts); a host's own where it gives one (the e2e's fixture
+ *  lay), with the faces its pages name. Given an engine without `lay`, nothing is laid and every page stays arXiv's */
 export interface Engine {
   lay?: (parts: (n: number) => Promise<Part | null>, pages: number) => Promise<Lay> | Lay
   faces?: FaceTable
@@ -228,6 +231,11 @@ export function openReader(
     panes: Panes | null = null,
     composer: Composer | null = null,
     highlight: Highlight | null = null
+  /** the served faces and the reader's Metrics over them, the reader's own typesetter's (no engine of the host's), with the code */
+  let served: import('./compose/served.ts').Served | null = null
+  /** the typesetter's chunk, asked with the code; the target its first reads were asked ahead for (warmSoon) */
+  let typesetCode: Promise<typeof import('./compose/typeset.ts')> | null = null
+  let warmed = ''
   const ready = kitReady.then((k) => {
     // (a reader closed while PDF.js was loading makes nothing: no sheet, no pane, no mark on a root it has given back; its kit
     // let go. Everything below waits on `ready` and finds no panes, or its released ticket)
@@ -275,6 +283,9 @@ export function openReader(
   let rows = new Map<string, Row>()
   let rowsTarget = ''
   let rowsDone = false
+  /** the units the paper keeps as they are (format's Unit.kept), once the head's units are read: never translated, so no page
+   *  waits for a row of theirs */
+  let keptIds: ReadonlySet<string> = new Set()
   const rowsListeners = new Set<() => void>()
   const rowsSource = (): RowsSource => ({
     target: rowsTarget,
@@ -282,6 +293,7 @@ export function openReader(
     get done() {
       return rowsDone
     },
+    kept: (id) => keptIds.has(id),
     on(f) {
       rowsListeners.add(f)
       return () => rowsListeners.delete(f)
@@ -319,6 +331,15 @@ export function openReader(
         (l) => l.flat(),
       )
       unitsHeld = { key, units: p }
+      // (the kept units known: a page that waited for theirs alone is laid now)
+      p.then(
+        (units) => {
+          if (closed || unitsHeld?.units !== p) return
+          keptIds = new Set(units.filter((u) => u.kept).map((u) => u.id))
+          if (keptIds.size) for (const f of [...rowsListeners]) f()
+        },
+        () => {},
+      )
       p.catch(() => {
         if (unitsHeld?.units === p) unitsHeld = null
       })
@@ -454,6 +475,18 @@ export function openReader(
    *  lays nothing). A generation: published whole, by the ticket that made it while it lives, and read only through it */
   let composed: { doc: PDFDocumentProxy; groups: import('./compose/groups.ts').Groups; lay: Lay } | null = null
   const none: Lay = (part) => ({ page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] })
+  /** the reader's own typesetter's lay, where the host gives no engine: the rules of the target the rows are of and of the toggles
+   *  at each call, the served Metrics (compose/typeset.ts) */
+  const typesetOf = async (): Promise<Lay> => {
+    const s = served
+    if (!s) return none
+    const { typesetLay } = await import('./compose/typeset.ts')
+    return typesetLay({
+      served: s,
+      target: () => rowsTarget || targetOf(rt.state),
+      classes: () => rt.state.prefs.value.classes,
+    })
+  }
   /** the paper's title: its PDF's Info Title (arXiv's margin stamp is none), else the abstract page's (one request a visit,
    *  asked again by the next open where it could not be read); the first known stays */
   const abstract = abstractPage(host.fetch, ref)
@@ -578,26 +611,34 @@ export function openReader(
       return undefined
     },
     code(_spec, t, emit, signal) {
-      // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s)
+      // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s); the
+      // reader's own typesetter and its served faces with it, where the host gives no engine. What the composed document's open
+      // reads is asked with it, the code's load waiting for none of it: its groups, and the typesetter, whose patterns, faces'
+      // index and CJK tables are asked once a translation is to be shown (warmSoon; staging, 2026-11-08: three round trips in a
+      // row before composedOpen)
       let faces: import('./compose/faces.ts').Faces | null = null
+      void import('./compose/groups.ts').catch(() => {})
+      typesetCode = o.engine ? null : import('./compose/typeset.ts')
+      typesetCode?.catch(() => {})
       Promise.all([
         import('./compose/composer.ts'),
         import('./compose/faces.ts'),
         import('./compose/highlight.ts'),
         ready,
+        o.engine ? null : import('./compose/served.ts'),
       ]).then(
-        async ([C, F, H, k]) => {
+        async ([C, F, H, k, S]) => {
           if (signal.aborted || !panes) return
-          faces = F.createFaces({
-            table: o.engine?.faces ?? {},
-            fetch: host.fetch,
-            root,
-            lost: () => {
-              if (facesLost) return
-              facesLost = true
-              tellSoon()
-            },
-          })
+          const lost = () => {
+            if (facesLost) return
+            facesLost = true
+            tellSoon()
+          }
+          if (S) {
+            served = S.createServed({ fetch: host.fetch, root, lost })
+            faces = served.faces
+            warmSoon(rt.state)
+          } else faces = F.createFaces({ table: o.engine?.faces ?? {}, fetch: host.fetch, root, lost })
           // (the lay itself is made once the head is read: the composed document's open, whose own it is)
           const lay: Lay = (part, rs) => (composed?.lay ?? none)(part, rs)
           composer = C.createComposer({
@@ -639,6 +680,9 @@ export function openReader(
         composer = null
         highlight = null
         faces = null
+        served = null
+        typesetCode = null
+        warmed = ''
       }
     },
     composed(spec, t, emit, signal) {
@@ -676,7 +720,7 @@ export function openReader(
           await groups.ready
           // (the lay held here until the ticket is known to live: one made for a document let go, which may come after a
           // newer catalog's, never reaches the composer)
-          const lay = o.engine?.lay ? await o.engine.lay(partOf, h.paper.pages) : none
+          const lay = o.engine ? (o.engine.lay ? await o.engine.lay(partOf, h.paper.pages) : none) : await typesetOf()
           if (signal.aborted) return
           mine = { doc, groups, lay }
           composed = mine
@@ -852,7 +896,7 @@ export function openReader(
       here: !!host.translate,
       defaults: DEFAULTS,
       visit: o.visit,
-      targets: o.engine?.targets ?? null,
+      targets: o.engine ? (o.engine.targets ?? null) : TYPESET_TARGETS,
       now: Date.now(),
       visible: document.visibilityState !== 'hidden',
       online: navigator.onLine !== false,
@@ -867,7 +911,24 @@ export function openReader(
   })
   // ---- the objects wanted (the head), and the view following the state
   const fetching = new Set<string>()
+  /** what laying the target reads first, asked ahead (warmTypeset) once a composed translation is to be shown (the display
+   *  shows it, the reader sets the target: translationShown), once a target; a visit that shows the original asks none of it */
+  function warmSoon(s: State) {
+    const sv = served,
+      code = typesetCode
+    if (!sv || !code || !translationShown(s)) return
+    const target = targetOf(s)
+    if (warmed === target) return
+    warmed = target
+    void code.then(
+      (TS) => {
+        if (!closed && served === sv) TS.warmTypeset(sv, target)
+      },
+      () => {},
+    )
+  }
   const onState = (s: State) => {
+    warmSoon(s)
     // (the layer's units, once its head is read: the contents' headings, and the rows made here read them from the same objects)
     if (s.layer.s === 'ready' && s.layer.head && wanted(s).length) contentsFor(s.layer.head, s.layer.units)
     for (const r of wanted(s)) {
@@ -891,6 +952,8 @@ export function openReader(
       // (the display shown: the one chosen, the original where it is held for the visit)
       panes?.setDisplay(displayOf(s))
       panes?.setSync(s.visit.sync ?? s.prefs.value.sync)
+      // (side by side swapped, marked on the root with the display, where the sheets read it: the chrome's and the reader's own)
+      panes?.setSwapped(s.prefs.value.swapped)
       composer?.setShown(displayOf(s) !== 'original')
       // (what to translate, shown or hidden in place; the highlight's switch; no layer for the paper: every page the original's)
       composer?.setClasses(s.prefs.value.classes)
@@ -910,9 +973,20 @@ export function openReader(
   const onVisible = () => rt.input({ i: 'env.visible', on: document.visibilityState !== 'hidden' })
   const onOnline = () => rt.input({ i: 'env.online', on: true }),
     onOffline = () => rt.input({ i: 'env.online', on: false })
+  // (the page put away into the back-forward cache, and shown from it again: the session put away meanwhile, our server neither
+  // followed nor asked, no timer live, and followed anew on return, the panes as they were (today's web session/job.ts putAway,
+  // shown). A pagehide that is not persisted is the host's to close the reader on)
+  const onHide = (e: PageTransitionEvent) => {
+    if (e.persisted) rt.input({ i: 'env.away', on: true })
+  }
+  const onShow = (e: PageTransitionEvent) => {
+    if (e.persisted) rt.input({ i: 'env.away', on: false })
+  }
   document.addEventListener('visibilitychange', onVisible)
   addEventListener('online', onOnline)
   addEventListener('offline', onOffline)
+  addEventListener('pagehide', onHide)
+  addEventListener('pageshow', onShow)
   // ---- what the host reads
   function tellSoon() {
     told = null
@@ -934,7 +1008,7 @@ export function openReader(
         id: paper.id,
         version: paper.version ?? s.doc?.version ?? head?.paper.version ?? null,
         title: s.title,
-        html: s.html.s === 'known' ? s.html.url : null,
+        html: s.html.s === 'unknown' ? null : (s.html.url ?? null),
         pdf: originalPdfOf(ref),
       },
       prefs: s.prefs.value,
@@ -1045,6 +1119,7 @@ export function openReader(
         storeBytes: store.bytes,
         clockDue: clock.due,
         laidPages: (composer?.probe().laidPages as number) ?? 0,
+        lays: (composer?.probe().lays as number) ?? 0,
         lit: highlight?.lit?.id ?? null,
         crashed,
         // (the moments, ms from the open; the open itself, ms from performance's origin, to place them on the page's clock)
@@ -1060,6 +1135,8 @@ export function openReader(
       document.removeEventListener('visibilitychange', onVisible)
       removeEventListener('online', onOnline)
       removeEventListener('offline', onOffline)
+      removeEventListener('pagehide', onHide)
+      removeEventListener('pageshow', onShow)
       void rt.dispose().then(() => {
         panes?.dispose()
         scheduler.dispose()

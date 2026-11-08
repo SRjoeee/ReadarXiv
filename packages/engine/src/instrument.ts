@@ -33,6 +33,9 @@ export interface InstrumentUnit {
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */
   cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true }
+  /** the paper's title, a unit of its front matter (the source reader's) */
+  title?: true
+  front?: true
   /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip) */
   align?: 'j' | 'l' | 'c' | 'r'
   /** a babel name's key (a unit of kind `name`: its occurrences are owned with ROLE.name) */
