@@ -88,7 +88,8 @@ export function decorBefore(i: DecorBeforeInput): DecorBefore {
 }
 
 /** a single line run on to its column's edge or the next glyph on its baseline; a centred one as far to either side
- *  (RUN:1576 widen, its room stated: `side`) */
+ *  (RUN:1576 widen, its room stated: `side`); one set flush right back to its left, its end kept (TeX's \hfil before it: the
+ *  room a flush-right line has is before it; the owner's ruling of 2026-11-08, a page number keeps its size and its end) */
 export function widen(b: DecorBlock, side: Side | undefined): void {
   if (b.rects.length !== 1 || !side) return
   const r = b.rects[0]!
@@ -101,6 +102,8 @@ export function widen(b: DecorBlock, side: Side | undefined): void {
       b.x0 = mid - half
       b.x1 = mid + half
     }
+  } else if (b.flush === 'right') {
+    if (left < b.x0) b.x0 = left
   } else if (right > b.x1) b.x1 = right
 }
 

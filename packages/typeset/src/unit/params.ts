@@ -23,6 +23,9 @@ import type { Block } from './blocks.ts'
 export const CJK_CAPS_SIZE = 1
 /** a solid-set original's pitch, × its size (L2:3065 SOLID) */
 export const SOLID = 1.25
+/** the units of the page's head and foot (today's ink units of the heads and the notes): one of a single line, a running head,
+ *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
+const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /** the target's rules U.params reads */
 export type ParamsRules = {
@@ -149,6 +152,8 @@ export type Params = {
     halfLead: HalfLead | null
     lastLines: boolean
     capScale?: number
+    floor?: number
+    floorMin?: number
   }
   clear: ReturnType<typeof cellBands>
   fillable: boolean
@@ -167,6 +172,9 @@ export function params(i: ParamsInput): Params {
     lineskip: i.lineskip,
     halfLead,
     lastLines: i.heading && !i.numbered,
+    // (a line of the page's head or foot keeps its size: no step of the fit or past it shrinks it; where its free row does not
+    // hold it at its size it is left the original's)
+    ...(HEAD_FOOT.has(i.kind) && i.blocks.length === 1 && i.blocks[0]!.rects.length === 1 ? { floor: 1, floorMin: 1 } : {}),
   }
   const clear = i.P.cjk && i.kind === 'cell' ? cellBands(i.blocks, i.rulesOf, i.s, i.P) : null
   if (clear && clear.cap < 1) P.capScale = clear.cap

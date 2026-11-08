@@ -363,6 +363,37 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid!.state).toBe('laid')
     expect(laid!.lines.every(([y]) => y > 683)).toBe(true)
   })
+  it('keeps a page number’s size and its end: a foot line set flush right grows leftwards into its free row', () => {
+    // (the owner's ruling of 2026-11-08: 2609.36054v2's "page 13 of 14" at the text block's right edge (548.28) was laid from the
+    // original's start and shrunk to 0.825 of its size; its translation keeps the original's size and ends where it ends)
+    const foot = (o: Partial<Placed> = {}) =>
+      member({
+        kind: 'inkheads',
+        align: 'r',
+        lines: [[1, 1, 494.57, 548.28, 34.64, 41.31, 32.69, 302.19, 550.02, 0, 10]],
+        room: { below: 32.69, side: [302.19, 550.02] },
+        ...o,
+      })
+    const still: typeof rules = { ...rules, set: { ...rules.set, adaptiveFill: false } as unknown as typeof rules.set }
+    // (15 characters at half a size each: 75 pt, the original's line 53.71 pt)
+    const [laid] = layPage(part(foot()), rowsOf([row([{ t: 'text', s: 'Seite 13 von 14' }])]), still, metrics()).members
+    expect(laid!.state).toBe('laid')
+    expect(laid!.fit!.size).toBe(10)
+    // (its text from 473.28 to the original's end, its line the free row's from 302.19: a flush-right line's slack before it)
+    const [, x0, x1, items] = laid!.lines[0]!
+    expect([x0, items[0]!.x, x1]).toEqual([302.19, 473.28, 548.28])
+    // (longer than the free row before it (the ink on its baseline at 480, half a size off: 63.28 pt), which it would fit at
+    // 0.825 of its size: never shrunk, left the original's)
+    const crowded = foot({ room: { below: 32.69, side: [480, 550.02] } })
+    const [left] = layPage(
+      part(crowded),
+      rowsOf([row([{ t: 'text', s: 'Seite 13 von 14' }])]),
+      still,
+      metrics(),
+    ).members
+    expect(left!.state).not.toBe('laid')
+    expect(left!.fit).toBeUndefined()
+  })
   it('caps a size tie by scale, not by points: a run-in head of a smaller size keeps the original’s ratio (S3)', () => {
     // (2610.30034v1 p2: a head at 8.97 and its paragraph at 9.96, both laid at their size, the paragraph capped at 8.97, 0.9 of
     // its own; one paragraph's text even (the maintainer's ruling) is one scale for both)

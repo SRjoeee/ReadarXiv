@@ -12,10 +12,12 @@ import {
   bandOf,
   bracketsOf,
   breakEnd,
+  CENTRE,
   cellCentred,
   centredByBlock,
   FORCED_BREAK,
   fillOfGlyphs,
+  INSET,
   type InkBox,
   labelParts,
   pinnedOf,
@@ -35,6 +37,9 @@ const SHORT = 0.5
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
 /** the characters of a text an opening point is found by (today's stream.mjs WANT, marks/follows.ts) */
 const WANT = 8
+/** the ink units of the page's head and foot (made on A, today's ink-units.mjs INK_KIND heads and notes): their lines TeX sets
+ *  as boxes of the text's width (\@oddhead, \@oddfoot), and states no alignment of */
+const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /** a unit's pieces in the source's order, a group as its open and its close */
 type Flat = { t: 'text'; s: string } | { t: 'el'; id: string } | { t: 'open' | 'close'; id: string } | { t: 'unit' }
@@ -531,6 +536,15 @@ export function factsOf({
           x.lines.filter((l) => l[0] === l0[0] && !(l[9] & 1)).map((l) => [l[2], l[3]] as [number, number]),
         )
         if (cellCentred(spans) === true) a = 'c'
+      }
+      // (a line of the page's head or foot, alone: flush right where it ends at its measure's end and starts within it, TeX's
+      // \hfil before it in the text width's box (2609.36054v2's "page 13 of 14", read justified, its translation laid from the
+      // original's start and shrunk); left and centred as read above. A paragraph's single line, full and indented, is no box
+      // of the text width: its alignment is its paragraph's)
+      if (a === 'j' && unit.align === undefined && HEAD_FOOT.has(mem.kind) && own.length === 1) {
+        const [l, j] = own[0]!
+        const e = blockOf(l)
+        if (Math.abs(l[3] - e[1]) <= CENTRE && l[2] - e[0] > INSET * sizeOf(j)) a = 'r'
       }
       // (nothing tells it and its column does not centre it: centred by its own block's lines, a single line's stack)
       if (a === 'j' && unit.align === undefined && !unit.cell)

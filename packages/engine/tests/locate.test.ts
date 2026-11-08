@@ -1471,3 +1471,35 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
   })
 })
+
+describe('the alignment of a line of the page’s head or foot', () => {
+  it('reads a head or foot line that ends at its measure’s end and starts within it set flush right (TeX’s \\hfil before it)', () => {
+    // (2609.36054v2's foot, "page 13 of 14" at the text block's right edge, read justified: its translation was laid from the
+    // original's start and shrunk to 0.825 of its size; a head or foot line is a box of the text's width, the place TeX's \hfil
+    // left it in that box its alignment. A paragraph's single line indented and full is no such line: it stays justified)
+    const body = 'w'.repeat(70)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'A running title', y: 760 },
+          { text: body, y: 700 },
+          { text: body, y: 688 },
+          { text: body, y: 676 },
+          { text: body, y: 664 },
+          { text: 'w'.repeat(65), x: 102, y: 640 },
+          { text: 'page 2 of 9', x: 426, y: 60 },
+        ],
+      },
+    ])
+    const units = [
+      unitOf('inkheads', 'A running title'),
+      unitOf('para', 'the body'),
+      unitOf('para', 'one full line'),
+      unitOf('inkheads', 'page 2 of 9'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 1, 1, 1, 2, 3]]), B, align(B, B))
+    const at = (u: number) => L.members.find((m) => m.unit === u)!
+    expect(at(3).lines[0]!.slice(2, 4)).toEqual([426, 492])
+    expect([at(0).align, at(1).align, at(2).align, at(3).align]).toEqual(['j', 'j', 'j', 'r'])
+  })
+})
