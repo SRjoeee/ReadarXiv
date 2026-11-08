@@ -157,6 +157,39 @@ describe("a label in a translated unit: today's relabelled against v2's kept as 
   })
 })
 
+describe("a label read from the drawn text: drawn anew where the first line opens with a word and the label's number", () => {
+  // (2610.30034's centred "Lemma 3 (": the label's ink 58.92–103.52, its name word to 88.25, the head's text after it to 244.25,
+  // TeX's alignment centred; today draws the relabelled head from the label's start, v2 centres it, its first line starting
+  // past the name's end)
+  const lemma = { ink: [N, 58.92, 204.55, 103.52, 213.09, 206.36], kind: 'head', name: ['Lemma', [N, 58.92, 206.25, 88.25, 212.86, 206.36]], num: ['3', [N, 91.74, 206.29, 96.72, 213.09, 206.36]], punct: ['(', [N, 100.21, 204.55, 103.52, 213.02, 206.36]] }
+  // (a caption "Fig. 4." whose number the part states with the abbreviation's stop, ".4": its name word to 59.6, its ink to 69.9)
+  const fig = { ink: [N, 49, 600, 69.9, 607, 601], kind: 'caption', name: ['Fig', [N, 49, 600, 59.6, 607, 601]], num: ['.4', [N, 61, 600, 69.9, 607, 601]] }
+  const v2 = (ord: number, kind: string, align: string, label: object, x0: number, y: number) =>
+    v2Of({ members: [{ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }], facts: [{ ord, kind, align, style: { size: 10 }, label, lines: [factLine(x0, 244.25, y)] }], today: { [ord]: { today: ord } } })
+  const page = (f: ReturnType<typeof v2Of>, ord: number, t: Line, v: Line) =>
+    measure(f, rec({ today: { units: [{ id: ord, lines: [t] }], lit: [ord] }, v2: { units: [{ id: ord, lines: [v] }] } }))
+  const labels = (p: { diffs: { flag: string; v2: { value: unknown } }[] }) => p.diffs.filter((d) => d.flag === 'shown' && d.v2.value === 'label')
+
+  it("a centred head v2 relabels, its line starting past the name's end, is relabelled, not kept", () => {
+    const head = v2(81, 'heading', 'c', lemma, 103.52, 206.36)
+    const today = drawnLine(58.24, 171.83, 206.36, 'Hilfssatz 3 (Zerlegung): ')
+    const centred = drawnLine(94.51, 208.04, 206.36, 'Hilfssatz 3 (Zerlegung): ')
+    expect(labels(page(head, 81, today, centred))).toEqual([])
+  })
+  it('a caption v2 keeps "Fig. 4." for, its line holding no label, is still a label kept', () => {
+    const cap = v2(94, 'caption', 'j', fig, 69.9, 601)
+    const today = drawnLine(49, 240, 601, 'Abb. 4. Ein Vergleich der Budgets')
+    const kept = drawnLine(74.5, 240, 601, 'Ein Vergleich der Budgets')
+    expect(labels(page(cap, 94, today, kept))).toMatchObject([{ unit: 't94 caption', worse: true }])
+  })
+  it("a kept label whose text opens with the label's number is no label drawn anew", () => {
+    const head = v2(81, 'heading', 'c', lemma, 103.52, 206.36)
+    const today = drawnLine(58.24, 171.83, 206.36, 'Hilfssatz 3 (3 Schritte): ')
+    const kept = drawnLine(104, 208.04, 206.36, '3 Schritte): ')
+    expect(labels(page(head, 81, today, kept))).toMatchObject([{ unit: 't81 heading', worse: true }])
+  })
+})
+
 describe("a size tie (one paragraph's text is even) judged as one paragraph", () => {
   // (a run-in head, member 57, and its paragraph, member 59, set at 10 pt on A, which v2 ties to one scale; today lays them
   // independently)

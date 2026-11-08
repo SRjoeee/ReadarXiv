@@ -380,8 +380,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned }) {
   for (const [key, o] of orig) {
     const name = o.label?.name
     if (!o.first || !name?.[1] || name[1][0] !== n || !T.has(key) || !V.has(key)) continue
-    const t = labelOf(T.get(key), name),
-      v = labelOf(V.get(key), name)
+    const t = labelOf(T.get(key), o.label),
+      v = labelOf(V.get(key), o.label)
     if (t === 'translated' && v !== null && v !== 'translated')
       diff('shown', `${key} ${o.kind ?? ''}`.trim(), `its label ("${name[0]}") drawn in the target by today, ${v === 'kept' ? "kept as the original's ink" : "drawn in the original's words"} by v2`, name[0], { value: 'translated', off: null }, { value: 'label', off: null }, true, 'today')
   }
@@ -493,15 +493,27 @@ function raised(lines) {
 }
 
 /**
- * A unit's label on its first line as a side drew it (its lines, the label's name word and box, part facts): 'kept' where
- * the line's ink starts at the name's end or after it, or with a crop's stand-in (the original's ink stands there); else
- * drawn anew, 'original' where the line opens with the name word, 'translated' where it does not; null where nothing is drawn
+ * A unit's label on its first line as a side drew it (its lines; the part's label: its name word and box, its number), read
+ * from the drawn text. TeX's label is a name word and a number (Placed.label name, num); a side that draws it anew draws a
+ * word, the target's or the original's, and that number at the line's opening, wherever the line stands (a centred head
+ * relabelled starts where its width puts it, past the name's end as often as not). So: 'kept' where the line opens with a
+ * crop's stand-in (the original's ink stands there) or does not open with a word and the label's number (the original's ink
+ * stands for the label, the line holds the unit's text alone); else drawn anew, 'original' where the line opens with the name word,
+ * 'translated' where it does not. A label that states no number (a word alone) is read by its place, no text telling it
+ * from the unit's own: kept where the line's ink starts at the name's end or after it. null where nothing is drawn
  */
-function labelOf(lines, name) {
+function labelOf(lines, label) {
   const l = lines.filter((x) => !x.rot && x.n > 0).sort((a, b) => b.y - a.y)[0]
   if (!l) return null
   const text = l.text.trimStart()
-  if (l.x0 >= name[1][3] - NEAR.positionMin || text.startsWith(OBJ)) return 'kept'
+  const name = label.name
+  if (text.startsWith(OBJ)) return 'kept'
+  // (the number as drawn: the part's, the punctuation TeX set about it aside (a caption's "Fig. 4." states ".4"))
+  const num = (label.num?.[0] ?? '').replace(/^[\p{P}\s]+|[\p{P}\s]+$/gu, '')
+  if (num) {
+    const esc = num.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (!new RegExp(`^[^\\s\\p{N}\\p{P}]+[\\s\\p{P}]*${esc}(?![\\p{L}\\p{N}])`, 'u').test(text)) return 'kept'
+  } else if (l.x0 >= name[1][3] - NEAR.positionMin) return 'kept'
   return text.startsWith(name[0]) ? 'original' : 'translated'
 }
 
