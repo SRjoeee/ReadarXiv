@@ -126,16 +126,20 @@ export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: st
 }
 
 /**
- * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796, its characters'
- * sizes by pageChars2 L2:188): the median (the upper one of an even count) of its own text glyphs' sizes along the line, the
- * size PDF.js's text content gives their items (an expanded font's wider than its size up the line), its math fonts' glyphs
- * aside; undefined where it has none (today then reads the size off its lines' bands). Faked small capitals, which today
- * leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b: TeX's font state)
+ * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796): the median (the
+ * upper one of an even count) of its own text glyphs' sizes, its math fonts' glyphs aside; undefined where it has none (today
+ * then reads the size off its lines' bands). Each glyph's size up the line, the size TeX was asked for: pdfTeX's font expansion
+ * (microtype) scales a justified line's glyphs along it alone, by up to 2 % either way, to justify that line, and today's
+ * pageChars2 (L2:188) read the size along it (PDF.js's item transform, Math.hypot(a, b)): a paragraph whose lines TeX stretched
+ * read larger than its font, one it shrank smaller (2610.40645v1 p12: \normalsize paragraphs at 10.69 to 11.13, every glyph
+ * 10.91 up its line), which a lay that keeps its size (borrowing before shrinking) then drew larger than the original. Faked
+ * small capitals, which today leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b:
+ * TeX's font state)
  */
 export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
   const sizes = gs
     .filter((g) => real(g) && classifyFont(g.base).fam !== 'math')
-    .map((g) => g.along ?? g.size)
+    .map((g) => g.size)
     .sort((a, b) => a - b)
   // (as the page states it, not on the coordinates' 1/100 grid: a size is a font's scale, which the lay multiplies every width
   // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 set a 240 pt line 0.06 pt short of today's)

@@ -1,5 +1,5 @@
 // The facts the typesetter consumes, stated by today's definitions (lane L7, the converge lane): a line's size and baseline as
-// today's maker reads them, a unit's size as today's reader reads it (its text glyphs' sizes along the line), a line pinned as
+// today's maker reads them, a unit's size as today's reader reads it (its text glyphs' sizes, up the line), a line pinned as
 // today's edgesOf reads it alone, and its measure as today's columnOf reads its column. Each on ink made by hand.
 import { type Piece, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
@@ -159,12 +159,16 @@ describe('a line’s size and baseline, today’s maker’s (MAKE:382-410)', () 
 })
 
 describe('a unit’s size, today’s reader’s (L2:765 originalStyle, L2:188 pageChars2)', () => {
-  it('is the median of its text glyphs’ sizes along the line, its math fonts aside', () => {
-    // (a line pdfTeX expanded 1.7 %: its glyphs 9.96 pt up the line, 10.13 along it, as PDF.js's text items give them)
+  it('is the median of its text glyphs’ sizes up the line, the size TeX was asked for, its math fonts aside', () => {
+    // (pdfTeX's font expansion scales a justified line's glyphs along it alone, to justify it: 2610.40645v1 p12 t80, three
+    // lines 2 % wide, 11.127 along and 10.909 up (\normalsize, 10.95 pt), read 11.13 along, where TeX set every glyph at 10.91.
+    // A paragraph of lines expanded 1.7 % and shrunk 2 %, set at 9.96)
     const wide = [...'expanded'].map((u, i) => g(u, 72 + 5 * i, 700, 9.96, { along: 10.13 }))
+    const narrow = [...'shrunk'].map((u, i) => g(u, 72 + 5 * i, 676, 9.96, { along: 9.76 }))
     const plain = [...'line'].map((u, i) => g(u, 72 + 5 * i, 688, 9.96))
     const math = [...'xyzw'].map((u, i) => g(u, 120 + 5 * i, 688, 7, { base: 'CMMI7' }))
-    expect(unitSize([...wide, ...plain, ...math])).toBe(10.13)
+    expect(unitSize([...wide, ...plain, ...math])).toBe(9.96)
+    expect(unitSize([...wide, ...narrow])).toBe(9.96)
     expect(unitSize(math)).toBeUndefined()
     // (faked small capitals aside: IEEEtran's "Experiments" as "E" at 9.96 and "XPERIMENTS" at 7.97 is set at 9.96, its share
     // 0.8; an ink unit's, whose source is its own text, by its capitals' sizes alone)
