@@ -81,7 +81,8 @@ export function classed(el: El, c: PieceClass | undefined): El {
   if (!c) return el
   const out: El = { ...el, kind: c.cls }
   if (c.unknown) out.unknown = 1
-  if (c.copy) out.copy = c.copy
+  // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
+  if (c.copy && out.copy === undefined) out.copy = c.copy
   if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
