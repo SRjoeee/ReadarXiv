@@ -37,6 +37,13 @@ export type Piece =
       /** what the element reads as to a sentence cutter, where the host knows it (the HTML page: its visible text); else
        *  its kind decides (a formula a word, a reference a number, a citation's or a note's mark an annotation) */
       reads?: string | undefined
+      /** it sets nothing where it stands, no character and no space (the PDF's source reader, from TeX's tables: a
+       *  declaration, a key written to a file, a penalty, `\noindent`, `\-`, a table's row rule; never a space, a break, a
+       *  fill or a skip): no translator needs it. The markers wire and the runs floor send it on no wire (each marker a hard
+       *  boundary to Microsoft, each runs' edge a cut), beside an element that sets something in that one's marker; read
+       *  back, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group went
+       *  out before it, else at the group's end. The tags wire sends it as any element */
+      silent?: boolean | 1 | undefined
     }
   | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
 

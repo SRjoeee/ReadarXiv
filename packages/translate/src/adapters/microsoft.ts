@@ -62,7 +62,7 @@ export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(mi
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
-export const MICROSOFT_DIGEST = 'fed9e1bed19dfba3e74f17d1ccea433f9feb61b34e41b8c4a71fb17251adcc97'
+export const MICROSOFT_DIGEST = '3515dfd4bb2a213a9fed6e42a0ceb8df356f4c951bc046d60792bc65ee7c1316'
 
 export interface MicrosoftOptions {
   fetch: Fetch
@@ -100,11 +100,11 @@ function sentencesOf(
     last = c
   }
   const back = readMarkers(marked + text.slice(last), plan, tolerant)
-  const content = back && contentOf(refill(back, plan.refill), plan.around)
+  const content = back && contentOf(refill(back, plan.refill), plan.around, plan.beside)
   if (!content) return undefined
   const withSentinels = projectionOf(content)
   const bare = (s: string) => s.split(SENTINEL).join('').replace(/\s+/g, '')
-  const plain = projectionOf(contentOf(toks as Tok[], plan.around) ?? [])
+  const plain = projectionOf(contentOf(toks as Tok[], plan.around, plan.beside) ?? [])
   if (bare(withSentinels) !== bare(plain)) return undefined
   const at: number[] = []
   for (let i = 0, n = 0; i < withSentinels.length; i++) {
@@ -133,7 +133,7 @@ export function readMicrosoft(unit: UnitIn, raw: string): { content: OutPiece[];
     const toks = readMarkers(r.text, plan, tolerant)
     if (!toks) continue
     const filled = refill(toks, plan.refill)
-    const content = contentOf(filled, plan.around)
+    const content = contentOf(filled, plan.around, plan.beside)
     if (!content) continue
     const sentences = unit.sentences ? sentencesOf(unit, plan, r.text, r.src, r.tr, filled, tolerant) : undefined
     return sentences ? { content, sentences } : { content }

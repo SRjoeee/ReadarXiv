@@ -14,8 +14,12 @@ import {
   MICROSOFT_REPLIES,
   MICROSOFT_UNITS,
   NESTED_DISPLAY,
+  SILENT,
+  SILENT_AROUND,
+  SILENT_LABEL,
   UNITS,
 } from './fixtures.ts'
+import { quiet, t, unit } from '../pieces.ts'
 
 /** the endpoint giving each text back as its translation, with sentence lengths cut after each full stop and a space */
 export const microsoftEcho = (_url: string, init: FetchInit) => {
@@ -101,6 +105,11 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       'We compare two settings as follows: @a#\n@b# No XYZ @c#: A model trained without the XYZ task. @d#@e# Only XYZ @f#: A model trained with it alone.',
       // (an element between two letters is the word's: no space of ours beside it; a tie, TeX's space, keeps them)
       'The column str@a#s holds Ni@b#B, by Jane @c# Doe.',
+      // (elements that set nothing: on no wire, the word a discretionary hyphen stands in whole; one beside a citation in its
+      // marker; a span around the rest goes around the translation, the element beside it no matter)
+      'We train an example model @a# on every word, then stop.',
+      '@a# Setup:@b# we train it.',
+      'Method',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -173,6 +182,59 @@ describe('microsoft: reading', () => {
       JSON.stringify({ text: '我们研究这个问题。这很难。', src: [22, 11], tr: [10, 3] }),
     )
     expect(r?.sentences).toEqual({ src: [22], tr: [9] })
+  })
+})
+
+// Elements that set nothing (`silent`): today's wire put them on no wire (mt.mjs INKLESS, TRANSLATE_VERSION 3 and 10:
+// 2610.19159's `\textcolor{…}{\bfseries w}` round every word went out as a marker a word, Microsoft's word salad), v2 sent each
+// as a marker; read back, each stands at the front of its innermost kept group where nothing went out before it, else at its end
+describe('microsoft: an element that sets nothing goes on no wire', () => {
+  it("reads each back at its group's front or end, one beside a citation in its marker, a head of them in a copy of its span", () => {
+    const r = readMicrosoft(SILENT, JSON.stringify({ text: '我们训练一个示例模型 @a# 在每个词上，然后停止。' }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'lab' },
+      { t: 'text', s: '我们训练一个示例模型 ' },
+      { t: 'el', id: 'c' },
+      { t: 'el', id: 'k' },
+      { t: 'text', s: ' 在每个词上，然后停止。' },
+      { t: 'el', id: 'hy' },
+      { t: 'span', id: 'g', content: [{ t: 'el', id: 'bf' }] },
+      { t: 'el', id: 'n' },
+    ])
+    expect(accept(SILENT, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it("a kept span's head that sets nothing comes back after its open", () => {
+    const r = readMicrosoft(SILENT_LABEL, JSON.stringify({ text: '@a#设置：@b# 我们训练它。' }))
+    expect(r?.content[0]).toEqual({
+      t: 'span',
+      id: 'h',
+      content: [
+        { t: 'el', id: 'bm' },
+        { t: 'text', s: '设置：' },
+      ],
+    })
+    expect(accept(SILENT_LABEL, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it('a span around all the rest goes around the translation, the element that sets nothing outside it', () => {
+    const r = readMicrosoft(SILENT_AROUND, JSON.stringify({ text: '方法' }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'hl' },
+      { t: 'span', id: 'm', content: [{ t: 'text', s: '方法' }] },
+    ])
+    expect(accept(SILENT_AROUND, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it("Microsoft's sentence lengths read with them off the wire: the offsets each projection's own", () => {
+    const u = unit('two', [quiet('a'), t('One sentence here. Then'), quiet('b'), t(' another one.')], true)
+    expect(microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(u, 'zh-Hans')).toBe(
+      'One sentence here. Then another one.',
+    )
+    const r = readMicrosoft(u, JSON.stringify({ text: '这里一句话。然后另一句。', src: [19, 17], tr: [6, 6] }))
+    expect(r?.content).toEqual([
+      { t: 'el', id: 'a' },
+      { t: 'text', s: '这里一句话。然后另一句。' },
+      { t: 'el', id: 'b' },
+    ])
+    expect(r?.sentences).toEqual({ src: [20], tr: [7] })
   })
 })
 

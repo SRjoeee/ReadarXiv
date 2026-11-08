@@ -35,7 +35,15 @@ export const SpanKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 
 export type Piece =
   | { t: 'text'; s: string }
-  | { t: 'el'; id: string; kind: string; src: string; keys?: string[] | undefined; stop?: string | undefined }
+  | {
+      t: 'el'
+      id: string
+      kind: string
+      src: string
+      keys?: string[] | undefined
+      stop?: string | undefined
+      silent?: 1 | undefined
+    }
   | {
       t: 'span'
       id: string
@@ -50,7 +58,7 @@ export type Piece =
 /**
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
- * identity only (`stop` not in the id: it is read from `src`, or from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
+ * identity only (`stop` and `silent` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
  * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). `unit`: a unit
  * nested in this one (a footnote set inside a paragraph), by its id, with the source around it (`pre`, `post`)
  */
@@ -67,6 +75,11 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
       // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
+      // the element sets nothing where it stands: no character and no space (today's mt.mjs isInkless, TeX's tables: a
+      // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
+      // a table's row rule; never a space, a break, a fill or a skip), so no translator needs it: a wire may send it on no
+      // wire and put it back at its group's front or end
+      silent: flag.optional(),
     }),
     z.object({
       t: z.literal('span'),

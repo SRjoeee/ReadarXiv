@@ -22,6 +22,7 @@ import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { phClass, texToText } from '../layer-proto/layer1.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
+import { displayStop, isInkless } from '../translate/mt.mjs'
 
 const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
@@ -54,9 +55,21 @@ const SPAN_STYLES = [
 ]
 const styleOf = src => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 
+/** what today's wire reads of an element's source, stated so that no translator reads a source: a display's own stop
+ *  (mt.mjs displayStop: the punctuation it sets at its end that is its sentence's, `x = y.`, which a wire writes after the
+ *  element so that the sentence ends there: in Microsoft's recorded answers no display ending its sentence had the sentence cut
+ *  after it, 0 of 444, a marker before `. ` and a capital every time, 1,357 of 1,357, TRANSLATE_VERSION 5), and an element that
+ *  sets nothing where it stands (mt.mjs isInkless, from TeX's tables: a declaration, a key written to a file, a penalty,
+ *  `\noindent`, `\-`, a table's row rule; never a space, a break, a fill or a skip), which no translator needs: a marker for
+ *  it is a hard boundary to Microsoft (2610.19159's `\bfseries` before every coloured word, 13,000 markers and word salad,
+ *  TRANSLATE_VERSION 3 and 10) */
+const wireFacts = p => {
+  const stop = displayStop(p.src)
+  return { ...(stop ? { stop } : {}), ...(isInkless(p) ? { silent: 1 } : {}) }
+}
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
- *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; its
- *  run-in labels `must` (runIns) */
+ *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
+ *  element's wire facts (wireFacts); its run-in labels `must` (runIns) */
 export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
   let level = []
   const stack = []
@@ -64,7 +77,7 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
     const id = String(k)
     switch (p.t) {
       case 'text': level.push({ t: 'text', s: unicodeOf(p.s) }); break
-      case 'ph': level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src) }); break
+      case 'ph': level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p) }); break
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
         const style = styleOf(unicodeOf(p.src))

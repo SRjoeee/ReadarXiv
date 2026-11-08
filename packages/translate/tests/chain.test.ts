@@ -9,7 +9,7 @@ import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
 import { BERT_STRATEGIES } from './adapters/fixtures.ts'
-import { el, span, t, unit } from './pieces.ts'
+import { el, quiet, span, t, unit } from './pieces.ts'
 
 const all = async (it: AsyncIterable<Result>): Promise<Result[]> => {
   const out: Result[] = []
@@ -268,6 +268,50 @@ describe('the contract: the runs floor', () => {
     expect(r.content.at(-1)).toEqual({
       t: 'text',
       s: ' ALL PRE-TRAINED PARAMETERS. THE TWO APPROACHES SHARE THE SAME OBJECTIVE FUNCTION DURING PRE-TRAINING, WHERE THEY USE UNIDIRECTIONAL LANGUAGE MODELS TO LEARN GENERAL LANGUAGE REPRESENTATIONS.',
+    })
+  })
+  it("an element that sets nothing (`silent`) cuts no stretch: it comes back at its group's front or end", async () => {
+    const u = unit('q', [
+      quiet('lab'),
+      t('First words exam'),
+      quiet('hy'),
+      t('ple here '),
+      el('a'),
+      t(' then '),
+      span('g', 'colour', [quiet('bf'), t(' more')]),
+      t(' words '),
+      span('l', 'link', [quiet('bm'), t('linked text')], true),
+      t(' x.'),
+    ])
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [upper] }))
+    expect(rs[0]).toEqual({
+      id: 'q',
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'el', id: 'lab' },
+        { t: 'text', s: 'FIRST WORDS EXAMPLE HERE ' },
+        { t: 'el', id: 'a' },
+        { t: 'text', s: ' THEN MORE WORDS ' },
+        {
+          t: 'span',
+          id: 'l',
+          content: [
+            { t: 'el', id: 'bm' },
+            { t: 'text', s: 'LINKED TEXT' },
+          ],
+        },
+        { t: 'text', s: ' x.' },
+        { t: 'el', id: 'hy' },
+        { t: 'span', id: 'g', content: [{ t: 'el', id: 'bf' }] },
+      ],
     })
   })
   it('`runs:mixed` when its stretches came from two translators; refused when none came back', async () => {

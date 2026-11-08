@@ -12,6 +12,15 @@
 // - side-by-side elements, white space alone between them, go as one marker read back as all of them in order (28,203 of
 //   the 53 sweep papers' 97,053 markers touched the one before); a display, and an element its host states `alone`, ends
 //   such a stretch (`display` below is that property and nothing else);
+// - an element that sets nothing where it stands (`silent`, the source reader's from TeX's tables: a declaration, a key
+//   written to a file, `\noindent`, `\-`) goes on no wire, and so does a span's head of such elements alone (`{\bfseries w}`):
+//   a marker for it cut the sentence where the source sets nothing (2610.19159's `\textcolor{…}{\bfseries w}` round every
+//   word: 13,000 markers and word salad, until today's wire sent them on none, TRANSLATE_VERSION 3 and 10; this wire, before
+//   the source reader stated them, sent 106 in one of its units where today's sends 10, and Microsoft's reply was word salad
+//   again, 2026-11-09). Beside an element that sets something it rides in that one's marker, in its
+//   place; alone, it comes back at the front of its innermost kept group (the unit, a kept span) where nothing of the group
+//   went out before it, else at the group's end, as today's wire puts it back; one beside a span that holds all the rest
+//   leaves that span around the translation, itself outside it where it stands;
 // - a marker touching a word is read as part of it, and one right after a full stop leaves the last word untranslated: a
 //   space of ours around it, taken back on reading where the reply kept it beside a stop or a digit. Not around an element
 //   inside a word (a letter right before it and right after it, an element that reads as part of a word: `inWord`): there
@@ -44,10 +53,22 @@ type Item =
       stop: string | undefined
       /** each element it holds can stand inside a word (`inWord`) */
       word: boolean
+      /** each element it holds sets nothing (`silent`): alone, it goes on no wire */
+      silent: boolean
     }
   | { t: 'open'; id: string; at: number; letters: boolean; depth: number }
   | { t: 'close'; id: string; at: number }
 export type Slot = { t: 'void'; out: OutPiece[] } | { t: 'open'; id: string } | { t: 'close'; id: string }
+export interface Beside {
+  before: OutPiece[]
+  after: OutPiece[]
+}
+export interface Off {
+  front: OutPiece[]
+  back: OutPiece[]
+  heads: ReadonlyMap<string, OutPiece[]>
+  tails: ReadonlyMap<string, OutPiece[]>
+}
 
 export interface MarkersPlan {
   wire: string
@@ -63,6 +84,10 @@ export interface MarkersPlan {
   lines: ReadonlySet<number>
   /** spans that hold the whole unit, outermost first: back around the translation */
   around: readonly string[]
+  /** for each of them, what sets nothing beside it (`silent`, on no wire): back before and after it */
+  beside: readonly Beside[]
+  /** what went on no wire (`silent`): back at the unit's front or end (inside its spans around), or a kept span's (by id) */
+  off: Off
   /** kept spans whose source holds letters, innermost first: refilled where they come back empty */
   refill: readonly string[]
   /** the wire holds no `#` of its own: a `#` beside a marker is the marker's */
@@ -93,28 +118,36 @@ const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 const projLength = (ps: readonly Piece[]): number =>
   ps.reduce((n, p) => n + (p.t === 'text' ? p.s.length : p.t === 'el' ? 1 : projLength(p.content)), 0)
 
-/** the spans that hold every element and every word of the unit, outermost first, and what they hold */
-function around(content: readonly Piece[]): { ids: string[]; inner: readonly Piece[]; at: number } {
+type El = Extract<Piece, { t: 'el' }>
+const silentEl = (p: Piece): p is El => p.t === 'el' && !!p.silent
+/** the spans that hold every element and every word of the unit but those that set nothing, outermost first, what they hold,
+ *  and the elements that set nothing beside each */
+function around(content: readonly Piece[]): { ids: string[]; inner: readonly Piece[]; at: number; beside: Beside[] } {
   const ids: string[] = []
+  const beside: Beside[] = []
   let inner = content
   let at = 0
   for (;;) {
-    const solid = inner.filter((p) => !(p.t === 'text' && !SOLID.test(p.s)))
+    const solid = inner.filter((p) => !(p.t === 'text' && !SOLID.test(p.s)) && !silentEl(p))
     const only = solid[0]
-    if (solid.length !== 1 || only?.t !== 'span') return { ids, inner, at }
-    at += projLength(inner.slice(0, inner.indexOf(only)))
+    if (solid.length !== 1 || only?.t !== 'span') return { ids, inner, at, beside }
+    const k = inner.indexOf(only)
+    at += projLength(inner.slice(0, k))
     ids.push(only.id)
+    beside.push({
+      before: asOut(inner.slice(0, k).filter(silentEl)),
+      after: asOut(inner.slice(k + 1).filter(silentEl)),
+    })
     inner = only.content
   }
 }
 
-type El = Extract<Piece, { t: 'el' }>
-/** the last element of pieces, through the groups that hold it: what a marker of them ends with (its display, its own stop),
- *  a display inside a group inside a span's head too (`{\small $$ x = y. $$} Then…`) */
+/** the last element of pieces that sets something, through the groups that hold it: what a marker of them ends with (its
+ *  display, its own stop), a display inside a group inside a span's head too (`{\small $$ x = y. $$} Then…`) */
 function lastEl(content: readonly Piece[]): El | undefined {
   for (let i = content.length - 1; i >= 0; i--) {
     const p = content[i] as Piece
-    if (p.t === 'el') return p
+    if (p.t === 'el' && !p.silent) return p
     if (p.t === 'span') {
       const inner = lastEl(p.content)
       if (inner) return inner
@@ -125,10 +158,10 @@ function lastEl(content: readonly Piece[]): El | undefined {
 
 /** a display, or an element its host states alone: it ends a stretch of elements, and so a marker */
 const ends = (q: El | undefined): boolean => !!q && (q.kind === DISPLAY || q.alone === true)
-/** the stop a stretch of side-by-side elements ends with: its last element's, else a line end one of them states (what
- *  follows a forced break in its stretch sets no word: a switch, a skip) */
+/** the stop a stretch of side-by-side elements ends with: its last element's that sets something, else a line end one of
+ *  them states (what follows a forced break in its stretch sets no word: a switch, a skip) */
 const stopOf = (els: readonly El[]): string | undefined =>
-  els[els.length - 1]?.stop ?? els.findLast((q) => q.stop !== undefined && LINE_END.test(q.stop))?.stop
+  els.findLast((q) => !q.silent)?.stop ?? els.findLast((q) => q.stop !== undefined && LINE_END.test(q.stop))?.stop
 /**
  * Whether an element can stand inside a word, its characters the word's: one that reads as a word to the sentence splitter
  * (text.ts standInOf: a formula; a macro, an escaped character, code, which it reads as none). Never one its reader states
@@ -170,6 +203,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           display: p.kind === DISPLAY || p.alone === true,
           stop: p.stop,
           word: inWord(p),
+          silent: !!p.silent,
         })
         at += 1
       } else if (!p.must) {
@@ -191,6 +225,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
             display: ends(last),
             stop: stopOf(elsOf(head)),
             word: elsOf(head).every(inWord),
+            silent: elsOf(head).every((q) => !!q.silent),
           })
           at += len
         }
@@ -211,6 +246,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           display: ends(last),
           stop: stopOf(elsOf(p.content)),
           word: elsOf(p.content).every(inWord),
+          silent: false,
         })
         at += len
       }
@@ -241,23 +277,35 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
     const run = items.slice(i, last + 1)
     const end = run[run.length - 1] as Extract<Item, { t: 'void' }>
     const voids = run.filter((x): x is Extract<Item, { t: 'void' }> => x.t === 'void')
+    // (a stretch of elements that each set nothing is no marker: each goes on no wire)
+    if (voids.every((x) => x.silent)) {
+      out.push(...run)
+      i = last
+      continue
+    }
     out.push({
       t: 'void',
       out: run.flatMap((x): OutPiece[] => (x.t === 'void' ? x.out : x.t === 'text' ? [{ t: 'text', s: x.s }] : [])),
       at: it.at,
       len: end.at + end.len - it.at,
       display: end.display,
-      stop: end.stop ?? voids.findLast((x) => x.stop !== undefined && LINE_END.test(x.stop))?.stop,
+      stop:
+        voids.findLast((x) => !x.silent)?.stop ??
+        voids.findLast((x) => x.stop !== undefined && LINE_END.test(x.stop))?.stop,
       word: false,
+      silent: false,
     })
     i = last
   }
   return out
 }
 
+/** a kept group on the wire (the unit, a kept span): what of it went on no wire, before and after its first thing on it */
+type Group = { id: string | null; seen: boolean; lead: OutPiece[]; end: OutPiece[] }
+
 /** A unit's markers wire and what reading a reply needs */
 export function planMarkers(unit: UnitIn): MarkersPlan {
-  const { ids, inner, at } = around(unit.content)
+  const { ids, inner, at, beside } = around(unit.content)
   const items = itemsOf(inner, at)
   const slots: Slot[] = []
   const stops = new Set<number>()
@@ -272,6 +320,21 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     wire += s
     for (let k = 0; k < s.length; k++) plainAt.push(from)
   }
+  // (an element that sets nothing, left alone in itemsOf, goes on no wire: into its innermost kept group, before the group's
+  // first thing on the wire or after)
+  const isOff = (it: Item | undefined): boolean => it?.t === 'void' && it.silent
+  const groups: Group[] = [{ id: null, seen: false, lead: [], end: [] }]
+  const done: Group[] = []
+  const seen = () => {
+    for (const g of groups) g.seen = true
+  }
+  /** the text item next to `i` on the wire (`d` its side), past what goes on none */
+  const textBeside = (i: number, d: 1 | -1): string => {
+    let j = i + d
+    while (isOff(items[j])) j += d
+    const x = items[j]
+    return x?.t === 'text' ? x.s : ''
+  }
   for (const [i, it] of items.entries()) {
     if (it.t === 'text') {
       // white space as one space, one where two runs meet; the escapes, each character of one at its source's place
@@ -280,8 +343,16 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
         if (/\s/.test(ch)) {
           if (/\s$/.test(wire) || (k > 0 && /\s/.test(it.s[k - 1] as string))) continue
           put(' ', it.at + k)
-        } else put(escapeMarkers(ch), it.at + k)
+        } else {
+          put(escapeMarkers(ch), it.at + k)
+          seen()
+        }
       }
+      continue
+    }
+    if (isOff(it)) {
+      const g = groups[groups.length - 1] as Group
+      ;(g.seen ? g.end : g.lead).push(...(it as Extract<Item, { t: 'void' }>).out)
       continue
     }
     slots.push(
@@ -293,16 +364,10 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     )
     if (it.t === 'open' && it.letters) kept.push({ id: it.id, depth: it.depth })
     const n = slots.length
-    const next = items[i + 1]
-    const nextText = next?.t === 'text' ? next.s : ''
+    const nextText = textBeside(i, 1)
     // (an element inside a word: a letter of the source right before it and right after it, no space of ours beside it)
-    const prev = items[i - 1]
     const inside =
-      it.t === 'void' &&
-      it.word &&
-      prev?.t === 'text' &&
-      /[\p{L}\p{M}]$/u.test(prev.s) &&
-      /^[\p{L}\p{M}]/u.test(nextText)
+      it.t === 'void' && it.word && /[\p{L}\p{M}]$/u.test(textBeside(i, -1)) && /^[\p{L}\p{M}]/u.test(nextText)
     const before = !inside && /[\p{L}\p{N}\p{M}.]$/u.test(wire) ? ' ' : ''
     if (wire.endsWith('.')) stops.add(n)
     if (/\p{N}$/u.test(wire)) numbers.add(n)
@@ -317,7 +382,13 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     put(`@${toAlpha(n)}#`, it.at)
     put(stop, end)
     put(after, end)
+    seen()
+    if (it.t === 'open') groups.push({ id: it.id, seen: false, lead: [], end: [] })
+    else if (it.t === 'close' && groups.length > 1) done.push(groups.pop() as Group)
   }
+  const unitGroup = groups[0] as Group
+  const byGroup = (pick: (g: Group) => OutPiece[]) =>
+    new Map(done.filter((g) => pick(g).length).map((g) => [g.id as string, pick(g)]))
   // the wire trimmed whole
   const lead = wire.length - wire.trimStart().length
   const trimmed = wire.trim()
@@ -332,6 +403,8 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     own,
     lines,
     around: ids,
+    beside,
+    off: { front: unitGroup.lead, back: unitGroup.end, heads: byGroup((g) => g.lead), tails: byGroup((g) => g.end) },
     refill: kept.sort((a, b) => b.depth - a.depth).map((k) => k.id),
     hashFree: !trimmed.replace(/@@|@[a-z]+#/g, '').includes('#'),
     plainAt: map,
@@ -422,7 +495,21 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
   if (seen.size !== plan.slots.length) return null
   if (!toks.some((t) => t.t === 'text' && SAYS.test(t.s)) && LETTER.test(plan.wire.replace(MARKER_ATOM, '')))
     return null
-  return toks
+  return withOff(toks, plan.off)
+}
+
+/** the tokens with what went on no wire put back: at the unit's front and end, after a kept span's open and before its close */
+function withOff(toks: Tok[], off: Off): Tok[] {
+  if (!off.front.length && !off.back.length && !off.heads.size && !off.tails.size) return toks
+  const one = (out: OutPiece[] | undefined): Tok[] => (out?.length ? [{ t: 'void', out }] : [])
+  const res: Tok[] = one(off.front)
+  for (const t of toks) {
+    if (t.t === 'close') res.push(...one(off.tails.get(t.id)))
+    res.push(t)
+    if (t.t === 'open') res.push(...one(off.heads.get(t.id)))
+  }
+  res.push(...one(off.back))
+  return res
 }
 
 const STOP = /[.!?。！？]/
@@ -466,8 +553,13 @@ export function refill(toks: Tok[], ids: readonly string[]): Tok[] {
   return out
 }
 
-/** tokens → content: pairs nested as they close, the spans around the whole unit put back; null for a pair out of order */
-export function contentOf(toks: readonly Tok[], aroundIds: readonly string[]): OutPiece[] | null {
+/** tokens → content: pairs nested as they close, the spans around the whole unit put back with what sets nothing beside
+ *  each (`beside`, aligned with them); null for a pair out of order */
+export function contentOf(
+  toks: readonly Tok[],
+  aroundIds: readonly string[],
+  beside: readonly Beside[] = [],
+): OutPiece[] | null {
   const root: OutPiece[] = []
   const stack: { id: string | null; content: OutPiece[] }[] = [{ id: null, content: root }]
   for (const t of toks) {
@@ -485,6 +577,11 @@ export function contentOf(toks: readonly Tok[], aroundIds: readonly string[]): O
   }
   if (stack.length !== 1) return null
   let content = root
-  for (const id of [...aroundIds].reverse()) content = [{ t: 'span', id, content }]
+  for (let i = aroundIds.length - 1; i >= 0; i--)
+    content = [
+      ...(beside[i]?.before ?? []),
+      { t: 'span', id: aroundIds[i] as string, content },
+      ...(beside[i]?.after ?? []),
+    ]
   return content
 }

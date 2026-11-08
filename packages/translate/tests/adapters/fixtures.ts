@@ -2,7 +2,7 @@
 // repository's own tests (tests/pdf-reader/mt-wire.test.ts, the comparison of 2026-10-05 over 2610.02069 and of
 // 2026-10-07 over 1706.03762; readarxiv-web worker/tests/mt.test.ts's reading table); none is fetched here.
 import type { UnitIn } from '../../src/contract.ts'
-import { el, span, t, unit } from '../pieces.ts'
+import { el, quiet, span, t, unit } from '../pieces.ts'
 
 export const UNITS: UnitIn[] = [
   /* 0 */ unit('plain', [t('We study the problem. It is hard.')], true),
@@ -179,6 +179,39 @@ export const INSIDE_WORDS: UnitIn = unit('inside-words', [
   el('tie', 'other'),
   t('Doe.'),
 ])
+/** elements that set nothing (`silent`, the source reader's from TeX's tables: a key written to a file, a discretionary hyphen,
+ *  `\noindent`, a declaration at a group's head), words of our own: on no wire, each back at the front of its innermost kept
+ *  group where nothing of it went out before, else at its end; one beside an element that sets something rides in its marker */
+export const SILENT: UnitIn = unit(
+  'silent',
+  [
+    quiet('lab'),
+    t('\nWe train an exam'),
+    quiet('hy'),
+    t('ple model'),
+    el('c', 'cite'),
+    quiet('k'),
+    t(' on '),
+    span('g', 'colour', [quiet('bf'), t(' every')]),
+    t(' word, '),
+    quiet('n'),
+    t('then stop.'),
+  ],
+  true,
+)
+/** a kept span whose head sets nothing (`\textbf{\boldmath Setup:}`): back after its open */
+export const SILENT_LABEL: UnitIn = unit('silent-label', [
+  span('h', 'bold', [quiet('bm'), t('Setup:')], true),
+  t(' we train it.'),
+])
+/** a span around all the rest but an element that sets nothing beside it (a cell's `\hline` before its `\multicolumn`): the
+ *  span goes around the translation, the element outside it where it stands */
+export const SILENT_AROUND: UnitIn = unit('silent-around', [
+  quiet('hl'),
+  t('\n'),
+  span('m', 'other', [t('Method')]),
+  t(' '),
+])
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -186,6 +219,9 @@ export const MICROSOFT_UNITS: UnitIn[] = [
   /* 19, 20, 21, 22 */ ...NESTED_DISPLAY,
   /* 23 */ LABEL_AFTER_BREAK,
   /* 24 */ INSIDE_WORDS,
+  /* 25, 26, 27 */ SILENT,
+  SILENT_LABEL,
+  SILENT_AROUND,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */

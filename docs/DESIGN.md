@@ -1064,7 +1064,11 @@ only how it meets the rest of the extension.
   next one, and Microsoft read "yields" as a noun; 7,986 of the corpus's 9,089 displays inside a unit end with such a
   mark. In Microsoft's recorded Chinese answers no display that ends its sentence had the sentence cut after it (0 of
   444 before a capital), a marker before `. ` and a capital is cut every time (1,357 of 1,357), and no mark the wire
-  set after a marker came back moved before it (0 of 4,825).
+  set after a marker came back moved before it (0 of 4,825). The rebuilt reader states the stop on the element
+  (`el.stop`, the front half's adapter `pipeline/instrument.mjs` by `displayStop`), which `packages/translate`'s two wires
+  write and read back the same way; until 2026-11-09 the adapter stated none, and 2,118 of the 88 corpus papers' 31,535
+  units went out without a display's own punctuation (live, Microsoft's own sentence lengths: one sentence where the stops
+  make two in 1007.0072v1's `we can get @c# Then`, five for eight in 2608.23393v1).
 - **Fewer markers, each read from TeX** (TRANSLATE_VERSION 10, the rules audit of 2026-11-04). Each marker is a hard
   boundary to Microsoft and a chance of a fallback: over the 53 sweep papers' units, those with more than 20 markers went to
   Google 22 to 42 % of the time, those with none never. What the wire tells is read from TeX's own tables and definitions,
@@ -1080,7 +1084,15 @@ only how it meets the rest of the extension.
   its unit's front or back, and stays a marker in its place inside its words (382 of the sweep's units had every reply
   refused for one, and went as runs). Over the 53 papers' zh units the markers wire is 3.9 % shorter (3,772,215 to 3,626,267
   characters) and holds 36.8 % fewer markers (97,053 to 61,329). An echo of every
-  changed wire reads back to the old echo's pieces but for white space and where a piece on no wire comes back.
+  changed wire reads back to the old echo's pieces but for white space and where a piece on no wire comes back. The
+  rebuilt reader states such a placeholder on its element (`el.silent`, the adapter by `isInkless`), and
+  `packages/translate`'s markers wire and runs floor send it on no wire by the same rule: beside an element with ink in its
+  marker, alone back at its innermost kept group's front or end, beside a span that holds the rest outside that span, which
+  then goes around the translation. Until 2026-11-09 the adapter stated nothing of it and every one went as a marker:
+  6,216 markers in 2,773 of the 88 corpus papers' units, 2610.19159v1's word salad again (one unit 106 markers, today's
+  10, its reply's markers out of place); stated, 4,383 of the 4,572 units whose wire the two facts change go out as
+  today's wire, byte for byte (the rest differ by the package's own rules: an element inside a word, a span on no wire).
+  The tags wire still sends it as an element (Google keeps tags; no measure says it cuts there).
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its

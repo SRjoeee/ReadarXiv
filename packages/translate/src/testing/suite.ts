@@ -60,6 +60,30 @@ const els = (content: readonly OutPiece[], out: string[] = []): string[] => {
   }
   return out
 }
+/** a unit's elements that set nothing (`silent`): a wire may send them on no wire and put them back where their group begins
+ *  or ends */
+const silentEls = (u: UnitIn): Set<string> => {
+  const out = new Set<string>()
+  const walk = (ps: UnitIn['content']) => {
+    for (const p of ps) {
+      if (p.t === 'el' && p.silent) out.add(p.id)
+      else if (p.t === 'span') walk(p.content)
+    }
+  }
+  walk(u.content)
+  return out
+}
+/** content without the given elements */
+const without = (content: readonly (UnitIn['content'][number] | OutPiece)[], ids: ReadonlySet<string>): OutPiece[] =>
+  content.flatMap((p): OutPiece[] =>
+    p.t === 'el'
+      ? ids.has(p.id)
+        ? []
+        : [{ t: 'el', id: p.id }]
+      : p.t === 'span'
+        ? [{ t: 'span', id: p.id, content: without(p.content, ids) }]
+        : [{ t: 'text', s: p.s }],
+  )
 const unitEls = (u: UnitIn): Set<string> => {
   const out = new Set<string>()
   const walk = (ps: UnitIn['content']) => {
@@ -122,7 +146,7 @@ export function translatorSuite(name: string, f: AdapterFixtures): void {
       if (f.secret) expect(t.identity).not.toContain(f.secret)
     })
 
-    it('round trip on an echo: each unit reads back as itself (but for white space a wire sets), accepted', async () => {
+    it('round trip on an echo: each unit reads back as itself (but for white space a wire sets, and where an element that sets nothing comes back), accepted', async () => {
       const t = echoing()
       const wires = f.units.map((u) => t.write(u, f.target))
       const raws = await sent(t, wires, f.target)
@@ -133,7 +157,10 @@ export function translatorSuite(name: string, f: AdapterFixtures): void {
         expect(r, `unit ${i}`).not.toBeNull()
         expect(accept(u, r?.content ?? []), `unit ${i}`).toEqual({ ok: true })
         const flat = (s: string) => s.replace(/\s+/g, '')
-        expect(flat(projectionOf(r?.content ?? [])), `unit ${i}`).toBe(flat(projectionOf(u.content)))
+        const silent = silentEls(u)
+        expect(flat(projectionOf(without(r?.content ?? [], silent))), `unit ${i}`).toBe(
+          flat(projectionOf(without(u.content, silent))),
+        )
         if (r?.sentences && u.sentences) expect(validSentences(u, r.content, r.sentences), `unit ${i}`).toBe(true)
       }
     })
