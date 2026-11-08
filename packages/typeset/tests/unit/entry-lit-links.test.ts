@@ -601,6 +601,231 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     const some: Link = { ...whole, box: [71, 696, 200, 709] }
     expect(layPage(part(entry, [some]), rowsOf([rr]), rules, metrics()).links).toEqual([])
   })
+  it('lays a link the part states holds every glyph of the member (Link.whole) over its whole drawing, whatever its ink', () => {
+    // (2610.37668v1-zh p15: a contents entry's link round its title, its last glyph's ink 0.09 pt past the link's box: each
+    // line's ink inside a box, every entry was dropped. The part states what today's whole tier asks, every own character's
+    // glyph point under them)
+    const entry = member({ kind: 'inkcontents', lines: [[1, 0, 66, 163.5, 700, 707, 698, 52, 300, 0, 10]] })
+    const title: Link = { box: [51.81, 696, 163.41, 709], to: { dest: '"appendix.A"' }, owner: [0, ''], text: 'AHexel' }
+    const rr = row([{ t: 'text', s: 'Hexel-Parametrisierung' }])
+    const fates: LinkFate[] = []
+    expect(layPage(part(entry, [title]), rowsOf([rr]), rules, metrics(), { linkFates: fates }).links).toEqual([])
+    expect(fates).toEqual(['unmatched'])
+    const f2: LinkFate[] = []
+    const p = layPage(part(entry, [{ ...title, whole: 1 }]), rowsOf([rr]), rules, metrics(), { linkFates: f2 })
+    expect(f2).toEqual(['whole'])
+    expect(only(p)[0][0]).toBeCloseTo(p.members[0]!.lines[0]![1], 6)
+  })
+  describe('an annotation the part gives to the member’s text, of a kind its elements carry (today’s order tier)', () => {
+    // (2608.25210v2-zh p13: hyperref's link round \ref's "7" takes in the comma after it, its glyph point inside the box by
+    // the link's margin, so the part gives it to the text (the element owns one of its two glyphs, not more than half); the member
+    // has no link group, and it was dropped. Today's matchUnit pairs what geometry leaves with the unit's pieces of its kind in
+    // their orders (links.mjs:420): a destination with the references and \hyperref groups, a footnote's mark with the marks)
+    const ref = (o: Record<string, unknown> = {}) => ({
+      kind: 'num',
+      cmd: 'ref',
+      text: '7',
+      style: { role: 'serif' as const, size: 10 },
+      ink: [[1, 150, 698, 155, 707, 700]] as [number, number, number, number, number, number][],
+      ...o,
+    })
+    const r7 = row([
+      { t: 'text', s: 'Siehe Tabelle ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ', dort steht es.' },
+    ])
+    const comma: Link = { box: [149, 697, 157, 708], to: { dest: '"table.7"' }, owner: [0, ''], text: '7,' }
+    /** each drawn link's target with the drawn characters whose middles are under it (half a size each, as `metrics` sets) */
+    const under = (p: Page) => {
+      const f = p.members[0]!.fit!.size
+      const chars = p.members[0]!.lines.flatMap(([y, , , it]) =>
+        it.flatMap((x) => ('face' in x ? [...x.s].map((ch, j) => ({ ch, y, x: x.x + (j + 0.5) * 0.5 * f })) : [])),
+      )
+      return p.links.map(([b, to]) => [
+        'url' in to ? to.url : to.dest,
+        chars
+          .filter((c) => c.x > b[0] && c.x < b[2] && c.y > b[1] && c.y < b[3])
+          .map((c) => c.ch)
+          .join('')
+          .trim(),
+      ])
+    }
+    it('lays it over the reference it stands over, drawn as text', () => {
+      const fates: LinkFate[] = []
+      const p = layPage(part(member({ els: [['5', ref()]] }), [comma]), rowsOf([r7]), rules, metrics(), {
+        linkFates: fates,
+      })
+      expect(fates).toEqual(['text'])
+      const [b, to] = only(p)
+      expect(to).toEqual(comma.to)
+      // (over the drawn "7" alone: the comma is the text's, drawn after it)
+      const seven = p.members[0]!.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.startsWith('7'))!
+      expect(b[0]).toBeCloseTo(seven.x, 6)
+      expect(b[2] - b[0]).toBeCloseTo(0.5 * p.members[0]!.fit!.size, 6)
+    })
+    it('lays a footnote’s mark the same way, and pairs a reference and a \\hyperref group in their source’s order', () => {
+      // (a nested footnote's mark "1" with the full stop after it, Hfootnote.2: 2608.25210v2-zh p1)
+      const mark = member({ els: [['5', { kind: 'num', mark: 1, nested: 1, text: '1', ink: [[1, 150, 703, 153, 707, 700]] }]] })
+      const stop: Link = { box: [149, 697, 157, 708], to: { dest: '"Hfootnote.2"' }, owner: [0, ''], text: '1.' }
+      const fates: LinkFate[] = []
+      layPage(part(mark, [stop]), rowsOf([r7]), rules, metrics(), { linkFates: fates })
+      expect(fates).toEqual(['text'])
+      // (a \hyperref group after the reference: two destinations, two pieces of their kind; the part made before paired none, the
+      // order over all bare groups having one group for two annotations)
+      const both = member({ els: [['5', ref()]], spans: [['7', { cmd: 'hyperref' }]] })
+      const hyper: Link = { box: [200, 697, 240, 708], to: { dest: '"sec.2"' }, owner: [0, ''] }
+      const rr = row([
+        { t: 'text', s: 'Siehe Tabelle ' },
+        { t: 'el', id: '5' },
+        { t: 'text', s: ', und ' },
+        { t: 'span', id: '7', content: [{ t: 'text', s: 'dort' }] },
+        { t: 'text', s: ' mehr.' },
+      ])
+      const f2: LinkFate[] = []
+      const p = layPage(part(both, [hyper, comma]), rowsOf([rr]), rules, metrics(), { linkFates: f2 })
+      expect(f2).toEqual(['pair', 'text'])
+      expect(under(p)).toEqual([
+        ['"table.7"', '7'],
+        ['"sec.2"', 'dort'],
+      ])
+    })
+    it('pairs none where they are not as many (a destination no piece of its kind is left for)', () => {
+      // (two such annotations, one reference: as today's assign, none of them, never a guess)
+      const other: Link = { box: [250, 697, 258, 708], to: { dest: '"table.8"' }, owner: [0, ''], text: '8.' }
+      const fates: LinkFate[] = []
+      const p = layPage(part(member({ els: [['5', ref()]] }), [comma, other]), rowsOf([r7]), rules, metrics(), {
+        linkFates: fates,
+      })
+      expect(fates).toEqual(['unmatched', 'unmatched'])
+      expect(p.links).toEqual([])
+      // (a reference that holds its own annotation takes no other of its kind)
+      const own: Link = { box: [150, 697, 155, 708], to: { dest: '"table.7"' }, owner: [0, '5'], text: '7' }
+      const f2: LinkFate[] = []
+      layPage(part(member({ els: [['5', ref()]] }), [own, other]), rowsOf([r7]), rules, metrics(), { linkFates: f2 })
+      expect(f2).toEqual(['text', 'unmatched'])
+    })
+  })
+  it('keeps at A’s box a link over the member’s label, where its label stays (an endnote’s back-reference)', () => {
+    // (2609.36054v2-zh p14: enotez's "3" before each endnote links back to its mark; the part gives it to the member with the
+    // label's glyphs, Link.label. The label is not drawn anew: its ink stays on, and so does its link, as today's freeze keeps a
+    // link no tier took whose glyphs no operation of the page erased)
+    const note = member({
+      kind: 'footnote',
+      label: {
+        kind: 'mark',
+        ink: [1, 60, 700, 64, 707, 700],
+        style: { role: 'serif', size: 10 },
+        num: ['3', [1, 60, 700, 64, 707, 700]],
+      },
+    })
+    const back: Link = { box: [59, 697, 65, 708], to: { dest: '"enz.3.backref"' }, owner: [0, ''], text: '3', label: 1 }
+    const rr = row([{ t: 'text', s: 'Eine Anmerkung, die weiter läuft.' }])
+    const fates: LinkFate[] = []
+    const p = layPage(part(note, [back]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    expect(p.members[0]!.off & 4).toBe(0)
+    expect(fates).toEqual(['kept'])
+    expect(p.links).toEqual([[back.box, back.to, 0]])
+    // (a theorem's head drawn anew in the target's word: its label's ink off, the link over it dropped, never left over
+    // erased paper)
+    const head = member({
+      kind: 'theorem',
+      label: {
+        kind: 'head',
+        ink: [1, 72, 698, 112, 707, 700],
+        style: { role: 'serif', size: 10, bold: 1 },
+        name: ['Theorem', [1, 72, 698, 105, 707, 700]],
+        num: ['1', [1, 107, 698, 110, 707, 700]],
+        punct: ['.', [1, 110, 698, 112, 707, 700]],
+      },
+    })
+    const onHead: Link = { box: [106, 697, 111, 708], to: { dest: '"thm.1"' }, owner: [0, ''], text: '1', label: 1 }
+    const f2: LinkFate[] = []
+    const q = layPage(part(head, [onHead]), rowsOf([rr]), rules, metrics(), { linkFates: f2 })
+    expect(q.members[0]!.off & 4).toBe(4)
+    expect(f2).toEqual(['off'])
+    expect(q.links).toEqual([])
+  })
+  it('lays an element’s own links where one round it holds them on A (a link left open over a footnote)', () => {
+    // (2610.10069v1-zh p10, ord 74: a citation's link left open over a whole footnote, one annotation a line; its last line's
+    // holds "Berry et al. (1995)." and the two of that citation, "Berry et al." and "1995", and the part gives it to the
+    // citation, which owns most of its glyphs. Searched first, it took the citation's whole drawing and its own two were
+    // unplaced. A link round others on A is not the element's own: its characters run past it (today's geometry tier: every
+    // character the piece's) and it is the text's)
+    const m = member({
+      els: [
+        [
+          '9',
+          {
+            kind: 'cite',
+            cmd: 'citet',
+            text: 'Berry et al. (1995)',
+            style: { role: 'serif', size: 10 },
+            ink: [[1, 72, 698, 153, 707, 700]],
+          },
+        ],
+      ],
+    })
+    const round: Link = {
+      box: [71, 697, 301, 708],
+      to: { dest: '"cite.f"' },
+      owner: [0, '9'],
+      text: 'Berryetal.(1995).',
+    }
+    const a: Link = { box: [71, 697, 123, 708], to: { dest: '"cite.blp"' }, owner: [0, '9'], text: 'Berryetal.' }
+    const b: Link = { box: [128, 697, 150, 708], to: { dest: '"cite.blp"' }, owner: [0, '9'], text: '1995' }
+    const rr = row([
+      { t: 'el', id: '9' },
+      { t: 'text', s: ' zeigen es, und der Satz läuft weiter.' },
+    ])
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, [round, a, b]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['unmatched', 'text', 'text'])
+    const runs = p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it)
+    expect(p.links.map(([box, to]) => ['dest' in to ? to.dest : '', box[0]])).toEqual([
+      ['"cite.blp"', runs.find((it) => it.s.startsWith('Berry'))!.x],
+      ['"cite.blp"', expect.any(Number)],
+    ])
+  })
+  it('lays a link of an element the translation moves across the page break over its drawing, on the page it is set on', () => {
+    // (2610.20484v1-zh t62: a theorem from p6's last line onto p7, its \eqref "(8)" on p7; the translation sets "(8)" on p6's
+    // line, cut from p7. p6 holds the annotation with its page; the member has no element ink on p6, so its elements' group
+    // there was read as on, the element as staying, and the link was p7's at its box, where p7 drew nothing of it)
+    const m = member({
+      lines: [
+        [1, 0, 72, 300, 100, 107, 98, 72, 300, 0, 10],
+        [2, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [2, 0, 72, 200, 688, 695, 686, 72, 300, 0, 10],
+      ],
+      els: [['5', { kind: 'num', cmd: 'eqref', ink: [[2, 150, 698, 170, 707, 700]] }]],
+    })
+    const eq: Link = { box: [149, 697, 171, 708], to: { dest: '"equation.8"' }, owner: [0, '5'], text: '(8)' }
+    const rr = row([
+      { t: 'text', s: 'Nach ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' gilt es, und der Satz läuft über die Seite weiter bis zum Ende der Zeile.' },
+    ])
+    const onPage = (n: 1 | 2) => {
+      const fates: LinkFate[] = []
+      const p = layPage(
+        { ...part(m, n === 1 ? [{ ...eq, page: 2 }] : [eq]), page: n },
+        rowsOf([rr]),
+        rules,
+        metrics(),
+        { linkFates: fates },
+      )
+      return { p, fates }
+    }
+    const one = onPage(1),
+      two = onPage(2)
+    // (the crop on page 1's line)
+    expect(cropOf(one.p.members[0]!)).toBeDefined()
+    expect(one.fates).toEqual(['crop'])
+    expect(one.p.links).toHaveLength(1)
+    expect(one.p.links[0]![0][0]).toBeCloseTo(cropOf(one.p.members[0]!)!.it.x, 6)
+    // (page 2 draws nothing of it: its element is drawn on page 1)
+    expect(two.fates).toEqual(['away'])
+    expect(two.p.links).toEqual([])
+  })
 })
 
 describe('S.figures over the part: a figure text drawn in its translation where it fits', () => {
