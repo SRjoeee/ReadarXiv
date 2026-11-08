@@ -24,6 +24,7 @@ import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import { type Instrument, type InstrumentUnit, ROLE } from '../instrument.ts'
+import { symbolText } from '../marks/classes.ts'
 import { bracketsOf, fakedCaps, fillRunsOf, sourceText, styleOf, textOf, unitSize, urlCopyOf } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
@@ -148,6 +149,9 @@ const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
+/** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
+ *  its source where it has no ink): one of no ink is drawn as nothing, which is right only where TeX set nothing for it */
+const INKED_CLASSES = new Set(['cite', 'num', 'other', 'display', 'macro', 'umacro'])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
@@ -166,6 +170,10 @@ function piecesOf(content: readonly Piece[], out = new Map<string, Piece>()): Ma
   }
   return out
 }
+
+/** the letters of a text, a modifier letter aside (a spacing accent TeX sets as a glyph of its own: ˇ, ˆ), a decomposed character's
+ *  marks aside (č is one letter, as its source's \\v{c} is) */
+const lettersIn = (t: string): number => (t.normalize('NFKD').match(/[\p{Lu}\p{Ll}\p{Lt}\p{Lo}]/gu) ?? []).length
 
 const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
@@ -357,6 +365,64 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     lineGlyphs: [],
   })
 
+  /** the first element of unit u whose ink TeX's points show it set and its unit's ownership gives none of: of a class drawn
+   *  from its ink (INKED_CLASSES; a paper's own macro aside, which the typesetter leaves unproven where it has neither ink nor
+   *  text), both its points stated with a glyph of B between them, none of its own; a text macro whose glyphs there are its
+   *  unit's text is found as that text (its El.text, the reading between its points). `element not found`, null where none is */
+  const notFound = (u: number, list: readonly number[], boxes: readonly [number, number][]): string | null => {
+    const unit = ins.units[u]!
+    if (!unit.classes?.length) return null
+    const found = new Set<number>()
+    for (const b of list) if (roleB[b] === ROLE.element && (pieceB[b] as number) >= 0) found.add(pieceB[b] as number)
+    for (const [p, x] of boxes)
+      if (ins.boxes[p]!.role[x] === ROLE.element && (ins.boxes[p]!.piece[x] as number) >= 0)
+        found.add(ins.boxes[p]!.piece[x] as number)
+    const classes = new Map(unit.classes)
+    for (const [id, piece] of piecesOf(unit.content)) {
+      const c = classes.get(id)
+      if (piece.t !== 'el' || !c || !INKED_CLASSES.has(c.cls) || c.unknown || found.has(Number(id))) continue
+      const span = placeSpan.get(`${u}|${id}`)
+      if (!span || !(span[0] < span[1]) || emptyPiece.has(`${u}|${id}`)) continue
+      let set = false
+      let text = false
+      for (let b = span[0]; b < span[1]; b++) {
+        if (!/\S/.test(gB(b).u)) continue
+        set = true
+        if (unitB[b] === u && roleB[b] === ROLE.text) text = true
+      }
+      if (!set || ((c.cls === 'macro' || c.cls === 'umacro') && text)) continue
+      return 'element not found'
+    }
+    return null
+  }
+  /** the letters unit u's text may hold: those its text pieces write, and those of the pieces whose glyphs its ownership gives
+   *  its text, as TeX's facts state them: a text symbol's character; a text macro's, its unit's text glyphs between its two
+   *  points on B (the reading El.text takes), else the text the probe showed it sets */
+  const writtenOf = (u: number): number => {
+    const unit = ins.units[u]!
+    const classes = new Map(unit.classes ?? [])
+    let n = 0
+    const walk = (ps: readonly Piece[]) => {
+      for (const p of ps) {
+        if (p.t === 'text') n += lettersIn(p.s)
+        else if (p.t === 'span') walk(p.content)
+        else if (p.t === 'el') {
+          const c = classes.get(p.id)
+          n += lettersIn(symbolText(p.src) ?? c?.sym?.[0] ?? '')
+          if (c?.cls !== 'macro' && c?.cls !== 'umacro') continue
+          const span = placeSpan.get(`${u}|${p.id}`)
+          let between = 0
+          if (span)
+            for (let b = span[0]; b < span[1]; b++)
+              if (unitB[b] === u && roleB[b] === ROLE.text) between += lettersIn(gB(b).u)
+          n += between || lettersIn(c.text ?? '')
+        }
+      }
+    }
+    walk(unit.content)
+    return n
+  }
+
   /** one placement of unit u from its B glyphs `list` and boxes `boxes` */
   const place = (
     u: number,
@@ -472,6 +538,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         },
       )
     }
+    // (an element TeX set ink for between its two points that its unit's ownership gives none of, glyph or box: its ink is not
+    // found, which is no statement that TeX set none (today's LOST, make.mjs, against its EMPTY: both its points stated and
+    // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
+    // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
+    // The unit stays the original's)
+    if (!bad) bad = notFound(u, list, boxes)
     if (bad || (!aIdx.length && !turnedA.length)) {
       for (const [a] of claims) claimedA[a] = HELD
       mem.cause = bad ?? 'no ink'
@@ -499,6 +571,25 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           claimedA[a] = HELD
           roleAt.delete(a)
         }
+    }
+    // (its text no more letters than its source writes: TeX sets a text's letters as written, and the ownership gives a unit's
+    // text the glyphs of its text pieces, its text symbols and its text macros alone. Glyphs past them are another piece's
+    // ink read as the text, which its text group would erase and no translation draws again: 2608.25210v2 p7's Algorithm 1,
+    // its formulas' and keywords' glyphs claimed as its text (200 letters where its text pieces write 6), erased with its 21
+    // lines and one drawn. The unit stays the original's. A count, no threshold: fewer is TeX's (a ligature's one glyph
+    // for its letters, a word the class does not print), more is never)
+    if (name === undefined) {
+      let claimed = 0
+      for (const [a, [role, k]] of roleAt)
+        if (role !== ROLE.label && !(role === ROLE.element && k >= 0)) claimed += lettersIn(gA(a).u)
+      const written = writtenOf(u)
+      if (claimed > written) {
+        for (const [a] of claims) claimedA[a] = HELD
+        mem.located = false
+        mem.turned = []
+        mem.cause = 'text past its source'
+        return mem
+      }
     }
     for (const [a, [role, k]] of [...roleAt].sort((x, y) => x[0] - y[0])) {
       claimedA[a] = mem.ord

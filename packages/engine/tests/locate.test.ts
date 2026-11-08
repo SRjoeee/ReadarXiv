@@ -797,7 +797,12 @@ describe('locate: the room under a unit', () => {
         ],
       },
     ])
-    const units = [unitOf('caption', 'a caption'), unitOf('para', 'right'), unitOf('para', 'left')]
+    // (each unit's text its glyphs': a member claims no more letters than its source writes)
+    const units = [
+      unitOf('caption', `${wide} ${wide} short end`),
+      unitOf('para', 'right column text one '.repeat(3)),
+      unitOf('para', 'left column text one '.repeat(3)),
+    ]
     const L = locate(instrumentOf(B, units, [[0, 0, 0, 1, 1, 1, 2, 2, 2]]), B, align(B, B))
     expect(L.members[0]!.lines.map((l) => l[1])).toEqual([2, 2, 0])
     expect(L.members[0]!.room.next).toBe(14)
@@ -1701,5 +1706,65 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(km.copy).toBe('km s−1 Mpc−1')
     expect(km.ink).toHaveLength(1)
     expect(elementOf(L, '2').text).toBe('e.g.')
+  })
+
+  it('leaves a unit the original’s where an element TeX set ink for has none: not found is not "TeX set none" (math.md R3)', () => {
+    // (a formula whose two points hold glyphs the ownership gave the unit's text, none its own: read as "TeX set no ink", it was
+    // drawn as nothing and its glyphs erased with the text, as 2608.25210v2 p7's Algorithm 1 lost its 21 lines. Today's file
+    // states such a piece LOST, its unit unproven; EMPTY only where both its points hold nothing between them, or TeX said it
+    // sets none: a paper's macro the instrument states empty, a formula whose points stand at one glyph)
+    const B = docOf([{ lines: [{ text: 'Return P if x', x: 72, y: 700 }] }, { lines: [{ text: 'Return P', y: 700 }] }])
+    const content = [text('Return '), el('1', '$P$'), text(' if '), el('3', '$x$')]
+    const content2 = [text('Return P'), el('1', '\\papertext{x}'), el('2', '$\\phantom{}$')]
+    const units = [
+      paraOf(content, [
+        ['1', { cls: 'other' }],
+        ['3', { cls: 'other' }],
+      ]),
+      {
+        ...paraOf(content2, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'other' }],
+        ]),
+      },
+    ]
+    const ins: Instrument = {
+      ...ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]),
+      places: [
+        { unit: 0, piece: '1', page: 1, glyph: 7, end: false },
+        { unit: 0, piece: '1', page: 1, glyph: 8, end: true },
+        { unit: 0, piece: '3', page: 1, glyph: 12, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 13, end: true },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: false },
+        { unit: 1, piece: '2', page: 2, glyph: 8, end: true },
+      ],
+      empty: [{ unit: 1, piece: '1' }],
+    }
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'element not found' })
+    expect(L.members[1]).toMatchObject({ located: true })
+  })
+
+  it('leaves a unit the original’s whose text holds more letters than its source writes: another piece’s ink (math.md R3)', () => {
+    // (2608.25210v2 p7's Algorithm 1 again, its formulas and keywords marked by no point: 200 letters claimed as its text where its
+    // text pieces write 6 ("Return"); its text group would erase them and no translation draws them. TeX sets a text's letters as
+    // written, a ligature's one glyph for its two, an accent and its letter one: no more letters, ever)
+    const B = docOf([
+      { lines: [{ text: 'Return rank(T) if x', y: 700 }] },
+      { lines: [{ text: 'the ﬁrst élan ˇc', y: 700 }] },
+    ])
+    const units = [
+      paraOf(
+        [text('Return '), el('1', '$\\mathrm{rank}(T)$'), text(' if '), el('3', '$x$')],
+        [
+          ['1', { cls: 'other' }],
+          ['3', { cls: 'other' }],
+        ],
+      ),
+      paraOf([text('the first élan č')], []),
+    ]
+    const L = locate(ownedBy(B, units, [[[0, T, -1]], [[1, T, -1]]]), B, align(B, B))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'text past its source' })
+    expect(L.members[1]).toMatchObject({ located: true })
   })
 })
