@@ -472,7 +472,7 @@ export function createComposer(o: ComposerOptions): Composer {
     const out = page.members.map((m): Laid => {
       if (m.state !== 'laid' || !m.off || g.holds(m.ord, page.page, m.off)) return m
       unwrapped.add(m.ord)
-      return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { left: m.lit.left, right: m.lit.left, own: [] } }
+      return { ...m, state: 'unwrapped', off: 0, lines: [], lit: { ...m.lit, right: m.lit.left, own: [] } }
     })
     if (!unwrapped.size) return page
     const links: Page['links'] = page.links.filter(([, , owner]) => owner === undefined || !unwrapped.has(owner))

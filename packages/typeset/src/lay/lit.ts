@@ -8,7 +8,11 @@
 //   lines it keeps where they stand (a held line: its ink stays);
 // - `own`: its own ink the page keeps (D.groups' shown: a display, its rows, a block of its own; a piece or a label kept where it
 //   stands), the same boxes on both panes.
-// A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left.
+// A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left. A figure
+// text the original sets turned (Placed.dir, its run Placed.run) is lit turned with its text: its boxes in its run's frame
+// (Laid.lit's `dir`), on A its run's box, as drawn its line along it, never the level box its turned box stands in on the page
+// (a label set at 30° stands in a level box about twice its height, over its neighbours': 336 of the 1,887 turned figure texts
+// over the 87 corpus bundles).
 import type { Box, Ink, Placed } from '@readarxiv/format'
 import { type GroupEl, groupsOff } from '../emit/groups.ts'
 import { lineBoxes, onDisplay } from '../emit/sentences.ts'
@@ -46,8 +50,74 @@ function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
 export const mirrored = (boxes: Box[]): Lit =>
   boxes.length ? { left: [boxes], right: [boxes], own: [] } : { left: [], right: [], own: [] }
 
-/** a member lit from A on both panes (not laid, or waiting): its lines on the page, its label with the line it stands on */
+type Dir = [ux: number, uy: number]
+/** a page's point in the frame of a run along `dir` (Laid.lit's `dir`): its place along the run and across it, (−uy, ux) */
+export const inFrame = ([ux, uy]: Dir, x: number, y: number): [s: number, t: number] => [
+  x * ux + y * uy,
+  y * ux - x * uy,
+]
+
+/** a box in a run's frame as the page's box it stands in (its corners' extent on the page) */
+export function pageBoxOf([s0, t0, s1, t1]: Box, [ux, uy]: Dir): Box {
+  const xs: number[] = [],
+    ys: number[] = []
+  for (const s of [s0, s1])
+    for (const t of [t0, t1]) {
+      xs.push(s * ux - t * uy)
+      ys.push(s * uy + t * ux)
+    }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+}
+
+/**
+ * A turned figure text's box on A in its run's frame (Placed.dir, Placed.run): the box its line tells (its line: the extent on
+ * the page of its run's box, turned), read back about its run's origin. Across the run, the band each edge of its line that
+ * turns with it tells, weighed by how much it turns, the run taken from its origin over its length; along it, the same of the
+ * edges that turn with it, over that band; the band read again over that run (a quarter turned, each extent its line's own; at
+ * an angle between, the run's length where its line tells none apart). Null where the part states no run (a part made before:
+ * its line, level, is all it tells) or the page is not its
+ */
+export function runBoxOfA(m: Placed, page: number): Box | null {
+  const l = m.lines[0]
+  if (!m.dir || !m.run || !l || l[0] !== page) return null
+  const [ux, uy] = m.dir
+  const [ox, oy, length] = m.run
+  // (its run's box, s along it from its origin and t across, stands on the page over x: ox + s·ux − t·uy, y: oy + s·uy + t·ux;
+  // an extent of x or y over the box is its s's extent times one component and its t's times the other)
+  const [x0, x1, y0, y1] = [l[2] - ox, l[3] - ox, l[6] - oy, l[5] - oy]
+  const lo = (a: number, b: number) => Math.min(a, b),
+    hi = (a: number, b: number) => Math.max(a, b)
+  /** one extent read back from the box's x and y extents, the other's given: [from, to] */
+  const read = (other: [number, number], xk: number, xo: number, yk: number, yo: number): [number, number] | null => {
+    let w = 0,
+      a = 0,
+      b = 0
+    for (const [k, o, e0, e1] of [
+      [xk, xo, x0, x1],
+      [yk, yo, y0, y1],
+    ] as const) {
+      if (Math.abs(k) < 1e-6) continue
+      const p = (e0 - lo(other[0] * o, other[1] * o)) / k,
+        q = (e1 - hi(other[0] * o, other[1] * o)) / k
+      a += lo(p, q) * Math.abs(k)
+      b += hi(p, q) * Math.abs(k)
+      w += Math.abs(k)
+    }
+    return w ? [a / w, b / w] : null
+  }
+  const band0 = read([0, length], -uy, ux, ux, uy)
+  const run = band0 && read(band0, ux, -uy, uy, ux)
+  const band = run && read(run, -uy, ux, ux, uy)
+  if (!band || !run || !(band[1] > band[0]) || !(run[1] > run[0])) return null
+  const [os, ot] = inFrame(m.dir, ox, oy)
+  return [os + run[0], ot + band[0], os + run[1], ot + band[1]]
+}
+
+/** a member lit from A on both panes (not laid, or waiting): its lines on the page, its label with the line it stands on; a
+ *  turned figure text its run's box, turned with it */
 export function litOfA(m: Placed, page: number): Lit {
+  const run = runBoxOfA(m, page)
+  if (run) return { ...mirrored([run]), dir: m.dir! }
   const lines = m.lines.filter((l) => l[0] === page).map(boxOfLine)
   return mirrored(widened(lines, m.label ? [m.label.ink] : [], page))
 }

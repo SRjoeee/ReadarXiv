@@ -32,7 +32,7 @@ import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
-import { inkOfLine, litLaid, litOfA } from './lit.ts'
+import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA } from './lit.ts'
 import { layPagePrepared } from './page.ts'
 import { tokenBand } from '../emit/sentences.ts'
 import { CJK } from '../breaker/script.ts'
@@ -514,7 +514,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         state: 'laid',
         off: groupsOn(m, page) & 1,
         lines: fl,
-        lit: { left: [[boxOfA(m.lines[0]!)]], right: [fl.map(nameBox)], own: [] },
+        lit: litOfFigure(m, page, fl),
       }
     // (a name drawn on its own: its word on its line, its text group off)
     const nl = names.get(m.ord)
@@ -598,7 +598,8 @@ const boxOfA = (l: Placed['lines'][number]): [number, number, number, number] =>
   return [k[1], k[2], k[3], k[4]]
 }
 /** a name's or a figure text's drawn line as a box: its runs across, each run's band at its size (D.sentences' tokenBand: a CJK
- *  run's em box); a turned line's (its items' `dir`) the page box of that band turned about its origin */
+ *  run's em box); a turned line's (its items' `dir`) in its run's frame (Laid.lit's `dir`): from its origin along it, that band
+ *  across it */
 const nameBox = ([y, x0, x1, items]: Laid['lines'][number]): [number, number, number, number] => {
   let bottom = y,
     top = y
@@ -610,9 +611,14 @@ const nameBox = ([y, x0, x1, items]: Laid['lines'][number]): [number, number, nu
   }
   const dir = items[0] && 'dir' in items[0] ? items[0].dir : undefined
   if (!dir) return [x0, bottom, x1, top]
-  const [ux, uy] = dir
-  const pts = [0, x1 - x0].flatMap((s) => [bottom - y, top - y].map((t) => [x0 + ux * s - uy * t, y + uy * s + ux * t]))
-  const xs = pts.map((p) => p[0]!),
-    ys = pts.map((p) => p[1]!)
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+  const [s, t] = inFrame(dir, x0, y)
+  return [s, t + bottom - y, s + x1 - x0, t + top - y]
+}
+/** a figure text drawn: on A its line, as drawn its laid line; a turned one's both in its run's frame, lit turned with it (its
+ *  run's box on A, its line along it as drawn) */
+function litOfFigure(m: Placed, page: number, fl: Laid['lines']): Laid['lit'] {
+  const run = runBoxOfA(m, page)
+  const right = fl.map(nameBox)
+  if (run && m.dir) return { left: [[run]], right: [right], own: [], dir: m.dir }
+  return { left: [[boxOfA(m.lines[0]!)]], right: [m.dir ? right.map((b) => pageBoxOf(b, m.dir!)) : right], own: [] }
 }

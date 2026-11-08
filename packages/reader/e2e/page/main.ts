@@ -683,10 +683,14 @@ const h = {
     const el = (h.panes as Panes).pageElement(side, n)
     if (!el || !boxes.length) return []
     const r = el.getBoundingClientRect()
+    // (a turned member's boxes in its run's frame: a point of one at s along its run and t across it on the page)
+    const [ux, uy] = m?.lit.dir ?? [1, 0]
     return boxes.flatMap((b) =>
       [0.25, 0.75].map((f) => {
-        const x = b[0] + f * (b[2] - b[0]),
-          y = (b[1] + b[3]) / 2
+        const s = b[0] + f * (b[2] - b[0]),
+          t = (b[1] + b[3]) / 2
+        const x = s * ux - t * uy,
+          y = s * uy + t * ux
         const q = (h.panes as Panes).boxOf(side, n, [x, y, x, y]) as { left: number; top: number }
         return {
           at: [el.clientLeft + q.left, el.clientTop + q.top],
@@ -727,9 +731,15 @@ const h = {
       m = p?.members.find((x) => x.ord === ord)
     const committed = !!h.composer?.laid(n)
     const per = side === 'right' && committed ? m?.lit.right : m?.lit.left
-    const b = per?.[0]?.[0]
+    const f = per?.[0]?.[0]
     const el = (h.panes as Panes).pageElement(side, n)
-    if (!b || !el) return null
+    if (!f || !el) return null
+    // (a turned member's box in its run's frame: its middle on the page)
+    const [ux, uy] = m?.lit.dir ?? [1, 0]
+    const [ms, mt] = [(f[0] + f[2]) / 2, (f[1] + f[3]) / 2]
+    const b: [number, number, number, number] = m?.lit.dir
+      ? [ms * ux - mt * uy, ms * uy + mt * ux, ms * ux - mt * uy, ms * uy + mt * ux]
+      : f
     const q = (h.panes as Panes).boxOf(side, n, b) as { left: number; top: number; width: number; height: number }
     const r = el.getBoundingClientRect()
     // (one shape a sentence, and one of its kept ink: the bands each pane shows of the member lit whole)
