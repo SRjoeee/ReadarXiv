@@ -1023,9 +1023,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
   factsOf({ ins, inkA, m, members, claimedA, pageA, unitB, roleB, pieceB, units })
 
-  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end, in one paragraph of
-  // TeX's (no paragraph end of B's between the one's last glyph and the other's first, where the instrument states them); a
-  // table's cell and a figure's text are set in boxes of their own, never in a paragraph with another
+  // ---- flows: a member whose first line is the one before's last line, on its baseline after its end (SHARED_SEP of its size at
+  // most, today's rowLeadOf), in one paragraph of TeX's (no paragraph end of B's between the one's last glyph and the other's
+  // first, where the instrument states them); a table's cell and a figure's text are set in boxes of their own, never in a
+  // paragraph with another
   const ends: number[] = []
   ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
     for (const g of l) ends.push((m.offB[p] as number) + g)
@@ -1129,6 +1130,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
+      b[2] - a[3] <= SHARED_SEP * (b[10] ?? mem.style.size) &&
       !ownBox(prev) &&
       !ownBox(mem) &&
       (prev.bLast < 0 || mem.bFirst < 0 || !endsBetween(prev.bLast, mem.bFirst))
@@ -1397,6 +1399,10 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** a shared line's separation at most, in em of the follower's size: a run-in head's \quad, a float split's word space
+ *  (today's need.mjs SHARED_SEP, rowLeadOf; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set
+ *  side by side (a running head's title and folio, two minipages' titles), not one line of a paragraph */
+const SHARED_SEP = 3
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure today's column of it (below; TeX's \parshape and
  *  \hangindent measures: stage 1b) */

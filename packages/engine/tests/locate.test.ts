@@ -162,23 +162,37 @@ describe('locate', () => {
     expect(L.members.slice(0, 2).map((m) => m.lines[0]![1])).toEqual([0, 2])
     expect(L.flows.slice(0, 2)).toEqual([[0], [1]])
   })
+  it('shares no line further apart than a shared line’s separation (today’s SHARED_SEP, 3 em): boxes set side by side', () => {
+    // (1706.03762v7 p4: two minipages' titles on one baseline 97 pt apart; 2608.06701v1 p6: a run-in head and a paragraph
+    // whose text starts 39.77 pt after it, its own label between, 4 em of its 9.96 pt; a running head's title and folio)
+    const at = (x: number) => {
+      const B2 = docOf([{ lines: [{ text: 'Head.', x: 72, y: 700 }, { text: 'Body runs on', x, y: 700 }, 'and on'] }])
+      const units2 = [unitOf('heading', 'Head.'), unitOf('para', 'Body runs on and on')]
+      return locate(instrumentOf(B2, units2, [[0, 1, 1]]), B2, align(B2, B2))
+    }
+    // (the head ends at 72 + 5 glyphs of 6 pt: 102)
+    expect(at(102 + 30).flows).toEqual([[0, 1]])
+    expect(at(102 + 30).members[1]!.join).toEqual([30])
+    expect(at(102 + 31).flows).toEqual([[0], [1]])
+    expect(at(102 + 31).members[1]!.join).toBeUndefined()
+  })
   it('states a shared row kept where a character of the page stays on it between the two (today’s keptBetween)', () => {
     // (2608.25210v2 p17's notes made on A: "… Mao." ends one, "2024" (no unit's) stays, ". Be…" begins the next on the row; the
     // follower is not laid from the first's end, which today kept (S.rowStart not applied, its share kept). Nothing between: not)
     const lines = (between: boolean) => [
       { text: 'First ends.', x: 72, y: 700 },
       ...(between ? [{ text: '2024', x: 140, y: 700 }] : []),
-      { text: 'Next runs on', x: 170, y: 700 },
+      { text: 'Next runs on', x: 166, y: 700 },
       { text: 'and on', x: 72, y: 688 },
     ]
     const units2 = [unitOf('para', 'First ends.'), unitOf('para', 'Next runs on and on')]
     const kept = docOf([{ lines: lines(true) }])
     const L = locate(instrumentOf(kept, units2, [[0, -1, 1, 1]]), kept, align(kept, kept))
     expect(L.flows).toEqual([[0, 1]])
-    expect(L.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6)), 1])
+    expect(L.members[1]!.join).toEqual([r2(166 - (72 + 11 * 6)), 1])
     const free = docOf([{ lines: lines(false) }])
     const F = locate(instrumentOf(free, units2, [[0, 1, 1]]), free, align(free, free))
-    expect(F.members[1]!.join).toEqual([r2(170 - (72 + 11 * 6))])
+    expect(F.members[1]!.join).toEqual([r2(166 - (72 + 11 * 6))])
   })
   it('states the line of its own a label stands on: a raised mark on the row it shares with the member before (Label.line)', () => {
     // (2608.06701v1 p5 t76: footnote 3's mark set raised before its text, on the row footnote 2 ends on: by El.ink's rule (the
