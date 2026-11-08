@@ -9,7 +9,9 @@ import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mj
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
 import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
-import { contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
+import { EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
@@ -92,7 +94,20 @@ describe('today’s ink makers in the engine package', () => {
   it('make the same figure texts, ledger lines, ink units, claims and kept blocks as today’s', () => {
     const today = run(TODAY)
     const copy = run(T as unknown as Impl)
-    expect(copy).toEqual(today)
+    // (the copy's one addition to them: each kept run's glyphs by its placeholder's piece, `glyphs.runs`, which part today's `ph`)
+    type Glyphs = { ph: [number, number][]; runs?: [number, [number, number][]][] }
+    const runsOf = (u: unknown) => (u as { glyphs: Glyphs }).glyphs.runs
+    const bare = (u: unknown) => {
+      const { runs: _, ...glyphs } = (u as { glyphs: Glyphs }).glyphs
+      return { ...(u as object), glyphs }
+    }
+    expect({ ...copy, ink: copy.ink.map(bare) }).toEqual(today)
+    for (const u of copy.ink) {
+      const runs = runsOf(u) ?? []
+      expect(runs.flatMap(([, gs]) => gs)).toEqual((u as unknown as { glyphs: Glyphs }).glyphs.ph)
+      for (const [k] of runs) expect(u.pieces[k]?.t).toBe('ph')
+    }
+    expect(copy.ink.some((u) => (runsOf(u)?.length ?? 0) > 0)).toBe(true)
     // (and the page makes what the test means it to: a head, notes or orphans, a figure text, contents lines and an entry)
     expect(today.ink.map((u) => u.kind)).toEqual(expect.arrayContaining(['inkheads', 'inkorphan', 'inkcontents', 'inkreferences']))
     expect(today.fig.units.map((u) => u.text)).toEqual(['Accuracy'])
@@ -199,7 +214,10 @@ describe('today’s ink makers in the engine package', () => {
       { s: '2', x: 72, y: 691.8, size: 6 },
       { s: 'Department of Physics', x: 76, y: 688 },
     ], { points: [['bs1', 0], ['be1', 37]] })
-    type Made = { pieces: { t: string; s?: string }[]; glyphs: { text: [number, number][]; label?: [number, number][] } }
+    type Made = {
+      pieces: { t: string; s?: string }[]
+      glyphs: { text: [number, number][]; label?: [number, number][]; runs?: [number, [number, number][]][] }
+    }
     const one = (I: Impl) => {
       const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
@@ -207,11 +225,81 @@ describe('today’s ink makers in the engine package', () => {
     }
     const today = one(TODAY)
     const copy = one(T as unknown as Impl)
-    expect(copy.map(({ glyphs: { label: _, ...g }, ...u }) => ({ ...u, glyphs: g }))).toEqual(today)
+    // (the copy's other addition, each kept run's glyphs, `glyphs.runs`, set aside as in the first case)
+    expect(copy.map(({ glyphs: { label: _, runs: _r, ...g }, ...u }) => ({ ...u, glyphs: g }))).toEqual(today)
     expect(today.map((u) => u.pieces.map((p) => p.s ?? '').join(''))).toEqual(['Department of Physics'])
     expect(today[0]!.glyphs.label).toBeUndefined()
     expect(copy[0]!.glyphs.label).toEqual([[1, 15]])
     expect(copy[0]!.glyphs.text).toContainEqual([1, 15])
+  })
+  it('keep an e-mail address in an ink unit a run of its own, as the front end keeps one in a source unit’s text (#28)', () => {
+    // (2609.36054v2 p1's note "*Correspondence to: <address> and <address>. The views …", its addresses grey: today's said them as
+    // text in colour groups the translator never saw, and they came back black. Kept, each is an element whose ink is the
+    // original's; the stop after the second is the sentence's, as the front end reads an address in a source unit's text
+    // (latex-front.mjs keepAddresses, its EMAIL_ADDRESS the copy's))
+    const note = 'Correspondence to: alan.chan@example.org and bo.writer@example.ac. The views are ours.'
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: note, y: 688 },
+    ], { points: [['bs1', 16], ['be1', 31 + note.length]] })
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inkorphan').map((u) => u.pieces)
+    }
+    expect(one(TODAY)).toEqual([[{ t: 'text', s: note }]])
+    expect(one(T as unknown as Impl)).toEqual([[
+      { t: 'text', s: 'Correspondence to: ' },
+      { t: 'ph', src: '\\url{alan.chan@example.org}' },
+      { t: 'text', s: ' and ' },
+      { t: 'ph', src: '\\url{bo.writer@example.ac}' },
+      { t: 'text', s: '. The views are ours.' },
+    ]])
+    // (one pattern for both readers: the front end's)
+    expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
+    expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
+  })
+  it('write each TeX special of an ink unit’s math run by the command that sets it in a formula, where today’s strips it: a brace alone no display', () => {
+    // (2610.21377v1 p42's `$J_0\in\{0,\dots,J-1\}$`, its closing brace a run of its own between the upright digits, and 2608.06007v1
+    // p17's bibliography titles `$\{$Intra-Operator$\}$`: the glyph `{` in the symbol font's math face. Today's strips `$ \ { }`
+    // from a run's characters and wrote `$$`, which every reader takes as a display; drawn in its own ink, each was a kept display
+    // row in the middle of its line)
+    const line = 'An orphan with {x} and {Intra} then A\\B or $ here'
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: line, y: 688 },
+    ], { points: [['bs1', 16], ['be1', 31 + line.length]] })
+    const g = pg.glyphs as G[]
+    for (let k = 31; k < 31 + line.length; k++) {
+      const u = g[k]!.u as string
+      const inMath = /[{}\\$]/.test(u) || ((u === 'x' || u === 'A' || u === 'B') && /[{}\\]/.test(`${g[k - 1]!.u}${g[k + 1]!.u}`))
+      if (inMath) g[k]!.font = /[{}\\$]/.test(u) ? 'ABCDEF+CMSY10' : 'ABCDEF+CMMI10'
+    }
+    const srcs = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inkorphan').flatMap((u) => u.pieces.filter((p) => p.t === 'ph').map((p) => p.src!))
+    }
+    expect(srcs(TODAY)).toEqual(['$x$', '$$', '$$', '$AB$', '$$'])
+    const copy = srcs(T as unknown as Impl)
+    expect(copy).toEqual(['$\\{x\\}$', '$\\{$', '$\\}$', '$A\\backslash B$', '$\\$$'])
+    // (and every reader of the source reads each an inline formula: the copy's classOf, the element's kind on the translators'
+    // wire; the adapter's classesOf, today's reader's class, the part's El.kind the typesetter draws by; today's wire's display)
+    for (const src of copy) {
+      expect(T.classOf({ t: 'ph', src })).toBe('math')
+      expect(classesOf([{ t: 'ph', src }])[0]![1].cls).not.toBe('display')
+      expect(DISPLAY.test(src)).toBe(false)
+    }
+    expect(classesOf(copy.map((src) => ({ t: 'ph', src }))).map(([, c]) => [c.cls, c.copy])).toEqual([
+      ['other', '{x}'],
+      ['symbol', '{'],
+      ['symbol', '}'],
+      // (its copy text as today's tables read it: they know no `\backslash`, so the backslash is not in it, as it was not in the stripped source)
+      ['other', expect.any(String)],
+      ['symbol', '$'],
+    ])
   })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
     for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))

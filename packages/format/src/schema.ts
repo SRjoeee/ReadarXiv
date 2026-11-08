@@ -43,6 +43,7 @@ export type Piece =
       keys?: string[] | undefined
       stop?: string | undefined
       silent?: 1 | undefined
+      after?: string | undefined
     }
   | {
       t: 'span'
@@ -58,7 +59,7 @@ export type Piece =
 /**
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
- * identity only (`stop` and `silent` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
+ * identity only (`stop`, `silent` and `after` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
  * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). A figure text's
  * run of glyphs in another face than its own is a group of no source, neither end, its style what the face changes (`bold`,
  * `medium`, `italic`, `upright`, a role) and its face the part's (SpanAt.style). `unit`: a unit
@@ -82,6 +83,11 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // a table's row rule; never a space, a break, a fill or a skip), so no translator needs it: a wire may send it on no
       // wire and put it back at its group's front or end
       silent: flag.optional(),
+      // TeX sets it after the unit's text, no word of its sentences (backref's list of the pages that cite a bibliography
+      // entry: backref.sty's parscan reads the entry to its paragraph's end, sets it, then \BR@backref sets the list, its
+      // \newblock's glue before it), and the white space that stands for that gap: no translator is given it, and it comes back
+      // after the translation, this white space before it
+      after: z.string().optional(),
     }),
     z.object({
       t: z.literal('span'),

@@ -97,6 +97,10 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
   return { rules, work, over: false }
 }
 
+// ---- source/latex-front.mjs EMAIL_ADDRESS (an e-mail address as a text writes it, keepAddresses'), held equal to it by
+// tests/pdf-reader/locate-ink-today.test.ts
+export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+
 // ---- layout/file.mjs:255 (UNIT_FLAG)
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
 
@@ -112,7 +116,8 @@ export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
 // ---- layout/marks.mjs:72-94 (classOf), the one change: a piece's class is the instrument's (the front half's adapter ran today's
 // classOf over its source: an element's kind, `other` where classOf said none), and of an ink unit's own placeholder (its kept
 // run's characters, ink-units.mjs phSource: `$…$` or `\url{…}`) today's classOf's answer for those two forms: a formula of no
-// character `$$`, DISPLAY (translate/mt.mjs:89); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
+// character `$$`, DISPLAY (translate/mt.mjs:89), which the copy's phSource never writes (a run has a character, and a `$` of it
+// is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
 export function classOf(piece) {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null

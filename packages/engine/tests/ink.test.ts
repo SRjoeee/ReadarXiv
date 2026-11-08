@@ -123,9 +123,11 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.groups[0]!.glyphs[21]).not.toBe(`${entry.ord}.1.t`)
   })
 
-  it('states an ink unit’s placeholders after its first in that one’s ink: TeX’s nothing of their own, El.text empty', () => {
-    // (no points tell an ink unit's placeholders apart: their glyphs are its first's (inkOf); one of no ink of its own read as not
-    // found would leave every such line the original's (2307.16209v1's contents lines, three-state El, lave.md §2))
+  it('states each of an ink unit’s placeholders its own kept run’s ink, as today’s file draws each by its own segments', () => {
+    // (the maker cuts each run of a math or typewriter face its own placeholder, and knows its glyphs: today's file draws each by
+    // them, rows.ph. All of them stated as the first's, it drew every run at the first's place and none at the others', where a
+    // translation sets words between them: 149 of the 88 corpus papers' 185 ink members of two elements or more, 2307.16209v1's
+    // contents lines "ℓ = |s| … qQ … ν ≤ ν_c" in one crop)
     const spec = { lines: ['Body text here', 'and then x plus y equals z for all of them'] }
     const B = docOf([
       {
@@ -149,11 +151,127 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const classesOf = (p: readonly { t: string }[]) =>
       p.flatMap((x, k) => (x.t === 'ph' ? [[String(k), { cls: 'other' }]] : []))
     const L = locate(ins, A, align(B, A), { pages: rawOf(A), classesOf: classesOf as never })
+    const member = L.members.find((m) => m.kind === 'inkorphan')!
+    const els = new Map(member.elements)
+    const g = A.pages[0]!.glyphs
+    const at = (u: string) => g.find((x) => x.n === 1 && x.u === u)!
+    for (const [id, u] of [
+      ['1', 'x'],
+      ['3', 'y'],
+      ['5', 'z'],
+    ] as const) {
+      expect(els.get(id)!.ink).toHaveLength(1)
+      expect(els.get(id)!.ink[0]!.slice(0, 4)).toEqual([1, at(u).x0, at(u).bottom, at(u).x1])
+      expect(els.get(id)!.text).toBeUndefined()
+    }
+  })
+
+  it('gives a rule the claim gave an ink unit’s placeholders to the one whose glyph stands nearest it', () => {
+    // (claimInk gives the placeholders a rule inside one's extent, an inline fraction's bar, an address's underline: that one's,
+    // never the first's)
+    const lines = ['Body text here', 'and then x plus y equals z for all of them']
+    // (a thin bar under the line's "y", the second placeholder's glyph: page glyph 30, x 168 to 174, its baseline 688)
+    const boxes: [number, number, number, number, number, number][] = [[31, 0, 168.5, 689, 173.5, 689.5]]
+    const B = docOf([
+      {
+        lines,
+        boxes,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 46],
+        ],
+      },
+    ])
+    const A = docOf([{ lines, boxes }])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.n === 1 && /^[xyz]$/.test(g.u)) {
+          g.font = 'ABCDEF+CMMI10'
+          g.base = 'CMMI10'
+        }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const classesOf = (p: readonly { t: string }[]) =>
+      p.flatMap((x, k) => (x.t === 'ph' ? [[String(k), { cls: 'other' }]] : []))
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A), classesOf: classesOf as never })
+    const member = L.members.find((m) => m.kind === 'inkorphan')!
+    expect([...member.elBoxes]).toEqual([['3', [[1, 0]]]])
+  })
+
+  it('keeps an ink unit’s e-mail addresses each an element in its own ink, its fill the original’s (#28)', () => {
+    // (2609.36054v2 p1's note: its two grey addresses said as text in colour groups no translation kept, drawn black)
+    const note = 'Correspondence to: alan.chan@example.org and bo.writer@example.ac. The views are ours.'
+    const spec = { lines: ['Body text here', note] }
+    const B = docOf([
+      {
+        ...spec,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 14 + note.length],
+        ],
+      },
+    ])
+    const A = docOf([spec])
+    // (each address grey, and the stop after the second, as the note's colour groups set them; the rest black)
+    const grey = 0x7a7f80
+    const greyAt = (at: number) =>
+      (at >= note.indexOf('alan') && at < note.indexOf(' and ')) ||
+      (at >= note.indexOf('bo.') && at < note.indexOf(' The'))
+    for (const D of [A, B]) for (const g of D.pages[0]!.glyphs) if (g.n === 1 && greyAt(g.k - 14)) g.fill = grey
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const unit = L.units.find((u) => u.kind === 'inkorphan')!
+    expect(
+      unit.content.filter((p) => p.t === 'el').map((p) => [p.t === 'el' && p.kind, p.t === 'el' && p.src]),
+    ).toEqual([
+      ['url', '\\url{alan.chan@example.org}'],
+      ['url', '\\url{bo.writer@example.ac}'],
+    ])
     const els = new Map(L.members.find((m) => m.kind === 'inkorphan')!.elements)
-    expect(els.get('1')!.ink).toHaveLength(1)
-    expect(els.get('1')!.text).toBeUndefined()
-    expect(els.get('3')).toMatchObject({ ink: [], text: '' })
-    expect(els.get('5')).toMatchObject({ ink: [], text: '' })
+    expect([...els].map(([id, e]) => [id, e.text, e.style?.fill, e.ink.length])).toEqual([
+      ['1', 'alan.chan@example.org', grey, 1],
+      ['3', 'bo.writer@example.ac', grey, 1],
+    ])
+  })
+
+  it('writes a TeX special of an ink unit’s math run by the command that sets it in a formula: a brace alone an inline formula, never a display', () => {
+    // (a brace a formula sets, `\{` (amsmath's set {0, …, J−1}, 2610.21377v1 p42) or a title's `$\{$Intra-Operator$\}$` in a
+    // bibliography (2608.06007v1 p17): its glyph `{` in the symbol font's math face, a run of its own. The maker stripped TeX's
+    // specials and wrote `$$`, which every reader takes as a display: a kept display row in the middle of the line)
+    const line = 'the set {x} and inter-and {Intra} work'
+    const spec = { lines: ['Body text here', line] }
+    const B = docOf([
+      {
+        ...spec,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 14 + line.length],
+        ],
+      },
+    ])
+    const A = docOf([spec])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs) {
+        if (g.n !== 1) continue
+        const font = /^[{}]$/.test(g.u) ? 'CMSY10' : g.u === 'x' ? 'CMMI10' : null
+        if (!font) continue
+        g.font = `ABCDEF+${font}`
+        g.base = font
+      }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const unit = L.units.find((u) => u.kind === 'inkorphan')!
+    expect(unit.content.flatMap((p) => (p.t === 'el' ? [[p.kind, p.src]] : []))).toEqual([
+      ['math', '$\\{x\\}$'],
+      ['math', '$\\{$'],
+      ['math', '$\\}$'],
+    ])
+    expect(unit.id).toBe(unitId('inkorphan', unit.content))
   })
 
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {

@@ -1254,7 +1254,10 @@ const joinLetters = pieces => {
 }
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
 // (0000-0002-1825-0097), and the domain after a list of names in braces
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b/g, HAS_EMAIL = new RegExp(EMAIL.source)
+/** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (packages/engine's copy of
+ *  ink-units.mjs, rule 4: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+const EMAIL = new RegExp(String.raw`${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
 const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
 /** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
  *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the

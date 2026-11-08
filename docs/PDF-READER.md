@@ -4695,7 +4695,17 @@ section number's `\quad`, a page number after leaders) or is a running head's fo
 page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
 word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
 (LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
-left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders, and
+left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders (the
+rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mjs`, keeps an e-mail address in a word one too, the
+address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
+groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and it gives each kept run its own ink, which
+today's file draws by its own segments and the copy had given the unit's first placeholder: 149 of the 88 corpus papers' 185 ink
+members of two elements or more drew every run at the first one's place; and it writes a kept formula's TeX specials by the tokens
+that set them in a formula, `\{`, `\}`, `\$` and `\backslash`, where today's file strips them: a run of a brace alone, the closing
+brace of `\{0,\dots,J-1\}` between upright digits, 2610.21377v1 p42, or a bibliography title's `$\{$Intra-Operator$\}$`,
+2608.06007v1 p17, was `$$`, which every reader takes as a display, and once drawn in its own ink each was a kept display row in
+the middle of its line: 15 runs in 3 members; over the 88 corpus papers 10 ink units of 3 papers change their id, the copy text
+of 25 other runs gains the braces it had lost), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
@@ -5487,7 +5497,13 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   `mt.mjs` `listOf`): it is no word of the entry's sentence, and on the wire Microsoft's Chinese read it as a page number and
   wrote the character for "page" (U+9875) before it, between the year and the list (2610.37668v1). It comes back after the translation, an en space before it: the `\enspace`
   backref sets is a kern, no ink of the list's, and without it the list stood against the year in a CJK translation
-  ("2025.3, 5, 26"). In the marked original the entry names
+  ("2025.3, 5, 26"); what TeX sets there is `\newblock`'s glue, which `\BR@backref` begins with. The rebuilt reader states
+  it on its element (`el.after`, the en space its gap: the front half's adapter, `pipeline/instrument.mjs`), and
+  `packages/translate`'s chain asks every translator for the entry without it and puts it back after the translation, on
+  every wire and the runs floor. Until 2026-11-09 it went as a marker: over the 88 corpus papers 314 entries of 5 papers, 147
+  a marker alone at the wire's end, 167 in one marker with the year before it, read back against the year with no gap;
+  stated, 147 markers wires and every one of the 314 tags wires change, and 300 of the markers wires are today's byte for
+  byte (the rest differ before the list, by the package's own rules). In the marked original the entry names
   its marks after its end mark (`\axtbrname{p<i>.<k>}`, an assignment), and LAYOUT_TEX wraps both printers where the document
   begins (begindocument/end, after the class's own `\backrefalt`), so that the list has that piece's opening mark before it
   and its closing mark after it; `\backrefalt` only where a package or the paper defined one (backref calls `\backref` while

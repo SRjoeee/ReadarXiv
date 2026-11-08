@@ -299,8 +299,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // set before their unit's start point, outside its text: its `outside`)
   const emptyPiece = new Set((ins.empty ?? []).map((x) => `${x.unit}|${x.piece}`))
   const outsidePiece = new Set((ins.outside ?? []).map((x) => `${x.unit}|${x.piece}`))
-  // (an ink unit's placeholders after its first, whose glyphs are its first's (inkOf: no points tell them apart): what they set is
-  // in that one's ink, none of their own, as the instrument's `empty` states it of a source unit's piece; by unit and piece)
+  // (an ink unit's elements of no kept run of its (inkOf: each element its own run's; an echoed unit's that sets nothing, for which
+  // the ink unit has no run): none of their own, as the instrument's `empty` states it of a source unit's piece; by unit and
+  // piece. One whose run's glyphs another unit owns is not found, as before)
   const jointPiece = new Set<string>()
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
@@ -740,8 +741,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     for (const x of made) {
       const u = units.length
       units.push(x.unit)
-      if (x.phId !== null)
-        for (const id of piecesOf(x.unit.content).keys()) if (id !== x.phId) jointPiece.add(`${u}|${id}`)
+      if (x.els) for (const id of piecesOf(x.unit.content).keys()) if (!x.els.has(id)) jointPiece.add(`${u}|${id}`)
       const mem = empty(u, x.unit.kind, x.unit.id)
       mem.fixed = !!x.unit.fixed
       mem.figure = !!x.unit.figure
@@ -785,14 +785,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // (its label, the mark its text does not say (an affiliation's raised number, a note's mark): a label as a source unit's,
       // its group `.l`, stated with its ink and the line it stands on below)
       mem.label = x.label ?? []
-      if (x.phId !== null && x.ph.length)
-        mem.els.set(
-          x.phId,
-          [...x.ph].sort((p, q) => p - q),
-        )
+      for (const [id, e] of x.els ?? []) {
+        if (e.glyphs.length)
+          mem.els.set(
+            id,
+            [...e.glyphs].sort((p, q) => p - q),
+          )
+        if (e.boxes.length) mem.elBoxes.set(id, e.boxes)
+      }
       mem.turned = x.turned
       mem.textBoxes = x.textBoxes
-      if (x.phId !== null && x.elBoxes.length) mem.elBoxes.set(x.phId, x.elBoxes)
       for (const a of mine) {
         claimedA[a] = mem.ord
         const b = m.aToB[a] as number

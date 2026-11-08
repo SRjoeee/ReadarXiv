@@ -1,6 +1,8 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but three changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`): run
+// marked COPY, nothing else but six changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
+// placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
+// them, never stripped, MATH_SPECIAL): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -28,8 +30,8 @@
 //      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
-//      its source the run's characters; a word that is a web address is one in whatever face (a note of an address alone
-//      is then no unit);
+//      its source the run's characters; a word that is a web address is one in whatever face, and so is an e-mail address in a
+//      word, the word's characters around it the text's (a note of an address alone is then no unit);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -61,7 +63,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
 import { accentTexts } from './accents.mjs'
-import { classifyFont, classOf, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
+import { classifyFont, classOf, EMAIL_ADDRESS, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
@@ -167,8 +169,14 @@ function groupsOf(st, base) {
   return out
 }
 
-/** a kept run's placeholder source: a formula of its characters, or an address */
-const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
+/** the characters a formula's own frame reads, each written by the token that sets it in a formula (a control word as TeX prints
+ *  one, a space after it): the math shift `\$`, a group's braces `\{` `\}`, the escape `\backslash` */
+const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
+/** a kept run's placeholder source: a formula of its characters, or an address. CHANGED: today's strips `$ \ { }` from a formula's
+ *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
+ *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
+ *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
+const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
 /** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
  *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
  *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993
@@ -199,6 +207,33 @@ function wordsOf(G, gs, fams) {
   }
   // (an address set in the text's face, \urlstyle{same}: a typewriter run as any, kept, rule 4)
   for (const w of out) if (w.fam === 'text' && URL_WORD.test(w.text)) w.fam = 'mono'
+  return out.flatMap(w => (w.fam === 'text' ? addressed(w) : [w]))
+}
+/** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
+ *  the text's (an address's stop, a bracket), as the front end keeps one in a source unit's text (latex-front.mjs keepAddresses,
+ *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). CHANGED: today's said it as text, in a colour group of its
+ *  run where its ink has another colour, which no translation kept (2609.36054v2 p1's grey addresses drawn black, #28); kept, it is
+ *  an element every reply brings back, its ink the original's. A word's text is its glyphs' (`ts`): an address that begins or
+ *  ends inside a glyph's text takes that glyph whole */
+const ADDRESSES = new RegExp(EMAIL_ADDRESS.source, 'g')
+function addressed(w) {
+  const found = [...w.text.matchAll(ADDRESSES)]
+  if (!found.length) return [w]
+  const starts = []
+  let n = 0
+  for (const t of w.ts) { starts.push(n); n += t.length }
+  const glyphAt = o => { let i = 0; while (i + 1 < starts.length && starts[i + 1] <= o) i++; return i }
+  const out = []
+  const part = (a, b, fam) => { if (b > a) out.push({ gs: w.gs.slice(a, b), ts: w.ts.slice(a, b), text: w.ts.slice(a, b).join(''), fam }) }
+  let from = 0
+  for (const m of found) {
+    const a = glyphAt(m.index), b = glyphAt(m.index + m[0].length - 1) + 1
+    if (a < from) continue
+    part(from, a, 'text')
+    part(a, b, 'mono')
+    from = b
+  }
+  part(from, w.gs.length, 'text')
   return out
 }
 
@@ -314,10 +349,13 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
  * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
  * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
- * [[page, g]], ph: [[page, g]], label?: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the face's
- * name at 7), frames, erase, ph } }]: `label` the glyphs of its label (labelLength), among its text's, where it has one
- * (CHANGED: today's states none, its reader reading the label off the unit's characters; locate states a member's label from
- * the glyphs it is told, as a source unit's, 2610.22065v1 p1's "2" erased with the translated affiliation and drawn by nobody)
+ * [[page, g]], ph: [[page, g]], runs: [[k, [[page, g]]]], label?: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces],
+ * lines (8 a line, the face's name at 7), frames, erase, ph } }]: `runs` each kept run's glyphs by its placeholder's index among
+ * the pieces (CHANGED: today's states them all as one list, `ph`, its file each placeholder's segments, rows.ph; locate gives each
+ * element the glyphs it is told, and told one list gave the first every run's ink); `label` the glyphs of its label
+ * (labelLength), among its text's, where it has one (CHANGED: today's states none, its reader reading the label off the unit's
+ * characters; locate states a member's label from the glyphs it is told, as a source unit's, 2610.22065v1 p1's "2" erased with
+ * the translated affiliation and drawn by nobody)
  */
 export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const fams = new Map(), faces = new Map()
@@ -496,7 +534,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (e !== undefined && (cls === 'orphan' || cls === 'notes') && unitClass(units[e]) === 'names') cls = 'names'
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
     if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
-    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), ...(labelled.length ? { label: labelled } : {}) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
+    out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs), runs: kept.map(p => [p.k, p.gs]), ...(labelled.length ? { label: labelled } : {}) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
 }

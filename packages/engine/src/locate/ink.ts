@@ -46,6 +46,10 @@ export interface Made {
   elBoxes: [number, number][]
   /** a figure text's groups of its runs in another face (figureRuns): each one's style, its glyphs', by its piece id */
   spanStyles?: [string, Style][]
+  /** an ink unit's elements of a kept run, each its own (by piece id): the run's glyphs the claim gave the unit's placeholders
+   *  (inkUnitsOf's `glyphs.runs`; none where another unit owns them all) and the rules the claim gave them that stand nearest
+   *  its glyphs */
+  els?: Map<string, { glyphs: number[]; boxes: [number, number][] }>
 }
 
 export interface InkInput {
@@ -195,6 +199,15 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       if (w === `u${u.id}.p`) (first !== null ? x.ph : x.text).push(global(p, g))
       else if (w === `u${u.id}`) x.text.push(global(p, g))
     }
+    // (each element its own kept run's glyphs, the maker's: today's file draws each placeholder by its own segments, rows.ph;
+    // given the first, every run was drawn at its place and none at the others')
+    if (first !== null) {
+      x.els = new Map()
+      for (const [k, gs] of u.glyphs.runs ?? []) {
+        const mine = gs.filter(([p, g]) => own.glyphs[p - 1]?.[g] === `u${u.id}.p`).map(([p, g]) => global(p, g))
+        x.els.set(String(k), { glyphs: mine, boxes: [] })
+      }
+    }
     made.push(x)
   }
   // (the rules TeX painted on an ink unit's lines, which its claim took: its text's, or a placeholder's)
@@ -207,6 +220,29 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       ;(r![2] && x.phId !== null ? x.elBoxes : x.textBoxes).push([i + 1, b])
     })
   })
+  // (and each rule the claim gave an ink unit's placeholders, the element's whose glyph stands nearest it: claimInk gives a
+  // placeholder a rule inside its extent, an inline fraction's bar between its numerator and its denominator)
+  for (const x of made) {
+    if (!x.els?.size) continue
+    for (const [p, b] of x.elBoxes) {
+      const B4 = inkA.pages[p - 1]!.boxes
+      const cx = ((B4[4 * b] as number) + (B4[4 * b + 2] as number)) / 2
+      const cy = ((B4[4 * b + 1] as number) + (B4[4 * b + 3] as number)) / 2
+      let best: { boxes: [number, number][] } | null = null
+      let near = Number.POSITIVE_INFINITY
+      for (const e of x.els.values())
+        for (const a of e.glyphs) {
+          if (o.pageA[a] !== p) continue
+          const g = inkA.pages[p - 1]!.glyphs[a - (m.offA[p - 1] as number)]!
+          const d = Math.hypot(Math.max(g.x0 - cx, 0, cx - g.x1), Math.max(g.bottom - cy, 0, cy - g.top))
+          if (d < near) {
+            near = d
+            best = e
+          }
+        }
+      best?.boxes.push([p, b])
+    }
+  }
   for (const u of kept) {
     const content: Piece[] = []
     const x: Made = {
