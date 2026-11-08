@@ -2,7 +2,10 @@
 // <text> a line at its baseline, a <tspan> a run of one face at its own place, an oblique run skewed about its baseline, a line
 // set turned turned about its origin as svgOfFigure turns a figure's text), drawn
 // from `Page` alone; and the crops, each element's (or label's) own ink cut from the crop render of the page it stands on and
-// drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A member laid
+// drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A crop is cut
+// as the typesetter states it: its source, its ink with the antialiased margin round it (typeset's cropOfBox), drawn through
+// its clip where another piece's ink stands in it (typeset's lay/clips.ts), since the crop render shows every element and label
+// of the page and a source cut whole carries their ink (2610.21312v1-zh p5 t58: line 2's glyph tops left as dots). A member laid
 // across a page break may carry an element of one page onto a line of the other (its Ink's page): that crop is cut from its own
 // page's render, as today's were (triage-1 B, 2608.16117v1-de t11's p3 element on p4's line).
 //
@@ -16,8 +19,6 @@ import type { Ink, Item, Laid, Page } from './page.ts'
 
 const SVG = 'http://www.w3.org/2000/svg'
 const n2 = (v: number) => Math.round(v * 100) / 100
-/** how far a crop reaches past its ink, PDF units: a glyph's antialiased edge (hide.mjs CLIP_PAD) */
-export const CLIP_PAD = 0.6
 /** an oblique run's slant, degrees (a face's own where the table names none) */
 const OBLIQUE_DEG = 12
 
@@ -106,12 +107,15 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
   return svg
 }
 
-/** each crop of the page: the page its ink is cut from (its Ink's), its source ink and where it is drawn, both in PDF units
- *  [x0, y0, x1, y1] */
+/** each crop of the page: the page its ink is cut from (its Ink's), its source and where it is drawn, both in PDF units
+ *  [x0, y0, x1, y1], and where it states one, its clip where it is drawn (its source's rectangles moved and scaled as its source
+ *  is). Its source is the typesetter's whole: its ink and the antialiased margin round it, none at an edge cut between two of
+ *  its element's glyphs (a URL broken) */
 export function cropsOf(page: Page): {
   from: number
   src: [number, number, number, number]
   at: [number, number, number, number]
+  clip?: [number, number, number, number][]
   piece: string
   ord: number
 }[] {
@@ -122,14 +126,18 @@ export function cropsOf(page: Page): {
       for (const it of items) {
         if (!isCrop(it)) continue
         const [from, x0, y0, x1, y1, base] = it.src
-        const p = CLIP_PAD
-        // (an edge cut between two glyphs of its element, a URL broken: no margin, the next glyph's ink a fraction of a point off)
-        const pl = (it.cut ?? 0) & 1 ? 0 : p,
-          pr = (it.cut ?? 0) & 2 ? 0 : p
+        const k = it.k
+        const to = ([a, b, c, d]: readonly number[]): [number, number, number, number] => [
+          it.x + ((a as number) - x0) * k,
+          y + ((b as number) - base) * k,
+          it.x + ((c as number) - x0) * k,
+          y + ((d as number) - base) * k,
+        ]
         out.push({
           from,
-          src: [x0 - pl, y0 - p, x1 + pr, y1 + p],
-          at: [it.x - pl * it.k, y - (base - y0 + p) * it.k, it.x + (x1 - x0 + pr) * it.k, y + (y1 - base + p) * it.k],
+          src: [x0, y0, x1, y1],
+          at: to([x0, y0, x1, y1]),
+          ...(it.clip?.length ? { clip: it.clip.map(to) } : {}),
           piece: it.piece,
           ord: m.ord,
         })
@@ -237,6 +245,9 @@ export async function cropsFor(
   )
   out.setAttribute('aria-hidden', 'true')
   const ctx = out.getContext('2d') as CanvasRenderingContext2D
+  // (each crop darkened in, as the canvas is into the page: one drawn after another, their margins overlapping where two lines
+  // are drawn nearer than their sources stand, never covers the other's ink with its paper)
+  ctx.globalCompositeOperation = 'darken'
   const devOf =
     (v: PageViewport) =>
     ([x0, y0, x1, y1]: [number, number, number, number]) => {
@@ -266,7 +277,15 @@ export async function cropsFor(
       const [sx, sy, sw, sh] = src(c.src),
         [dx, dy, dw, dh] = at(c.at)
       if (sw <= 0 || sh <= 0) continue
+      // (through its clip where it states one: another piece's ink in its source left behind)
+      if (c.clip) {
+        ctx.save()
+        ctx.beginPath()
+        for (const r of c.clip) ctx.rect(...at(r))
+        ctx.clip()
+      }
       ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh)
+      if (c.clip) ctx.restore()
     }
     source.width = 0
     source.height = 0

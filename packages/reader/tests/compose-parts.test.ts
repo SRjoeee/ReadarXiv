@@ -9,7 +9,7 @@ import type { Faces } from '../src/compose/faces.ts'
 import { shapePath } from '../src/compose/highlight.ts'
 import { LINK_SCHEMES, linkLayer, textUnder, urlAllowed } from '../src/compose/links.ts'
 import { createMarks } from '../src/compose/marks.ts'
-import { CLIP_PAD, cropsOf, svgOf } from '../src/compose/paint.ts'
+import { cropsOf, svgOf } from '../src/compose/paint.ts'
 import type { Laid, Page } from '../src/compose/page.ts'
 import { laidText, TEXT_ITEMS_MAX, type TextContent } from '../src/compose/text.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -861,7 +861,7 @@ describe('the page drawn (svgOf)', () => {
 })
 
 describe('a crop cut from its element’s ink between two glyphs (a URL broken where TeX’s url package breaks it)', () => {
-  it('reaches past its ink by the antialiased margin on its own edges, and not at all on a cut one', () => {
+  it('is cut as the typesetter states its source: its own edges with their margin, a cut one at the cut', () => {
     const page: Page = {
       page: 1,
       wait: { rows: [], faces: [] },
@@ -881,11 +881,11 @@ describe('a crop cut from its element’s ink between two glyphs (a URL broken w
       links: [],
     }
     const [head, tail] = cropsOf(page)
-    expect(head!.src[0]).toBeCloseTo(235 - CLIP_PAD, 5)
+    expect(head!.src[0]).toBeCloseTo(235, 5)
     expect(head!.src[2]).toBeCloseTo(277.1, 5)
     expect(head!.at[2]).toBeCloseTo(72 + 277.1 - 235, 5)
     expect(tail!.src[0]).toBeCloseTo(277.1, 5)
     expect(tail!.at[0]).toBeCloseTo(72, 5)
-    expect(tail!.src[2]).toBeCloseTo(450 + CLIP_PAD, 5)
+    expect(tail!.src[2]).toBeCloseTo(450, 5)
   })
 })

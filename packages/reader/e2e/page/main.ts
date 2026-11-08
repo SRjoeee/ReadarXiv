@@ -75,6 +75,29 @@ function cutCrop(pages: Map<number, Page>, o: { piece: string; share: number; te
       }
   return false
 }
+/** a crop given a clip of the left `share` of its source (paint.ts: drawn through it), as the typesetter states one where
+ *  another piece's ink stands in its source (lay/clips.ts); its clip's right edge and its drawn box, PDF units of its page */
+function clipCrop(
+  pages: Map<number, Page>,
+  o: { piece: string; share: number },
+): { page: number; edge: number; box: [number, number, number, number] } | null {
+  for (const p of pages.values())
+    for (const m of p.members)
+      for (const [y, , , items] of m.lines) {
+        const j = items.findIndex((it) => 'src' in it && it.piece === o.piece)
+        if (j < 0) continue
+        const it = items[j] as Extract<Item, { src: Ink }>
+        const [, a, b, c, d, base] = it.src
+        const at = a + (c - a) * o.share
+        items[j] = { ...it, clip: [[a, b, at, d]] }
+        return {
+          page: p.page,
+          edge: it.x + (at - a) * it.k,
+          box: [it.x, y + (b - base) * it.k, it.x + (c - a) * it.k, y + (d - base) * it.k],
+        }
+      }
+  return null
+}
 const h = {
   panes: null as Panes | null,
   kit: null as Awaited<ReturnType<typeof loadKit>> | null,
@@ -167,6 +190,8 @@ const h = {
       pages?: string
       /** an element's crop cut over two lines, as the typesetter cuts a URL (cutCrop) */
       cut?: { piece: string; share: number; text: [string, string] }
+      /** an element's crop drawn through a clip of the left share of its source (clipCrop) */
+      clip?: { piece: string; share: number }
     } = {},
   ) {
     const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
@@ -208,6 +233,8 @@ const h = {
         )
     h.pages = pages
     if (o.cut && !cutCrop(pages, o.cut)) throw new Error(`no crop of ${o.cut.piece} to cut`)
+    const clipped = o.clip ? clipCrop(pages, o.clip) : null
+    if (o.clip && !clipped) throw new Error(`no crop of ${o.clip.piece} to clip`)
     const given = new Map<string, Row>()
     const listeners = new Set<() => void>()
     const rows = {
@@ -293,6 +320,7 @@ const h = {
     composer.setLayer({ part: async (n) => parts.get(n) ?? null, pages: head.paper.pages }, rows)
     return {
       proved,
+      clipped,
       groups: groups.size,
       tOpen: Math.round(tOpen),
       parts: parts.size,

@@ -24,8 +24,9 @@ export type Item =
       dir?: [ux: number, uy: number]
     }
   /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter'); `cut`
-   *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3 }
+   *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin;
+   *  `clip`, where another piece's ink stands in src, the rectangles of src it is drawn through (src's page's PDF units) */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; clip?: Box[] }
 
 export type Why =
   | 'unlocated'
