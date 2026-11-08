@@ -629,6 +629,7 @@ export function gateL1Pair(
             heads: rules0.heads,
             names: ownNames,
           },
+          refs: rules0.refs,
           relabels: !!mm.label && !((mm.fixed ?? 0) & 4),
           lead: nameLead?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,

@@ -726,3 +726,43 @@ describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragr
     expect(textOf(laid.lines[at - 1]!)).toMatch(/ist\.$/)
   })
 })
+
+describe('a reference TeX’s cross-referencing packages generate, in the target’s names (U.rename, PDF-READER §19.11)', () => {
+  // (today's renameRefs: cleveref's "Figure 3" drawn with its name in the target's (cleveref's, hyperref's words, translator's,
+  // babel's, the paper's own name units'), its number the original's; a citation's note so; layPage derives it from the rules
+  // and the part, no caller option)
+  const ref = (cmd: string, text: string, note?: string) =>
+    member({
+      els: [
+        [
+          '1',
+          {
+            kind: cmd === 'cref' ? 'num' : 'cite',
+            cmd,
+            ...(note !== undefined ? { note } : {}),
+            copy: '?',
+            ink: [[1, 150, 698, 190, 707, 700]],
+            text,
+            style: { role: 'serif', size: 10 },
+          },
+        ],
+      ],
+    })
+  const shown = (m: Placed, to: string) => {
+    const r = row([
+      { t: 'text', s: 'Siehe ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' für mehr.' },
+    ])
+    const [laid] = layPage(part(m), rowsOf([r], true), rulesFor(to as never), metrics()).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines.map((l) => l[3].map((it) => it.s).join('')).join(' ')
+  }
+  it('draws cleveref’s name in the target’s word, its number kept', () => {
+    expect(shown(ref('cref', 'Figure 3'), 'de')).toContain('Abbildung 3')
+    expect(shown(ref('cref', 'Figure 3'), 'de')).not.toContain('Figure')
+  })
+  it('draws a citation’s note’s name in the target’s word, the cited work’s own text kept', () => {
+    expect(shown(ref('citep', '[Smith, 2020, Section 2]', 'Section~2'), 'de')).toContain('[Smith, 2020, Abschnitt 2]')
+  })
+})

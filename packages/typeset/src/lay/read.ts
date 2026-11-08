@@ -14,10 +14,12 @@
 // - the unit's base style, its size and its colour from Style (today's originalStyle and measuredOf over its characters), the
 //   faces' design from the font's name (today's classifyFont, breaker/font-names.mjs), the paper's designs and English family
 //   from Part.paper.faces (today's page-1 tally and familyOfFonts);
+// - U.rename over the resolutions drawn as the page's text: a generated reference's or a citation's note's names in the
+//   target's (the rules' reference names, babel's, the paper's own name units'), where the reader draws labels anew;
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
 // A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
-// state yet is passed as today does without it, each named where it is read: U.rename's names, a rendering's runs of one fill
-// and its faked small capitals, a colour piece's run.
+// state yet is passed as today does without it, each named where it is read: a rendering's runs of one fill and its faked
+// small capitals, a colour piece's run.
 import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.types.ts'
@@ -30,6 +32,7 @@ import { breakMaps, type Breaks, statedBreaks, type V0Piece } from '../unit/brea
 import { cropFields, cropOfBox, cropPartsOfSegments } from '../unit/crops.ts'
 import { type ElementReading, elements, type Gap, type Res } from '../unit/elements.ts'
 import { type Glyph, type LabelInput, label as labelRule, type UnitLabel } from '../unit/label.ts'
+import { type RefNames, rename } from '../unit/rename.ts'
 import { cjkAdvance } from '../unit/params.ts'
 import { SMALL_CAPS_SHARE } from '../shared/names.ts'
 import { type Rect, rectKey } from '../util.ts'
@@ -398,6 +401,9 @@ export type ReadInput = {
   /** U.label's names: the target's float names, the reader's caption choice, translator's head names, the paper's own names;
    *  null where the reader draws no label anew */
   labels: Pick<LabelInput, 'words' | 'captions' | 'heads' | 'names'> | null
+  /** U.rename's names: the packages' reference names for the target (Rules.refs), read with `labels`' babel words and the
+   *  paper's own names; none renamed where `labels` is null (today's renameRefs ran where the reader draws labels anew) */
+  refs?: RefNames | null
   /** the reader draws the member's label anew (its label group can be turned off) */
   relabels: boolean
   /** a babel name's lead (lay/lead.ts ledBy: U.lead, the name the part binds to the member): set before the translation, its
@@ -449,6 +455,10 @@ export function readMember(i: ReadInput): ReadOut {
     resolved: new Set(res.keys()),
   })
   for (const [k, x] of br.marks) Object.assign(res.get(k)!, x)
+  // U.rename: the names cleveref and \autoref generate in its references, and a citation's note's, in the target's (RUN:2026)
+  if (i.labels && i.refs)
+    for (const [k, x] of rename(res, i.refs, i.labels.words ?? null, i.labels.names ?? null))
+      (res.get(k) as Res & { rename?: typeof x }).rename = x
   // U.marks' facts: the original's first mark after a display the drawing breaks at, after a kept piece on a held line (El.after)
   for (const [k, r0] of res) {
     const r = r0 as Res & { region?: number; origAfter?: string | null }

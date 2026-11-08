@@ -14,7 +14,8 @@
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
 // made before) read as before. A CJK cell's bands are read over the rules its Room.band states. A theorem-like head is drawn in
 // the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own name unit's row (ownNamesOf
-// over Part.paper.names), as today's headOf.
+// over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a citation's note, with its names
+// in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -293,6 +294,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
           P: R as never,
           paper,
           labels: { words: rules.labels, captions: rules.captions, heads: rules.heads, names: ownNames },
+          refs: rules.refs,
           relabels,
           lead: led?.lead ?? null,
           shown: Number.POSITIVE_INFINITY,
