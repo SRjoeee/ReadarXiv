@@ -60,9 +60,16 @@ for (const [pair, raw] of drawn) {
   const turned = new Set()
   const led = new Map()
   const top = new Set()
-  // (the page numbers of each page: a running head or foot whose text holds the page's number, the owner's ruling 6)
+  // (the page numbers of each page, the owner's ruling 6: a running head or foot whose text holds the page's number, or a note
+  // that does on the page's first or last row (a first page's folio is read as a note, 2609.36054 p1))
   const folios = new Map()
   const bundle = l1Paper(raw.paper)
+  const rowsOf = new Map()
+  for (const [pg, part] of bundle?.parts ?? []) {
+    const ys = part.flows.flat().flatMap((m) => m.lines.filter((l) => l[0] === pg).map((l) => l[4]))
+    if (ys.length) rowsOf.set(pg, [Math.min(...ys), Math.max(...ys)])
+  }
+  const edgeRow = (m, pg) => m.lines.some((l) => l[0] === pg && rowsOf.get(pg)?.some((y) => Math.abs(l[4] - y) <= 0.5))
   for (const [pg, part] of bundle?.parts ?? [])
     for (const f of part.flows)
       f.forEach((m, k) => {
@@ -71,7 +78,8 @@ for (const [pair, raw] of drawn) {
         const b = f[k - 1]
         if (b && (m.join || (b.kind === 'name' && b.bound)) && !led.has(m.ord)) led.set(m.ord, b.ord)
         const text = typeof m.text === 'string' ? (bundle.units.get(m.text)?.content ?? []).map((x) => (x.t === 'text' ? x.s : ' ')).join('') : ''
-        if (m.kind === 'inkheads' && m.lines.some((l) => l[0] === pg) && new RegExp(`(^|\\D)${pg}(\\D|$)`).test(text)) {
+        const page = m.kind === 'inkheads' ? m.lines.some((l) => l[0] === pg) : m.kind === 'inknotes' && edgeRow(m, pg)
+        if (page && new RegExp(`(^|\\D)${pg}(\\D|$)`).test(text)) {
           if (!folios.has(pg)) folios.set(pg, [])
           folios.get(pg).push(m.ord)
         }
