@@ -14,10 +14,10 @@
 // (a forced break is a marker like any other, and Microsoft reads neither a marker nor a colon as a sentence's end): staging,
 // 2026-11-09, 1810.04805v2 p8's "as \bertbase: \\ \noindent \textbf{No NSP}: A bidirectional model ... (NSP) task." went out
 // as one sentence of Microsoft's, the label's words a fragment between two markers inside it, and came back as the word for
-// "no" alone, the term lost. So the
-// break such a label follows, where no stop ends the text before it, states the line it ends: its `stop` a line end, which a
-// wire writes after the element so that the endpoint's sentence ends there (begun on its own line, the label came back
-// with its term). A break no label follows states nothing: a title or an affiliation broken over lines is one phrase.
+// "no" alone, the term lost. So the break such a label follows, where no stop ends the text before it, states the line it
+// ends: its `stop` a line end, which a wire writes after the element so that the endpoint's sentence ends there (begun on its
+// own line, the label came back with its term). A break no label follows states nothing: a title or an affiliation broken
+// over lines is one phrase.
 import type { Piece } from '@readarxiv/format'
 import { ABBR } from '@readarxiv/text'
 import { INVISIBLE, STRUCTURE } from './tex.ts'

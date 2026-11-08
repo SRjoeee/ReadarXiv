@@ -16,8 +16,8 @@
 //   space of ours around it, taken back on reading where the reply kept it beside a stop or a digit. Not around an element
 //   inside a word (a letter right before it and right after it, an element that reads as part of a word: `inWord`): there
 //   the word is one token of the source, and spaced it went out as two words (2608.25210v2's `str\_s`: `str @a# s` came
-//   back `STR @a#`, `LLM @a# bottom @b# up` with "bottom" and "up" translated; unspaced, the four identifiers asked came back as
-//   they went, 2026-11-09);
+//   back `STR @a#`, `LLM @a# bottom @b# up` with "bottom" and "up" translated; unspaced, the four identifiers asked came
+//   back as they went, 2026-11-09);
 // - a display's own end punctuation goes after its marker or the sentence runs on (0/444 vs 1,357/1,357), and the reply's
 //   marks after that marker are taken off on reading; an element's stop that is a line end (a forced break a run-in label
 //   follows, no stop ending the sentence before it: the source reader's run-in rule) goes after its marker too, where
