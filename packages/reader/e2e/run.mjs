@@ -874,6 +874,48 @@ await check(
   },
 )
 await check(
+  'compose: a crop drawn through its clip leaves the rest of its source behind, in the crops canvas of its page view (s1-columns)',
+  async () => {
+    // (the typesetter states a clip where another piece's ink stands in a crop's source, typeset's lay/clips.ts: 2610.21312v1-zh
+    // p5 t58, line 2's glyph tops cut with line 1's formula and left behind as dots; here the formula's crop given a clip of its
+    // source's left half, and the crops canvas read: ink left of the clip's edge, none right of it)
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    const r = await page.evaluate(() => window.__h.layer('s1-columns', { clip: { piece: '1', share: 1 / 2 } }))
+    const n = r.clipped.page
+    await laidShown(page, n)
+    await waitFor(page, (n) => !!window.__h.panes.right.page(n)?.querySelector('.axt-over > canvas.axt-crops'), n)
+    const ink = await page.evaluate(
+      async ({ n, edge, box }) => {
+        const c = window.__h.panes.right.page(n).querySelector('.axt-over > canvas.axt-crops')
+        const [vx0, vy0, vx1, vy1] = (await window.__h.composed.getPage(n)).view
+        const X = (x) => ((x - vx0) * c.width) / (vx1 - vx0),
+          Y = (y) => ((vy1 - y) * c.height) / (vy1 - vy0)
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
+        let left = 0,
+          right = 0
+        const cut = X(edge)
+        for (let y = Math.floor(Y(box[3])); y < Math.ceil(Y(box[1])); y++)
+          for (let x = Math.floor(X(box[0])); x < Math.ceil(X(box[2])); x++) {
+            const i = (y * c.width + x) * 4
+            if (d[i + 3] < 128 || 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2] > 128) continue
+            if (x + 1 <= cut) left++
+            else if (x >= cut + 1) right++
+          }
+        return { left, right, px: [c.width, c.height] }
+      },
+      { n, edge: r.clipped.edge, box: r.clipped.box },
+    )
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      ink.left > 0 && ink.right === 0,
+      `the crop's ink: ${ink.left} px left of its clip's edge, ${ink.right} right of it`,
+    )
+    return ink
+  },
+)
+await check(
   'compose: a language switch reuses the composed document, the parts and the place; a unit not laid in the new language has its groups back on (s1-columns)',
   async () => {
     const { page, context, errors } = await newPage()
