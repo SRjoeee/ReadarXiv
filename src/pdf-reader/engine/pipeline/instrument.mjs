@@ -347,12 +347,14 @@ export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new S
     // (the texts spell the whole run, as own.mjs claimed it, or the run is not the lead's: none of it a piece's)
     if (got.size && n < 0) for (const [j, k] of got) out[j] = k
   }
-  // (and the glyphs own.mjs claims `.p` after the unit's end point with no point open, a footnote's call TeX gave no mark after
-  // its last word (MR 4b): the call's, where the unit's tail holds that one piece of a class, of no point of its own)
+  // (and the glyphs own.mjs claims `.p` after the unit's end point, a footnote's call TeX gave no mark after its last word (MR 4b):
+  // the call's, where the unit's tail holds that one piece of a class, of no point of its own. Past the end point no piece before
+  // the last text set anything, so not the last one opened on the page either, which the points gave them (2610.35877v1 p1's
+  // abstract: its "1" its piece 15's, closed long before))
   const ends = new Map()
   for (const pt of pg.points) { const e = END_POINT.exec(pt.name); if (e) ends.set(Number(e[1]), pt.glyph) }
   for (let j = 0; j < pg.glyphs.length; j++) {
-    const m = out[j] < 0 ? /^u(\d+)\.p$/.exec(row[j] ?? '') : null
+    const m = /^u(\d+)\.p$/.exec(row[j] ?? '')
     const u = m ? Number(m[1]) : -1
     if (u < 0 || !(ends.get(u) <= j)) continue
     const pieces = units[u]?.pieces ?? []

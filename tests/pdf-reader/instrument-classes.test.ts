@@ -253,6 +253,13 @@ describe('the piece of a footnote call’s mark TeX gave no point after the unit
     const got = glyphPiecesOf(pg, row, { units: unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), { t: 'text', s: '\n' }]), names: new Set(['5s', '5e']) })
     expect([...got]).toEqual([-1, -1, -1, -1, -1, 1])
   })
+  it('gives them the call where an earlier piece of the unit closed on the page (S1’s last opened piece is no owner past the end)', () => {
+    // (2610.35877v1 p1: the "1" went to the abstract's piece 15, closed long before, its last opened point on the page)
+    const units = unitsOf([{ t: 'text', s: 'a ' }, ph('$x$'), { t: 'text', s: '.' }, ph('\\footnotemark')])
+    const page = { points: [{ name: '5s', glyph: 0 }, { name: 'p5.1a', glyph: 1 }, { name: 'p5.1b', glyph: 2 }, { name: '5e', glyph: 3 }], glyphs: glyphs('ax.1') }
+    const got = glyphPiecesOf(page, ['u5', 'u5.p', 'u5', 'u5.p'], { units, names: new Set(['5s', 'p5.1a', 'p5.1b', '5e']) })
+    expect([...got]).toEqual([-1, 1, -1, 3])
+  })
   it('gives none where the tail holds two calls, or the call has a point of its own', () => {
     const two = unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), ph('\\footnotemark')])
     expect([...glyphPiecesOf(pg, row, { units: two, names: new Set(['5s', '5e']) })]).toEqual(Array(6).fill(-1))
