@@ -32,7 +32,7 @@ const sizeOf = (room: Placed['room']) => {
     flows: [[cellOf(room)]],
   }
   // ("Model" in Chinese, escaped)
-  const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: '模型' }] }
+  const r: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: '\u6a21\u578b' }] }
   const rows: Rows = { get: (k) => (k === id ? r : undefined), done: true }
   const [m] = layPage(part, rows, rulesFor('zh'), metrics()).members
   expect(m!.state).toBe('laid')
