@@ -1514,3 +1514,192 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     expect(inside.els?.find(([id]) => id === '3')?.[1].opens).toBeUndefined()
   })
 })
+
+describe('an element’s ink is what TeX set for it', () => {
+  /** an instrument whose B lines each give their glyphs one owner, `lines[p][line]` its [unit, role, piece] (piece -1 none), and
+   *  each box `boxes[p][box]` one */
+  const ownedBy = (
+    B: Doc,
+    units: InstrumentUnit[],
+    lines: [number, number, number][][],
+    boxes: [number, number, number][][] = [],
+  ): Instrument => ({
+    ink: B,
+    units,
+    glyphs: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.glyphs.length)
+      pg.glyphs.forEach((g, j) => {
+        const [u, role, piece] = lines[p]?.[g.n] ?? [-1, 0, -1]
+        O.unit[j] = u
+        O.role[j] = role
+        O.piece[j] = piece
+      })
+      return O
+    }),
+    boxes: B.pages.map((pg, p) => {
+      const O = ownersOf(pg.kinds.length)
+      pg.kinds.forEach((_, x) => {
+        const [u, role, piece] = boxes[p]?.[x] ?? [-1, 0, -1]
+        O.unit[x] = u
+        O.role[x] = role
+        O.piece[x] = piece
+      })
+      return O
+    }),
+    tex: {},
+    made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+  })
+  const el = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'math', src })
+  const paraOf = (content: InstrumentUnit['content'], classes: InstrumentUnit['classes']): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    classes,
+  })
+  const T = ROLE.text
+  const E = ROLE.element
+  const elementOf = (L: ReturnType<typeof locate>, id = '1') =>
+    new Map(L.members.find((x) => x.unit === 0)!.elements).get(id)!
+
+  it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
+    // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'
+    // ink in the parts; joined to the element's glyphs only within 0.5 pt, it was an ink of its own on its own baseline, which the
+    // typesetter read as a formula broken over lines and set after it: "H = H ▁")
+    const B = docOf([
+      {
+        lines: [
+          { text: 'so ', x: 72, y: 700 },
+          { text: 'H=H', x: 90, y: 700 },
+          { text: ' agree', x: 108, y: 700 },
+        ],
+        boxes: [[5, 0, 102, 708.2, 108, 708.6]],
+      },
+    ])
+    const content = [text('so '), el('1', '$\\vH=\\overline{\\vH}$'), text(' agree')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 90, 698, 108, 708.6, 700]])
+  })
+
+  it('states one box for an inline fraction on its line, its denominator back under its numerator (math.md R1)', () => {
+    // (2608.06701v1 p8's 2×|LCS(X,Y)| / (|X|+|Y|): cut alone, the element's glyphs made two lines, the denominator one of its own
+    // where it runs back left under the numerator, each on the unit line they stand on; the typesetter set the two crops side by
+    // side. The unit's own lines keep them one line of TeX's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'as ', x: 72, y: 700 },
+          { text: '2L', x: 90, y: 704, size: 7 },
+          { text: 'X+Y', x: 88.5, y: 696, size: 7 },
+          { text: ' with', x: 110, y: 700 },
+        ],
+        boxes: [[5, 0, 88.5, 700.9, 101.5, 701.3]],
+      },
+    ])
+    const content = [text('as '), el('1', '$\\frac{2L}{X+Y}$'), text(' with')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 88.5, 694.6, 101.5, 708.9, 700]])
+  })
+
+  it('states a box a line for a formula TeX broke over two lines, a rule with the glyph TeX shipped it beside (math.md R1)', () => {
+    // (each rule with its neighbour in B's stream, the one of its two neighbours nearer it where they stand on two lines: an
+    // overline over the second line's nucleus, shipped right before it and after the first line's last glyph)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'a+', x: 96, y: 700 },
+          { text: 'b', x: 72, y: 688 },
+          { text: ' is', x: 78, y: 688 },
+        ],
+        boxes: [[6, 0, 72, 696.2, 78, 696.6]],
+      },
+    ])
+    const content = [text('see '), el('1', '$a+\\overline{b}$'), text(' is')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+      [[[0, E, 1]]],
+    )
+    expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([
+      [1, 96, 698, 108, 707, 700],
+      [1, 72, 686, 78, 696.6, 688],
+    ])
+  })
+
+  it('states no text of an element whose glyphs on a line stand on two baselines: a script is no plain text (math.md R4)', () => {
+    // (2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹": its text "km s−1 Mpc−1" dropped the scripts' raise and size, drawn as body
+    // text; without a text the typesetter crops its ink, as today's reader does a raised script's (layer2.mjs scriptedOf). Its
+    // copy text stays its glyphs')
+    const B = docOf([
+      {
+        lines: [
+          { text: 'H0 is ', x: 72, y: 700 },
+          { text: 'km s', x: 108, y: 700 },
+          { text: '−1', x: 132, y: 703.6, size: 7 },
+          { text: ' Mpc', x: 140.4, y: 700 },
+          { text: '−1', x: 164.4, y: 703.6, size: 7 },
+          { text: ' e.g.', x: 172.8, y: 700 },
+          { text: ' now', x: 196.8, y: 700 },
+        ],
+      },
+    ])
+    const content = [text('H0 is '), el('1', '\\kmsMpc'), el('2', '\\eg'), text(' now')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['2', { cls: 'macro' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 2],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const km = elementOf(L)
+    expect(km.text).toBeUndefined()
+    expect(km.copy).toBe('km s−1 Mpc−1')
+    expect(km.ink).toHaveLength(1)
+    expect(elementOf(L, '2').text).toBe('e.g.')
+  })
+})
