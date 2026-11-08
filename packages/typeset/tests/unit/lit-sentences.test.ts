@@ -104,6 +104,107 @@ describe('Laid.lit by sentence', () => {
     expect(new Set(order.map((x) => x[0]))).toEqual(new Set(rows.map((_, j) => j)))
     expect(laid.lit.own).toEqual([])
   })
+  it('leaves no gap between two sentences on a row: each runs to the next one’s start, the last to the row’s end', () => {
+    // (as today's shapes tile a row: the space after a full stop is the sentence's before it, so that a pointer over it lights
+    // that sentence; on both panes. The coordinator's full parity, round 3: 23 rows of 21 pages with 2.9–10.3 pt between)
+    const laid = laidOf(member(), row(SENTENCES))
+    const whole = laidOf(member(), row()).lit.right[0]!
+    for (const pane of ['left', 'right'] as const) {
+      const all = laid.lit[pane].flatMap((boxes, s) => boxes.map((b) => ({ b, s })))
+      const rows = new Map<number, { b: Box; s: number }[]>()
+      for (const x of all) {
+        const y = Math.round((x.b[1] + x.b[3]) / 2)
+        const key = [...rows.keys()].find((k) => Math.abs(k - y) < 3) ?? y
+        rows.set(key, [...(rows.get(key) ?? []), x])
+      }
+      for (const [, on] of rows) {
+        on.sort((p, q) => p.b[0] - q.b[0])
+        for (let k = 1; k < on.length; k++) expect(on[k]!.b[0]).toBeCloseTo(on[k - 1]!.b[2], 6)
+      }
+      // (the row's sentences together span what the unit lit whole spans there: the line's start to its end)
+      if (pane === 'right')
+        for (const line of whole) {
+          const on = all.filter((x) => Math.min(x.b[3], line[3]) - Math.max(x.b[1], line[1]) > 0)
+          expect(Math.min(...on.map((x) => x.b[0]))).toBeCloseTo(line[0], 6)
+          expect(Math.max(...on.map((x) => x.b[2]))).toBeCloseTo(line[2], 6)
+        }
+    }
+  })
+  it('begins a sentence as drawn at the token that carries its first word, a bracket set against it with it', () => {
+    // (today's words.mjs: a token's sentence is the word it carries; "(Vier" carries "Vier", the second sentence's first word;
+    // set ragged, a run's characters stand at its x plus half the size each: the metrics' advance)
+    const tr = 'Eins zwei drei. (Vier fünf sechs.) Sieben acht neun.'
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [{ t: 'text', s: tr }],
+      sentences: { src: [15, 30], tr: [tr.indexOf('('), tr.indexOf('Sieben')] },
+    }
+    const laid = laidOf(member({ align: 'l' }), r)
+    const it = laid.lines
+      .flatMap(([, , , its]) => its)
+      .find((x) => 's' in x && typeof x.s === 'string' && x.s.includes('(Vier')) as {
+      s: string
+      x: number
+      size: number
+    }
+    expect(it).toBeDefined()
+    const bracket = it.x + (it.size * [...it.s.slice(0, it.s.indexOf('(Vier'))].length) / 2
+    expect(laid.lit.right[1]![0]![0]).toBeCloseTo(bracket, 6)
+  })
+  it('ends a sentence at a forced break: the text after it a sentence of its own on both panes', () => {
+    // (1810.04805v2 p8: "… as BERT_BASE:" \\ \noindent "No NSP: …", one TeX paragraph, one sentence of Microsoft's across
+    // the break; the owner hovering the item saw the paragraph before it lit with it. TeX ended the line by command: the item
+    // is a block of its own on the page)
+    const m = member({
+      lines: [
+        [1, 0, 72, 200, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+        [1, 0, 72, 200, 676, 683, 674, 72, 300, 0, 10],
+      ],
+      els: [['1', { kind: 'space', brk: 1, ends: [0, 0], ink: [] }]],
+      words: [
+        [0, 0, 72],
+        [6, 0, 108],
+        [12, 0, 144],
+        [18, 1, 72],
+        [23, 1, 100],
+        [27, 1, 130],
+        [30, 1, 150],
+        [36, 2, 72],
+        [41, 2, 100],
+      ],
+    })
+    const before = 'Einleitung hier:',
+      after = 'Punkt eins ist hier. Punkt zwei.'
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: before },
+        { t: 'el', id: '1' },
+        { t: 'text', s: after },
+      ],
+      // (the translator's one start: the second "Item", "Punkt zwei"; none at the break)
+      sentences: { src: [36], tr: [before.length + 1 + after.lastIndexOf('Punkt')] },
+    }
+    const laid = laidOf(m, r)
+    expect(laid.lit.left).toEqual([[[72, 698, 200, 707]], [[72, 686, 300, 695]], [[72, 674, 200, 683]]])
+    expect(laid.lit.right).toHaveLength(3)
+    for (const sb of laid.lit.right) expect(sb.length).toBeGreaterThan(0)
+    // (its row with no sentences of its own: the break alone cuts it, both panes alike)
+    const alone = laidOf(m, { ...r, sentences: undefined } as Row)
+    expect(alone.lit.left).toEqual([
+      [[72, 698, 200, 707]],
+      [
+        [72, 686, 300, 695],
+        [72, 674, 200, 683],
+      ],
+    ])
+    expect(alone.lit.right).toHaveLength(2)
+  })
   it('cuts a CJK translation, set with no spaces, at its sentences’ first characters', () => {
     const zh = '第一句话在这里。第二句话在这里。第三句话。'
     const r: Row = {

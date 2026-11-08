@@ -13,7 +13,8 @@
 // TeX ended the line inside the word: facts.ts lineEnd). Letters are compared folded (compatibility decomposition, marks off,
 // lower case: a ligature is its letters, an accent TeX sets as a glyph of its own is none). A word is placed where every
 // letter of it is matched and its glyphs' letters follow one another with no break between: its first glyph's line (the
-// index in the member's lines) and x0. One that is not (a word TeX never set, a word a macro's own text stands across) is
+// index in the member's lines) and x0, from the opening brackets and quotes set against it (Unicode's Ps, Pi: the page's text
+// runs them in one token with the word, today's left start, so that "(See" begins at its "("). One that is not (a word TeX never set, a word a macro's own text stands across) is
 // stated at line -1: a row's start there is found at its sentence's next word placed (lay/lit.ts startsOnA, LATE).
 import type { Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
@@ -54,6 +55,11 @@ const SEP = 32
 const WORK_PER_LETTER = 256
 
 export type Word = [offset: number, line: number, x: number]
+
+/** opening punctuation (Unicode's Ps and Pi, and Spanish's inverted marks): what it opens follows it, never precedes it */
+const OPENING = /^[\p{Ps}\p{Pi}\u00bf\u00a1]+$/u
+/** whether glyph `p` is an opening mark set against `g` after it on its line: no space between them, as PDF.js reads one */
+const opensBefore = (p: DocGlyph, g: DocGlyph) => !p.blank && OPENING.test(p.u) && !lineChange(p, g) && !apart(p, g)
 
 /**
  * Each word of `content`'s projection placed on A: `glyphs` the unit's text glyphs on A in stream order, `lineOf(i)` the index in
@@ -122,7 +128,9 @@ export function wordsOn(
   return words.map(({ offset, from, to }) => {
     let ok = matched[from]! >= 0
     for (let i = from + 1; ok && i < to; i++) ok = matched[i]! === matched[i - 1]! + 1
-    const q = ok ? gOf[matched[from]!]! : -1
+    let q = ok ? gOf[matched[from]!]! : -1
+    // (from the opening brackets and quotes set against it: the page's text runs them in one token with it, today's start)
+    while (q > 0 && opensBefore(glyphs[q - 1]!, glyphs[q]!)) q--
     const line = q >= 0 ? lineOf(q) : -1
     return line >= 0 ? [offset, line, Math.round(glyphs[q]!.x0 * 100) / 100] : [offset, -1, 0]
   })

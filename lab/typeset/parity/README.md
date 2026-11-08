@@ -118,10 +118,11 @@ The highlight's granularity is judged apart from its coverage (`sentences.mjs`, 
 that cover a unit's lines tell nothing of whether they are the unit's or a sentence's (the maintainer found on staging,
 2026-11-08, v2 lighting every unit whole where today pairs sentence by sentence: coverage passed it). A unit today lights by
 sentence, of two sentences or more (today's `litBoxes` kept per sentence, `leftBy`/`rightBy`), is worse where v2 lights it
-whole, pairs another count of sentences, lights a sentence on arXiv's page whose boxes meet most another of today's sentences
-there or none of its own, or lights on a page as drawn a sentence today does not (or not one it does). A unit of one sentence
-is lit as that sentence's shape, the unit whole, alike on both; a drawing of before the per-sentence boxes is not judged by it
-(`measures.sentences.unread`).
+whole or in fewer sentences (finer is allowed: v2 also ends a sentence at a forced break), where on arXiv's page a sentence
+of v2's meets most one of today's out of today's order or a sentence today lights there is met by none of v2's, or where
+v2 lights nothing of it as drawn on a page today lights it (which sentences a page's translation holds is the layout's). A
+unit of one sentence is lit as that sentence's shape, the unit whole, alike on both; a drawing of before the per-sentence
+boxes is not judged by it (`measures.sentences.unread`).
 
 Beside the verdict each side's faults against absolute bounds are measured (a first line off both ways by 0.25 of the
 size, a line off its alignment by 0.25 of the size, a crossing, a follower past its separation by half the size, an
