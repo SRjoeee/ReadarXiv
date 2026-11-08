@@ -4630,7 +4630,12 @@ rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mj
 address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
 groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and it gives each kept run its own ink, which
 today's file draws by its own segments and the copy had given the unit's first placeholder: 149 of the 88 corpus papers' 185 ink
-members of two elements or more drew every run at the first one's place), and
+members of two elements or more drew every run at the first one's place; and it writes a kept formula's TeX specials by the tokens
+that set them in a formula, `\{`, `\}`, `\$` and `\backslash`, where today's file strips them: a run of a brace alone, the closing
+brace of `\{0,\dots,J-1\}` between upright digits, 2610.21377v1 p42, or a bibliography title's `$\{$Intra-Operator$\}$`,
+2608.06007v1 p17, was `$$`, which every reader takes as a display, and once drawn in its own ink each was a kept display row in
+the middle of its line: 15 runs in 3 members; over the 88 corpus papers 10 ink units of 3 papers change their id, the copy text
+of 25 other runs gains the braces it had lost), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular

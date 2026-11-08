@@ -1,7 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but four changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but five changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; each kept run's glyphs by its placeholder stated, `glyphs.runs`; an e-mail address
-// a kept run of its own, addressed): run
+// a kept run of its own, addressed; a formula's TeX specials written as TeX sets them, never stripped, MATH_SPECIAL): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -168,8 +168,14 @@ function groupsOf(st, base) {
   return out
 }
 
-/** a kept run's placeholder source: a formula of its characters, or an address */
-const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
+/** the characters a formula's own frame reads, each written by the token that sets it in a formula (a control word as TeX prints
+ *  one, a space after it): the math shift `\$`, a group's braces `\{` `\}`, the escape `\backslash` */
+const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
+/** a kept run's placeholder source: a formula of its characters, or an address. CHANGED: today's strips `$ \ { }` from a formula's
+ *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
+ *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
+ *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
+const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
 /** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
  *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
  *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993

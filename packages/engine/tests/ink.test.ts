@@ -235,6 +235,43 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
+  it('writes a TeX special of an ink unit’s math run by the command that sets it in a formula: a brace alone an inline formula, never a display', () => {
+    // (a brace a formula sets, `\{` (amsmath's set {0, …, J−1}, 2610.21377v1 p42) or a title's `$\{$Intra-Operator$\}$` in a
+    // bibliography (2608.06007v1 p17): its glyph `{` in the symbol font's math face, a run of its own. The maker stripped TeX's
+    // specials and wrote `$$`, which every reader takes as a display: a kept display row in the middle of the line)
+    const line = 'the set {x} and inter-and {Intra} work'
+    const spec = { lines: ['Body text here', line] }
+    const B = docOf([
+      {
+        ...spec,
+        points: [
+          ['bs1', 0],
+          ['0s', 0],
+          ['0e', 12],
+          ['be1', 14 + line.length],
+        ],
+      },
+    ])
+    const A = docOf([spec])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs) {
+        if (g.n !== 1) continue
+        const font = /^[{}]$/.test(g.u) ? 'CMSY10' : g.u === 'x' ? 'CMMI10' : null
+        if (!font) continue
+        g.font = `ABCDEF+${font}`
+        g.base = font
+      }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const unit = L.units.find((u) => u.kind === 'inkorphan')!
+    expect(unit.content.flatMap((p) => (p.t === 'el' ? [[p.kind, p.src]] : []))).toEqual([
+      ['math', '$\\{x\\}$'],
+      ['math', '$\\{$'],
+      ['math', '$\\}$'],
+    ])
+    expect(unit.id).toBe(unitId('inkorphan', unit.content))
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
