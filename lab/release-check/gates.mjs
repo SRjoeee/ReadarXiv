@@ -64,7 +64,7 @@ export const INVARIANTS = [
 /** design §7's rows; `from`: the gate whose numbers give the value, read by `value(numbers)`; none: not measured, `why` */
 export const TARGETS = [
   { id: 'prepare', measure: 'Prepare, median on staging (n ≥ 90)', baseline: '33.6 s', target: 'under 20 s', from: 'private-soak', why: "staging's prepare records (the private repository's)" },
-  { id: 'tex-runs', measure: 'TeX runs a paper', baseline: '4 compiles, 5 passes', target: "the paper's own passes; no final pass", from: 'front-count', value: n => n.compiles != null && `${n.compiles} compiles on ${n.papers} papers (${(n.compiles / n.papers).toFixed(2)} a paper), TeX ${n.texS} s` },
+  { id: 'tex-runs', measure: 'TeX runs a paper', baseline: '4 compiles, 5 passes', target: "the paper's own passes; no final pass", from: null, why: "no gate counts them: the rebuilt front half that dropped the final pass, and its count, were deleted on 2026-11-09 (DESIGN §16)" },
   { id: 'reprepare', measure: 'A new prepare after an engine change that keeps the marks', baseline: '33.6 s', target: 'under 6 s, no TeX', from: 'private-soak', why: 'the box on staging (the private repository\'s)' },
   { id: 'reuse', measure: 'Translation after an engine change', baseline: 'every language of every paper again', target: 'changed units only', from: null, why: 'no gate measures the rows\' reuse rate after an engine change' },
   {
@@ -138,7 +138,7 @@ export function typesetOf(text) {
   return out
 }
 
-/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh, lab/marks/front.sh): one line a paper, `id <tab> exit <tab> summary` */
+/** a corpus runner's log.tsv (lab/pdf/prepare-back/corpus.sh): one line a paper, `id <tab> exit <tab> summary` */
 export function corpusLogOf(file) {
   const rows = readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => l.split('\t'))
   const out = { papers: rows.length, made: 0, failed: [], refused: [], missingCompile: [], proofs: { a: 0, c: 0, on: 0, offOutside: 0 } }
@@ -148,7 +148,7 @@ export function corpusLogOf(file) {
     if (rc !== '0') { out.failed.push(`${id}: exit ${rc}: ${summary}`); continue }
     out.made++
     let s
-    // (the summary is the paper's JSON, after its id where the runner prints one: lab/marks/front.sh, gate.sh)
+    // (the summary is the paper's JSON, after its id where the runner prints one)
     try { s = JSON.parse(summary.slice(summary.indexOf('{'))) } catch { out.failed.push(`${id}: no summary`); continue }
     const p = s.proofs ?? {}
     // (a proof the prover refused is no count: run.mjs writes its reason where the count would be, `offOutside: '<why>'`, or
@@ -198,17 +198,6 @@ export function canvasOf(text, ids = []) {
     pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
     over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
   }
-}
-
-/** the marks' sum against the record the owner judged: every count and class but the compiles' (a replay compiles nothing) */
-export function sameSum(made, recorded) {
-  const strip = t => {
-    const [first, ...rest] = t.trim().split('\n')
-    const head = JSON.parse(first)
-    delete head.compiles
-    return [JSON.stringify(head), ...rest].join('\n')
-  }
-  return strip(made) === strip(recorded)
 }
 
 // ---------------------------------------------------------------- the gates
@@ -325,22 +314,6 @@ export const GATES = [
       if (log.refused.length) return { skip: `the corpus runner refused ${log.refused.length} papers: ${log.refused[0]}` }
       return { pass: steps.every(s => s.exit === 0), numbers: { papers: log.papers, same: steps[1]?.text.trim().split('\n').at(-1) } }
     },
-  },
-  {
-    id: 'marks-replay',
-    title: "the marks' equivalence again over run 6's kept inputs, no TeX (lab/marks/replay.mjs), judged by the marks' census",
-    tier: 'full',
-    stage: 'pipeline',
-    holds: [],
-    // (gate.mjs --keep's inputs: today's owners and the new instrument's B pages, plan and source. Valid while markSource writes
-    // the same marks; after a change to the writer the gate is gate.sh again, the release tier's marks-gate. The census is
-    // the tree's where it is, lab/marks/census.json judged by census.mjs; before it, run 6's census r13 in lab data)
-    needs: ctx => [exists("run 6's kept inputs", lab(ctx, 'lanes/L2/marks/gate6/keep')), ...censusNeeds(ctx)],
-    steps: ctx => [
-      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/replay.mjs', `--keep=${lab(ctx, 'lanes/L2/marks/gate6/keep')}`, `--out=${join(ctx.work, 'marks-replay')}`], slot: 'test', fresh: join(ctx.work, 'marks-replay') },
-      censusStep(ctx, join(ctx.work, 'marks-replay')),
-    ],
-    judge: (ctx, steps) => censusJudge(ctx, steps),
   },
   {
     id: 'translate-equivalence',
@@ -502,43 +475,6 @@ export const GATES = [
     },
   },
   {
-    id: 'marks-gate',
-    title: "the marks' equivalence on the 87 with TeX (lab/marks/gate.sh), judged by the marks' census",
-    tier: 'release',
-    stage: 'corpus',
-    holds: [],
-    disk: true,
-    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/marks/answers.json')), exists('Docker', which('docker')), ...censusNeeds(ctx)],
-    steps: ctx => [{ cmd: ['bash', 'lab/marks/gate.sh', join(ctx.work, 'marks-gate')], fresh: join(ctx.work, 'marks-gate') }, censusStep(ctx, join(ctx.work, 'marks-gate'))],
-    judge: (ctx, steps) => censusJudge(ctx, steps),
-  },
-  {
-    id: 'front-count',
-    title: 'the rebuilt front half on the 87 with TeX: compiles a paper, papers without a layer (lab/marks/front.sh, count.mjs)',
-    tier: 'release',
-    stage: 'corpus',
-    holds: [],
-    disk: true,
-    needs: ctx => [exists("lane L2's data", lab(ctx, 'lanes/L2/defs')), exists('Docker', which('docker')), exists("today's gate run 6 (the count's comparison)", lab(ctx, 'lanes/L2/marks/gate6'))],
-    // (the instrument's store of this run's own, so that lane L2's is not written and every paper's TeX runs are counted; the
-    // instruments' inputs kept, which the count replays)
-    steps: ctx => [
-      { cmd: ['bash', 'lab/marks/front.sh', join(ctx.work, 'front')], env: { KEEP: '1', STORE: join(ctx.work, 'front-store') }, fresh: join(ctx.work, 'front') },
-      { cmd: ['node', '--max-old-space-size=6144', '--import', 'tsx', 'lab/marks/count.mjs', `--today=${lab(ctx, 'lanes/L2/marks/gate6')}`, `--defs=${lab(ctx, 'lanes/L2/defs')}`, `--run=new:${join(ctx.work, 'front')}`] },
-    ],
-    judge: (ctx, steps) => {
-      const log = corpusLogOf(join(ctx.work, 'front', 'log.tsv'))
-      if (log.refused.length) return { skip: `the front half's runner refused ${log.refused.length} papers: ${log.refused[0]}` }
-      if (steps[1]?.exit !== 0) return { pass: false, note: log.failed[0] }
-      const row = JSON.parse(steps[1].text.slice(steps[1].text.indexOf('{'))).rows?.new ?? {}
-      return {
-        pass: !log.failed.length && !(row.noLayer ?? []).length,
-        numbers: { papers: row.papers, compiles: row.compiles, texS: Math.round((row.texMs ?? 0) / 1000), noLayer: (row.noLayer ?? []).length, delimited: row.delimited, units: row.units },
-        note: log.failed[0],
-      }
-    },
-  },
-  {
     id: 'speed',
     title: "today's engine's speed check, head against a base worktree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release)",
     tier: 'release',
@@ -571,20 +507,6 @@ export const GATES = [
     ['e2e:placeholders', 'the live placeholder run: survival per sentence shape against a real engine'],
   ].map(([script, title]) => ({ ...e2e(script, title), tier: 'release', stage: 'corpus', network: 'live', after: ['build-staging'], steps: () => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_E2E_ONLINE: '1' } }] })),
 ]
-
-/** the marks' census: the tree's where it is (lab/marks/census.mjs over lab/marks/census.json), else run 6's r13 in lab data,
- *  compared with lab/marks/gate-sum.mjs's sum but for its compiles */
-const treeCensus = ctx => existsSync(join(ctx.root, 'lab/marks/census.mjs'))
-const censusNeeds = ctx => (treeCensus(ctx) ? [] : [exists("run 6's census (r13)", lab(ctx, 'lanes/L2/marks/r13-sum.txt'))])
-const censusStep = (ctx, out) => ({ cmd: ['node', treeCensus(ctx) ? 'lab/marks/census.mjs' : 'lab/marks/gate-sum.mjs', out] })
-function censusJudge(ctx, steps) {
-  if (steps[0]?.exit !== 0 || !steps[1]) return { pass: false }
-  if (treeCensus(ctx)) return { pass: steps[1].exit === 0, note: steps[1].exit === 0 ? 'every class as the census' : lastLine(steps[1].text) }
-  if (steps[1].exit !== 0) return { pass: false }
-  const same = sameSum(steps[1].text, readFileSync(lab(ctx, 'lanes/L2/marks/r13-sum.txt'), 'utf8'))
-  const head = JSON.parse(steps[1].text.trim().split('\n')[0])
-  return { pass: same, numbers: { papers: head.papers, glyphs: `${head.glyphs.same} of ${head.glyphs.compared}`, boxes: `${head.boxes.same} of ${head.boxes.compared}` }, note: same ? "every class as run 6's census" : "the sum differs from run 6's census: the owner reads the new classes" }
-}
 
 /** the canvas gate's papers: spike S1c's, as lane L1's canvas runs list them */
 const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)

@@ -1,6 +1,6 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
 // marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none): run by locate over arXiv's page (../ink.ts), held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until stage 1c.
+// tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units

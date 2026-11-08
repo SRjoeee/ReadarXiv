@@ -36,7 +36,7 @@ import { spellOf } from './today/today.types.ts'
 const SHORT = 0.5
 /** the element classes that set ink of their own (today's VISIBLE, tex.mjs:18): a piece of another class sets none */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
-/** the characters of a text an opening point is found by (today's stream.mjs WANT, marks/follows.ts) */
+/** the characters of a text an opening point is found by (today's stream.mjs WANT) */
 const WANT = 8
 /** the ink units of the page's head and foot (made on A, today's ink-units.mjs INK_KIND heads and notes): their lines TeX sets
  *  as boxes of the text's width (\@oddhead, \@oddfoot), and states no alignment of */

@@ -1,4 +1,4 @@
-// instrument.mjs's types (transition code until stage 1c), for the tests
+// instrument.mjs's types, for the tests
 import type { Instrument, PieceClass, SpanClass } from '@readarxiv/engine'
 
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode */

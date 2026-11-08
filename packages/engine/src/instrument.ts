@@ -1,10 +1,9 @@
 // The seam between the prepare's front half and its back half (design §4.3, stage 1a): what a marked compile yields, the
 // INSTRUMENT. B (our marked compile) is never shown: it is read for who owns each glyph and box, and its ownership is carried
-// onto arXiv's page by align and locate. Whatever makes it (today's front end through its adapter, the rebuilt source reader
-// later) gives exactly this; the back half reads nothing else of the source, the marks or the compile.
+// onto arXiv's page by align and locate. Today's front end makes it through its adapter (src/pdf-reader/engine/pipeline/
+// instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
 import type { Piece } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
-import type { TexState } from './marks/statements.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
  *  text, or stays: a display), its label (the class's mark before it), a babel name's own word */
@@ -36,7 +35,7 @@ export interface InstrumentUnit {
   /** a caption's float type, LaTeX's \@captype where its \caption runs (its float environment's, \captionof's): the part's
    *  Label.float */
   float?: string
-  /** the paper's title, a unit of its front matter (the source reader's) */
+  /** the paper's title, a unit of its front matter (the front end's) */
   title?: true
   front?: true
   /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip) */
@@ -131,15 +130,7 @@ export interface Instrument {
   tex: {
     lineskip?: [number, number]
     paragraphEnds?: number[][]
-    /** TeX's state where a unit (piece null) or a placeholder (its content id) opens: its font, \baselineskip and measure
-     *  (marks/statements.ts STATE_TEX) */
-    states?: { unit: number; piece: string | null; state: TexState }[]
-    /** where TeX ended a sentence inside a unit (SENTENCE_TEX): the glyphs before the point on its page; the next sentence
-     *  begins at the next glyph */
-    sentences?: { unit: number; page: number; glyph: number }[]
-    /** the colour TeX was in after a colour piece (\textcolor's, \color's), as the driver names it (\current@color) */
-    colours?: { unit: number; piece: string | null; colour: string }[]
-    /** per B page, its text frame as TeX shipped it (marks/instrument.ts framesOf, LAYOUT_TEX's AXT-BODY at each body's
+    /** per B page, its text frame as TeX shipped it (marks/channels.ts framesOf, LAYOUT_TEX's AXT-BODY at each body's
      *  bracket): the text block's left and right edge (\textwidth from where TeX shipped the page's body) and its columns',
      *  each \columnwidth at both edges of the block on a page TeX set in two columns, else the block; null where TeX stated
      *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */

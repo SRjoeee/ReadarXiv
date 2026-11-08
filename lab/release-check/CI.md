@@ -10,7 +10,7 @@ is taken as about twice as slow on the CPU-bound steps.
 |---|---|---|---|---|---|
 | fast | every pull request and every push to `next`, `main`, `rebuild/v2` | GitHub-hosted `ubuntu-latest` | three jobs (below) | 14 wall clock, about 28 of runner time | the fixtures' read token (exists) |
 | full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), and 16 for `display`, one runner | none |
-| release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 120 | none here; the private repository's own |
+| release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 80 | none here; the private repository's own |
 
 ## fast: every pull request (hosted)
 
@@ -72,8 +72,7 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   gate as skipped, never passed). The report is the run's artifact; the run fails on NO-GO.
 - **Inputs**: `$AXT_LAB_DATA/refactor-2026-11/` (`baseline/`: the frozen dumps, `acceptance.json`, the tap;
   `lanes/L1-papers87.tsv` and `lanes/L1-caches.txt`: the 87 papers and the cached compiles, partly on the external disk;
-  `lanes/L2/marks/gate6/keep/` and `r13-sum.txt`: the marks' kept inputs and their census; `lanes/L3/replay/`: the
-  typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's readers' replies; `lanes/L1-out4/`: the harness's corpus
+  `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's readers' replies; `lanes/L1-out4/`: the harness's corpus
   bundles); today's engine at `065c1d973` checked out beside the worktree (`AXT_TODAY`); the release sweep's cache and the
   reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`);
   Playwright's Chromium. No Docker (a compile no cache holds is a failed paper: exit 3).
@@ -87,14 +86,11 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
 | `prepare` (87 papers from cached compiles, PDF.js proofs) | 184 s: pass, proofs (a) and (c′) 0 on every page |
 | `prepare-diff` (the differential against the frozen baseline) | 1 s: pass, shown 37,793 → 38,146, lost 0 (+3 accepted), gained 356 |
 | `prepare-same` (the prepare again, object by object) | 188 s: pass, 2,692 of 2,692 objects, 87 of 87 dumps |
-| `marks-replay` (no TeX, against run 6's census) | 8 s: fail at `13216ac44`, 9 boxes and 1 glyph in other classes than the census |
 | `translate-equivalence` (recorded replies) | 1 s: fail at `13216ac44`, 3 disagreements of 6,228 |
 
-Both read either shape of their tools: the marks' gates are judged by the census in the tree where it is
-(`lab/marks/census.mjs` over `lab/marks/census.json`), else by run 6's census in lab data (`r13-sum.txt`); the translation
-equivalence counts a difference of a class the package's owners accepted as compared (its rows `accepted`), and passes on
-the tool's own exit with no other disagreement. With the census branch merged, the two failures above are the classes it
-names (the frame class's 9 boxes, the footnote call's glyph; the `#` of its own, 3 replies) and both gates pass.
+The translation equivalence counts a difference of a class the package's owners accepted as compared (its rows
+`accepted`), and passes on the tool's own exit with no other disagreement: with those rows merged, its failure above is the
+class they name (the `#` of its own, 3 replies) and the gate passes.
 | `typeset-today` (today's members, the reader's differential) | 39 s: pass, 32,035 laid as the baseline, changed 12; I3 160, I4 0, I5 0 |
 | `typeset-parts` (this run's parts) | 40 s: fail at `13216ac44`, lost 1,416 ("not laid from L1's part", the converge lane's open work); I3 79, I4 0, I5 0; a page's lay p50 7.58, p90 20.66, p99 33.51 ms over 3,213 pages |
 | `typeset-replays` (six replays) | 134 s: fail at `13216ac44`, fit and display on one pair (2610.21026v1-zh, a crop box the tap does not record); fill, emit, names, figures equal |
@@ -120,13 +116,9 @@ tier's report and does not run it.
   --work=<external disk>` (`PACK` the layer gate's fixture pack, else `lab/pdf/out/gate-pack`: the speed check's driver,
   run with zsh, measures, and its verdict is `speed.mjs`'s over the driver's logs, PASS alone a pass).
 - **Adds to full**: the prepare's pixel proofs on every page of the 87 papers (poppler's `pdftoppm` and `pdftocairo`); the
-  reader's canvas on spike S1c's papers (Chromium); the marks' equivalence and the rebuilt front half with TeX (Docker,
-  `texlive/texlive` by the digests `lab/pdf/compile-images.json` pins); today's engine's speed check against the last
-  release; the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
+  reader's canvas on spike S1c's papers (Chromium); today's engine's speed check against the last release; the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
   `e2e:local-endpoint`, `e2e:image`) and the live placeholder run (`e2e:placeholders`), each under the project's
-  User-Agent and never against our production server (`tests/e2e/lib/online.mjs`). The marks' gate and the front half's
-  count compile through the lab's compile caches (`lab/marks/today.mjs`, the caches `lab/marks/gate.sh` and `front.sh` name),
-  which they write on a miss: the release machine's caches, not a lane's (the count's instrument store is the run's own).
+  User-Agent and never against our production server (`tests/e2e/lib/online.mjs`).
 - **The private repository's gates**, named in the report with their commands there and never run here: its platform
   tier; the security suite of its compile jail on native amd64 (invariant I9); the corpus through its prepare, byte for
   byte the lab's (I6); its website's reader e2e (I8); the staging soak's measurements (design §7's prepare times and the
@@ -137,11 +129,10 @@ tier's report and does not run it.
 - **I7 keeps the release NO-GO until it has a gate.** An invariant no gate holds is NO-GO by design (no gate is weakened
   and none is invented here), so with every gate passing the release tier still says NO-GO and its report says why: that
   is the runner telling the truth, not a fault in it. Today I7 (a unit's boxes the same on both panes) has no gate.
-- **Minutes**: about 120 in all. Measured here: the full tier's 26; the pixel proofs 25 (pass: every page of the 87 papers,
+- **Minutes**: about 80 in all. Measured here: the full tier's 26; the pixel proofs 25 (pass: every page of the 87 papers,
   2,328, all groups on is arXiv's page under Splash and each kind off changes only its ink under Cairo); the canvas 2 (fail
   at `13216ac44`, as lane L1's own GPU run: 9 of 12 papers over the bound in the GPU canvas, 27 pages with pixels outside the
-  split glyphs). Estimated from the lanes' records: the marks' gate and the front half's count about 20 each (TeX), the
-  speed check about 12, the online scripts about 15. No hosted minute.
+  split glyphs). Estimated from the lanes' records: the speed check about 12, the online scripts about 15. No hosted minute.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would
   take its key from the browser's settings, never from CI). The private repository's own: the registry's read-only
   credentials to pull its frozen base image (the security job), and a read token for the staging soak's analytics.
