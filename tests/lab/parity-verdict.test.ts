@@ -26,13 +26,15 @@ const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; toda
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
 /** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
- *  member a bound name leads: measure.mjs reads them off the part) */
-const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = [], led: Record<number, number> = {}) =>
+ *  member a bound name leads: measure.mjs reads them off the part); `top`: the part's title and front matter (Placed.title,
+ *  Placed.front) */
+const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = [], led: Record<number, number> = {}, top: number[] = []) =>
   measurePage('p-zh', v2, r, {
     prepByOrd: new Map(prep.map((u) => [u.ord, u])),
     todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
     turned: new Set(),
     led: new Map(Object.entries(led).map(([f, h]) => [Number(f), h])),
+    top: new Set(top),
   })
 const worse = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.worse).map((d) => d.flag)
 
@@ -362,6 +364,31 @@ describe('gap: a follower the part states as run in after its leader, nothing el
       { 108: 236 },
     )
     expect(gaps(p)).toEqual([])
+  })
+})
+
+describe("anchor: a section heading set in fewer lines than the original's stands on its last lines", () => {
+  // (1810.04805 p16 t265: a heading of two lines on A, 393.01 and 379.47 at 10.91 pt, each side's one line: today's 8.63 over
+  // the first, v2's on the last (X.lastLines, the owner's ruling of 2026-10-19))
+  const head = v2Of({
+    members: [{ ord: 265, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 265, kind: 'heading', align: 'l', style: { size: 10.91 }, lines: [factLine(72, 300, 393.01, 10.91), factLine(72, 200, 379.47, 10.91)] }],
+    today: { 265: { today: 265 } },
+  })
+  const page = (t: Line[], v: Line[], top: number[] = []) =>
+    measure(head, rec({ today: { units: [{ id: 265, lines: t }] }, v2: { units: [{ id: 265, lines: v }] } }), [], {}, top)
+  const anchors = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'anchor')
+  const one = (y: number) => [drawnLine(72, 250, y, 'x'.repeat(20), 10.91)]
+
+  it("its last line against the original's last: v2 on it is nearer than today 8.63 over the first", () => {
+    expect(anchors(page(one(401.64), one(379.47)))).toMatchObject([{ unit: 't265 heading', worse: false, nearer: 'v2' }])
+  })
+  it('the title and the front matter stay anchored at their first line', () => {
+    expect(anchors(page(one(401.64), one(379.47), [265]))).toMatchObject([{ unit: 't265 heading', worse: true }])
+  })
+  it("a heading set in as many lines as the original's is read at its first line", () => {
+    const two = (y: number) => [drawnLine(72, 250, y, 'x'.repeat(20), 10.91), drawnLine(72, 200, y - 13.54, 'x'.repeat(10), 10.91)]
+    expect(anchors(page(two(393.01), two(379.47)))).toMatchObject([{ unit: 't265 heading', worse: true }])
   })
 })
 

@@ -86,9 +86,10 @@ export const SAYS = {
  * One page measured: `v2` v2.mjs's file of the pair (its Pages, the part's facts, the join of part members to today's units),
  * `rec` render.mjs's record of the page (what each side drew, read back, and its pixels), `prepByOrd` today's prepare dump's
  * units by ord (the original's lines of today's units), `todayOf` part ord → today's ord, `turned` the part's members set
- * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
+ * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
+ * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -127,7 +128,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
-    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, part: m.ord, size: m.style.size, label: m.label ?? null })
+    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null })
   }
   for (const key of T.keys()) {
     if (orig.has(key)) continue
@@ -194,8 +195,17 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
         const dl = [...ls].sort((a, b) => b.y - a.y)
         const os = ol[0].size || o.size || s.size
         s.osize = os
-        // anchor: the unit's first line, where the original starts on this page
-        if (o.first) {
+        // anchor: the unit's first line, where the original starts on this page; a section heading the side sets in fewer lines
+        // than the original's (the part's heading, not its title nor its front matter, wholly on this page, its label not kept
+        // as the original's ink on its first line) stands on the original's last lines (X.lastLines, the owner's ruling of
+        // 2026-10-19): its last line's baseline against the original's last
+        const onLast =
+          o.first && o.last && o.kind === 'heading' && !o.top && ls.length < o.lines.length && (!o.label?.name || labelOf(ls, o.label) !== 'kept')
+        if (onLast) {
+          const db = dl.at(-1).y - ol.at(-1).y
+          s.anchor = { baseline: r2(db), top: null, off: Math.abs(db), at: ol.at(-1).y, last: true }
+          if (Math.abs(db) > BOUNDS.anchor * os) fault(side, 'anchor', `${name}: last line ${r2(db)} pt from the original's last baseline (size ${r2(os)})`)
+        } else if (o.first) {
           const db = dl[0].y - ol[0].y
           const dt = dl[0].y + 0.8 * dl[0].size - (ol[0].y + 0.8 * os)
           s.anchor = { baseline: r2(db), top: r2(dt), off: Math.min(Math.abs(db), Math.abs(dt)), at: ol[0].y }
@@ -258,8 +268,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led }) 
     if (t && v) {
       const os = v.osize ?? t.osize ?? o?.size ?? t.size
       const eps = Math.max(NEAR.positionMin, NEAR.position * (os || 10))
+      const said = (a) => (a.last ? `last line's baseline ${a.baseline} off the original's last` : `baseline ${a.baseline}, top ${a.top}`)
       if (t.anchor && v.anchor)
-        judge('anchor', name, 'first line off the original\'s (baseline or top, the nearer)', t.anchor.at, { value: `baseline ${t.anchor.baseline}, top ${t.anchor.top}`, d: t.anchor.off }, { value: `baseline ${v.anchor.baseline}, top ${v.anchor.top}`, d: v.anchor.off }, eps)
+        judge('anchor', name, "first line off the original's (baseline or top, the nearer); a section heading set in fewer lines, its last line off the original's last", t.anchor.at, { value: said(t.anchor), d: t.anchor.off }, { value: said(v.anchor), d: v.anchor.off }, eps)
       if (t.align && v.align)
         judge('align', name, `${v.align.how} off the original's`, { c: 'centred', l: 'left', j: 'justified', r: 'right' }[o?.align] ?? null, { value: null, d: t.align.off }, { value: null, d: v.align.off }, eps)
       if (os) {
