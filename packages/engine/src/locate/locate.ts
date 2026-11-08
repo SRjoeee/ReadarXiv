@@ -874,19 +874,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // set it on: a radical's glyph origin is at its bar, a subscript's below the line), else its own. As today's file's
       // segment of a piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. A
       // display's rows are its own lines)
-      const textLines = mem.lines.filter((l) => !(l[9] & 1))
       const onLine = (page: number, lo: number, hi: number, own: number) => {
-        let best: number | null = null,
-          d = Number.POSITIVE_INFINITY
-        for (const l of textLines) {
-          if (l[0] !== page || hi < l[6] - 0.5 || lo > l[5] + 0.5) continue
-          const e = Math.abs(l[4] - own)
-          if (e < d) {
-            d = e
-            best = l[4]
-          }
-        }
-        return best ?? own
+        const j = standsOn(mem.lines, page, lo, hi, own)
+        return j >= 0 ? (mem.lines[j] as Line)[4] : own
       }
       const ink: Ink[] =
         p.kind === 'display'
@@ -966,11 +956,15 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const L = cutLines(mem.label, atA)[0]
       const lg = mem.label.map(gA)
       if (L) {
+        // (the line of its own it stands on, by an element's rule: a footnote's mark raised over the row it shares with the note
+        // before stands on that row, its first line)
+        const on = standsOn(mem.lines, L.page, L.bottom, L.top, L.base)
         mem.labelAt = {
           kind: LABEL_KIND[mem.kind] ?? 'number',
           // (its glyphs' advances, as an element's ink and a line's extent)
           ink: [L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base],
           style: { role: 'serif', size: L.most },
+          ...(on >= 0 ? { line: on } : {}),
         }
       }
     }
@@ -1341,6 +1335,23 @@ function columnsAndMeasures(members: Member[], inkA: Doc, gA: (a: number) => Doc
     l[7] = r2(m0)
     l[8] = r2(m1)
   }
+}
+
+/** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
+ *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
+ *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
+function standsOn(lines: readonly Line[], page: number, lo: number, hi: number, own: number): number {
+  let best = -1
+  let d = Number.POSITIVE_INFINITY
+  lines.forEach((l, j) => {
+    if (l[9] & 1 || l[0] !== page || hi < l[6] - 0.5 || lo > l[5] + 0.5) return
+    const e = Math.abs(l[4] - own)
+    if (e < d) {
+      d = e
+      best = j
+    }
+  })
+  return best
 }
 
 /** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph with ink by its text (no blank,

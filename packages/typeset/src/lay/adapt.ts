@@ -311,8 +311,13 @@ export function adapt(i: AdaptInput): Adapted {
             size: sizeOf(bl, b),
           } as Row,
           carried: decor.carried,
+          // (its label on the row: where the part says it stands on its first line, which is the row (Label.line: a mark raised
+          // over the row is the row's); a part made before states no line: its baseline the row's, as before)
           ownLabel:
-            m.label && m.label.ink[0] === bl[0] && Math.abs(m.label.ink[5] - bl[4]) < 0.05
+            m.label &&
+            (m.label.line !== undefined
+              ? m.label.line === 0
+              : m.label.ink[0] === bl[0] && Math.abs(m.label.ink[5] - bl[4]) < 0.05)
               ? [0, m.label.ink[0], m.label.ink[1], m.label.ink[5], m.label.ink[3], m.label.ink[4], m.label.ink[2]]
               : null,
           keptBetween: () => !!m.join![1],

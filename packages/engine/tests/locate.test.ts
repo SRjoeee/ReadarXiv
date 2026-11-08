@@ -107,6 +107,31 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('states the line of its own a label stands on: a raised mark on the row it shares with the member before (Label.line)', () => {
+    // (2608.06701v1 p5 t76: footnote 3's mark set raised before its text, on the row footnote 2 ends on: by El.ink's rule (the
+    // line whose band its ink meets, the nearest by baseline) it stands on its first line, the shared row)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'note two ends', y: 700 },
+          { text: '3', x: 152, y: 702.8, size: 6 },
+          { text: 'note three', x: 158, y: 700 },
+          { text: 'runs on below', y: 688 },
+          { text: 'x', x: 72, y: 640, size: 6 },
+        ],
+      },
+    ])
+    const units2 = [unitOf('footnote', 'note two ends'), unitOf('footnote', 'note three runs on below')]
+    const L = locate(
+      instrumentOf(B2, units2, [[0, 1, 1, 1, -1]], [[ROLE.text, ROLE.label, ROLE.text, ROLE.text, ROLE.text]]),
+      B2,
+      align(B2, B2),
+    )
+    const three = L.members[1]!
+    expect(three.lines.map((l) => l[4])).toEqual([700, 688])
+    expect(three.labelAt?.ink[5]).toBe(702.8)
+    expect(three.labelAt?.line).toBe(0)
+  })
   it('chains a run-in head to its paragraph across a float and a footnote the stream sets between them', () => {
     // (2608.06701v1 p6: the head, then a table's caption and a footnote, each a paragraph of its own inside its insert, then the
     // head's paragraph on its row)
