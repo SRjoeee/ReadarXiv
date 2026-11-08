@@ -380,9 +380,15 @@ export function createServed(o: {
     lost = new Set<string>(),
     told = new Set<string>()
   const added: FontFaceLike[] = []
-  /** a face lost: its texts left the original's, told once */
-  const tellLost = (id: string) => {
+  /** a face lost: its texts left the original's, told once; one lost while only the text rendering's probe asked it
+   *  (`quiet`), told once a page's text asks it (a face no page draws is no loss of the page's) */
+  const unseen = new Set<string>()
+  const tellLost = (id: string, quiet = false) => {
     if (told.has(id)) return
+    if (quiet) {
+      unseen.add(id)
+      return
+    }
     told.add(id)
     o.lost?.(id)
   }
@@ -406,7 +412,7 @@ export function createServed(o: {
   }
   /** the demands of each slice waiting for its slot: let go there, never asked, where none of them wants it any more */
   const demands = new Map<string, (() => boolean)[]>()
-  const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean): Promise<void> => {
+  const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean, quiet = false): Promise<void> => {
     if (loaded.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
     let p = loading.get(slice.key)
     if (p) {
@@ -445,7 +451,7 @@ export function createServed(o: {
       // (not there, or a failure for now met twice: lost, its texts left the original's; else asked again next time)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
-        tellLost(face.id)
+        tellLost(face.id, quiet)
       }
       failed.add(slice.key)
     })
@@ -456,7 +462,7 @@ export function createServed(o: {
     return p
   }
   /** the tables a font string's faces need read: the index, then the group of each face not read yet */
-  const tablesOf = async (font: string) => {
+  const tablesOf = async (font: string, quiet = false) => {
     // (nothing asked once the reader is closed: not before the index, nor after an index or a table that came in since)
     if (gone) return
     const fs = facesOf(font)
@@ -477,19 +483,23 @@ export function createServed(o: {
         if (had[k]) f.slices ??= []
         else {
           f.slices = []
-          tellLost(f.id)
+          tellLost(f.id, quiet)
         }
       })
       runsCache.clear()
     }
   }
   /** the tables a font string needs read, then the slices its text needs loaded, while `wanted` */
-  const load = async (font: string, text: string, wanted: () => boolean) => {
-    await tablesOf(font)
+  const load = async (font: string, text: string, wanted: () => boolean, quiet = false) => {
+    await tablesOf(font, quiet)
+    // (a face whose table only the probe found not to be had, now asked by a page: told)
+    if (!quiet) for (const f of facesOf(font)?.faces ?? []) if (unseen.has(f.id) && !f.slices?.length) tellLost(f.id)
     if (gone || !wanted()) return
     const runs = runsOf(font, text)
     if (!runs || runs === 'never') return
-    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted)))
+    await Promise.all(runs.map((r) => loadSlice(r.face, r.slice, wanted, quiet)))
+    // (a slice only the probe found lost, now needed by a page: its face told)
+    if (!quiet) for (const r of runs) if (unseen.has(r.face.id) && lost.has(r.slice.key)) tellLost(r.face.id)
   }
   // ---- the patterns
   const hyphs = new Map<string, Promise<Patterns | null>>()
@@ -581,7 +591,7 @@ export function createServed(o: {
     },
     familyOf,
     async probeFace(text) {
-      await load(PROBE_FACE, text, () => true).catch((e) => o.warn?.(`the faces of ${PROBE_FACE}`, e))
+      await load(PROBE_FACE, text, () => true, true).catch((e) => o.warn?.(`the faces of ${PROBE_FACE}`, e))
       return metrics.ready(PROBE_FACE, text) === true ? PROBE_FACE : null
     },
     async ready(items, wanted = () => true) {

@@ -185,9 +185,19 @@ describe('the served faces and the Metrics over them', () => {
       '/static-fonts/0000000000000004.woff2',
     ])
     expect(faces).toEqual([{ family: 'axt-cmun-serif', range: unicodeRangeOf(LATIN), added: true }])
-    // (its slice not there, or its table: no probe face, the sheet's geometricPrecision; a system face would tell nothing)
-    expect(await site({ missing: ['/static-fonts/0000000000000004.woff2'] }).s.faces.probeFace('Sphinx')).toBeNull()
-    expect(await site({ missing: ['/static-fonts/cmun-serif.json?fonts=6'] }).s.faces.probeFace('Sphinx')).toBeNull()
+    // (its slice not there, or its table: no probe face, the sheet's geometricPrecision (a system face would tell nothing), and
+    // no face lost told for it: no page draws in it; told once a page's text asks it)
+    const FACE = '400 100px "axt-cmun-serif"'
+    const gone = site({ missing: ['/static-fonts/0000000000000004.woff2'] })
+    expect(await gone.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(gone.lost).toEqual([])
+    await gone.s.faces.ready([[FACE, 'Satz']])
+    expect([gone.s.metrics.ready(FACE, 'Satz'), gone.lost]).toEqual(['never', ['cmun-serif-regular']])
+    const table = site({ missing: ['/static-fonts/cmun-serif.json?fonts=6'] })
+    expect(await table.s.faces.probeFace('Sphinx')).toBeNull()
+    expect(table.lost).toEqual([])
+    await table.s.faces.ready([[FACE, 'Satz']])
+    expect(table.lost).toEqual(['cmun-serif-regular'])
     s.faces.dispose()
   })
   it('nothing ready before the tables are read; the slices a text needs loaded, no other; a character no face holds never ready', async () => {
