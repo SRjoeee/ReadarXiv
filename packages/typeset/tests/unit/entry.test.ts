@@ -488,6 +488,37 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p2.off).toBe(1)
     for (const page of [1, 2]) expect(on(page).off & ~has(page)).toBe(0)
   })
+  it('reads a CJK cell’s bands over its own rules, never over the bands of the cells its widened line spans (triage-1 S1)', () => {
+    // (1706.03762v7-zh p8's t94, a header cell set over two rows of a booktabs table: its single line widened across the table
+    // (Room.side), the band edge of the cells under a column group's \cmidrule, which stands in other columns, capped it at
+    // 0.897; today's cellBands read the rules over the cell's own rectangle: cap 1)
+    const zh = rulesFor('zh')
+    const idN = 'd'.repeat(64)
+    const head = member({
+      ord: 0,
+      kind: 'cell',
+      align: 'l',
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 400, 0, 10]],
+      room: { below: 0, next: 300, side: [72, 400], band: [680, 715] },
+    })
+    const under = member({
+      ord: 1,
+      kind: 'cell',
+      align: 'l',
+      text: idN,
+      lines: [[1, 0, 250, 300, 692, 699, 690, 72, 400, 0, 10]],
+      room: { below: 0, next: 300, side: [102, 400], band: [680, 702] },
+    })
+    const pt: Part = { ...part(head), flows: [[head], [under]] }
+    // ("Model", "Score" in Chinese: the translations' text, escaped)
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6a21\u578b' }]),
+      { ...row([{ t: 'text', s: '\u5206\u6570' }]), id: idN },
+    ])
+    const laid = layPage(pt, rows, zh, metrics()).members
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
+    expect(laid[0]!.fit!.size).toBe(10)
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

@@ -12,9 +12,9 @@
 // whole, no part stating `cuts` yet) and the page's links as drawn (Page.links, lay/links.ts: moved with their pieces, else at
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
-// made before) read as before. A CJK cell's bands are read over the rules its Room.band states. A member's groups are turned off
-// on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides each
-// page's own: a member laid across a page break turns off on the other page none of the groups of this one.
+// made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
+// off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides
+// each page's own: a member laid across a page break turns off on the other page none of the groups of this one.
 import type { OutPiece, Part, Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -72,6 +72,21 @@ function cutsOf(L: Layout | undefined): { page: number; el: boolean }[] {
       if (c) out.push({ page: c.page, el: c.k !== undefined })
     }
   return out
+}
+
+/** a CJK cell's rules as U.params' cellBands reads them, [x0, y0, x1, y1] each, on the page of its first line: the rule over its
+ *  lines and the rule under them, which its own Room.band states (the clear band between them), across its lines. Its own
+ *  alone: a cell's single line widened into its row (U.decor's widen) spans its neighbours, whose bands' edges stand over and
+ *  under no line of its (triage-1 S1: 1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at
+ *  0.615). Today's cellBands (L2:352) read the page's rules over the cell's own rectangle, never widened (RUN:2116) */
+function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
+  const band = m.room.band
+  const l0 = m.lines[0]
+  if (!band || !l0) return () => undefined
+  const x0 = Math.min(...m.lines.map((l) => l[2])),
+    x1 = Math.max(...m.lines.map((l) => l[3]))
+  const rules = [x0, band[1], x1, band[1], x0, band[0], x1, band[0]]
+  return (pg) => (pg === l0[0] ? rules : undefined)
 }
 
 /** the page's lowest unit line, as today's pageBottom (RUN:911: a line's band bottom and 0.24 of its height, the lowest of the
@@ -216,18 +231,6 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const measure = fitMeasure(metrics)
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   const bottoms = bottomsOf(part)
-  // (a page's table rules as U.params' cellBands reads them, [x0, y0, x1, y1] each: the rule over a cell's lines and the rule
-  // under them, which its Room.band states (the clear band between them), across the cell's lines)
-  const rules0 = new Map<number, number[]>()
-  for (const m of members) {
-    const band = m.room.band
-    if (!band || !m.lines.length) continue
-    const pg = m.lines[0]![0]
-    const x0 = Math.min(...m.lines.map((l) => l[2])),
-      x1 = Math.max(...m.lines.map((l) => l[3]))
-    const list = rules0.get(pg) ?? rules0.set(pg, []).get(pg)!
-    list.push(x0, band[1], x1, band[1], x0, band[0], x1, band[0])
-  }
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   const state = new Map<number, Unlaid>()
   // (the members never to be translated: no text of their own, or of a kind the reader leaves; they hold no tie)
@@ -377,7 +380,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       measure,
       patterns: rules.hyph as never,
       view: () => undefined,
-      rulesOf: (pg) => rules0.get(pg),
+      rulesOf: bandRulesOf(m),
       lineskip,
       reading: {
         tokens,
