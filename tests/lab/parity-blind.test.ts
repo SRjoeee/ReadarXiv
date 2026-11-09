@@ -397,6 +397,63 @@ describe("the original's facts of a unit's class, read off arXiv's PDF", () => {
     })
     expect([...k.references.today].sort()).toEqual([517, 518])
   })
+  it("a unit level with an entry's line in the other column is no piece of it: the line's column is the bibliography's extent there", () => {
+    // (round 8's default parity: three units read as references, each level with a line of an entry that crosses columns or
+    // pages, whose lines' extent across, taken over all of them, spans both columns. 2608.06701 p11: an entry from the left
+    // column's foot to the right column's head, a heading at the left column's head level with its right-column line;
+    // 2610.22065 p7 alike; 1810.04805 p11-12: an entry from p11's right column to p12's left, a paragraph at p12's right
+    // column's head level with its first line there)
+    const of = (today: { ord: number; lines: ReturnType<typeof line>[] }[], cites: { page: number; x: number; y: number }[]) =>
+      [...keptFacts({ authors: [], cites, pages: [], today, part: [] }).references.today].sort((a, b) => a - b)
+    const crossing = of(
+      [
+        { ord: 283, lines: [line(11, 132.1, 236.4, 733.1, 9.96)] },
+        { ord: 297, lines: [line(11, 70.5, 300, 87.5, 9.96), line(11, 70.5, 300, 75.6, 9.96), line(11, 333.6, 563, 733.1, 9.96), line(11, 333.6, 528.7, 721.1, 9.96)] },
+        { ord: 298, lines: [line(11, 333.6, 563, 709.2, 9.96), line(11, 333.6, 480.2, 697.2, 9.96)] },
+      ],
+      [{ page: 11, x: 70.5, y: 96.5 }, { page: 11, x: 333.6, y: 718.2 }],
+    )
+    expect(crossing).toEqual([297, 298])
+    const short = of(
+      [
+        { ord: 114, lines: [line(7, 70.3, 126.7, 698.4, 9.96)] },
+        { ord: 127, lines: [line(7, 69.2, 295.2, 92.6, 7.97), line(7, 69.2, 294.7, 84.7, 7.97), line(7, 333.4, 365.1, 698.4, 7.97)] },
+      ],
+      [{ page: 7, x: 69.2, y: 99.8 }],
+    )
+    expect(short).toEqual([127])
+    const paging = of(
+      [
+        { ord: 195, lines: [line(12, 329.1, 525.6, 768.1, 10.91), line(12, 329.1, 459.4, 754.6, 10.91)] },
+        {
+          ord: 330,
+          lines: [line(11, 307.3, 525.6, 100.8, 9.96), line(11, 318.2, 525.6, 89.9, 9.96), line(12, 82.9, 290.3, 768.1, 9.96), line(12, 82.9, 145.4, 757.2, 9.96)],
+        },
+      ],
+      [{ page: 11, x: 307.3, y: 109.8 }],
+    )
+    expect(paging).toEqual([330])
+  })
+  it("entries anchored in both columns of a balanced page stay references, a unit holding several of them among them", () => {
+    // (2608.06007v1 pp. 16-17, biblatex: today's ink units in the right column each hold several entries, every entry's anchor
+    // naming the unit below it; the left column's entries their own units)
+    const k = keptFacts({
+      authors: [],
+      cites: [
+        { page: 16, x: 53.8, y: 706.4 },
+        { page: 16, x: 318, y: 706.4 },
+        { page: 16, x: 318, y: 666.5 },
+      ],
+      pages: [],
+      today: [
+        { ord: 243, lines: [line(16, 318, 559.6, 698.4, 7.97), line(16, 335, 558.4, 688.4, 7.97)] },
+        { ord: 244, lines: [line(16, 318, 559.1, 658.5, 7.97), line(16, 335, 407, 648.5, 7.97), line(16, 318, 559.6, 638.6, 7.97)] },
+        { ord: 266, lines: [line(16, 53.8, 294.9, 698.4, 7.97), line(16, 70.2, 294.9, 688.4, 7.97), line(16, 70.9, 170, 658.5, 7.97)] },
+      ],
+      part: [],
+    })
+    expect([...k.references.today].sort((a, b) => a - b)).toEqual([243, 244, 266])
+  })
   it("reads arXiv's metadata authors (its Info /Author, '; ' between names) and the cite.* destinations of the PDF", async () => {
     const doc = await PL.PDFDocument.create()
     doc.addPage([612, 792])
