@@ -434,6 +434,17 @@ describe("lead: a paragraph set tighter than the original's leading while its bl
   it('v2 tighter than the original where today keeps its leading: worse', () => {
     expect(of('lead')(measure(f, sides(140, at(12), at(10))))).toMatchObject([{ unit: 't140 para', worse: true }])
   })
+  it("reads the original's leading as TeX's \\baselineskip where the part states it, not a gap TeX's \\lineskip rule opened", () => {
+    // (2610.40645v1 p10 t66: its lines 13.54 and 15.70 apart, the second gap TeX's push under a tall formula, its \baselineskip
+    // 13.55; the median of its gaps read 15.70 as its leading, and v2's lines 14.64 apart, looser than TeX's pitch, were judged
+    // tighter. Here 12, 16 and 16 apart, \baselineskip 12 (Placed.lead, no 'lead' read): v2's three lines 13 apart, a line of
+    // room under them, are no fault; read off the lines, they are)
+    const lines = [700, 688, 672, 656].map((y) => factLine(72, 300, y))
+    const three = (pitch: number) => [0, 1, 2].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))
+    const stated = v2Of({ members: [laid(141)], facts: [{ ord: 141, kind: 'para', align: 'j', style: { size: 10 }, lines, pitch: 12 }], today: { 141: { today: 141 } } })
+    expect(of('lead')(measure(stated, sides(141, three(16), three(13))))).toEqual([])
+    expect(of('lead')(measure(one(141, 'para', lines), sides(141, three(16), three(13))))).toMatchObject([{ unit: 't141 para', worse: true }])
+  })
   it('a paragraph tightened to fit a block it fills is no fault', () => {
     // (4 lines on each side: v2's at 11 apart end at 667, within a line of the original's last)
     const four = (pitch: number) => [0, 1, 2, 3].map((i) => drawnLine(72, 300, 700 - pitch * i, 'x'.repeat(20)))

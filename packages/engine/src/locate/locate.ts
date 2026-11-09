@@ -1035,7 +1035,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const stated = skip !== undefined && skip > 0 && pitches.every((d) => d >= skip - ON_BASE)
     if (mem.lines.length) mem.read.push(...(stated ? ['style'] : ['style', 'lead']))
     pitches.sort((x, y) => x - y)
-    mem.lead = stated ? r2(skip) : pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
+    // (a stated pitch to a thousandth: it is laid line after line, and 12 pt, 11.9552 PDF units, written 11.96 drifts 0.005 a line)
+    mem.lead = stated
+      ? Math.round(skip * 1000) / 1000
+      : pitches.length
+        ? (pitches[Math.floor(pitches.length / 2)] as number)
+        : r2(1.2 * size)
     // elements: each one's own ink, one box per line of TeX's it stands on (its glyphs and its rules)
     const unitText = unit ? sourceText(unit.content) : ''
     // (the line of the unit's own each of its glyphs was cut into, its KEPT lines aside: the line TeX set it on)

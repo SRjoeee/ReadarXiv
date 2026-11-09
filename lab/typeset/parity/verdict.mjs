@@ -240,7 +240,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
-    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null })
+    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
   }
   for (const key of T.keys()) {
     if (orig.has(key)) continue

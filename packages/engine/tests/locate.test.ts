@@ -1194,13 +1194,14 @@ describe('locate: the room under a unit', () => {
       ...ins,
       tex: {
         skips: [
-          { unit: 0, baselineskip: 12, parskip: 0 },
+          { unit: 0, baselineskip: 11.9552, parskip: 0 },
           { unit: 1, baselineskip: 14, parskip: 0 },
         ],
       },
     }
+    // (to a thousandth: a pitch is laid line after line, and 12 pt, 11.9552 PDF units, written 11.96 drifts 0.005 a line)
     const [tall, near] = locate(stated, B, align(B, B)).members
-    expect([tall!.lead, tall!.read?.includes('lead')]).toEqual([12, false])
+    expect([tall!.lead, tall!.read?.includes('lead')]).toEqual([11.955, false])
     expect([near!.lead, near!.read?.includes('lead')]).toEqual([12, true])
     // (no statement, no compile of them: its lines' pitch, read)
     const plain = locate(ins, B, align(B, B)).members[0]!
