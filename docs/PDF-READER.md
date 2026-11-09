@@ -4736,7 +4736,20 @@ that set them in a formula, `\{`, `\}`, `\$` and `\backslash`, where today's fil
 brace of `\{0,\dots,J-1\}` between upright digits, 2610.21377v1 p42, or a bibliography title's `$\{$Intra-Operator$\}$`,
 2608.06007v1 p17, was `$$`, which every reader takes as a display, and once drawn in its own ink each was a kept display row in
 the middle of its line: 15 runs in 3 members; over the 88 corpus papers 10 ink units of 3 papers change their id, the copy text
-of 25 other runs gains the braces it had lost), and
+of 25 other runs gains the braces it had lost; and it reads a script by its glyph, whatever its face (`scriptsOf`): a glyph TeX
+set smaller than its line's text and off its baseline (the size most of the line's glyphs have, the baseline most of those stand
+on, each on the hundredth of a point, as locate reads one box's baseline: no threshold) is a kept run's, where the face alone made
+a script in a text face the unit's text, drawn flat at the line's size — Times sets `$^{1,2}$`'s digits in its text face and
+Computer Modern a formula's digit or a footnote's mark in CMR7, so 2610.30854v1 p1's names read "Jiang1,2"; a run of scripts of one
+sign is written as TeX writes one, `$^{…}$` or `$_{…}$`, so that every reader of the source reads it as a source unit's mark (a
+mark of one symbol drawn raised, `sym`, where `$*$` drew it on the baseline at the line's size); a unit's label is its first
+line's leading run of raised scripts, in any face (`labelLength` without today's 0.85 and a fifth: 2610.40394v1 p1's "*", 7.77
+pt on its note's 7.97 and raised 0.20 pt, was a placeholder, its note no longer echoing its source footnote), its glyphs the
+text's as before; and no run is joined over a line's break where a script stands at the break, as TeX sets a script on its line
+after its atom and breaks a formula only after a binary operation or a relation (2610.20030v1 p1's "Krajnc¹" and "¹Jožef Stefan
+Institute" one element on two lines, drawn as text): over the 88 corpus papers 79 ink units of 21 papers move and one more
+states its label, 69 runs written as scripts (50 raised, 19 lowered), 4 display lines in a text face of 2608.08481v1 no longer
+translated, no source unit), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular

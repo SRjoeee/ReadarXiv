@@ -2,7 +2,8 @@
 // marked COPY, nothing else but seven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
-// them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, scriptOf): run
+// them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
+// leading raised scripts, no run over a line's break at a script, scriptsOf): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -173,7 +174,8 @@ const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
 /** a kept run's placeholder source: a formula of its characters, or an address; a run of scripts of one sign (`sign`, scriptsOf)
  *  written as TeX writes a script, `$^{…}$` raised and `$_{…}$` lowered, so that every reader of the source reads it as it reads a
  *  source unit's mark (the instrument adapter: a symbol drawn raised, `sym`, a superscript's copy text): written `$*$`, a note's
- *  mark of one symbol was drawn as that symbol on the line's baseline at its size (CHANGED, with scriptsOf). CHANGED: today's strips `$ \ { }` from a formula's
+ *  mark of one symbol was drawn as that symbol on the line's baseline at its size (CHANGED, with scriptsOf). CHANGED: today's
+ *  strips `$ \ { }` from a formula's
  *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
  *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
  *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
@@ -214,8 +216,8 @@ function wordsOf(G, gs, fams) {
   return out.flatMap(w => (w.fam === 'text' ? addressed(w) : [w]))
 }
 
-/** a line's scripts (rule 4), each raised (1) or lowered (-1): of its glyphs `order`, those TeX set smaller than the line's text and off its baseline, raised or
- *  lowered — the line's text size the one most of its glyphs have, its baseline the one most of those at that size stand on,
+/** a line's scripts (rule 4), each raised (1) or lowered (-1): of its glyphs `order`, those TeX set smaller than the line's text
+ *  and off its baseline — the line's text size the one most of its glyphs have, its baseline the one most of those at that size stand on,
  *  each read on the engine's hundredth of a point, as locate reads a box's glyphs on one baseline (TeX sets one box's glyphs at
  *  one size on one baseline: equal, no threshold). A script is no text of the line's but its formula's, or a mark TeX set over
  *  or under it, whatever its face: C_n²'s "2" in a text face (2610.19274v1), an affiliation's `$^{1,2}$` under Times, whose
