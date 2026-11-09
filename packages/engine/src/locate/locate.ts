@@ -1562,20 +1562,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
   flows.sort((f, g) => Math.min(...f) - Math.min(...g))
-  // (a flow is one paragraph of TeX's: a member made on A in it, no mark of its own to state how TeX set its line, is set as TeX
-  // set the paragraph its marked members state, where they state one alignment. 2610.21106v1: amsart's centred "A AND B", the AND
-  // made on A justified by default, ran on from the first name's translated end while the second, centred, stayed on its own
-  // original's middle: the hole moved before the second name, 36.11 pt where TeX set 3.32)
-  for (const flow of flows) {
-    const told = new Set(
-      flow
-        .map((o) => members[o]!)
-        .flatMap((x) => (!madeOnA(x) && x.located && !x.read.includes('align') ? [x.align] : [])),
-    )
-    if (told.size !== 1) continue
-    const a = [...told][0]!
-    for (const o of flow) if (madeOnA(members[o]!) && members[o]!.align !== a) members[o]!.align = a
-  }
 
   // ---- ties: a table's cells, laid together; a figure's set, at one size; a flow's members, at one size
   const ties: Located['ties'] = []

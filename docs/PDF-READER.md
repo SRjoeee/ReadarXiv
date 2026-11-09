@@ -2907,12 +2907,13 @@ stream (no glyph TeX printed, none made on A) is now never the member before (no
 over to, nor the last note), and a member made on A whose first glyph TeX set right after a member's last, on that member's
 last row, stands after it (`locate.ts` `standsAfter`; before the member whose first glyph comes next otherwise, as before):
 the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
-page and stood after every member. A flow being one paragraph of TeX's, a member made on A in it (no mark of its own to state how
-TeX set its line) is set as the paragraph its marked members state, where they state one alignment: amsart's centred "A AND B",
-its AND made on A justified by default, ran on from the first name's end once it stood after it, while the centred second name
-stayed on its own original's middle, the hole moved before it (2610.21106v1: 36.11 pt where TeX set 3.32). Each row's names
-then run on from the one before, at the original's separation from its translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
-members).
+page and stood after every member. Each row's names then run on from the one before, at the original's separation from its
+translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
+members); and a centred row of several members is not centred as a whole. A centred member is laid on its own original's middle
+and never from the one before's end, so where a member that is not centred runs on between two centred ones (amsart's
+"A AND B", its AND made on A, now joined to the first name it follows in TeX's stream), the hole stands before the second name:
+2610.21106v1 p1, 36.11 pt where TeX set 3.32 (today 34.92, round 6 22.47). Centring the AND alone on its own middle split the
+hole in two (18.79 and 21.15 pt) and was dropped; the fix is to lay a centred line's members run on and centre the line.
 
 **A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
 translation leaves a great deal of redundant blank space"). Its class sets `$^{1,*}$` and ", " after each `\author`'s text,
