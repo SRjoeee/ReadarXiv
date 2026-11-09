@@ -533,7 +533,8 @@ export function readMember(i: ReadInput): ReadOut {
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
-    // (a colour piece's run in the fill TeX set it in, El.colour or SpanAt.colour: today's tex.mjs colourOf over the log's)
+    // (a group's run in the fill TeX set it in, El.colour or SpanAt.colour: a colour piece's the log's, today's tex.mjs
+    // colourOf; any other group's, a link's that hyperref colours, its glyphs' on A, today's measuredStyle `pieces`)
     colourOf: (k) => {
       const p = pieces[k]
       const c =

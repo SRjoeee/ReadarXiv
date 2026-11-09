@@ -1,4 +1,4 @@
-import { read, unitId } from '@readarxiv/format'
+import { type Piece, read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
@@ -2608,5 +2608,121 @@ describe('locate: the glyphs of B with no partner on A inside a unit', () => {
     const A = docOf([{ lines: ['Cloze procedure: A new tool for'] }])
     const L = locate(instrumentOf(B, [unitOf('reference', '“Cloze procedure: A new tool for')], [[0]]), A, align(B, A))
     expect(L.members[0]).toMatchObject({ located: false, cause: 'content difference: bonly' })
+  })
+})
+
+describe('locate: the fill TeX set a unit’s text in, group by group, read off its glyphs on A (SpanAt.colour, Style.fill)', () => {
+  // (hyperref's colorlinks sets a link's text in its colour by its own macros, which no source piece says and the marked
+  // compile's log does not state, as it states a \textcolor's: 1810.04805v2 p11's `\href{…}{An efficient framework for …}`
+  // blue on arXiv's page, its translation drawn black; p10's Hendrycks entry, whose title link holds most of its letters,
+  // drawn blue whole, its authors and journal too. Today's reader read each such group's fill off its own glyphs and the
+  // unit's off the glyphs outside them, layer2.mjs measuredStyle)
+  const partOf = (ins: Instrument, B: Doc, A: Doc) => {
+    const L = locate(ins, A, align(B, A))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    return read('part', part.bytes).flows.flat()[0]!
+  }
+  const to = { url: 'https://arxiv.org/abs/1606.08415' }
+  const span = (id: string, style: string, open: string, content: Piece[]): Piece => ({
+    t: 'span',
+    id,
+    style,
+    ...(style === 'link' ? { must: 1 as const } : {}),
+    open,
+    close: '}',
+    content,
+  })
+  const unitWith = (content: Piece[], spans: InstrumentUnit['spans']): InstrumentUnit => ({
+    id: unitId('reference', content),
+    kind: 'reference',
+    content,
+    spans,
+  })
+  /** B and A of the same lines, A's glyphs on `blue` lines (by index) and from `from` of line `at` filled 0x000080 */
+  const pair = (lines: string[], blue: (line: number, j: number) => boolean) => {
+    const B = docOf([{ lines }])
+    const A = docOf([{ lines }])
+    for (const g of A.pages[0]!.glyphs) if (blue(g.n, g.x0)) g.fill = 0x80
+    return { B, A }
+  }
+
+  it('states a link’s fill where it is not the fill around it, and the unit’s own outside it where the link holds most', () => {
+    const lines = [
+      'Dan Hendrycks and Kevin Gimpel. 2016.',
+      'Bridging nonlinearities and stochastic',
+      'regularizers with gaussian error units.',
+      'CoRR, abs/1606.08415.',
+    ]
+    const { B, A } = pair(lines, (n) => n === 1 || n === 2)
+    const content = [
+      text('Dan Hendrycks and Kevin Gimpel. 2016. '),
+      span('1', 'link', `\\href{${to.url}}{`, [
+        text('Bridging nonlinearities and stochastic regularizers with gaussian error units.'),
+      ]),
+      text(' '),
+      span('3', 'italic', '\\emph{', [text('CoRR')]),
+      text(', abs/1606.08415.'),
+    ]
+    const u = unitWith(content, [
+      ['1', { cmd: 'href', to }],
+      ['3', { cmd: 'emph' }],
+    ])
+    const m = partOf(instrumentOf(B, [u], [[0, 0, 0, 0]]), B, A)
+    expect(m.spans).toEqual([
+      ['1', { cmd: 'href', to, colour: 0x80 }],
+      ['3', { cmd: 'emph' }],
+    ])
+    // (the authors' and the journal's fill, black: no fill stated)
+    expect(m.style.fill).toBeUndefined()
+  })
+  it('states none where a group’s fill is the one around it, nor a unit’s own where its text is all one fill', () => {
+    // (a unit wholly inside its link: its own fill the link's, as its glyphs read it, no group of it set apart)
+    const all = pair(['Bridging nonlinearities and', 'stochastic regularizers.'], () => true)
+    const whole = unitWith(
+      [span('1', 'link', `\\href{${to.url}}{`, [text('Bridging nonlinearities and stochastic regularizers.')])],
+      [['1', { cmd: 'href', to }]],
+    )
+    const m = partOf(instrumentOf(all.B, [whole], [[0, 0]]), all.B, all.A)
+    expect(m.spans).toEqual([['1', { cmd: 'href', to }]])
+    expect(m.style.fill).toBe(0x80)
+    // (a paper's macro that colours its argument, a bold group inside it: the macro's fill stated, the bold group's the
+    // macro's, none; a colour group the log states keeps the log's)
+    const lines = ['We use the new loss, which is better', 'than the old one.']
+    // (the glyphs of "new loss, which is" blue: from x 72 + 11 * 6 to 72 + 30 * 6 on line 0)
+    const { B, A } = pair(lines, (n, x0) => n === 0 && x0 >= 72 + 11 * 6 && x0 < 72 + 30 * 6)
+    const content = [
+      text('We use the '),
+      span('1', 'other', '\\hl{', [span('2', 'bold', '\\textbf{', [text('new loss')]), text(', which is')]),
+      text(' better than the old one.'),
+    ]
+    const u = unitWith(content, [
+      ['1', { cmd: 'hl' }],
+      ['2', { cmd: 'textbf' }],
+    ])
+    expect(partOf(instrumentOf(B, [u], [[0, 0]]), B, A).spans).toEqual([
+      ['1', { cmd: 'hl', colour: 0x80 }],
+      ['2', { cmd: 'textbf' }],
+    ])
+    const logged = unitWith(
+      [
+        text('We use the '),
+        span('1', 'colour', '\\textcolor{red}{', [text('new loss, which is')]),
+        text(' better than the old one.'),
+      ],
+      [['1', { cmd: 'textcolor', colour: 0xff0000 }]],
+    )
+    expect(partOf(instrumentOf(B, [logged], [[0, 0]]), B, A).spans).toEqual([
+      ['1', { cmd: 'textcolor', colour: 0xff0000 }],
+    ])
   })
 })

@@ -130,6 +130,25 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       ['bitte', undefined],
     ])
   })
+  it('draws a link’s translation in the fill its group states, CJK or Latin, the rest in the unit’s own (1810.04805v2 p11)', () => {
+    // (hyperref colours a link's text; the part states the group's fill read off its glyphs on A, SpanAt.colour, and the
+    // translation keeps the link's group (a link span is `must`): its CJK words in the link's blue, not the CJK ink)
+    const zh = rulesFor('zh')
+    const to = { url: 'https://openreview.net/forum?id=rJvJXZb0W' }
+    const m = member({ kind: 'reference', spans: [['5', { cmd: 'href', to, colour: 0x000080 }]] })
+    const r = row([
+      { t: 'text', s: '\u674e\u3002 ' },
+      { t: 'span', id: '5', content: [{ t: 'text', s: '\u4e00\u4e2a\u9ad8\u6548\u7684\u6846\u67b6 ICLR' }] },
+      { t: 'text', s: ' \u4f1a\u8bae\u3002' },
+    ])
+    const runs = layPage(part(m), rowsOf([r]), zh, metrics())
+      .members[0]!.lines.flatMap((l) => l[3])
+      .flatMap((it) => ('src' in it || !it.s.trim() ? [] : [[it.s.trim(), it.fill]]))
+    expect(runs.filter(([s]) => /\u6846\u67b6|ICLR/u.test(s as string)).map(([, f]) => f)).toEqual([0x000080, 0x000080])
+    expect(runs.filter(([s]) => /\u674e|\u4f1a\u8bae/u.test(s as string)).map(([, f]) => f)).toEqual([
+      0x141414, 0x141414,
+    ])
+  })
   it('keeps an ink unit’s stated label where it stands, and carries it with a centred line as a crop (today’s `carried`)', () => {
     // (2610.22065v1-zh p1: an affiliation's raised "2" the part states as the unit's label, its group `.l`: on a line laid from
     // its start the label's group stays on and no crop is drawn; on a centred line it goes with the line, its ink a crop at the

@@ -50,6 +50,7 @@ import {
 } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
+import { fillsOf, hasScopes } from './fills.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
@@ -121,6 +122,9 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (fills.ts; SpanAt.colour
+   *  where the instrument states none): each one's open piece id and fill */
+  spanFills?: [string, number][]
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
@@ -1018,6 +1022,24 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
+    }
+    // (the fill TeX set its text in, group by group (fills.ts): a group's where it is not the fill around it, a link's that
+    // hyperref colours, stated for the typesetter to draw its translation in; and where a group or a colour switch's run is set
+    // apart so, its own fill is its text's outside them, not the fill most of all its glyphs hold, which a link holding most
+    // of its letters makes the link's)
+    const isSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
+    if (unit && mem.text.length && hasScopes(unit.content, isSwitch)) {
+      const f = fillsOf(
+        unit.content,
+        [...mem.text].sort((x, y) => x - y).map(gA),
+        (el) => classOf.get(el.id)?.text,
+        isSwitch,
+      )
+      if (f.groups.length) mem.spanFills = f.groups
+      if (f.apart && f.own !== undefined) {
+        if (f.own > 0) mem.style.fill = f.own
+        else delete mem.style.fill
+      }
     }
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)

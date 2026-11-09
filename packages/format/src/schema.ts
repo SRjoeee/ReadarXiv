@@ -121,7 +121,8 @@ export const Units = z.object({ format, units: z.array(Unit) })
 // ---------------------------------------------------------------- what laying a page reads
 /** TeX's font state, the fill read from A: role, size, bold, slant (1 italic, 2 slanted), faked small capitals' size share,
  *  set in small capitals (a placement's: most of its letters that can tell are faked small capitals, today's vote; a face of
- *  real small capitals is its design's), upper case, fill 0xRRGGBB, the design where it is not the paper's */
+ *  real small capitals is its design's), upper case, fill 0xRRGGBB (a placement's: its text's outside the groups whose fill is
+ *  another, SpanAt.colour, where it has such groups), the design where it is not the paper's */
 export const Style = z.object({
   role: z.enum(['serif', 'sans', 'mono']),
   size: num,
@@ -195,7 +196,8 @@ export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z
 /** a group of the source on A: its style (a figure text's run's, read off its glyphs; a source group's whose command names no
  *  style the rules know, the face TeX set its text in, read off its glyphs on B: what the typesetter draws its translation
  *  in), the paragraph TeX opened at it; the command its open begins with (its name and
- *  star), the fill TeX set its run in; a link group's target where its source names it, as Link.to states an annotation's (an
+ *  star), the fill TeX set its run in (a colour piece's, read off the marked compile's log; any other group's, read off its
+ *  text's glyphs on A where it is not the fill around it: a link's that hyperref colours); a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
  *  its name): what the typesetter pairs the group's translation with its annotations by */
 export const SpanAt = z.object({

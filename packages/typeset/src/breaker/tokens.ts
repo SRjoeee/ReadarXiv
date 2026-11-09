@@ -13,7 +13,8 @@
 // - `resolved`: the unit's reading: the elements' resolutions (U.elements, U.breaks' marks, U.rename's names, U.marks' facts),
 //   `measured` (the base style and pieces' colours its glyphs hold ← TeX's font state, Placed.style / spans), `capsRatio`
 //   (Style.sc), `orig.size` (Style.size), `openBreaks` / `referenced` (U.breaks), `tail` / `tailOwn` (Placed.tail)
-// - `colourOf`, `fillOf`: a colour piece's run's fill and an element's (TeX's log, A's glyphs) ← SpanAt.style.fill, El.style.fill
+// - `colourOf`, `fillOf`: a group's run's fill (a colour piece's, TeX's log; any other's, a link's, its glyphs' on A where it is
+//   not the fill around it) and an element's (A's glyphs) ← SpanAt.colour, El.colour, El.style.fill
 // - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today) ← El.style;
 //   `fakedCaps`: the renderings set wholly in them ← El.style (all capitals at the small size) of a Style.sc unit
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
