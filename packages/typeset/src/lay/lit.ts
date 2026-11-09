@@ -13,13 +13,17 @@
 //   (a text token's, an element's at its piece's, one of neither its neighbour's: words.mjs addUnitWords), the start the token
 //   of the sentence's first word; and the lines it keeps where they stand (a held line: its ink stays), in the sentence they
 //   stand in on A;
-// - `own`: its own ink the page keeps (D.groups' shown: a display, its rows, a block of its own; a piece or a label kept where it
-//   stands), the same boxes on both panes. Lit by sentence, a kept piece lights with its sentence, a label with the first, a
-//   kept character with the token beside it (words.mjs: the owner, 2026-10-30), a display alone (a block of its own).
+// - `own`: its displays (D.groups' shown), each a block of its own by its piece, the same boxes on both panes: lit alone where the
+//   pointer is over it, never with its member, whole or by sentence, and no row of its text (today's units.mjs displayBlockId:
+//   one hover id a display; the owner's reports of 2026-11-09, a sentence lit over its display on 2602.23285v2 p15, a paragraph
+//   lit over both of its on 2609.33403v1). The rest of the ink it keeps (a piece or a label kept where it stands, a character)
+//   lights with its member, on both panes the row it stands on widened over it (today's unitRuns), else a row of its own: lit
+//   by sentence, a kept piece with its sentence (an element no sentence of the translation places, the sentence it stands in on
+//   A, as a held line), a label with the first, a kept character with the token beside it (words.mjs: the owner, 2026-10-30).
 // A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left (by
-// sentence where its row's starts are found on A). A figure text the original sets turned (Placed.dir, its run Placed.run) is
-// lit whole, turned with its text: its boxes in its run's frame
-// (Laid.lit's `dir`), on A its run's box, as drawn its line along it, never the level box its turned box stands in on the page
+// sentence where its row's starts are found on A), its displays apart as above. A figure text the original sets turned
+// (Placed.dir, its run Placed.run) is lit whole, turned with its text: its boxes in its run's frame (Laid.lit's `dir`), on A its
+// run's box, as drawn its line along it, never the level box its turned box stands in on the page
 // (a label set at 30° stands in a level box about twice its height, over its neighbours': 336 of the 1,887 turned figure texts
 // over the 87 corpus bundles).
 import type { Box, Ink, Placed } from '@readarxiv/format'
@@ -43,19 +47,35 @@ export const inkOfLine = (l: Line): Ink => [l[0], l[2], l[6], l[3], l[5], l[4]]
  *  row of its own */
 function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
   const out = rows.map((b) => [...b] as Box)
-  for (const k of ink) {
-    if (k[0] !== page) continue
-    const r = out.find((b) => b[1] <= k[5] && k[5] <= b[3])
-    if (!r) out.push([k[1], k[2], k[3], k[4]])
-    else {
-      r[0] = Math.min(r[0], k[1])
-      r[1] = Math.min(r[1], k[2])
-      r[2] = Math.max(r[2], k[3])
-      r[3] = Math.max(r[3], k[4])
-    }
+  for (const k of ink) if (k[0] === page) widen(out, k)
+  return out
+}
+/** one piece of ink into `rows`, in place: the row whose band holds its baseline widened over it, else a row of its own */
+function widen(rows: Box[], k: Ink) {
+  const r = rows.find((b) => b[1] <= k[5] && k[5] <= b[3])
+  if (!r) rows.push([k[1], k[2], k[3], k[4]])
+  else {
+    r[0] = Math.min(r[0], k[1])
+    r[1] = Math.min(r[1], k[2])
+    r[2] = Math.max(r[2], k[3])
+    r[3] = Math.max(r[3], k[4])
+  }
+}
+/** kept ink as ink on page `page` */
+const inkOfShown = (x: Shown, page: number): Ink => [page, ...x.box, x.base]
+/** the member's displays with ink on `page` (El kind 'display'), each a block of its own by its piece: Laid.lit's `own` */
+function displaysOf(m: Placed, page: number): [string, Box[]][] {
+  const out: [string, Box[]][] = []
+  for (const [id, e] of m.els ?? []) {
+    if (e.kind !== 'display') continue
+    const boxes = e.ink.filter((s) => s[0] === page).map((s): Box => [s[1]!, s[2]!, s[3]!, s[4]!])
+    if (boxes.length) out.push([id, boxes])
   }
   return out
 }
+/** a member's line on A that is a display's row (a KEPT line on one of its displays: its display's ink, no line of its text) */
+const onItsDisplay = (l: Line, displays: readonly { box: Box }[]) =>
+  !!(l[9] & KEPT) && onDisplay(displays, l[2], l[6], l[3], l[5])
 
 /** the boxes on both panes alike (one entry each), none where it has none */
 export const mirrored = (boxes: Box[]): Lit =>
@@ -365,16 +385,21 @@ export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
   const run = runBoxOfA(m, page)
   if (run) return { ...mirrored([run]), dir: m.dir! }
   const label = m.label ? [m.label.ink] : []
+  // (its displays a block of its own each, their rows none of its text's)
+  const own = displaysOf(m, page)
+  const displays = own.flatMap(([, boxes]) => boxes.map((box) => ({ box })))
+  const keep = (l: Line) => !onItsDisplay(l, displays)
   const row = m.words ? (src?.length ? startsOnA(m.words, src) : []) : null
   // (with its forced breaks' starts, each where no start of the row's stands at its line's start)
   const starts = row && [...row, ...breaksOnA(m).map((b) => b.a)].sort((x, y) => x[0] - y[0] || x[1] - y[1])
   const unique = starts?.filter((a, i) => !i || after(a, starts[i - 1]!))
   if (unique?.length) {
-    const per = cutOnA(m, page, () => true, unique, label)
-    return { left: per, right: per, own: [] }
+    const per = cutOnA(m, page, keep, unique, label)
+    return { left: per, right: per, own }
   }
-  const lines = m.lines.filter((l) => l[0] === page).map(boxOfLine)
-  return mirrored(widened(lines, label, page))
+  const lines = m.lines.filter((l) => l[0] === page && keep(l)).map(boxOfLine)
+  const text = widened(lines, label, page)
+  return text.length ? { left: [text], right: [text], own } : { left: [], right: [], own }
 }
 
 /**
@@ -413,7 +438,7 @@ export function litLaid(
   })
   const displays = shown.filter((s) => s.kind === 'display')
   // (a KEPT line is a display's row, its display's block, or a held line: its ink stays, on both panes in its unit's shape)
-  const keep = (l: Line) => !(l[9] & KEPT && onDisplay(displays, l[2], l[6], l[3], l[5]))
+  const keep = (l: Line) => !onItsDisplay(l, displays)
   const mine = m.lines.filter((l) => l[0] === page && keep(l))
   const extra = [
     ...(relabelled && m.label ? [m.label.ink] : []),
@@ -422,16 +447,19 @@ export function litLaid(
   const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown) : null
   if (by) return by
   const held = mine.filter((l) => l[9] & KEPT).map(boxOfLine)
-  const left = widened(mine.map(boxOfLine), extra, page)
-  const right = [...(L ? lineBoxes(L, page) : []), ...held]
+  // (the ink it keeps but its displays, on the row it stands on: a piece, a label, a character)
+  const kept = shown.filter((x) => x.kind !== 'display').map((x) => inkOfShown(x, page))
+  const left = widened(mine.map(boxOfLine), [...extra, ...kept], page)
+  const right = widened([...(L ? lineBoxes(L, page) : []), ...held], kept, page)
+  const own = ownOf(displays)
+  return left.length || right.length ? { left: [left], right: [right], own } : { left: [], right: [], own }
+}
+
+/** its displays the page keeps, each a block of its own by its piece (Laid.lit's `own`) */
+function ownOf(displays: readonly Shown[]): [string, Box[]][] {
   const own = new Map<string, Box[]>()
-  for (const s of shown) {
-    const key = s.kind === 'display' || s.kind === 'piece' ? String(s.k) : s.kind
-    own.set(key, [...(own.get(key) ?? []), s.box])
-  }
-  return left.length || right.length
-    ? { left: [left], right: [right], own: [...own] }
-    : { left: [], right: [], own: [...own] }
+  for (const x of displays) if (x.kind === 'display') own.set(String(x.k), [...(own.get(String(x.k)) ?? []), x.box])
+  return [...own]
 }
 
 /** the starts on A of the sentences after each forced break of a member (El.brk, the line it ends El.ends: TeX ended the line by
@@ -527,16 +555,9 @@ function bySentence(
   m.lines.forEach((l, j) => {
     if (l[0] === page && keep(l) && l[9] & KEPT) right[sentenceAtLine(starts, j, l[2])]!.push(boxOfLine(l))
   })
-  const own = new Map<string, Box[]>()
-  const both = (s: number, b: Box) => {
-    left[s]!.push(b)
-    right[s]!.push(b)
-  }
+  // (the ink it keeps but its displays: on both panes with its sentence, the row it stands on widened over it)
   for (const x of shown) {
-    if (x.kind === 'display') {
-      own.set(String(x.k), [...(own.get(String(x.k)) ?? []), x.box])
-      continue
-    }
+    if (x.kind === 'display') continue
     const s =
       x.kind === 'label'
         ? 0
@@ -546,11 +567,26 @@ function bySentence(
               return k >= 0 ? sentenceOf(plain, places.piece[k]! + 1) : -1
             })()
           : besideOf(tokens, x.box)
-    if (s >= 0) both(s, x.box)
-    else {
-      const key = x.kind === 'piece' ? String(x.k) : x.kind
-      own.set(key, [...(own.get(key) ?? []), x.box])
-    }
+    const k = inkOfShown(x, page)
+    const at = s >= 0 ? s : standsInOnA(m, page, keep, starts, k)
+    widen(left[at]!, k)
+    widen(right[at]!, k)
   }
-  return { left, right, own: [...own] }
+  return { left, right, own: ownOf(shown) }
+}
+
+/** the sentence a piece of ink kept where it stands stands in on A: that of its member's line on the page whose band holds its
+ *  baseline (else the nearest by baseline) at its start, as a held line's; the first where the page holds no line of it */
+function standsInOnA(m: Placed, page: number, keep: (l: Line) => boolean, starts: readonly At[], k: Ink): number {
+  let best = -1,
+    far = Number.POSITIVE_INFINITY
+  m.lines.forEach((l, j) => {
+    if (l[0] !== page || !keep(l)) return
+    const d = l[6] <= k[5] && k[5] <= l[5] ? 0 : Math.abs(l[4] - k[5])
+    if (d < far) {
+      far = d
+      best = j
+    }
+  })
+  return best < 0 ? 0 : sentenceAtLine(starts, best, k[1])
 }

@@ -129,7 +129,61 @@ describe('Laid.lit: a member lit whole (its row has no sentences)', () => {
     expect(laid!.state).toBe('laid')
     expect(laid!.off).toBe(1)
     expect(p.links).toEqual([[link.box, link.to, 0]])
-    expect(laid!.lit.own).toEqual([['5', [[250, 698, 270, 707]]]])
+    // (in its member's one entry on both panes, the row it stands on widened over it: `own` holds the displays alone, each a
+    // block of its own)
+    expect(laid!.lit.own).toEqual([])
+    for (const pane of ['left', 'right'] as const) {
+      expect(laid!.lit[pane]).toHaveLength(1)
+      expect(laid!.lit[pane][0]!.some((b) => b[0] <= 250 && b[1] <= 698 && b[2] >= 270 && b[3] >= 707)).toBe(true)
+    }
+  })
+  it('lights a label kept where it stands with its member, widening the row it stands on, on both panes', () => {
+    // (a list item's number kept: today's unitRuns, a label with no row of its own widens its unit's row)
+    const m = member({
+      label: {
+        kind: 'number',
+        ink: [1, 60, 698, 68, 707, 700],
+        style: { role: 'serif', size: 10 },
+        num: ['3', [1, 60, 698, 66, 707, 700]],
+        punct: ['.', [1, 66, 698, 68, 707, 700]],
+      },
+    })
+    const [laid] = layPage(
+      part(m),
+      rowsOf([row([{ t: 'text', s: 'Ein Satz, der weiter läuft.' }])]),
+      rules,
+      metrics(),
+    ).members
+    expect(laid!.off & 4).toBe(0)
+    expect(laid!.lit.own).toEqual([])
+    expect(laid!.lit.left).toEqual([
+      [
+        [60, 698, 300, 707],
+        [72, 686, 200, 695],
+      ],
+    ])
+    expect(laid!.lit.right[0]!.some((b) => b[0] === 60 && b[2] > 68)).toBe(true)
+  })
+  it('lights a member not laid, and a page that waits, around its display: the display a block of its own, its rows out of the text’s', () => {
+    const m = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 120, 250, 680, 688, 676, 72, 300, 1, 10],
+        [1, 0, 72, 200, 664, 671, 662, 72, 300, 0, 10],
+      ],
+      els: [['1', { kind: 'display', keep: 1, ink: [[1, 120, 676, 250, 688, 680]] }]],
+    })
+    const text = [
+      [
+        [72, 698, 300, 707],
+        [72, 662, 200, 671],
+      ],
+    ]
+    for (const done of [true, false]) {
+      const laid = layPage(part(m), rowsOf([], done), rules, metrics()).members[0]!
+      expect(laid.state).toBe(done ? 'none' : 'waiting')
+      expect(laid.lit).toEqual({ left: text, right: text, own: [['1', [[120, 676, 250, 688]]]] })
+    }
   })
   it('lights a babel name drawn on its own on both panes: its line on A, its word as drawn', () => {
     const name = member({

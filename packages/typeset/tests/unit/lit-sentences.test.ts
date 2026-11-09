@@ -153,6 +153,55 @@ describe('Laid.lit by sentence', () => {
     const bracket = it.x + (it.size * [...it.s.slice(0, it.s.indexOf('(Vier'))].length) / 2
     expect(laid.lit.right[1]![0]![0]).toBeCloseTo(bracket, 6)
   })
+  it('lights its kept ink with its sentence, on the row it stands on: a label with the first, an element the translation omits where it stands on A', () => {
+    // (`own` holds the displays alone; an element no sentence of the translation places, kept where it stands, lights with the
+    // sentence it stands in on A, as a held line does; on both panes the row it stands on widened over it)
+    const m = member({
+      label: {
+        kind: 'number',
+        ink: [1, 60, 698, 68, 707, 700],
+        style: { role: 'serif', size: 10 },
+        num: ['3', [1, 60, 698, 66, 707, 700]],
+        punct: ['.', [1, 66, 698, 68, 707, 700]],
+      },
+      els: [['5', { kind: 'cite', ink: [[1, 120, 686, 140, 695, 688]] }]],
+    })
+    const laid = laidOf(m, row(SENTENCES))
+    expect(laid.lit.own).toEqual([])
+    expect(laid.lit.left).toEqual([
+      [[60, 698, 200, 707]],
+      [
+        [200, 698, 300, 707],
+        [72, 686, 150, 695],
+      ],
+      [
+        [150, 686, 300, 695],
+        [72, 674, 200, 683],
+      ],
+    ])
+    const holds = (bs: readonly Box[], [x0, y0, x1, y1]: Box) =>
+      bs.some((b) => b[0] <= x0 && b[1] <= y0 && b[2] >= x1 && b[3] >= y1)
+    expect(holds(laid.lit.right[0]!, [60, 698, 68, 707])).toBe(true)
+    expect(holds(laid.lit.right[1]!, [120, 686, 140, 695])).toBe(true)
+  })
+  it('lights its display as a block of its own, never with a sentence, the rows either side of it its sentence’s', () => {
+    // (the owner's report of 2026-11-09, 2602.23285v2 p15: "… processed as: [display (11)] and a sequence …": the display's row
+    // in no sentence on either pane)
+    const m = member({
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 120, 250, 680, 688, 676, 72, 300, 1, 10],
+        [1, 0, 72, 300, 664, 671, 662, 72, 300, 0, 10],
+        [1, 0, 72, 200, 652, 659, 650, 72, 300, 0, 10],
+      ],
+      els: [['9', { kind: 'display', keep: 1, ink: [[1, 120, 676, 250, 688, 680]] }]],
+      words: SOURCE_WORDS.map(([o, l, x]) => [o, l === 0 ? 0 : l + 1, x] as [number, number, number]),
+    })
+    const laid = laidOf(m, row(SENTENCES))
+    expect(laid.lit.own).toEqual([['9', [[120, 676, 250, 688]]]])
+    for (const pane of ['left', 'right'] as const)
+      for (const s of laid.lit[pane]) for (const b of s) expect(b[1] >= 688 || b[3] <= 676).toBe(true)
+  })
   it('ends a sentence at a forced break: the text after it a sentence of its own on both panes', () => {
     // (1810.04805v2 p8: "… as BERT_BASE:" \\ \noindent "No NSP: …", one TeX paragraph, one sentence of Microsoft's across
     // the break; the owner hovering the item saw the paragraph before it lit with it. TeX ended the line by command: the item
