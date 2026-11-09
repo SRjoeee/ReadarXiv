@@ -62,7 +62,7 @@ describe("today's row of a unit, said in v2's unit that holds its scripts as ele
     { kind: 'ph', src: '$,2$' },
     { kind: 'text', s: ', Yi-Hsuan Yang1' },
   ])
-  const v124 = unit([text('Song-Ze Yu'), math('$1$', '1'), text(', Fang-Duo Tsai'), math('$1,2$', '3'), text(', Yi-Hsuan Yang'), math('$1$', '5')])
+  const v124 = unit([text('Song-Ze Yu'), math('$^{1}$', '1'), text(', Fang-Duo Tsai'), math('$^{1,2}$', '3'), text(', Yi-Hsuan Yang'), math('$^{1}$', '5')])
 
   it("each mark the element v2 holds for it where the translation keeps what today's held for it, text and placeholder", () => {
     expect(keptRow([123, ['余宋泽1，蔡方多1', 1, '，杨怡萱1'], 'whole', 'microsoft'], t123, v124)).toEqual({
@@ -77,7 +77,7 @@ describe("today's row of a unit, said in v2's unit that holds its scripts as ele
     // ("Write to A12. Then go.": the second sentence at 14 in today's text, 13 in v2's (the mark "12" one character); its
     // translation's at 7 in today's row, 6 in v2's)
     const t = today([{ kind: 'text', s: 'Write to A12. Then go.' }])
-    const v = unit([text('Write to A'), math('$12$', '1'), text('. Then go.')], true)
+    const v = unit([text('Write to A'), math('$^{12}$', '1'), text('. Then go.')], true)
     const got = keptRow([1, ['写信给A12。然后走。'], 'whole', 'microsoft', { src: [14], tr: [7] }], t, v)
     expect(got).toEqual({ content: [text('写信给A'), { t: 'el', id: '1' }, text('。然后走。')], sentences: { src: [13], tr: [6] } })
   })

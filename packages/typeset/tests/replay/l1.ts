@@ -92,15 +92,16 @@ export function todayPrepared(paper: string): Map<number, TodayPrepared> | null 
 /** an address a unit holds as an element: the reading's `\url{…}` of an e-mail or web address, its ink kept as A's */
 const ADDRESS = /^\\url\{([^{}]*)\}$/
 /** a formula's run an ink unit holds as an element, `$…$`, its TeX specials written as the commands that set them in a formula
- *  (packages/engine locate/today/ink-units.mjs MATH_SPECIAL) */
-const FORMULA = /^\$([\s\S]+)\$$/
+ *  (packages/engine locate/today/ink-units.mjs MATH_SPECIAL), a run of scripts written as TeX writes one, `$^{…}$` or `$_{…}$` */
+const FORMULA = /^\$(?:[\^_]\{([\s\S]+)\}|([\s\S]+))\$$/
 /** the characters an element's ink reads as where today's prepare may have read that ink otherwise: an address's (`\url{…}`,
  *  rebuild/wire-tail: today's text) and an ink unit's formula run's (`$…$`, its specials undone: a script TeX set in a text
  *  face, today's text, rebuild/script-face); null for any other element */
 export function readingOf(src: string): string | null {
   const a = ADDRESS.exec(src)?.[1]
   if (a !== undefined) return a
-  const f = FORMULA.exec(src)?.[1]
+  const m = FORMULA.exec(src)
+  const f = m?.[1] ?? m?.[2]
   return f === undefined ? null : f.replace(/\\backslash |\\([${}])/g, (_, c: string | undefined) => c ?? '\\')
 }
 
@@ -186,6 +187,8 @@ export function keptJoin(
     const t = free.find(
       (t) =>
         !taken.has(t.ord) &&
+        // (a unit the dump states no lines of, which today drew nothing of, has no glyphs to join)
+        !!t.lines &&
         t.lines.length === m.lines.length &&
         t.lines.every((l, j) => l.page === m.lines[j]![0] && Math.abs(l.baseline - m.lines[j]![4]) <= 0.01 + 1e-9) &&
         (heldRuns(flat, atomsOf(t))?.read ?? 0) > 0,

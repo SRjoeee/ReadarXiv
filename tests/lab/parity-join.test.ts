@@ -184,11 +184,11 @@ describe("a unit whose kept runs v2 holds as elements is today's unit of the sam
     const math = (src: string, id: string) => ({ t: 'el', id, kind: 'math', src })
     const names = [
       { t: 'text', s: 'Song-Ze Yu' },
-      math('$1$', '1'),
+      math('$^{1}$', '1'),
       { t: 'text', s: ', Fang-Duo Tsai' },
-      math('$1,2$', '3'),
+      math('$^{1,2}$', '3'),
       { t: 'text', s: ', Yi-Hsuan Yang' },
-      math('$1$', '5'),
+      math('$^{1}$', '5'),
     ] as unknown as Content
     const v = bundle({ 1: [member(124, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: names }])
     const t123 = (pieces: object[]) =>
@@ -199,5 +199,8 @@ describe("a unit whose kept runs v2 holds as elements is today's unit of the sam
     expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,2, Yi-Hsuan Yang1' }]))[124]).toEqual({ today: 123 })
     // (another mark: no join)
     expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,3, Yi-Hsuan Yang1' }]))[124]).toBeUndefined()
+    // (and a unit of today's the dump states no lines of, one it drew nothing of, joins nothing)
+    const unlined = new Map<number, object>([...t123(split), [122, { ord: 122, id: R, kind: 'inknotes', text: '', pieces: split }]])
+    expect(todayJoin(p124, v, [{ ord: 122, id: R }, { ord: 123, id: Q }], unlined)[124]).toEqual({ today: 123 })
   })
 })
