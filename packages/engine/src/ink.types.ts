@@ -125,6 +125,8 @@ export const pageInk = ink.pageInk as (
     shapesAll?: boolean
     /** the reader's own table across its pages, each font's name by its object: read once a document (none: once a page) */
     names?: Map<unknown, string> | null
+    /** false: no figure path's lines (`shapes` empty), every other reading as it is */
+    shapes?: boolean
   },
 ) => PageInk
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its

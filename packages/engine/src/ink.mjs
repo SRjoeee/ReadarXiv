@@ -365,8 +365,10 @@ export const PARA_END = /^qe\d+[cjlr]$/
  * glyph's outline its line's
  * `names`: a Map the reader keeps across its pages, each font's name by its object, read once (PDF.js's FontInfo.name decodes a
  * new string at every read): every glyph of a font holds one string. None given, one a page
+ * `shapes` false (with `turned`): no figure path's lines (`shapes` empty), every other reading as it is: a reader that reads none
+ * of them (the front half's read of B, which only arXiv's page's figure texts would read)
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false, names = null }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false, shapes: withShapes = true, names = null }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
@@ -929,7 +931,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
           // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
           // (`shapesAll`: every path's, where the page's figures are not told by its own forms and pictures: arXiv's page, whose
           // pictures' points are B's and whose included figures its producer may have flattened)
-          if (turned && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
+          if (turned && withShapes && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
         if (s.pendingClip) {

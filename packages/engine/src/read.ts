@@ -59,6 +59,8 @@ export interface ReadOptions<X> {
   annotations?: boolean
   /** read each font's own map and mark the glyphs it gives no Unicode of (`nu`; opens the document with fontExtraProperties) */
   mapped?: boolean
+  /** false: no figure path's lines (pageInk's `shapes`), which a reader of B's figures never reads (the front half's adapter) */
+  shapes?: boolean
   /** false: each page's raw glyphs (pageInk's) let go once its Doc page is made, its raw page kept without them (`glyphs` empty):
    *  a reader that reads the Doc's glyphs alone holds one copy of a document's glyphs, never two (the front half's adapter
    *  reading B, lane mem-front) */
@@ -129,6 +131,7 @@ export async function readPdf<X = never>(
         indices: true,
         turned: o.turned ?? false,
         shapesAll: o.shapesAll ?? false,
+        shapes: o.shapes ?? true,
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
         names,

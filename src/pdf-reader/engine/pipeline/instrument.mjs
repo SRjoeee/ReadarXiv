@@ -934,7 +934,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // field it reads (their character, place, ink box, size, font, fill, show and place in it, blank, form, clip, figure) and which it
   // never writes. It read a copy of each glyph of its own made from pageInk's, so that B's glyphs were held three times at once:
   // lane mem-front, after L9 §3 6)
-  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true, rawGlyphs: false })
+  // (and with no figure path's lines, which no step reads of B: its figures' extents and glyphs are read as they were)
+  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true, rawGlyphs: false, shapes: false })
   const lower = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
   // (each page as wrapFinal hands it to the ownership: layout/wrap-final.mjs)
   const pages = read.pages.map(({ raw, page }) => {
