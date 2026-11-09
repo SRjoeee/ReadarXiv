@@ -108,6 +108,11 @@ describe("the baseline's units the candidate does not make, stated with how it r
       [587, `made on arXiv's page as ${'d'.repeat(12)}: content difference: aonly`],
     ])
     expect(statedOf([{ ...unit(id('a'), 5, 'inknotes', [text('x')]), lines: [] }], [{ ...unit(id('b'), 5, 'inkorphan', [text('y')]), lines: [] }])).toEqual([])
+    // (a kept block there is no unit the block's rule moved, which never makes one: (f)'s holding by a kept block states it, as before)
+    const kept = { ...unit(id('e'), 40, 'inkorphan', []), kept: true as const }
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], [kept]))).toEqual([
+      [587, `made on arXiv's page as ${'e'.repeat(12)}: ${CAUSE.heldKept}`],
+    ])
   })
 
   it('states no names line for a line now of another kind that is not the names toggle (held whole (f)), nor one at another place', () => {

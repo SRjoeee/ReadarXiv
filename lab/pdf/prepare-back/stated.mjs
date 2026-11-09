@@ -81,8 +81,9 @@ export function statedOf(base, units, { trails = [], labels = new Map() } = {}) 
     const at = (c) => (L && c.lines?.[0] ? meets(L, c.lines[0]) : c.ord === u.ord)
     let k = free.findIndex((c) => c.kind === u.kind && at(c))
     // (none of its kind: a names unit of today's rule 8 the author block's rule moved out of the block, its ledger class's now
-    // (rebuild/author-toggle: the names toggle the block under the title's alone), 2610.21084v1's page-foot note of the e-mails)
-    if (k < 0 && u.kind === 'inknames') k = free.findIndex((c) => LEDGER_OF_NAMES.has(c.kind) && at(c))
+    // (rebuild/author-toggle: the names toggle the block under the title's alone), 2610.21084v1's page-foot note of the e-mails,
+    // 2610.21106v1's end addresses; never a kept block, which the rule makes none of)
+    if (k < 0 && u.kind === 'inknames') k = free.findIndex((c) => LEDGER_OF_NAMES.has(c.kind) && !c.kept && c.pieces?.length && at(c))
     return k < 0 ? null : free.splice(k, 1)[0]
   }
   const chars = (p) => [...(p.kind === 'text' ? p.s : p.kind === 'ph' ? p.src : '')].sort().join('')
