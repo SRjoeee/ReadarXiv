@@ -346,12 +346,13 @@ function spanIn(u, b) {
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
  *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
- *  (CHANGED) its glyphs' characters (`text`: a paragraph's full lines are of different texts, setsOf's measure) */
+ *  (CHANGED) its glyphs' own width, their advances without the spaces between them (`glyphs`: setsOf's measure). Its size is
+ *  setsOf's to key (CHANGED: today's keyed it to the hundredth, see there) */
 function edgesOf(r, gs) {
   const f = r.frame, s0 = f.ox * f.ux + f.oy * f.uy, len = Math.max(0, ...gs.map(x => along(f, x.ex, x.ey)))
   const at = s => ({ along: s0 + s, x: f.ox + f.ux * s, y: f.oy + f.uy * s })
   const square = Math.abs(f.ux) < 1e-3 || Math.abs(f.uy) < 1e-3
-  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null, text: gs.map(x => x.u).join('') }
+  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null, glyphs: gs.reduce((w, x) => w + along(f, x.ex, x.ey) - along(f, x.ox, x.oy), 0) }
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
@@ -377,6 +378,20 @@ function setsOf(mine, evidence, stats) {
   if (mine.length < 2) return
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: today's keyed the size to the
+  // hundredth, and 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, made a column of their own)
+  {
+    const bySize = new Map()
+    evidence.forEach((e, i) => (bySize.get(e.key) ?? bySize.set(e.key, []).get(e.key)).push(i))
+    for (const [key, list] of bySize) {
+      const order = [...list].sort((a, b) => evidence[a].size - evidence[b].size)
+      let n = 0
+      order.forEach((i, j) => {
+        if (j && evidence[i].size - evidence[order[j - 1]].size > 0.01 * evidence[order[j - 1]].size) n++
+        evidence[i].key = `${key}:${n}`
+      })
+    }
+  }
   const byKey = new Map()
   evidence.forEach((e, i) => (byKey.get(e.key) ?? byKey.set(e.key, []).get(e.key)).push(i))
   const lines = EDGES.flatMap(edge => AXES.map(axis => ({ edge, axis, parent: new Int32Array(evidence.length).map((_, i) => i) })))
@@ -409,13 +424,14 @@ function setsOf(mine, evidence, stats) {
   // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
   // tick's label stays centred)
   const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
-  // (a paragraph's measure: an end column and a start column along the runs that hold two lines or more of different texts in
-  // common (its full lines), the end column's other lines all starting inside it (an entry's first line, indented by hand) and
-  // the start column's all ending inside it (a paragraph's last line). Its lines were set justified, each from its start, its
-  // end no edge a line was set from. Right-aligned labels share no start but where two are one text (2610.10492v1's two
-  // "Population mean") or as wide, which tells no measure: a longer label of the column starts before them. CHANGED: today's set
-  // a paragraph's indented line, which shares its end and not its start, from its end — 2411.13093v4 p18's prompt, an entry's
-  // translated first line flush against the box's right edge, its next line from the left)
+  // (a paragraph's measure: an end column and a start column along the runs that hold lines in common (its full lines), two of
+  // them of glyphs of different widths, set to one width by the stretch of their spaces (justified), the end column's other lines
+  // all starting inside it (an entry's first line, indented by hand) and the start column's all ending inside it (a paragraph's
+  // last line). Its lines were set each from its start, its end no edge a line was set from. Right-aligned labels that share a
+  // start too are as wide in their glyphs, of one text (2610.10492v1's two "Population mean") or not (2610.20808v1's "pt" "en"
+  // "es", 2610.37668v1's "PSNR 29.49 dB" "PSNR 36.24 dB"): no stretch, no measure. CHANGED: today's set a paragraph's indented
+  // line, which shares its end and not its start, from its end — 2411.13093v4 p18's prompt, an entry's translated first line
+  // flush against the box's right edge, its next line from the left)
   const measured = new Map()
   const isMeasure = (line, c) => {
     if (line.axis !== 'along') return false
@@ -427,7 +443,9 @@ function setsOf(mine, evidence, stats) {
     for (const j of inEnd) { const s = find(start.parent, j); (byStart.get(s) ?? byStart.set(s, []).get(s)).push(j) }
     let yes = false
     for (const [s, full] of byStart) {
-      if (full.length === inEnd.length || new Set(full.map(j => evidence[j].text)).size < 2) continue
+      if (full.length === inEnd.length) continue
+      const widths = full.map(j => evidence[j].glyphs)
+      if (Math.max(...widths) - Math.min(...widths) <= ALIGN_TOL * evidence[full[0]].size) continue
       const from = Math.max(...full.map(j => evidence[j].start.along)), to = Math.min(...full.map(j => evidence[j].end.along))
       const indented = inEnd.every(j => find(start.parent, j) === s || evidence[j].start.along > from)
       let short = true

@@ -426,7 +426,7 @@ describe('today’s ink makers in the engine package', () => {
       ['symbol', '$'],
     ])
   })
-  it('set every line of a justified paragraph inside a figure from its start, where today’s set an indented one from its end (the one change)', () => {
+  it('set every line of a justified paragraph inside a figure from its start, where today’s set an indented one from its end (a change)', () => {
     // (2411.13093v4 p18: a prompt in an included figure, a justified paragraph whose entries' first lines are indented by hand.
     // The indented line shares the paragraph's end and not its start; today's took the end column, the most runs', as its
     // edge, and its translation was laid flush against the box's right edge)
@@ -434,7 +434,7 @@ describe('today’s ink makers in the engine package', () => {
       { s: 'Body owned text', y: 700 },
       { s: 'The entry of the box indented here', x: 92, y: 640, form: true, fid: 1 },
       { s: 'and its lines go on to the measure end', x: 72, y: 628, form: true, fid: 1 },
-      { s: 'set as one block of the prose it holds', x: 72, y: 616, form: true, fid: 1 },
+      { s: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true, fid: 1 },
       { s: 'its last one', x: 72, y: 604, form: true, fid: 1 },
     ])
     const anchors = (I: Impl) => {
@@ -445,7 +445,7 @@ describe('today’s ink makers in the engine package', () => {
     expect(anchors(T as unknown as Impl)).toEqual([
       ['The entry of the box indented here', 'start'],
       ['and its lines go on to the measure end', 'start'],
-      ['set as one block of the prose it holds', 'start'],
+      ['set as one blocky paragraph, its prose', 'start'],
       ['its last one', 'start'],
     ])
   })

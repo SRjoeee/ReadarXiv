@@ -341,7 +341,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           'a paragraph whose word',
           { text: 'The entry of the box indented here', x: 96, y: 640, form: true },
           { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
-          { text: 'set as one block of the prose it holds', x: 72, y: 616, form: true },
+          { text: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true },
           { text: 'its last one', x: 72, y: 604, form: true },
           { text: 'continues on its last line', y: 560 },
         ],
@@ -352,7 +352,36 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(figs.map((m) => [m.plain, m.align])).toEqual([
       ['The entry of the box indented here', 'l'],
       ['and its lines go on to the measure end', 'l'],
-      ['set as one block of the prose it holds', 'l'],
+      ['set as one blocky paragraph, its prose', 'l'],
+      ['its last one', 'l'],
+    ])
+  })
+
+  it('sets a paragraph’s lines from their start where the figure’s maker set two of them a hundredth of a point larger', () => {
+    // (2411.13093v4 p18: lines 515, an entry's indented first line, and 527, a full line, set at 7.07 pt among the paragraph's
+    // 7.06's. A column is of one size, and sizes keyed to the hundredth parted the two from their paragraph into a column of their
+    // own, its end the most runs': both laid from the box's right edge. One size as runs join, within 1 % of the size before)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'The entry of the box indented here', x: 96, y: 640, size: 10.02, form: true },
+          { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
+          { text: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true },
+          { text: 'its lines set in one justified measure', x: 72, y: 604, size: 10.02, form: true },
+          { text: 'its last one', x: 72, y: 592, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['The entry of the box indented here', 'l'],
+      ['and its lines go on to the measure end', 'l'],
+      ['set as one blocky paragraph, its prose', 'l'],
+      ['its lines set in one justified measure', 'l'],
       ['its last one', 'l'],
     ])
   })
@@ -382,6 +411,33 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['Accuracy', 'r'],
       ['Population mean', 'r'],
       ['Loss', 'r'],
+    ])
+  })
+
+  it('keeps right-aligned labels set from their end where their glyphs are as wide, whatever their texts', () => {
+    // (2610.20808v1 p8's language codes "pt" "en" "es" "zh" "hi", as wide in their glyphs, share both edges; a shorter one starts
+    // inside them. Lines of different texts as wide tell no measure: a justified paragraph's full lines are of glyphs of different
+    // widths, set to one width by the stretch of their spaces)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'deu', x: 282, y: 640, form: true },
+          { text: 'eng', x: 282, y: 628, form: true },
+          { text: 'spa', x: 282, y: 616, form: true },
+          { text: 'ja', x: 288, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['deu', 'r'],
+      ['eng', 'r'],
+      ['spa', 'r'],
+      ['ja', 'r'],
     ])
   })
 
