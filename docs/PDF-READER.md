@@ -2238,10 +2238,16 @@ within noise.
 ### 17.9 On the rebuilt reader (`packages/`): the starts stated by the prepare
 
 - **What pairs the sentences** is the row's starts (Row.sentences: the translator's own, offsets in the unit's projection and
-  its translation's) found on each pane, as on the layer path: on arXiv's page at the sentence's first word, its second or third
-  where the first is not found, else the unit lights whole on both (`packages/typeset` lay/lit.ts `startsOnA`); as drawn, the
-  laid token of that word (each token's sentence its place in the translation, an element's its piece's, else its
-  neighbour's; the token that carries the first word begins it, an opening bracket set against the word with it). A forced
+  its translation's) found on each pane, as on the layer path: on arXiv's page at the sentence's first word or element, its
+  second or third where the first is not found, else the unit lights whole on both (`packages/typeset` lay/lit.ts
+  `startsOnA`); as drawn, the laid token of that word or element (each token's sentence its place in the translation, an
+  element's its piece's, else its neighbour's; the token that carries the first word begins it, an opening bracket set against
+  the word with it). A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
+  macro: "\method{} trains this model …") begins at it on both panes: moved on to the first letter past it, as both panes did
+  until 2026-11-10, the element lit with the sentence before (2611.03953v2 p5, the owner's report: "Three details of Equation
+  (6) matter." came back with the reference first, and "(6)" lit with the sentence before; on staging's rows of five papers,
+  591 of 2,148 translated starts and 556 source starts stood before an element, 350 and 320 units, the paper's `\method{}`,
+  `\citet` subjects, `\cref`s, formulas, a bibliography's `\newblock`s). A forced
   break (TeX's `\\`, El.brk) ends the sentence it stands in on both panes, as the line TeX ended there: the text after it is
   a block of its own on the page (1810.04805v2 p8: "… as BERT_BASE:" `\\` "No NSP: …", one TeX paragraph and one sentence of
   Microsoft's across the break, lit as one; the owner's staging review). On a row a sentence's box runs on to the next one's
@@ -2252,7 +2258,8 @@ within noise.
 - **The prepare states where each word stands on A** (format's `Placed.words`: each word of the projection, its line and its
   first glyph's x0, from the opening brackets and quotes set against it, as the text layer runs them in its token;
   `packages/engine` locate/words.ts: the projection's letters and the unit's glyphs' matched in order, Myers', each side's word
-  breaks kept), and marks the units a translator is to cut (`Unit.sentences`: every kind but a heading,
+  breaks kept; and each element where its ink's first box stands on A, its line and x0, but a display, a block of its own, and
+  an element TeX set outside the unit's text; locate.ts), and marks the units a translator is to cut (`Unit.sentences`: every kind but a heading,
   a cell, a figure's text and a babel name, the layer path's NOT_RUNNING). Every word, not the shared cutter's starts alone:
   of Microsoft's 40,409 stored starts over the corpus (13,149 units, 96 paper-targets, 2026-11-08), 82.4 % are among the
   shared cutter's cuts and 82.9 % among Unicode's sentence boundaries, and what precedes the rest is no closed set ("." 73 %,

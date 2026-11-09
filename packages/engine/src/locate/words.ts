@@ -41,6 +41,26 @@ export function projectionOf(content: readonly Piece[]): string {
   return out
 }
 
+/** each element's (and nested unit's) offset in the projection (projectionOf's count) and its piece id, in order: where a
+ *  sentence may begin with it (a row's start that falls on it: its translator set it first in its sentence, "\method{} trains
+ *  …", "\citet{x} proposes …"), placed by locate at its ink's first box on A */
+export function elementsOf(content: readonly Piece[]): [offset: number, id: string][] {
+  const out: [number, string][] = []
+  const walk = (ps: readonly Piece[], at: number): number => {
+    for (const p of ps) {
+      if (p.t === 'text') at += p.s.length
+      else if (p.t === 'span') at = walk(p.content, at)
+      else {
+        out.push([at, p.id])
+        at += 1
+      }
+    }
+    return at
+  }
+  walk(content, 0)
+  return out
+}
+
 const LETTER = /[\p{L}\p{N}]/u
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 /** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */
