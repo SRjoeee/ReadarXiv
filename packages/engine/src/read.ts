@@ -14,6 +14,7 @@
 // (private use, a replacement character, a control), is `nu`: its text is no reading of its glyph (2307.16209v1's newtx sum
 // sign, which PDF.js reads by its code as "Í"). The glyph's state rides through pageInk on the same tag.
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
+import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
@@ -207,38 +208,44 @@ function docPageOf(
         : ink.degraded
           ? 'degraded'
           : null
+  // (each glyph's coordinates in the page's one array, glyph.ts PageGlyph: a field of its own each was a heap number of 16 bytes)
+  const c = new Float64Array(unread ? 0 : 8 * ink.glyphs.length)
   const glyphs: DocGlyph[] = []
   for (const g of ink.glyphs) {
     const [u, code, nu] = split(g.u)
     g.u = u
     if (!/\S/.test(u)) g.blank = true
     else delete g.blank
+    if (unread) continue
     const font = String(g.font)
-    glyphs.push({
-      u,
-      code,
-      font,
-      base: baseOf(font),
-      x0: g.x0,
-      x1: g.x1,
-      y: g.y,
-      top: g.top,
-      bottom: g.bottom,
-      size: g.size,
-      ix0: g.ix0,
-      ix1: g.ix1,
-      n: g.n ?? -1,
-      k: g.k ?? -1,
-      form: !!g.form,
-      blank: !!g.blank,
-      fill: g.fill ?? -1,
-      fid: (g as { fid?: number }).fid,
-      pid: (g as { pid?: number }).pid,
-      clipped: g.clipped,
-      unseen: g.unseen,
-      ...(nu ? { nu: true as const } : {}),
-      ...((g as { along?: number }).along !== undefined ? { along: (g as { along?: number }).along } : {}),
-    })
+    const o = 8 * glyphs.length
+    c[o] = g.x0
+    c[o + 1] = g.x1
+    c[o + 2] = g.y
+    c[o + 3] = g.top
+    c[o + 4] = g.bottom
+    c[o + 5] = g.size
+    c[o + 6] = g.ix0
+    c[o + 7] = g.ix1
+    glyphs.push(
+      new PageGlyph(c, o, {
+        u,
+        code,
+        font,
+        base: baseOf(font),
+        n: g.n ?? -1,
+        k: g.k ?? -1,
+        form: !!g.form,
+        blank: !!g.blank,
+        fill: g.fill ?? -1,
+        fid: (g as { fid?: number }).fid,
+        pid: (g as { pid?: number }).pid,
+        clipped: g.clipped,
+        unseen: g.unseen,
+        ...(nu ? { nu: true as const } : {}),
+        ...((g as { along?: number }).along !== undefined ? { along: (g as { along?: number }).along } : {}),
+      }),
+    )
   }
   const turned: DocTurned[] = []
   for (const t of ink.turned ?? []) {
