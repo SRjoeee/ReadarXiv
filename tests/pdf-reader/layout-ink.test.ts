@@ -404,6 +404,9 @@ describe('pageInk', () => {
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dte4', glyph: 2 }, { name: 'dts4', glyph: 3 }, { name: 'dts5', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
     // (a glyph's mode its innermost region's: the text's, the math in it, the text in that)
     expect([...displayTextMask([{ kind: 'display', from: 0, to: 10 }, { kind: 'dtext', from: 2, to: 9 }, { kind: 'dmath', from: 4, to: 8 }, { kind: 'dtext', from: 5, to: 6 }], 11)]).toEqual([0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0])
+    // (a box whose text is one formula, \\boxed's: its math's points at its own ends, the math closed first and so stated first —
+    // the inner of two regions on the same glyphs; 2608.25210v2 p10's framed bounds read as text)
+    expect([...displayTextMask(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dts7', glyph: 2 }, { name: 'dms8', glyph: 2 }, { name: 'dme8', glyph: 5 }, { name: 'dte7', glyph: 5 }, { name: 'be1', glyph: 6 }], 6), 6)]).toEqual([0, 0, 0, 0, 0, 0])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {

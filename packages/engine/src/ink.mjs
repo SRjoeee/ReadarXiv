@@ -1036,9 +1036,10 @@ export function regionsOfPoints(points, glyphCount) {
 export function displayTextMask(regions, n) {
   const out = new Uint8Array(n)
   // (nested regions start later than those holding them: in the order they start, each one's mode over its glyphs is the
-  // innermost's)
-  const rs = (regions ?? []).filter(r => r.kind === 'dtext' || r.kind === 'dmath').sort((a, b) => a.from - b.from || b.to - a.to)
-  for (const r of rs) out.fill(r.kind === 'dtext' ? 1 : 0, Math.max(0, r.from), Math.min(n, r.to))
+  // innermost's; of two on the same glyphs the inner closed first, and regionsOfPoints states regions as they close)
+  const rs = (regions ?? []).map((r, i) => [r, i]).filter(([r]) => r.kind === 'dtext' || r.kind === 'dmath')
+    .sort(([a, i], [b, j]) => a.from - b.from || b.to - a.to || j - i)
+  for (const [r] of rs) out.fill(r.kind === 'dtext' ? 1 : 0, Math.max(0, r.from), Math.min(n, r.to))
   return out
 }
 /** a page's glyphs (`n` of them) each 1 where it stands in a region of `kind` (pageInk's `regions`), else 0 */
