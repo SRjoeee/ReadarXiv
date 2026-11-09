@@ -34,6 +34,8 @@ const BASE = arg('base') ? readFileSync(resolve(arg('base')), 'latin1') : null
 
 /** a cell unit between its marks, as layoutMarking writes them */
 const C = (i, text = `cell ${i}`) => `\\leavevmode\\axtmark{t${i}s}${text}\\axtend{t${i}e}`
+/** a unit no cell's (an author block's, a paragraph), between its marks as layoutMarking writes them */
+const U = (i, text = `unit ${i}`) => `\\leavevmode\\axtmark{${i}s}${text}\\axtend{${i}e}`
 const doc = (pre, body, cls = 'article') => `\\documentclass${cls === 'article' ? '' : '[aps,pra,twocolumn]'}{${cls}}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`
 const LONG = 'a text longer than any cell'
 
@@ -102,6 +104,26 @@ const CASES = {
       '\\end{tabular}',
     ].join('\n'), cls), { [i]: 'l', [i + 1]: 'c', [i + 2]: 'r', [i + 3]: 'c', [i + 4]: 'r' }]]
   })),
+  // (an author block's units, no cell's: NeurIPS's \And, each author a tabular[t]{c} of their own, and LaTeX's \author with
+  // \and under \maketitle, each name and place its cell's line, in a brace group of its own or not: their column's class. Not
+  // where the cell's line is more than the unit: two units in one cell, a unit in a box inside the cell. A unit that is a
+  // paragraph (a p column's) its paragraph's; a body's paragraph in a list and one holding a tabular theirs; longtable's
+  // caption, in a \noalign, set as before)
+  authors: [doc('\\usepackage{longtable}\n\\title{A}\n\\author{' + U(10, 'Alice Smith') + ' \\\\ ' + U(11, 'Some University') + ' \\and ' + U(12, 'Bob Jones') + '}', [
+    '\\maketitle',
+    `\\begin{tabular}[t]{c}\\bf\\rule{0pt}{24pt}${U(1, 'Ashish Vaswani')}\\footnotemark[1]\\\\ ${U(2, 'Google Brain')}\\\\ \\texttt{avaswani@google.com}\\\\`,
+    `\\end{tabular}\\hfil\\linebreak[0]\\hfil\\begin{tabular}[t]{c}\\bf\\rule{0pt}{24pt}${U(3, 'Noam Shazeer')}\\footnotemark[1]\\\\ {${U(4, 'Google Research')}}\\\\ ${U(5, '{\\L}ukasz Kaiser')}\\end{tabular}`,
+    '',
+    `\\begin{tabular}{l} ${U(20)} \\\\ ${LONG} \\end{tabular}`,
+    `\\begin{tabular}{c} ${U(21, 'A')}, ${U(22, 'B')} \\\\ ${LONG} \\\\ \\mbox{${U(23)}} \\\\ ${U(24, 'x')}\\footnotemark[2] \\end{tabular}`,
+    `\\begin{tabular}{p{3cm}} ${U(26, 'a paragraph in a p column, long enough to break its lines in its cell')} \\end{tabular}`,
+    '',
+    `\\begin{itemize}\\item ${U(27, 'an item of a list, its paragraph justified')}\\end{itemize}`,
+    '',
+    `${U(28, 'a paragraph holding a tabular \\begin{tabular}{c} x \\end{tabular} and more words')}`,
+    '',
+    `\\begin{longtable}{c} \\caption{${U(29, 'A caption')}}\\\\ x \\\\ ${LONG} \\\\ \\end{longtable}`,
+  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: 'c', 10: 'c', 11: 'c', 12: 'c', 20: 'l', 21: '-', 22: '-', 23: '-', 24: 'c', 26: 'j', 27: 'j', 28: 'j' }],
   // (tabularray's tblr measures a cell in an \hbox, then sets it as a paragraph, \raggedright, \centering or \raggedleft: its
   // paragraph's; nicematrix's NiceTabular builds its preamble with LaTeX's; a plain \halign, no template of LaTeX's: nothing)
   others: [doc('\\usepackage{tabularray,nicematrix}', [

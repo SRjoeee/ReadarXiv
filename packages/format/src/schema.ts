@@ -190,6 +190,11 @@ export const El = z.object({
   // code units (as the text holds them: a space between two glyphs, a ligature's letters, an astral character's two): the unit
   // the typesetter slices `copy` in
   breaks: z.array(z.tuple([num, int])).optional(),
+  // a member's trail (its id `~`, no piece's): the ink TeX set right after its last glyph, glued to it on its row, that no unit
+  // owns (a class's marks after a name and its separator, a \thanks mark), which travels with its text: drawn as its crop after
+  // the translation's end. A typesetter of before reads it as an element no piece names, never drawn: its unit's group, and
+  // nothing moves where the unit is the original's
+  trail: flag.optional(),
 })
 /** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
 export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])

@@ -26,6 +26,7 @@ import {
   type Side,
   widen,
 } from '../unit/decor.ts'
+import { cropOfBox } from '../unit/crops.ts'
 import { params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 import type { FlowMember } from './flow.ts'
@@ -34,6 +35,9 @@ type Line = Placed['lines'][number]
 const KEPT = 1,
   PINNED = 2,
   SHORTSKIP = 4
+
+/** a trail's crop's element index (Tok.crop.k): no piece's (a piece's is its index, 0 up), never a label's (none) */
+const TRAIL_K = -1
 
 /** what the reading (L5) and the tokens (L7) decided of the member, handed in until the adapter makes them */
 export type Reading = {
@@ -476,6 +480,28 @@ export function adapt(i: AdaptInput): Adapted {
     tokens = Object.assign([c as unknown as (typeof tokens)[number], ...tokens], {
       base: (tokens as { base?: unknown }).base,
     }) as typeof tokens
+  }
+  // (its trail, the ink TeX set glued after its last glyph that no unit owns (El.trail: a class's marks and separator after a
+  // name, a \thanks mark): cut from where TeX set it and drawn right after its own tokens' last, glued to it as TeX set it, so
+  // that the member after it on the row is laid from its end and no hole stands where the original's longer text was (2604.14228v3)
+  const trail = i.reading.own ? (m.els ?? []).find(([, e]) => e.trail && e.ink.length === 1) : undefined
+  if (trail && tokens.length) {
+    const [p, x0, y0, x1, y1, base] = trail[1].ink[0]!
+    const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: base })
+    const crop = {
+      mode: 'crop' as const,
+      page: p,
+      ...box,
+      text: trail[1].copy ?? '',
+      k: TRAIL_K,
+      gap: { box: { x0, x1, bottom: y0, top: y1 } },
+    }
+    tokens = Object.assign(
+      [...tokens, { crop, cw: box.crop[2] - box.crop[0], glue: true, w100: 0 } as unknown as (typeof tokens)[number]],
+      {
+        base: (tokens as { base?: unknown }).base,
+      },
+    ) as typeof tokens
   }
   const member: FlowMember = {
     ord: m.ord,

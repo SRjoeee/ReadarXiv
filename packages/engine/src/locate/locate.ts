@@ -759,6 +759,37 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   }
 
+  // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
+  // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
+  // \thanks mark \maketitle sets in an \rlap after a name), claimed as its element TRAIL, which travels with its text (its group
+  // `.e`, El.trail: laid after its translation's end). Left where TeX set it, that ink fenced the member's room beside it and kept
+  // the member after it on the row where it stood: 2604.14228v3's translated names each at its original's start, a hole after
+  // each, 1706.03762v7's first name set small before its \thanks mark. Glued: its glyphs one after the other in TeX's stream,
+  // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
+  // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
+  // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  for (const mem of members) {
+    if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
+      continue
+    const end = m.bToA[mem.bLast] as number
+    if (end < 0) continue
+    const last = gA(end)
+    let prev = last
+    const trail: number[] = []
+    for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
+      const a = m.bToA[b] as number
+      if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
+      const g = gA(a)
+      if (!isInk(g) || g.top <= last.bottom || g.bottom >= last.top || g.x0 < prev.x0) break
+      if (g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)) break
+      trail.push(a)
+      prev = g
+    }
+    if (!trail.length) continue
+    for (const a of trail) claimedA[a] = mem.ord
+    mem.els.set(TRAIL, trail)
+  }
+
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
   // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
@@ -1338,6 +1369,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       mem.elements.push([id, el])
     }
+    // its trail (above): an element of no piece, its ink a crop's, its text its glyphs'
+    const tr = mem.els.get(TRAIL)
+    if (tr?.length) {
+      const L = cutLines(tr, atA)[0]
+      if (L)
+        mem.elements.push([
+          TRAIL,
+          {
+            kind: 'other',
+            copy: tr.map((a) => gA(a).u).join(''),
+            ink: [[L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base]],
+            trail: 1,
+          },
+        ])
+    }
     // its label: the class's mark before it
     if (mem.label.length) {
       const L = cutLines(mem.label, atA)[0]
@@ -1495,8 +1541,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   const standsBefore = new Map<number, number[]>()
   const standing = new Set<number>()
+  // (one whose first glyph TeX set right after a member's last, on that member's last row, stands after it: the paragraph goes
+  // on past that member into text no unit owns. acmart's reference format, its last author's name a unit of \author's that TeX
+  // sets late in the stream and ". 2027. ABNAT: …" after it, the title set again, made on A: no member begins after it on the
+  // page, and standing where it was made, after every member, the member before it was another row's (2610.22065v1), its
+  // translation laid at its original's start past a gap. Else before the member whose first glyph comes next, as above)
+  const lastAt = new Map<number, number>()
+  for (const x of members) if (x.bLast >= 0 && !madeOnA(x)) lastAt.set(x.bLast, x.ord)
+  const standsAfter = new Map<number, number[]>()
   for (const x of members) {
-    if (!madeOnA(x) || x.bLast < 0) continue
+    if (!madeOnA(x) || x.bFirst < 0) continue
+    let b = x.bFirst - 1
+    while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0 && !madeB.has(b)) b--
+    const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
+    const lead = o === undefined ? undefined : members[o]
+    const a = lead?.lines.at(-1),
+      l = x.lines[0]
+    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < a[3] - 0.5) continue
+    if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
+    ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
+    standing.add(x.ord)
+  }
+  for (const x of members) {
+    if (!madeOnA(x) || x.bLast < 0 || standing.has(x.ord)) continue
     let b = x.bLast + 1
     while (b < NB && pageB[b] === pageB[x.bLast] && (unitB[b] as number) < 0 && !madeB.has(b)) b++
     const next = b < NB && pageB[b] === pageB[x.bLast] ? firstAt.get(b) : undefined
@@ -1508,6 +1575,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const put = (o: number) => {
     for (const x of standsBefore.get(o) ?? []) put(x)
     seq.push(members[o]!)
+    for (const x of standsAfter.get(o) ?? []) put(x)
   }
   for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
@@ -1518,9 +1586,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // notes as one paragraph, a note on the row the one before ends: 2608.06701v1 p5), but a member made on A that B printed
   // right before it)
   let note: number | null = null
+  // (a member of the instrument's that B never printed — a unit whose marks TeX set nowhere, acmart's \affiliation between two
+  // names its reference format sets again — has no place in TeX's stream: never the member before. 2610.22065v1: the authors'
+  // names each a flow of their own, each laid at its original's start, the gaps between them read as stretched spaces)
+  const inStream = (x: Member) => x.bFirst >= 0 || madeOnA(x)
   for (let q = 0; q < seq.length; q++) {
     const mem = seq[q]!
     let k = q - 1
+    while (k >= 0 && !inStream(seq[k]!)) k--
     if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
     else if (mem.kind === 'footnote' && note !== null && !(k >= 0 && standsBefore.get(mem.ord)?.includes(seq[k]!.ord)))
       k = note
@@ -1563,8 +1636,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (!insert(mem) && !madeOnA(mem)) body = q
-    if (mem.kind === 'footnote') note = q
+    if (!insert(mem) && !madeOnA(mem) && inStream(mem)) body = q
+    if (mem.kind === 'footnote' && inStream(mem)) note = q
   }
   // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
   flows.sort((f, g) => Math.min(...f) - Math.min(...g))
@@ -1930,6 +2003,11 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 const ON_ROW = 0.4
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
 const ON_BASE = 0.05
+/** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
+ *  wordsOf: ink-units.mjs WORD_GAP) */
+const WORD_GAP = 0.12
+/** the element id of a member's trail (no piece's: a piece's id is its index) */
+export const TRAIL = '~'
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
  *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a
