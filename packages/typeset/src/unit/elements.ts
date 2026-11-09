@@ -40,6 +40,8 @@ export type Res = {
   parts?: readonly unknown[]
   /** a URL's crop: where TeX's url package may break it (El.breaks: x on the page, the copy text's UTF-16 code units before) */
   breaks?: readonly (readonly [number, number])[]
+  /** a mark's crop (lay/read.ts readingsOf's `mark`): glued to what precedes it, as TeX sets a mark, no glue between */
+  mark?: true
   proof?: true
   empty?: true
   inPlace?: true

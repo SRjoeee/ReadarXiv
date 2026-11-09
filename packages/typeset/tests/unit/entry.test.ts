@@ -1566,6 +1566,26 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       expect(c?.it.src.slice(1)).toEqual([149.6, 702.7, 154.4, 706.5, 700])
       expect(items.some((x) => 'face' in x.it && /[\u22173]/.test(x.it.s))).toBe(false)
     }
+    // (glued to what precedes it, as TeX sets it, no glue between: never a line's first item after a CJK character a line
+    // could break after, where its text was glued as a superscript's; drawn as a crop and free to break there, a footnote's
+    // mark after a sentence's full stop began a line of its own, 1810.04805v2 p7's 12, 2609.36054v2 p5's 7)
+    const zh = rulesFor('zh')
+    const two = member({
+      els: [['1', { kind: 'num', mark: 1, ink: [ink], text: '7', style: { role: 'serif', size: 7 } }]],
+      lines: [
+        [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 120, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const full = row([
+      { t: 'text', s: `${'\u4e2d'.repeat(48)}\u3002` },
+      { t: 'el', id: '1' },
+      { t: 'text', s: '\u4e2d'.repeat(30) },
+    ])
+    const [glued] = layPage(part(two), rowsOf([full]), zh, metrics()).members
+    expect(glued!.state).toBe('laid')
+    expect(glued!.lines.length).toBe(2)
+    for (const l of glued!.lines) expect('src' in l[3][0]!).toBe(false)
     // (a symbol TeX set on the line, no superscript, stays the page's text, as before)
     const level = drawn({ kind: 'symbol', sym: ['\u2264'], copy: '\u2264', ink: [[1, 150, 699, 156, 705, 700]] })
     expect(crop(level)).toBeUndefined()

@@ -221,7 +221,7 @@ function drawnAs(
     if (parts) return { ...cropFields(parts), text: copy } as Res
   }
   if ((cls !== 'other' && !mark) || broken || textMacro) return { mode: 'orig-text', text: g.text, sup, st } as Res
-  return { mode: 'crop', page, ...cropOfBox(box), text: copy } as Res
+  return { mode: 'crop', page, ...cropOfBox(box), text: copy, ...(mark ? { mark: true } : {}) } as Res
 }
 
 /** each element's reading (U.elements' ElementReading) from its El, by the row's piece index */

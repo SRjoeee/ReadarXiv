@@ -99,6 +99,8 @@ export type TRes = {
   crop?: number[]
   gap?: Record<string, unknown> | null
   rename?: [number, number, string][]
+  /** a mark's crop: glued to what precedes it (unit/elements.ts Res.mark) */
+  mark?: true
   brk?: true
   room?: number
   brkAt?: number
@@ -712,7 +714,10 @@ export function tokens(i: TokensInput): Tokens {
       const ecglue = !keepAll && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
       for (const [n, q] of cropPartsOf(r).entries()) {
         if (n) pushText(' ', style())
-        const glue = tokens.length > 0 && !lastIsSpace() && !(n === 0 && ecglue)
+        // (a mark's crop glued to what precedes it, as its text was a superscript's: TeX sets no glue between a word and its
+        // mark, so no line begins with it; after a CJK character, free to break as between two, a footnote's mark after a
+        // sentence's full stop began a line of its own, 1810.04805v2 p7's 12)
+        const glue = tokens.length > 0 && !lastIsSpace() && (!!r.mark || !(n === 0 && ecglue))
         const c = q.crop as number[]
         tokens.push({ crop: q, cw: c[2]! - c[0]!, glue, w100: 0 })
       }
