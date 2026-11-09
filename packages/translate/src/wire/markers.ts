@@ -22,7 +22,10 @@
 //   went out before it, else at the group's end, as today's wire puts it back; one beside a span that holds all the rest
 //   leaves that span around the translation, itself outside it where it stands;
 // - a marker touching a word is read as part of it, and one right after a full stop leaves the last word untranslated: a
-//   space of ours around it, taken back on reading where the reply kept it beside a stop or a digit. Not around an element
+//   space of ours around it, taken back on reading wherever the reply kept it on that side of the marker: the space is the
+//   wire's, not the page's (DESIGN §6.2, as the HTML page's rehydrate takes it), and the source set the element glued there,
+//   a mark, a script or an accent to its word, a tie to its neighbours (before 2026-11-09 only beside a stop or a digit:
+//   2610.20967v1's names read back a space TeX never set before each name's marks, 4.3 pt where TeX's is 1.35). Not around an element
 //   inside a word (a letter right before it and right after it, an element that reads as part of a word: `inWord`): there
 //   the word is one token of the source, and spaced it went out as two words (2608.25210v2's `str\_s`: `str @a# s` came
 //   back `STR @a#`, `LLM @a# bottom @b# up` with "bottom" and "up" translated; unspaced, the four identifiers asked came
@@ -79,6 +82,9 @@ export interface MarkersPlan {
   stops: ReadonlySet<number>
   numbers: ReadonlySet<number>
   numbersAfter: ReadonlySet<number>
+  /** markers the wire set a space of its own before, and after: where the source set the element glued to the text there */
+  gluedBefore: ReadonlySet<number>
+  gluedAfter: ReadonlySet<number>
   /** markers after which the wire wrote their element's own stop */
   own: ReadonlySet<number>
   /** markers after which the wire wrote a line end, their element's stop: taken back on reading */
@@ -330,6 +336,8 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
   const stops = new Set<number>()
   const numbers = new Set<number>()
   const numbersAfter = new Set<number>()
+  const gluedBefore = new Set<number>()
+  const gluedAfter = new Set<number>()
   const own = new Set<number>()
   const lines = new Set<number>()
   const kept: { id: string; depth: number }[] = []
@@ -397,6 +405,8 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     else if (stop) own.add(n)
     const after = !inside && !line && /^[\p{L}\p{N}\p{M}]/u.test(nextText) ? ' ' : ''
     const end = it.t === 'void' ? it.at + it.len : it.at
+    if (before) gluedBefore.add(n)
+    if (after) gluedAfter.add(n)
     put(before, it.at)
     put(`@${toAlpha(n)}#`, it.at)
     put(stop, end)
@@ -419,6 +429,8 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     stops,
     numbers,
     numbersAfter,
+    gluedBefore,
+    gluedAfter,
     own,
     lines,
     around: ids,
@@ -462,6 +474,12 @@ const LINE_LEAD = /^[ \t\f\r\ue000]*\n[ \t\n\f\r\ue000]*/
 /** our space after a digit before a marker, and before a digit after one */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u
 const NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
+/** our space before a marker, and after one, where the source set its element glued to the text there: TeX set no space
+ *  between a word and the mark, the script or the accent it carries, so neither does the translation, whatever the reply
+ *  keeps of ours or whatever stands beside it now (2610.20967v1 p1 on staging: its names' marks 4.3 pt off the names, CJK's,
+ *  where TeX's are 1.35; its places' marks a space before them) */
+const GLUED_SPACE = /[ \t\n\f\r]+$/
+const GLUED_LEAD = /^[ \t\n\f\r]+/
 /** what a reply may set for an element's own stop right after its marker: any script's stop, comma, semicolon or colon */
 const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
@@ -476,6 +494,7 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
   const toks: Tok[] = []
   const seen = new Set<number>()
   let afterNumber = false
+  let afterGlued = false
   let afterOwn = false
   let afterLine = false
   const push = (raw: string, takeBack: RegExp | null) => {
@@ -486,6 +505,7 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
     if (afterLine) s = s.replace(LINE_LEAD, (m) => m.replace(/[^\ue000]/g, ''))
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
+    if (afterGlued) s = s.replace(GLUED_LEAD, '')
     s = s.replace(INVISIBLE, '')
     if (s) toks.push({ t: 'text', s })
   }
@@ -502,11 +522,21 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
     const id = fromAlpha((m[1] ?? m[2]) as string)
     const slot = plan.slots[id - 1]
     if (!slot || seen.has(id)) return null
-    push(buf, plan.stops.has(id) ? STOP_SPACE : plan.numbers.has(id) ? NUMBER_SPACE : null)
+    push(
+      buf,
+      plan.gluedBefore.has(id)
+        ? GLUED_SPACE
+        : plan.stops.has(id)
+          ? STOP_SPACE
+          : plan.numbers.has(id)
+            ? NUMBER_SPACE
+            : null,
+    )
     buf = ''
     seen.add(id)
     toks.push(slot)
     afterNumber = plan.numbersAfter.has(id)
+    afterGlued = plan.gluedAfter.has(id)
     afterOwn = plan.own.has(id)
     afterLine = plan.lines.has(id)
   }
