@@ -1072,6 +1072,17 @@ only how it meets the rest of the extension.
   write and read back the same way; until 2026-11-09 the adapter stated none, and 2,118 of the 88 corpus papers' 31,535
   units went out without a display's own punctuation (live, Microsoft's own sentence lengths: one sentence where the stops
   make two in 1007.0072v1's `we can get @c# Then`, five for eight in 2608.23393v1).
+  A display that states no punctuation of its own (the author wrote none) ends its sentence where the text after it begins
+  one: the first thing after it that sets something is text beginning with an upper-case letter (Unicode Lu, Lt; an element
+  stated `silent` and one that reads as white space are passed over). TeX goes on in the display's paragraph either way, and
+  the sentence's own first letter is what tells "… as: [display] The next …" from "… tuple: [display] where …". Both wires
+  then write a stop after it as its own and take the reply's back (`packages/translate` wire/text.ts `displayEnds`), and the
+  tags wire's cutter reads it as the sentence's end (the owner's report of 2026-11-09 on 2609.33403v1 §4.2: a paragraph of two
+  displays and three sentences went to Microsoft as one sentence, translated and lit as one). Over the 88 corpus papers'
+  33,159 units, 94 displays in 78 units of 22 papers take it (every one followed by a sentence's first word: The, In, We,
+  For, Here, Then, This, …); the 328 followed by lower case, 52 at their unit's end and 10 before an element take none. Live
+  (Microsoft, zh-Hans, 2026-11-09, 8 units of 6 papers and one of our own words, two requests): every display given the stop
+  had its sentence cut after it (9 of 9), none followed by lower case did (0 of 5), and no stop came back after the marker.
 - **Fewer markers, each read from TeX** (TRANSLATE_VERSION 10, the rules audit of 2026-11-04). Each marker is a hard
   boundary to Microsoft and a chance of a fallback: over the 53 sweep papers' units, those with more than 20 markers went to
   Google 22 to 42 % of the time, those with none never. What the wire tells is read from TeX's own tables and definitions,

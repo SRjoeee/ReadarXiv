@@ -2,6 +2,7 @@
 // sees. Restated from the measured facts (translation dossier §16): Microsoft's and Google's free endpoints run an HTML
 // aligner on every request, so a bare `<` or `&` fuses (`a < b and c > d` came back `<B和C> d`), and replies stay
 // HTML-encoded; Google sets zero width spaces inside words; a numeric entity past U+10FFFF must not throw.
+import type { Piece } from '../contract.ts'
 
 /** default-ignorable code points: invisible by definition, dropped from what a reply says */
 export const INVISIBLE = /\p{Default_Ignorable_Code_Point}/gu
@@ -42,3 +43,42 @@ export function standInOf(kind: string): 'annotation' | string | undefined {
 /** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows), which the
  *  markers wire writes where Microsoft cuts its sentence; never punctuation of the element's own */
 export const LINE_END = /^\s+$/
+
+/** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */
+export const DISPLAY_END = '.'
+/** a text that begins a sentence: its first letter upper case (Unicode Lu, Lt) */
+const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
+/**
+ * The unit's content with each display that states no stop of its own given `DISPLAY_END` where TeX set it at its sentence's end:
+ * the first thing after it that sets something is text that begins with an upper-case letter (Unicode Lu, Lt: the source's own
+ * orthography; TeX's text goes on after a display in its paragraph either way, "… as: [display] The next …" a sentence of its
+ * own after it, "… tuple: [display] where …" its sentence going on). What sets nothing is passed over (an element stated
+ * `silent`, one that reads as white space: a space, a break); an element that sets something, or the unit's end, gives none.
+ * Each wire writes it after the display as the display's own stop, which reading takes back (the original sets none there),
+ * and the tags wire's cutter reads it: a translator is asked for the sentence TeX ended (Microsoft cuts at neither a marker nor
+ * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (2026-11-09): 3,937 displays
+ * state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by an upper-case
+ * word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
+ */
+export function displayEnds(content: readonly Piece[]): readonly Piece[] {
+  const ends = new Set<Piece>()
+  let pending: Piece | null = null
+  const walk = (ps: readonly Piece[]) => {
+    for (const p of ps) {
+      if (p.t === 'span') walk(p.content)
+      else if (p.t === 'text') {
+        if (!p.s.trim()) continue
+        if (pending && BEGINS.test(p.s)) ends.add(pending)
+        pending = null
+      } else if (p.kind === 'display' && p.stop === undefined) pending = p
+      else if (!p.silent && standInOf(p.kind) !== ' ') pending = null
+    }
+  }
+  walk(content)
+  if (!ends.size) return content
+  const stated = (ps: readonly Piece[]): Piece[] =>
+    ps.map((p) =>
+      p.t === 'span' ? { ...p, content: stated(p.content) } : ends.has(p) ? { ...p, stop: DISPLAY_END } : p,
+    )
+  return stated(content)
+}

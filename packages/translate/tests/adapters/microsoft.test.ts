@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { accept } from '../../src/accept.ts'
 import { microsoft, readMicrosoft } from '../../src/adapters/microsoft.ts'
-import type { FetchInit } from '../../src/contract.ts'
+import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
 import {
@@ -9,6 +9,7 @@ import {
   BERT_ABSTRACT_REPLY,
   BERT_STRATEGIES,
   BERT_STRATEGIES_REPLY,
+  DISPLAY_ENDS,
   HEAD_STOP,
   INSIDE_WORDS,
   LABEL_AFTER_BREAK,
@@ -20,7 +21,7 @@ import {
   SILENT_LABEL,
   UNITS,
 } from './fixtures.ts'
-import { quiet, t, unit } from '../pieces.ts'
+import { el, quiet, t, unit } from '../pieces.ts'
 
 /** the endpoint giving each text back as its translation, with sentence lengths cut after each full stop and a space */
 export const microsoftEcho = (_url: string, init: FetchInit) => {
@@ -114,6 +115,7 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       // (a stop TeX sets at a group's end, its source writing none: at the end of a kept span, before its close; after the
       // words of one on no wire)
       '@a# Current methods are not reliable. @b# To infer the source, one could rank sentences. We call it verifiable sources. Then we go on.',
+      'Each part is formalized as: @a#. The next field is a list of effects, formalized as a tuple: @b# where kind is its kind.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -411,5 +413,46 @@ describe('microsoft: an element inside a word', () => {
       { t: 'el', id: 'tie' },
       { t: 'text', s: ' Doe。' },
     ])
+  })
+})
+
+// (a display that states no stop of its own, at its sentence's end: TeX set it there and the next sentence begins after it, its
+// first letter upper case; Microsoft cuts at neither a marker nor a colon, so the unit went as one sentence, the translation and
+// the highlight with it: the owner's report of 2026-11-09 on 2609.33403v1 §4.2)
+describe('microsoft: a display that states no stop of its own', () => {
+  const m = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch })
+  const src = 'Each part is formalized as: @a#. '
+  const wire = `${src}The next field is a list of effects, formalized as a tuple: @b# where kind is its kind.`
+  it('ends its sentence where the text after it begins one: a stop after its marker; none where the sentence goes on', () => {
+    expect(m.write(DISPLAY_ENDS, 'zh-Hans')).toBe(wire)
+  })
+  it("takes the reply's stop after its marker back, and reads the endpoint's cut there as the next sentence's start", () => {
+    const head = '每个部分形式化为：@a#。'
+    const text = `${head}下一个字段是一组效果，形式化为一个元组：@b#其中种类是它的种类。`
+    const r = readMicrosoft(
+      DISPLAY_ENDS,
+      JSON.stringify({
+        text,
+        src: [src.length, wire.length - src.length],
+        tr: [head.length, text.length - head.length],
+      }),
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个部分形式化为：' },
+      { t: 'el', id: 'd1' },
+      { t: 'text', s: '下一个字段是一组效果，形式化为一个元组：' },
+      { t: 'el', id: 'd2' },
+      { t: 'text', s: '其中种类是它的种类。' },
+    ])
+    // (in the unit's projection, a display one character: "The" at 30; in the translation's, "下一个" at 10)
+    expect(r?.sentences).toEqual({ src: [30], tr: [10] })
+  })
+  it('writes nothing after one whose sentence goes on (lower case), nor before an element, nor at the unit’s end', () => {
+    const on = (after: Piece[]) => m.write(unit('u', [t('We set: '), el('d', 'display'), ...after]), 'zh-Hans')
+    expect(on([t(' where x is one.')])).toBe('We set: @a# where x is one.')
+    expect(on([t(' '), el('x', 'math'), t(' Then y.')])).toBe('We set: @a# @b# Then y.')
+    expect(on([])).toBe('We set: @a#')
+    // (what sets nothing between them is passed over: the text after it begins the next sentence)
+    expect(on([quiet('q'), t(' Then we go on.')])).toBe('We set: @a#. Then we go on.')
   })
 })
