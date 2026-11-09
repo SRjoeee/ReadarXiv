@@ -309,14 +309,14 @@ describe('the author calls the marked original states (\\axtcall, CALL_TEX: the 
     const p = open('\\maketitle\nWords.', '\\author{Ashish Vaswani\\thanks{Equal contribution.} \\\\ Google Brain \\And Noam Shazeer \\\\ Google Research}')
     const tex = marked(p)
     expect(tex).toContain(`\\axtcall{${idOf(p, 'Noam Shazeer')}}\\And `)
-    expect(tex.match(/\\axtcall\{/g)).toHaveLength(1)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
     expect(tex).toContain(CALL_TEX)
   })
   it('before an author block\'s command right after another\'s, never before the first (ICML\'s \\icmlauthor)', () => {
     const p = open('\\twocolumn[\\icmltitle{A Title}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n% a comment\n\\icmlauthor{John Roe}{y}\n\\end{icmlauthorlist}\n]\nWords.', '\\usepackage{icml2025}')
     const tex = marked(p)
     expect(tex).toContain(`\\axtcall{${idOf(p, 'John Roe')}}\\icmlauthor{`)
-    expect(tex.match(/\\axtcall\{/g)).toHaveLength(1)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
   })
   it('none for one author\'s block, and no definition in the head: the paper\'s bytes as before', () => {
     const p = open('\\maketitle\nWords.', '\\author{Jane Doe \\\\ The University}')
