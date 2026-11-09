@@ -1,9 +1,13 @@
 // The highlight (design §4.5 "Highlight"; docs/PDF-READER.md §17): both panes light the same per-sentence boxes of the same unit,
 // from `Page.lit` (on the left from A, on the right as drawn), with `{id, s}` the only lit state: a member's ord and its sentence,
-// -1 for the whole member. What is painted is what is hit: a point lights the sentence whose box holds it, on the pane it is over,
-// read from the same boxes the bands are drawn from, the smaller unit winning where two overlap; a miss keeps what is lit 120 ms
-// (the HTML page's grace). A page that is not laid lights from A on both panes (the right mirrors the left). The pointer lights,
-// nothing else does: a click holds nothing.
+// -1 for the whole member, -2 - k its display of piece k alone (Laid.lit's `own`: a display is a block of its own, the same ink on
+// both panes, lit only where the pointer is over it, never with its member: today's units.mjs displayBlockId, the owner's report
+// of 2026-11-09). What is painted is what is hit: a point lights the sentence whose box holds it, on the pane it is over, read
+// from the same boxes the bands are drawn from, the smaller unit winning where two overlap; a miss keeps what is lit 120 ms (the
+// HTML page's grace). A shape's rows are one outline where they meet across, never across another block standing between two of
+// them (a display, another member's line: today's runs, cut there, highlight.mjs interrupted), which the outline would fill. A
+// page that is not laid lights from A on both panes (the right mirrors the left). The pointer lights, nothing else does: a click
+// holds nothing.
 //
 // Carried from today's lighting (src/pdf-reader/engine/view/lighting.mjs, highlight.mjs shapePath, overlay.mjs pinned at
 // baf2083e0): one outline a shape (3 px corners), padded 3 px beside and half the page's leading above and below; each shape in
@@ -44,16 +48,61 @@ export interface Highlight {
   dispose(): void
 }
 
-/** a member's boxes on a pane: per sentence, from the Page (the right's as drawn where its page is committed) */
-function boxesOf(page: Page, ord: number, side: Side, committed: boolean): Box[][] {
+/** a member's boxes on a pane: per sentence (one entry: lit whole), from the Page (the right's as drawn where its page is
+ *  committed); and its displays (Laid.lit's `own`, the same on both panes), each a block of its own by its piece */
+function entriesOf(page: Page, ord: number, side: Side, committed: boolean): { per: Box[][]; own: [string, Box[]][] } {
   const m = page.members.find((x) => x.ord === ord)
-  if (!m) return []
-  const per = side === 'right' && committed ? m.lit.right : m.lit.left
-  // (its kept ink, a block of its own, the same on both panes: lit with the member)
-  const own = m.lit.own.flatMap(([, b]) => b)
-  return own.length ? [...per, own] : per
+  if (!m) return { per: [], own: [] }
+  return { per: side === 'right' && committed ? m.lit.right : m.lit.left, own: m.lit.own }
 }
-const areaOf = (bs: Box[][]) => bs.flat().reduce((a, b) => a + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0)
+/** the lit state of a display alone (its piece's id; a key that is none lights nothing alone) and the piece it names */
+const displayS = (key: string) => (/^\d+$/.test(key) ? -2 - Number(key) : null)
+const displayKey = (s: number) => String(-2 - s)
+/** the shapes a lit state paints of a member on a pane: every sentence (whole), one sentence, or one display */
+function shapesOf(page: Page, lit: Lit, side: Side, committed: boolean): Box[][] {
+  const { per, own } = entriesOf(page, lit.id, side, committed)
+  if (lit.s === -1) return per
+  // (a sentence the page holds none of, a display on another page: nothing of it here)
+  if (lit.s >= 0) return lit.s < per.length ? [per[lit.s] as Box[]] : []
+  const d = own.find(([k]) => k === displayKey(lit.s))
+  return d ? [d[1]] : []
+}
+/** every box lit on a pane of a page but a turned member's (its boxes in its run's frame, a figure's text): what stands between
+ *  two rows of a shape */
+function pageBoxes(page: Page, side: Side, committed: boolean): Box[] {
+  const out: Box[] = []
+  for (const m of page.members) {
+    if (m.lit.dir) continue
+    const { per, own } = entriesOf(page, m.ord, side, committed)
+    for (const boxes of per) out.push(...boxes)
+    for (const [, boxes] of own) out.push(...boxes)
+  }
+  return out
+}
+
+/**
+ * Whether each of a shape's boxes (PDF units, y up), in the order given, stands apart from the one before it: another block
+ * stands between them, a box of `others` that is none of the shape's whose middle is between the two and that meets them across
+ * (their joint extent), the two at least the shorter one's height apart (room for a line: today's highlight.mjs interrupted,
+ * which cuts a run there, its own display included). Never the first
+ */
+export function apartRows(boxes: readonly Box[], others: readonly Box[]): boolean[] {
+  const mine = new Set(boxes)
+  return boxes.map((below, i) => {
+    const above = boxes[i - 1]
+    if (!above) return false
+    if (above[1] - below[3] < Math.min(above[3] - above[1], below[3] - below[1])) return false
+    const x0 = Math.min(above[0], below[0]),
+      x1 = Math.max(above[2], below[2])
+    return others.some((o) => {
+      if (mine.has(o)) return false
+      const y = (o[1] + o[3]) / 2
+      return y < above[1] && y > below[3] && Math.min(o[2], x1) > Math.max(o[0], x0)
+    })
+  })
+}
+const areaOf = (bs: readonly Box[][]) =>
+  bs.flat().reduce((a, b) => a + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0)
 /** the direction a member's boxes are set along (a turned figure text's: Laid.lit's `dir`, its boxes in its run's frame) */
 const dirOf = (page: Page, ord: number) => page.members.find((x) => x.ord === ord)?.lit.dir
 
@@ -87,15 +136,20 @@ function leadOf(page: Page, side: Side, committed: boolean): number {
 
 /**
  * One outline of a shape's rectangles stacked from the top (CSS pixels, y down): an SVG path, every corner rounded to `radius`
- * (or half its shorter side), the inner ones too; rectangles that do not meet across by more than two radii are outlines of their
- * own in the one path (a sentence's first row right of its last). highlight.mjs shapePath, carried
+ * (or half its shorter side), the inner ones too; rectangles that do not meet across by more than two radii, and one `apart`
+ * from the one above it (another block between them, apartRows), are outlines of their own in the one path (a sentence's first
+ * row right of its last; its rows either side of a display). highlight.mjs shapePath, carried: an outline joins its rows at the
+ * upper one's foot on the right and the lower one's head on the left, so that it fills what stands between two of them
  */
-export function shapePath(rects: { x0: number; x1: number; y0: number; y1: number }[], radius: number): string {
+export function shapePath(
+  rects: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[],
+  radius: number,
+): string {
   let d = ''
   for (let a = 0, b = 1; b <= rects.length; b++) {
     const p = rects[b - 1],
       q = rects[b]
-    if (p && q && Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0) > 2 * radius) continue
+    if (p && q && !q.apart && Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0) > 2 * radius) continue
     d += outline(rects, a, b, radius)
     a = b
   }
@@ -201,14 +255,22 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     return out
   }
   /** the rows of a shape in the page's CSS px at its scale now, in its own frame (a turned page's layer is turned with it):
-   *  padded beside and by half the leading above and below */
-  function rowsOf(side: Side, n: number, boxes: Box[], lead: number) {
-    const out: { x0: number; x1: number; y0: number; y1: number }[] = []
-    for (const b of [...boxes].sort((p, q) => q[3] - p[3])) {
+   *  padded beside and by half the leading above and below; with `others` (the page's boxes on the pane), each row apart from
+   *  the one above it where another block stands between them (apartRows: an outline of its own) */
+  function rowsOf(side: Side, n: number, boxes: Box[], lead: number, others?: readonly Box[]) {
+    const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
+    const sorted = [...boxes].sort((p, q) => q[3] - p[3])
+    const kept: Box[] = []
+    for (const b of sorted) {
       const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
       if (!r) continue
+      kept.push(b)
       out.push({ x0: r.left - PAD, x1: r.left + r.width + PAD, y0: r.top, y1: r.top + r.height })
     }
+    if (others)
+      apartRows(kept, others).forEach((a, i) => {
+        if (a) (out[i] as (typeof out)[number]).apart = true
+      })
     // (rows that overlap made to meet: one outline)
     for (let i = 1; i < out.length; i++) {
       const p = out[i - 1] as (typeof out)[number],
@@ -259,9 +321,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       for (const side of ['left', 'right'] as const) {
         // (a page another generation still shows: nothing of it lit on the right until the new one commits)
         if (side === 'right' && composer.muted(n)) continue
-        const per = boxesOf(page, lit.id, side, committed)
-        // (a sentence the page holds none of, its kept ink lit alone on another page among them: nothing of it here)
-        const shapes = lit.s < 0 ? per : lit.s < per.length ? [per[lit.s] as Box[]] : []
+        const shapes = shapesOf(page, lit, side, committed)
         const layer = layerOf(side, n)
         const frame = panes.frameOf(side, n)
         if (!layer || !frame) continue
@@ -291,12 +351,19 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
             })
             layer.append(el)
           }
+        const others = dir || !shapes.length ? [] : pageBoxes(page, side, committed)
         for (const boxes of dir ? [] : shapes) {
-          const rows = rowsOf(side, n, boxes, lead)
+          const rows = rowsOf(side, n, boxes, lead, others)
           if (!rows.length) continue
           const X0 = Math.min(...rows.map((r) => r.x0)),
             Y0 = Math.min(...rows.map((r) => r.y0))
-          const local = rows.map((r) => ({ x0: r.x0 - X0, x1: r.x1 - X0, y0: r.y0 - Y0, y1: r.y1 - Y0 }))
+          const local = rows.map((r) => ({
+            x0: r.x0 - X0,
+            x1: r.x1 - X0,
+            y0: r.y0 - Y0,
+            y1: r.y1 - Y0,
+            apart: r.apart,
+          }))
           const w = Math.max(...local.map((r) => r.x1)),
             h = Math.max(...local.map((r) => r.y1))
           let el: HTMLElement | SVGSVGElement
@@ -361,16 +428,22 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
             )
           })
         : rowsOf(side, n, boxes, lead).some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)
+    const take = (t: Lit, area: number) => {
+      if (area < least) {
+        least = area
+        best = t
+      }
+    }
     for (const m of page.members) {
-      const per = boxesOf(page, m.ord, side, committed)
+      const { per, own } = entriesOf(page, m.ord, side, committed)
       for (let s = 0; s < per.length; s++)
-        if (inside(m.lit.dir, per[s] as Box[])) {
-          const area = areaOf(per)
-          if (area < least) {
-            least = area
-            best = { id: m.ord, s: per.length > 1 && m.lit.left.length > 1 ? s : -1 }
-          }
-        }
+        if (inside(m.lit.dir, per[s] as Box[]))
+          take({ id: m.ord, s: per.length > 1 && m.lit.left.length > 1 ? s : -1 }, areaOf(per))
+      // (a display: a block of its own, its own area)
+      for (const [key, boxes] of own) {
+        const s = displayS(key)
+        if (s !== null && inside(m.lit.dir, boxes)) take({ id: m.ord, s }, areaOf([boxes]))
+      }
     }
     return best
   }
