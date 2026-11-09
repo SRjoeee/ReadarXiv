@@ -722,13 +722,14 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['E26', '1F:over'],
     ports: ['RUN:1754-1789 overFollower', 'RUN:2287-2292'],
     how: 'ported',
-    ruling: '2026-11-03 the run-in head over its row',
+    ruling: "2026-11-03 the run-in head over its row; 2026-11-10 the row before the head's size",
     reads: [],
     file: 'shared/over-follower.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a head its row holds only by shrinking runs on over its row too, taken where it is set larger there: today's took the row for a clipped head alone, and since the size tie (2026-11-08: one paragraph's text at one scale) a head shrunk in its row sets its paragraph at its scale (the owner's report of 2026-11-10, 2611.03178v1-zh p16: \"ML Coding.\" and its paragraph at 0.85 of the body among paragraphs at full size). Over the 90 pairs with stored rows, 29 heads (34 with every toggle on) to 1 or nearer it, no paragraph smaller",
       replay:
-        "chained from F2 on every laid round of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (1,291: 25 taken, their layouts whole); the follower's first line read off today's bundle (tests/replay/today.ts)",
+        "chained from F2 on every laid round of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (1,291: 25 taken, their layouts whole), before the shrunk case; the sampled rounds hold no head its row holds only by shrinking; the follower's first line read off today's bundle (tests/replay/today.ts)",
       cases: 1291,
     },
   },

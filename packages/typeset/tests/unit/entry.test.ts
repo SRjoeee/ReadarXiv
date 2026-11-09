@@ -341,6 +341,45 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const both = layPage(pt, rows, rules, metrics()).members
     expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
   })
+  it('lets a run-in head take its row before it shrinks: the head and its paragraph at their size (2611.03178v1-zh p16)', () => {
+    // (a bold head at 72-100 on the row of its paragraph, which TeX set from 105 on: its translation, eight characters, 40 wide
+    // at its size where its own line holds 28: the fit shrank it to 0.85 to fit there, and the size tie set its paragraph at
+    // that scale, a paragraph at 0.85 of the body among paragraphs at full size and a hole under it, where one character more
+    // clipped it and it ran on over its row at full size. TeX sets a run-in head on its paragraph's first line, as wide as its
+    // text: the row is the head's room before its size)
+    const idB = 'b'.repeat(64)
+    const head = member({
+      ord: 0,
+      kind: 'heading',
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [72, 105] },
+    })
+    const para = member({
+      ord: 1,
+      text: idB,
+      join: [5],
+      lines: [
+        [1, 0, 105, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+        [1, 0, 72, 300, 676, 683, 674, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(head), flows: [[head, para]], ties: [{ rule: 'size', ords: [0, 1] }] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u673a\u5668\u5b66\u4e60\u7f16\u7801\u7801\u3002' }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(60) }]), id: idB },
+    ])
+    const laid = layPage(pt, rows, rulesFor('zh'), metrics()).members
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
+    expect(laid.map((m) => m.fit?.size)).toEqual([10, 10])
+    // (the head on its row past where its original ended, the paragraph's first line on the row after it)
+    const [hy, , hx1] = laid[0]!.lines[0]!
+    expect(hy).toBe(700)
+    expect(hx1).toBeGreaterThan(100)
+    const first = laid[1]!.lines.find(([y]) => y === 700)
+    expect(first?.[1]).toBeGreaterThanOrEqual(hx1 - 1e-6)
+  })
   it('caps a size tie’s members alike on every page it is laid for (PR #620 re-review: a member on pages 1-2, one on 2)', () => {
     // (the tie's sizes were read off the members with a line on the page asked for: on page 1 the second member was no voter,
     // and the first laid at 10, on page 2 at the second's 8.5)
