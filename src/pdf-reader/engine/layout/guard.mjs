@@ -15,6 +15,7 @@ import { isMemoryError } from '@readarxiv/engine'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
+import { duplicatesIn } from './marks.mjs'
 
 const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
 /** the environments TeX reads verbatim, whose braces are no group: their text is the paper's either way, skipped alike */
@@ -257,14 +258,22 @@ export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.te
  * there — a host that reads none, or failed to, shows nothing — and no TeX error)
  * and its log names every destination set twice (tellsTwice). TeX then read each such mark back where the paper's own TeX sets
  * its unit's text, once (an endnote package prints each note from the aux: 2609.36054v2's enotez, `\enotez@note{…}{text}`), or
- * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there; or it set it twice (a
- * class that sets an author's name again in the e-mail footnote: elsarticle's `\emailauthor`, 2610.21084v1), and the reading drops
- * every destination the log names (marks.mjs readMarked `dropped`), the unit the original's as an unmarked one is. A mark read
- * back where no text is set — in a `\csname`, a number, a key — raises an error, and every unit stays out of place as before
- * (2610.21201v1's etoc depth tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and
- * nameref's title are never out of place (marksOutOfPlace)
+ * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there. One TeX set twice, a
+ * unit's own start or end mark the log names (a class that sets an author's name again from what it stored, in the e-mail
+ * footnote: elsarticle's and cas-common's `\emailauthor`), stays out of place: the reading would drop every destination the log
+ * names (marks.mjs readMarked `dropped`) and leave the unit the original's anyway, and the class may take the stored argument
+ * apart as data, our marks among its words — cas-common's `\parsename` splits the name at its spaces and takes each given name's
+ * head for its initial, our `\leavevmode`, so that its footnote read "(. Chung)" where arXiv's reads "(M. Chung)" and the unit
+ * made of it was refused (2610.21084v1) —: unmarked, the class's copy is the paper's own. A mark read back where no text is set —
+ * in a `\csname`, a number, a key — raises an error, and every unit stays out of place as before (2610.21201v1's etoc depth
+ * tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and nameref's title are never
+ * out of place (marksOutOfPlace)
  */
-export const copiesOutOfPlace = (units, { clean, log }) => (clean && tellsTwice(log) ? new Set() : units)
+export const copiesOutOfPlace = (units, { clean, log }) => {
+  if (!(clean && tellsTwice(log))) return units
+  const twice = new Set(duplicatesIn(log).flatMap(n => { const m = /^(\d+)[se]$/.exec(n); return m ? [Number(m[1])] : [] }))
+  return new Set([...units].filter(u => twice.has(u)))
+}
 /** the TeX errors of a compile's last pass: its `! ` lines */
 export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).length
 /** the pages TeX says the last pass wrote ("Output written on main.pdf (36 pages, …)", the .xdv's under XeTeX), else null */

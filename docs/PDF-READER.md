@@ -3446,13 +3446,24 @@ own), each part carrying its pages' cell rules (`rules`).
     destination set twice, XeTeX's driver and the DVI driver latexmk runs tell no log the host returns), each such mark was set
     once where the paper's TeX sets its unit's text — enotez prints each endnote from its `\enotez@note{…}{text}` line at
     `\printendnotes` (2609.36054v2: 16 notes, unmarked and English before, one compile of 34 s more) —, or never — jmlr's
-    `\jmlr@author{…}{…}` discards both arguments (2610.21201v1) —, and its unit is located there; or twice — elsarticle's
-    `\emailauthor{…}{name}` sets an author's name again in the e-mail footnote (2610.21084v1, 2610.20848v1) — and the reading
-    drops every destination the log names (`marks.mjs` `readMarked` `dropped`), the unit then laid as an unmarked one is, never
-    at the copy's place; nor does it take its alignment from the copy: a unit whose paragraphs TeX set in two alignments tells
-    none (`marks.mjs` `readAlign`), as a piece set in two colours tells no colour (`readColours`). 2610.20848v1's name, set again
-    flush left in its footnote, has the file it had before; 2610.21084v1's, flush left in its block and in each footnote, keeps
-    TeX's word. The same rule mends two papers whose class sets the title and the authors again (acmart's "ACM Reference Format"),
+    `\jmlr@author{…}{…}` discards both arguments (2610.21201v1) —, and its unit is located there. One TeX set twice — a unit's own
+    start or end mark the log names: elsarticle's and cas-common's `\emailauthor{…}{name}` set an author's name again in the
+    e-mail footnote (2610.21084v1, 2610.20848v1) — is out of place still, its unit unmarked and the marked original compiled
+    again (round 8 B2, rebuild/block-residue): the reading would drop every destination the log names (`marks.mjs` `readMarked`
+    `dropped`) and lay the unit as an unmarked one anyway, and a class may take the argument it stored apart as data, our marks
+    among its words. cas-common's `\parsename` splits the name at its spaces and makes each given name's initial of its head,
+    `\tl_head:n`: the first word's head was our `\leavevmode`, so that 2610.21084v1's footnotes read "(. Chung)", "(.M. Solomon)",
+    "(. Verma)" where arXiv's read "(M. Chung)", "(J.M. Solomon)", "(D. Verma)", and the ink unit made of them, holding the
+    initials arXiv's page sets and ours did not, was refused (a content difference). Unmarked, the three names are the paper's
+    to the class: our final pass's text is arXiv's but for arXiv's stamp and its abstract's first word, at one compile more
+    (cas-common writes the abstract's body to a file verbatim, `\verbatimwrite`, once its optional argument's look-ahead has read
+    the body's first token, our line probe `\axtlines`: the file reads "{4}…", our compile sets a "4" there and the abstract
+    is refused, left open). 2610.20848v1, elsarticle's, copies the name whole: its text arXiv's before and after, its one
+    author unmarked. Over the 88 papers' marked compiles, the log names a unit's own mark set twice in five: these two, through the aux; acmart's (2402.10294v1,
+    2608.25210v2: the authors set again in the ACM Reference Format at `\maketitle`, their text arXiv's; 2610.22065v1's title, a
+    heading's mark) hold none in a file and are as before. A unit set twice is never at the copy's place, nor does it take its
+    alignment from the copy: a unit whose paragraphs TeX set in two alignments tells none (`marks.mjs` `readAlign`), as a piece
+    set in two colours tells no colour (`readColours`). The same rule mends two papers whose class sets the title and the authors again (acmart's "ACM Reference Format"),
     whose flags were the second setting's: 2608.25210v2's centred title and authors, read flush left (the title now no flag, the
     middle author centred), and 2610.22065v1's centred title, read justified (now centred); no line of either moves. A mark read
     back where no text is set (a `\csname`, a number, a key) raises an error, and every unit stays out of place as before

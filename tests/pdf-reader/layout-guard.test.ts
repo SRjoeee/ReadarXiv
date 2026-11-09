@@ -341,14 +341,27 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     }
   })
 
-  it('a mark a file holds that TeX set twice stands: its log names it, the reading drops it, the unit the original\'s (2610.21084v1)', async () => {
-    // (a class that sets an author's name again in the e-mail footnote: pdfTeX keeps the first destination and names the other)
+  it('a mark a file holds that TeX set twice is out of place: the unit unmarked, one compile more, the class\'s copy the paper\'s own (2610.21084v1)', async () => {
+    // (cas-common writes each \ead's author into the aux, `\emailauthor{…}{<the \author argument>}`, and reads it back for the
+    // e-mail footnote: \parsename splits the name at its spaces, takes the last word for the surname and each other word's head,
+    // \tl_head:n, for an initial, so that our marks are words of it — the first given name's head our \leavevmode, its initial
+    // nothing: "(. Chung)" where arXiv's footnote reads "(M. Chung)" —, and the surname with our end mark is set again, which
+    // pdfTeX names. The reading would drop the mark set twice and leave the unit the original's anyway: no mark of ours is kept
+    // where a class sets the unit's text again from what it stored)
     const aux = '\\emailauthor{a@b.c}{\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
     const twice = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-2e}) has been already used, duplicate ignored\n'
-    const c = compiler([PROBE, ran(PDF, twice, 3, { aux })])
+    const c = compiler([PROBE, ran(PDF, twice, 3, { aux }), ran(PDF1)])
     const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })
-    expect(made).toEqual({ pdf: PDF, log: expect.stringContaining('name{axt-2e}'), options: expect.any(Object), ms: expect.any(Object) })
-    expect(c.asked).toHaveLength(2)
+    expect(made).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
+    expect(c.asked).toHaveLength(3)
+    expect([has(c.asked[2], '\\axtmark{2s}'), has(c.asked[2], '\\axtend{2e}'), has(c.asked[2], '\\axtmark{1s}')]).toEqual([false, false, true])
+    // (one TeX set once there, the paper's own text read back from the file (enotez), stands, though the log names another set
+    // twice: the units of the destinations it names alone)
+    const once = '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    const other = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-h9e}) has been already used, duplicate ignored\n'
+    const kept = compiler([PROBE, ran(PDF, other, 3, { aux: once })])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: kept.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(kept.asked).toHaveLength(2)
   })
 
   it('a mark a file holds stays out of place where the compile shows anything else, or its log cannot tell a destination set twice', async () => {
