@@ -1714,6 +1714,17 @@ function commentAt(s, at) {
   }
   return -1
 }
+/** the names of each \\bibliography{…} in s[from, to) outside comments, in order (its required argument, split at commas) */
+function bibliographiesIn(s, from, to) {
+  const out = []
+  for (const m of s.slice(from, to).matchAll(/\\bibliography(?![A-Za-z@])/g)) {
+    const at = from + m.index
+    if (inComment(s, at)) continue
+    const { args } = argsAfter(s, at + m[0].length, 1)
+    if (args[0]?.kind === 'req' && args[0].end <= to) out.push(s.slice(args[0].start + 1, args[0].end - 1).split(',').map(x => x.trim()).filter(Boolean))
+  }
+  return out
+}
 /** each \\thanks or \\footnote in s[from, to), walked alone: a footnote unit of its own, with no paragraph around it */
 function frontNotes(s, from, to, b, ctx) {
   let past = from
@@ -2442,6 +2453,19 @@ function walk(s, from, to, b, ctx) {
     // (its call ends with its second argument: where the table does not know it, every adjacent group was read as one of its)
     const callEnd = pdfString ? args.args[1].end : args?.end
     if (walked.length) { endText(); walkArgs(s, i, callEnd, walked, b, ctx); i = callEnd; continue }
+    // (a \\bibliography in the groups of a command the table does not know, every one read as its argument, is read where it
+    // stands all the same, as above: TeX reads the job's .bbl there, inside whatever group (balance.sty's \\balance takes no
+    // argument: 2608.06007v1's `\\balance{\\bibliographystyle{unsrt}\\bibliography{ref}}`, read as one placeholder, named no
+    // bibliography, no .bbl was made, and its entries, no unit's, were kept blocks, never translated). The call is then no
+    // unit's, as \\bibliography's own source is none; nothing of ours is written in its groups, the entries units of the .bbl)
+    if (args && !args.known && /^[A-Za-z@]+$/.test(name)) {
+      const named = bibliographiesIn(s, end, args.end)
+      if (named.length) {
+        endText(); b.flush()
+        for (const names of named) { ctx.bibliography.push(...names); if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat) }
+        i = args.end; continue
+      }
+    }
     let { end: e } = !/^[A-Za-z@]+$/.test(name) ? { end } : NO_ARGS.has(name) ? optsAfter(s, from, OPT_ONLY.has(name)) : args
     // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
     if (args?.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
