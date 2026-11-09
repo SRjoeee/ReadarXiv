@@ -29,7 +29,7 @@ import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import { inkLines, type TextItem } from '../emit/display.ts'
 import { adapt, rectOf, sharedPaper } from './adapt.ts'
-import { clipCrops } from './clips.ts'
+import { cropInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
@@ -655,16 +655,18 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
           : litOfA(m, page, sentences?.src),
     }
   })
+  // (each crop's own ink and the page's every piece's, the reader's to cut by: its element the one its place among its row's
+  // pieces holds, as its links read it)
+  const cut = cropInks(out, part, (ord, piece) => {
+    const p = read.get(ord)?.pieces[Number(piece)] as { t: string; k?: number } | undefined
+    return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : null
+  })
   return {
     page,
     wait: { rows: [], faces: [] },
-    // (each crop drawn through its own ink alone where another piece's stands in its rectangle: its element the one its place
-    // among its row's pieces holds, as its links read it)
-    members: clipCrops(out, part, (ord, piece) => {
-      const p = read.get(ord)?.pieces[Number(piece)] as { t: string; k?: number } | undefined
-      return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : null
-    }),
+    members: cut.members,
     links: linksOf(part, page, owners, measure.w100, o.linkFates),
+    ...(cut.inks.length ? { inks: cut.inks } : {}),
   }
 }
 

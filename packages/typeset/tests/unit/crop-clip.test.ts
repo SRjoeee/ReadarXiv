@@ -1,14 +1,14 @@
 // A crop carries its own piece's ink and no other's (the owner's comment #36 on 2610.21312v1-zh p5, t58: v2 not erased
-// clean). The crop render holds every element and label of the page, so a crop's rectangle, its ink and the antialiased
-// margin round it, cut whole, carries whatever of another piece's ink stands in that margin: line 1's formula reached into
-// the glyph tops of line 2's "det M = 1", whose ink was drawn 5.8 pt lower, and the tops stayed behind as a row of dots. The
-// part states every piece's ink; where another's stands within a crop's rectangle the crop states the rectangles it is drawn
-// through: its own ink's box whole, and the rest of its rectangle clear of the others' ink.
+// clean). The crop render holds every element and label of the page, so a rectangle cut whole carries whatever of another
+// piece's ink stands in its margin: line 1's formula reached into the glyph tops of line 2's "det M = 1", drawn 5.8 pt lower,
+// and the tops stayed behind as a row of dots. And a margin fixed in points is no glyph's antialiased edge at every zoom: that
+// edge is a device pixel of the render the crop is cut from (round 5's parity, crop-edge). So the typesetter states the facts,
+// each crop's own ink boxes and every piece's on its page, as the part states them, and the reader cuts each crop through its
+// own ink and a device pixel round it, clear of the others' ink and theirs (paint.ts cropsOf).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rulesFor } from '../../src/rules-for.ts'
-import { cropClip } from '../../src/unit/crops.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
 
 type Box = [number, number, number, number]
@@ -62,95 +62,60 @@ const row: Row = {
     { t: 'text', s: ': verschobene Diffusion der Residuen ohne Verzerrung.' },
   ],
 }
-type Crop = Extract<Item, { src: unknown }> & { clip?: Box[] }
+type Crop = Extract<Item, { src: unknown }> & { ink?: Box[] }
 const cropsOf = (p: ReturnType<typeof layPage>): Crop[] =>
   p.members.flatMap((m) => m.lines.flatMap((l) => l[3])).filter((it): it is Crop => 'src' in it)
-const meet = (a: Box, b: Box): Box | null => {
-  const x0 = Math.max(a[0], b[0]),
-    y0 = Math.max(a[1], b[1]),
-    x1 = Math.min(a[2], b[2]),
-    y1 = Math.min(a[3], b[3])
-  return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null
-}
 const inside = (a: Box, b: Box) =>
   a[0] >= b[0] - 1e-9 && a[1] >= b[1] - 1e-9 && a[2] <= b[2] + 1e-9 && a[3] <= b[3] + 1e-9
-/** whether rectangles `rs` reach box `n` anywhere outside box `own` */
-const reaches = (rs: Box[], n: Box, own: Box) =>
-  rs.some((r) => {
-    const m = meet(r, n)
-    return !!m && !inside(m, own)
-  })
-/** whether rectangles `rs` cover box `b` whole (sampled on a grid of a hundredth of a point's tenth) */
-const covers = (rs: Box[], b: Box) => {
-  for (let x = b[0] + 0.005; x < b[2]; x += (b[2] - b[0]) / 97)
-    for (let y = b[1] + 0.005; y < b[3]; y += (b[3] - b[1]) / 31)
-      if (!rs.some((r) => x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3])) return false
-  return true
-}
 
-describe('a crop carries its own ink and no other piece’s (2610.21312v1-zh p5 t58)', () => {
-  it('is drawn through its own ink and the rest of its rectangle clear of another element’s ink a line under it', () => {
-    const crops = cropsOf(layPage(part(member()), rowsOf(row), rules, metrics))
+describe('a crop states its own ink as TeX set it, the page every piece’s (2610.21312v1-zh p5 t58)', () => {
+  it('states each crop’s own ink box, and the page each element’s ink box, as the part states them', () => {
+    // (no margin of the typesetter's: the reader takes the antialiased edge of the render it cuts from, one device pixel,
+    // round its own ink and round the others', paint.ts cropsOf)
+    const p = layPage(part(member()), rowsOf(row), rules, metrics)
+    const crops = cropsOf(p)
     // (each found by its ink: its source the element's box with its margin)
     const of = (b: Box) => crops.find((c) => inside(b, c.src.slice(1, 5) as Box))!
     const c0 = of(O),
       c2 = of(N)
     expect(c0 && c2 && c0 !== c2).toBeTruthy()
-    // (its rectangle reaches the other's ink: the margin round its own, a third of a point, into the glyph tops under it)
-    expect(meet(c0.src.slice(1, 5) as Box, N)).not.toBeNull()
-    expect(c0.clip).toBeDefined()
-    expect(reaches(c0.clip!, N, O)).toBe(false)
-    expect(covers(c0.clip!, O)).toBe(true)
-    // (and the formula under it likewise: none of line 1's ink outside its own)
-    expect(c2.clip).toBeDefined()
-    expect(reaches(c2.clip!, O, N)).toBe(false)
-    expect(covers(c2.clip!, N)).toBe(true)
+    expect(c0.ink).toEqual([O])
+    expect(c2.ink).toEqual([N])
+    expect(p.inks).toEqual(
+      expect.arrayContaining([
+        [1, ...O, 165.97],
+        [1, ...N, 153.71],
+      ]),
+    )
   })
-  it('is cut whole where no other piece’s ink stands in its rectangle (no clip)', () => {
-    const far = member({
+  it('states, of an element TeX set on two lines, the box of the line each crop is cut from', () => {
+    const l1: Box = [250, 160.57, 300, 170],
+      l2: Box = [73.2, 150, 120, 157]
+    const broken = member({
       els: [
-        ['0', { kind: 'other', ink: [[1, ...O, 165.97]], copy: 'tr M = x' }],
-        ['2', { kind: 'other', ink: [[1, 73.2, 150, 116.39, 157, 153.71]], copy: 'det M = 1' }],
+        [
+          '0',
+          {
+            kind: 'other',
+            ink: [
+              [1, ...l1, 165.97],
+              [1, ...l2, 153.71],
+            ],
+            copy: 'a + b + c + d',
+          },
+        ],
       ],
     })
-    for (const c of cropsOf(layPage(part(far), rowsOf(row), rules, metrics))) expect(c.clip).toBeUndefined()
-  })
-})
-
-describe('cropClip: the rectangles a crop is drawn through', () => {
-  const src = (b: Box, base: number, page = 1): [number, number, number, number, number, number] => [
-    page,
-    b[0] - 0.4,
-    b[1] - 0.3,
-    b[2] + 0.4,
-    b[3] + 0.3,
-    base,
-  ]
-  it('keeps its own ink whole where another piece’s box overlaps it, and leaves the other’s outside its own', () => {
-    // (two boxes of TeX's lines that meet by 0.06 pt: the overlap is ink of both, kept; the rest of the other's box is not, nor
-    // the antialiased edge round it, a crop's own margin: 0.4 across, 0.3 up and down)
-    const clip = cropClip(src(O, 165.97), [O], [N])!
-    expect(covers(clip, O)).toBe(true)
-    expect(reaches(clip, N, O)).toBe(false)
-    expect(reaches(clip, [N[0] - 0.4, N[1] - 0.3, N[2] + 0.4, N[3] + 0.3], O)).toBe(false)
-  })
-  it('leaves out a label’s ink beside an element’s crop, and an element’s beside a label’s', () => {
-    // (a carried label's crop reaches to its text's start, where its first formula's ink begins: 2610.21312v1 p5's "(i)")
-    const label: Box = [57.82, 164.21, 67.23, 172.78]
-    const labelSrc: [number, number, number, number, number, number] = [1, 57.42, 163.38, 72.8 + 0.6, 173.94, 165.97]
-    const clip = cropClip(labelSrc, [label], [O])!
-    expect(covers(clip, label)).toBe(true)
-    expect(reaches(clip, O, label)).toBe(false)
-  })
-  it('leaves out its own element’s ink on another of TeX’s lines (a formula broken over lines: each line its crop)', () => {
-    const l1: Box = [250, 160.57, 300, 170],
-      l2: Box = [73.2, 150, 280, 160.5]
-    const clip = cropClip(src(l1, 165.97), [l1], [l2])!
-    expect(covers(clip, l1)).toBe(true)
-    expect(reaches(clip, l2, l1)).toBe(false)
-  })
-  it('states nothing where no other ink stands in its rectangle, and where it knows no ink of its own', () => {
-    expect(cropClip(src(O, 165.97), [O], [[73.2, 140, 116.39, 150]])).toBeUndefined()
-    expect(cropClip(src(O, 165.97), [], [N])).toBeUndefined()
+    const one: Row = {
+      ...row,
+      content: [
+        { t: 'text', s: 'Es gilt ' },
+        { t: 'el', id: '0' },
+        { t: 'text', s: ' und so fort.' },
+      ],
+    }
+    const crops = cropsOf(layPage(part(broken), rowsOf(one), rules, metrics))
+    expect(crops.length).toBe(2)
+    for (const c of crops) expect(c.ink).toEqual([c.src[5] === 165.97 ? l1 : l2])
   })
 })

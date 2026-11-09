@@ -3,9 +3,10 @@
 // set turned turned about its origin as svgOfFigure turns a figure's text), drawn
 // from `Page` alone; and the crops, each element's (or label's) own ink cut from the crop render of the page it stands on and
 // drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A crop is cut
-// as the typesetter states it: its source, its ink with the antialiased margin round it (typeset's cropOfBox), drawn through
-// its clip where another piece's ink stands in it (typeset's lay/clips.ts), since the crop render shows every element and label
-// of the page and a source cut whole carries their ink (2610.21312v1-zh p5 t58: line 2's glyph tops left as dots). A member laid
+// by its own ink as TeX set it (its item's `ink`, the part's boxes) and its antialiased edge, a device pixel of the render it is
+// cut from round it, clear of every other piece's ink and its edge (the Page's `inks`): the crop render shows every element
+// and label of the page, so a source cut whole carries their ink (2610.21312v1-zh p5 t58: line 2's glyph tops left as dots),
+// and a margin fixed in points is no antialiased edge at every zoom (a 1x screen's at 100 %: a device pixel 0.75 pt). A member laid
 // across a page break may carry an element of one page onto a line of the other (its Ink's page): that crop is cut from its own
 // page's render, as today's were (triage-1 B, 2608.16117v1-de t11's p3 element on p4's line).
 //
@@ -107,11 +108,40 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces): SVGSVGElement
   return svg
 }
 
-/** each crop of the page: the page its ink is cut from (its Ink's), its source and where it is drawn, both in PDF units
- *  [x0, y0, x1, y1], and where it states one, its clip where it is drawn (its source's rectangles moved and scaled as its source
- *  is). Its source is the typesetter's whole: its ink and the antialiased margin round it, none at an edge cut between two of
- *  its element's glyphs (a URL broken) */
-export function cropsOf(page: Page): {
+type Rect = [number, number, number, number]
+const meet = (a: Rect, b: Rect): Rect | null => {
+  const x0 = Math.max(a[0], b[0]),
+    y0 = Math.max(a[1], b[1]),
+    x1 = Math.min(a[2], b[2]),
+    y1 = Math.min(a[3], b[3])
+  return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null
+}
+const inside = (a: Rect, b: Rect) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3]
+/** rectangle `r` less rectangle `n`: what of `r` stands left, right, under and over `n`, each a rectangle of its own */
+function less(r: Rect, n: Rect): Rect[] {
+  const m = meet(r, n)
+  if (!m) return [r]
+  const out: Rect[] = []
+  if (m[0] > r[0]) out.push([r[0], r[1], m[0], r[3]])
+  if (m[2] < r[2]) out.push([m[2], r[1], r[2], r[3]])
+  if (m[1] > r[1]) out.push([m[0], r[1], m[2], m[1]])
+  if (m[3] < r[3]) out.push([m[0], m[3], m[2], r[3]])
+  return out
+}
+
+/**
+ * Each crop of the page: the page its ink is cut from (its Ink's), its source and where it is drawn, both in PDF units
+ * [x0, y0, x1, y1], and its clip where it is drawn, where it has one (its source's rectangles moved and scaled as its source
+ * is). `px`: a device pixel of the render it is cut from, PDF units across and up. A crop of its own ink stated (its item's
+ * `ink`) is its ink's boxes whole and the device pixel round them, its antialiased edge, less every other piece's ink with its
+ * own (the Page's `inks`): what TeX set for it and nothing of its neighbours', at any zoom; its edge cut between two of its
+ * element's glyphs (a URL broken) takes none, its element's ink going on past it. One of no ink stated is the typesetter's
+ * source whole (its ink and the margin cropOfBox gives it)
+ */
+export function cropsOf(
+  page: Page,
+  px: { x: number; y: number },
+): {
   from: number
   src: [number, number, number, number]
   at: [number, number, number, number]
@@ -133,11 +163,59 @@ export function cropsOf(page: Page): {
           it.x + ((c as number) - x0) * k,
           y + ((d as number) - base) * k,
         ]
+        const own = it.ink?.length ? it.ink : null
+        if (!own) {
+          out.push({ from, src: [x0, y0, x1, y1], at: to([x0, y0, x1, y1]), piece: it.piece, ord: m.ord })
+          continue
+        }
+        // (its own ink, an edge cut between two glyphs cut there; and with the device pixel round it, none past a cut)
+        const cl = (it.cut ?? 0) & 1,
+          cr = (it.cut ?? 0) & 2
+        const mine = own.flatMap((b): Rect[] => {
+          const r: Rect = [cl ? Math.max(b[0], x0) : b[0], b[1], cr ? Math.min(b[2], x1) : b[2], b[3]]
+          return r[2] > r[0] && r[3] > r[1] ? [r] : []
+        })
+        if (!mine.length) {
+          out.push({ from, src: [x0, y0, x1, y1], at: to([x0, y0, x1, y1]), piece: it.piece, ord: m.ord })
+          continue
+        }
+        const ring = mine.map(
+          (b): Rect => [
+            cl ? Math.max(b[0] - px.x, x0) : b[0] - px.x,
+            b[1] - px.y,
+            cr ? Math.min(b[2] + px.x, x1) : b[2] + px.x,
+            b[3] + px.y,
+          ],
+        )
+        // (every other piece's ink on its page with its own edge, where it meets the ring outside its own ink)
+        const isOwn = (k: readonly number[]) =>
+          own.some((o) => o[0] === k[1] && o[1] === k[2] && o[2] === k[3] && o[3] === k[4])
+        const hits = (page.inks ?? [])
+          .filter((k) => k[0] === from && !isOwn(k))
+          .map((k): Rect => [k[1] - px.x, k[2] - px.y, k[3] + px.x, k[4] + px.y])
+          .filter((n) =>
+            ring.some((r) => {
+              const q = meet(r, n)
+              return !!q && !mine.some((o) => inside(q, o))
+            }),
+          )
+        const src: Rect = [
+          Math.min(...ring.map((r) => r[0])),
+          Math.min(...ring.map((r) => r[1])),
+          Math.max(...ring.map((r) => r[2])),
+          Math.max(...ring.map((r) => r[3])),
+        ]
+        let clip: Rect[] | undefined
+        if (hits.length || ring.length > 1) {
+          let clear = ring
+          for (const n of hits) clear = clear.flatMap((r) => less(r, n))
+          clip = [...mine, ...clear.filter((r) => !mine.some((o) => inside(r, o)))]
+        }
         out.push({
           from,
-          src: [x0, y0, x1, y1],
-          at: to([x0, y0, x1, y1]),
-          ...(it.clip?.length ? { clip: it.clip.map(to) } : {}),
+          src,
+          at: to(src),
+          ...(clip ? { clip: clip.map(to) } : {}),
           piece: it.piece,
           ord: m.ord,
         })
@@ -226,7 +304,14 @@ export async function cropsFor(
   signal?: AbortSignal,
   round: Rounding = { x: 1, y: 1 },
 ): Promise<HTMLCanvasElement | null> {
-  const list = cropsOf(page)
+  // (a device pixel of the crop render, PDF units across and up: the page view's scale at its output scale, a quarter turn's
+  // across its height)
+  const quarter = turnOf(vp) % 180 !== 0
+  const px = {
+    x: 1 / (vp.scale * (quarter ? scale.sy : scale.sx)),
+    y: 1 / (vp.scale * (quarter ? scale.sx : scale.sy)),
+  }
+  const list = cropsOf(page, px)
   if (!list.length || signal?.aborted) return null
   const [w, h] = cropGrid(vp, scale, round).px
   const out = document.createElement('canvas')
@@ -234,7 +319,6 @@ export async function cropsFor(
   out.width = w
   out.height = h
   // (its box the page view's: the frame, across where the page is turned a quarter, floored to the page view's rounding)
-  const quarter = turnOf(vp) % 180 !== 0
   out.style.setProperty(
     '--axt-crops-w',
     `round(down, var(${quarter ? '--axt-frame-h' : '--axt-frame-w'}, 100%), ${round.x}px)`,

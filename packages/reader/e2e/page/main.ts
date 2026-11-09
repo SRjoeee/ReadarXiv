@@ -75,8 +75,9 @@ function cutCrop(pages: Map<number, Page>, o: { piece: string; share: number; te
       }
   return false
 }
-/** a crop given a clip of the left `share` of its source (paint.ts: drawn through it), as the typesetter states one where
- *  another piece's ink stands in its source (lay/clips.ts); its clip's right edge and its drawn box, PDF units of its page */
+/** a crop whose own ink is the left `share` of its source and whose source's rest is another piece's ink on its page (the
+ *  Page's `inks`), as the typesetter states them where two pieces' ink stand side by side (lay/clips.ts); its own ink's right
+ *  edge and its drawn box, PDF units of its page */
 function clipCrop(
   pages: Map<number, Page>,
   o: { piece: string; share: number },
@@ -87,9 +88,10 @@ function clipCrop(
         const j = items.findIndex((it) => 'src' in it && it.piece === o.piece)
         if (j < 0) continue
         const it = items[j] as Extract<Item, { src: Ink }>
-        const [, a, b, c, d, base] = it.src
+        const [pg, a, b, c, d, base] = it.src
         const at = a + (c - a) * o.share
-        items[j] = { ...it, clip: [[a, b, at, d]] }
+        items[j] = { ...it, ink: [[a, b, at, d]] }
+        p.inks = [...(p.inks ?? []), [pg, a, b, at, d, base], [pg, at, b, c, d, base]]
         return {
           page: p.page,
           edge: it.x + (at - a) * it.k,
@@ -190,7 +192,7 @@ const h = {
       pages?: string
       /** an element's crop cut over two lines, as the typesetter cuts a URL (cutCrop) */
       cut?: { piece: string; share: number; text: [string, string] }
-      /** an element's crop drawn through a clip of the left share of its source (clipCrop) */
+      /** an element's crop whose own ink is the left share of its source, the rest another piece's (clipCrop) */
       clip?: { piece: string; share: number }
     } = {},
   ) {

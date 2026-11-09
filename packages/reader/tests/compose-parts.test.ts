@@ -880,7 +880,7 @@ describe('a crop cut from its element’s ink between two glyphs (a URL broken w
       ],
       links: [],
     }
-    const [head, tail] = cropsOf(page)
+    const [head, tail] = cropsOf(page, { x: 0.5, y: 0.5 })
     expect(head!.src[0]).toBeCloseTo(235, 5)
     expect(head!.src[2]).toBeCloseTo(277.1, 5)
     expect(head!.at[2]).toBeCloseTo(72 + 277.1 - 235, 5)

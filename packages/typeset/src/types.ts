@@ -144,10 +144,10 @@ export type Item =
       dir?: [ux: number, uy: number]
     }
   /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
-   *  url package breaks it), which the reader draws with no antialiased margin; `clip`, where another piece's ink stands in its
-   *  source, the rectangles of its source it is drawn through (its own ink's boxes and the rest clear of the others' ink, its
-   *  page's PDF units: lay/clips.ts) */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; clip?: Box[] }
+   *  url package breaks it), which the reader draws with no antialiased margin; `ink` its own ink, its piece's boxes on its
+   *  line as the part states them (its page's PDF units; none where the part states none of its piece: lay/clips.ts), the
+   *  reader's to cut it by */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[] }
 
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {
@@ -177,6 +177,9 @@ export type Page = {
    *  owner), so that a reader leaving that member the original's puts its links back at A's boxes; `border` its own
    *  annotation's on A (Link.border, moved or not), none where it has none */
   links: [box: Box, to: Link['to'], owner?: number, border?: Link['border']][]
+  /** every piece's ink the part states (each element's, label's and counter's box) on the pages the page's crops are cut from:
+   *  what a crop's antialiased edge must leave behind; none where it draws no crop (lay/clips.ts) */
+  inks?: Ink[]
   ledger?: PageLedger
 }
 

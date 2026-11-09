@@ -25,8 +25,8 @@ export type Item =
     }
   /** a crop: src's ink, its base on the line's, scaled k; `s` its copy text, `piece` its element (or 'label', 'counter'); `cut`
    *  its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken), drawn with no margin;
-   *  `clip`, where another piece's ink stands in src, the rectangles of src it is drawn through (src's page's PDF units) */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; clip?: Box[] }
+   *  `ink` its own ink, its piece's boxes on its line as the part states them (src's page's PDF units), which it is cut by */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[] }
 
 export type Why =
   | 'unlocated'
@@ -74,6 +74,9 @@ export interface Page {
   /** the page's links as drawn: moved with their pieces, else at A's boxes; `owner` the ord of the member that holds one;
    *  `border` its own annotation's on A (Link.border), none where it has none */
   links: [box: Box, to: { url: string } | { dest: string }, owner?: number, border?: LinkBorder][]
+  /** every piece's ink the part states on the pages the page's crops are cut from (each element's, label's and counter's box):
+   *  what a crop's antialiased edge leaves behind */
+  inks?: Ink[]
 }
 
 /** the rows a lay reads: a row by unit id, and whether no other row will come; `kept`, a unit the paper keeps as it is, whose

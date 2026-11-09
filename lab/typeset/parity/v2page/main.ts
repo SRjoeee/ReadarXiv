@@ -17,7 +17,7 @@ import { linesOfSvg } from '../measure-dom.mjs'
 type Metrics = { ready(face: string, text: string): boolean | 'never' }
 const root = document.getElementById('root') as HTMLElement
 let reader: Reader | null = null
-let pages: Record<string, { members: Laid[]; links: Page['links'] }> = {}
+let pages: Record<string, { members: Laid[]; links: Page['links']; inks?: Page['inks'] }> = {}
 let asked: Record<string, number> = {}
 
 ;(globalThis as { __parityLay?: unknown }).__parityLay = (part: { page: number }, _rows: unknown, metrics: Metrics): Page => {
@@ -37,7 +37,7 @@ let asked: Record<string, number> = {}
       members: got.members.map((m) => ({ ...m, state: 'waiting', off: 0, lines: [] })),
       links: [],
     }
-  return { page: n, wait: { rows: [], faces: [] }, members: got.members, links: got.links }
+  return { page: n, wait: { rows: [], faces: [] }, members: got.members, links: got.links, ...(got.inks ? { inks: got.inks } : {}) }
 }
 
 const slotOf = (n: number) => root.querySelector<HTMLElement>(`.axt-pane.right .page.axt-slot[data-page-number="${n}"]`)
@@ -113,9 +113,14 @@ const p = {
     const el = slotOf(n)
     const svg = el?.querySelector<SVGSVGElement>('.axt-over svg')
     const got = pages[String(n)]
-    const page: Page | null = got ? { page: n, wait: { rows: [], faces: [] }, members: got.members, links: got.links } : null
-    // (each crop: its member, where it is drawn, its piece, its source on A (both padded as the reader cuts it) and its page)
-    const crops = page ? cropsOf(page).map((c) => [c.ord, ...c.at, c.piece, ...c.src, c.from]) : []
+    const page: Page | null = got
+      ? { page: n, wait: { rows: [], faces: [] }, members: got.members, links: got.links, ...(got.inks ? { inks: got.inks } : {}) }
+      : null
+    // (each crop: its member, where it is drawn, its piece, its source on A (as the reader cuts it: its own ink and a device
+    // pixel of the crops' canvas round it) and its page)
+    const canvas = el?.querySelector<HTMLCanvasElement>('.axt-over > canvas.axt-crops')
+    const dpx = canvas?.width ? (view[2] - view[0]) / canvas.width : 3 / 8
+    const crops = page ? cropsOf(page, { x: dpx, y: dpx }).map((c) => [c.ord, ...c.at, c.piece, ...c.src, c.from]) : []
     const vb = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number)
     const k = svg && vb[2] ? vb[2] / (view[2] - view[0]) : 1
     return {

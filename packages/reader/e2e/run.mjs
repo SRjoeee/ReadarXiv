@@ -874,11 +874,12 @@ await check(
   },
 )
 await check(
-  'compose: a crop drawn through its clip leaves the rest of its source behind, in the crops canvas of its page view (s1-columns)',
+  'compose: a crop carries its own ink and leaves another piece’s in its source behind, in the crops canvas of its page view (s1-columns)',
   async () => {
-    // (the typesetter states a clip where another piece's ink stands in a crop's source, typeset's lay/clips.ts: 2610.21312v1-zh
-    // p5 t58, line 2's glyph tops cut with line 1's formula and left behind as dots; here the formula's crop given a clip of its
-    // source's left half, and the crops canvas read: ink left of the clip's edge, none right of it)
+    // (the typesetter states a crop's own ink and its page's every piece's, typeset's lay/clips.ts, and the reader cuts it by
+    // its own and a device pixel round it, clear of the others' (paint.ts cropsOf): 2610.21312v1-zh p5 t58, line 2's glyph
+    // tops cut with line 1's formula and left behind as dots; here the formula's crop given the left half of its source as its
+    // own ink and the right half as another piece's, and the crops canvas read: ink left of the edge, none right of it)
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
     const r = await page.evaluate(() => window.__h.layer('s1-columns', { clip: { piece: '1', share: 1 / 2 } }))
@@ -910,7 +911,7 @@ await check(
     assert(!errors.length, errors.join('; '))
     assert(
       ink.left > 0 && ink.right === 0,
-      `the crop's ink: ${ink.left} px left of its clip's edge, ${ink.right} right of it`,
+      `the crop's ink: ${ink.left} px left of its own ink's edge, ${ink.right} right of it`,
     )
     return ink
   },
