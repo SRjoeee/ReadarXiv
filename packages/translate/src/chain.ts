@@ -24,6 +24,7 @@ import {
   type UnitIn,
   type Why,
 } from './contract.ts'
+import { placeGroups } from './groups.ts'
 import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
 
@@ -56,8 +57,9 @@ export const GATE_MS = 1_000
 export const KEY_VERSION = 't1'
 /** the chain's own outcome rules (fall-through per unit, one re-ask where a translator asks it, the runs floor of stretches
  *  of two letters or more, a span that is no edge keeping its head in a copy of itself: runs.ts; an element set after the
- *  unit's text given to no translator, put back after the translation: tailOf): a change to them is a change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads|after'
+ *  unit's text given to no translator, put back after the translation: tailOf; a group a reply did not bring back placed
+ *  around its own text where the translation states it: groups.ts): a change to them is a change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2|runs-heads|after|groups'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -865,8 +867,9 @@ export function chainOf(ports: Ports = {}): Chain {
       by.add(r.by)
     })
     if (!by.size) return null
-    const content = join(tr)
-    if (!accept(u, content).ok) return null
+    const joined = join(tr)
+    if (!accept(u, joined).ok) return null
+    const content = placeGroups(u, joined)
     return { id: u.id, ok: true, content, by: by.size === 1 ? `runs:${[...by][0]}` : 'runs:mixed' }
   }
 
@@ -879,9 +882,11 @@ export function chainOf(ports: Ports = {}): Chain {
       return null
     }
     if (!r || !Array.isArray(r.content) || !accept(u, r.content).ok) return null
-    return r.sentences && u.sentences && validSentences(u, r.content, r.sentences)
-      ? { content: r.content, sentences: r.sentences }
-      : { content: r.content }
+    // (a group the reply did not bring back, around its own text where the translation states it; its projection the same)
+    const content = placeGroups(u, r.content)
+    return r.sentences && u.sentences && validSentences(u, content, r.sentences)
+      ? { content, sentences: r.sentences }
+      : { content }
   }
 }
 

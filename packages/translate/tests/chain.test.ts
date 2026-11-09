@@ -148,7 +148,7 @@ describe('the contract: fall-through is per unit', () => {
     expect(e.sent(withMath)).toBe(1)
     expect(e.sent(plain)).toBe(0)
   })
-  it('each mangling refuses only the unit it mangles; a dropped span that is not `must` is accepted unstyled (DECISION "Styled spans")', async () => {
+  it('each mangling refuses only the unit it mangles; a dropped span that is not `must` is accepted, placed back where the translation keeps its text (DECISION "Styled spans", groups.ts)', async () => {
     const styled = unit('s', [
       t('A '),
       span('b', 'bold', [t('bold')]),
@@ -176,13 +176,14 @@ describe('the contract: fall-through is per unit', () => {
     const kept = await all(
       chainOf({ clock: fakeClock() }).translate([loose], 'ja', { translators: [mangler('drop-span'), echo()] }),
     )
+    // (the echo keeps "bold" as written, once: the group's own text, so it goes back around it)
     expect(kept[0]).toEqual({
       id: 's2',
       ok: true,
       by: 'mangle-drop-span:0',
       content: [
         { t: 'text', s: 'A ' },
-        { t: 'text', s: 'bold' },
+        { t: 'span', id: 'b', content: [{ t: 'text', s: 'bold' }] },
         { t: 'text', s: ' word.' },
       ],
     })
