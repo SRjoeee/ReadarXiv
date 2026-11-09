@@ -4,11 +4,27 @@
 // reader's own lay (packages/reader/src/compose/typeset.ts `typesetLay`, which v2.mjs makes over the pair's metrics and the
 // served patterns), so that whatever the reader passes to `layPage` (its rules for the target, its toggles' `leave`, its
 // options) the parity check passes, and nothing more. The part and the rows stay gate-l1's (the pair's door rows, the same
-// translation on both sides). Nothing else of any module is touched; a gate-l1.ts that no longer holds the call once throws.
+// translation on both sides). And in packages/typeset/src/shared/fill-pass.ts one call is put after a page's fill, before its
+// runs are joined: `globalThis.__parityFill?.(page, its target, the units begun on it, those running on to it, the rules)`,
+// which v2.mjs reads to record each pass's target and the paragraphs that borrow room among its voters (the verdict's
+// leadRuling). Nothing else of any module is touched; a gate-l1.ts that no longer holds the call once, or a fill-pass.ts its
+// anchor, throws.
 const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
+const FILLED = '  for (const [p, t] of runs) {\n'
 
 export async function load(url, context, nextLoad) {
   const r = await nextLoad(url, context)
+  if (url.endsWith('/packages/typeset/src/shared/fill-pass.ts')) {
+    const source = String(r.source)
+    if (source.split(FILLED).length !== 2) throw new Error('parity hook: fill-pass.ts no longer holds its anchor once')
+    return {
+      ...r,
+      source: source.replace(
+        FILLED,
+        `  ;(globalThis as any).__parityFill?.(pg, target, begun, ok.filter((p) => p.pages[0] !== pg), P)\n${FILLED}`,
+      ),
+    }
+  }
   if (!url.endsWith('/packages/typeset/tests/replay/gate-l1.ts')) return r
   const source = String(r.source)
   const found = source.match(CALL) ?? []

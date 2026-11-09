@@ -25,6 +25,7 @@ const { typesetLay } = await import('../../../packages/reader/src/compose/typese
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
 const { todayJoin } = await import('./join.mjs')
+const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -60,6 +61,23 @@ for (const pair of pairs) {
     if (p === pair)
       pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait, ...(page.inks ? { inks: page.inks } : {}) }
   }
+  // (each fill pass's target, and the target its voters tell without the paragraphs among them that borrow room under their
+  // lines (a state, or a run's, that took the borrow knob): option (i) moves their fill leadings, and they still vote, the
+  // owner's ruling of 2026-11-10; with each unit begun on the page, its fill leading and whether it borrows. The verdict's
+  // leadRuling reads it. hook.mjs puts the call in fill-pass.ts; a page's pass is run again by each page laid after it, alike)
+  const fills = {}
+  globalThis.__parityFill = (pg, told, begun, continuing, P) => {
+    const borrows = (p) => (p.layout?.state?.borrow ?? 0) > 0 || (p.runs ?? []).some((q) => (q.layout?.state?.borrow ?? 0) > 0)
+    const voter = (p) => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines ?? 0 })
+    const band = P.adaptiveFill?.band ?? 0
+    const without = fillTarget(begun.filter((p) => !borrows(p)).map(voter), continuing.filter((p) => !borrows(p)).map(voter), band)
+    fills[pg] = {
+      target: told?.target ?? null,
+      without: without?.target ?? null,
+      band,
+      units: Object.fromEntries(begun.map((p) => [p.id, [p.fillLead ?? null, borrows(p) ? 1 : 0]])),
+    }
+  }
   // (the reader's lay of the pair, as openReader binds it once the head is read: its target the pair's, as render.mjs opens
   // the reader on it, its toggles TOGGLES's, its metrics the layered ones, its patterns the served ones)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
@@ -77,6 +95,7 @@ for (const pair of pairs) {
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
+  globalThis.__parityFill = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
@@ -126,7 +145,7 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)
