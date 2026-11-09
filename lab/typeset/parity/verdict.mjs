@@ -4,7 +4,7 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
-import { judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -102,10 +102,10 @@ export const WEIGHT = {
 export const FLAGS = Object.keys(WEIGHT)
 /** what each measure is, as a distance from the original */
 export const SAYS = {
-  shown: "a unit today shows translated that v2 leaves the original's, or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
+  shown: "a unit today shows translated that v2 leaves the original's (one today draws in its source's own words misses none), or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
   weight: "the translated text's ink darkness (mean over its glyph pixels) against the original text's (its units' lines on arXiv's page)",
   anchor: "a unit's first line against the original's first line: the smaller of its baseline's and its em top's offsets",
-  align: "TeX's alignment kept: a line's start (left, justified), midpoint (centred) or end (right) against the original's lines'",
+  align: "TeX's alignment kept: a line's start (left, justified), midpoint (centred) or end (right) by its ink (a CJK mark's blank half none) against the original's lines'",
   cross: "the original's room kept: a laid line across a vertical rule of arXiv's page or over another unit's box (none on the original)",
   gap: "a run-in follower's start against its head's end, against the original's separation",
   turn: "a unit TeX set turned (a figure's rotated text) drawn upright (the original's, and today's, turned)",
@@ -204,7 +204,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // holds most of its height (its ink's middle nearest the baseline where two hold as much): a formula's ink that dips into the
   // next line's band is its own line's, a raised script's its own line's, never the neighbour's)
   const withCrops = (u, crops) => {
-    const ls = raised(u.lines.filter((l) => l.n > 0))
+    const ls = raised(u.lines.filter((l) => l.n > 0).map(inkedLine))
     const on = new Map()
     for (const c of crops) {
       if (c[0] !== u.id) continue
@@ -218,7 +218,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     }
     return ls.map((l) => {
       const cs = on.get(l)
-      return cs ? { ...l, x0: Math.min(l.x0, ...cs.map((c) => c[1])), x1: Math.max(l.x1, ...cs.map((c) => c[3])) } : l
+      if (!cs) return l
+      const x0 = Math.min(...cs.map((c) => c[1])),
+        x1 = Math.max(...cs.map((c) => c[3]))
+      return { ...l, x0: Math.min(l.x0, x0), x1: Math.max(l.x1, x1), ix0: Math.min(l.ix0, x0), ix1: Math.max(l.ix1, x1) }
     })
   }
   const drawn = (units, crops, keyOf) =>
@@ -297,13 +300,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       const a = originalOf(runs, fonts, o.lines.map((l) => [l.x0, l.bottom ?? l.y - 0.2 * l.size, l.x1, l.top ?? l.y + 0.8 * l.size]))
       if (a) aOrig.set(key, a)
     }
-  /** a drawn line by its ink: a CJK opening mark's blank first half and a closing mark's blank second half no ink */
+  /** a drawn line by its ink (inkedLine, its crops and raised marks with it: withCrops) */
   const inkOf = (l) => {
     if (l.rot) return l
-    const t = l.text.trim()
-    const x0 = l.x0 + (OPENING.test(t[0] ?? '') ? 0.5 * l.size : 0),
-      x1 = l.x1 - (CLOSING.test(t.at(-1) ?? '') ? 0.5 * l.size : 0)
-    return x1 > x0 ? { ...l, x0, x1 } : l
+    const k = l.ix0 === undefined ? inkedLine(l) : l
+    return { ...l, x0: k.ix0, x1: k.ix1 }
   }
 
   // ------------------------------------------------ per unit, each side's distances from the original
@@ -342,17 +343,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
         }
         // alignment, by TeX's statement
         const tol = Math.max(BOUNDS.alignMin, BOUNDS.align * os)
-        // (a line that opens with a CJK opening mark starts its advance half an em before its ink)
-        const opens = (l) => OPENING.test(l.text.trimStart()[0] ?? '')
-        const startOff = (l, at) => Math.max(0, Math.abs(l.x0 - at) - (opens(l) ? 0.5 * l.size : 0))
+        // (a line that opens with a CJK opening mark starts its advance half an em before its ink: either may stand at the
+        // margin; a line a crop or a raised mark opens starts at it)
+        const startOff = (l, at) => Math.max(0, Math.abs(l.x0 - at) - (inkOf(l).x0 - l.x0))
         let off = null,
           how = null
         if (o.align === 'c') {
-          // (TeX centres a first line with its label, which a side draws anew or keeps at its place)
+          // (TeX centres a first line with its label, which a side draws anew or keeps at its place; a drawn line's middle is
+          // its ink's, as the original's glyphs')
           const mid = median(ol.map((l) => (l.x0 + l.x1) / 2))
           const lb = o.first ? ol[0].label : undefined
           off = Math.max(
-            ...dl.map((l, j) => {
+            ...dl.map(inkOf).map((l, j) => {
               const own = Math.abs((l.x0 + l.x1) / 2 - mid)
               if (j > 0 || lb === undefined) return own
               const whole = (lb + ol[0].x1) / 2
@@ -362,7 +364,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
           how = 'centred: a line\'s midpoint'
         } else if (o.align === 'r') {
           const end = median(ol.map((l) => l.x1))
-          off = Math.max(...dl.map((l) => Math.abs(l.x1 - end)))
+          off = Math.max(...dl.map((l) => Math.abs(inkOf(l).x1 - end)))
           how = "right: a line's end"
         } else if (o.align === 'l' || o.align === 'j') {
           // (a follower's first line starts after its head, whose translation is another width: the gap measures it; every
@@ -520,10 +522,20 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   let gained = 0
   // (every unit today draws that v2 does not: where v2's part has its member, that member's state; where no member of v2's part
-  // is joined to it (prepare or the join lost it), that is said: a translation missing all the same)
+  // is joined to it (prepare or the join lost it), that is said: a translation missing all the same. But a unit today draws in
+  // its source's own words, letters and digits (the state `groups` reads a drawn cell in: an address alone, a reply that came
+  // back as it went), misses no translation where v2 leaves the original's ink of it: those named apart, `echoed`)
+  const echoed = []
+  const todayRaw = new Map(rec.today.units.map((u) => [`t${u.id}`, u.lines]))
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
+    const src = prepByOrd.get(Number(key.slice(1)))?.text
+    const said = (todayRaw.get(key) ?? []).map((l) => l.text).join('')
+    if (typeof src === 'string' && bare(src) !== '' && bare(said) === bare(src)) {
+      echoed.push(`${key} ${o?.kind ?? ''}`.trim())
+      continue
+    }
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, true, 'today')
   }
@@ -721,6 +733,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     diff: px.diff ?? null,
     rules: rules.length,
     laid: { today: T.size, v2: V.size, gained },
+    echoed,
     figures: { today: figT, v2: figV, v2Laid: figLaid },
   }
   for (const f of FLAGS) {
@@ -779,6 +792,22 @@ export function recount(out) {
   out.score = [...by].reduce((s, [f, k]) => s + WEIGHT[f] * Math.min(k, 8), 0)
 }
 
+/**
+ * A drawn line as read back with its ink's extent (`ix0`, `ix1`): its drawn characters' boxes, but the first's where it is a CJK
+ * opening mark, whose ink stands in its em's second half, and the last's where it is a closing mark, whose ink stands in the
+ * first (the blank half a reader sees as space, at the start or the end of a line). The first and last are its own drawn
+ * characters' (no white space, no crop's stand-in, U+FFFC): a crop or a raised mark that stands before or after them on the line
+ * extends it apart (withCrops, raised), its edge never a mark's. Every box a full em of its face, a mark the breaker compressed
+ * too: compression moves the next character, not the mark's box (breaker/break.mjs). A line of marks alone is its boxes
+ */
+function inkedLine(l) {
+  if (l.rot || l.x0 === null) return { ...l, ix0: l.x0, ix1: l.x1 }
+  const chars = [...l.text].filter((c) => !/\s/u.test(c) && c !== OBJ)
+  const ix0 = l.x0 + (OPENING.test(chars[0] ?? '') ? 0.5 * l.size : 0),
+    ix1 = l.x1 - (CLOSING.test(chars.at(-1) ?? '') ? 0.5 * l.size : 0)
+  return ix1 > ix0 ? { ...l, ix0, ix1 } : { ...l, ix0: l.x0, ix1: l.x1 }
+}
+
 /** a run set smaller and raised or lowered off its line's baseline (a footnote mark, a superscript: the typesetter's rise)
  *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own */
 function raised(lines) {
@@ -791,6 +820,10 @@ function raised(lines) {
     }
     host.x0 = Math.min(host.x0, l.x0)
     host.x1 = Math.max(host.x1, l.x1)
+    if (host.ix0 !== undefined && l.ix0 !== undefined) {
+      host.ix0 = Math.min(host.ix0, l.ix0)
+      host.ix1 = Math.max(host.ix1, l.ix1)
+    }
     for (const k of ['n', 'bold', 'italic']) host[k] += l[k]
     host.word = Math.max(host.word, l.word)
     host.letter = Math.max(host.letter, l.letter)
