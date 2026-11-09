@@ -1,6 +1,6 @@
 // lab/pdf/prepare-back/restate.mjs: a stage 1a run's dumps with the baseline's units it does not make stated again (stated.mjs),
 // with no compile and no prepare: each dump's own units kept as they are, the statements run.mjs's --baseline wrote dropped and
-// made again (with the trails its bundles' parts carry), numbered after the dump's own units as run.mjs numbers them, its counts
+// made again (with the trails and labels its bundles' parts carry), numbered after the dump's own units as run.mjs numbers them, its counts
 // made again. For a change to how the statement reads (an acceptance ruling) measured on a run already made; the differential
 // then reads <out>.
 //   node --import tsx lab/pdf/prepare-back/restate.mjs <baseline prepare dir> <run dir> <out dir>
@@ -23,13 +23,20 @@ for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.pre
     const base = JSON.parse(readFileSync(join(BASELINE, f), 'utf8')).units
     // (the trails the run's parts' members carry, as locate's members carried them to run.mjs)
     const dir = join(RUN, 'bundles', f.slice(0, -'.prepare.json'.length))
-    const els = existsSync(dir)
+    const members = existsSync(dir)
       ? readdirSync(dir)
           .filter((p) => p.endsWith('.part'))
-          .flatMap((p) => JSON.parse(readFileSync(join(dir, p), 'utf8')).flows.flat().flatMap((m) => m.els ?? []))
+          .flatMap((p) => JSON.parse(readFileSync(join(dir, p), 'utf8')).flows.flat())
       : []
+    const els = members.flatMap((m) => m.els ?? [])
+    // (the number each unit's label states (Label.num), by its ord in the dump: located/<id>.json's dumpOrds join the two)
+    const located = join(RUN, 'located', `${f.slice(0, -'.prepare.json'.length)}.json`)
+    const num = new Map(members.filter((m) => m.label?.num).map((m) => [m.ord, m.label.num[0]]))
+    const labels = new Map(
+      (existsSync(located) ? JSON.parse(readFileSync(located, 'utf8')).dumpOrds : []).map(([o, m]) => [o, num.get(m)]).filter(([, n]) => n),
+    )
     let ord = units.reduce((m, u) => Math.max(m, u.ord + 1), 0)
-    for (const { u, why } of statedOf(base, units, { trails: trailsOf(els) })) {
+    for (const { u, why } of statedOf(base, units, { trails: trailsOf(els), labels })) {
       units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
       stated++
     }

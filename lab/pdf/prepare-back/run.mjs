@@ -211,7 +211,9 @@ if (located) for (const [o, b] of located.born) {
 if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
   const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
-  for (const { u, why } of statedOf(base, units, { trails })) {
+  // (the number each unit's label states, Label.num, by its ord in the dump)
+  const labels = new Map(dumpOrds.map(([o, m]) => [o, located?.members[m]?.labelAt?.num?.[0]]).filter(([, n]) => n))
+  for (const { u, why } of statedOf(base, units, { trails, labels })) {
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }

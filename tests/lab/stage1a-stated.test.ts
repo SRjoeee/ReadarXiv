@@ -5,7 +5,8 @@
 // scripts are now elements (rebuild/script-face) where the two units read alike, its marks read as v2's elements as the parity's
 // keptJoin reads them; (b') a unit whose glyphs a unit of the author block's (the names toggle) now holds; (c) a line whose marks
 // are the name before's trail (rebuild/front-matter); (d) (a) with an element's characters in another order; (e) a unit whose
-// lines v2 keeps whole as the original's (stated, not accepted: the ruling waits on whether they are display formulas). Synthetic units in the dumps' form.
+// lines v2 keeps whole as the original's inside a display the engine states; (f) a unit one v2 unit holds whole, its text a part
+// of that unit's (a kept block holding it stated apart, not accepted). Synthetic units in the dumps' form.
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
@@ -89,8 +90,10 @@ describe("the baseline's units the candidate does not make, stated with how it r
     expect(said(statedOf(base, units))).toEqual([[161, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`]])
   })
 
-  it('states nothing for a line now of another kind that is not the names toggle, nor for one at another place', () => {
-    expect(statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])])).toEqual([])
+  it('states no names line for a line now of another kind that is not the names toggle (held whole (f)), nor one at another place', () => {
+    expect(said(statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])]))).toEqual([
+      [1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
+    ])
     expect(
       statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknames', [text('x')], [72, 300, 400])]),
     ).toEqual([])
@@ -125,9 +128,11 @@ describe("(b') a unit whose glyphs a unit of the author block now holds, whateve
     ])
   })
 
-  it("states nothing where the unit holding its glyphs is not the author block's, or holds only part of its line", () => {
-    expect(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'para', [text('x')])])).toEqual([])
-    expect(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'author', [text('x')], [72, 200, 600])])).toEqual([])
+  it("states no names line where the unit holding its glyphs is not the author block's, or holds only part of its line", () => {
+    // (held whole (f) instead: one unit meets its line, its text today's)
+    const held = [[1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]]
+    expect(said(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'para', [text('x')])]))).toEqual(held)
+    expect(said(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'author', [text('x')], [72, 200, 600])]))).toEqual(held)
   })
 })
 
@@ -202,6 +207,48 @@ describe("(e) a unit whose lines v2 keeps whole as the original's, inside a disp
   })
 })
 
+describe("(f) a unit held whole by another unit: one v2 unit holds every line of it, its text a part of that unit's", () => {
+  /** v2's reference holding today's two ink notes ("[64] …Mao." and ". Benchmarking …"), a label box before its first line */
+  const holder = () => {
+    const n = unit(id('b'), 485, 'reference', [
+      text('Ada Lovelace, '),
+      ph('~'),
+      text('Alan Turing. '),
+      ph('2024'),
+      ph('\\newblock'),
+      text('. Benchmarking the engines of thought'),
+    ], [334.39, 558.2, 93.86])
+    n.lines.push({ page: 1, x0: 334.39, x1: 500, baseline: 86, top: 94, bottom: 84 })
+    n.elements = [{ k: 3, kind: 'other', segs: [{ page: 1, x0: 440, x1: 460, baseline: 86, top: 94, bottom: 84 }] }]
+    return { ...n, label: [{ page: 1, x0: 317.96, x1: 329.41, baseline: 93.86, top: 98.77, bottom: 92.51 }] }
+  }
+  it('states a part of its text after an element setting no glyph as held whole', () => {
+    const base = [unit(id('a'), 518, 'inknotes', [text('. Benchmarking the engines')], [462, 500, 86])]
+    expect(said(statedOf(base, [holder()]))).toEqual([[518, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+
+  it("reads today's leading label as the holder's label where the part states its number, a tie as no glyph", () => {
+    const base = [unit(id('a'), 517, 'inknotes', [text('[64] Ada Lovelace, Alan Turing.')], [317.96, 558.2, 93.86])]
+    const labels = new Map([[485, '64']])
+    expect(said(statedOf(base, [holder()], { labels }))).toEqual([[517, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    // (no number stated for the holder's label: its characters are not read, nothing stated)
+    expect(statedOf(base, [holder()])).toEqual([])
+  })
+
+  it('states a unit a kept block holds apart, not as held whole: it has no text to read', () => {
+    const base = [unit(id('a'), 243, 'inknotes', [text('Ada Lovelace. Notes.')])]
+    const kept = { ...unit(id('b'), 261, 'inkreferences', []), kept: true as const }
+    expect(said(statedOf(base, [kept]))).toEqual([[243, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`]])
+  })
+
+  it('states nothing where two units meet its line, or where its text is not a part of the holder\'s', () => {
+    const base = [unit(id('a'), 1, 'inknotes', [text('Ada Lovelace')])]
+    const two = [unit(id('b'), 1, 'para', [text('Ada')], [72, 150, 600]), unit(id('c'), 2, 'para', [text('Lovelace')], [160, 300, 600])]
+    expect(statedOf(base, two)).toEqual([])
+    expect(statedOf(base, [unit(id('b'), 1, 'para', [text('Ada Byron')])])).toEqual([])
+  })
+})
+
 const ACCEPTANCE = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
@@ -209,9 +256,10 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       new RegExp(e.match).test(cause),
     )
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display])
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
+    expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`)).toBe(false)
   })
 })

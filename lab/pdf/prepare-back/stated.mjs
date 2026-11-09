@@ -29,6 +29,12 @@ export const CAUSE = Object.freeze({
   // ((e)'s first condition alone, no display the engine states over them (2608.25210v2's address lines; 2608.08481v1's displays
   // (7), (8), set at the page's foot, no source unit's): stated, not accepted)
   kept: "its lines kept whole as the original's",
+  // ((f): a unit of today's whose every line one unit of the candidate's holds and no other meets (its lines, its elements' boxes,
+  // its label's), of any class, today's glyph text an in-order part of that unit's: accepted)
+  held: 'held whole by another unit',
+  // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
+  // apart, not accepted)
+  heldKept: 'held whole by a kept block, no text of it sent',
   another: 'another reading',
 })
 
@@ -48,10 +54,11 @@ export const trailsOf = (els) =>
 /**
  * `base` the baseline dump's units, `units` the candidate's own (none stated yet), `trails` the trails the candidate's members
  * carry (rebuild/front-matter's El.trail: its ink's box `page`, `x0`, `x1`, `top`, `bottom`, `baseline` and its characters
- * `text`): each baseline unit the candidate does not make, in the baseline's order, with its stated cause; one it has no
- * statement for (absent from the candidate) is left out
+ * `text`), `labels` the number each candidate unit's label states (Label.num, by the unit's ord in the dump): each baseline unit
+ * the candidate does not make, in the baseline's order, with its stated cause; one it has no statement for (absent from the
+ * candidate) is left out
  */
-export function statedOf(base, units, { trails = [] } = {}) {
+export function statedOf(base, units, { trails = [], labels = new Map() } = {}) {
   const out = []
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
@@ -141,6 +148,46 @@ export function statedOf(base, units, { trails = [] } = {}) {
             u.lines.every((l) => (n.lines ?? []).some((k) => covers(k, l)) || (n.elements ?? []).some((e) => e.segs.some((k) => covers(k, l)))),
         )
       : undefined
+  // ((f): the one unit of the candidate's meeting every line of today's (a line of its, an element's box or its label's on that
+  // baseline, across it), the same for every line; its text read as glyphs: texts, an inked element's reading (none: a glyph no
+  // reading names), an element with no ink nothing (a tie, \newblock: no glyph), white space none)
+  const boxesOf = (n) => [...(n.lines ?? []), ...(n.elements ?? []).flatMap((e) => e.segs), ...(n.label ?? [])]
+  const onLine = (k, l) => k.page === l.page && Math.abs(k.baseline - l.baseline) <= ON && k.x0 < l.x1 && l.x0 < k.x1
+  const glyphTextOf = (x) => {
+    const inked = new Set((x.elements ?? []).map((e) => e.k))
+    let s = ''
+    for (const p of x.pieces ?? [])
+      s += p.kind === 'text' ? p.s : p.kind === 'ph' ? (inked.has(p.k) ? (readingOf(p.src ?? '') ?? '\ufffc') : '') : ''
+    return s.replace(/\s+/g, '')
+  }
+  const heldBy = (u) => {
+    if (!u.lines?.length) return null
+    let one = null
+    for (const l of u.lines) {
+      const at = units.filter((n) => !n.replaced && boxesOf(n).some((k) => onLine(k, l)))
+      if (at.length !== 1 || (one && at[0] !== one)) return null
+      one = at[0]
+    }
+    return one
+  }
+  // (today's glyph text an in-order part of the holder's; or the holder's label (its number as the part states it, the rest its
+  // punctuation) at today's line start, then the holder's text from its start)
+  const partOf = (u, n) => {
+    const t = glyphTextOf(u),
+      h = glyphTextOf(n)
+    if (!t || !h) return false
+    if (h.includes(t)) return true
+    const L = u.lines[0],
+      num = labels.get(n.ord)
+    const lab = (n.label ?? []).some((b) => b.page === L.page && Math.abs(b.baseline - L.baseline) <= ON && Math.abs(b.x0 - L.x0) <= ON)
+    if (!lab || !num) return false
+    for (let i = 1; i < t.length; i++)
+      if (h.startsWith(t.slice(i))) {
+        const p = t.slice(0, i)
+        return p.includes(num) && !/[\p{L}\p{N}]/u.test(p.replace(num, ''))
+      }
+    return false
+  }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
@@ -157,13 +204,18 @@ export function statedOf(base, units, { trails = [] } = {}) {
         : null
     // (none of either: a unit of the author block's now holding its glyphs, whatever today's kind)
     const names = !c && !kept ? heldByBlock(u) : undefined
+    // (none of these: one unit of the candidate's, of any class, holding it whole (f))
+    const holder = !c && !kept && !names ? heldBy(u) : null
+    const held = !holder ? null : !holder.pieces?.length ? CAUSE.heldKept : partOf(u, holder) ? CAUSE.held : null
     const why = c
       ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}`
       : kept
         ? "kept on arXiv's page as the original's, no text of it sent"
         : names
           ? `made on arXiv's page as ${names.id.slice(0, 12)}: ${CAUSE.names}`
-          : null
+          : held
+            ? `made on arXiv's page as ${holder.id.slice(0, 12)}: ${held}`
+            : null
     if (why !== null) out.push({ u, why })
   }
   return out
