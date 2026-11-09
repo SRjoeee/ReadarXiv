@@ -74,15 +74,18 @@ export function darkOf(d, px, min = 0.1, skip = null) {
   return { mean: n ? Math.round((sum / n) * 10000) / 10000 : null, pixels: n }
 }
 
-/** whether shot `c` holds ink at pixel p or within one device pixel of it (the same ink drawn a sub-pixel phase apart) */
-function inkNear(c, p, W, H) {
+/** whether shot `c` holds ink at pixel p or within one device pixel of it (the same ink drawn a sub-pixel phase apart),
+ *  none of it in `skip` (a moved crop's place: its ink is not arXiv's in place, there or a device pixel beside it) */
+function inkNear(c, p, W, H, skip = null) {
   const x = p % W,
     y = (p / W) | 0
   for (let dy = -1; dy <= 1; dy++)
     for (let dx = -1; dx <= 1; dx++) {
       const X = x + dx,
         Y = y + dy
-      if (X >= 0 && Y >= 0 && X < W && Y < H && darkAt(c, Y * W + X) >= INK) return true
+      if (X < 0 || Y < 0 || X >= W || Y >= H) continue
+      const q = Y * W + X
+      if (!skip?.[q] && darkAt(c, q) >= INK) return true
     }
   return false
 }
@@ -94,7 +97,7 @@ const STROKE_MAX = 20000
  * The original's glyphs a side shows in part: each connected stroke (8-neighbours) of arXiv's ink (`a`) nine tenths or more
  * inside `region` (the side's translated units' original lines), with how many of its pixels the side's text-less shot (`c`)
  * shows in place (its ink there or within a device pixel), outside `skip` (the places a side draws a moved crop, whose ink
- * is not arXiv's in place). Returns the strokes shown at all and not whole: { box: [c0, r0, c1, r1] device px, size, shown }
+ * is not arXiv's in place: a pixel beside one is not shown by its ink either). Returns the strokes shown at all and not whole: { box: [c0, r0, c1, r1] device px, size, shown }
  */
 export function partsOf(a, c, region, skip, W, H) {
   const label = new Int32Array(W * H)
@@ -120,7 +123,7 @@ export function partsOf(a, c, region, skip, W, H) {
       size++
       if (size > STROKE_MAX) big = true
       if (region[p]) inside++
-      if (!skip?.[p] && inkNear(c, p, W, H)) shown++
+      if (!skip?.[p] && inkNear(c, p, W, H, skip)) shown++
       const x = p % W,
         y = (p / W) | 0
       if (x < c0) c0 = x

@@ -48,6 +48,23 @@ describe('pixels: the drawing read against arXiv\'s page', () => {
     // (a stroke mostly outside the region is not the region's)
     expect(partsOf(a, shot(rect(2, 2, 6, 3)), mask(rect(2, 2, 6, 3)), null, W, H)).toEqual([])
   })
+  it('a moved crop’s ink shows no glyph of arXiv’s, in its place or a device pixel beside it', () => {
+    // (round 5's 2610.21312v1-zh p10 t122: the crop of "E[(QD⁻¹Q^⊤)ⱼⱼ]…" drawn 25 pt left and 2.4 pt down, over the place of
+    // its own erased "D", whose top stands above the crop's place; the crop's top ink, a device pixel under that edge, made
+    // the "D"'s pixels there read as shown, though nothing of arXiv's is left: its place set aside, its ink is not arXiv's
+    // anywhere)
+    const glyph = rect(2, 1, 6, 6)
+    const a = shot(glyph)
+    const region = mask(rect(0, 0, W, H))
+    const crop = rect(0, 3, 9, 7)
+    // (the crop's place rows 3..6, its ink the row 3, under the glyph's rows 1..2 outside its place)
+    expect(partsOf(a, shot(rect(2, 3, 6, 4)), region, mask(crop), W, H)).toEqual([])
+    // (arXiv's own ink left beside the crop's place still shows: the glyph's top row kept by the side, and the row under it,
+    // within a device pixel of it)
+    expect(partsOf(a, shot([...rect(2, 1, 6, 2), ...rect(2, 3, 6, 4)]), region, mask(crop), W, H)).toEqual([
+      { box: [2, 1, 6, 6], size: 20, shown: 8 },
+    ])
+  })
   it("how much of an element's ink the copy shows in place", () => {
     const ink = rect(2, 2, 4, 4)
     expect(shownOf(shot(ink), shot(ink), all, W, H)).toEqual({ ink: 4, shown: 4 })
