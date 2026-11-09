@@ -1181,8 +1181,14 @@ only how it meets the rest of the extension.
   it reads `Fig.` and `No.` as abbreviations only before a number, and a marker is none. The tie is TeX's own statement that
   the stop ends no sentence (LaTeX's `~` and `\ ` after a non-final period, an interword space whatever the space factor),
   and LaTeXML writes it as a no-break space, which the HTML page sends as it is (`Fig.&nbsp;@d#`, no space of the wire's).
-  Whether Microsoft cuts at `Fig. @d#` or `Fig.@d#` is not measured (no recorded reply holds either); the wire is
-  unchanged until a live probe says which keeps the label and its sentence whole.
+  Live (Microsoft, zh-Hans, 2026-11-10, `lab/translate/live-html.ts` today mode, 12 windows of today's wire where it had cut,
+  each in three forms, 4 requests): as sent, a sentence began after the stop in 12 of 12; with a no-break space (U+00A0) for
+  the wire's space the reply was byte for byte the same, text and sentence lengths, in 12 of 12 (it reads U+00A0 as a space and
+  gives none back); with no space none was cut, but the label came back in English in 12 of 12 (`Fig.@b#显示…`), §6.2's
+  `word.@a#`. Neither form is a fix: a rule of the wire stands only where it is the source's own fact, sent alike on every
+  wire and harming no engine (the owner's standing rule), and the no-break space helps none here. Both wires collapse a
+  source's own U+00A0 with the rest of its white space (JavaScript's `\s` holds it), and the cutter reads a stop before it as
+  before a space. The wire is unchanged; "Fig." before a reference stays Microsoft's to cut.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its
