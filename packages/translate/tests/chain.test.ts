@@ -8,7 +8,7 @@ import { sha256Hex } from '../src/sha256.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
 import { echo, fakeTranslator, mangler, scriptedFetch } from '../src/testing/fakes.ts'
 import { countingGate, fakeClock, memoryStore } from '../src/testing/ports.ts'
-import { BERT_STRATEGIES } from './adapters/fixtures.ts'
+import { BERT_STRATEGIES, HEAD_STOP } from './adapters/fixtures.ts'
 import { el, quiet, span, t, unit } from './pieces.ts'
 
 const all = async (it: AsyncIterable<Result>): Promise<Result[]> => {
@@ -268,6 +268,27 @@ describe('the contract: the runs floor', () => {
     expect(r.content.at(-1)).toEqual({
       t: 'text',
       s: ' ALL PRE-TRAINED PARAMETERS. THE TWO APPROACHES SHARE THE SAME OBJECTIVE FUNCTION DURING PRE-TRAINING, WHERE THEY USE UNIDIRECTIONAL LANGUAGE MODELS TO LEARN GENERAL LANGUAGE REPRESENTATIONS.',
+    })
+  })
+  it("a stop TeX sets at a group's end ends its stretch: inside a kept span, after a span's words on no edge", async () => {
+    const upper = fakeTranslator({
+      identity: 'upper:0',
+      reply: (out) =>
+        out.some((p) => p.t !== 'text')
+          ? []
+          : out.map((p) => (p.t === 'text' ? { t: 'text', s: p.s.toUpperCase() } : p)),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([HEAD_STOP], 'ja', { translators: [upper] }))
+    expect(rs[0]).toMatchObject({
+      ok: true,
+      by: 'runs:upper:0',
+      content: [
+        { t: 'span', id: 'h', content: [{ t: 'text', s: 'CURRENT METHODS ARE NOT RELIABLE.' }] },
+        {
+          t: 'text',
+          s: '  \nTO INFER THE SOURCE, ONE COULD RANK SENTENCES. WE CALL IT VERIFIABLE SOURCES. THEN WE GO ON.',
+        },
+      ],
     })
   })
   it("an element that sets nothing (`silent`) cuts no stretch: it comes back at its group's front or end", async () => {

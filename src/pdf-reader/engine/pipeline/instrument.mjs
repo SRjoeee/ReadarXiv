@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { framesOf, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { regionsOf, WANT } from '../layout/stream.mjs'
@@ -77,10 +77,13 @@ const wireFacts = p => {
  *  before it after the translation (mt.mjs listOf, TRANSLATE_VERSION 7: an en space; on the wire Microsoft's Chinese read the
  *  list's marker as a page number and wrote the character for "page" before it, 2610.37668v1, 5 of 41 entries) */
 const BACKREF_GAP = '\u2002'
+/** today's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
+ *  once TeX's glyphs are read (piecesOf, marksOf) */
+export const contentOf = (pieces, o = {}) => runIns(piecesOf(pieces, o))
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
- *  element's wire facts (wireFacts); its run-in labels `must` (runIns) */
-export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
+ *  element's wire facts (wireFacts) */
+export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
   let level = []
   const stack = []
   pieces.forEach((p, k) => {
@@ -105,8 +108,47 @@ export function contentOf(pieces, { kindOf = () => 'other', idOfNested = () => n
       default: throw new Error(`a piece the front end does not make (${String(p.t).slice(0, 20)})`)
     }
   })
-  // (its run-in labels `must`: packages/engine/src/marks/run-ins.ts)
-  return runIns(stack.length ? stack[0].outer : level)
+  return stack.length ? stack[0].outer : level
+}
+/** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order (page by page, each page's in its
+ *  order), by unit index: `doc` B's pages as read, `owners` the instrument's glyph owners by page */
+export function textGlyphsOf(doc, owners) {
+  const out = new Map()
+  doc.pages.forEach((pg, p) => {
+    const O = owners[p]
+    if (!O) return
+    pg.glyphs.forEach((g, j) => {
+      if (O.role[j] !== ROLE.text || O.unit[j] < 0) return
+      const u = O.unit[j]
+      ;(out.get(u) ?? out.set(u, []).get(u)).push(g)
+    })
+  })
+  return out
+}
+/** a group's open that is a command (a paper's macro, a class's), not a bare group, whose switches inside say its style */
+const COMMAND = /^\\[A-Za-z@]/
+/**
+ * What TeX set for a source unit's groups that their source does not say, stated (packages/engine/src/marks/faces.ts over its
+ * text glyphs on B, `glyphs`): a group whose command names no style the table knows (its style `other`: a paper's macro, as
+ * 2608.25210v2's `\topic{…}` that sets its argument `{\bf #1.}`), set in a face that is not the face around it, states that
+ * face (its `style` named for what it changes, its group's facts in `spans` the face's Style); any group the stop TeX set at its
+ * end that its source does not write (`stop`). Then the unit's run-in labels `must` (runIns), each group of a face so read a
+ * style group. `textOf` the text TeX sets for an element whose glyphs are the unit's text (a text macro's, PieceClass `text`).
+ * In place; returns `spans` (spansOf's, by open piece id) with the faces stated
+ */
+export function marksOf(content, glyphs, spans = [], textOf = () => undefined) {
+  const facts = groupFacts(content, glyphs, textOf)
+  const faced = new Set()
+  const styles = new Map()
+  for (const [s, f] of facts) {
+    if (f.stop) s.stop = f.stop
+    if (!f.style || s.style !== 'other' || !COMMAND.test(s.open ?? '')) continue
+    s.style = f.change
+    faced.add(s)
+    styles.set(s.id, f.style)
+  }
+  runIns(content, faced)
+  return spans.map(([id, x]) => (styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x]))
 }
 
 // ---- today's reader's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
@@ -914,7 +956,8 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const classesBy = []
   const facts = unitFactsOf(paper)
   units.forEach((u, i) => {
-    const content = contentOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null })
+    // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
+    const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null })
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
@@ -977,6 +1020,15 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     }
   }
   for (const { unit, piece } of tail.unfound) delete classesBy[unit].get(piece).text
+  // (each source unit's groups as TeX set them, read off its text glyphs on B, and its run-in labels: marksOf. The unit's id is
+  // its source's, none of these)
+  const textGlyphs = textGlyphsOf(read.doc, glyphs)
+  units.forEach((u, i) => {
+    // (an element whose glyphs are the unit's text: a text macro, its text the probe's; a text symbol, its character, own.mjs)
+    const textOf = el => classesBy[i]?.get(el.id)?.text ?? symbolText(el.src) ?? undefined
+    const spans = marksOf(out[i].content, textGlyphs.get(i) ?? [], out[i].spans ?? [], textOf)
+    if (spans.length) out[i].spans = spans
+  })
   // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
   // what today's file states); the marked compile's log where the options have none)
   const lineskip = options.lineskip ?? readSkipProbe(log)

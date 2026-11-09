@@ -3,8 +3,21 @@ import type { Instrument, Owners, PieceClass, SpanClass } from '@readarxiv/engin
 
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode */
 export declare function unicodeOf(s: unknown): string
-/** today's flat pieces as nested ones */
+/** today's flat pieces as nested ones, its run-in labels `must` */
 export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null }): unknown[]
+/** today's flat pieces as nested ones, its elements' wire facts; no run-in label read yet (marksOf) */
+export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null }): unknown[]
+/** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order, by unit index */
+export declare function textGlyphsOf<G>(doc: { pages: readonly { glyphs: readonly G[] }[] }, owners: readonly (Owners | undefined)[]): Map<number, G[]>
+/** what TeX set for a source unit's groups that their source does not say (marks/faces.ts over its text glyphs on B): a face
+ *  where the group's command names none, the stop TeX set at its end; then its run-in labels `must`. In place; `spans` with the
+ *  faces stated */
+export declare function marksOf(
+  content: unknown[],
+  glyphs: readonly { u: string; base: string; size: number; fill: number }[],
+  spans?: readonly [string, SpanClass][],
+  textOf?: (el: { t: 'el'; id: string; src: string }) => string | undefined,
+): [string, SpanClass][]
 /** each element's class as today's reader reads its source, by piece id; and what the rest of the rules read of its source
  *  (`colours`: the unit's colour pieces' fills by index; `texts`: the marking probe's text macros' texts) */
 export declare function classesOf(

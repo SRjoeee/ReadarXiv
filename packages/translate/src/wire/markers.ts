@@ -43,7 +43,8 @@ import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, LINE_END, SAYS, stand
 export const DISPLAY = 'display'
 
 type Item =
-  | { t: 'text'; s: string; at: number }
+  /** `fixed`: no text of the source, every character of it at `at` (a group's stop, written at its end) */
+  | { t: 'text'; s: string; at: number; fixed?: true }
   | {
       t: 'void'
       out: OutPiece[]
@@ -122,18 +123,26 @@ type El = Extract<Piece, { t: 'el' }>
 const silentEl = (p: Piece): p is El => p.t === 'el' && !!p.silent
 /** the spans that hold every element and every word of the unit but those that set nothing, outermost first, what they hold,
  *  and the elements that set nothing beside each */
-function around(content: readonly Piece[]): { ids: string[]; inner: readonly Piece[]; at: number; beside: Beside[] } {
+function around(content: readonly Piece[]): {
+  ids: string[]
+  inner: readonly Piece[]
+  at: number
+  beside: Beside[]
+  stops: (string | undefined)[]
+} {
   const ids: string[] = []
   const beside: Beside[] = []
+  const stops: (string | undefined)[] = []
   let inner = content
   let at = 0
   for (;;) {
     const solid = inner.filter((p) => !(p.t === 'text' && !SOLID.test(p.s)) && !silentEl(p))
     const only = solid[0]
-    if (solid.length !== 1 || only?.t !== 'span') return { ids, inner, at, beside }
+    if (solid.length !== 1 || only?.t !== 'span') return { ids, inner, at, beside, stops }
     const k = inner.indexOf(only)
     at += projLength(inner.slice(0, k))
     ids.push(only.id)
+    stops.push(only.stop)
     beside.push({
       before: asOut(inner.slice(0, k).filter(silentEl)),
       after: asOut(inner.slice(k + 1).filter(silentEl)),
@@ -230,9 +239,11 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
           at += len
         }
         at = walk(p.content.slice(k), at, depth)
+        if (p.stop) items.push({ t: 'text', s: p.stop, at, fixed: true })
       } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, at, letters: LETTER.test(textOf(p.content)), depth })
         at = walk(p.content, at, depth + 1)
+        if (p.stop) items.push({ t: 'text', s: p.stop, at, fixed: true })
         items.push({ t: 'close', id: p.id, at })
       } else {
         // a `must` span with no text: one marker for it and what it holds
@@ -305,8 +316,14 @@ type Group = { id: string | null; seen: boolean; lead: OutPiece[]; end: OutPiece
 
 /** A unit's markers wire and what reading a reply needs */
 export function planMarkers(unit: UnitIn): MarkersPlan {
-  const { ids, inner, at, beside } = around(unit.content)
+  const { ids, inner, at, beside, stops: aroundStops } = around(unit.content)
   const items = itemsOf(inner, at)
+  // (the stop TeX set at the end of a span around the rest: after its words, the innermost's first)
+  const innerEnd = at + projLength(inner)
+  for (let i = aroundStops.length - 1; i >= 0; i--) {
+    const stop = aroundStops[i]
+    if (stop) items.push({ t: 'text', s: stop, at: innerEnd, fixed: true })
+  }
   const slots: Slot[] = []
   const stops = new Set<number>()
   const numbers = new Set<number>()
@@ -342,9 +359,9 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
         const ch = it.s[k] as string
         if (/\s/.test(ch)) {
           if (/\s$/.test(wire) || (k > 0 && /\s/.test(it.s[k - 1] as string))) continue
-          put(' ', it.at + k)
+          put(' ', it.fixed ? it.at : it.at + k)
         } else {
-          put(escapeMarkers(ch), it.at + k)
+          put(escapeMarkers(ch), it.fixed ? it.at : it.at + k)
           seen()
         }
       }

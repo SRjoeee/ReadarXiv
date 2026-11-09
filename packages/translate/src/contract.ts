@@ -51,7 +51,19 @@ export type Piece =
        *  it, on every wire and the runs floor */
       after?: string | undefined
     }
-  | { t: 'span'; id: string; style: SpanStyle; must?: boolean | 1 | undefined; content: readonly Piece[] }
+  | {
+      t: 'span'
+      id: string
+      style: SpanStyle
+      must?: boolean | 1 | undefined
+      /** the punctuation TeX sets at the group's end that its source does not write (the PDF's source reader, read off TeX's
+       *  glyphs: a paper's macro's own `{\bf #1.}`, 2608.25210v2's run-in heads). Every wire and the runs floor write it at
+       *  the group's end, inside a kept span before its close, after the words of one on no wire, so that the sentence ends
+       *  there (kept with no stop between its markers, Microsoft ran the head into the next sentence and wrote none); a
+       *  reply's stop there is the translation's own, read as text */
+      stop?: string | undefined
+      content: readonly Piece[]
+    }
 
 /** What a translator is given: the unit's id (a label, never a key), its content, and whether it lights by sentence */
 export interface UnitIn {

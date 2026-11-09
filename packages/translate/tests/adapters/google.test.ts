@@ -3,7 +3,7 @@ import { google, readTagged } from '../../src/adapters/google.ts'
 import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
+import { GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -14,7 +14,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: UNITS,
+  units: [...UNITS, HEAD_STOP],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -77,6 +77,16 @@ describe('google: sentences from boundary markers', () => {
     const r = readTagged(u, '设<x id="1"/>如<x id="2"/>所述。<x id="4"/><x id="4"/>更多内容见第<x id="3"/>节。')
     expect(r?.sentences).toBeUndefined()
     expect(r?.content.filter((p) => p.t === 'el').length).toBe(3)
+  })
+})
+
+// (2608.25210v2's `\topic{…}`: the stop the paper's macro sets after its argument, which its source does not write)
+describe('google: a stop TeX sets at a group’s end', () => {
+  it('is written before the group’s close, and read by the cutter as the sentence’s end', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(t.write(HEAD_STOP, 'zh-Hans')).toBe(
+      '<t id="1">Current methods are not reliable.</t> <x id="3"/>To infer the source, one could rank sentences. <x id="4"/>We call it <t id="2">verifiable sources.</t> <x id="5"/>Then we go on.',
+    )
   })
 })
 

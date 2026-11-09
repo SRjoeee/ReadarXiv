@@ -73,6 +73,13 @@ const silentEls = (u: UnitIn): Set<string> => {
   walk(u.content)
   return out
 }
+/** a unit's content with each group's stop at its end (contract.ts span `stop`), as every wire writes it */
+const stopped = (content: UnitIn['content']): UnitIn['content'] =>
+  content.map((p) =>
+    p.t === 'span'
+      ? { ...p, content: [...stopped(p.content), ...(p.stop ? [{ t: 'text' as const, s: p.stop }] : [])] }
+      : p,
+  )
 /** content without the given elements */
 const without = (content: readonly (UnitIn['content'][number] | OutPiece)[], ids: ReadonlySet<string>): OutPiece[] =>
   content.flatMap((p): OutPiece[] =>
@@ -146,7 +153,7 @@ export function translatorSuite(name: string, f: AdapterFixtures): void {
       if (f.secret) expect(t.identity).not.toContain(f.secret)
     })
 
-    it('round trip on an echo: each unit reads back as itself (but for white space a wire sets, and where an element that sets nothing comes back), accepted', async () => {
+    it('round trip on an echo: each unit reads back as itself (but for white space a wire sets, where an element that sets nothing comes back, and the stop TeX set at a group’s end, which the wire wrote), accepted', async () => {
       const t = echoing()
       const wires = f.units.map((u) => t.write(u, f.target))
       const raws = await sent(t, wires, f.target)
@@ -159,7 +166,7 @@ export function translatorSuite(name: string, f: AdapterFixtures): void {
         const flat = (s: string) => s.replace(/\s+/g, '')
         const silent = silentEls(u)
         expect(flat(projectionOf(without(r?.content ?? [], silent))), `unit ${i}`).toBe(
-          flat(projectionOf(without(u.content, silent))),
+          flat(projectionOf(without(stopped(u.content), silent))),
         )
         if (r?.sentences && u.sentences) expect(validSentences(u, r.content, r.sentences), `unit ${i}`).toBe(true)
       }

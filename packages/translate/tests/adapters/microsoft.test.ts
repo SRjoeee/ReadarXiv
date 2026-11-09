@@ -9,6 +9,7 @@ import {
   BERT_ABSTRACT_REPLY,
   BERT_STRATEGIES,
   BERT_STRATEGIES_REPLY,
+  HEAD_STOP,
   INSIDE_WORDS,
   LABEL_AFTER_BREAK,
   MICROSOFT_REPLIES,
@@ -110,6 +111,9 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       'We train an example model @a# on every word, then stop.',
       '@a# Setup:@b# we train it.',
       'Method',
+      // (a stop TeX sets at a group's end, its source writing none: at the end of a kept span, before its close; after the
+      // words of one on no wire)
+      '@a# Current methods are not reliable. @b# To infer the source, one could rank sentences. We call it verifiable sources. Then we go on.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -359,6 +363,35 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
     // (each at the label's first word: the source's "No XYZ", the translation's 「无 XYZ」 past the space before it)
     expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n￼'.length)
     expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：￼\n￼\n￼ '.length)
+  })
+})
+
+// 2608.25210v2 p2 on staging (2026-11-09): `\topic{Current approaches to infer provenance are not reliable}`, the paper's
+// `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, its stop the macro's: kept as two markers with no stop between
+// them, Microsoft ran the head into the next sentence and wrote none (4 of 4 heads asked); with the stop written before the
+// close, the head came back a sentence of its own, its stop inside the group (4 of 4, live-html.ts, lanes/runin-stop.md)
+describe('microsoft: a stop TeX sets at a group’s end', () => {
+  it('reads the reply’s stop inside the kept group, our space before its close taken back', () => {
+    const r = readMicrosoft(
+      HEAD_STOP,
+      JSON.stringify({
+        text: '@a# 目前的方法不可靠。@b# 为了推断来源，可以对句子排序。我们称之为可验证来源。然后我们继续。',
+      }),
+    )
+    expect(r?.content).toEqual([
+      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 目前的方法不可靠。' }] },
+      { t: 'text', s: ' 为了推断来源，可以对句子排序。我们称之为可验证来源。然后我们继续。' },
+    ])
+    expect(accept(HEAD_STOP, r?.content ?? [])).toEqual({ ok: true })
+  })
+  it("the endpoint's sentence after the head begins at the body's first word: the stop is the group's end", () => {
+    const wire = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(HEAD_STOP, 'zh-Hans')
+    const text = '@a# 目前的方法不可靠。@b# 为了推断来源，可以对句子排序。我们称之为可验证来源。然后我们继续。'
+    const at = (s: string, x: string) => s.indexOf(x)
+    const src = [at(wire, 'To'), wire.length - at(wire, 'To')]
+    const tr = [at(text, '为了'), text.length - at(text, '为了')]
+    const r = readMicrosoft(HEAD_STOP, JSON.stringify({ text, src, tr }))
+    expect(r?.sentences?.src[0]).toBe('Current methods are not reliable  \n'.length)
   })
 })
 

@@ -19,6 +19,12 @@
 // ends: its `stop` a line end, which a wire writes after the element so that the endpoint's sentence ends there (begun on its
 // own line, the label came back with its term). A break no label follows states nothing: a title or an affiliation broken
 // over lines is one phrase.
+//
+// A style group was one whose open names a style (STYLE_OPEN): a paper's macro never was, whatever TeX set it in. 2608.25210v2's
+// run-in heads are its `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}` (staging, 2026-11-09: on no wire, back
+// regular). So a group of a command the style tables name no style of, which TeX set in a face that is not the face around it
+// (read off its glyphs: marks/faces.ts, the caller's `faced`), is a style group too, by the same rules; and the stop TeX set
+// at a group's end that its source does not write (its `stop`, faces.ts) ends its text here as a stop the source wrote would.
 import type { Piece } from '@readarxiv/format'
 import { ABBR } from '@readarxiv/text'
 import { INVISIBLE, STRUCTURE } from './tex.ts'
@@ -66,9 +72,10 @@ const switched = (ps: readonly Piece[]): boolean => {
   return false
 }
 
-/** The unit's content with each run-in label `must`, in place (its spans gain the flag; nothing else changes). Its walks keep
- *  their own stacks: a source's groups nest as deep as it likes */
-export function runIns(content: Piece[]): Piece[] {
+/** The unit's content with each run-in label `must`, in place (its spans gain the flag; nothing else changes). `faced`: the
+ *  groups whose command names no style that TeX set in a face of their own (the caller's reading, marks/faces.ts), style
+ *  groups. Its walks keep their own stacks: a source's groups nest as deep as it likes */
+export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()): Piece[] {
   // ---- what each group holds: text, and an element that sets ink (after its children)
   const holds = new Map<Span, { text: boolean; ink: boolean }>()
   {
@@ -106,6 +113,11 @@ export function runIns(content: Piece[]): Piece[] {
       const top = stack[stack.length - 1] as Frame
       if (top.k >= top.list.length) {
         stack.pop()
+        // (the stop TeX set at the group's end, its source writing none: its text's end, as one written would be)
+        if (top.span?.stop) {
+          parts.push(top.span.stop)
+          at += top.span.stop.length
+        }
         if (top.span) (ranges.get(top.span) as [number, number])[1] = at
         continue
       }
@@ -169,7 +181,7 @@ export function runIns(content: Piece[]): Piece[] {
     }
     // (a group of no source, neither end's: a figure text's run of glyphs in another face (locate/ink.ts figureRuns), a style
     // and nothing else. A source's group with neither end is one that holds the whole unit, above)
-    if (s.open === undefined ? s.close !== undefined : !STYLE_OPEN.test(s.open)) continue
+    if (s.open === undefined ? s.close !== undefined : !STYLE_OPEN.test(s.open) && !faced.has(s)) continue
     const head = a <= word
     const tail = b >= lastWord
     const inside = flat.slice(Math.max(a, b - WINDOW), b).trimEnd()

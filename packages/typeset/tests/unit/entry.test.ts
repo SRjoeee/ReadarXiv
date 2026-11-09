@@ -1226,6 +1226,40 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       ['hier', false],
     ])
   })
+  it('draws a group whose command names no style in the face its part states TeX set it in (SpanAt.style)', () => {
+    // (2608.25210v2-zh p2: `\topic{…}`, the paper's `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, its group come
+    // back and drawn regular: no rule reads a style off the command `topic`. A command the tables name keeps its own: \textit)
+    const heads = (spans: Placed['spans']) => {
+      const m = member({ spans })
+      const r = row([
+        { t: 'span', id: '0', content: [{ t: 'text', s: 'Kopf.' }] },
+        { t: 'text', s: ' Text hier' },
+      ])
+      const [laid] = layPage(part(m), rowsOf([r]), rules, metrics()).members
+      expect(laid!.state).toBe('laid')
+      return laid!.lines
+        .flatMap((l) => l[3])
+        .flatMap((it) => ('face' in it && /\S/.test(it.s) ? [[it.s.trim(), weightOf(it.face)]] : []))
+    }
+    // (a face as the items name it, CSS's font shorthand: `italic 400 …`, `700 …`)
+    const weightOf = (f: string) => (/^italic /.test(f) ? 'italic' : /^[6-9]00 /.test(f) ? 'bold' : 'regular')
+    expect(
+      heads([['0', { cmd: 'topic', style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' } }]]),
+    ).toEqual([
+      ['Kopf.', 'bold'],
+      ['Text', 'regular'],
+      ['hier', 'regular'],
+    ])
+    expect(heads([['0', { cmd: 'topic' }]])).toEqual([
+      ['Kopf.', 'regular'],
+      ['Text', 'regular'],
+      ['hier', 'regular'],
+    ])
+    expect(heads([['0', { cmd: 'textit', style: { role: 'serif', size: 10, bold: 1 } }]])[0]).toEqual([
+      'Kopf.',
+      'italic',
+    ])
+  })
   it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
     // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
     // drawing set it on the baseline)

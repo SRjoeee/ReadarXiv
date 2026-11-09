@@ -5,7 +5,7 @@ import { Fault, type Result, type Signal } from '../../src/contract.ts'
 import { NEVER } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, UNITS } from './fixtures.ts'
+import { GOOGLE_REPLIES, HEAD_STOP, UNITS } from './fixtures.ts'
 
 /** a stand-in of the platform's Translator: available for the targets given, its sessions answering with `answer` */
 function api(
@@ -39,7 +39,7 @@ function api(
 translatorSuite('chrome', {
   make: () => chrome({ api: api() }),
   target: 'zh-Hans',
-  units: UNITS,
+  units: [...UNITS, HEAD_STOP],
   echo: () => ({ status: 200, body: '' }),
   replies: GOOGLE_REPLIES,
   faults: [],
