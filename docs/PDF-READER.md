@@ -4590,6 +4590,15 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     measured wrong by the same comparison and are not these: one that took off a single glue left the point between a macro's
     space and the line end's after ICML's marks, and TeX broke the centred line at the second, its first line a space wider
     (1.245 pt to the left); one `\protected` began an empty row of 1706.03762v7's author tabular after a `\\` (10.9 pt).
+  - *A note's call and a shared cell line, stated* (rebuild/author-marks-2, the owner's NeurIPS case 2411.13093v4). The same
+    point after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, written
+    before the next unit's bytes where that unit begins right at the call's end (2610.17108v1's `\thanks{…}\,$^{1,2}$`); and
+    `AXT-CELL` for each unit on a cell's line, past the box the column's template sets around the content (colortbl's, §18.12).
+    The TeX gate (`layout-cell-cases.mjs`, its new case `authorsColortbl`): 104 of 104 under 2023 and 2025 and four engines, every
+    PDF byte for byte the head's before. Over the 50 papers compiled (the 22 parity papers, every paper with a note in or beside
+    its author block, one paper of each of the 26 document classes of the 91, ICML's two, 2604.14228v3, 2411.13093v4): each marked
+    compile and final pass glyph for glyph round 7's on every page, each one's TeX errors as before; new class statements on
+    three papers (2411.13093v4 6, 2610.17108v1 2, 2610.21376v1 2), none taken away; points after a note on 8.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
