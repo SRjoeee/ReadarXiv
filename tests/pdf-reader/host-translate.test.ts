@@ -2,6 +2,8 @@
 // out (the chain's, in the background), in calls the size of the chain's batches, under one scope withdrawn when done
 import { describe, expect, it } from 'vitest'
 import type { Unit } from '@readarxiv/format'
+import { chainOf, type FetchInit, google, microsoft, type Translator, type UnitIn } from '@readarxiv/translate'
+import { scriptedFetch } from '@readarxiv/translate/testing'
 import { hostTranslate } from '@/pdf-reader/host/translate'
 import type { TranslationTransport } from '@/providers/transport'
 
@@ -27,6 +29,22 @@ function fake(o: { status?: Record<string, unknown>; fail?: (n: number) => strin
   return { transport, asked, cancelled }
 }
 const all = async <T>(it: AsyncIterable<T>) => { const out: T[] = []; for await (const x of it) out.push(x); return out }
+
+/** a transport that is the background's: the chain with one real adapter, its endpoint giving each text back */
+function realChain(translator: Translator) {
+  const transport = {
+    status: async () => status(),
+    cancel: async () => 0,
+    translate: async (call: { units: UnitIn[] }) => {
+      const results = []
+      for await (const r of chainOf().translate(call.units, 'zh-Hans', { translators: [translator] })) results.push(r)
+      return { ok: true, cached: 0, results }
+    },
+  } as unknown as TranslationTransport
+  return transport
+}
+const microsoftEcho = (_url: string, init: FetchInit) => ({ status: 200, body: JSON.stringify((JSON.parse(init.body) as string[]).map(text => ({ translations: [{ text, to: 'zh-Hans' }] }))) })
+const googleEcho = (_url: string, init: FetchInit) => ({ status: 200, body: JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0]]) })
 
 describe('the reader host translate through the background', () => {
   it('sends the units in calls the chain plans, with the target and the paper\'s context, and yields one Result a unit, in order', async () => {
@@ -55,6 +73,19 @@ describe('the reader host translate through the background', () => {
     const rows = await all(hostTranslate({ transport, paper: 'p' })([unit('u1', [{ t: 'text', s: 'a' }]), unit('u2', [{ t: 'text', s: 'b' }]), unit('u3', [{ t: 'text', s: 'c' }])], 'de', { signal: new AbortController().signal }))
     expect(rows.map(r => r.ok)).toEqual([true, true, false])
     expect(rows[2]).toEqual({ id: 'u3', ok: false, why: { kind: 'unavailable' } })
+  })
+  it('a unit holding a nested unit (a footnote set in a paragraph) reaches the real adapters as their wire takes it, and is translated', async () => {
+    const para = unit('a'.repeat(64), [{ t: 'text', s: 'A claim' }, { t: 'unit', id: 'n', unit: 'b'.repeat(64), pre: '\\footnote{', post: '}' }, { t: 'text', s: '. More words follow.' }])
+    for (const [translator, f] of [[microsoft, scriptedFetch(microsoftEcho)], [google, scriptedFetch(googleEcho)]] as const) {
+      const t = translator({ fetch: f.fetch })
+      const rows = await all(hostTranslate({ transport: realChain(t), paper: 'p' })([para], 'de', { signal: new AbortController().signal }))
+      // (answered by the translator itself, the nested unit's mark back as an element of the paragraph's: never unavailable
+      // for a wire that could not be written, nor the runs floor's)
+      expect(rows).toMatchObject([{ id: para.id, ok: true, by: t.identity }])
+      const row = rows[0]!
+      expect(row.ok && row.content.map(p => (p.t === 'text' ? p.s.trim() : p.t === 'el' ? `el:${p.id}` : p.t))).toEqual(['A claim', 'el:n', '. More words follow.'])
+      expect(f.requests).toHaveLength(1)
+    }
   })
   it('an abort withdraws the scope and asks no more', async () => {
     const ac = new AbortController()
