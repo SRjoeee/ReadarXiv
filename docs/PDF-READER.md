@@ -2909,11 +2909,7 @@ last row, stands after it (`locate.ts` `standsAfter`; before the member whose fi
 the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
 page and stood after every member. Each row's names then run on from the one before, at the original's separation from its
 translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
-members); and a centred row of several members is not centred as a whole. A centred member is laid on its own original's middle
-and never from the one before's end, so where a member that is not centred runs on between two centred ones (amsart's
-"A AND B", its AND made on A, now joined to the first name it follows in TeX's stream), the hole stands before the second name:
-2610.21106v1 p1, 36.11 pt where TeX set 3.32 (today 34.92, round 6 22.47). Centring the AND alone on its own middle split the
-hole in two (18.79 and 21.15 pt) and was dropped; the fix is to lay a centred line's members run on and centre the line.
+members). A centred row of several members, below.
 
 **A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
 translation leaves a great deal of redundant blank space"). Its class sets `$^{1,*}$` and ", " after each `\author`'s text,
@@ -2924,7 +2920,44 @@ the row (`ON_ROW`) and no word's gap after the one before (the ink units' word r
 of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
 glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
 `\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
-is no trail and stays. One rule with §18.12's: what TeX set on a line is laid as the line, with the alignment TeX gave it.
+is no trail and stays. One rule with §18.12's: what TeX set on a line is laid as the line, with the alignment TeX gave it. The
+crop stands on the member's last line, the line TeX set it on, as every element's crop stands on its line's baseline: drawn by
+its glyphs' own baseline, which a trail of raised marks alone holds off the line, each mark came down onto the line (45 of
+the 88 papers' 94 trails, 3.6 to 5.2 pt: 2610.10069v1's daggers, 1706.03762v7's star, 2608.16117v1's last author's "a").
+
+**A line its members share whole is set as TeX set it** (`lay/flow.ts` `layLine`, `lay/adapt.ts` `rowLinesOf`; the
+coordinator's rule on the owner's 2604.14228v3: a translated author line reflows as one line, its names, marks and separators
+run together, set with the alignment TeX gave the line). A centred member was laid on its own original's middle and never
+from the one before's end (S.rowStart lays no centred follower, today's RUN:2152), so on a centred line of several members
+each translation, shorter than its original, left a hole before the next: amsart's "NI XIANG AND YUNI XIONG", its AND made on
+A and run on after the first name, 36.11 pt before the second name where TeX set 3.32 (2610.21106v1 p1; today 34.92). Centring
+the AND alone on its own middle split the hole in two (18.79 and 21.15 pt). A line of TeX's that several members of a flow share
+whole (each its one line, joined on it, nothing kept between them, no babel name, cell or figure text among them), whose
+members' own marks state it centred or flush right, all alike (`AXT-ALIGN`, a cell's class by `AXT-CELL`; a member made on A
+states none of TeX's and takes the line's), is laid as one run, as TeX sets such a line: an hbox of its content at its
+natural width, then placed. The members are laid run on from the room's start, each after the one before from its ink's end
+at TeX's separation (S.rowStart), ragged; the run's extent is read off that lay, its first member's start to its last one's
+end (a closing mark's blank half that hangs aside, as a centred line's placing has it); and the run is laid again from where
+it stands centred on the line's middle (TeX's: its first glyph's start, the first member's label's where it stands on the
+line, to its last glyph's end), or ends at the line's end. Its room is as far either side of the middle as both its ends'
+room allows (the first member's `Room.side` on the left, the last one's on the right, their column), as U.decor widens a
+centred line, so the second lay is the first one moved. The page's fill holds the run's end as it holds a shared row's
+(`keepsShare`): tracked by the fill, 2610.10069v1's third name ran 5.7 pt past the run, its line 3.2 pt right of TeX's middle.
+Over the 88 papers' parts, 23 lines are so (all of page 1, authors' and places' lines); a line TeX set justified or flush left
+needs nothing, its members run on from its first one's start already. On the 22 parity pairs, every switch on, only three
+pages move, and only these lines' members: 2610.21106v1 p1 the second name 3.89 pt after the AND's ink, TeX's separation, the
+line's middle 1.19 pt off TeX's before, 0.00 now; 2610.10069v1 p1 (article's `\and`, each name a `tabular`) its names 29.56 and 29.57
+pt apart, TeX's (31.19 and 20.20 before), its middle 5.49 pt off before, 0.00 now; 2608.16117v1 p1 two lines of
+elsarticle's places, 4.38 and 4.39 pt apart (6.39 and 9.64), their middles 1.18 and 3.04 pt off before, 0.00 now. With the
+author block off nothing moves. Not done: a line one of whose members TeX set over two lines (the line is that member's last
+line or first): a member's lines are laid together and its last line is not moved with the members after it (2608.16117v1's
+"Pennsylvania" line; 4 lines in the 88); a line TeX's stream holds as more than one flow (a paragraph's end between two of its
+members: 2608.16117v1's first line of places, three flows, each centred on its own); a line with ink kept between two members,
+or a member whose label stays where TeX set it, or a member after the first whose label is carried (laid member by member, as
+before: 4 kept in the 88); a run that does not fit on its one line (laid member by member, as before). The separations are the
+original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fil`, so a centred line's slack stretched
+2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
+right this way: that case is held by a synthetic test alone.
 
 ## 19. The engine's contract
 
