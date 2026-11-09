@@ -270,7 +270,10 @@ export interface LocateOptions {
   /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
   annotations?: (unknown[] | null)[]
   /** each A page as pageInk read it (read.ts `raw`): given, locate makes the units no source unit is on A (ink.ts) */
-  pages?: readonly (PageInk | null)[]
+  pages?: (PageInk | null)[]
+  /** the pages are locate's (prepareBack's, unless it keeps them): it lets each go (its entry null) once the ink step has read it,
+   *  and each page's shapes once its figure texts are read; untaken, it reads them and leaves them as they are */
+  take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
 }
@@ -802,7 +805,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    const { made, stats: st } = inkOf({
+      ins,
+      inkA,
+      raws: o.pages,
+      take: o.take === true,
+      m,
+      pageA,
+      owned,
+      classesOf: o.classesOf,
+    })
     for (const x of made) {
       const u = units.length
       units.push(x.unit)

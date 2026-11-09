@@ -6,7 +6,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { alignOf, type Located, pageInk, planOf, type ReadPage, wrap, wrapOf } from '@readarxiv/engine'
+import { alignOf, type Located, pageInk, planOf, type ReadPage, wrap, wrapOf, wrapPageOf } from '@readarxiv/engine'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
 /** a one-page PDF: Helvetica as /F1, the page's content `content`, and a form /Fx1 of `form` (raw stream bytes and dict) */
@@ -65,7 +65,7 @@ describe('wrapOf over arXiv’s producers', () => {
     await task.destroy()
     const paths = ink.paths ?? []
     const located = { groups: [{ glyphs: ink.glyphs.map(() => '0.1.t'), boxes: paths.map(k => (k === -3 ? '0.1.e' : null)), turned: [] }], figureGroups: new Set<string>() } as unknown as Located
-    const pagesA = [{ raw: ink, extra: { ...facts, images: facts.images + 1 } }] as unknown as ReadPage<typeof facts>[]
+    const pagesA = [wrapPageOf({ raw: ink, extra: { ...facts, images: facts.images + 1 } } as unknown as ReadPage<typeof facts>)]
     const addOn = await wrap(bytes, located, pagesA, { PL, deflate, inflate })
     if ('refused' in addOn) throw new Error(addOn.why)
     expect([...addOn.lost]).toEqual(['0.1.e'])

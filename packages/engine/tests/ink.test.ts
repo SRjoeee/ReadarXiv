@@ -763,3 +763,26 @@ describe('carry: B’s marks onto A’s stream', () => {
     ])
   })
 })
+
+describe("locate takes A's raw pages (lane mem-back)", () => {
+  // (each page's figure paths, `shapes`, are read by its figure texts alone, and the raw pages by the ink step alone: locate lets
+  // a page's shapes go once its figure texts are read, and every raw page once the ink units are made, so that the rest of locate,
+  // the wrap and the bundle run without them: 61 MiB of shapes and 61 of raw glyphs on 2609.19644v1)
+  it('lets each raw page go once its ink is made, and makes what it made with them held', () => {
+    const { B, A } = pair({
+      lines: ['Running Title', 'Body text here'],
+      points: [
+        ['bs1', 13],
+        ['be1', 27],
+      ],
+    })
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const held = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const raws: (PageInk | null)[] = rawOf(A)
+    const taken = locate(ins, A, align(B, A), { pages: raws, take: true })
+    expect(raws).toEqual([null])
+    expect(taken.units).toEqual(held.units)
+    expect(taken.members).toEqual(held.members)
+    expect(taken.groups).toEqual(held.groups)
+  })
+})
