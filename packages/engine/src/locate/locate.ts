@@ -275,7 +275,10 @@ export interface LocateOptions {
   /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
   annotations?: (unknown[] | null)[]
   /** each A page as pageInk read it (read.ts `raw`): given, locate makes the units no source unit is on A (ink.ts) */
-  pages?: readonly (PageInk | null)[]
+  pages?: (PageInk | null)[]
+  /** the pages are locate's (prepareBack's, unless it keeps them): it lets each go (its entry null) once the ink step has read it,
+   *  and each page's shapes once its figure texts are read; untaken, it reads them and leaves them as they are */
+  take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
 }
@@ -818,7 +821,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       made,
       stats: st,
       block,
-    } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf, ownerOf })
+    } = inkOf({ ins, inkA, raws: o.pages, take: o.take === true, m, pageA, owned, classesOf: o.classesOf, ownerOf })
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
     // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
     // block keeps its kind; where no title is located, none is told apart)

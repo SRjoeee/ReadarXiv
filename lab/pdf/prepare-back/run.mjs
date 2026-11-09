@@ -14,7 +14,7 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { prepareBack, stateOf } from '@readarxiv/engine'
+import { prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { statedOf, trailsOf } from './stated.mjs'
@@ -107,7 +107,10 @@ if (!refusal) {
 const tIns = performance.now()
 if (ins) {
   const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
-  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf })) {
+  // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
+  // and the review; the proofs read A's pages again, as the back half read them)
+  const keep = process.argv.includes('--claims') || process.argv.includes('--review')
+  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })
@@ -138,11 +141,12 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   W.set(arxivBytes)
   W.set(tally.addOn.bytes, arxivBytes.length)
   const tp = performance.now()
-  proofs = { glyphs: await proveGlyphs({ W, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
+  const pagesA = tally.pagesA ?? (await readArxiv({ getDocument, OPS }, arxivBytes, { ...docOpts, ...LITE })).pages
+  proofs = { glyphs: await proveGlyphs({ W, pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
   proofs.glyphs.ms = Math.round(performance.now() - tp)
   if (process.argv.includes('--pixels')) {
     const tq = performance.now()
-    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
+    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
     proofs.pixels.ms = Math.round(performance.now() - tq)
   }
 }

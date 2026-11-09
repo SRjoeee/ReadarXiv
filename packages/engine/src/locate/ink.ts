@@ -65,8 +65,10 @@ export interface Made {
 export interface InkInput {
   ins: Instrument
   inkA: Doc
-  /** A's pages as pageInk read them (read.ts `raw`), null for a page not read */
-  raws: readonly (PageInk | null)[]
+  /** A's pages as pageInk read them (read.ts `raw`), null for a page not read; with `take`, the ink step's own: each let go
+   *  (the array's entry null) once today's pages are made of it, and each page's shapes once its figure texts are read */
+  raws: (PageInk | null)[]
+  take?: boolean
   m: Mapping
   pageA: Int32Array
   /** whether a glyph of A (global) is a source unit's: its partner's owner on B, a located member's claim, a held glyph */
@@ -124,6 +126,14 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
     pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
+  // (taken: a raw page is held from here by its today's page alone, which this step lets go at its end; and each page's shapes,
+  // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them, lane mem-back)
+  if (o.take) o.raws.fill(null)
+  const shapesRead = o.take
+    ? (p: number) => {
+        ;(pages[p] as { shapes: unknown }).shapes = new Map()
+      }
+    : null
   const own: { glyphs: (string | null)[][]; boxes: (string | null)[][] } = {
     glyphs: inkA.pages.map((pg, i) =>
       Array.from({ length: pg.glyphs.length }, (_, j): string | null =>
@@ -178,11 +188,15 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
   // ---- today's sequence (pipeline/instrument.mjs, wrapFinal's): the figure texts of what no unit owns, the ledger with them
   // owned, the ink units, their claims, then the kept blocks of what is left
   // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box)
-  const fig = figureUnitsOf(pages, {
-    glyphs: own.glyphs.map((row, i) =>
-      framed?.page === i ? row.map((x, g) => x ?? (framed.has(g) ? 'b' : null)) : row,
-    ),
-  })
+  const fig = figureUnitsOf(
+    pages,
+    {
+      glyphs: own.glyphs.map((row, i) =>
+        framed?.page === i ? row.map((x, g) => x ?? (framed.has(g) ? 'b' : null)) : row,
+      ),
+    },
+    { done: shapesRead },
+  )
   const ledgerOwn = own.glyphs.map((row, i) => {
     const f = fig.glyphs[i]
     if (!f?.size) return row

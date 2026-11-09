@@ -72,6 +72,8 @@ export interface TodayLedger {
 export const figureUnitsOf = fig.figureUnitsOf as (
   pages: readonly TodayPage[],
   own: { glyphs: (string | null)[][] },
+  /** `done`, told each page once its figure texts are read: nothing of the reading reads that page's shapes again */
+  o?: { unitsPage?: number; unitsDoc?: number; done?: ((page: number) => void) | null },
 ) => TodayFigures
 export const figureGroup = fig.figureGroup as (k: number) => string
 export const ledgerOf = ledger.ledgerOf as (

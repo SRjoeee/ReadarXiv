@@ -1022,6 +1022,22 @@ only how it meets the rest of the extension.
   lost 314 units against the frozen baseline where today's loses 3 and made 6,614 figure ticks and labels into units,
   for a saving (two compiles instead of three, TeX 15 % less at the median) that was the very final pass those figure
   texts need.
+  **What the back half holds** (2026-11-10, after 2609.19644v1 died of memory on staging). It reads arXiv's PDF whole
+  and aligns it with B whole, and holds past each step only what a later step reads: a page's glyph coordinates in the
+  page's one `Float64Array` (`glyph.ts` `PageGlyph`, read by getters; a field of its own each was a 16-byte heap number),
+  a font's name one string a document (pageInk's `names`, readPdf's bases); A's raw pages locate's alone (`take`: each
+  let go once the ink step has made today's page of it, its figure paths once its figure texts are read, figureUnitsOf's
+  `done`); the wrap reads each page's glyphs' (n, k) and facts (`wrapPageOf`) and keeps the section alone, A and it never
+  composed nor the whole hashed (wrapOf's `compose: false`); and read, align and locate run in a frame of their own
+  (`placedOf`), so that A's Doc is let go there and, unless `keep` (the lab's claims and review), B's, the instrument's
+  ink emptied. Measured natively on Linux (arm64, the box child's flags, its data limit as arm64 counts it: 1,024 MiB
+  and V8's 256 MiB code range, 1,280), the lowest data limit each paper prepared under three times of three:
+  2609.19644v1 (71 pages, a 26 MB source and PDF), which died under 1,280 as on staging, 1,120; 2610.40394v1 1,200;
+  2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,240; 2610.42112v1 960 and 2610.37668v1 800 or less
+  (once each). Under a lower limit each dies first where the back half no longer holds anything of a document whole:
+  2609.19644v1 in the front half's adapter (instrumentOf, its own copies of B's glyphs), 2610.40394v1 reading A,
+  2610.19159v1 in locate. Every object of the 88 corpus papers and of 2609.19644v1 is the same (stage 1a and I6). What
+  the box itself holds through the back half (the source, its files, B's bytes) is the box's to let go.
 - **One set of settings** (§9). The service, the language, the prompt and the highlight are the extension's.
   `pdfReader` (v19) holds the reader's own; its appearance became the extension's `theme` at v20, and what it translates
   (`classes`, "What to translate") joined it at v21, in the place of the image switch, which is the HTML page's alone since. The

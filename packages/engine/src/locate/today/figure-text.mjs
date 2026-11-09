@@ -168,7 +168,7 @@ function inFrame(f, b) {
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
  */
-export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
+export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null } = {}) {
   const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
@@ -275,6 +275,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
+    // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
+    done?.(pi)
   })
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
 }

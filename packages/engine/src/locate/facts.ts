@@ -6,6 +6,7 @@
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
+import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
 // @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
 // back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
@@ -428,7 +429,7 @@ export function joinAccents(gs: readonly DocGlyph[]): readonly DocGlyph[] {
   if (!joined.size) return gs
   return gs.flatMap((g, i) => {
     const t = joined.get(i)
-    return t === undefined ? [g] : t ? [{ ...g, u: t }] : []
+    return t === undefined ? [g] : t ? [glyphWith(g, { u: t })] : []
   })
 }
 /** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
