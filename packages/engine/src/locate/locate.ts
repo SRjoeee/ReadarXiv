@@ -88,6 +88,9 @@ export interface Member {
   turned: [number, number][]
   lines: Line[]
   elements: [string, El][]
+  /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
+   *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
+  asInk?: Set<string>
   labelAt?: Label
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
@@ -1307,12 +1310,31 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // where it has no text). TeX sets one box's glyphs on one baseline, equal on the engine's hundredth of a point: no
       // threshold. 2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹", was drawn as the text "km s−1 Mpc−1"; today's reader crops a
       // text macro raised 0.1 em or more over its baseline (layer2.mjs scriptedOf) and draws a lowered one as text (1810.04805v2's
-      // BERT_base, wrong too). A formula's text is no drawing (it is cropped, its text read for its brackets), nor a display's)
+      // BERT_base, wrong too). A formula's text is no drawing (it is cropped, its text read for its brackets), nor a display's.
+      // And each glyph where that text is drawn: on the baseline of the line it stands on (its ink's line, the hundredth most of
+      // that line's body glyphs share, lines.ts), or over it for a footnote's mark, which the typesetter draws raised (El.mark).
+      // One box TeX raised or lowered whole has its glyphs on one baseline of their own: 2610.17024v1 p11's `\REPOFOOTNOTE{}`, a
+      // paper's macro around a footnote, its "3" 6.58 pt and 3.16 pt over the line's baseline, was read level against its own
+      // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
       const cls0 = classOf.get(id)?.cls
       const level =
         !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
         (!bx.length &&
-          groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1))
+          groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1) &&
+          standsAsDrawn(groups, ink, !!classOf.get(id)?.mark, gA))
+      // (a symbol, drawn as its reading's character (El.sym) on the line's baseline, or raised where its reading raises it: only
+      // where TeX's ink is that symbol so drawn, no letter or digit among its glyphs (no symbol's reading holds one, phClass2) and
+      // each where the drawing sets it; else drawn as its ink. 2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred, was read
+      // as the symbol "*" on the baseline (the reading knows no `\vs`): drawn as a full-size *, the s lost)
+      const c0 = classOf.get(id)
+      if (
+        c0?.cls === 'symbol' &&
+        shown.length &&
+        (shown.some((a) => /[\p{L}\p{N}]/u.test(gA(a).u)) || !standsAsDrawn(groups, ink, !!c0.sym?.[1], gA))
+      ) {
+        mem.asInk ??= new Set()
+        mem.asInk.add(id)
+      }
       if (asText && level && gl.length && !gl.some((a) => gA(a).nu)) {
         el.text = textOf(gl.map(gA), lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
@@ -2191,6 +2213,25 @@ function columnsAndMeasures(
 /** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
  *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
  *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
+/** whether an element's glyphs (by line, `groups`, read by `gA`, each line's with its ink's box on the line it stands on, `ink`,
+ *  its baseline at 5) stand where its text is drawn: each glyph of a character on its line's baseline, equal on the engine's
+ *  hundredth (TeX sets a line's text on one baseline), or, `raised`, over it (a footnote's mark, a symbol its reading raises) */
+function standsAsDrawn(
+  groups: readonly number[][],
+  ink: readonly Ink[],
+  raised: boolean,
+  gA: (a: number) => DocGlyph,
+): boolean {
+  return groups.every((gs, q) =>
+    gs.every((a) => {
+      const g = gA(a)
+      if (!/\S/.test(g.u)) return true
+      const base = (ink[q] as Ink)[5]
+      return raised ? r2(g.y) > base : r2(g.y) === base
+    }),
+  )
+}
+
 function standsOn(lines: readonly Line[], page: number, lo: number, hi: number, own: number): number {
   let best = -1
   let d = Number.POSITIVE_INFINITY
