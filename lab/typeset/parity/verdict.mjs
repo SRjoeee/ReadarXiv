@@ -184,7 +184,7 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, rows }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -268,6 +268,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     runIns.push({ hk, h, hl, fk, f, fl, sz: fl.size || f.size || 10, sep: fl.x0 - hl.x1 })
   }
   const followers = new Set(runIns.map((r) => r.fk))
+  // (the lines of TeX's several members share whole, set centred or flush right, as the lay reads them (`rows`: the typesetter's
+  // rowLinesOf over the part's flows, measure.mjs; the coordinator's ruling of 2026-11-09): TeX placed the whole line, so a
+  // member's place follows from the run, and each is judged by the line (its run's middle, or end, below), never by its own
+  // original's middle; its separations are the gap's. By its members' keys, those on this page)
+  const lineOf = new Map()
+  for (const [ord, line] of rows ?? []) if (facts.get(ord)?.lines[0]?.[0] === n) lineOf.set(keyOfPart(ord), line)
   const faults = { today: {}, v2: {} }
   const fault = (side, flag, what) => (faults[side][flag] ??= []).push(what)
   const diff = (flag, unit, what, origV, t, v, worse, nearer) => out.diffs.push({ flag, unit, what, original: origV, today: t, v2: v, nearer, worse })
@@ -348,7 +354,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
         const startOff = (l, at) => Math.max(0, Math.abs(l.x0 - at) - (inkOf(l).x0 - l.x0))
         let off = null,
           how = null
-        if (o.align === 'c') {
+        if (lineOf.has(key)) {
+          // (a member of a line of several: judged by the line, below)
+        } else if (o.align === 'c') {
           // (TeX centres a first line with its label, which a side draws anew or keeps at its place; a drawn line's middle is
           // its ink's, as the original's glyphs')
           const mid = median(ol.map((l) => (l.x0 + l.x1) / 2))
@@ -439,6 +447,35 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const st = Math.min(...t),
       sv = Math.min(...v)
     judge('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
+  }
+
+  // ------------------------------------------------ a line of several members (lineOf): its run's middle against TeX's line's
+  // (its first glyph's start to its last one's end, as rowLinesOf states it), or its end where TeX set it flush right; each
+  // member's drawn line on the row by its ink (its crops and raised marks with it), a member a side leaves the original's where
+  // TeX set it; tolerated and judged as a line's alignment is
+  for (const line of new Set(lineOf.values())) {
+    const keys = line.ords.map(keyOfPart)
+    const o0 = orig.get(keys[0])?.lines[0]
+    if (!o0 || keys.some((k) => !orig.get(k)?.lines.length)) continue
+    const os = aOrig.get(keys[0])?.size ?? (o0.size || orig.get(keys[0]).size || 10)
+    const tol = Math.max(BOUNDS.alignMin, BOUNDS.align * os)
+    const name = `line ${keys.join(', ')}`
+    const how = line.align === 'r' ? "a line of several members, right: its run's end" : "a line of several members, centred: its run's midpoint"
+    const at = {}
+    for (const [side, M] of [['today', T], ['v2', V]]) {
+      const ends = keys.map((k) => {
+        const ls = (M.get(k) ?? []).filter((l) => !l.rot)
+        if (!ls.length) return [orig.get(k).lines[0].x0, orig.get(k).lines[0].x1]
+        const l = inkOf(ls.reduce((a, b) => (Math.abs(b.y - o0.y) < Math.abs(a.y - o0.y) ? b : a)))
+        return [l.x0, l.x1]
+      })
+      const x0 = Math.min(...ends.map((e) => e[0])),
+        x1 = Math.max(...ends.map((e) => e[1]))
+      at[side] = line.align === 'r' ? Math.abs(x1 - line.x1) : Math.abs((x0 + x1) / 2 - (line.x0 + line.x1) / 2)
+      if (at[side] > tol) fault(side, 'align', `${name} ${how} ${r2(at[side])} pt from TeX's line's`)
+    }
+    if (!keys.some((k) => T.has(k)) || !keys.some((k) => V.has(k))) continue
+    judge('align', name, `${how} off TeX's line's`, line.align === 'r' ? 'right' : 'centred', { value: null, d: at.today }, { value: null, d: at.v2 }, Math.max(NEAR.positionMin, NEAR.position * os))
   }
 
   // ------------------------------------------------ gap: each run-in pair, on each side

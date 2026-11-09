@@ -4,8 +4,10 @@
 // unit's sentence boxes where today highlights it, where today draws it without, and where only v2 translates it, a head's
 // label relabelled or kept, a size tie laid at one scale.
 import { describe, expect, it } from 'vitest'
+import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
 import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+import { rowLinesOf } from '../../packages/typeset/src/index.ts'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
 const line = (y: number, n = 12): Line => ({ y, x0: 72, x1: 300, size: 10, n, bold: 0, italic: 0, word: 0.3, letter: 0, text: 'x'.repeat(n) })
@@ -28,13 +30,23 @@ const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; toda
 /** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
  *  member a bound name leads: measure.mjs reads them off the part); `top`: the part's title and front matter (Placed.title,
  *  Placed.front) */
-const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, prep: { ord: number }[] = [], led: Record<number, number> = {}, top: number[] = []) =>
+/** `rows`: the lines of TeX's several members share whole, set centred or flush right, as the lay reads them (the typesetter's
+ *  rowLinesOf over the part's flows: measure.mjs hands them in) */
+const measure = (
+  v2: ReturnType<typeof v2Of>,
+  r: ReturnType<typeof rec>,
+  prep: { ord: number }[] = [],
+  led: Record<number, number> = {},
+  top: number[] = [],
+  rows?: ReturnType<typeof rowLinesOf>,
+) =>
   measurePage('p-zh', v2, r, {
     prepByOrd: new Map(prep.map((u) => [u.ord, u])),
     todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
     turned: new Set(),
     led: new Map(Object.entries(led).map(([f, h]) => [Number(f), h])),
     top: new Set(top),
+    ...(rows ? { rows } : {}),
   })
 const worse = (p: { diffs: { flag: string; worse: boolean }[] }) => p.diffs.filter((d) => d.worse).map((d) => d.flag)
 
@@ -606,5 +618,125 @@ describe("cross: a drawn line over a rule or another unit by its ink, a CJK mark
     const p = page([drawnLine(72, 140, 700, '甲乙丙丁', S)], [drawnLine(62, 130, 700, '甲乙丙丁', S)], [rule])
     expect(p.faults.cross?.v2).toBe(1)
     expect(worse(p)).toContain('cross')
+  })
+})
+
+describe('a line of several members TeX centred (rowLinesOf) is judged by the line, not member by member', () => {
+  // (TeX centres the whole line, so a member's place follows from the run: judged against its own original's middle, each name
+  // of a line laid as one run is off by however much the other translations are shorter, and the per-member centring that made
+  // the holes is the nearer. The line's run is judged instead, its middle against TeX's line's, and each separation by the gap)
+  type M = { ord: number; kind: string; align: 'c' | 'j' | 'l' | 'r'; at: [number, number]; join?: number }
+  /** the part's flow of the line's members, the facts v2.mjs states of them, and the lines rowLinesOf qualifies over that flow */
+  const lineOf = (ms: M[], y: number, size: number, today: Record<number, number>) => {
+    const placed = ms.map(
+      (m): Placed => ({
+        ord: m.ord,
+        kind: m.kind,
+        text: 'a'.repeat(64),
+        lead: size * 1.2,
+        style: { role: 'serif', size },
+        align: m.align,
+        lines: [factLine(m.at[0], m.at[1], y, size) as Placed['lines'][number]],
+        room: { below: 20 },
+        ...(m.join !== undefined ? { join: [m.join] as [number] } : {}),
+      }),
+    )
+    const f = v2Of({
+      members: laid(ms.map((m) => m.ord)),
+      facts: ms.map((m) => ({ ord: m.ord, kind: m.kind, align: m.align, style: { size }, lines: [factLine(m.at[0], m.at[1], y, size)] })),
+      today: Object.fromEntries(ms.map((m) => [m.ord, { today: today[m.ord] ?? m.ord }])),
+    })
+    const led = Object.fromEntries(ms.slice(1).map((m, k) => [m.ord, ms[k]!.ord]))
+    return { f, led, rows: rowLinesOf([placed]) }
+  }
+  const laid = (ords: number[]) => ords.map((ord) => ({ ord, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }))
+  const units = (ids: number[], at: [number, number][], y: number, size: number) =>
+    ids.map((id, k) => ({ id, lines: [drawnLine(at[k]![0], at[k]![1], y, 'x'.repeat(4), size)] }))
+  const aligns = (p: { diffs: { flag: string; unit: string; worse: boolean; nearer: string }[] }) =>
+    p.diffs.filter((d) => d.flag === 'align').map((d) => [d.unit, d.worse, d.nearer])
+
+  // (2610.21106v1 p1, toggles on: amsart's "NI XIANG AND YUNI XIONG", TeX's line 230.72-375.66 at 9.96 pt, the AND made on A
+  // (part ord 107, today's 98); today centres each name on its own original's middle, the hole before the second name; v2 lays
+  // the line as one run, centred)
+  const amsart = lineOf(
+    [
+      { ord: 1, kind: 'author', align: 'c', at: [230.72, 278.94] },
+      { ord: 107, kind: 'inkorphan', align: 'j', at: [282.27, 304.82], join: 3.83 },
+      { ord: 3, kind: 'author', align: 'c', at: [308.14, 375.66], join: 3.89 },
+    ],
+    640.16,
+    9.96,
+    { 107: 98 },
+  )
+  const amsartPage = (v2At: [number, number][]) =>
+    rec({
+      today: { units: units([1, 98, 3], [[244.87, 264.79], [267.77, 287.7], [322.62, 353.51]], 640.16, 9.96) },
+      v2: { units: units([1, 107, 3], v2At, 640.16, 9.96) },
+    })
+  const run: [number, number][] = [
+    [263.04, 282.96],
+    [286.8, 306.72],
+    [310.36, 340.25],
+  ]
+  it('qualifies the line from the part, as the lay does', () => {
+    expect([...amsart.rows.keys()]).toEqual([1, 107, 3])
+    expect(amsart.rows.get(1)).toMatchObject({ ords: [1, 107, 3], align: 'c', x0: 230.72, x1: 375.66 })
+  })
+  it('2610.21106v1 p1: judged member by member, its names are each off their own middles, worse than today', () => {
+    expect(aligns(measure(amsart.f, amsartPage(run), [], amsart.led))).toEqual([
+      ['t1 author', true, 'today'],
+      ['t3 author', true, 'today'],
+    ])
+  })
+  it('2610.21106v1 p1: judged by the line, its run stands nearer TeX’s middle than today’s, its gap TeX’s', () => {
+    const p = measure(amsart.f, amsartPage(run), [], amsart.led, [], amsart.rows)
+    expect(aligns(p)).toEqual([['line t1, t98, t3', false, 'v2']])
+    expect(p.diffs.filter((d: { flag: string }) => d.flag === 'gap')).toMatchObject([{ unit: 't3 author after t98 inkorphan', worse: false, nearer: 'v2' }])
+    expect(p.faults.align?.v2 ?? 0).toBe(0)
+  })
+  it('a line laid as one run but off TeX’s middle is still worse', () => {
+    // (the same run 15 pt right of where TeX centred the line; today's 4 pt left of it)
+    const off = run.map(([a, b]): [number, number] => [a + 15, b + 15])
+    const p = measure(amsart.f, amsartPage(off), [], amsart.led, [], amsart.rows)
+    expect(aligns(p)).toEqual([['line t1, t98, t3', true, 'today']])
+    expect(p.faults.align?.v2).toBe(1)
+  })
+
+  // (2610.10069v1 p1, toggles on: article's \and, three names at 14.35 pt, TeX's line 121.60-495.22; today's names each about its
+  // own middle, its gaps 21.23 and 42.26 where TeX's are 28.99; v2's run with TeX's separations)
+  const article = lineOf(
+    [
+      { ord: 2, kind: 'author', align: 'c', at: [121.6, 222.6] },
+      { ord: 4, kind: 'author', align: 'c', at: [251.59, 361.33], join: 29.56 },
+      { ord: 6, kind: 'author', align: 'c', at: [390.32, 495.22], join: 29.57 },
+    ],
+    583,
+    14.35,
+    {},
+  )
+  const articlePage = rec({
+    today: { units: units([2, 4, 6], [[121.6, 216.68], [237.91, 348.06], [390.32, 505.88]], 583, 14.35) },
+    v2: { units: units([2, 4, 6], [[117.96, 208.74], [243.52, 348.65], [383.43, 493.25]], 583, 14.35) },
+  })
+  it('2610.10069v1 p1: judged member by member, its first name is off its own middle, worse than today', () => {
+    expect(aligns(measure(article.f, articlePage, [], article.led)).filter(([, w]) => w)).toEqual([['t2 author', true, 'today']])
+  })
+  it('2610.10069v1 p1: judged by the line, nearer TeX’s middle than today’s', () => {
+    expect(aligns(measure(article.f, articlePage, [], article.led, [], article.rows))).toEqual([['line t2, t4, t6', false, 'v2']])
+  })
+  it('a line TeX set flush right is judged by its end', () => {
+    const right = lineOf(
+      [
+        { ord: 2, kind: 'author', align: 'r', at: [300, 380] },
+        { ord: 4, kind: 'author', align: 'r', at: [384, 480], join: 4 },
+      ],
+      583,
+      10,
+      {},
+    )
+    const page = (v: [number, number][]) =>
+      rec({ today: { units: units([2, 4], [[310, 370], [400, 460]], 583, 10) }, v2: { units: units([2, 4], v, 583, 10) } })
+    expect(aligns(measure(right.f, page([[350, 410], [414, 480]]), [], right.led, [], right.rows))).toEqual([['line t2, t4', false, 'v2']])
+    expect(aligns(measure(right.f, page([[300, 360], [364, 430]]), [], right.led, [], right.rows))).toEqual([['line t2, t4', true, 'today']])
   })
 })

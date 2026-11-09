@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { rowLinesOf } from '../../../packages/typeset/src/index.ts'
 import { l1Paper } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
@@ -70,6 +71,10 @@ for (const [pair, raw] of drawn) {
     if (ys.length) rowsOf.set(pg, [Math.min(...ys), Math.max(...ys)])
   }
   const edgeRow = (m, pg) => m.lines.some((l) => l[0] === pg && rowsOf.get(pg)?.some((y) => Math.abs(l[4] - y) <= 0.5))
+  // (the lines of TeX's several members share whole, set centred or flush right: the typesetter's own predicate over the part's
+  // flows, the lay's facts, so that the measure judges by the line exactly the lines the lay sets as one run)
+  const rows = new Map()
+  for (const [, part] of bundle?.parts ?? []) for (const [o, line] of rowLinesOf(part.flows)) rows.set(o, line)
   for (const [pg, part] of bundle?.parts ?? [])
     for (const f of part.flows)
       f.forEach((m, k) => {
@@ -90,7 +95,7 @@ for (const [pair, raw] of drawn) {
   const groups = (ledger(pair)?.tables ?? []).map((t) => ({ group: t.group, ids: t.ids }))
   const keptByGroup = new Set([...(doorRows(pair)?.values() ?? [])].filter((r) => r[2] === 'kept' && (r[5] === 'whole' || r[5] === 'partial')).map((r) => r[0]))
   const mine = []
-  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [] }))
+  for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], rows }))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(
     mine.filter((p) => !p.error),
