@@ -112,6 +112,55 @@ describe('a glyph PDF.js reads as a blank', () => {
     expect(lines[0]!.gs).toEqual([0, 1, 2, 3])
     expect(lines[0]).toMatchObject({ base: 500, top: 508.9, bottom: 496.95 })
   })
+  it('stands on its line after an operator’s limits, its ink near the line whatever its origin', () => {
+    // (2610.21880v1 p2 t30's `c^\star[t] = \arg\max_{c\in\mathcal{C}} \big\| h^H[t] f_c \big\|^2`: the limits c∈C, shipped back
+    // left under "arg max", are cut off and joined to their line again once its words after them vote its baseline; the bar's
+    // first piece, CMEX10 code 12 read U+000C, its origin at its top 16.8 pt over the limits' baseline, read as a glyph that
+    // far up starts a line, and the formula was three lines, its element three boxes. Its ink stands 10.6 pt over it)
+    const g = (u: string, x0: number, x1: number, y: number, bottom: number, top: number, size = 9.96): DocGlyph => ({
+      ...glyph(u, x0, y),
+      x1,
+      ix1: x1,
+      bottom,
+      top,
+      size,
+    })
+    const gs = [
+      g('=', 209.34, 217.09, 342.85, 342.85, 346.51),
+      g('a', 219.94, 224.92, 342.85, 342.74, 347.31),
+      g('r', 224.92, 228.82, 342.85, 342.85, 347.25),
+      g('g', 228.82, 233.8, 342.85, 340.8, 347.36),
+      g('m', 235.61, 243.91, 342.85, 342.85, 347.25),
+      g('a', 243.91, 248.89, 342.85, 342.74, 347.31),
+      g('x', 248.89, 254.15, 342.85, 342.85, 347.14),
+      g('c', 230.24, 233.8, 334.49, 334.42, 337.56, 6.97),
+      g('∈', 233.8, 239.17, 334.49, 333.96, 338.51, 6.97),
+      g('C', 239.17, 243.5, 334.49, 334.33, 339.39, 6.97),
+      {
+        ...g('\f', 255.81, 259.13, 351.32, 345.13, 351.53),
+        code: 12,
+        base: 'CMEX10',
+        blank: true,
+        ix0: 257.25,
+        ix1: 257.68,
+      },
+      {
+        ...g('\f', 255.81, 259.13, 345.34, 339.15, 345.55),
+        code: 12,
+        base: 'CMEX10',
+        blank: true,
+        ix0: 257.25,
+        ix1: 257.68,
+      },
+      g('h', 259.13, 265.49, 342.85, 342.85, 349.76),
+      g('t', 275.82, 279.42, 342.85, 342.74, 349.09),
+    ]
+    const lines = cutLines(
+      gs.map((_, i) => i),
+      at(gs),
+    )
+    expect(lines.map((l) => [l.base, l.x0, l.x1, l.gs.length])).toEqual([[342.85, 209.34, 279.42, 14]])
+  })
   it('holds it in the display row TeX set it in', () => {
     // (2610.30034v1 p10 ord 213's display, its closing brace 5.81 pt past the row's other glyphs: a display stays the original's,
     // its rows the ink a translation keeps off)

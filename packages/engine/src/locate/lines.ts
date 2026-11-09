@@ -1,7 +1,7 @@
 // A unit's lines, cut in its own glyph run in stream order by one rule (design §4.1, "geometry is A's"; spike S1 §2): the next
 // glyph starts a line where it leaves the line's baseline band (half a size about the baseline its body glyphs so far share)
-// and jumps back left of the glyph before it, or far on to its right (two sizes), or more than one and a half sizes up or down
-// (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
+// and jumps back left of the glyph before it, or far on to its right (two sizes), or its ink more than one and a half sizes up
+// or down (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
 // across each other, are one (a tall fraction's denominator under its line's band). A glyph off the band that goes on along it (a
 // script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
 // baseline is the one most of its body glyphs' characters share (to 0.01 pt; today's maker's rowOf); its extent their
@@ -127,12 +127,15 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     // that row's text), as `crosses` keeps one whose ink reaches across the line wherever its origin is)
     const apart = toStart && band !== null && (g.top < band[1] || g.bottom > band[0])
     const off = L !== null && !crosses && (apart || Math.abs(g.y - L.y0) >= 0.5 * Math.max(L.size, g.size))
+    // (how far up or down it stands from the line: its ink's, the side of it nearer the line's baseline, none where its ink holds
+    // the baseline; its origin is no measure of that for a big delimiter, which TeX's math extension sets at its top: 2610.21880v1
+    // p2's \big\| after an operator's limits, its origin 16.8 pt over the limits' baseline and its ink 10.6, cut its formula into
+    // three lines. A glyph set on a baseline has its ink about its origin, nearer the line than its origin or as near)
+    const away = L === null ? 0 : g.bottom > L.y0 ? g.bottom - L.y0 : g.top < L.y0 ? L.y0 - g.top : 0
     const jump =
       L !== null &&
       prev !== null &&
-      (back ||
-        g.x0 > prev.x1 + 2 * Math.max(prev.size, g.size) ||
-        (!crosses && Math.abs(g.y - L.y0) > 1.5 * Math.max(L.size, g.size)))
+      (back || g.x0 > prev.x1 + 2 * Math.max(prev.size, g.size) || (!crosses && away > 1.5 * Math.max(L.size, g.size)))
     if (L === null || page !== L.page || (off && jump)) {
       L = {
         page,
