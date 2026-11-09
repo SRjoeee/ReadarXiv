@@ -133,10 +133,11 @@ function less(r: Rect, n: Rect): Rect[] {
  * Each crop of the page: the page its ink is cut from (its Ink's), its source and where it is drawn, both in PDF units
  * [x0, y0, x1, y1], and its clip where it is drawn, where it has one (its source's rectangles moved and scaled as its source
  * is). `px`: a device pixel of the render it is cut from, PDF units across and up. A crop of its own ink stated (its item's
- * `ink`) is its ink's boxes whole and the device pixel round them, its antialiased edge, less every other piece's ink with its
- * own (the Page's `inks`): what TeX set for it and nothing of its neighbours', at any zoom; its edge cut between two of its
- * element's glyphs (a URL broken) takes none, its element's ink going on past it. One of no ink stated is the typesetter's
- * source whole (its ink and the margin cropOfBox gives it)
+ * `ink`: the box it was cut from) is its ink's boxes whole and the device pixel round them, its antialiased edge, less every
+ * other piece's ink with its own (the Page's `inks`, a box holding its own aside: its piece's whole): what TeX set for it and
+ * nothing of its neighbours', at any zoom; its edge cut between two of its element's glyphs (a URL broken) takes none, its
+ * element's ink going on past it. One of no ink stated is the typesetter's source whole (its ink and the margin cropOfBox
+ * gives it)
  */
 export function cropsOf(
   page: Page,
@@ -187,11 +188,12 @@ export function cropsOf(
             b[3] + px.y,
           ],
         )
-        // (every other piece's ink on its page with its own edge, where it meets the ring outside its own ink)
-        const isOwn = (k: readonly number[]) =>
-          own.some((o) => o[0] === k[1] && o[1] === k[2] && o[2] === k[3] && o[3] === k[4])
+        // (every other piece's ink on its page with its own edge, where it meets the ring outside its own ink; a box that holds
+        // its own is its piece's whole, of which the part states apart what it leaves behind: its brackets, its label's name)
+        const holds = (k: readonly number[]) =>
+          own.some((o) => k[1]! <= o[0] && k[2]! <= o[1] && k[3]! >= o[2] && k[4]! >= o[3])
         const hits = (page.inks ?? [])
-          .filter((k) => k[0] === from && !isOwn(k))
+          .filter((k) => k[0] === from && !holds(k))
           .map((k): Rect => [k[1] - px.x, k[2] - px.y, k[3] + px.x, k[4] + px.y])
           .filter((n) =>
             ring.some((r) => {

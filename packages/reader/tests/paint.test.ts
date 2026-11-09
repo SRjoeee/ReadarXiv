@@ -222,6 +222,49 @@ describe('a crop cut through its own ink and a device pixel round it, clear of e
     })
     close(c!.src, [O[0] - 0.5, O[1] - 0.5, 200, O[3] + 0.5])
   })
+  it('leaves its element’s brackets behind where it draws the ink between them, its element’s whole box no neighbour', () => {
+    // (2610.21312v1-zh p12 t200: "[784,256,256,10]" drawn inside the translation's own brackets; the page states the element's
+    // whole box, which holds the crop's own, and its brackets apart)
+    const box: Box = [163.74, 287.51, 237.35, 297.47],
+      left: Box = [163.74, 287.51, 166.51, 297.47],
+      right: Box = [234.59, 287.51, 237.35, 297.47],
+      inner: Box = [166.51, 287.51, 234.59, 297.47]
+    const page: Page = {
+      page: 12,
+      wait: { rows: [], faces: [] },
+      links: [],
+      inks: [
+        [12, ...box, 290],
+        [12, ...left, 290],
+        [12, ...right, 290],
+      ],
+      members: [
+        {
+          ord: 200,
+          page: 12,
+          state: 'laid',
+          off: 3,
+          lit: { left: [], right: [], own: [] },
+          lines: [
+            [
+              290,
+              72,
+              300,
+              [{ s: '', x: 166.11, src: [12, 166.11, 287.21, 234.99, 297.77, 290], k: 1, piece: '2', ink: [inner] }],
+            ],
+          ],
+        },
+      ],
+    }
+    const px = 3 / 8
+    const [c] = cropsOf(page, { x: px, y: px })
+    expect(covers(c!.clip!, inner)).toBe(true)
+    expect(reaches(c!.clip!, grow(left, px), inner)).toBe(false)
+    expect(reaches(c!.clip!, grow(right, px), inner)).toBe(false)
+    // (its ring kept over and under its ink: its element's box, which holds it, no neighbour's)
+    expect(covers(c!.clip!, [left[2] + px, inner[3], right[0] - px, inner[3] + px])).toBe(true)
+    expect(covers(c!.clip!, [left[2] + px, inner[1] - px, right[0] - px, inner[1]])).toBe(true)
+  })
   it('is cut as the typesetter’s source where no ink of its own is stated', () => {
     const [c] = cropsOf(pageOf({ ink: undefined }), { x: 0.5, y: 0.5 })
     close(c!.src, layout.slice(1, 5))

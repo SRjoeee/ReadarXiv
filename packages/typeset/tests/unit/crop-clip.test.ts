@@ -118,4 +118,46 @@ describe('a crop states its own ink as TeX set it, the page every piece’s (261
     expect(crops.length).toBe(2)
     for (const c of crops) expect(c.ink).toEqual([c.src[5] === 165.97 ? l1 : l2])
   })
+  it('states the ink a crop is cut from: an element drawn without its own brackets, its ink between them', () => {
+    // (2610.21312v1-zh p12 t200: "[784,256,256,10]" inside the translation's own brackets is drawn as its inner ink; its
+    // brackets are the page's ink it leaves behind, stated apart (El.brackets), never its own)
+    const box: Box = [163.74, 287.51, 237.35, 297.47]
+    const left: Box = [163.74, 287.51, 166.51, 297.47],
+      right: Box = [234.59, 287.51, 237.35, 297.47]
+    const m = member({
+      lines: [[1, 0, 72, 300, 290, 297.47, 287.51, 72, 300, 0, 9.96]],
+      els: [
+        [
+          '1',
+          {
+            kind: 'other',
+            ink: [[1, ...box, 290]],
+            brackets: [
+              [1, ...left, 290],
+              [1, ...right, 290],
+            ],
+            copy: '[784,256,256,10]',
+            text: '[784, 256, 256, 10]',
+          },
+        ],
+      ],
+    })
+    const r: Row = {
+      ...row,
+      content: [
+        { t: 'text', s: 'Die Eingabe hat die Form (' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ') und so fort.' },
+      ],
+    }
+    const p = layPage(part(m), rowsOf(r), rules, metrics)
+    const [c] = cropsOf(p)
+    expect(c?.ink).toEqual([[left[2], box[1], right[0], box[3]]])
+    expect(p.inks).toEqual(
+      expect.arrayContaining([
+        [1, ...left, 290],
+        [1, ...right, 290],
+      ]),
+    )
+  })
 })

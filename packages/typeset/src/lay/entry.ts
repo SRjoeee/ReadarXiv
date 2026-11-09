@@ -655,12 +655,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
           : litOfA(m, page, sentences?.src),
     }
   })
-  // (each crop's own ink and the page's every piece's, the reader's to cut by: its element the one its place among its row's
-  // pieces holds, as its links read it)
-  const cut = cropInks(out, part, (ord, piece) => {
-    const p = read.get(ord)?.pieces[Number(piece)] as { t: string; k?: number } | undefined
-    return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : null
-  })
+  // (each crop's own ink and the page's every piece's, the reader's to cut by)
+  const cut = cropInks(out, part)
   return {
     page,
     wait: { rows: [], faces: [] },

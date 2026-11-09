@@ -228,7 +228,11 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           text?: string
           k?: number
           cut?: 1 | 2 | 3
+          gap?: { box?: { x0: number; x1: number; top: number; bottom: number } } | null
         }
+        // (its own ink, the box its rectangle was cut from: its element's ink on its line, or the part of it it draws, inside
+        // its own brackets where the translation sets its own round it; a label's crop states none, lay/clips.ts)
+        const own = c.gap?.box
         items.push({
           s: c.text ?? '',
           x: it.x!,
@@ -236,6 +240,7 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           k: seg.scale,
           piece: c.k !== undefined ? String(c.k) : 'label',
           ...(c.cut ? { cut: c.cut } : {}),
+          ...(own ? { ink: [[own.x0, own.bottom, own.x1, own.top]] } : {}),
           w: it.w,
         })
         continue
