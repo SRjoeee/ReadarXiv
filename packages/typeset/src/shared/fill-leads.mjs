@@ -107,15 +107,35 @@ function framesOf(blocks) {
  * unit lies in one frame or no frame of it is set looser
  */
 function frameLeadsOf(p, bx, lo, hi, laid) {
-  const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.ceil((hi - lo) / 0.01 - 1e-9)
-  if (n < 2 || !(steps > 0)) return null
-  const r3 = x => Math.round(x * 1000) / 1000, L = k => Math.min(hi, r3(lo + k * 0.01))
-  const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens) }
+  const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.max(0, Math.ceil((hi - lo) / 0.01 - 1e-9))
+  if (n < 2) return null
+  const r3 = x => Math.round(x * 1000) / 1000, L = k => (k === 0 ? lo : Math.min(hi, r3(lo + k * 0.01)))
+  // (the cuts the tokens hold (pageCutsOf, the frames' share): before the first block of each frame but the first, the text
+  // before it set in the frames before it)
+  const base = p.P.blockBase ?? 0, cuts = []
+  p.tokens.forEach((t, i) => { if (t.pageBreak !== undefined && t.frame !== undefined && t.frame !== null) cuts.push([i, t.frame]) })
+  const holds = (l, fr) => cuts.every(([i, c]) => c !== fr || l.lines.every(x => !(x.from < i) || x.block + base < fr))
+  let at = null
+  const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens) && (at === null || holds(l, at)) }
   const leads = p.blocks.map(() => undefined)
   let last = lo
   const stateAt = () => ({ ...bx, lead: last, leads: leads.slice() })
   for (let f = 0; f < n; f++) {
     const put = v => { if (f === n - 1) last = v; else of.forEach((g, bi) => { if (g === f) leads[bi] = v }) }
+    // (a frame before the last holds the text before the cut of the frame after it, the share: where it does not at `lo`, the
+    // loosest leading closer, down to the original's pitch, at which it does, and no looser; where none does (the text before
+    // the cut does not fit even at the original's pitch), `lo`, the text running on past the cut as the fit set it)
+    const next = of.indexOf(f + 1)
+    at = f < n - 1 && cuts.some(([, c]) => c === next + base) ? next + base : null
+    if (at !== null) {
+      put(lo)
+      if (!sets(stateAt())) {
+        const K = Math.ceil((lo - 1) / 0.01 - 1e-9), C = k => (k >= K ? 1 : r3(lo - k * 0.01))
+        const found = K > 0 ? closerLead(K, k => { put(C(k)); return sets(stateAt()) ? true : null }, null) : null
+        put(found ? C(found.k) : lo)
+        continue
+      }
+    }
     // (the guess: a frame of one block before the last, its m lines from its first baseline to its last, (m - 1) pitches)
     const bis = of.flatMap((g, bi) => (g === f ? [bi] : [])), b = p.blocks[bis[0]]
     const m = laid.lines.filter(l => of[l.block] === f).length, p0 = b.pitch0 ?? 1.2 * p.s
@@ -138,7 +158,7 @@ function frameLeadsOf(p, bx, lo, hi, laid) {
     while (no - ok > 1) { const k = (ok + no) >> 1; put(L(k)); if (sets(stateAt())) ok = k; else no = k }
     put(L(ok))
   }
-  if (!(last > lo + 1e-9) && !leads.some(v => v !== undefined && v > lo + 1e-9)) return null
+  if (!(Math.abs(last - lo) > 1e-9) && !leads.some(v => v !== undefined && Math.abs(v - lo) > 1e-9)) return null
   return { leads, last }
 }
 /**

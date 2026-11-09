@@ -663,6 +663,66 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.length).toBe(2)
   })
+  it('keeps each frame of a paragraph over a page break its share of the lines, the earlier frame set tighter to hold it', () => {
+    // (2610.22065v1-zh p5/p6 t94 under option (i): ten original lines here and three on the next page; its translation of ten
+    // lines fits at its own leading with a line borrowed under its last on the next page, seven here and three there. TeX's
+    // share is 10 x 10/13 = 7.7, eight here: the frame here set tighter, down to the original's pitch, until it holds the text
+    // before its cut, so that its column does not end a line short of TeX's)
+    const zh = rulesFor('zh')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idB] = ['b'.repeat(64), 'c'.repeat(64)]
+    const a = member({
+      ord: 0,
+      text: idA,
+      lines: [700, 688, 676, 664].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [640, 628, 616, 604].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const ys = Array.from({ length: 10 }, (_, k) => 580 - 12 * k)
+    const m = member({
+      ord: 2,
+      lines: [...ys.map((y) => lineAt(1, y)), lineAt(2, 700), lineAt(2, 688), lineAt(2, 676)],
+      room: {
+        below: 25,
+        next: 25,
+        runs: [
+          [9, 30, 1],
+          [12, 25, 300],
+        ],
+        sep: 12,
+      },
+    })
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(440) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idB },
+    ])
+    const laid = (page: number) =>
+      layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
+    const [p1, p2] = [laid(1), laid(2)]
+    expect([p1.state, p2.state]).toEqual(['laid', 'laid'])
+    expect([p1.lines.length, p2.lines.length]).toEqual([8, 2])
+    // (its eight lines here from its first baseline to the frame's foot, no lower than TeX's last line here less its room)
+    expect(p1.lines[0]![0]).toBe(580)
+    expect(p1.lines.at(-1)![0]).toBeGreaterThanOrEqual(472 - 1 - 0.05)
+  })
   it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
     // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
     // between two that take 2 of 4. The 2026-10-17 gap rule held the gap under it to the next paragraph's leading too and pulled
