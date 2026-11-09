@@ -2872,6 +2872,65 @@ quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred hea
 middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
 6.49 pt off its middle and 12.98 pt past its own room.
 
+### 18.14 A link's colour stays on its own words; a unit our compile sets more of is still located (2026-11-09)
+
+The owner, on round 6's sheet with every toggle on (1810.04805v2 page 11): 「VR 版本丢失了一些原有的蓝色文字格式。并且漏翻了一段 reference。解决这种问题，我们需要从根本问题出发，从长期正确的角度去解决问题」.
+On staging the same paper's page 10 showed both sides of one fault: four link titles drawn black ("Semeval-2017 task 1",
+"Supervised learning of universal sentence representations…", "Universal language model fine-tuning…", "Quora question
+pairs"), and two entries drawn blue whole, their authors too (Hendrycks and Gimpel, Jernite, Bowman and Sontag), where the
+original colours each title alone.
+
+**A group's fill is read off its glyphs on arXiv's page.** hyperref's `colorlinks` colours a link's text inside its own
+macros. No source piece says so, and the marked compile's log states a fill for a colour piece alone (`\textcolor`,
+`\color`: SpanAt.colour, El.colour). The translation keeps the link's group (a link span is `must`; staging's stored
+Microsoft replies hold every link group around exactly its title), and the typesetter draws a group in its stated fill,
+but no fill was stated, so the title came back in the unit's own fill. Today's reader read each piece that may set a colour
+off its own glyphs (§18.1, "A character's colour"); the rebuild's typesetter has no glyphs to read. The engine now does it
+(`locate/fills.ts`): the unit's source characters are matched in order to its text glyphs on A (the longest common
+subsequence, as `words.ts` places its words), punctuation with its letters, white space aside. Each group, and each colour
+switch's run, is a scope; a scope's fill is the one most of its own text's glyphs hold, else most of all its text's. A
+group whose fill is not the one around it, or not the unit's own, states it (SpanAt.colour, where the log states none: a
+colour piece's row wins). Each group set apart carries its fill itself, because a translation keeps some groups and drops
+others: Microsoft moves an `\emph`'s markers to the end, empty, and 2501.14787v1's `\emph{\href{…}{…}}` would otherwise have
+stated the fill on the `\emph` alone.
+
+**A unit's own fill is its text's outside those groups.** A member's style was read over all of its glyphs, so a link that
+holds most of a unit's letters made the whole unit the link's colour. Where a group or a colour switch's run is set apart,
+the member's `Style.fill` is now its own text's. Where every letter of a unit is a group's (RevTeX's `\bibinfo` fields),
+its own text is the punctuation between them, which is why punctuation is matched. So a link's colour stays on its own
+words, or on none where the reply loses its group, and never spreads to the rest of the unit.
+
+**A unit our compile sets more of is located from what arXiv set.** 1810.04805v2's reference 325 stayed English: its
+`.bbl` writes "Cloze procedure" in UTF-8 quotes, arXiv's 2016 tree read their bytes as characters its OT1 font has no
+glyph for (TeX's "Missing character") and set nothing, while our tree sets the quotes. The locate refused any unit with a
+glyph of B lacking a partner on A (design-2026-11-06 §5). Every glyph A set is the unit's, in order, and A sets nothing
+between them, so its ink on A is whole. A glyph of B with no partner, between two of its unit's glyphs whose partners A
+sets one right after the other, is no ink of A: the unit is located from the glyphs A set, and its translation reads its
+source. A run at a unit's edge, or between partners that stand apart on A, is a line A may have set elsewhere that no block
+move paired (align classes its hunks before its moves), and stays a content difference.
+
+Over the 88 papers of stage 1a's corpus (round 6's parts against this change's), only fills and one member move. 1,534
+groups of 843 members in 20 papers now state a fill: 659 links (`\href` 634, `\hyperref` 25), the groups inside them
+(RevTeX's `\bibfield` and `\bibinfo`, an `\emph` journal), a paper's colouring macros (2610.19159v1's), 213 bare groups (`{…}`),
+and 16 `\textcolor` groups the log gives no row. 135 members in 7 papers lose a fill their links or colour words
+had given them, every one now black (2610.19159v1 101, 2610.21098v1 17, 2610.20507v1 9). No member takes a colour it did
+not have, and no figure text moves. 1810.04805v2's reference 325 is the one unit gained, drawn from A's lines as today
+draws it. Of the four content differences before, three remain: 2610.21084v1's abstract (a stray "4" our marked compile
+sets before it, a run at the unit's edge), 2610.21084v1's correspondence footnote (`aonly`) and 1007.0072v1's `\today`
+(`char`).
+
+The parity over the four pairs whose parts move (1810.04805v2-zh, 2609.20976v1-ja, 2608.16117v1-de, 2609.36054v2-zh; 84
+pages each run) against round 6's sheet: with the default toggles nothing moves. With every toggle on, the pages worse go
+from 18 to 17. 1810.04805v2 page 11 is no longer worse: reference 325 is laid and measures as today's on every count, and
+its three link titles are blue. 2609.20976v1 page 13 loses its links difference: v2's link text measure is 27 before and 33
+after, the original's and today's count. By eye, page 10's four titles are blue and the Hendrycks and Jernite entries
+colour their titles alone, as the original does.
+
+Not changed here. A member's slant is still read over all of its glyphs: 2609.20976v1 page 13 draws whole references
+italic where their titles hold most letters, because the stored replies empty the `\emph` groups the typesetter's `baseOf`
+counts. That is the same fault for the face, left to its own change. A run of B-only glyphs at a unit's edge (2610.21084v1's
+abstract, a stray "4" our marked compile sets before it) stays the original's.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

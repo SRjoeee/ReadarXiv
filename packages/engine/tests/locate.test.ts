@@ -2765,7 +2765,7 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     ])
     expect(m.style.fill).toBeUndefined()
   })
-  it('states none where a group’s fill is the one around it, nor a unit’s own where its text is all one fill', () => {
+  it('keeps a unit wholly inside its link in the link’s fill, a colouring macro’s fill on it and on its groups, the log’s first', () => {
     // (a unit wholly inside its link: its own fill the link's, as its glyphs read it, no group of it set apart)
     const all = pair(['Bridging nonlinearities and', 'stochastic regularizers.'], () => true)
     const whole = unitWith(
