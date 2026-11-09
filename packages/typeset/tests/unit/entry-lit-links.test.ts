@@ -1122,6 +1122,27 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     const flat = layPage(part(lead), rowsOf([rowF('Aufgabe: alle')]), rules, metrics()).members[0]!
     expect(flat.lines[0]![3].map((it) => [it.s, bold(it)])).toEqual([['Aufgabe: alle', false]])
   })
+  it('draws a translated run in the fill its group’s style states, black included, the rest in the figure text’s own (2611.03178v1)', () => {
+    // (TeX's line in the abstract's tcolorbox: "Page:" black, its address in the link's colour, one figure text whose own style is
+    // the address's, its fill the link's; its label a group whose style states its black. Drawn in one fill, the label took the
+    // link's colour)
+    const page = label({
+      plain: 'Page: site.io',
+      style: { role: 'mono', size: 8, fill: 0x315f9c },
+      spans: [['0', { style: { role: 'sans', size: 8, bold: 1, fill: 0 } }]],
+    })
+    const content: OutPiece[] = [
+      { t: 'span', id: '0', content: [{ t: 'text', s: 'Seite:' }] },
+      { t: 'text', s: ' site.io' },
+    ]
+    const m = layPage(part(page), rowsOf([{ id: idF, ok: true, by: 'test', content }]), rules, metrics()).members[0]!
+    expect(m).toMatchObject({ state: 'laid', off: 1 })
+    const items = m.lines[0]![3]
+    expect(items.map((it) => [it.s, 'fill' in it ? it.fill : undefined])).toEqual([
+      ['Seite:', undefined],
+      [' site.io', 0x315f9c],
+    ])
+  })
   it('shrinks a set to one size where one of it needs it, and leaves the original’s what says nothing else', () => {
     // (two labels of one set: the second's translation, 16 characters at 8 (64 wide), centred in a free line of 50 (its box of 30
     // and 10 either side), needs 0.78 of its size, over the last floor)

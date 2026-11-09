@@ -379,7 +379,13 @@ function figureRuns(
   s: string,
   { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
 ): { content: Piece[]; styles: [string, Style][] } {
-  const base = styleKeyOf(glyphStyleOf(own))
+  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.mjs texLine: the link's
+  // colour of an address after its label), whose group states its fill where it is not the text's, black included; a figure text
+  // a plotting program sets is of one fill, as its run was)
+  const fillKey = (f: number | undefined) => (f !== undefined && f > 0 ? f : 0)
+  const ownStyle = glyphStyleOf(own)
+  const baseFill = fillKey(ownStyle.fill)
+  const base = `${styleKeyOf(ownStyle)}|${baseFill}`
   const chars = [...s]
   const SPACE = /\s/u
   // (each character's glyph: its glyphs' text, white space aside, as today's textOf strings it)
@@ -396,7 +402,9 @@ function figureRuns(
     glyphOf.push(left > 0 ? q - 1 : null)
     left--
   }
-  const keyOf = glyphOf.map((g) => (g === null ? null : faceKeyOf(stream[g]!.style.base)))
+  const keyOf = glyphOf.map((g) =>
+    g === null ? null : `${faceKeyOf(stream[g]!.style.base)}|${fillKey(stream[g]!.style.fill)}`,
+  )
   if (!keyOf.some((x) => x !== null && x !== base)) return { content: [{ t: 'text', s }], styles: [] }
   // (a space the run's on both sides of it, else its own style's)
   const key = keyOf.map((x, i) => {
@@ -416,12 +424,18 @@ function figureRuns(
     if (key[i] === base) content.push({ t: 'text', s: run })
     else {
       const id = String(content.length)
-      content.push({ t: 'span', id, style: changeOf(key[i] as string, base), content: [{ t: 'text', s: run }] })
+      content.push({
+        t: 'span',
+        id,
+        style: changeOf(key[i] as string, base) || 'colour',
+        content: [{ t: 'text', s: run }],
+      })
       // (its style its own glyphs', at their size as locate reads a unit's: the median along the line)
       const gs = [...new Set(glyphOf.slice(i, j).filter((g): g is number => g !== null))].map((g) => stream[g]!.style)
       const { upper: _upper, ...st } = glyphStyleOf(gs)
       void _upper
-      styles.push([id, { ...st, size: unitSize(gs) ?? st.size }])
+      const fill = Number((key[i] as string).split('|')[3])
+      styles.push([id, { ...st, size: unitSize(gs) ?? st.size, ...(fill !== baseFill ? { fill } : {}) }])
     }
     i = j
   }
