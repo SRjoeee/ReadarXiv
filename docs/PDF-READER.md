@@ -2907,8 +2907,11 @@ stream (no glyph TeX printed, none made on A) is now never the member before (no
 over to, nor the last note), and a member made on A whose first glyph TeX set right after a member's last, on that member's
 last row, stands after it (`locate.ts` `standsAfter`; before the member whose first glyph comes next otherwise, as before):
 the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
-page and stood after every member. Each row's names then run on from the one before, at the original's separation from its
-translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
+page and stood after every member. A flow being one paragraph of TeX's, a member made on A in it (no mark of its own to state how
+TeX set its line) is set as the paragraph its marked members state, where they state one alignment: amsart's centred "A AND B",
+its AND made on A justified by default, ran on from the first name's end once it stood after it, while the centred second name
+stayed on its own original's middle, the hole moved before it (2610.21106v1: 36.11 pt where TeX set 3.32). Each row's names
+then run on from the one before, at the original's separation from its translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
 members).
 
 **A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
