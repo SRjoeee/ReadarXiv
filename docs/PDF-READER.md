@@ -2773,6 +2773,22 @@ today's last line stood on the folio). Where today borrowed past TeX's bottom v2
 shrinks to its line where today borrowed one (2608.16117v1 page 4). 2602.23285v2 page 4's paragraph over heading 4 keeps its
 four lines, as today: the heading's baseline 25.36 pt under it, its separation 16.94 (a 6 pt `\parskip`), no line's room.
 
+The bound is a baseline, as TeX's is (checked 2026-11-09, on the owner's question whether a paragraph may borrow a little past
+it, as today's reader does on 2602.23285v2-ja page 10). TeX's page builder sets a column's last baseline at `\textheight`'s
+foot at most and lets that line's depth hang under it, to `\maxdepth`: a deeper line has its baseline raised by the excess,
+and a line the `\lineskip` rule pushes under the foot goes to the next page, unless the page's glue shrinks to hold it. A
+probe on the pinned TeX Live 2025 (article, `\maxdepth` 5 pt) states each: the last line's baseline on the stated foot to
+0.001 pt, a 4 pt deep one too; an 8 pt deep one moved to the next page, or, with 3 pt more `\textheight`, its baseline 3 pt
+over the foot; a 14 pt tall line's push sending the last line over, kept only by a `\parskip` of 0 pt minus 1 pt. arXiv's
+pages show the same: 2610.21880v1's last line on page 3 stands 0.70 pt over the foot, its formula's ink 6.68 pt deep
+(IEEEtran's `\maxdepth`, 6 pt), 2610.21106v1's on page 2 0.52 pt over it, its formula's ink 4.58 pt deep (amsart's, LaTeX's
+4 pt; the ink 0.07 pt past TeX's box).
+The walk (a slot, a line the `\lineskip` rule pushed) and the parity's `block` compare a line's baseline with the foot, to
+0.05 pt, so neither is stricter than TeX; the depth's bound is neither stated nor read, and over the 22 parity pairs one
+drawn line passes it (2610.21106v1 page 2, unit 12: that formula's line pushed 0.56 pt down, its descent 0.64 pt past the
+4 pt). Today's lines past the foot are baselines where TeX sets none: 2602.23285v2 unit 29 by 2.50 pt on page 4, unit 90 by
+1.00 pt on page 9, 2608.16117v1 unit 99 by 1.04 pt on page 28.
+
 **Each paragraph TeX states inside a unit has its own leading.** A unit can hold more than one of TeX's paragraphs (an
 item's run-in text and the prompt TeX set in a frame under it, a theorem's two paragraphs); the part states where TeX opened
 each (`SpanAt.opens`, `El.opens`) and the row is paired with those points, each paragraph's text on its own lines. The fit
