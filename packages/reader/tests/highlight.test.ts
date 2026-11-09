@@ -393,4 +393,52 @@ describe('the highlight never fills a display nor bridges two rows across anothe
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
+  it('never joins two short rows across a display that stands beside them in their column (no strip down the column’s edge)', () => {
+    // (the owner's report of 2026-11-10 on staging, 2610.17024v1 p9: a sentence whose translation ends a line short (two
+    // characters) before display (43) and goes on short (two) after it, then display (44): the two short rows, both left of the
+    // displays' ink, were one outline, a strip down the column's left over (43)'s row; on arXiv's page the rows, longer, were
+    // cut. Today's runs are cut where a block stands between two rows in the column, whatever the rows' width)
+    const D43: Box = [150, 656, 300, 680],
+      D44: Box = [110, 612, 300, 622]
+    const rows: Box[] = [
+      [80, 710, 300, 719],
+      [72, 698, 100, 707],
+      [72, 630, 100, 639],
+      [72, 590, 300, 599],
+    ]
+    const strip: Page = {
+      ...page,
+      members: [
+        {
+          ord: 11,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [],
+          lit: {
+            left: [rows],
+            right: [rows],
+            own: [
+              ['43', [D43]],
+              ['44', [D44]],
+            ],
+          },
+        },
+      ],
+    }
+    const { els, hl } = setUp(strip)
+    hl.light({ id: 11, s: -1 })
+    for (const side of ['left', 'right'] as const) {
+      const outlines = painted(els, side)
+      // (its first two rows one outline, the row between the displays one, the row after the second one)
+      expect(outlines).toHaveLength(3)
+      // (nothing painted on either display's row, beside it in the column under the short rows: x 86)
+      for (const d of [D43, D44]) {
+        expect(outlines.some((o) => inside(middleOf(d), o))).toBe(false)
+        expect(outlines.some((o) => inside([86, middleOf(d)[1]], o))).toBe(false)
+      }
+    }
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
 })
