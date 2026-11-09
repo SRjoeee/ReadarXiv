@@ -2,7 +2,8 @@
 // abe884b5e, run by locate over arXiv's page) import from today's other modules: each copied as it is from the file and line
 // named (abe884b5e), so that the makers read exactly what today's read; held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: classOf reads the kind the instrument states of a
-// piece (today's classOf, which the front half's adapter ran) instead of a source.
+// piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
+// paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it).
 export { classifyFont } from '../facts.ts'
 export { PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
 
@@ -10,8 +11,8 @@ export { PICTURE_END, PICTURE_START, regionMask } from '../../ink.mjs'
 const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
 export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}ˆˇ˘-˝]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
 
-// ---- layout/stream.mjs:45, 152, 187-214 (columnsAt, regionsOf)
-const BRACKET = /^([bf])([se])\d+$/
+// ---- layout/stream.mjs:45, 152, 187-214 (columnsAt, regionsOf; CHANGED with today's: the body brackets paired by number)
+const BRACKET = /^([bf])([se])(\d+)$/
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
 export function columnsAt(page) {
   let two = false
@@ -24,16 +25,22 @@ export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
+  const open = new Set()
   const apply = name => {
     const m = BRACKET.exec(name)
     if (!m) return
-    if (m[1] === 'b') { body = m[2] === 's'; bodies = true } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
+    if (m[1] === 'b') {
+      if (m[2] === 's') open.add(m[3])
+      else open.delete(m[3])
+      body = open.size > 0
+      bodies = true
+    } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
   for (let q = 0, g = 0; g <= glyphs.n; g++) {
     while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
     if (g < glyphs.n) glyph[g] = code(body, depth)
   }
-  body = false; depth = 0
+  body = false; depth = 0; open.clear()
   for (let q = 0, b = 0; b < nBoxes; b++) {
     while (q < points.length && points[q].box <= b) apply(points[q++].name)
     box[b] = code(body, depth)

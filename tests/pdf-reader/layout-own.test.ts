@@ -55,6 +55,19 @@ describe('the text of a unit (MR 2, 3)', () => {
     expect(r.units.get(0)?.unhidden).toBe('across')
     expect(groupsOf(r, three)).toEqual({})
   })
+  it('crosses a page from a balanced page\'s right column: its body brackets nest, the right column inside the outer one (2608.25210v2 p17)', () => {
+    // (a page whose columns are balanced is split from one box: that box's opening point stays at the left column's top and its
+    // closing one after the right column's end, the left column's own pair inside them, `bs58 bs57 … be57 … be58`. The right
+    // column is inside a body; read as a flag, the left column's close put it outside, and a reference set from its foot onto
+    // the next page's top was refused whole, `across`: its text no unit's, drawn as notes)
+    const pages = [
+      page([{ pt: 'bs2' }, { pt: 'bs1' }, { pt: '0s' }, 'Left', { pt: '0e' }, { pt: 'be1' }, { pt: '1s' }, 'Bin Zh', { pt: 'be2' }]),
+      page([{ pt: 'bs4' }, { pt: 'bs3' }, 'ang', { pt: '1e' }, { pt: '2s' }, 'Next', { pt: '2e' }, { pt: 'be3' }, { pt: 'be4' }]),
+    ]
+    const r = ownOf(pages, { units: units('Left', 'Bin Zhang', 'Next') })
+    expect(r.units.get(1)?.unhidden).toBeNull()
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Left', u1: 'Bin Zhang', u2: 'Next' })
+  })
   it('of a unit with an end mark alone is from the point before it (a title)', () => {
     const pages = [page([{ pt: '5e' }, { pt: 'bs1' }, 'Title', { pt: '0e' }])]
     expect(groupsOf(ownOf(pages, { units: units('Title') }), pages)).toEqual({ u0: 'Title' })

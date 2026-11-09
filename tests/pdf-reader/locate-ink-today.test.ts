@@ -9,6 +9,7 @@ import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mj
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
 import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
+import { regionsOf } from '../../src/pdf-reader/engine/layout/stream.mjs'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import { EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
@@ -112,6 +113,24 @@ describe('today’s ink makers in the engine package', () => {
     expect(today.ink.map((u) => u.kind)).toEqual(expect.arrayContaining(['inkheads', 'inkorphan', 'inkcontents', 'inkreferences']))
     expect(today.fig.units.map((u) => u.text)).toEqual(['Accuracy'])
     expect(today.kept.length).toBeGreaterThan(0)
+  })
+  it('read a balanced page’s right column inside a body, as today’s regions do: nested body brackets (2608.25210v2 p17)', () => {
+    // (its columns split from one box: the box's pair around both, `bs2 bs1 … be1 … be2`; glyphs 0-3 the left column, 4-7 the
+    // right one, 8 past both)
+    const page = {
+      glyphs: { n: 9 },
+      boxes: [],
+      points: [
+        ['bs2', 0],
+        ['bs1', 0],
+        ['be1', 4],
+        ['be2', 8],
+      ].map(([name, glyph]) => ({ name: name as string, glyph: glyph as number, box: 0 })),
+    }
+    const today = regionsOf(page)
+    const copy = T.regionsOf(page)
+    expect([...copy.glyph]).toEqual([...today.glyph])
+    expect([...today.glyph].map((r) => r % 2)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 0])
   })
   it('read a stack’s glyphs at one x in the stream’s order, where today’s read the float noise of their x (the one difference)', () => {
     // (2307.16209v1 p14's "s = −1/2" in a list of figures: the fraction's 1 and 2 stand at one x, 451.282, which PDF.js composes
