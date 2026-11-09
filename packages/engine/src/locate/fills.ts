@@ -14,7 +14,10 @@
 // element whose class states the fill TeX set its run in, El.colour), is a scope of its own; the unit's text in no scope is
 // the unit's. A scope's fill is the one most of its own text's glyphs are set in (those of no scope within it), where it has
 // none, most of all its text's; a glyph whose fill the page does not tell is not read. A group's fill is stated where it is
-// not the fill of the scope around it (the unit's own, at last): a vote of glyphs and an inequality, no threshold.
+// not the fill of the scope around it, or not the unit's own: each group set apart carries its fill itself, since a
+// translation keeps some groups and not others (a link span is `must`; Microsoft's reply may move an `\emph`'s markers to the
+// end, empty: 2501.14787v1's `\emph{\href{…}{…}}`, whose fill the \emph alone stated was drawn on nothing). A vote of glyphs
+// and two inequalities, no threshold.
 import type { Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { StyleGlyph } from './facts.ts'
@@ -22,7 +25,8 @@ import type { StyleGlyph } from './facts.ts'
 type El = Extract<Piece, { t: 'el' }>
 
 /** the fills a unit's text is set in: its own (undefined where no glyph of it tells one); each group's (by its open piece's
- *  id) that is not the fill around it; whether any scope's fill (a group's, a colour switch's run's) is not the one around it */
+ *  id) that is not the fill around it or not the unit's own; whether any scope's fill (a group's, a colour switch's run's) is
+ *  not the one around it */
 export interface Fills {
   own: number | undefined
   groups: [id: string, fill: number][]
@@ -136,10 +140,10 @@ export function fillsOf(
   for (let s = 1; s < S; s++) {
     const f = fills[s]
     const around = fills[parent[s] as number]
-    if (f === undefined || around === undefined || f === around) continue
-    apart = true
+    if (f === undefined || around === undefined) continue
+    if (f !== around) apart = true
     const id = groupOf[s]
-    if (id !== null && id !== undefined) groups.push([id, f])
+    if (id !== null && id !== undefined && (f !== around || f !== fills[0])) groups.push([id, f])
   }
   return { own: fills[0], groups, apart }
 }

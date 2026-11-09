@@ -2685,6 +2685,28 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     // (the authors' and the journal's fill, black: no fill stated)
     expect(m.style.fill).toBeUndefined()
   })
+  it('states a link’s fill inside a group that carries it too: the translators keep a link and may drop the group (2501.14787v1)', () => {
+    // (`\emph{\href{…}{Adjoint methods …}}`: the link's text red on A, the \emph's text all the link's. A link span is `must`
+    // and an \emph's is not: Microsoft's reply keeps the link's markers and may move the \emph's to the end, empty, so the
+    // fill the \emph alone stated was drawn on nothing)
+    const lines = ['as described in the course notes', 'Adjoint methods and sensitivity', 'by S. G. Johnson (2011).']
+    const { B, A } = pair(lines, (n) => n === 1)
+    const content = [
+      text('as described in the course notes '),
+      span('5', 'italic', '\\emph{', [
+        span('6', 'link', `\\href{${to.url}}{`, [text('Adjoint methods and sensitivity')]),
+      ]),
+      text(' by S. G. Johnson (2011).'),
+    ]
+    const u = unitWith(content, [
+      ['5', { cmd: 'emph' }],
+      ['6', { cmd: 'href', to }],
+    ])
+    expect(partOf(instrumentOf(B, [u], [[0, 0, 0]]), B, A).spans).toEqual([
+      ['5', { cmd: 'emph', colour: 0x80 }],
+      ['6', { cmd: 'href', to, colour: 0x80 }],
+    ])
+  })
   it('states none where a group’s fill is the one around it, nor a unit’s own where its text is all one fill', () => {
     // (a unit wholly inside its link: its own fill the link's, as its glyphs read it, no group of it set apart)
     const all = pair(['Bridging nonlinearities and', 'stochastic regularizers.'], () => true)
@@ -2695,8 +2717,9 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     const m = partOf(instrumentOf(all.B, [whole], [[0, 0]]), all.B, all.A)
     expect(m.spans).toEqual([['1', { cmd: 'href', to }]])
     expect(m.style.fill).toBe(0x80)
-    // (a paper's macro that colours its argument, a bold group inside it: the macro's fill stated, the bold group's the
-    // macro's, none; a colour group the log states keeps the log's)
+    // (a paper's macro that colours its argument, a bold group inside it: the macro's fill stated, and the bold group's, the
+    // macro's but not the unit's own, so that it keeps it where a translation drops the macro's group; a colour group the log
+    // states keeps the log's)
     const lines = ['We use the new loss, which is better', 'than the old one.']
     // (the glyphs of "new loss, which is" blue: from x 72 + 11 * 6 to 72 + 30 * 6 on line 0)
     const { B, A } = pair(lines, (n, x0) => n === 0 && x0 >= 72 + 11 * 6 && x0 < 72 + 30 * 6)
@@ -2711,7 +2734,7 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     ])
     expect(partOf(instrumentOf(B, [u], [[0, 0]]), B, A).spans).toEqual([
       ['1', { cmd: 'hl', colour: 0x80 }],
-      ['2', { cmd: 'textbf' }],
+      ['2', { cmd: 'textbf', colour: 0x80 }],
     ])
     const logged = unitWith(
       [
