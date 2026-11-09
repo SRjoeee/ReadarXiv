@@ -123,7 +123,7 @@ describe("an ink unit that echoes a source unit is joined by what it is: the ink
   })
 })
 
-describe("a unit whose addresses v2 holds as elements is today's unit of the same glyphs, its addresses text", () => {
+describe("a unit whose kept runs v2 holds as elements is today's unit of the same glyphs, read as today's read them", () => {
   // (2609.36054v2 p1 #28: v2's note holds each e-mail address as an element `\url{…}` (wire-tail), a content today's prepare
   // never made, so its id is no unit's of today; today's unit of those glyphs holds the addresses as text)
   const url = (a: string, id: string) => ({ t: 'el', id, kind: 'url', src: `\\url{${a}}` })
@@ -137,8 +137,13 @@ describe("a unit whose addresses v2 holds as elements is today's unit of the sam
   const said = '*Correspondence to: alan@gov.ai and soren@casp.ac. The views are ours.'
   const lines = [[1, 0, 45.65, 473.09, 45.6], [1, 0, 46.99, 460.71, 34.64]]
   const at = (...ys: number[]) => ys.map((baseline) => ({ page: 1, baseline }))
-  const prepared = (o: object = {}) =>
-    new Map([[107, { ord: 107, id: Q, kind: 'inknotes', text: said, pieces: [], lines: at(45.6, 34.64), ...o }]])
+  const prepared = (o: { text?: string; pieces?: object[]; lines?: object[] } = {}) =>
+    new Map([
+      [
+        107,
+        { ord: 107, id: Q, kind: 'inknotes', text: said, pieces: [{ kind: 'text', s: o.text ?? said }], lines: at(45.6, 34.64), ...o },
+      ],
+    ])
   const part = (kind = 'inknotes') => bundle({ 1: [member(108, kind, P, { lines })] }, [{ id: P, kind, content: note }])
   const pages = pagesOf({ 1: [[108, 'none']] })
 
@@ -164,11 +169,35 @@ describe("a unit whose addresses v2 holds as elements is today's unit of the sam
     const got = todayJoin(pagesOf({ 1: [[100, 'laid'], [108, 'none']] }), both, [{ ord: 107, id: Q }], prepared())
     expect(got).toEqual({ 100: { today: 107 } })
   })
-  it('a unit holding no address, or another element, is joined by its id alone', () => {
+  it('a unit holding no element read otherwise is joined by its id alone; one of another element, where today’s holds it too', () => {
     const plain = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: text(said) }])
     expect(todayJoin(pages, plain, [{ ord: 107, id: Q }], prepared())[108]).toBeUndefined()
     const math = [...note, { t: 'el', id: '5', kind: 'math', src: '$x$' }] as unknown as Content
     const withMath = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: math }])
-    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], prepared({ text: `${said}￼` }))[108]).toBeUndefined()
+    // (today's placeholder of the same source: the same element; of another, no reading of v2's)
+    const mathOf = (src: string) => prepared({ text: `${said}￼`, pieces: [{ kind: 'text', s: said }, { kind: 'ph', src }] })
+    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], mathOf('$x$'))[108]).toEqual({ today: 107 })
+    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], mathOf('$y$'))[108]).toBeUndefined()
+  })
+  it("joins a unit whose scripts v2 holds as elements to today's unit that held them as text, or part text, part placeholder", () => {
+    // (2610.20967v1 p1 t123: the names' marks under Times, today's text but for the math-italic comma's placeholder ",2")
+    const math = (src: string, id: string) => ({ t: 'el', id, kind: 'math', src })
+    const names = [
+      { t: 'text', s: 'Song-Ze Yu' },
+      math('$1$', '1'),
+      { t: 'text', s: ', Fang-Duo Tsai' },
+      math('$1,2$', '3'),
+      { t: 'text', s: ', Yi-Hsuan Yang' },
+      math('$1$', '5'),
+    ] as unknown as Content
+    const v = bundle({ 1: [member(124, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: names }])
+    const t123 = (pieces: object[]) =>
+      new Map([[123, { ord: 123, id: Q, kind: 'inknotes', text: '', pieces, lines: at(45.6, 34.64) }]])
+    const split = [{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1' }, { kind: 'ph', src: '$,2$' }, { kind: 'text', s: ', Yi-Hsuan Yang1' }]
+    const p124 = pagesOf({ 1: [[124, 'none']] })
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123(split))[124]).toEqual({ today: 123 })
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,2, Yi-Hsuan Yang1' }]))[124]).toEqual({ today: 123 })
+    // (another mark: no join)
+    expect(todayJoin(p124, v, [{ ord: 123, id: Q }], t123([{ kind: 'text', s: 'Song-Ze Yu1, Fang-Duo Tsai1,3, Yi-Hsuan Yang1' }]))[124]).toBeUndefined()
   })
 })

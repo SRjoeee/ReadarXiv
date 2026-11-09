@@ -8,12 +8,13 @@
 // content (locate/ink.ts), so its own id is the format's unitId over its kind and that content, today's id of the ink unit.
 // Echoes are ink units' alone (inkUnitsOf's kinds, INK_KIND): a figure text's placement, of kind 'figure' over its unit of
 // kind 'inkfigures', names its own unit; one whose glyphs set a run in another face holds a group of it, today's unit its text
-// alone, joined by that one's id (l1.ts todayUnitOf). A member whose unit holds its addresses as elements, which today's held as
-// text, joins no id of today's: it is joined, after the ids, to today's unit of its glyphs, the same text set on the same lines
-// of A (l1.ts addressedJoin, over today's prepare dump).
+// alone, joined by that one's id (l1.ts todayUnitOf). A member whose unit holds kept runs as elements that today's held otherwise
+// (its addresses, today's text; an ink unit's scripts in a text face, today's text or text and a placeholder) joins no id of
+// today's: it is joined, after the ids, to today's unit of its glyphs, the same reading set on the same lines of A (l1.ts
+// keptJoin, over today's prepare dump).
 import { INK_KIND } from '../../../packages/engine/src/locate/today/ink-units.mjs'
 import { unitId } from '../../../packages/format/src/ids.ts'
-import { addressedJoin, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
+import { keptJoin, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
 
 const INK = new Set(Object.values(INK_KIND))
 /** a member's own unit id: its text, or the ink unit's where its text names the source unit it echoes (`units` by id) */
@@ -56,7 +57,7 @@ export function todayJoin(pages, bundle, units, prepared = null) {
     const ledgered = new Set(units.map((u) => u.ord))
     const free = [...members.values()].filter((m) => !join.has(m.ord))
     const left = [...prepared.values()].filter((t) => ledgered.has(t.ord) && !joined.has(t.ord))
-    for (const [ord, t] of addressedJoin(free, bundle.units, left)) join.set(ord, t)
+    for (const [ord, t] of keptJoin(free, bundle.units, left)) join.set(ord, t)
   }
   const out = {}
   for (const page of Object.values(pages)) for (const m of page.members) if (join.has(m.ord)) out[m.ord] = { today: join.get(m.ord) }

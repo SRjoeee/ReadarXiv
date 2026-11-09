@@ -34,15 +34,7 @@ import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
-import {
-  addressedJoin,
-  addressedRow,
-  type L1Placed,
-  l1Paper,
-  type TodayPrepared,
-  todayPrepared,
-  todayUnitOf,
-} from './l1.ts'
+import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
 import { prepare } from './round.ts'
 import { derived, ledger } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
@@ -557,30 +549,30 @@ export function gateL1Pair(
     const u = todayById.get(tid)?.[k]
     if (u) unitOf.set(ord, u)
   }
-  // (then the members no id joined, by their glyphs: a unit whose addresses v2 holds as elements, today's as text, l1.ts
-  // addressedJoin; its row today's said in v2's unit, addressedRow)
-  const addressedOf = new Map<number, TodayPrepared>()
+  // (then the members no id joined, by their glyphs: a unit whose kept runs v2 holds as elements, its addresses and its scripts,
+  // where today's held them otherwise, l1.ts keptJoin; its row today's said in v2's unit, keptRow)
+  const keptOf = new Map<number, TodayPrepared>()
   const prepared = todayPrepared(paper)
   if (prepared) {
     const joined = new Set([...unitOf.values()].map((u) => u.ord))
     const free = [...byOrd].filter(([o]) => !unitOf.has(o)).map(([, x]) => x.m)
     const left = L.units.filter((u) => !joined.has(u.ord) && prepared.has(u.ord)).map((u) => prepared.get(u.ord)!)
-    for (const [o, t] of addressedJoin(free, bundle.units, left)) {
+    for (const [o, t] of keptJoin(free, bundle.units, left)) {
       const u = L.units.find((x) => x.ord === t)
       if (!u) continue
       unitOf.set(o, u)
-      addressedOf.set(o, prepared.get(t)!)
+      keptOf.set(o, prepared.get(t)!)
     }
   }
   /** a member's door row as the translation package's Result holds it, in the unit's own pieces: the door's, or today's row
-   *  said in v2's unit where the two hold its addresses otherwise; null where a piece is no source piece */
+   *  said in v2's unit where the two hold its kept runs otherwise; null where a piece is no source piece */
   const rowOf = (
     ord: number,
     row: DoorRow,
     src: Unit,
   ): { content: OutPiece[]; sentences?: { src: number[]; tr: number[] } } | null => {
-    const t = addressedOf.get(ord)
-    if (t) return addressedRow(row, t, src)
+    const t = keptOf.get(ord)
+    if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
     if (!content) return null
@@ -669,8 +661,8 @@ export function gateL1Pair(
       const source = sourcePieces(src.content)
       // (the door's row as the translation package's Result would hold it (its text, the source's elements and groups by id):
       // the reading takes the pieces from it and the member's facts alone, rowPieces; AXT_GATE_SOURCE=1 the unit's own pieces
-      // as before, to hold the two equal); a unit whose addresses v2 holds as elements, today's row said in v2's unit
-      const content = addressedOf.has(ord) ? (rowOf(ord, row, src)?.content ?? null) : outOfDoor(row[1], source)
+      // as before, to hold the two equal); a unit whose kept runs v2 holds as elements, today's row said in v2's unit
+      const content = keptOf.has(ord) ? (rowOf(ord, row, src)?.content ?? null) : outOfDoor(row[1], source)
       if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
@@ -827,7 +819,7 @@ export function gateL1Pair(
       if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
       if (!(row[2] === 'whole' || row[2] === 'partial')) continue
       // (today's row names today's pieces: of a figure text whose runs L1's holds as groups, its one text; of a unit whose
-      // addresses v2 holds as elements, said in v2's unit; with the sentences today laid, where the unit is lit by sentence)
+      // kept runs v2 holds as elements, said in v2's unit; with the sentences today laid, where the unit is lit by sentence)
       const r = rowOf(ord, row, src)
       if (r) byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), ...r })
     }
