@@ -28,7 +28,7 @@ import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
 import { inkLines, type TextItem } from '../emit/display.ts'
-import { adapt, rectOf, sharedPaper } from './adapt.ts'
+import { adapt, rectOf, rowLinesOf, sharedPaper } from './adapt.ts'
 import { cropInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
@@ -281,6 +281,8 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
   const paper = paperOf(part.paper.faces.fonts, rules.target, rules.cjkFaces as never)
   // (the free paper two members share on one baseline, each its half: two authors side by side; a cell widens by its own side)
   const shared = sharedPaper(part.flows, page)
+  // (the lines of TeX's several members share whole, set centred or flush right: each laid as one run, lay/flow.ts)
+  const rowLines = rowLinesOf(part.flows)
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
   // §19.14, today's ownNames)
@@ -459,6 +461,7 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
         own: true,
       },
       ...(shared.has(m.ord) ? { shared: shared.get(m.ord)! } : {}),
+      ...(rowLines.has(m.ord) ? { line: rowLines.get(m.ord)! } : {}),
     })
     if ('stop' in got) {
       state.set(m.ord, 'kind')

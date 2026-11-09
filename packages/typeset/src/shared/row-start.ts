@@ -34,6 +34,37 @@ export type RowStart = {
   onLeadOf: { start: number; startY: number | undefined } | null
 }
 
+/**
+ * A line of TeX's several members of a flow share whole (each its one line, joined on it: Placed.join, nothing kept between),
+ * which TeX set centred or flush right (Placed.align, as its members' own marks state it: a member made on A, an ink unit,
+ * states no alignment of TeX's, nor one read off the page): its members in order, its alignment, its extent as TeX set it
+ * (its first glyph's start, the leader's label's where it stands on the line, to its last glyph's end), and the room a
+ * member's line may take beside it (Room.side, its column, as U.decor's widen reads it): the run's left is its first member's,
+ * its right its last one's
+ */
+export type RowLine = {
+  ords: readonly number[]
+  align: 'c' | 'r'
+  x0: number
+  x1: number
+  left: number
+  right: number
+}
+
+/** the room a line's run is laid in: centred, as far to either side of the line's middle as its room allows on both (U.decor's
+ *  widen of a centred line), never narrower than TeX's line; flush right, from its room's left to the line's end */
+export function lineRoom(line: Pick<RowLine, 'align' | 'x0' | 'x1'>, left: number, right: number): [number, number] {
+  if (line.align === 'r') return [Math.min(left, line.x0), line.x1]
+  const mid = (line.x0 + line.x1) / 2,
+    half = Math.max((line.x1 - line.x0) / 2, Math.min(right - mid, mid - left))
+  return [mid - half, mid + half]
+}
+
+/** how far a line's run laid over [lo, hi] (its first member's start to its last one's end) moves to stand as TeX set the
+ *  line: centred on the line's middle, or ending at its end */
+export const lineShift = (line: Pick<RowLine, 'align' | 'x0' | 'x1'>, lo: number, hi: number): number =>
+  line.align === 'r' ? line.x1 - hi : (line.x0 + line.x1) / 2 - (lo + hi) / 2
+
 /** S.rowStart: sets the first block's start, startY, onLead and flowX where the unit is laid from the row (RUN:2152) */
 export function rowStart(i: RowStartInput): RowStart {
   const row = i.row,

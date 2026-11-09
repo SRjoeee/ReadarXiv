@@ -660,12 +660,15 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:1623-1628 ownLabelOnRow (its fact: Placed.join, the label)',
     ],
     how: 'ported',
+    ruling:
+      "2026-11-09 a translated author line reflows as one line, set with the alignment TeX gave it (the coordinator's, on the owner's 2604.14228v3)",
     reads: [],
     file: 'shared/row-start.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a line of TeX's that several members share whole and TeX set centred or flush right (RowLine: their own marks' alignment, a member made on A taking the line's) is laid as one run, its members run on and the run placed as TeX placed the line (lay/flow.ts layLine), where today's left a centred member where TeX set it (RUN:2152 `!b.centred`) and each translation, shorter, left a hole before the next: 2610.21106v1 p1's amsart \"A AND B\", 36.11 pt where TeX set 3.32",
       replay:
-        "every F1 slot of the corpus (ledgers/*.ledger.json.gz): keptBetween, a page fact, taken from the slot's verdict where it decides",
+        "every F1 slot of the corpus (ledgers/*.ledger.json.gz): keptBetween, a page fact, taken from the slot's verdict where it decides; the lines it lays as one run, synthetic (tests/unit/entry.test.ts) and the 23 such lines of the 88 papers' parts (lanes/author-line)",
       cases: 1349,
     },
   },
