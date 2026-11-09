@@ -473,7 +473,9 @@ export function readMember(i: ReadInput): ReadOut {
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
   const read = (m.read ?? []).includes('breaks')
-  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read }, pieces, cls2), {
+  // (a frame's pitch TeX's \baselineskip where the part states it, Placed.lead: no 'lead' read)
+  const pitch = (m.read ?? []).includes('lead') ? null : m.lead
+  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read, pitch }, pieces, cls2), {
     pieces,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),

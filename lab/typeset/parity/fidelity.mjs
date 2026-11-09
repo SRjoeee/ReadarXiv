@@ -519,7 +519,9 @@ export function measureFidelity(c) {
 
   // ---------------- lead: a text set tighter than the original's leading while its block has room (the maintainer's 2010.11929
   // p5, 1810.04805 p8): its pitch over its size against the original's, where its last line stands a pitch or more over the
-  // original's last
+  // original's last. The original's leading is TeX's \baselineskip where the part states it (`pitch`), else the median of its
+  // lines' gaps on A, which a gap TeX's \lineskip rule opened under a tall line passes for one (2610.40645v1 p10 t66: 13.54 and
+  // 15.70 apart, its \baselineskip 13.55)
   const pitchOf = (ls) => {
     const ys = ls.map((l) => l.y).sort((a, b) => b - a)
     const size = ls.map((l) => l.size).sort((a, b) => a - b)[ls.length >> 1] || 10
@@ -539,8 +541,9 @@ export function measureFidelity(c) {
       if (!o || o.lines.length < 2 || /figure/.test(o.kind ?? '') || o.kind === 'cell') continue
       const fl = flat(ls)
       const d = pitchOf(fl),
-        a = pitchOf(o.lines)
-      if (!d || !a) continue
+        read = pitchOf(o.lines)
+      if (!d || !read) continue
+      const a = o.pitch ? { pitch: o.pitch, size: read.size } : read
       const room = Math.min(...fl.map((l) => l.y)) - Math.min(...o.lines.map((l) => l.y)) >= a.pitch - 0.5
       const t = room ? Math.max(0, 1 - d.pitch / d.size / (a.pitch / a.size)) : 0
       tight[side].set(key, t)

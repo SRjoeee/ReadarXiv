@@ -379,6 +379,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   /** the instrument's units, then those made on A */
   const units: InstrumentUnit[] = [...ins.units]
   const members: Member[] = []
+  // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
+  const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -1080,16 +1082,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           ],
         ]
     }
-    // the lead: the pitch of its lines, where it has two on one page; else its size's
+    // the lead: TeX's \baselineskip where its paragraph states it (LINES_TEX's AXT-LINES, as the paragraph ends: the one TeX
+    // appended its lines at), the pitch TeX set its lines at, which TeX's \lineskip rule only widens, under a line too tall for
+    // it, never narrows; else (read) the pitch of its lines, where it has two on one page, else its size's, today's rule. A gap
+    // the \lineskip rule opened is no pitch of the paragraph: read as one (2602.23285v2 p4 t29, gaps 10.96 and 12.24, read
+    // 12.24), a translation that set the tall line elsewhere had that gap added to the push its own tall line took. A
+    // paragraph whose lines stand nearer than the \baselineskip stated was not set at it (a negative skip after a forced
+    // break, a part of it set before a display under another): read
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
       if (cut[q]!.page === cut[q - 1]!.page) {
         const d = cut[q - 1]!.base - cut[q]!.base
         if (d > 0 && d < 3 * size) pitches.push(r2(d))
       }
-    if (mem.lines.length) mem.read.push('style', 'lead')
+    const skip = mem.unit >= 0 && mem.name === undefined ? texSkip.get(mem.unit) : undefined
+    const stated = skip !== undefined && skip > 0 && pitches.every((d) => d >= skip - ON_BASE)
+    if (mem.lines.length) mem.read.push(...(stated ? ['style'] : ['style', 'lead']))
     pitches.sort((x, y) => x - y)
-    mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
+    // (a stated pitch to a thousandth: it is laid line after line, and 12 pt, 11.9552 PDF units, written 11.96 drifts 0.005 a line)
+    mem.lead = stated
+      ? Math.round(skip * 1000) / 1000
+      : pitches.length
+        ? (pitches[Math.floor(pitches.length / 2)] as number)
+        : r2(1.2 * size)
     // elements: each one's own ink, one box per line of TeX's it stands on (its glyphs and its rules)
     const unitText = unit ? sourceText(unit.content) : ''
     // (the line of the unit's own each of its glyphs was cut into, its KEPT lines aside: the line TeX set it on)
@@ -1913,6 +1928,8 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
+const ON_BASE = 0.05
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
  *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a

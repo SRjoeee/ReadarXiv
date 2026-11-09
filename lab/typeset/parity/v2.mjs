@@ -95,6 +95,9 @@ for (const pair of pairs) {
           align: m.align,
           style: m.style,
           lines: m.lines,
+          // (TeX's \baselineskip where the part states it, Placed.lead with no 'lead' read: the original's leading, which the lead
+          // measure reads)
+          ...(!(m.read ?? []).includes('lead') ? { pitch: m.lead } : {}),
           ...(m.label ? { label: m.label } : {}),
           // (TeX's room under each run of its lines and its paragraph separation, where the part states them: the block measure's)
           ...(m.room?.runs || m.room?.sep !== undefined

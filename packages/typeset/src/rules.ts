@@ -218,10 +218,14 @@ const SPECS: readonly RuleSpec[] = [
       'break-room.mjs pitchOf, roomOf, naturalOf',
     ],
     how: 'ported',
-    reads: ['k.SHORT 0.5 em (a guard: TeX states the line a break ends, A.El.ends)'],
+    reads: [
+      'k.SHORT 0.5 em (a guard: TeX states the line a break ends, A.El.ends)',
+      "Placed.lead (TeX's \\baselineskip, where the part states it)",
+    ],
     file: 'unit/breaks.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a forced break's frame pitch (its next line's, the grid's `joinAt`) is TeX's \\baselineskip where the part states it (Placed.lead with no 'lead' read), not the median of the frame's other gaps, which a gap TeX's \\lineskip rule opened under a tall line passes for one; the engine reads the break's room (El.ends) against the same pitch. A part that states none reads as today",
       replay: 'samples/U.breaks.json.gz (+ every sampled reading) and lanes/L3/replay/U.breaks.json.gz',
       cases: 101,
     },
@@ -240,9 +244,18 @@ const SPECS: readonly RuleSpec[] = [
     ],
     how: 'ported',
     ruling: "2026-10-29 the even grid (lane B's B1)",
-    reads: ["lineskip (TeX's log)", 'k.STEP_EM 2, k.MEASURE_TOL 0.5 (guards: TeX states the measure, Line m0..m1)'],
+    reads: [
+      "lineskip (TeX's log)",
+      "Placed.lead (TeX's \\baselineskip, where the part states it)",
+      'k.STEP_EM 2, k.MEASURE_TOL 0.5 (guards: TeX states the measure, Line m0..m1)',
+    ],
     file: 'unit/blocks.ts',
-    state: { is: 'ported', replay: 'samples/U.blocks.json.gz', cases: 36 },
+    state: {
+      is: 'changed',
+      why: "a block's pitch is TeX's \\baselineskip where the part states it (Placed.lead with no 'lead' read: LINES_TEX's AXT-LINES as its paragraph ends), every block's of the unit, a single line's too, where none of its gaps is under it; today's read the upper median of its gaps, which a gap TeX's \\lineskip rule opened under a tall line passes for one (2602.23285v2-ja p4 t29: gaps 10.96 and 12.24, read 12.24): the even grid kept that gap where the translation set the tall line elsewhere, the push of its own tall line was added to it, and the paragraph's last line fell past TeX's text block bottom and it shrank. A part that states none reads as today: the replay's samples are unchanged",
+      replay: 'samples/U.blocks.json.gz',
+      cases: 36,
+    },
   },
   {
     id: 'U.decor',

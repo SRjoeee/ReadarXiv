@@ -14,7 +14,11 @@
 // - `centred`: TeX's alignment of the unit ← Placed.align; `pageViews`: each page's box, read only where `centred` is not
 //   told (a unit no file holds), which the part never leaves untold: void then
 // - `lineskip`: TeX's \lineskip and \lineskiplimit ← Part.paper.lineskip
+// - `pitch`: TeX's \baselineskip, the pitch it set the unit's lines at ← Placed.lead where the part states it (no 'lead' read)
 import { median, type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
+
+/** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, as the slots' feet read it */
+const ON_BASE = 0.05
 
 /** a line as the unit's reading knows it (tex.mjs:506 texParts' lineInfo) */
 export type LineInfo = {
@@ -40,6 +44,8 @@ export type BlocksInput = {
   joinAt?: ReadonlyMap<string, number> | null
   centred?: boolean | undefined
   paraAt?: ReadonlySet<string> | null
+  /** TeX's \baselineskip for the unit's lines (Placed.lead where the part states it): every block's pitch, null where unstated */
+  pitch?: number | null
 }
 
 /** a block of a unit's lines (layer2.d.mts Block2): its lines, bounds, pitch, measures, the original's baselines `B` and
@@ -271,9 +277,16 @@ export function blocks(i: BlocksInput): Block[] {
       .slice(1)
       .map((y, k) => g[k]! - y)
       .filter((v) => v > 0)
+    // (its pitch: TeX's \baselineskip where the part states it, the pitch TeX set the paragraph's lines at, which its \lineskip
+    // rule only widens under a line too tall for it; else, as today, read off its gaps, their upper median, the mean where they
+    // agree to a fiftieth. A gap the \lineskip rule opened is no pitch: read as one (2602.23285v2 p4 t29, its gaps 10.96 and
+    // 12.24 read 12.24), the grid kept that gap where the translation set the tall line elsewhere and a push of its own was
+    // added to it, the paragraph's last line past TeX's text block bottom. A block whose lines stand nearer than the pitch
+    // stated was set at another: read)
     let pitch0: number | null = d.length ? median(d) : null
     if (d.length > 1 && raw.rects.every((r) => info(r)?.file) && d.every((v) => Math.abs(v - pitch0!) <= 0.02))
       pitch0 = d.reduce((a, v) => a + v, 0) / d.length
+    if (i.pitch && i.pitch > 0 && d.every((v) => v >= i.pitch! - ON_BASE)) pitch0 = i.pitch
     let E: number[] | undefined
     if (lineskip && pitch0 !== null) {
       const p0 = pitch0

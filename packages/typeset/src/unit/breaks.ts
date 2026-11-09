@@ -412,6 +412,8 @@ export type StatedFacts = {
   els: ReadonlyMap<string, El>
   spans: ReadonlyMap<string, SpanAt>
   read?: boolean
+  /** TeX's \baselineskip for the unit's lines (Placed.lead where the part states it): a frame's pitch */
+  pitch?: number | null
 }
 
 /**
@@ -508,7 +510,9 @@ export function statedBreaks(
     })
   if (!misread)
     for (const { members, line: j, room: stated } of taken) {
-      const pitch = frameOf[j] === frameOf[j + 1] ? pitchOf(gaps.get(frameOf[j]!) ?? []) : null
+      // (the frame's pitch: TeX's \baselineskip where the part states it, else its other gaps' median, which a gap TeX's
+      // \lineskip rule opened under a tall line passes for one)
+      const pitch = frameOf[j] === frameOf[j + 1] ? f.pitch || pitchOf(gaps.get(frameOf[j]!) ?? []) : null
       const room = pitch === null ? null : stated
       for (const i of members) out.set(i, { next: j + 1, room, pitch })
     }

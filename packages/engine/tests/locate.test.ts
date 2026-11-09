@@ -1172,6 +1172,41 @@ describe('locate: the room under a unit', () => {
     // (one run, its last line 116 pt over the next paragraph's baseline, 176 over TeX's bottom)
     expect(para.room.runs).toEqual([[2, 116, 176]])
   })
+  it('states TeX’s \\baselineskip as its lead where its paragraph states one, never a gap TeX’s \\lineskip rule opened', () => {
+    // (2602.23285v2 p4 t29: a paragraph's third line set 14 pt under its second for a tall formula on it, TeX's \lineskip rule,
+    // its \baselineskip 12 pt; the median of its gaps, 12 and 14, read 14 as its pitch, and a translation that set the formula
+    // on its second line was pushed by it again. A paragraph whose lines stand nearer than the \baselineskip stated was not set
+    // at it (TeX sets no two lines of a paragraph nearer): its pitch read off its lines, as today, and told read)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'tall one', y: 700 },
+          { text: 'tall two', y: 688 },
+          { text: 'tall three', y: 674 },
+          { text: 'near one', y: 600 },
+          { text: 'near two', y: 588 },
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'tall one tall two tall three'), unitOf('para', 'near one near two')]
+    const ins = instrumentOf(B, units, [[0, 0, 0, 1, 1]])
+    const stated: Instrument = {
+      ...ins,
+      tex: {
+        skips: [
+          { unit: 0, baselineskip: 11.9552, parskip: 0 },
+          { unit: 1, baselineskip: 14, parskip: 0 },
+        ],
+      },
+    }
+    // (to a thousandth: a pitch is laid line after line, and 12 pt, 11.9552 PDF units, written 11.96 drifts 0.005 a line)
+    const [tall, near] = locate(stated, B, align(B, B)).members
+    expect([tall!.lead, tall!.read?.includes('lead')]).toEqual([11.955, false])
+    expect([near!.lead, near!.read?.includes('lead')]).toEqual([12, true])
+    // (no statement, no compile of them: its lines' pitch, read)
+    const plain = locate(ins, B, align(B, B)).members[0]!
+    expect([plain.lead, plain.read?.includes('lead')]).toEqual([14, true])
+  })
   it("ties at one size the units of one TeX paragraph a float cut in two, on the row they share (the checkpoint's free-9)", () => {
     // (2608.16117v1 p19: "… 8(d))." and "The increasing-" on one line, a figure set after it, "decreasing trend …" below: one
     // paragraph of TeX's the front end cut at the figure into two units, each fitted alone, the one at its size, the other shrunk;
