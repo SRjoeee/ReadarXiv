@@ -1011,6 +1011,34 @@ describe('locate: the room under a unit', () => {
     // borrowed lines run into a display)
     expect(L.members[0]!.room.below).toBe(5)
   })
+  it('reads the room under a unit to the first ink there, a glyph PDF.js reads as a blank among it', () => {
+    // (a math extension piece no unit owns under a paragraph: CMEX10's bar extension, code 12, read U+000C, the top of a \Big|
+    // under it. The room under the paragraph stopped at the next ink whose Unicode is no blank, past the bar's top)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'para one', y: 700 },
+          { text: 'para two', y: 688 },
+          { text: '\f', x: 100, y: 660 },
+          { text: 'other unit', y: 640 },
+        ],
+      },
+    ])
+    Object.assign(B.pages[0]!.glyphs[16]!, {
+      code: 12,
+      font: 'ABCDEF+CMEX10',
+      base: 'CMEX10',
+      x1: 103.32,
+      top: 660.21,
+      bottom: 653.81,
+      ix0: 101.44,
+      ix1: 101.87,
+    })
+    const units = [unitOf('para', 'para one para two'), unitOf('para', 'other unit')]
+    const L = locate(instrumentOf(B, units, [[0, 0, -1, 1]]), B, align(B, B))
+    // (from its last line's bottom, 686, to the bar's top)
+    expect(L.members[0]!.room.below).toBe(25.79)
+  })
   it("reads no ink nothing of which is shown beside a unit or under it (the checkpoint's measure-9: a figure's clipped title)", () => {
     // (1706.03762v7 p13: "Attention Visualizations", and on its baseline's band to its right a figure's "Layer5", clipped out of
     // its form, nothing of it shown: Room.side stopped at it, the heading could not widen, and its translation was set at 70 %)
@@ -1484,6 +1512,32 @@ describe('review of #605', () => {
     const p = L.members[0]!
     expect(p.room.stays).toEqual([[1, 300, 688, 307, 695]])
     expect(p.room.side).toEqual([72, 312])
+  })
+  it('states a glyph PDF.js reads as a blank among the ink that stays beside a paragraph’s line (Room.stays)', () => {
+    // (a math extension piece no unit owns after a paragraph's last words on its row: CMEX10's bar extension, code 12, read
+    // U+000C, its origin on the row's band. Read by its Unicode it was no ink, and a translation's line laid there ran over it)
+    const L40 = 'x'.repeat(40)
+    const B = docOf([
+      {
+        lines: [
+          { text: L40, x: 72, y: 700 },
+          { text: 'yyyy', x: 72, y: 688 },
+          { text: '\f', x: 300, y: 690 },
+        ],
+      },
+    ])
+    Object.assign(B.pages[0]!.glyphs[44]!, {
+      code: 12,
+      font: 'ABCDEF+CMEX10',
+      base: 'CMEX10',
+      x1: 303.32,
+      top: 690.21,
+      bottom: 683.81,
+      ix0: 301.44,
+      ix1: 301.87,
+    })
+    const L = locate(instrumentOf(B, [unitOf('para', `${L40} yyyy`)], [[0, 0, -1]]), B, align(B, B))
+    expect(L.members[0]!.room.stays).toEqual([[1, 300, 683.81, 303.32, 690.21]])
   })
   it('states each cell’s grid place and its own text in the part, what a table’s groups are decided by (S.table.groups)', () => {
     // (1706.03762v7 p9's Table 3: today's groups follow TeX's tabular, the header, each column, a \multicolumn row of its own,
@@ -2020,6 +2074,98 @@ describe('an element’s ink is what TeX set for it', () => {
       [[[0, E, 1]]],
     )
     expect(elementOf(locate(ins, B, align(B, B))).ink).toEqual([[1, 88.5, 694.6, 101.5, 708.9, 700]])
+  })
+
+  it('states an element’s box over every glyph TeX set for it, one PDF.js reads as a blank: a big delimiter', () => {
+    // (2610.30034v1 p4 t60's `\mathbb{E}\big\{ J(f(x,u,w)) \big\}`: CMEX10's "}" of \big is its code 9, which PDF.js reads as
+    // U+0009, its origin at its top. TeX's points give it the element (its group erased it), and the box, made of the element's
+    // glyphs whose Unicode is no blank, stopped 4.37 pt short of its ink: the brace was erased and no crop drew it again. Its
+    // Unicode says nothing of its ink)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'so ', x: 72, y: 700 },
+          { text: 'E{J}\t', x: 90, y: 700 },
+          { text: ' and', x: 126, y: 700 },
+        ],
+      },
+    ])
+    Object.assign(B.pages[0]!.glyphs[7]!, {
+      code: 9,
+      font: 'ABCDEF+CMEX10',
+      base: 'CMEX10',
+      y: 708.5,
+      top: 708.9,
+      bottom: 696.95,
+      ix0: 115.12,
+      ix1: 118.67,
+    })
+    const content = [text('so '), el('1', '$\\mathbb{E}\\big\\{J\\big\\}$'), text(' and')]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'other' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L).ink).toEqual([[1, 90, 696.95, 120, 708.9, 700]])
+    // (and the unit's line holds it, its ink the line's)
+    expect(L.members.find((x) => x.unit === 0)!.lines.map((l) => [l[2], l[3], l[4], l[5], l[6]])).toEqual([
+      [72, 150, 700, 708.9, 696.95],
+    ])
+  })
+
+  it('states a display’s row over every glyph TeX set in it, one PDF.js reads as a blank (its rows the ink that stays)', () => {
+    // (2610.30034v1 p10 ord 213: a display's closing \big\} 5.81 pt past its row's box; the display stays the original's, and its
+    // rows are the ink a translation keeps off)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'we have', x: 72, y: 700 },
+          { text: 'x=a\t', x: 200, y: 680 },
+          { text: 'so on', x: 72, y: 660 },
+        ],
+      },
+    ])
+    Object.assign(B.pages[0]!.glyphs[10]!, {
+      code: 9,
+      font: 'ABCDEF+CMEX10',
+      base: 'CMEX10',
+      y: 688.5,
+      top: 688.9,
+      bottom: 676.95,
+      ix0: 219.12,
+      ix1: 222.67,
+    })
+    const content = [
+      text('we have '),
+      { t: 'el' as const, id: '1', kind: 'display', src: '\\[x=a\\big\\}\\]' },
+      text(' so on'),
+    ]
+    const ins = ownedBy(
+      B,
+      [paraOf(content, [['1', { cls: 'display' }]])],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L)).toMatchObject({ keep: 1, ink: [[1, 200, 676.95, 224, 688.9, 680]] })
+    expect(
+      L.members
+        .find((x) => x.unit === 0)!
+        .lines.filter((l) => l[9] & 1)
+        .map((l) => l.slice(2, 7)),
+    ).toEqual([[200, 224, 680, 688.9, 676.95]])
   })
 
   it('states a box a line for a formula TeX broke over two lines, a rule with the glyph TeX shipped it beside (math.md R1)', () => {

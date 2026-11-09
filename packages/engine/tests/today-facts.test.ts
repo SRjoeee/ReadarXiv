@@ -11,6 +11,7 @@ import { cutLines, lineSize } from '../src/locate/lines.ts'
 import { locate } from '../src/locate/locate.ts'
 import { docOf, type PageSpec } from './helpers/doc.ts'
 
+/** a glyph; a space the font's, whose outline is empty: no extent across or up from its origin (ink.mjs's reading) */
 const g = (u: string, x: number, y: number, size = 10, o: Partial<DocGlyph> = {}): DocGlyph => ({
   u,
   code: u.codePointAt(0) ?? 0,
@@ -19,11 +20,11 @@ const g = (u: string, x: number, y: number, size = 10, o: Partial<DocGlyph> = {}
   x0: x,
   x1: x + 0.5 * size,
   y,
-  top: y + 0.7 * size,
-  bottom: y - 0.2 * size,
+  top: u === ' ' ? y : y + 0.7 * size,
+  bottom: u === ' ' ? y : y - 0.2 * size,
   size,
   ix0: x,
-  ix1: x + 0.5 * size,
+  ix1: u === ' ' ? x : x + 0.5 * size,
   n: 0,
   k: 0,
   form: false,
