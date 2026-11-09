@@ -849,7 +849,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   // (a figure's word set in another face inside a line of code: the ink glyphs right before and after it in its page's order
   // stand on its baseline (ON_BASE) in a face of one pitch. 2411.13093v4 p19's code boxes set "attractions" and "coin" in
-  // Georgia inside their Consolas lines: translated alone, a line read `"The number of the 景点 ."`)
+  // Georgia inside their Consolas lines: translated alone, each line read a Chinese word between its kept English ones)
   const nearInk = (a: number, step: 1 | -1): DocGlyph | null => {
     for (let b = a + step; b >= 0 && b < NA && pageA[b] === pageA[a]; b += step) {
       const g = gA(b)

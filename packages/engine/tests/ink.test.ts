@@ -330,7 +330,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
 
   it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line (mono-blocks, Rule 1)', () => {
     // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
-    // `["coin", "table", ...]` but "coin": kept, the line read "The number of the 景点 ." and `["硬币", "table"`. A word whose
+    // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A word whose
     // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
     // code. A word of its own line stays translated)
     const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })

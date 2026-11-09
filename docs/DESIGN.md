@@ -564,7 +564,9 @@ per-call fallback service and its 60 s demotions, of the page's own resend, runs
 inserting sentence markers, is the package's now, per unit: write, store read, requests cut by each translator's limits
 with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
 translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
-fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last.
+fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
+whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
+English between translated stretches (PDF-READER §18.18).
 An element its reader states TeX sets after the unit's text (`el.after`: the PDF's backref list of the pages citing a
 bibliography entry, PDF-READER §19.13) is given to no translator: the chain asks for the unit without it and puts it back
 after the translation, the white space it states before it, on every wire and the runs floor (`chain.ts` `tailOf`).
