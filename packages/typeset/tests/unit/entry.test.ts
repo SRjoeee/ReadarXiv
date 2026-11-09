@@ -769,6 +769,50 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(pitch).toBeGreaterThan(12)
     expect(first[2]! - 592).toBeGreaterThanOrEqual(pitch - 0.05)
   })
+  // (a page of a column: paragraphs `units`, each [ord, kind, first baseline, original lines, characters of translation], 12 apart,
+  // the room under each TeX's (Room.runs: the next ink `below` under its last line, its text block's bottom far; Room.sep 15, a
+  // \parskip of 3)
+  const listPage = (units: [number, string, number, number, number][], next: number) => {
+    const zh = rulesFor('zh')
+    const at = (y: number): Placed['lines'][number] => [1, 0, 72, 300, y, y + 7, y - 2, 72, 300, 0, 10]
+    const ms = units.map(([ord, kind, y0, n], i) => {
+      const below = (units[i + 1]?.[2] ?? next) - (y0 - 12 * (n - 1))
+      return member({
+        ord,
+        kind,
+        text: String(ord).padStart(64, 'e'),
+        lines: Array.from({ length: n }, (_, k) => at(y0 - 12 * k)),
+        room: { below: -below, next: -below, runs: [[n - 1, -below, 300]], sep: 15 },
+      })
+    })
+    const rows = rowsOf(
+      units.map(([ord, , , , chars]) => ({
+        ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]),
+        id: String(ord).padStart(64, 'e'),
+      })),
+      true,
+    )
+    return layPage({ ...part(ms[0]!), flows: [ms] }, rows, zh, metrics()).members
+  }
+  it('lets a paragraph that borrows the room under it fill it at its own leading, its gap measured from the borrow’s limit', () => {
+    // (option (i), shown to the owner before it is adopted: 1810.04805v2's references, an entry that needs all three of its
+    // lines set at the original's pitch among entries spread to 1.38; the room under it TeX's (the next entry 22 under its last
+    // line, its separation 15) was the borrow's, but the gap floor kept the original's whole skip under it at any looser leading)
+    const laid = listPage(
+      [
+        [1, 'para', 700, 4, 80],
+        [2, 'para', 640, 3, 130],
+        [3, 'para', 594, 4, 80],
+      ],
+      540,
+    )
+    const m = laid.find((x) => x.ord === 2)!
+    expect(m.lines.length).toBe(3)
+    const pitch = m.lines[0]![0] - m.lines[1]![0]
+    expect(pitch).toBeGreaterThan(13)
+    // (its last line no nearer the next than its own pitch and the \parskip: the borrow's limit at its leading)
+    expect(m.lines.at(-1)![0] - 594).toBeGreaterThanOrEqual(pitch + 3 - 0.05)
+  })
   it('holds the gap under a paragraph’s one line at the top of the next column to its own leading: the paragraph under it starts lower', () => {
     // (the owner on staging, 2610.20967v1-zh p4: a paragraph spread over the foot of the left column ends in one line at the top
     // of the right, TeX's widow line, its next paragraph a pitch under it, no \parskip. That line cannot rise (the column's first
