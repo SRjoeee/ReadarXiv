@@ -61,7 +61,7 @@
 // direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
-import { BAND_MAX, classifyFont, PICTURE_END, PICTURE_START, regionMask } from './deps.mjs'
+import { BAND_MAX, classifyFont, displayTextMask, PICTURE_END, PICTURE_START, regionMask } from './deps.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -121,9 +121,9 @@ function streamOf(pg, owners) {
   const depthAtPoint = new Int32Array(P.length + 1)
   for (let i = 0, d = 0; i < P.length; i++) { depthAtPoint[i] = d; const nm = P[i].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1); depthAtPoint[i + 1] = d }
   // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below; and (CHANGED) each one
-  // TeX set in a display, the formula's, kept as the paper has it wherever it stands)
-  const code = regionMask(pg.regions, G.length, 'code'), display = regionMask(pg.regions, G.length, 'display')
-  for (let g = 0; g < G.length; g++) if (display[g]) code[g] = 1
+  // TeX set in a display, the formula's, kept as the paper has it wherever it stands, but what it set there in text mode)
+  const code = regionMask(pg.regions, G.length, 'code'), display = regionMask(pg.regions, G.length, 'display'), dtext = displayTextMask(pg.regions, G.length)
+  for (let g = 0; g < G.length; g++) if (display[g] && !dtext[g]) code[g] = 1
   const out = []
   let q = 0, d = 0
   for (let g = 0; g < G.length; g++) {

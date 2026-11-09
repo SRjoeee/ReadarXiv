@@ -30,6 +30,10 @@ export const CAUSE = Object.freeze({
   // (7), (8), set at the page's foot, no source unit's): stated, not accepted)
   kept: "its lines kept whole as the original's",
   another: 'another reading',
+  // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
+  // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
+  // coordinator's ruling of 2026-11-09; 2608.08481v1 t118-t121, (7)'s and (8)'s parts)
+  displayPart: "kept on arXiv's page as part of a display",
 })
 
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
@@ -48,10 +52,11 @@ export const trailsOf = (els) =>
 /**
  * `base` the baseline dump's units, `units` the candidate's own (none stated yet), `trails` the trails the candidate's members
  * carry (rebuild/front-matter's El.trail: its ink's box `page`, `x0`, `x1`, `top`, `bottom`, `baseline` and its characters
- * `text`): each baseline unit the candidate does not make, in the baseline's order, with its stated cause; one it has no
- * statement for (absent from the candidate) is left out
+ * `text`), `displays` the lines on arXiv's page the candidate reads as a display's formula (locate's `displays`: `[page, x0,
+ * bottom, x1, top, baseline]`): each baseline unit the candidate does not make, in the baseline's order, with its stated cause;
+ * one it has no statement for (absent from the candidate) is left out
  */
-export function statedOf(base, units, { trails = [] } = {}) {
+export function statedOf(base, units, { trails = [], displays: shown = [] } = {}) {
   const out = []
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
@@ -141,6 +146,12 @@ export function statedOf(base, units, { trails = [] } = {}) {
             u.lines.every((l) => (n.lines ?? []).some((k) => covers(k, l)) || (n.elements ?? []).some((e) => e.segs.some((k) => covers(k, l)))),
         )
       : undefined
+  // ((f): a line inside the display lines on its page whose box holds its baseline, from the first one's start to the last one's
+  // end — a formula row the ledger cut at its gaps is one row)
+  const inDisplay = (l) => {
+    const on = shown.filter(([p, , bottom, , top]) => p === l.page && Math.min(bottom, top) <= l.baseline && l.baseline <= Math.max(bottom, top))
+    return on.length > 0 && Math.min(...on.map((d) => d[1])) <= l.x0 + ON && Math.max(...on.map((d) => d[3])) >= l.x1 - ON
+  }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
@@ -157,13 +168,17 @@ export function statedOf(base, units, { trails = [] } = {}) {
         : null
     // (none of either: a unit of the author block's now holding its glyphs, whatever today's kind)
     const names = !c && !kept ? heldByBlock(u) : undefined
+    // ((f) none of these: every line of it inside the display lines the candidate reads on its baseline, between their ends)
+    const part = !c && !kept && !names && !!u.lines?.length && u.lines.every((l) => inDisplay(l))
     const why = c
       ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}`
       : kept
         ? "kept on arXiv's page as the original's, no text of it sent"
         : names
           ? `made on arXiv's page as ${names.id.slice(0, 12)}: ${CAUSE.names}`
-          : null
+          : part
+            ? CAUSE.displayPart
+            : null
     if (why !== null) out.push({ u, why })
   }
   return out

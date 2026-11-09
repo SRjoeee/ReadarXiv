@@ -211,7 +211,7 @@ if (located) for (const [o, b] of located.born) {
 if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
   const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
-  for (const { u, why } of statedOf(base, units, { trails })) {
+  for (const { u, why } of statedOf(base, units, { trails, displays: located?.displays ?? [] })) {
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }
@@ -227,7 +227,8 @@ for (let p = 1; p <= N; p++) {
 const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length }
 for (const u of units) { const k = (counts.byKind[u.kind] ??= { drawn: 0, laid: 0, unlaid: 0 }); k[u.state]++ }
 mkdirSync(join(OUT, 'prepare'), { recursive: true })
-writeFileSync(join(OUT, 'prepare', `${id}.prepare.json`), `${JSON.stringify({ format: 'readarxiv-baseline/prepare 1', engine: 'rebuild/prepare (stage 1a)', paper: paperOut, refused: refusal, pages, counts, units })}\n`)
+// (the lines the candidate reads as a display's formula, locate's `displays`, which restate.mjs states a unit by as run.mjs does)
+writeFileSync(join(OUT, 'prepare', `${id}.prepare.json`), `${JSON.stringify({ format: 'readarxiv-baseline/prepare 1', engine: 'rebuild/prepare (stage 1a)', paper: paperOut, refused: refusal, pages, counts, units, ...(located?.displays?.length ? { displays: located.displays.map((d) => d.map(r2)) } : {}) })}\n`)
 // what the gate reads beside the dump
 const placeOf = {}
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) placeOf[allUnits[mem.unit].id] = (placeOf[allUnits[mem.unit].id] ?? []).concat([[mem.ord, mem.located ? mem.place : null, mem.cause ?? null, mem.lines.length]])

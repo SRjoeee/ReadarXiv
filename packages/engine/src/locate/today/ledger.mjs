@@ -22,7 +22,7 @@
 // folio; stage 2 brackets them by points of their own (the note's §7).
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, unitClass } from './content-classes.mjs'
-import { classifyFont, columnsAt, regionMask, regionsOf } from './deps.mjs'
+import { classifyFont, columnsAt, displayTextMask, regionMask, regionsOf } from './deps.mjs'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
 export const LINE_DY = 0.6
@@ -106,7 +106,10 @@ export const RULES = Object.freeze([
   // (CHANGED: a line TeX set in a display, by its points (pageInk's `regions`, marks.mjs POINTS_TEX), wherever it stands — under
   // a footnote rule, in a box, a float, beside a column — and whatever its face: the formula's, kept as the paper has it.
   // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, were the
-  // foot's notes by their place and translated; today's reads them so)
+  // foot's notes by their place and translated; today's reads them so. A glyph TeX set in text mode there (an \hbox in its math,
+  // `dtext`: \text, \mbox, a brace's label) is no formula's: a line mostly such text goes through the rules of place and is read
+  // as text, as today's (the coordinator's ruling of 2026-11-09: 2610.22299v1's display (1), a sentence), a formula line with a
+  // short \text{if} stays the formula's)
   ['math', l => l.display > 0 && l.display >= CODE_SHARE * l.n],
   // (a biblatex entry's line in a column's body, whatever it holds: TeX set it in that entry — its URL alone, its numbers alone)
   ['references', l => l.entry !== null && l.entry !== undefined && !l.outside],
@@ -167,7 +170,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     const lp = listPage(G, O, columnsAt(pg))
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
     classes.push(out)
-    const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P }), code = regionMask(pg.regions, n, 'code'), display = regionMask(pg.regions, n, 'display')
+    const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P }), code = regionMask(pg.regions, n, 'code'), display = regionMask(pg.regions, n, 'display'), dtext = displayTextMask(pg.regions, n)
     // (the page's first and last mark of its own text, the column's mark aside: the head is shipped before the first, the foot
     // after the last)
     let first = n, last = 0
@@ -250,7 +253,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (f === 'math') line.math++
       if (f === 'mono') line.mono++
       if (code[g]) line.code++
-      if (display[g]) line.display++
+      if (display[g] && !dtext[g]) line.display++
       if (x.form) line.form++
       if (RELATION.test(x.u)) line.relation = true
     }

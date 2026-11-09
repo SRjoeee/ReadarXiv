@@ -721,8 +721,8 @@ describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it 
   // translated. TeX enters display math for each, an equation's, an align's, \\[ \\]'s or $$'s alike: the start is set from
   // there, by TeX's own state, never by an environment's name; the end where the source ends the display, $$ aside)
   it('opens each display with a point at its math list’s start and closes it inside its formula, at its environment’s end or \\]', () => {
-    expect(POINTS_TEX).toContain('\\def\\axt@dpopen{\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}')
-    expect(POINTS_TEX).toContain('\\axt@point{dps\\axt@dpn}\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend')
+    expect(POINTS_TEX).toContain('\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}')
+    expect(POINTS_TEX).toContain('\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend')
     // (no node after its box: whatever TeX sets there is in the page's list, where a column's \lastbox reads it. REVTeX's
     // balance takes each column's last box to leave its depth out, revtex4.cls's \setbox\z@\lastbox: a point after a display
     // at a column's foot moved the columns above 2608.08481v1 p7's widetext by up to 2.55 pt. Its end is set in the formula's
@@ -742,7 +742,7 @@ describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it 
   it('sets no node in a display TeX sets as an alignment, which must open with its \\halign: points between its rows instead', () => {
     // (TeX refuses an \\halign in a display whose list holds anything, "Improper \\halign inside $$'s": a display's kind is known
     // from the pass before, by its number, its environment and its line (the aux), and none is set where it is not known)
-    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\axt@@halign}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi')
     expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}')
     expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}')
     expect(POINTS_TEX).toContain('\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname')
@@ -758,6 +758,36 @@ describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it 
     // anything else (a whatsit, a mark), the point alone)
     expect(POINTS_TEX).toContain('\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}')
     expect(POINTS_TEX).toContain('\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}')
+  })
+  it('states the text a display sets in text mode, each \\hbox it opens in math, and the math that text opens again', () => {
+    // (the coordinator's ruling of 2026-11-09: words TeX sets in text mode inside a display are text, translated as before;
+    // 2610.22299v1's display (1), a sentence in \text, and 2608.25210v2 p10's labels under a brace. TeX's text mode inside math
+    // is an \hbox, whatever made it (\text's \textdef@, \mbox, \textrm's \nfss@text, \fbox): \everyhbox is the one place each
+    // passes. A box opened where the list is a display's math gets `dts<n>` first in it and `dte<n>` after it in the math list
+    // (\aftergroup); none where a script, a prime or \limits comes next, which would then take the point for its nucleus. Math
+    // opened again in a restricted list of a display's (a text box, an alignment's cell, a box in a \vcenter: \everymath) gets
+    // `dms<n>` first in it and `dme<n>` after it in that list, so that rows a box takes again (amsmath's split, \rendsplit@'s
+    // \unhcopy) keep their math's points: a glyph's mode is its innermost point's. Math in a \vbox's paragraph gets none (a
+    // point after it would be a paragraph's). A display not known from the pass before as no alignment states no text in its
+    // own list: a point before an \halign would be "Improper \halign inside $$'s". Every point in a math list or a restricted
+    // list: no node in a page's list, none in a paragraph's)
+    expect(POINTS_TEX).toContain('\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxhb{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\xdef\\axt@dxst{dte\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxte\\axt@dxmfalse\\axt@dxrtrue\\else\\ifaxt@dxw\\axt@dxrtrue\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}')
+    // (the end of a text box: the next token past spaces read first, LaTeX's \@ifnextchar; a script's, a prime's or a limits'
+    // drops the point)
+    expect(POINTS_TEX).toContain('\\def\\axt@dxte{\\@ifnextchar^\\axt@dxdrop\\axt@dxte@}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxte@{\\let\\axt@dxq\\axt@dxpop\\ifcat\\noexpand\\@let@token_\\let\\axt@dxq\\axt@dxdrop\\fi\\ifcat\\noexpand\\@let@token^\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\'\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\\sp\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\\sb\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\\limits\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\\nolimits\\let\\axt@dxq\\axt@dxdrop\\fi\\ifx\\@let@token\\displaylimits\\let\\axt@dxq\\axt@dxdrop\\fi\\axt@dxq}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxdrop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxdrop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxdrop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}}')
+    // (a display's own math only where its start is set, a display alignment's cells, an alignment's in a \vbox; never under
+    // the gate; the three hooks appended once the document began)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}')
+    expect(POINTS_TEX).toContain('\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}')
+    expect(POINTS_TEX).toContain('\\everyhbox\\expandafter{\\the\\everyhbox\\axt@dxhb}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}')
   })
 })
 

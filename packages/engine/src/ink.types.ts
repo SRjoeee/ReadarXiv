@@ -78,6 +78,10 @@ export const regionsOfPoints = ink.regionsOfPoints as (
   points: readonly { name: string; glyph: number }[],
   glyphCount: number,
 ) => InkRegion[]
+export const displayTextMask = ink.displayTextMask as (
+  regions: readonly InkRegion[] | null | undefined,
+  n: number,
+) => Uint8Array
 export const regionMask = ink.regionMask as (
   regions: readonly InkRegion[] | null | undefined,
   n: number,

@@ -29,7 +29,7 @@ for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.pre
           .flatMap((p) => JSON.parse(readFileSync(join(dir, p), 'utf8')).flows.flat().flatMap((m) => m.els ?? []))
       : []
     let ord = units.reduce((m, u) => Math.max(m, u.ord + 1), 0)
-    for (const { u, why } of statedOf(base, units, { trails: trailsOf(els) })) {
+    for (const { u, why } of statedOf(base, units, { trails: trailsOf(els), displays: dump.displays ?? [] })) {
       units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
       stated++
     }

@@ -85,12 +85,17 @@ export const PICTURE_START = 'zs', PICTURE_END = 'ze'
  *  display's: each display TeX sets, its start before its formula's first ink and its end the last thing in its formula,
  *  before its number, or after each of its rows where TeX set it as an alignment; a display the source ends with $$ has no
  *  end, and its start alone states no region */
-export const REGION_POINT = /^(cd|dp)([se])(\d+)$/
-/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs, holds 'code'; 'display' is read
- *  by the engine's ledger and figures alone, the file's maker passing it by) */
-export const REGION_POINT_KINDS = Object.freeze({ cd: 'code', dp: 'display' })
+export const REGION_POINT = /^(cd|dp|dt|dm)([se])(\d+)$/
+/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs, holds 'code'; 'display' and a
+ *  display's text are read by the engine's ledger and figures alone, the file's maker passing them by): a display's text,
+ *  `dtext`, what an \\hbox opened in its math set in text mode (`dts<n>` first in the box, `dte<n>` after it); `dmath`, the math
+ *  opened again in such a text (`dms<n>`, `dme<n>`) */
+export const REGION_POINT_KINDS = Object.freeze({ cd: 'code', dp: 'display', dt: 'dtext', dm: 'dmath' })
 /** the kinds whose region runs to its last end: an alignment's rows each end with one (marks.mjs POINTS_TEX \\axt@dpcr) */
 const TO_LAST_END = new Set(['display'])
+/** the kinds whose start and end are paired alone, never from or to a column body's bracket: a box TeX set once and placed
+ *  elsewhere (\\setbox), or set again (\\copy, \\unhcopy), states nothing */
+const PAIRED = new Set(['dtext', 'dmath'])
 /** a column body's bracket (marks.mjs POINTS_TEX: `bs<n>` before it, `be<n>` after it) */
 const BODY_BRACKET = /^b[se]\d+$/
 /** a figure's curve as this many chords (`turned`'s shapes), and the numbers a page's shapes hold at most */
@@ -1005,7 +1010,7 @@ export function regionsOfPoints(points, glyphCount) {
       if (p.name[1] === 's') bodyStart = p.glyph
       // (a start of a kind that runs to its last end has no end TeX broke off: a display with none is one the source ended
       // with $$, never the rest of the column)
-      else { for (const [key, from] of open) { const kind = REGION_POINT_KINDS[key.replace(/\d+$/, '')]; if (!TO_LAST_END.has(kind)) push(kind, from, Math.min(p.glyph, glyphCount)) } open.clear(); bodyStart = null }
+      else { for (const [key, from] of open) { const kind = REGION_POINT_KINDS[key.replace(/\d+$/, '')]; if (!TO_LAST_END.has(kind) && !PAIRED.has(kind)) push(kind, from, Math.min(p.glyph, glyphCount)) } open.clear(); bodyStart = null }
       continue
     }
     const m = REGION_POINT.exec(p.name)
@@ -1019,12 +1024,22 @@ export function regionsOfPoints(points, glyphCount) {
       if (r && TO_LAST_END.has(kind)) r.to = Math.max(r.to, Math.min(p.glyph, glyphCount))
       continue
     }
-    const from = open.get(key) ?? bodyStart
+    const from = open.get(key) ?? (PAIRED.has(kind) ? null : bodyStart)
     if (from === null || from === undefined) continue
     open.delete(key)
     closed.set(key, push(kind, from, Math.min(p.glyph, glyphCount)))
   }
   return out.sort((a, b) => a.from - b.from)
+}
+/** a page's glyphs (`n` of them) each 1 where TeX set it in text mode inside a display (its innermost region of `dtext` and
+ *  `dmath` a `dtext`: the text an \\hbox set in a display's math, not the math opened again in it, the text in that again), else 0 */
+export function displayTextMask(regions, n) {
+  const out = new Uint8Array(n)
+  // (nested regions start later than those holding them: in the order they start, each one's mode over its glyphs is the
+  // innermost's)
+  const rs = (regions ?? []).filter(r => r.kind === 'dtext' || r.kind === 'dmath').sort((a, b) => a.from - b.from || b.to - a.to)
+  for (const r of rs) out.fill(r.kind === 'dtext' ? 1 : 0, Math.max(0, r.from), Math.min(n, r.to))
+  return out
 }
 /** a page's glyphs (`n` of them) each 1 where it stands in a region of `kind` (pageInk's `regions`), else 0 */
 export function regionMask(regions, n, kind) {

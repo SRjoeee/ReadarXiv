@@ -224,6 +224,25 @@ describe('today’s ink makers in the engine package', () => {
     expect(cls(TODAY)).toEqual({ lines: ['notes', 'notes', 'symbols'], ink: 2 })
     expect(cls(T as unknown as Impl)).toEqual({ lines: ['math', 'math', 'math'], ink: 0 })
   })
+  it('read a display’s line TeX set in text mode as text, through the rules of place, and a formula’s short text as the formula’s', () => {
+    // (the coordinator's ruling of 2026-11-09: words TeX sets in text mode inside a display are text, translated as before —
+    // 2610.22299v1's display (1), a sentence in \\text; 2608.25210v2 p10's labels under a brace — while a formula line that holds
+    // a short \\text{if} stays the formula's. The marked compile states the text each \\hbox sets in a display's math (`dtext`)
+    // and the math opened again in it (`dmath`), a glyph's mode its innermost region's)
+    const pg = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'any two adjacent vertices have exactly x common neighbors', x: 90, y: 600 },
+      { s: 'f(x) = 1 if x > 0', x: 90, y: 560 },
+    ], { points: [['bs1', 0], ['be1', 89]], regions: [
+      { kind: 'display', from: 15, to: 15 + 57 },
+      { kind: 'dtext', from: 15, to: 15 + 57 },
+      { kind: 'display', from: 72, to: 72 + 17 },
+      { kind: 'dtext', from: 72 + 9, to: 72 + 12 },
+    ] })
+    const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
+    const ledger = (T as unknown as Impl).ledgerOf([pg], own, { units: units.slice(0, 1) }) as { lines: { cls: string; gs: number[] }[] }
+    expect(ledger.lines.map((l) => [l.cls, l.gs.length])).toEqual([['orphan', 57], ['math', 17]])
+  })
   it('state the glyphs of the label they read out of a unit’s text, those glyphs its text’s still as today’s (the one addition)', () => {
     // (2610.22065v1 p1: an affiliation the class prints from its own lists, its raised "2" no text of the unit's (labelLength);
     // today's left its glyph among the unit's text glyphs alone, so locate, which states a label from the glyphs it is told,

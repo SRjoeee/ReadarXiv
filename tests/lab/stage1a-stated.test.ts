@@ -202,6 +202,26 @@ describe("(e) a unit whose lines v2 keeps whole as the original's, inside a disp
   })
 })
 
+describe('(f) a unit the candidate does not make whose lines lie inside a display the engine states', () => {
+  // (the coordinator's ruling of 2026-11-09: a display's ink is kept as part of the display; the engine states each display TeX
+  // sets (the marked compile's regions), its text-mode glyphs read as text, and gives the stage its lines on arXiv's page,
+  // `displays`: [page, x0, bottom, x1, top, baseline]. 2608.08481v1 t118-t121, (7)'s and (8)'s parts today translated, no unit
+  // of v2's now)
+  const D = [[1, 100, 190, 260, 205, 195.57]]
+  it("states one absent from the candidate, every line inside a display line of the engine's, as kept as part of a display", () => {
+    const base = [unit(id('a'), 118, 'inknotes', [text('x = '), ph('$y$')], [107.91, 253.18, 195.57])]
+    expect(said(statedOf(base, [], { displays: D }))).toEqual([[118, CAUSE.displayPart]])
+  })
+  it('states nothing where a line lies outside every display line, or none is given, and keeps the earlier causes first', () => {
+    const base = [unit(id('a'), 118, 'inknotes', [text('x = '), ph('$y$')], [107.91, 253.18, 195.57])]
+    expect(said(statedOf(base, [], { displays: [[1, 100, 190, 200, 205, 195.57]] }))).toEqual([])
+    expect(said(statedOf(base, [], { displays: [[2, 100, 190, 260, 205, 195.57]] }))).toEqual([])
+    expect(said(statedOf(base, []))).toEqual([])
+    const kept = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 253.18, 195.57]), kept: true as const }
+    expect(said(statedOf(base, [kept], { displays: D }))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
+  })
+})
+
 const ACCEPTANCE = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
@@ -213,5 +233,6 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
+    expect(accepted(CAUSE.displayPart)).toBe(true)
   })
 })

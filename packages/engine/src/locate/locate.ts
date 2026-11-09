@@ -51,7 +51,7 @@ import {
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
-import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } from './ink.ts'
+import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -166,6 +166,9 @@ export interface Located {
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
   figureGroups: Set<string>
+  /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
+   *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
+  displays: DisplayLine[]
   stats: {
     units: number
     located: number
@@ -381,6 +384,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const members: Member[] = []
   // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
   const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
+  const displays: DisplayLine[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -799,7 +803,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    const {
+      made,
+      stats: st,
+      displays: dl,
+    } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    displays.push(...dl)
     for (const x of made) {
       const u = units.length
       units.push(x.unit)
@@ -1873,7 +1882,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (mem.place) stats.places[mem.place]++
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays }
 }
 
 /** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the

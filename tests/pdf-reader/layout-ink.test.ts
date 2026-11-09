@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
+import { BOXES_PAGE, displayTextMask, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
 import { figureUnitsOf } from '@/pdf-reader/engine/layout/figure-text.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
@@ -397,6 +397,13 @@ describe('pageInk', () => {
     // $$ displays in mdframed boxes took the page's box titles to its foot)
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'cds2', glyph: 1 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 1, to: 9 }])
+    // (a display's text, TeX's text mode inside its math: `dts<n>` first in an \\hbox, `dte<n>` after it; math opened again in
+    // it, `dms<n>`/`dme<n>`: each paired, a start before its end, never from or to a column body's bracket — a box a pass set
+    // and placed elsewhere, or set again, states nothing; marks.mjs POINTS_TEX)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps1', glyph: 1 }, { name: 'dts2', glyph: 3 }, { name: 'dms3', glyph: 5 }, { name: 'dme3', glyph: 6 }, { name: 'dte2', glyph: 8 }, { name: 'dpe1', glyph: 9 }, { name: 'be1', glyph: 10 }], 11)).toEqual([{ kind: 'display', from: 1, to: 9 }, { kind: 'dtext', from: 3, to: 8 }, { kind: 'dmath', from: 5, to: 6 }])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dte4', glyph: 2 }, { name: 'dts4', glyph: 3 }, { name: 'dts5', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
+    // (a glyph's mode its innermost region's: the text's, the math in it, the text in that)
+    expect([...displayTextMask([{ kind: 'display', from: 0, to: 10 }, { kind: 'dtext', from: 2, to: 9 }, { kind: 'dmath', from: 4, to: 8 }, { kind: 'dtext', from: 5, to: 6 }], 11)]).toEqual([0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {
