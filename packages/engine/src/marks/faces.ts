@@ -18,7 +18,8 @@
 // TeX set between the glyph of the group's last letter and the glyph of the source's next letter after it, where the source
 // between the two writes no character (white space, or an element whose ink is its own) and both words are matched whole
 // (each letter's glyph right after the one before: a word matched across TeX's own letters is no proof of where they stand),
-// every character of them punctuation (Unicode's P); stated on the innermost of the groups whose text ends there. A letter or
+// every character of them punctuation that ends a sentence or a clause (Unicode's Terminal_Punctuation; a bracket or a quote is
+// the ink a macro sets around its argument); stated on the innermost of the groups whose text ends there. A letter or
 // a digit there is TeX's prose (a macro's own words), no stop.
 import type { Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
@@ -36,7 +37,10 @@ export interface GroupFact {
 
 const LETTER = /[\p{L}\p{N}]/u
 const SPACE = /\s/u
-const PUNCT = /^\p{P}+$/u
+/** the punctuation that ends a sentence or a clause (Unicode's Terminal_Punctuation: `.` `,` `;` `:` `!` `?` and every
+ *  script's own), never a bracket or a quote, which a macro sets around its argument (`\ctk{0.5k}`: "[0.5k]", its opening
+ *  bracket no stop of the group before, its closing one half a pair whose other half no wire writes) */
+const TERMINAL = /^\p{Terminal_Punctuation}+$/u
 /** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */
 const fold = (ch: string): number[] =>
   [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
@@ -166,7 +170,9 @@ export function groupFacts(
   const rangeOf = (s: Span | null): [number, number] => (s ? (ranges.get(s) as [number, number]) : [0, group.length])
   /** the face around a group, in the nearest group around it (the unit at last) that holds text outside it: the face of that
    *  one's own text, or where it has none (its text all in groups), of most of its text outside the groups whose command
-   *  names their style (of most of it, where that is all); none where nothing holds text outside the group */
+   *  names their style (of most of it, where that is all); none where nothing holds text outside the group, nor where a group
+   *  between whose command names its style holds the group alone (RevTeX's `\emph{\bibinfo{title}{…}}`: the face the
+   *  command's, which the group inherits) */
   const aroundOf = (s: Span): string | undefined => {
     const [sa, sb] = rangeOf(s)
     for (let up = parent.get(s) ?? null; ; up = parent.get(up) ?? null) {
@@ -177,7 +183,7 @@ export function groupFacts(
         const plain = glyphsIn(a, b, (i) => !named[i])
         return faceOf(plain.length ? plain : glyphsIn(a, b, () => true))
       }
-      if (up === null) return undefined
+      if (up === null || up.style !== 'other') return undefined
     }
   }
   /** whether a word's letters (the run of characters with letters from `i` in direction `d`) are matched whole, each letter's
@@ -225,7 +231,7 @@ export function groupFacts(
     let text = ''
     for (let q = (gOf[gl] as number) + 1; q < q2; q++)
       text += (glyphs[q] as StyleGlyph).u.normalize('NFKC').replace(/\s/gu, '')
-    if (!text || !PUNCT.test(text)) continue
+    if (!text || !TERMINAL.test(text)) continue
     const was = stops.get(last)
     if (!was || (depth.get(s) as number) > (depth.get(was.s) as number)) stops.set(last, { s, stop: text })
   }

@@ -1103,11 +1103,12 @@ only how it meets the rest of the extension.
   today's wire kept `\topic` as two markers: both drew it regular), the stop the macro sets in no source of the unit's. The
   rebuilt reader reads them off the unit's text glyphs on B (`packages/engine/src/marks/faces.ts`, the source's letters and the
   glyphs' matched in order, as a unit's words are placed on A): a group whose command names no style the table knows, set in a
-  face that is not the face around it (its parent's own text), states that face — the unit's span its `style` named for what
+  face that is not the face around it (the nearest enclosing group's own text, else most of its text outside groups whose
+  command names their style; none inherited from such a group that holds it alone, RevTeX's `\emph{\bibinfo{title}{…}}`), states that face — the unit's span its `style` named for what
   it changes, the part's `SpanAt.style` its Style, which the typesetter draws it in where its command names none; it is a
   style group to the run-in rule, so a head before a capital, a stop or a colon is `must`. The punctuation TeX set between a
-  group's last letter and the source's next one, where the source writes only white space there and both words are matched
-  whole, is the group's `stop`, which every wire and the runs floor write at its end (inside a kept span, before its close).
+  group's last letter and the source's next one, where the source writes no character there and both words are matched
+  whole, all of it Unicode's Terminal_Punctuation (a bracket or a quote is a macro's ink around its argument), is the group's `stop`, which every wire and the runs floor write at its end (inside a kept span, before its close).
   Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
   sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
   4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).

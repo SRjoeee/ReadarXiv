@@ -177,6 +177,30 @@ describe('the face TeX set a group in and the stop it set at its end, read off i
     const g2 = [...set('A head of many words, longer than its body.', BOLD), ...set('It ends.', REGULAR)]
     expect(groupFacts([head, t(' It ends.')], g2).get(head)).toMatchObject({ change: 'bold', stop: '.' })
   })
+  it('no face of its own for a group that a group whose command names its style holds alone (RevTeX’s `\\emph{\\bibinfo{title}{…}}`)', () => {
+    const field = group('\\bibinfo {title} {', [t('The Painleve Property')])
+    const emph = { ...group('\\emph {', [field]), style: 'italic' }
+    const content = [t('R. Conte, ed., '), emph, t(' (Springer, New York, 1999).')]
+    const glyphs = [
+      ...set('R. Conte, ed.,', REGULAR),
+      ...set('The Painleve Property', ITALIC),
+      ...set('(Springer, New York, 1999).', REGULAR),
+    ]
+    expect(groupFacts(content, glyphs).get(field)?.change).toBeUndefined()
+  })
+  it('no stop of a bracket or a quote: the ink a macro sets around its argument (`\\ctk{0.5k}` sets "[0.5k]")', () => {
+    const mark = group('\\cmk{', [t('1')])
+    const count = group('\\ctk{', [t('0.5k')])
+    const content = [mark, t(' '), count, t(' tokens were spent on it.')]
+    const glyphs = [
+      ...set('1', BOLD),
+      ...set('[0.5k]', 'LMMono10-Regular'),
+      ...set('tokens were spent on it.', REGULAR),
+    ]
+    const facts = groupFacts(content, glyphs)
+    expect(facts.get(mark)?.stop).toBeUndefined()
+    expect(facts.get(count)?.stop).toBeUndefined()
+  })
   it('an italic group named by its change, read the same way', () => {
     const it2 = group('\\eg{', [t('for example')])
     const content = [t('Some tasks, '), it2, t(', are hard.')]
