@@ -9,7 +9,7 @@ import type { Instrument } from './instrument.ts'
 import { type Located, type LocateOptions, locate } from './locate/locate.ts'
 import { type PdfJs, type ReadPage, readPdf } from './read.ts'
 import { type AlignFacts, alignOf, type PdfLib } from './remove.types.ts'
-import { type AddOn, wrap, wrapPageOf } from './wrap/wrap.ts'
+import { type AddOn, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
 export interface PrepareDeps {
   pdfjs: PdfJs
@@ -26,9 +26,9 @@ export interface PrepareDeps {
   /** what the front half reads of an ink unit's pieces (its elements' classes: the instrument adapter's classesOf), for the units
    *  locate makes on A; none: their elements carry the kinds alone */
   classesOf?: LocateOptions['classesOf']
-  /** keep what is read (the lab's proofs and reviews): A's pages in the tally's `pagesA`. Not kept (the box), A's raw pages are
-   *  locate's, let go as its ink step reads them, so that the rest of locate, the wrap and the bundle run without them (lane
-   *  mem-back) */
+  /** keep what is read (the lab's proofs and reviews): A's pages in the tally's `pagesA`, and the instrument's ink. Not kept (the
+   *  box), each is let go once located: A's raw pages as locate's ink step reads them, A's Doc and B's (the instrument's `ink`,
+   *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them (lane mem-back) */
   keep?: boolean
 }
 
@@ -70,8 +70,62 @@ export async function* prepareBack(
   deps: PrepareDeps,
 ): AsyncGenerator<BundleObject | Tally> {
   const now = deps.now ?? (() => 0)
-  const keep = deps.keep === true
   const t0 = now()
+  // (read, align and locate in a function of their own, whose frame ends with them: what they read is let go there, unless kept,
+  // and nothing of the wrap's or the bundle's holds it. Nulled inside one running function, it stayed reachable: lane L9)
+  const p = await placedOf(ins, original, deps, now)
+  const { located, mapping, times } = p
+  const addOn = await wrap(original, located, p.wrapPages, deps)
+  const t4 = now()
+  for (const x of bundle({
+    ins,
+    located,
+    addOn,
+    original,
+    paper: { ...deps.paper, pages: p.pages },
+    made: deps.made,
+  }))
+    yield x
+  const t5 = now()
+  yield {
+    kind: 'tally',
+    ms: {
+      read: times.t1 - t0,
+      align: times.t2 - times.t1,
+      locate: times.t3 - times.t2,
+      wrap: t4 - times.t3,
+      bundle: t5 - t4,
+    },
+    pages: p.pages,
+    located: located.stats,
+    wrap:
+      'refused' in addOn
+        ? { refused: addOn.refused, pagesRefused: 0, groups: 0 }
+        : { pagesRefused: [...addOn.pages.values()].filter((x) => !x.ok).length, groups: addOn.groups.size },
+    mapping,
+    locatedAll: located,
+    addOn,
+    ...(p.pagesA ? { pagesA: p.pagesA } : {}),
+  }
+}
+
+/** arXiv's PDF read once (read.ts) and B's ownership carried onto it (align, locate); what the wrap and the bundle read of it (each
+ *  page's wrap facts, the page count), and, kept, its pages. Unless kept, its raw pages are locate's (taken: each let go as its
+ *  ink step has read it), and its Doc and the instrument's ink end with this function (B's pages emptied, and its owners) */
+async function placedOf(
+  ins: Instrument,
+  original: Uint8Array,
+  deps: PrepareDeps,
+  now: () => number,
+): Promise<{
+  located: Located
+  mapping: Mapping
+  wrapPages: (WrapPageA | null)[]
+  pages: number
+  pagesA: ReadPage<AlignFacts>[] | null
+  times: { t1: number; t2: number; t3: number }
+}> {
+  const keep = deps.keep === true
   const read = await readArxiv(deps.pdfjs, original, deps.pdfOptions)
   const t1 = now()
   const owners = new Int32Array(ins.ink.pages.reduce((n, p) => n + p.glyphs.length, 0)).fill(-1)
@@ -96,30 +150,19 @@ export async function* prepareBack(
     classesOf: deps.classesOf,
   })
   const t3 = now()
-  const addOn = await wrap(original, located, wrapPages, deps)
-  const t4 = now()
-  for (const x of bundle({
-    ins,
+  // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)
+  if (!keep) {
+    ins.ink.pages.length = 0
+    ins.glyphs.length = 0
+    ins.boxes.length = 0
+    if (ins.turned) ins.turned.length = 0
+  }
+  return {
     located,
-    addOn,
-    original,
-    paper: { ...deps.paper, pages: read.doc.pages.length },
-    made: deps.made,
-  }))
-    yield x
-  const t5 = now()
-  yield {
-    kind: 'tally',
-    ms: { read: t1 - t0, align: t2 - t1, locate: t3 - t2, wrap: t4 - t3, bundle: t5 - t4 },
-    pages: read.doc.pages.length,
-    located: located.stats,
-    wrap:
-      'refused' in addOn
-        ? { refused: addOn.refused, pagesRefused: 0, groups: 0 }
-        : { pagesRefused: [...addOn.pages.values()].filter((x) => !x.ok).length, groups: addOn.groups.size },
     mapping,
-    locatedAll: located,
-    addOn,
-    ...(keep ? { pagesA: read.pages } : {}),
+    wrapPages,
+    pages: read.doc.pages.length,
+    pagesA: keep ? read.pages : null,
+    times: { t1, t2, t3 },
   }
 }
