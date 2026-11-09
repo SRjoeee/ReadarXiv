@@ -185,7 +185,7 @@ const phSource = (fam, text, sign = 0) => {
   return sourceView(sign > 0 ? `$^{${t}}$` : sign < 0 ? `$_{${t}}$` : `$${t}$`)
 }
 /** a word's scripts' one sign (scriptsOf): raised (1) or lowered (-1) where every glyph of it is a script of that sign, else 0 */
-const signOf = w => (w.sc && w.sc.every(v => v === w.sc[0]) ? w.sc[0] : 0)
+const signOf = w => (w.sc?.every(v => v === w.sc[0]) ? w.sc[0] : 0)
 /** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
  *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
  *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993
