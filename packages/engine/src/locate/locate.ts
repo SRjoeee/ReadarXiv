@@ -1416,8 +1416,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   const standsBefore = new Map<number, number[]>()
   const standing = new Set<number>()
+  // (one whose first glyph TeX set right after a member's last, on that member's last row, stands after it: the paragraph goes
+  // on past that member into text no unit owns. acmart's reference format, its last author's name a unit of \author's that TeX
+  // sets late in the stream and ". 2027. ABNAT: …" after it, the title set again, made on A: no member begins after it on the
+  // page, and standing where it was made, after every member, the member before it was another row's (2610.22065v1), its
+  // translation laid at its original's start past a gap. Else before the member whose first glyph comes next, as above)
+  const lastAt = new Map<number, number>()
+  for (const x of members) if (x.bLast >= 0 && !madeOnA(x)) lastAt.set(x.bLast, x.ord)
+  const standsAfter = new Map<number, number[]>()
   for (const x of members) {
-    if (!madeOnA(x) || x.bLast < 0) continue
+    if (!madeOnA(x) || x.bFirst < 0) continue
+    let b = x.bFirst - 1
+    while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0 && !madeB.has(b)) b--
+    const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
+    const lead = o === undefined ? undefined : members[o]
+    const a = lead?.lines.at(-1),
+      l = x.lines[0]
+    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < a[3] - 0.5) continue
+    if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
+    ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
+    standing.add(x.ord)
+  }
+  for (const x of members) {
+    if (!madeOnA(x) || x.bLast < 0 || standing.has(x.ord)) continue
     let b = x.bLast + 1
     while (b < NB && pageB[b] === pageB[x.bLast] && (unitB[b] as number) < 0 && !madeB.has(b)) b++
     const next = b < NB && pageB[b] === pageB[x.bLast] ? firstAt.get(b) : undefined
@@ -1429,6 +1450,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const put = (o: number) => {
     for (const x of standsBefore.get(o) ?? []) put(x)
     seq.push(members[o]!)
+    for (const x of standsAfter.get(o) ?? []) put(x)
   }
   for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
@@ -1439,9 +1461,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // notes as one paragraph, a note on the row the one before ends: 2608.06701v1 p5), but a member made on A that B printed
   // right before it)
   let note: number | null = null
+  // (a member of the instrument's that B never printed — a unit whose marks TeX set nowhere, acmart's \affiliation between two
+  // names its reference format sets again — has no place in TeX's stream: never the member before. 2610.22065v1: the authors'
+  // names each a flow of their own, each laid at its original's start, the gaps between them read as stretched spaces)
+  const inStream = (x: Member) => x.bFirst >= 0 || madeOnA(x)
   for (let q = 0; q < seq.length; q++) {
     const mem = seq[q]!
     let k = q - 1
+    while (k >= 0 && !inStream(seq[k]!)) k--
     if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
     else if (mem.kind === 'footnote' && note !== null && !(k >= 0 && standsBefore.get(mem.ord)?.includes(seq[k]!.ord)))
       k = note
@@ -1484,8 +1511,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (!insert(mem) && !madeOnA(mem)) body = q
-    if (mem.kind === 'footnote') note = q
+    if (!insert(mem) && !madeOnA(mem) && inStream(mem)) body = q
+    if (mem.kind === 'footnote' && inStream(mem)) note = q
   }
   // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
   flows.sort((f, g) => Math.min(...f) - Math.min(...g))

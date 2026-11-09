@@ -571,6 +571,30 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (the flows in the members' order, each at its first member's: the source units' as before, the head's with its theorem's)
     expect(L.flows).toEqual([[0], [head.ord, thm.ord]])
   })
+  it('flows a unit made on A on from the member TeX set right before it on its row, no member after it on the page (2610.22065v1)', () => {
+    // (acmart's reference format: its last author's name, a unit of \author's that TeX sets late in the stream, then
+    // ". 2027. ABNAT: …", the title set again, no unit's, made on A an orphan, on the name's row; no member begins after it on the
+    // page. Standing where it was made, after every member, its member before was the last of the units' order, on another
+    // row: a flow of its own, laid at its original's start, a gap before it where the name's translation is the shorter)
+    const { B, A } = pair({
+      lines: [
+        'Body text here',
+        { text: 'Ru Huang.', x: 72, y: 688 },
+        { text: '2027. ABNAT', x: 72 + 9 * 6 + 2, y: 688 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 9 + 11],
+      ],
+    })
+    // (the name's unit first in the units' order, the paragraph's after it, as \author's units precede the body's)
+    const ins = instrumentOf(B, [unitOf('author', 'Ru Huang.'), unitOf('para', 'Body text here')], [[1, 0, -1]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const tail = L.members.find((m) => m.kind === 'inkorphan')!
+    expect(L.units[tail.unit]!.content).toEqual([text('2027. ABNAT')])
+    expect(L.flows.find((f) => f.includes(tail.ord))).toEqual([0, tail.ord])
+    expect(tail.join).toEqual([2])
+  })
   it('flows no unit made on A into the next where a paragraph end of TeX’s stands between them, nor one on another row', () => {
     const spec = (y: number) => ({
       lines: [

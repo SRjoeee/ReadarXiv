@@ -108,6 +108,29 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 1]])
     expect(L.members[1]!.join?.[0]).toBeCloseTo(110 - (72 + 5 * 6), 5)
   })
+  it('chains members TeX set on one row of a paragraph past the units between them it never set (2610.22065v1’s ACM reference format)', () => {
+    // (acmart sets the authors' names again in its reference format, one paragraph, each name a unit of \author's; the places
+    // \affiliation holds between them in the units' order are set nowhere there, members with no place in TeX's stream: taken
+    // for the member before, they kept every name a flow of its own, each laid at its original's start, a translation shorter
+    // than its name leaving a gap before the next, the gaps the maintainer read as stretched spaces)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Wenshuai Yao,', x: 54, y: 700 },
+          { text: 'Wenyong Zhou,', x: 54 + 13 * 6 + 2, y: 700 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Wenshuai Yao,'),
+      unitOf('affiliation', 'School of Integrated Circuits'),
+      unitOf('author', 'Wenyong Zhou,'),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 2]]), B2, align(B2, B2))
+    expect(L.members.map((m) => m.located)).toEqual([true, false, true])
+    expect(L.flows).toEqual([[0, 2], [1]])
+    expect(L.members[2]!.join).toEqual([2])
+  })
   it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
     // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two
     // columns, the head's line in the left half, its paragraph's first line over both; the columns as the names' binding
