@@ -134,12 +134,26 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   }
   // (each group's command and fill, as the instrument reads its source; the paragraph TeX opened at it, as locate read it)
   // (and a figure text's runs in another face, each group's style read off its glyphs on A)
-  if (unit?.spans?.length || mem.spanOpens?.size || mem.spanStyles?.length) {
+  // (and a group's fill where its source and TeX's log state none: the fill its text's glyphs hold on A, where it is not the
+  // fill around it, locate's fills.ts: a link's that hyperref colours; a colour piece's the log's)
+  // (and the face of a group whose command names none where the instrument states none: the face its own text's glyphs hold
+  // on A, where it is not the face around it; a group the instrument faced on B keeps that)
+  if (
+    unit?.spans?.length ||
+    mem.spanOpens?.size ||
+    mem.spanStyles?.length ||
+    mem.spanFills?.length ||
+    mem.spanFaces?.length
+  ) {
     const spans = new Map(
       (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
     )
     for (const [id, j] of mem.spanOpens ?? []) spans.set(id, { ...spans.get(id), opens: j })
     for (const [id, style] of mem.spanStyles ?? []) spans.set(id, { ...spans.get(id), style })
+    for (const [id, colour] of mem.spanFills ?? [])
+      if (spans.get(id)?.colour === undefined) spans.set(id, { ...spans.get(id), colour })
+    for (const [id, style] of mem.spanFaces ?? [])
+      if (spans.get(id)?.style === undefined) spans.set(id, { ...spans.get(id), style })
     p.spans = [...spans]
   }
   // (a caption's label: its float's type, by which its name is drawn in the target's word)

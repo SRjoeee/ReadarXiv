@@ -50,7 +50,8 @@ import {
 } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { type InkInput, type InkStats, inkOf } from './ink.ts'
+import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
+import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -121,6 +122,12 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (group-style.ts;
+   *  SpanAt.colour where the instrument states none): each one's open piece id and fill */
+  spanFills?: [string, number][]
+  /** its groups whose command names no face and whose own text TeX set in a face other than the face around it, read off its
+   *  glyphs on A (group-style.ts; SpanAt.style where the instrument states none): each one's open piece id and style */
+  spanFaces?: [string, Style][]
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
@@ -496,15 +503,37 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     let bad: string | null = null
     const aIdx: number[] = []
-    for (const b of list) {
+    // (B's glyphs with no partner inside the unit, between two of its own whose partners A sets one right after the other:
+    // glyphs our compile set where arXiv's set nothing (1810.04805v2 u325: our tree sets the .bbl's UTF-8 quotes round "Cloze
+    // procedure", arXiv's 2016 tree read their bytes as characters its OT1 font has no glyph for, TeX's "Missing character",
+    // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
+    // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
+    // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
+    // that no block move paired): a content difference, the unit the original's, as before)
+    const prevPaired = new Int32Array(list.length).fill(-1)
+    for (let i = 0, last = -1; i < list.length; i++) {
+      prevPaired[i] = last
+      if ((m.bToA[list[i] as number] as number) >= 0) last = i
+    }
+    let nextPaired = -1
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i] as number
       const a = m.bToA[b] as number
       if (a >= 0) {
         aIdx.push(a)
+        nextPaired = i
         continue
       }
       if (m.hunkB[b] === HUNK.hyphen || m.offpageB[b]) continue
-      bad ??= `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
+      const pv = prevPaired[i] as number
+      if (pv >= 0 && nextPaired >= 0) {
+        const ap = m.bToA[list[pv] as number] as number
+        const an = m.bToA[list[nextPaired] as number] as number
+        if (an === ap + 1) continue
+      }
+      bad = `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
     }
+    aIdx.reverse()
     const boxPartners: [ap: number, ai: number, p: number, x: number][] = []
     for (const [p, x] of boxes) {
       const kind = B.pages[p]!.kinds[x] as number
@@ -996,6 +1025,41 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.upper ? { upper: 1 as const } : {}),
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
+    }
+    // (the fill and the face TeX set its text in, group by group (group-style.ts): a group's fill where it is not the fill
+    // around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
+    // around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so,
+    // the unit's own fill, slant and weight are its own text's, not those most of all its glyphs hold, which a link or an
+    // \emph holding most of its letters makes theirs)
+    const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
+    const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
+      const c = classOf.get(el.id)
+      return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
+    }
+    const switches = (el: Extract<Piece, { t: 'el' }>) => colourSwitch(el) || faceSwitch(el)
+    // (not a figure text's: its groups are its runs of glyphs in another face than its own, which is the face of most of its
+    // glyphs by their definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in
+    // the stream's, 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own)
+    if (unit && !mem.figure && !unit.figure && mem.text.length && hasScopes(unit.content, switches)) {
+      const g = groupStyleOf(
+        unit.content,
+        [...mem.text].sort((x, y) => x - y).map(gA),
+        (el) => classOf.get(el.id)?.text,
+        colourSwitch,
+        faceSwitch,
+      )
+      if (g.fill.groups.length) mem.spanFills = g.fill.groups
+      if (g.fill.apart && g.fill.own !== undefined) {
+        if (g.fill.own > 0) mem.style.fill = g.fill.own
+        else delete mem.style.fill
+      }
+      if (g.face.groups.length) mem.spanFaces = g.face.groups
+      if (g.face.apart && g.face.own) {
+        if (g.face.own.bold) mem.style.bold = 1
+        else delete mem.style.bold
+        if (!g.face.own.italic) delete mem.style.slant
+        else mem.style.slant ??= 1
+      }
     }
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)
