@@ -6,7 +6,7 @@
 // joined by the ink unit's own id, the format's unitId over its kind and the echoed content. Synthetic parts and units.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -202,5 +202,32 @@ describe("a unit whose kept runs v2 holds as elements is today's unit of the sam
     // (and a unit of today's the dump states no lines of, one it drew nothing of, joins nothing)
     const unlined = new Map<number, object>([...t123(split), [122, { ord: 122, id: R, kind: 'inknotes', text: '', pieces: split }]])
     expect(todayJoin(p124, v, [{ ord: 122, id: R }, { ord: 123, id: Q }], unlined)[124]).toEqual({ today: 123 })
+  })
+})
+
+describe("a member no id joined to today's unit stage 1a states its unit holds whole ((f), (b'), (f'): its kind moved)", () => {
+  // (2610.21106v1 p1's AND: today's inkorphan, v2's inknames, an ink unit's id naming its kind, so no id of today's is the
+  // member's; stage 1a's statement of today's t98 names v2's unit holding it whole, which the parity joins by)
+  const and = text('AND')
+  const part = bundle({ 1: [member(107, 'inknames', P)] }, [{ id: P, kind: 'inknames', content: and }])
+  const pages = pagesOf({ 1: [[107, 'left']] })
+  const prepared = new Map([[98, { ord: 98, id: Q, kind: 'inkorphan', text: 'AND', pieces: [{ kind: 'text', s: 'AND' }], lines: [] }]])
+  const stated = (cause: string, holder = P, ord = 98) => ({ id: Q, kind: 'inkorphan', replaced: true, stated: { ord, cause, holder } })
+
+  it('joins it by the holder the statement names, for each cause of holding whole', () => {
+    for (const c of ['held', 'names', 'heldBlock'])
+      expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(c)])[107]).toEqual({ today: 98 })
+  })
+  it('joins none where the holder holds two of today\'s units, the cause is another, or today\'s unit is joined already', () => {
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }, { ord: 99, id: R }], prepared, [stated('held'), stated('held', P, 99)])[107]).toBeUndefined()
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('trail')])[107]).toBeUndefined()
+    const both = bundle({ 1: [member(100, 'inkorphan', Q), member(107, 'inknames', P)] }, [{ id: P, kind: 'inknames', content: and }, { id: Q, kind: 'inkorphan', content: and }])
+    expect(todayJoin(pagesOf({ 1: [[100, 'laid'], [107, 'left']] }), both, [{ ord: 98, id: Q }], prepared, [stated('held')])[107]).toBeUndefined()
+  })
+  it("tells whether the two units' contents are one, so that today's row may be laid in v2's (heldJoin's `same`)", () => {
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    expect([...heldJoin(free, part.units, [stated('held')], [98], prepared)]).toEqual([[107, { today: 98, same: true }]])
+    const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
+    expect([...heldJoin(free, part.units, [stated('held')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
   })
 })

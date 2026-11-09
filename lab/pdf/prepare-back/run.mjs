@@ -213,8 +213,11 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
   // (the number each unit's label states, Label.num, by its ord in the dump)
   const labels = new Map(dumpOrds.map(([o, m]) => [o, located?.members[m]?.labelAt?.num?.[0]]).filter(([, n]) => n))
-  for (const { u, why } of statedOf(base, units, { trails, labels })) {
-    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
+  // (arXiv's glyphs on each page, as the engine read A: (f') reads a line's glyphs of ink)
+  const glyphs = (p) => tally?.pagesA?.[p - 1]?.page?.glyphs ?? null
+  // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
+  for (const { u, why, cause, holder } of statedOf(base, units, { trails, labels, glyphs })) {
+    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
     states.unlaid++
   }
 }

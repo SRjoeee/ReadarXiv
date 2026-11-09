@@ -24,7 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { todayJoin } = await import('./join.mjs')
+const { candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
 const args = process.argv.slice(2)
@@ -79,6 +79,21 @@ for (const pair of pairs) {
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
   if (!target) throw new Error(`v2.mjs: ${pair} names no target`)
   const metrics = metricsOf(pair)
+  // (stage 1a's statements of today's units the candidate makes otherwise: a member no id joined is today's unit its own holds
+  // whole, join.mjs heldJoin; the lay is given today's row of it where the two units' contents are one, the coordinator's ruling
+  // of 2026-11-10, so that a unit whose kind moved, its id with it, is drawn translated as today's was)
+  const stated = candidateStated(paperOf(pair))
+  const prepared0 = todayPrepared(paperOf(pair))
+  const heldRows = { joined: 0, laid: 0 }
+  const held = (members, today) => {
+    const out = new Map()
+    for (const [ord, { today: t, same }] of heldJoin(members, l1Paper(paperOf(pair))?.units ?? new Map(), stated, today, prepared0)) {
+      heldRows.joined++
+      if (same) out.set(ord, t)
+    }
+    heldRows.laid = out.size
+    return out
+  }
   globalThis.__parityLay = await typesetLay({
     served: {
       metrics,
@@ -98,13 +113,14 @@ for (const pair of pairs) {
   globalThis.__parityFill = targets(offTargets)
   globalThis.__parityNoOptionI = true
   try {
-    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
   } finally {
     globalThis.__parityNoOptionI = undefined
   }
   globalThis.__ckPage = keep
   globalThis.__parityFill = targets(fills)
-  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+  heldRows.joined = 0
+  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
   for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
@@ -113,7 +129,7 @@ for (const pair of pairs) {
   const bundle = l1Paper(paperOf(pair))
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
   // glyphs too, where v2's unit holds as elements the addresses today's held as text, over today's prepare dump)
-  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair))) : {}
+  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair)), stated) : {}
   const facts = {}
   for (const [pg, part] of bundle?.parts ?? []) {
     const list = []
@@ -158,8 +174,8 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
-  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)
+  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)
 }
