@@ -2260,6 +2260,31 @@ within noise.
   2010.11929v2; a part states them only for the members with ink on its page.
 - Until 2026-11-08 the rebuilt reader lit every unit whole: the prepare marked no unit for sentences (no translator was
   asked to cut, no row carried any) and placed no start on A (the maintainer's staging review of converge-7, 225f0959f).
+- **A display is a block of its own, and no shape fills one** (the owner's reports of 2026-11-09 on staging: 2602.23285v2 p15,
+  "… processed as: [display (11)] and a sequence …" lit as one shape over the line before, the display across the column and
+  the line after, on both panes, where today lights a bar on each line and the display not at all: 「这里我们主站是分开的」;
+  2609.33403v1 §4.2, a paragraph lit as one region over both of its displays, their own shape drawn inside it). The highlight
+  shows which words correspond, and a display is the same ink on both panes: lighting it with its text adds nothing. So
+  `Laid.lit`'s `own` holds a member's displays alone, each by its piece, the same boxes on both panes, and no row of its text
+  is on one (on A a KEPT line on a display is the display's, a member lit from A too); the reader lights a display alone where
+  the pointer is over it (`{id, s: -2 - piece}`, the same on every page: today's `displayBlockId`, one hover id a display),
+  never with its member, whole or by sentence. The rest of a member's kept ink (a piece or a label kept where it stands, a
+  character) lights with it, the row it stands on widened over it, by sentence with its sentence (an element no sentence of the
+  translation places, the sentence it stands in on A). The painter's outline (today's `shapePath`) joins two rows where they
+  meet across and paints the room between them, from the upper row's left to the lower one's right; v2 hands it every row of a
+  sentence on a page, so it bridged whatever stood between them, a room no box holds and the hit test never found. A shape's
+  rows are one outline now only where no other block stands between two of them (a box lit on the pane, another member's or a
+  display, whose middle is between them and that meets them across, the two a row's height apart at least: today's runs, cut
+  there, `highlight.mjs interrupted`); a gap with nothing in it stays the unit's, as today's. Judged by the parity's highlight
+  measure as the reader paints it (`lab/typeset/parity/paint.mjs`, the reader's own cut): over round 6's drawing, the shapes'
+  fills of another block (a display; on arXiv's page another unit's line) were worse than today's on 181 units of 103 pages
+  (2602.23285v2-ja p15 t127: 2 against 0), and are on none.
+- **What it does not settle**: a display the part states no ink of (LOST) leaves a gap with nothing in it, filled as today's;
+  a display set on a text line beside a word (TeX's display after a word on its baseline) is on that line's row, lit with it;
+  a sentence whose only text is a display lights nothing but the display; and a sentence that runs on past a display with no
+  stop of its own is one sentence to the translator (the markers wire writes nothing after the display's marker, and Microsoft
+  cuts at neither a marker nor a colon; the tags wire's cutter reads a display as a word), lit as one in pieces around it, as
+  today's (2609.33403v1).
 
 ## 18. Rules and their versions
 
