@@ -1,7 +1,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, compilerOfPdf, contextUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { ALLOCATION_FAILED } from '@readarxiv/engine'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -362,6 +362,53 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const kept = compiler([PROBE, ran(PDF, other, 3, { aux: once })])
     expect(await markedOfPaper(paperOf(), { final: false, compile: kept.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(kept.asked).toHaveLength(2)
+  })
+
+  it("a class's verbatim copy of our source that begins inside a mark of ours: the unit unmarked, one compile more (cas-common's abstract, 2610.21084v1)", async () => {
+    // (cas-sc's abstract: cas-common.sty's \\RenewDocumentEnvironment{abstract}{o}{…\\verbatimwrite{\\jobname.abs}}{\\endverbatimwrite},
+    // read back by \\file_input:n. The look-ahead for its optional argument reads the body's first token before moreverb's
+    // \\verbatimwrite makes every character other, and the copy loses it where it is a control word: our probe's name, its
+    // argument printed — "4Scientific…" on our page, the unit refused for that content of ours. A letter, the paper's own first
+    // character, is kept)
+    const src = '\\documentclass{cas-sc}\n\\begin{document}\n\\begin{abstract}\nScientific prediction under uncertainty needs more than one estimate.\n\nWe establish an approximation theory for the method.\n\\end{abstract}\n\\maketitle\n\nAnother paragraph of words.\n\\end{document}\n'
+    const copyOf = (req: CompileRequest) => (/\\begin\{abstract\}\n([\s\S]*?)\\end\{abstract\}/.exec(dec(req.overrides.get('main.tex')))?.[1] ?? '').replace(/^\\[A-Za-z]+/, '')
+    /** cas-common's compile: the abstract's copy among the files it wrote, after the probe */
+    const casCompiler = (copy: (req: CompileRequest) => string, ext = 'abs') => {
+      const asked: CompileRequest[] = []
+      const compile = async (req: CompileRequest): Promise<Compiled> => {
+        asked.push(req)
+        if (asked.length === 1) return PROBE
+        return ran(asked.length === 2 ? PDF : PDF1, '', 3, { files: new Map([[`main.${ext}`, enc(copy(req))], ['main.log', enc('l.4 \\axtlines{0}\\leavevmode\\axtmark{0s}Sci')]]) })
+      }
+      return { asked, compile }
+    }
+    const c = casCompiler(copyOf)
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [0], names: true, failed: ['aux'] } })
+    expect(c.asked).toHaveLength(3)
+    expect([has(c.asked[2], '\\axtmark{0s}'), has(c.asked[2], '\\axtlines{0}'), has(c.asked[2], '\\axtmark{1s}')]).toEqual([false, false, true])
+    // (a copy of whole lines — comment.sty's, acmart's acks, 2608.25210v2 — and one that begins inside the paper's own text: they
+    // stand)
+    const whole = casCompiler(req => /\\begin\{abstract\}\n([\s\S]*?)\\end\{abstract\}/.exec(dec(req.overrides.get('main.tex')))?.[1] ?? '', 'cut')
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: whole.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF })
+    expect(whole.asked).toHaveLength(2)
+    const own = casCompiler(req => copyOf(req).replace(/^\{0\}\\leavevmode\\axtmark\{0s\}Sc/, ''))
+    expect(await markedOfPaper(paperOf(src), { final: false, compile: own.compile, pages: 3, textOf: unshown })).toMatchObject({ pdf: PDF })
+    expect(own.asked).toHaveLength(2)
+  })
+
+  it("cutCopyUnits: the units whose mark of ours a line a compile wrote begins inside, that line a copy of our source's", () => {
+    const ours = new Map([['main.tex', enc('\\begin{abstract}\n\\axtlines{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n\nText \\axtmark{6s}more.\\axtend{6e}\n')]])
+    const wrote = (files: [string, string][]) => ({ files: new Map(files.map(([p, t]): [string, Uint8Array] => [p, enc(t)])) })
+    // (the probe's name lost, its argument left; the \\leavevmode before a start mark lost: both inside ours)
+    expect(cutCopyUnits(wrote([['x.abs', '{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 9)).toEqual(new Set([4]))
+    expect(cutCopyUnits(wrote([['x.abs', '\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 9)).toEqual(new Set([4]))
+    // (a whole line, one whose head is a suffix of the paper's own text, \\write's form (a space after the control word), a record
+    // of the compile's own, and a unit past `count`: none)
+    expect(cutCopyUnits(wrote([['x.cut', '\\axtlines{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n'], ['y.cut', 'xt \\axtmark{6s}more.\\axtend{6e}\n']]), ours, 9)).toEqual(new Set())
+    expect(cutCopyUnits(wrote([['x.aux', '{4}\\leavevmode \\axtmark {4s}Scientific\n'], ['x.log', '{4}\\leavevmode\\axtmark{4s}Sci\n']]), ours, 9)).toEqual(new Set())
+    expect(cutCopyUnits(wrote([['x.abs', '{4}\\leavevmode\\axtmark{4s}Scientific words.\\axtend{4e}\n']]), ours, 4)).toEqual(new Set())
+    // (no files given, or none written)
+    expect(cutCopyUnits({}, ours, 9)).toEqual(new Set())
   })
 
   it('a mark a file holds stays out of place where the compile shows anything else, or its log cannot tell a destination set twice', async () => {
