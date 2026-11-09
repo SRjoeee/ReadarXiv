@@ -3178,7 +3178,9 @@ round 7's): 40 drawn as their ink for a raise their text dropped (2610.19274v1's
 the line's 9.96; 2608.06007v1's three affiliation macros; the two `\REPOFOOTNOTE`; 2610.21547v1's two footnote macros) and 21
 symbols whose ink is not their reading (t167's starred s; `\textsuperscript{*}`, `{†}` on 2610.21477v1, 2610.22214v1,
 2610.40576v1; 2610.21765v1's raised "†"; a Σ with its limits, a θ and 11 β with their scripts or accents, a √ with its
-content). Not changed: 2610.10069v1 p1's title "…与封闭式反∗" ends as Microsoft's reply ends, "反" before the `\thanks` mark;
+content). The parity over the two pairs among those papers (2610.10069v1-zh, 2610.17024v1-zh), default and every switch on:
+no page newly worse, `scripts` nearer v2 on three pages (t167 15 of 15 characters drawn as scripts, today 14; t174 and t448 1 of
+1, today 0), v2's `scripts` faults there 3 pages to none. Not changed: 2610.10069v1 p1's title "…与封闭式反∗" ends as Microsoft's reply ends, "反" before the `\thanks` mark;
 the wire sends "Closed-Form Inverses" whole, its marker a space apart, and the mark is drawn raised (El.mark): no mark eats or
 splits a word there. The reading's own faults (`\vs` read as text) stay where TeX set no ink to tell them.
 
