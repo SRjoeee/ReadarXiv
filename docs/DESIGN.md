@@ -1031,11 +1031,13 @@ only how it meets the rest of the extension.
   composed nor the whole hashed (wrapOf's `compose: false`); and read, align and locate run in a frame of their own
   (`placedOf`), so that A's Doc is let go there and, unless `keep` (the lab's claims and review), B's, the instrument's
   ink emptied. Measured natively on Linux (arm64, the box child's flags, its data limit as arm64 counts it: 1,024 MiB
-  and V8's 256 MiB code range), the lowest data limit each paper prepares under, against 1,280: 2609.19644v1 (71
-  pages, a 26 MB source and PDF) more than 1,280 before (it died, as on staging), 1,040 now; 2610.40394v1 1,160;
-  2610.19159v1 (163 pages, which died at the 768 MiB heap cap) 1,200; 2610.42112v1 960; 2610.37668v1 800 or less. Every
-  object of the 88 corpus papers and of 2609.19644v1 is the same (stage 1a and I6). What the box itself holds through
-  the back half (the source, its files, B's bytes) is the box's to let go.
+  and V8's 256 MiB code range, 1,280), the lowest data limit each paper prepared under three times of three:
+  2609.19644v1 (71 pages, a 26 MB source and PDF), which died under 1,280 as on staging, 1,120; 2610.40394v1 1,200;
+  2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,240; 2610.42112v1 960 and 2610.37668v1 800 or less
+  (once each). Under a lower limit each dies first where the back half no longer holds anything of a document whole:
+  2609.19644v1 in the front half's adapter (instrumentOf, its own copies of B's glyphs), 2610.40394v1 reading A,
+  2610.19159v1 in locate. Every object of the 88 corpus papers and of 2609.19644v1 is the same (stage 1a and I6). What
+  the box itself holds through the back half (the source, its files, B's bytes) is the box's to let go.
 - **One set of settings** (§9). The service, the language, the prompt and the highlight are the extension's.
   `pdfReader` (v19) holds the reader's own; its appearance became the extension's `theme` at v20, and what it translates
   (`classes`, "What to translate") joined it at v21, in the place of the image switch, which is the HTML page's alone since. The
