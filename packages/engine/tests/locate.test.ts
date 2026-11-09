@@ -224,6 +224,79 @@ describe('locate', () => {
       ),
     ).toEqual([])
   })
+  it('gives the last author of stated calls the ink TeX set on its line before its paragraph’s end, whatever the gap', () => {
+    // (2611.03953v2 p1: the last \icmlauthor's marks, "2 †", a thin space after "Zuo Bai", no call after them: the paragraph TeX
+    // ends there (`qe3c`) is where its run ends, as the next call is where any other author's does)
+    const lines = [
+      { text: 'Zuo Bai', x: 72, y: 700 },
+      { text: '2', x: 72 + 42 + 1.66, y: 703.6, size: 7 },
+      { text: 'Body text.', x: 72, y: 676 },
+    ]
+    const units2 = [unitOf('author', 'Zuo Bai'), unitOf('para', 'Body text.')]
+    const at = (points: [string, number][], ends: number[], marks = lines) => {
+      const B2 = docOf([{ lines: marks, points }])
+      const ins = instrumentOf(B2, units2, [[0, -1, 1]])
+      ins.tex = { ...ins.tex, paragraphEnds: [ends] }
+      return locate(ins, B2, align(B2, B2))
+    }
+    const trail = (L: ReturnType<typeof locate>) => L.members[0]!.elements.map(([k, e]) => [k, e.copy, e.trail])
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [8],
+        ),
+      ),
+    ).toEqual([['~', '2', 1]])
+    // (no call of its own stated, or the paragraph's end past the next unit's start: the word's gap rule, as before)
+    expect(
+      trail(
+        at(
+          [
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [8],
+        ),
+      ),
+    ).toEqual([])
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [12],
+        ),
+      ),
+    ).toEqual([])
+    // (what stands on another line before the paragraph's end, an e-mail row a class sets under the last name in its tabular, is
+    // no trail of its: none, the word's gap rule)
+    const below = [lines[0]!, { text: 'a@b.org', x: 72, y: 688 }, lines[2]!]
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 14],
+          ],
+          [14],
+          below,
+        ),
+      ),
+    ).toEqual([])
+  })
   it('runs on a row the members TeX set in one paragraph across the page middle, no body’s or float’s bracket between', () => {
     // (2611.03953v2 p1, ICML: the names of a line of \icmlauthor in one centred paragraph over the two columns' middle, read
     // as three flows by the columns a line's x tells, the line never laid as one. B's stream brackets each column's body

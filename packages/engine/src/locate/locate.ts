@@ -770,21 +770,40 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
   // A run TeX states (latex-front.mjs \axtcall: the point `<i>c` the marked compile sets before each author's call, the command
   // or the \and that opens unit i's block, where TeX sets it on a line): an author's member owns what stands between its end
-  // mark and the next author's call, before any unit's mark, whatever the gap and the line (ICML's \, before its marks, 0.17
-  // em, past WORD_GAP: the marks were left behind its name's translation), and nothing past it, which the next author's lead
-  // is (own.mjs MR 5). Where no call is stated (a class that stores its list and sets it whole, 2604.14228v3's \addtolist),
-  // the glue rule below, as before
-  const callAfter = (mem: Member): number => {
-    if (!AUTHOR_KINDS.has(mem.kind)) return -1
+  // mark and the next author's call, before any unit's mark or bracket, whatever the gap and the line (ICML's \, before its
+  // marks, 0.17 em, past WORD_GAP: the marks were left behind its name's translation), and nothing past it, which the next
+  // author's lead is (own.mjs MR 5). The last of such calls, an author whose own call is stated with no call after it, owns what
+  // stands on its last line before the paragraph TeX ends after it (Instrument.tex.paragraphEnds), no unit's mark between: the
+  // end of the list its calls make (ICML's last name, "Zuo Bai 2 †"); a row of another line before that end (an e-mail a class
+  // sets under the last name in its tabular) is none of it, and the glue rule below reads the run. Where no call is stated (a
+  // class that stores its list and sets it whole, 2604.14228v3's \addtolist), the glue rule below, as before
+  const paraEndsB: number[] = []
+  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+    for (const g of l) paraEndsB.push((m.offB[p] as number) + g)
+  })
+  paraEndsB.sort((x, y) => x - y)
+  const calledOwn = new Set<string>()
+  for (const pg of B.pages) for (const x of pg.points ?? []) if (CALL.test(x.name)) calledOwn.add(x.name.slice(0, -1))
+  const runEndOf = (mem: Member): { at: number; line: boolean } | null => {
+    if (!AUTHOR_KINDS.has(mem.kind)) return null
     const p = (pageB[mem.bLast] as number) - 1
+    const o = m.offB[p] as number
     const pts = B.pages[p]?.points ?? []
     const k = pts.findIndex((x) => x.name === `${mem.unit}e`)
-    for (let j = k < 0 ? pts.length : k + 1; j < pts.length; j++) {
+    if (k < 0) return null
+    let next = Number.POSITIVE_INFINITY
+    for (let j = k + 1; j < pts.length; j++) {
       const x = pts[j]!
-      if (CALL.test(x.name)) return (m.offB[p] as number) + x.glyph
-      if (UNIT_MARK.test(x.name)) break
+      if (CALL.test(x.name)) return { at: o + x.glyph, line: false }
+      if (UNIT_MARK.test(x.name) || BRACKET.test(x.name)) {
+        next = o + x.glyph
+        break
+      }
     }
-    return -1
+    if (!calledOwn.has(String(mem.unit))) return null
+    const from = o + pts[k]!.glyph
+    const end = paraEndsB.find((e) => e >= from)
+    return end === undefined || end > next || pageB[end - 1] !== pageB[mem.bLast] ? null : { at: end, line: true }
   }
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
@@ -794,7 +813,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const last = gA(end)
     let prev = last
     const trail: number[] = []
-    const call = callAfter(mem)
+    const run = runEndOf(mem)
+    let call = run ? run.at : -1
+    // (the list's end: every free ink glyph before it on the member's last line, else the glue rule)
+    if (run?.line)
+      for (let b = mem.bLast + 1; b < run.at && b < NB && (unitB[b] as number) < 0; b++) {
+        const a = m.bToA[b] as number
+        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        const g = gA(a)
+        if (isInk(g) && (g.top <= last.bottom || g.bottom >= last.top)) {
+          call = -1
+          break
+        }
+      }
     for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
       if (call >= 0) {
         if (b >= call) break
