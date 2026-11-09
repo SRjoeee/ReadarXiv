@@ -798,7 +798,12 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   So the class LaTeX built the template from rides on the template itself: every \@mkpream (LaTeX's tabular and array,
  *   array.sty's, longtable, tabularx, colortbl, siunitx's S, which is array's c; \multicolumn's own spec) has each
  *   column's template end in `\axt@te{<\@chnum>}` (0 c, 1 l, 2 r, 3 m, 4 p, 5 b: LaTeX's reading of the column's letter
- *   after \newcolumntype and *{n}{…}), wrapped at begindocument/end over whatever \@mkpream and \@classz the packages left.
+ *   after \newcolumntype and *{n}{…}), wrapped at begindocument/end over whatever \@mkpream and \@classz the packages left,
+ *   and appended with what the preamble holds left unexpanded: REVTeX's ltxutil appends its templates' tokens unexpanded, its
+ *   own macros run in each cell (\array@row@rst, \cell@font), and expanded once more at the build they set the template's
+ *   alignment box there, and TeX never ended the table (revtex4's 1007.0072v1, 2610.20507v1, 2610.21288v1 hung). A \@mkpream
+ *   entered while one runs leaves \@classz as it finds it, already wrapped: taken again as the class to wrap, the wrapper
+ *   would call itself.
  *   A cell's start mark (`t<i>s`) defines its index in its own cell's group, carried out through the groups around the
  *   mark (the paper's braces, a template's \begingroup, colortbl's box, a p column's \vtop) by \aftergroup to the
  *   innermost alignment entry's (\currentgrouptype 6), never past it; the template's end writes `AXT-CELL <i> <class>`
@@ -1132,8 +1137,9 @@ export const LAYOUT_TEX = [
   '\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{}\\axt@alg#1e\\@nil}\\def\\axt@tcs t#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@cs{#1}\\fi}',
   '\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else\\ifnum\\currentgrouplevel>\\z@\\expandafter\\gdef\\csname axt@cu@#1\\endcsname{\\axt@cs{#1}}\\expandafter\\aftergroup\\csname axt@cu@#1\\endcsname\\fi\\fi}',
   '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
-  '\\def\\axt@ate{\\xdef\\@preamble{\\@preamble\\axt@te{\\the\\@chnum}}}',
-  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\let\\axt@cz\\@classz\\def\\@classz{\\axt@cz\\axt@ate}\\axt@mkp{#1}\\let\\@classz\\axt@cz}}\\fi',
+  '\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}',
+  '\\def\\axt@czw{\\axt@cz\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\ifx\\@classz\\axt@czw\\expandafter\\axt@mkp\\else\\expandafter\\axt@mkw\\fi{#1}}}\\fi',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
   '\\def\\axt@take{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@tg\\or\\expandafter\\axt@tk\\or\\expandafter\\axt@tp\\fi}',

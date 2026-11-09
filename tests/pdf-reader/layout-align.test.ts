@@ -83,8 +83,12 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     // the template's own group level)
     expect(LAYOUT_TEX).toContain('\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else')
     expect(LAYOUT_TEX).toContain('\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}')
-    expect(LAYOUT_TEX).toContain('\\def\\axt@ate{\\xdef\\@preamble{\\@preamble\\axt@te{\\the\\@chnum}}}')
-    expect(LAYOUT_TEX).toContain('\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\let\\axt@cz\\@classz\\def\\@classz{\\axt@cz\\axt@ate}\\axt@mkp{#1}\\let\\@classz\\axt@cz}}')
+    // (the class appended with what the preamble holds left as it is: REVTeX's ltxutil appends tokens unexpanded, its macros
+    // run in the cell, and an \\xdef that expanded them again set its alignment box at the build: the table never ended)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}')
+    // (a \\@mkpream entered while one runs finds \\@classz wrapped and leaves it: wrapped again, the wrapper would call itself)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@czw{\\axt@cz\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}')
+    expect(LAYOUT_TEX).toContain('\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\ifx\\@classz\\axt@czw\\expandafter\\axt@mkp\\else\\expandafter\\axt@mkw\\fi{#1}}}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}')
     // (the skips a paragraph is broken by are those at its \\par, so its own are read once it ends: a one-shot para/after hook set
