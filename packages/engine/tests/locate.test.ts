@@ -2385,8 +2385,10 @@ describe('an element’s ink is what TeX set for it', () => {
     // (2610.17024v1 p11's `\REPOFOOTNOTE{}`, a paper's macro around a footnote: its "3" 6.58 pt and 3.16 pt over the line's
     // baseline, one baseline of its own. Read against its own glyphs alone it was level, stated the text "3", and the typesetter
     // drew it as the line's text: flat, at the line's size. Its glyphs stand on no baseline of its line's: no plain text, its ink
-    // cropped. A footnote's mark, which the typesetter draws raised (El.mark), keeps its text where TeX raised it; a macro on the
-    // line's baseline keeps its text)
+    // cropped. A footnote's mark, which the typesetter draws raised whatever TeX set it as (El.mark), keeps its text, raised
+    // or a superior figure on the baseline (newpx's, 2307.16209v1's 68 marks); a macro on the line's baseline keeps its text,
+    // its glyph's baseline told from the line's as two baselines are (ON_BASE: 2610.40394v1 p34's line at 476.125, stated
+    // 476.12, its \ref's "5.3" read 476.13 on the hundredth)
     const B = docOf([
       {
         lines: [
@@ -2394,8 +2396,9 @@ describe('an element’s ink is what TeX set for it', () => {
           { text: '3', x: 156, y: 703.16, size: 6.58 },
           { text: ' The work', x: 159.95, y: 700 },
           { text: '4', x: 213.95, y: 703.16, size: 6.58 },
-          { text: ' e.g.', x: 217.9, y: 700 },
+          { text: ' e.g.', x: 217.9, y: 700.006 },
           { text: ' now', x: 241.9, y: 700 },
+          { text: '5', x: 265.9, y: 700 },
         ],
       },
     ])
@@ -2406,6 +2409,7 @@ describe('an element’s ink is what TeX set for it', () => {
       el('3', '\\footnotemark'),
       el('4', '\\eg'),
       text(' now'),
+      el('6', '\\footnotemark'),
     ]
     const ins = ownedBy(
       B,
@@ -2414,6 +2418,7 @@ describe('an element’s ink is what TeX set for it', () => {
           ['1', { cls: 'umacro', unknown: true }],
           ['3', { cls: 'num', mark: true }],
           ['4', { cls: 'macro' }],
+          ['6', { cls: 'num', mark: true }],
         ]),
       ],
       [
@@ -2424,6 +2429,7 @@ describe('an element’s ink is what TeX set for it', () => {
           [0, E, 3],
           [0, E, 4],
           [0, T, -1],
+          [0, E, 6],
         ],
       ],
     )
@@ -2434,13 +2440,15 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(mark.ink).toEqual([[1, 156, r2(703.16 - 0.2 * 6.58), r2(156 + 0.6 * 6.58), r2(703.16 + 0.7 * 6.58), 700]])
     expect(elementOf(L, '3').text).toBe('4')
     expect(elementOf(L, '4').text).toBe('e.g.')
+    expect(elementOf(L, '6').text).toBe('5')
   })
 
   it('states a symbol drawn as its ink where TeX’s glyphs are not that symbol as drawn: a letter among them, or a raise its reading lacks', () => {
     // (2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred: the source's reading, which knows no `\vs`, is the symbol "*"
     // drawn on the baseline at the line's size (phClass2, `sym` without its raise), so the typesetter drew a full-size * and the
     // s was lost. TeX's ink is a bold s and a raised star: drawn as its ink, a formula's crop. A symbol on its line's baseline,
-    // `$\times$`, and one raised where its reading raises it, `$^\dagger$`, are drawn as their symbols still)
+    // `$\times$`, a Greek letter, `$\alpha$` (no Latin letter: a symbol to its reading, phClass), and one raised where its
+    // reading raises it, `$^\dagger$`, are drawn as their symbols still)
     const B = docOf([
       {
         lines: [
@@ -2452,6 +2460,7 @@ describe('an element’s ink is what TeX set for it', () => {
           { text: ' b', x: 136.2, y: 700 },
           { text: '†', x: 148.2, y: 704.5, size: 7, font: 'ABCDEF+CMSY7' },
           { text: ' now', x: 152.4, y: 700 },
+          { text: 'α', x: 176.4, y: 700, font: 'ABCDEF+CMMI10' },
         ],
       },
     ])
@@ -2463,6 +2472,7 @@ describe('an element’s ink is what TeX set for it', () => {
       text(' b'),
       el('5', '$^\\dagger$'),
       text(' now'),
+      el('7', '$\\alpha$'),
     ]
     const ins = ownedBy(
       B,
@@ -2471,6 +2481,7 @@ describe('an element’s ink is what TeX set for it', () => {
           ['1', { cls: 'symbol', copy: '*', sym: ['*'] }],
           ['3', { cls: 'symbol', copy: '×', sym: ['×'] }],
           ['5', { cls: 'symbol', copy: '†', sym: ['†', true] }],
+          ['7', { cls: 'symbol', copy: 'α', sym: ['α'] }],
         ]),
       ],
       [
@@ -2483,6 +2494,7 @@ describe('an element’s ink is what TeX set for it', () => {
           [0, T, -1],
           [0, E, 5],
           [0, T, -1],
+          [0, E, 7],
         ],
       ],
     )
@@ -2506,6 +2518,7 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(els.get('1')!.ink).toHaveLength(1)
     expect([els.get('3')!.kind, els.get('3')!.sym]).toEqual(['symbol', ['×']])
     expect([els.get('5')!.kind, els.get('5')!.sym]).toEqual(['symbol', ['†', 1]])
+    expect([els.get('7')!.kind, els.get('7')!.sym]).toEqual(['symbol', ['α']])
   })
 
   it('leaves a unit the original’s where an element TeX set ink for has none: not found is not "TeX set none" (math.md R3)', () => {

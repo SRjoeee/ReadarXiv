@@ -1312,8 +1312,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // text macro raised 0.1 em or more over its baseline (layer2.mjs scriptedOf) and draws a lowered one as text (1810.04805v2's
       // BERT_base, wrong too). A formula's text is no drawing (it is cropped, its text read for its brackets), nor a display's.
       // And each glyph where that text is drawn: on the baseline of the line it stands on (its ink's line, the hundredth most of
-      // that line's body glyphs share, lines.ts), or over it for a footnote's mark, which the typesetter draws raised (El.mark).
-      // One box TeX raised or lowered whole has its glyphs on one baseline of their own: 2610.17024v1 p11's `\REPOFOOTNOTE{}`, a
+      // that line's body glyphs share, lines.ts); a footnote's mark is drawn raised whatever TeX set it as (El.mark: a superior
+      // figure on the baseline, newpx's, 2307.16209v1). One box TeX raised or lowered whole has its glyphs on one baseline of
+      // their own: 2610.17024v1 p11's `\REPOFOOTNOTE{}`, a
       // paper's macro around a footnote, its "3" 6.58 pt and 3.16 pt over the line's baseline, was read level against its own
       // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
       const cls0 = classOf.get(id)?.cls
@@ -1321,16 +1322,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
         (!bx.length &&
           groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1) &&
-          standsAsDrawn(groups, ink, !!classOf.get(id)?.mark, gA))
+          (!!classOf.get(id)?.mark || standsAsDrawn(groups, ink, false, gA)))
       // (a symbol, drawn as its reading's character (El.sym) on the line's baseline, or raised where its reading raises it: only
-      // where TeX's ink is that symbol so drawn, no letter or digit among its glyphs (no symbol's reading holds one, phClass2) and
-      // each where the drawing sets it; else drawn as its ink. 2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred, was read
+      // where TeX's ink is that symbol so drawn, no Latin letter or digit among its glyphs (a symbol's reading holds none, its
+      // source's letters and digits once commands are dropped: phClass) and each where the drawing sets it; else drawn as its ink. 2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred, was read
       // as the symbol "*" on the baseline (the reading knows no `\vs`): drawn as a full-size *, the s lost)
       const c0 = classOf.get(id)
       if (
         c0?.cls === 'symbol' &&
         shown.length &&
-        (shown.some((a) => /[\p{L}\p{N}]/u.test(gA(a).u)) || !standsAsDrawn(groups, ink, !!c0.sym?.[1], gA))
+        (shown.some((a) => /[A-Za-z0-9]/.test(gA(a).u)) || !standsAsDrawn(groups, ink, !!c0.sym?.[1], gA))
       ) {
         mem.asInk ??= new Set()
         mem.asInk.add(id)
@@ -2214,8 +2215,10 @@ function columnsAndMeasures(
  *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
  *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
 /** whether an element's glyphs (by line, `groups`, read by `gA`, each line's with its ink's box on the line it stands on, `ink`,
- *  its baseline at 5) stand where its text is drawn: each glyph of a character on its line's baseline, equal on the engine's
- *  hundredth (TeX sets a line's text on one baseline), or, `raised`, over it (a footnote's mark, a symbol its reading raises) */
+ *  its baseline at 5) stand where its text is drawn: each glyph of a character on its line's baseline, as two baselines are
+ *  told (ON_BASE: the line's stated to a hundredth, a glyph's as the PDF wrote it; TeX's positions fall on a half-hundredth
+ *  often, 2610.40394v1 p34's line at 476.125, stated 476.12, its glyphs' floats rounding to either side), or, `raised`, over it
+ *  (a symbol its reading raises) */
 function standsAsDrawn(
   groups: readonly number[][],
   ink: readonly Ink[],
@@ -2227,7 +2230,7 @@ function standsAsDrawn(
       const g = gA(a)
       if (!/\S/.test(g.u)) return true
       const base = (ink[q] as Ink)[5]
-      return raised ? r2(g.y) > base : r2(g.y) === base
+      return raised ? g.y > base + ON_BASE : Math.abs(g.y - base) <= ON_BASE
     }),
   )
 }
