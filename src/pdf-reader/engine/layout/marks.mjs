@@ -445,6 +445,10 @@ export const INK_ANY = '\uFFFC'
 /** a character node as TeX lists it, of a font of LaTeX's (its encoding, the rest of its name): the character as TeX prints it,
  *  and a ligature's characters */
 const CHAR_NODE = /^\.+\\([A-Za-z0-9]+)\/\S+ (\S|\^\^[0-9a-f]{2}|\^\^.)(?: \(ligature (\S{2,3})\))?$/
+/** XeTeX's listing of a word of a font of its own (fontspec's, the TU encoding): one node, its font and the word's characters as
+ *  TeX prints them, where pdfTeX and LuaTeX list a character a node (2611.03178v1's \\textsc{CoworkOS}: `\\TU/XCharter(0)/m/sc/10.5
+ *  CoworkOS`) */
+const WORD_NODE = /^\.+\\TU\/\S+ (\S{2,})$/
 /** the text encodings, whose letters and digits are ASCII's */
 const TEXT_ENCODING = new Set(['OT1', 'T1', 'LY1', 'TU'])
 /** the punctuation each text encoding sets as ASCII's character and TeX prints as it: every one's, and T1's and TU's more
@@ -458,7 +462,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
  * The text each sample sets, from the probe's log (inkSection): each sample whose box TeX listed in full with no error
  * between its rows, of characters with nothing else but nodes that set no ink between them (glue, kerns, penalties, a
  * formula's switches, boxes at any depth), as [source, text], the characters in TeX's order, at most INK_TEXT_MAX:
- * - a letter or a digit of a text font (OT1, T1, LY1, TU: those are ASCII's there), a ligature of them, and the punctuation
+ * - a letter or a digit of a text font (OT1, T1, LY1, TU: those are ASCII's there), a ligature of them, XeTeX's word of them
+ *   (WORD_NODE: one node a word, outside a formula; under XeLaTeX no macro's text was known, so that a paper's macro at a
+ *   unit's head kept no ink of its own, 2611.03178v1's \\system{} after each run-in head), and the punctuation
  *   the font sets as ASCII's (PUNCT_ALL; T1's and TU's PUNCT_WIDE): \\newcommand\\bert{BERT\\xspace}'s "BERT", a model's name
  *   with a subscript in small capitals "BERTBASE", 2610.21098v1's \\CompletionTokenCap{} = 1{,}024 "1,024", a cell's lead
  *   \\texttt{max\\_tokens} "max_tokens" (T1's underscore; OT1's is a rule: no answer);
@@ -496,6 +502,13 @@ export function readInkTexts(log, samples) {
       if (TEXT_ENCODING.has(enc) && (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch) || (ch.length === 1 && punct.includes(ch)))) text += lig ?? ch
       else if (math > 0 && !lig && enc === 'OML' && /^[A-Za-z0-9]$/.test(ch)) text += ch
       else if (math > 0) text += INK_ANY
+      else bad = true
+      continue
+    }
+    // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
+    const w = math === 0 ? WORD_NODE.exec(line) : null
+    if (w) {
+      if ([...w[1]].every(ch => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
       else bad = true
       continue
     }
