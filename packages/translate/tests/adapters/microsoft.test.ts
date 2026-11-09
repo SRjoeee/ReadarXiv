@@ -146,10 +146,49 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
 })
 
 describe('microsoft: reading', () => {
+  it('takes our space beside a marker back where the source set the element glued to its word, whatever the reply sets there', () => {
+    // (2610.20967v1 p1 on staging, 2026-11-09: spconf's names, each name's marks `$^{1}$` glued to it, and its places, each
+    // place's mark glued before it. A marker touching a word is read as part of it, so a space of ours goes beside it; the
+    // reply kept it, and read back beside a CJK name it stood as a space TeX never set, 4.3 pt between the name and its mark
+    // where TeX's is 1.35)
+    const names = unit('n', [t('Song Yu'), el('1'), t(', Fang Tsai'), el('3'), t(', Yi Yang'), el('5')])
+    const m = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch })
+    expect(m.write(names, 'zh-Hans')).toBe('Song Yu @a#, Fang Tsai @b#, Yi Yang @c#')
+    expect(
+      readMicrosoft(names, JSON.stringify({ text: '\u4f59\u5b8b @a#\uff0c\u8521\u65b9 @b#\uff0c\u6768\u6021 @c#' }))
+        ?.content,
+    ).toEqual([
+      { t: 'text', s: '\u4f59\u5b8b' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: '\uff0c\u8521\u65b9' },
+      { t: 'el', id: '3' },
+      { t: 'text', s: '\uff0c\u6768\u6021' },
+      { t: 'el', id: '5' },
+    ])
+    // (a mark glued before its place: our space after it taken back; the space the source set before the second mark kept)
+    const places = unit('p', [el('1'), t('National University '), el('2'), t('University of California')])
+    expect(m.write(places, 'zh-Hans')).toBe('@a# National University @b# University of California')
+    expect(
+      readMicrosoft(places, JSON.stringify({ text: '@a# \u56fd\u7acb\u5927\u5b66 @b# \u52a0\u5dde\u5927\u5b66' }))
+        ?.content,
+    ).toEqual([
+      { t: 'el', id: '1' },
+      { t: 'text', s: '\u56fd\u7acb\u5927\u5b66 ' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '\u52a0\u5dde\u5927\u5b66' },
+    ])
+    // (an element the source set between spaces keeps the reply's spaces, as before)
+    const apart = unit('a', [t('Values '), el('1'), t(' hold.')])
+    expect(readMicrosoft(apart, JSON.stringify({ text: '\u6570\u503c @a# \u6210\u7acb\u3002' }))?.content).toEqual([
+      { t: 'text', s: '\u6570\u503c ' },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ' \u6210\u7acb\u3002' },
+    ])
+  })
   it("a display's own stop: written after its marker, the reply's marks after it taken off", () => {
     const r = readMicrosoft(UNITS[3] as never, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))
     expect(r?.content).toEqual([
-      { t: 'text', s: '我们有 ' },
+      { t: 'text', s: '我们有' },
       { t: 'el', id: 'd1' },
       { t: 'text', s: '然后我们继续。' },
     ])
@@ -199,7 +238,7 @@ describe('microsoft: an element that sets nothing goes on no wire', () => {
     const r = readMicrosoft(SILENT, JSON.stringify({ text: '我们训练一个示例模型 @a# 在每个词上，然后停止。' }))
     expect(r?.content).toEqual([
       { t: 'el', id: 'lab' },
-      { t: 'text', s: '我们训练一个示例模型 ' },
+      { t: 'text', s: '我们训练一个示例模型' },
       { t: 'el', id: 'c' },
       { t: 'el', id: 'k' },
       { t: 'text', s: ' 在每个词上，然后停止。' },
@@ -255,7 +294,7 @@ describe('microsoft: a span on no wire keeps its head (1810.04805v2, as staging 
       { t: 'span', id: '1', content: [{ t: 'el', id: '2' }] },
       { t: 'text', s: ' 基于特征和 ' },
       { t: 'span', id: '6', content: [{ t: 'el', id: '7' }] },
-      { t: 'text', s: ' 微调。基于特征的方法，如ELMo ' },
+      { t: 'text', s: ' 微调。基于特征的方法，如ELMo' },
       { t: 'el', id: '11' },
       { t: 'el', id: '12' },
       { t: 'text', s: '，使用任务专用架构，将预训练表示作为附加功能。微调方法，如生成预训练变换器（OpenAI GPT）' },
@@ -294,18 +333,18 @@ describe("microsoft: a head's last element found through its groups (a display i
     const [stop, , must, ref] = NESTED_DISPLAY as [never, never, never, never]
     const tail = { t: 'text', s: '然后我们继续。' }
     expect(readMicrosoft(stop, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
-      { t: 'text', s: '我们有 ' },
+      { t: 'text', s: '我们有' },
       { t: 'span', id: 's', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
       tail,
     ])
     expect(readMicrosoft(ref, JSON.stringify({ text: '我们有 @a#。@b# 然后我们继续。' }))?.content).toEqual([
-      { t: 'text', s: '我们有 ' },
+      { t: 'text', s: '我们有' },
       { t: 'span', id: 's', content: [{ t: 'el', id: 'd' }] },
       { t: 'el', id: 'r' },
       { t: 'text', s: ' 然后我们继续。' },
     ])
     expect(readMicrosoft(must, JSON.stringify({ text: '我们有 @a#。然后我们继续。' }))?.content).toEqual([
-      { t: 'text', s: '我们有 ' },
+      { t: 'text', s: '我们有' },
       { t: 'span', id: 'g', content: [{ t: 'span', id: 'n', content: [{ t: 'el', id: 'd' }] }] },
       tail,
     ])
@@ -331,12 +370,12 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
       { t: 'el', id: 'b' },
       { t: 'text', s: '\n' },
       { t: 'el', id: 'n' },
-      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 无 XYZ ' }] },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] },
       { t: 'text', s: '：一个未经 XYZ 任务训练的模型。' },
       { t: 'el', id: 'b2' },
       { t: 'text', s: '\n' },
       { t: 'el', id: 'n2' },
-      { t: 'span', id: 'h2', content: [{ t: 'text', s: ' 仅 XYZ ' }] },
+      { t: 'span', id: 'h2', content: [{ t: 'text', s: '仅 XYZ' }] },
       { t: 'text', s: '：一个仅用它训练的模型。' },
     ])
     expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
@@ -350,7 +389,7 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
     )
     expect(r?.content.slice(5, 7)).toEqual([
       { t: 'el', id: 'n' },
-      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 无 XYZ ' }] },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] },
     ])
   })
   it("the endpoint's sentences begin at the label, in both projections", () => {
@@ -362,9 +401,10 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
     const src = [at(wire, '@b#'), at(wire, '@d#') - at(wire, '@b#'), wire.length - at(wire, '@d#')]
     const tr = [at(text, '@b#'), at(text, '@d#') - at(text, '@b#'), text.length - at(text, '@d#')]
     const r = readMicrosoft(u, JSON.stringify({ text, src, tr }))
-    // (each at the label's first word: the source's "No XYZ", the translation's 「无 XYZ」 past the space before it)
+    // (each at the label's first word: the source's "No XYZ", the translation's 「无 XYZ」 right after its marker, our space
+    // before it taken back: the source set the label's words glued to the element before them)
     expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n￼'.length)
-    expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：￼\n￼\n￼ '.length)
+    expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：￼\n￼\n￼'.length)
   })
 })
 
@@ -381,7 +421,7 @@ describe('microsoft: a stop TeX sets at a group’s end', () => {
       }),
     )
     expect(r?.content).toEqual([
-      { t: 'span', id: 'h', content: [{ t: 'text', s: ' 目前的方法不可靠。' }] },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: '目前的方法不可靠。' }] },
       { t: 'text', s: ' 为了推断来源，可以对句子排序。我们称之为可验证来源。然后我们继续。' },
     ])
     expect(accept(HEAD_STOP, r?.content ?? [])).toEqual({ ok: true })
@@ -409,9 +449,9 @@ describe('microsoft: an element inside a word', () => {
       { t: 'el', id: 'u' },
       { t: 'text', s: 's 包含 Ni' },
       { t: 'el', id: 'f' },
-      { t: 'text', s: 'B，作者 Jane ' },
+      { t: 'text', s: 'B，作者 Jane' },
       { t: 'el', id: 'tie' },
-      { t: 'text', s: ' Doe。' },
+      { t: 'text', s: 'Doe。' },
     ])
   })
 })

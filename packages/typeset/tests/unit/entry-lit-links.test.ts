@@ -800,15 +800,16 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
       expect(b[0]).toBeCloseTo(seven.x, 6)
       expect(b[2] - b[0]).toBeCloseTo(0.5 * p.members[0]!.fit!.size, 6)
     })
-    it('lays a footnote’s mark the same way, and pairs a reference and a \\hyperref group in their source’s order', () => {
-      // (a nested footnote's mark "1" with the full stop after it, Hfootnote.2: 2608.25210v2-zh p1)
+    it('moves a footnote’s mark’s with its crop, and pairs a reference and a \\hyperref group in their source’s order', () => {
+      // (a nested footnote's mark "1" with the full stop after it, Hfootnote.2: 2608.25210v2-zh p1. A mark is drawn as its ink
+      // (lay/read.ts readingsOf's `mark`), so its link goes with its crop, as an element's drawn so)
       const mark = member({
         els: [['5', { kind: 'num', mark: 1, nested: 1, text: '1', ink: [[1, 150, 703, 153, 707, 700]] }]],
       })
       const stop: Link = { box: [149, 697, 157, 708], to: { dest: '"Hfootnote.2"' }, owner: [0, ''], text: '1.' }
       const fates: LinkFate[] = []
       layPage(part(mark, [stop]), rowsOf([r7]), rules, metrics(), { linkFates: fates })
-      expect(fates).toEqual(['text'])
+      expect(fates).toEqual(['crop'])
       // (a \hyperref group after the reference: two destinations, two pieces of their kind; the part made before paired none, the
       // order over all bare groups having one group for two annotations)
       const both = member({ els: [['5', ref()]], spans: [['7', { cmd: 'hyperref' }]] })

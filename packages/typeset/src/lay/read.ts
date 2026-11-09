@@ -201,7 +201,8 @@ const boxOf = (S: readonly number[]) => {
 }
 
 /** drawnAs (L2:1757) over a rendering whose source knows its ink (its box): a formula over lines as its crops, the page's text
- *  for a citation, a reference, a macro and a formula over lines, else a crop of its box; its copy text the source's */
+ *  for a citation, a reference, a macro and a formula over lines, else a crop of its box; its copy text the source's. A mark
+ *  (`mark`: readingsOf's) on one line is a crop of its box whatever its class */
 function drawnAs(
   cls: string,
   g: Gap & { box: ReturnType<typeof boxOf> },
@@ -210,6 +211,7 @@ function drawnAs(
   page: number,
   st: TStyle | null,
   literal: boolean,
+  mark = false,
 ) {
   const box = g.box
   const broken = box.lines > 1
@@ -218,8 +220,8 @@ function drawnAs(
     const parts = cropPartsOfSegments(box.segs)
     if (parts) return { ...cropFields(parts), text: copy } as Res
   }
-  if (cls !== 'other' || broken || textMacro) return { mode: 'orig-text', text: g.text, sup, st } as Res
-  return { mode: 'crop', page, ...cropOfBox(box), text: copy } as Res
+  if ((cls !== 'other' && !mark) || broken || textMacro) return { mode: 'orig-text', text: g.text, sup, st } as Res
+  return { mode: 'crop', page, ...cropOfBox(box), text: copy, ...(mark ? { mark: true } : {}) } as Res
 }
 
 /** each element's reading (U.elements' ElementReading) from its El, by the row's piece index */
@@ -264,6 +266,11 @@ function readingsOf(
     const cls = el?.kind ?? 'zero'
     const copy = el?.copy ?? ''
     const supSrc = !!el?.mark
+    // (a mark: a glyph TeX set raised in its own font at its script size, a footnote's or a \thanks mark (El.mark), or a
+    // symbol set as a superscript (El.sym's second): drawn as its ink, its size and raise TeX's, whatever unit holds it. As
+    // the page's text it was its text in the target's face at a superscript's share of the line's size (1706.03762v7 p1's
+    // seven CMSY7 stars 1.6 pt tall where TeX's are 2.7, its first author's, his trail's crop, at full size))
+    const mark = !!el?.mark || (cls === 'symbol' && !!el?.sym?.[1])
     const ink = el?.ink ?? []
     const S = el ? segsOf(el) : []
     const onKept = ink.length > 0 && ink.every((q) => lineOfInk(L, q, true) !== null)
@@ -290,7 +297,12 @@ function readingsOf(
     else if (el?.keep && cls !== 'display' && cls !== 'symbol' && cls !== 'zero' && ink.length && !onKept)
       fixed = { mode: 'none', text: '', proof: true, inPlace: true }
     let gap: (Gap & { box: ReturnType<typeof boxOf> }) | null = null
-    if (cls !== 'zero' && cls !== 'symbol' && (ink.length || textOnly) && !(cls === 'space' && !ink.length)) {
+    if (
+      cls !== 'zero' &&
+      (cls !== 'symbol' || (mark && ink.length)) &&
+      (ink.length || textOnly) &&
+      !(cls === 'space' && !ink.length)
+    ) {
       let lines = ink.map((q) => lineOfInk(L, q, cls === 'display' ? true : null)).filter((x): x is string => !!x)
       // (a display the unit begins or ends with, its rows before its first text line or after its last, stays in place: today's
       // layout file holds no line of it (the maker's inPlace, a unit's first or last piece), so no region of it is referenced)
@@ -309,7 +321,7 @@ function readingsOf(
       ? { fam: el.style.role, bold: !!el.style.bold, italic: !!el.style.slant }
       : null
     const literal = !!el?.literal
-    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal) : null
+    const drawn0 = gap ? drawnAs(cls, gap, supSrc, copy, page, gst, literal, mark) : null
     // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
     const drawn =
       drawn0?.mode === 'crop' && !drawn0.parts && el?.breaks?.length ? { ...drawn0, breaks: el.breaks } : drawn0
