@@ -1003,14 +1003,14 @@ function ownLater(name, b, before, ctx) {
 }
 /** a call of such a command: its argument of text the block's (frontBlock, its role ownAuthorsOf's), its other arguments as they
  *  are (a mark's key, a label); the call's end, or -1 where the argument is not there */
-function ownAuthorCall(s, end, name, to, b, ctx) {
+function ownAuthorCall(s, at, end, name, to, b, ctx) {
   const { role, param } = ctx.ownAuthors.get(name), macro = ctx.macros.get(name)
   const { args, end: e } = frontArgs(s, end, name, ctx, to)
   const reqs = args.filter(a => a.kind === 'req'), opt = args.find(a => a.kind === 'opt')
   const arg = macro?.opt && param === 1 ? opt : reqs[param - 1 - (macro?.opt ? 1 : 0)]
   if (!arg) return -1
   const before = b.units.length
-  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role)
+  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role, at === null ? null : { at, end: e })
   ownLater(name, b, before, ctx)
   return e
 }
@@ -1806,7 +1806,8 @@ function frontEnds(s, from, to, ifs = new Set()) {
  * its own (frontValues). An e-mail or a web address in any of them, an ORCID, a mark, stays as it is (keepAddresses, the
  * placeholders)
  */
-function frontBlock(s, from, to, b, ctx, role = 'names') {
+function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
+  const callAt = call ? calledAfter(s, call, ctx) : undefined
   if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
   // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level
   const notes = []
@@ -1865,6 +1866,32 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
   // that no unit's pieces, nor a unit that nests it, carry it: sourceHash)
   const block = { text: s.slice(from, to) }
   for (const u of made) BLOCK_OF.set(u, block)
+  // (the calls the marked compile states, each on the first unit after it: the call's own command where another author's call
+  // ended right before it, and each author's \\and inside the block — layoutMarking's \\axtcall, CALLED_AT)
+  const top = topUnits(made)
+  const states = (at, after) => { const u = top.find(v => v.start >= after); if (u && !CALLED_AT.has(u)) CALLED_AT.set(u, at) }
+  if (callAt !== undefined) states(callAt, from)
+  for (const e of ends) if (e.and) states(e.at, e.end)
+}
+/**
+ * Where the marked compile states an author's call (layout/marks.mjs CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in
+ * horizontal mode alone), by the first unit after it: an author block's command in the document (\\icmlauthor, an \\author of a
+ * class that sets it where it stands) right after another's, white space and comments alone between — ICML's names, each a call
+ * of its own in one paragraph, its marks set after its name —, and each \\and that opens an author's block inside one (LaTeX's
+ * \\author, NeurIPS' \\And). Each a source offset, in the unit's file. What TeX sets between an author's end mark and the next
+ * author's call is the author's (its trail: the engine's locate), what after it the next author's (its lead: own.mjs MR 5): no
+ * gap tells them apart, a thin space or a word space (2611.03953v2's names, 2610.10069v1's \\thanks mark before its \\and). A call
+ * in the preamble states none (frontMatter: TeX sets nothing there, and a class stores what it sets later and whole, its
+ * separators its own — 2604.14228v3's \\addtolist), the \\and inside its argument still
+ */
+const CALLED_AT = new WeakMap()
+export const calledAt = u => CALLED_AT.get(u)
+/** the offset of an author block's call (`call`: its command's start and its arguments' end) where another author call ended
+ *  right before it in the same text, white space and comments alone between; this call noted for the next */
+function calledAfter(s, call, ctx) {
+  const last = ctx.frontCall
+  ctx.frontCall = { s, end: call.end }
+  return last?.s === s && last.end <= call.at && /^(?:\s|%[^\n]*(?:\n|$))*$/.test(s.slice(last.end, call.at)) ? call.at : undefined
 }
 /** an author block's unit's block (frontBlock): its command's whole argument, by unit */
 const BLOCK_OF = new WeakMap()
@@ -1976,7 +2003,7 @@ function envArgs(s, at, to, env, ctx) {
  * arguments as they are. Where the table knows its parameters the hook's is found by its index, else it is its n-th
  * required argument or its last. Its end, or -1 where it has no such argument
  */
-function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
+function frontCommand(s, at, end, name, to, b, ctx, { front = false } = {}) {
   const [role, n] = FRONT_ROLES[name]
   const call = commandArgs(s, end, name, to)
   const reqs = call.args.filter(a => a.kind === 'req' && s[a.start] === '{')
@@ -1984,7 +2011,7 @@ function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
   if (!arg) return -1
   b.flush()
   const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
-  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name))
+  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name), at === null ? null : { at, end: call.end })
   else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
   else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
   if (front) for (const u of b.units.slice(before)) u.front = true
@@ -2302,11 +2329,12 @@ function walk(s, from, to, b, ctx) {
         i = content.end; continue
       }
     }
-    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      const first = args.find(a => a.kind === 'req')
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name), a === first ? { at: i, end: e } : null); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2352,7 +2380,7 @@ function walk(s, from, to, b, ctx) {
     // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
     // paragraph's unit must not run over the call, whose source no piece of it holds — written back, the call was gone
     // (the re-review's N1, \note{…} mid-paragraph)
-    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
+    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
@@ -2425,7 +2453,7 @@ function walk(s, from, to, b, ctx) {
     if (name === '\\') { const { args, end: e } = argsAfter(s, end, 1); const stop = args[0]?.kind === 'opt' ? e : end; endText(); if (b.cellMode) { b.flush(); i = stop; continue } b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
     // \dedicatory, a \date): their text a unit of what it is, the text before them ended first (above)
-    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     // a running head, kept as it is with its arguments (2608.04322's \markboth{…}%\n{…}, whose second argument was walked
     // as text only while a comment kept it from the command)
     if (RUNNING_HEADS.has(name)) { const call = commandArgs(s, end, name, to); endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
@@ -2915,7 +2943,7 @@ function frontMatter(s, from, to, b, ctx) {
       continue
     }
     if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
-    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
+    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
@@ -2934,7 +2962,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (m) { ctx.visitFront?.((m[1] ?? m[2]).trim(), ctx.dirs); past = c.end + m[0].length }
       continue
     }
-    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, c.end, c.name, to, b, ctx); if (e > 0) past = e }
+    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e }
   }
   b.flush()
 }
@@ -3493,7 +3521,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // the line and the original (FIT_DEF)
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
     // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
-    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // (and an author's call the marked compile states, its unit's mark's `call` at `callAt`, in the text between two units: CALLED_AT)
+    const called = mark ? us.flatMap(u => { const m = mark(u); return m?.call && Number.isInteger(m.callAt) ? [[m.callAt, [utf8Bytes(m.call)]]] : [] }) : []
+    const inserts = [...fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]), ...called].sort((a, b) => a[0] - b[0])
     // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written, and each
     // unit nested in one, inside its range, with the top-level unit it is written in (`outer`), which a compile's error
     // is located by (tex-errors.mjs)

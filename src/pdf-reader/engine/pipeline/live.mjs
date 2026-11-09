@@ -6,7 +6,7 @@
 // over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames, theoremNames } from '../source/paper-names.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, regionsTex } from '../layout/marks.mjs'
+import { CALL_TEX, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, regionsTex } from '../layout/marks.mjs'
 import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inAuthorBlock, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { nameCells } from '../translate/mt.mjs'
@@ -290,9 +290,11 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
   const project = !transcode && read.transcode?.size ? { ...read, transcode: new Set() } : read
   const base = markUnits(project.units), index = new Map(project.units.map((u, i) => [u, i]))
   const raw = spans ? [] : null
-  let out, patched = null
+  let out, patched = null, called = false
   if (layout) {
     const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }), paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
+    called = marked.units.some(u => !!marked.mark(u)?.call)
     const asSource = unmarked ? new Set([...unmarked].map(i => marked.units[i]).filter(Boolean)) : null
     out = patch({ ...project, units: marked.units }, new Map(), { mark: marked.mark, spans: raw, asSource, pastBegin })
     for (const x of raw ?? []) { x.unit = paperOf.get(x.unit) ?? x.unit; if (x.outer) x.outer = paperOf.get(x.outer) ?? x.outer }
@@ -314,7 +316,7 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }

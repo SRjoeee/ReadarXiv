@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { CALL_TEX, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { classesOn, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
@@ -297,5 +297,30 @@ describe('the places\' units: their number, their class, their marks', () => {
   it('marked as the author block\'s names are, in the layout compile: its own start and end marks', () => {
     const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(tex).toMatch(/\\author\{\\leavevmode\\axtmark\{1s\}Alice Smith\\axtend\{1e\} \\\\ \\leavevmode\\axtmark\{4s\}University of Somewhere\\axtend\{4e\}\}/)
+  })
+})
+
+describe('the author calls the marked original states (\\axtcall, CALL_TEX: the point `<i>c` before an author\'s call)', () => {
+  // (what TeX sets between an author's end mark and the next author's call is the author's, what after it the next author's: no
+  // gap tells them apart, ICML's marks after a name a thin space after it, 2611.03953v2; a \thanks mark before an \and)
+  const marked = (p: ReturnType<typeof open>) => new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+  const idOf = (p: ReturnType<typeof open>, name: string) => units(p).findIndex(u => u.kind === 'author' && textOf(u) === name)
+  it('before each \\and that opens an author\'s block inside one, its first unit\'s', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Ashish Vaswani\\thanks{Equal contribution.} \\\\ Google Brain \\And Noam Shazeer \\\\ Google Research}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'Noam Shazeer')}}\\And `)
+    expect(tex.match(/\\axtcall\{/g)).toHaveLength(1)
+    expect(tex).toContain(CALL_TEX)
+  })
+  it('before an author block\'s command right after another\'s, never before the first (ICML\'s \\icmlauthor)', () => {
+    const p = open('\\twocolumn[\\icmltitle{A Title}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n% a comment\n\\icmlauthor{John Roe}{y}\n\\end{icmlauthorlist}\n]\nWords.', '\\usepackage{icml2025}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'John Roe')}}\\icmlauthor{`)
+    expect(tex.match(/\\axtcall\{/g)).toHaveLength(1)
+  })
+  it('none for one author\'s block, and no definition in the head: the paper\'s bytes as before', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Jane Doe \\\\ The University}')
+    const tex = marked(p)
+    expect(tex).not.toContain('\\axtcall')
   })
 })

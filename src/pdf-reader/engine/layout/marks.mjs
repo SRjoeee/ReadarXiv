@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { BACKREF_LIST, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { BACKREF_LIST, calledAt, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
@@ -1208,6 +1208,22 @@ export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{
  * After LAYOUT_TEX, for such a paper alone (live.mjs originalFiles, probeFiles): every other engine's files are byte for byte
  * as before. One line, no comment
  */
+/**
+ * \axtcall{i}, before an author's call (latex-front.mjs CALLED_AT, layoutMarking: the command of an author block right after
+ * another's, an \and inside one): the point `<i>c`, unit i the first after it, where TeX is in horizontal mode alone, set as a
+ * closing mark is (\axt@set: every glue, kern and penalty that ends the list taken off, the point set against what came before,
+ * each put back), never on an empty list. Measured on the 31 papers that state a call (2026-11-10), where it first set an end
+ * mark's way: one glue taken off of two (a macro's space and the source's line end after ICML's marks) left the point between
+ * them, TeX broke the centred line at the second and kept the first, the line a space wider (2611.03953v2's first line 1.245 pt
+ * to the left); and, being \protected, it began a row of its own where a block ends in `\\` before NeurIPS' \And (TeX's look for
+ * \noalign after a row's \cr expands every macro and stops at any other token): an empty row, its strut 10.9 pt (1706.03762v7's
+ * second line of names). So it is expandable where LaTeX typesets (\protect its \@typeset@protect, as \axtpma's), to nothing
+ * outside horizontal mode — between two rows of an alignment, in vertical mode, in the preamble —, and kept as it is where LaTeX
+ * stores text robustly; gobbled in a PDF string (hyperref's pdfauthor from \@author). In the marked compile's head only where the
+ * source states a call (live.mjs originalFiles): every other paper's bytes as before. After LAYOUT_TEX, whose \axt@set it uses.
+ * One line
+ */
+export const CALL_TEX = '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
 export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
 
 /** a unit's alignment as the marks file holds it (readAlign): centred, flush left, flush right, justified */
@@ -1468,8 +1484,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // class sets it again (own.mjs MR 3). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
     if (u.kind === 'heading') return { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
+    // (and an author's call the source states before it, latex-front.mjs CALLED_AT: its point `<i>c`, CALL_TEX)
     const f = front(u)
-    if (f) return f
+    if (f) { const at = calledAt(u); return at === undefined ? f : { ...f, call: `\\axtcall{${i}}`, callAt: at } }
     const m = base(u)
     return m && lines ? { ...m, before: `\\axtlines{${i}}` } : m
   }

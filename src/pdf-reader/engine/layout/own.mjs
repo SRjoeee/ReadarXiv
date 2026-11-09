@@ -295,6 +295,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     return 0
   }
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
+  // (a unit whose call the marked compile states, an author's (latex-front.mjs \axtcall: the point `<i>c` before the command or
+  // the \and that opens its block): its lead is what TeX set between that point and its start, its label whatever its form, and
+  // what stands before the point is the author's before, its trail (locate). Walked back to the end mark before, ICML's marks
+  // after a name were the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
+  const stated = new Set()
   for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
@@ -315,6 +320,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
       if (END.test(X.name)) break
+      if (X.name === `${id}c`) { stated.add(id); break }
       // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
       // or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) { if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p'); lead.glyphs = []; continue }
@@ -615,7 +621,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
       // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
       // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
-      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
+      if (!stated.has(id) && !isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
         if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
         for (const [p, i] of lead) gOwn[p - 1][i] = null
         u.groups.delete(`u${id}.l`)
