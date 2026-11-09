@@ -122,3 +122,53 @@ describe("an ink unit that echoes a source unit is joined by what it is: the ink
     expect(got[50]).toEqual({ today: 61 })
   })
 })
+
+describe("a unit whose addresses v2 holds as elements is today's unit of the same glyphs, its addresses text", () => {
+  // (2609.36054v2 p1 #28: v2's note holds each e-mail address as an element `\url{…}` (wire-tail), a content today's prepare
+  // never made, so its id is no unit's of today; today's unit of those glyphs holds the addresses as text)
+  const url = (a: string, id: string) => ({ t: 'el', id, kind: 'url', src: `\\url{${a}}` })
+  const note = [
+    { t: 'text', s: '*Correspondence to: ' },
+    url('alan@gov.ai', '1'),
+    { t: 'text', s: ' and ' },
+    url('soren@casp.ac', '3'),
+    { t: 'text', s: '. The views are ours.' },
+  ] as unknown as Content
+  const said = '*Correspondence to: alan@gov.ai and soren@casp.ac. The views are ours.'
+  const lines = [[1, 0, 45.65, 473.09, 45.6], [1, 0, 46.99, 460.71, 34.64]]
+  const at = (...ys: number[]) => ys.map((baseline) => ({ page: 1, baseline }))
+  const prepared = (o: object = {}) =>
+    new Map([[107, { ord: 107, id: Q, kind: 'inknotes', text: said, pieces: [], lines: at(45.6, 34.64), ...o }]])
+  const part = (kind = 'inknotes') => bundle({ 1: [member(108, kind, P, { lines })] }, [{ id: P, kind, content: note }])
+  const pages = pagesOf({ 1: [[108, 'none']] })
+
+  it("joins it to today's unit of its text, its addresses as their text, set on the same lines of A", () => {
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared())[108]).toEqual({ today: 107 })
+  })
+  it('joins it whatever kind each reading gave those glyphs (2610.21313 p1: an inknotes of today, an inknames of v2)', () => {
+    expect(todayJoin(pages, part('inknames'), [{ ord: 107, id: Q }], prepared())[108]).toEqual({ today: 107 })
+  })
+  it('joins nothing to a unit of another text, or of the same text on other lines', () => {
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared({ text: `${said} More.` }))[108]).toBeUndefined()
+    expect(todayJoin(pages, part(), [{ ord: 107, id: Q }], prepared({ lines: at(45.6, 30) }))[108]).toBeUndefined()
+  })
+  it('joins nothing to a unit of today another member is joined to by its id', () => {
+    // (another member of v2's part of today's id Q, joined to it first)
+    const both = bundle(
+      { 1: [member(100, 'inknotes', Q), member(108, 'inknotes', P, { lines })] },
+      [
+        { id: Q, kind: 'inknotes', content: text(said) },
+        { id: P, kind: 'inknotes', content: note },
+      ],
+    )
+    const got = todayJoin(pagesOf({ 1: [[100, 'laid'], [108, 'none']] }), both, [{ ord: 107, id: Q }], prepared())
+    expect(got).toEqual({ 100: { today: 107 } })
+  })
+  it('a unit holding no address, or another element, is joined by its id alone', () => {
+    const plain = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: text(said) }])
+    expect(todayJoin(pages, plain, [{ ord: 107, id: Q }], prepared())[108]).toBeUndefined()
+    const math = [...note, { t: 'el', id: '5', kind: 'math', src: '$x$' }] as unknown as Content
+    const withMath = bundle({ 1: [member(108, 'inknotes', P, { lines })] }, [{ id: P, kind: 'inknotes', content: math }])
+    expect(todayJoin(pages, withMath, [{ ord: 107, id: Q }], prepared({ text: `${said}￼` }))[108]).toBeUndefined()
+  })
+})

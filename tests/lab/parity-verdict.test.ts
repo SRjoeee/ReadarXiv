@@ -496,3 +496,24 @@ describe('the run judged whole', () => {
     expect(verdictOf([], [page('a-zh', 1, { worse: 2 })])).toMatchObject({ pass: false, worse: 1 })
   })
 })
+
+describe("shown: a unit today draws in its own source's words misses no translation where v2 leaves the original's ink", () => {
+  // (2608.25210 p1: an e-mail address alone, the stored row the address as it went; v2's part holds it as a kept line, its
+  // ink the original's. 2610.21313 p1 t112: a row that translated the address's "bo", which v2 leaves)
+  const prep = (text: string) => [{ ord: 499, kind: 'inknotes', text, lines: [{ page: N, x0: 92.47, x1: 192.23, baseline: 646.6, top: 653.55, bottom: 644.23, size: 9.96 }] }]
+  const page = (drawn: string, source: string) =>
+    measure(v2Of(), rec({ today: { units: [{ id: 499, lines: [drawnLine(92.47, 192.21, 646.6, drawn, 9.96)] }] } }), prep(source))
+  const shown = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'shown')
+
+  it("today's drawn text its source's letters and digits: no difference, the unit named apart", () => {
+    const p = page('yiminglin@berkeley.edu ', 'yiminglin@berkeley.edu')
+    expect(shown(p)).toEqual([])
+    expect(p.measures.echoed).toEqual(['t499 inknotes'])
+  })
+  it("today's drawn text not its source's: a translation missing, as before", () => {
+    expect(shown(page('博wang@sutd.edu.sg ', 'bo wang@sutd.edu.sg'))).toMatchObject([{ unit: 't499 inknotes', worse: true }])
+  })
+  it('a unit whose source holds no letter or digit is no echo: judged as before', () => {
+    expect(shown(page('（）', '()'))).toMatchObject([{ unit: 't499 inknotes', worse: true }])
+  })
+})

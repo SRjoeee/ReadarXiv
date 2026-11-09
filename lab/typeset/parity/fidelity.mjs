@@ -35,7 +35,8 @@ export const LEAD_SHARE = 0.05
 const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
 /** a cased letter (Unicode: it has another case) */
 const cased = (ch) => ch.toLowerCase() !== ch.toUpperCase()
-const bare = (s) => String(s ?? '').normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
+/** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
+export const bare = (s) => String(s ?? '').normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
 
 // ---------------------------------------------------------------- the original read off arXiv's glyphs
 /** the runs of arXiv's page whose middle stands in one of `boxes` ([x0, y0, x1, y1], PDF units, padded half a point) */

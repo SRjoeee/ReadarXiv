@@ -17,7 +17,7 @@ register('../checkpoint/items-hook.mjs', import.meta.url)
 register('./hook.mjs', import.meta.url)
 const { gateL1Pair } = await import('../../../packages/typeset/tests/replay/gate-l1.ts')
 const { ledger, readGz, TAP } = await import('../../../packages/typeset/tests/replay/tap.ts')
-const { l1Paper } = await import('../../../packages/typeset/tests/replay/l1.ts')
+const { l1Paper, todayPrepared } = await import('../../../packages/typeset/tests/replay/l1.ts')
 const { paperOf } = await import('../../../packages/typeset/tests/replay/today.ts')
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
@@ -78,8 +78,9 @@ for (const pair of pairs) {
   globalThis.__parityLay = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
-  // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs)
-  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units) : {}
+  // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
+  // glyphs too, where v2's unit holds as elements the addresses today's held as text, over today's prepare dump)
+  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair))) : {}
   const facts = {}
   for (const [pg, part] of bundle?.parts ?? []) {
     const list = []

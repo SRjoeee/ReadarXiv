@@ -4,7 +4,7 @@
 // differences past a noise floor judged (v2 nearer passes, farther fails the page), and each side's faults against the
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
-import { judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -102,7 +102,7 @@ export const WEIGHT = {
 export const FLAGS = Object.keys(WEIGHT)
 /** what each measure is, as a distance from the original */
 export const SAYS = {
-  shown: "a unit today shows translated that v2 leaves the original's, or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
+  shown: "a unit today shows translated that v2 leaves the original's (one today draws in its source's own words misses none), or its label today relabels that v2 keeps the original's: a translation missing (no nearness judged)",
   weight: "the translated text's ink darkness (mean over its glyph pixels) against the original text's (its units' lines on arXiv's page)",
   anchor: "a unit's first line against the original's first line: the smaller of its baseline's and its em top's offsets",
   align: "TeX's alignment kept: a line's start (left, justified), midpoint (centred) or end (right) against the original's lines'",
@@ -520,10 +520,20 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   let gained = 0
   // (every unit today draws that v2 does not: where v2's part has its member, that member's state; where no member of v2's part
-  // is joined to it (prepare or the join lost it), that is said: a translation missing all the same)
+  // is joined to it (prepare or the join lost it), that is said: a translation missing all the same. But a unit today draws in
+  // its source's own words, letters and digits (the state `groups` reads a drawn cell in: an address alone, a reply that came
+  // back as it went), misses no translation where v2 leaves the original's ink of it: those named apart, `echoed`)
+  const echoed = []
+  const todayRaw = new Map(rec.today.units.map((u) => [`t${u.id}`, u.lines]))
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
+    const src = prepByOrd.get(Number(key.slice(1)))?.text
+    const said = (todayRaw.get(key) ?? []).map((l) => l.text).join('')
+    if (typeof src === 'string' && bare(src) !== '' && bare(said) === bare(src)) {
+      echoed.push(`${key} ${o?.kind ?? ''}`.trim())
+      continue
+    }
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, true, 'today')
   }
@@ -721,6 +731,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     diff: px.diff ?? null,
     rules: rules.length,
     laid: { today: T.size, v2: V.size, gained },
+    echoed,
     figures: { today: figT, v2: figV, v2Laid: figLaid },
   }
   for (const f of FLAGS) {
