@@ -18,11 +18,12 @@ const textless = t => t.blockTo !== undefined || t.newline !== undefined || t.pa
  * cut opens (a URL cut by its characters, a hyphenated word's tail) begins inside the token the line before ends in. No
  * sentence, no word of the alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the frame changes at
  * a natural line end). A run laid in one line is cut in it, at the share of its tokens, the one short line a break leaves.
- * Wherever the fit sets that line, in an earlier frame (its frame before holds more than its share) or in that one (its frame
- * before holds less, at the fit's state): every lay of the tokens keeps the share, the page fill setting a frame before
- * tighter to hold the text before its cut (fillLeadsOf framesLeadsOf; lab option (i)'s frame share, 2026-11-09: 2610.22065v1
- * p5's column a line short of TeX's where the fit set seven of ten here at its leading and the share is eight). Returns
- * [{ page, frame, at }], `frame` the unit's block the frame begins with, `at` the token its text begins with, rising
+ * Wherever the fit sets that line: in an earlier frame (its frame before holds more than its share) every lay keeps the cut;
+ * in that one or later (its frame before holds less, at the fit's state) the cut is the share's (`share`), which a lay keeps
+ * only at a state that holds the share (lab option (i)'s frame share, 2026-11-09: 2610.22065v1 p5's column a line short of
+ * TeX's where the fit set seven of ten there and the share is eight; the page fill holds it where that costs no frame a
+ * leading under its page's band, fillPage). Returns [{ page, frame, at, share? }], `frame` the unit's block the frame begins
+ * with, `at` the token its text begins with, rising
  */
 export function pageCutsOf(lines, blocks, tokens, P) {
   const frames = []
@@ -54,7 +55,7 @@ export function pageCutsOf(lines, blocks, tokens, P) {
         while (q < ix.length && !opens(tokens[ix[q]])) q++
         if (q >= ix.length) break
         q0 = q
-        out.push({ page: frame.page, frame: frame.first, at: ix[q] })
+        out.push({ page: frame.page, frame: frame.first, at: ix[q], ...(l0.block < frame.first ? {} : { share: true }) })
         continue
       }
       // (the line ends a cut may stand at: past the last cut, short of the run's last line, each line one a token opens)
@@ -67,9 +68,11 @@ export function pageCutsOf(lines, blocks, tokens, P) {
       }
       if (k < 0) break
       k0 = k
-      // (whichever frame the fit's own flow sets that line in: a fit that sets it later, its frame before not full at its state,
-      // keeps it so, the break reached in that frame or later; the page fill's frames then hold their share, fillLeadsOf)
-      if (rl[k].from > 0) out.push({ page: frame.page, frame: frame.first, at: rl[k].from })
+      // (whichever frame the fit's own flow sets that line in. Where the fit sets it in that frame or later (its frame before
+      // not full at its state), the cut is the share's (`share`): a lay honours it only at a state that holds the share (`share`,
+      // the page fill's where the share costs no frame a leading under its page's band, fillPage), every other lay as though
+      // it were not there, the fit's own flow keeping the line)
+      if (rl[k].from > 0) out.push({ page: frame.page, frame: frame.first, at: rl[k].from, ...(rl[k].block < frame.first ? {} : { share: true }) })
     }
   }
   return out.sort((a, b) => a.at - b.at)
@@ -80,7 +83,7 @@ export function withPageBreaks(tokens, cuts) {
   const out = []
   let c = 0
   tokens.forEach((t, i) => {
-    while (c < cuts.length && cuts[c].at === i) { const { page, frame } = cuts[c++]; out.push({ pageBreak: page, ...(frame !== undefined ? { frame } : {}), w100: 0 }) }
+    while (c < cuts.length && cuts[c].at === i) { const { page, frame, share } = cuts[c++]; out.push({ pageBreak: page, ...(frame !== undefined ? { frame } : {}), ...(share ? { share } : {}), w100: 0 }) }
     out.push(t)
   })
   return Object.assign(out, { base: tokens.base })

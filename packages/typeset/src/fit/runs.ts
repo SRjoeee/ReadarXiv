@@ -183,11 +183,13 @@ export function keepsPages(
   fit: readonly Pick<LaidLine, 'from' | 'page'>[],
   lines: readonly Pick<LaidLine, 'from' | 'page'>[],
   tokens: readonly Token[] | null = null,
+  share = false,
 ): boolean {
   const breaks: [number, number][] = []
   tokens?.forEach((t, i) => {
     const b = (t as { pageBreak?: number }).pageBreak
-    if (b !== undefined) breaks.push([i, b])
+    // (a cut of the frames' share, read only by a lay that holds the share: pageCutsOf `share`)
+    if (b !== undefined && (share || !(t as { share?: boolean }).share)) breaks.push([i, b])
   })
   const sent = (from: number) => breaks.reduce((pg, [i, b]) => (i < from ? Math.max(pg, b) : pg), -Infinity)
   let j = 0

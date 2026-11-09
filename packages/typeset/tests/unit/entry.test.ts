@@ -663,11 +663,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.length).toBe(2)
   })
-  it('keeps each frame of a paragraph over a page break its share of the lines, the earlier frame set tighter to hold it', () => {
-    // (2610.22065v1-zh p5/p6 t94 under option (i): ten original lines here and three on the next page; its translation of ten
-    // lines fits at its own leading with a line borrowed under its last on the next page, seven here and three there. TeX's
-    // share is 10 x 10/13 = 7.7, eight here: the frame here set tighter, down to the original's pitch, until it holds the text
-    // before its cut, so that its column does not end a line short of TeX's)
+  // (a paragraph of ten original lines here and three on the next page whose translation, ten lines, fits at its own leading with
+  // a line borrowed under its last on the next page, seven here and three there, where TeX's share is 10 x 10/13 = 7.7, eight;
+  // two paragraphs over it on the page, their translations `chars` characters in four lines each, which sets the page's band)
+  const sharePage = (chars: number) => {
     const zh = rulesFor('zh')
     const lineAt = (page: number, y: number): Placed['lines'][number] => [
       page,
@@ -711,17 +710,28 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     })
     const rows = rowsOf([
       row([{ t: 'text', s: '\u6587'.repeat(440) }]),
-      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idA },
-      { ...row([{ t: 'text', s: '\u6587'.repeat(80) }]), id: idB },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]), id: idB },
     ])
     const laid = (page: number) =>
       layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
-    const [p1, p2] = [laid(1), laid(2)]
+    return [laid(1), laid(2)] as const
+  }
+  it('keeps each frame of a paragraph over a page break its share of the lines where that holds within the page’s band', () => {
+    // (2610.22065v1-zh p5/p6 t94: the frame here set tighter, to 1.29, holds the text before its cut, its column ending on
+    // TeX's last line, where the page's band reaches down that far: its neighbours spread to 1.33)
+    const [p1, p2] = sharePage(120)
     expect([p1.state, p2.state]).toEqual(['laid', 'laid'])
     expect([p1.lines.length, p2.lines.length]).toEqual([8, 2])
-    // (its eight lines here from its first baseline to the frame's foot, no lower than TeX's last line here less its room)
     expect(p1.lines[0]![0]).toBe(580)
     expect(p1.lines.at(-1)![0]).toBeGreaterThanOrEqual(472 - 1 - 0.05)
+  })
+  it('leaves the fit’s split where holding the share would set a frame under the page’s band: no frame solid', () => {
+    // (2610.37668v1-zh p17, 2610.21084v1-zh p1: the share set a column's foot solid, two lines at the original's pitch among
+    // paragraphs spread to 1.38-1.5, which read worse than the one line its fit left there; its neighbours here spread to 1.67)
+    const [p1, p2] = sharePage(80)
+    expect([p1.lines.length, p2.lines.length]).toEqual([7, 3])
+    expect(p1.lines[0]![0] - p1.lines[1]![0]).toBeGreaterThan(12.5)
   })
   it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
     // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
