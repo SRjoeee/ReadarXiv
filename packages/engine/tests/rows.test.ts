@@ -90,3 +90,49 @@ describe('a display’s rows', () => {
     expect(rows[0]).toMatchObject({ bottom: 488.5, top: 504.3 })
   })
 })
+
+describe('a glyph PDF.js reads as a blank', () => {
+  // (TeX's math extension pieces where their font maps no Unicode: CMEX10's "}" of \big is its code 9, which PDF.js reads as
+  // U+0009, its bar's extension code 12 as U+000C, a Bigg "(" code 32 as U+0020: 1,515 glyphs of the 88 papers' pages, each drawn
+  // by its outline. Its origin is at its top, its ink reaching down across its line)
+  const brace = (x: number, y: number): DocGlyph => ({
+    ...glyph('\t', x, y + 8.5, -1.155, 0.04, 5.81),
+    code: 9,
+    font: 'CMEX10',
+    base: 'CMEX10',
+    blank: true,
+    ix0: x + 1.12,
+    ix1: x + 4.67,
+  })
+  it('stands on the line its ink reaches across, whatever Unicode its font maps it to', () => {
+    // (2610.30034v1 p4 t60's `\mathbb{E}\big\{ J(f(x,u,w)) \big\}`: the line held the formula's glyphs and not its brace)
+    const gs = [glyph('E', 200, 500, 0, 0.68), glyph('J', 206, 500, -0.02, 0.68), brace(212, 500), glyph('a', 230, 500)]
+    const lines = cutLines([0, 1, 2, 3], at(gs))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.gs).toEqual([0, 1, 2, 3])
+    expect(lines[0]).toMatchObject({ base: 500, top: 508.9, bottom: 496.95 })
+  })
+  it('holds it in the display row TeX set it in', () => {
+    // (2610.30034v1 p10 ord 213's display, its closing brace 5.81 pt past the row's other glyphs: a display stays the original's,
+    // its rows the ink a translation keeps off)
+    const gs = [glyph('x', 200, 500), glyph('=', 210, 500, 0.15, 0.37), glyph('a', 222, 500), brace(228, 500)]
+    const rows = rowsOf([0, 1, 2, 3], at(gs))
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.gs).toEqual([0, 1, 2, 3])
+    expect(rows[0]).toMatchObject({ x0: 200, x1: 233.81, base: 500, top: 508.9, bottom: 496.95 })
+  })
+  it('leaves out a glyph that paints nothing, and an included figure’s word space', () => {
+    // (a font's space: its outline empty, which the reading gives as no extent (ink.mjs: top = bottom, ix0 = ix1 at its origin).
+    // Inside a form XObject the glyphs are an included figure's, which its producer spaced with blank glyphs that PDF.js mostly
+    // draws nothing of (3,320 of the 88 papers' 9,355 there carry an outline PDF.js never draws): today's figure reading's, a blank
+    // there no ink)
+    const nothing: DocGlyph = { ...glyph(' ', 206, 500, 0, 0, 2), ix1: 206 }
+    const word: DocGlyph = { ...glyph(' ', 206, 500, 0, 0.625, 2), form: true, blank: true }
+    const a = glyph('a', 200, 500)
+    const b = glyph('b', 208, 500)
+    expect(cutLines([0, 1, 2], at([a, nothing, b]))[0]!.gs).toEqual([0, 2])
+    expect(rowsOf([0, 1, 2], at([a, nothing, b]))[0]!.gs).toEqual([0, 2])
+    const f = (g: DocGlyph): DocGlyph => ({ ...g, form: true })
+    expect(cutLines([0, 1, 2], at([f(a), word, f(b)]))[0]!.gs).toEqual([0, 2])
+  })
+})

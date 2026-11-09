@@ -6,6 +6,7 @@
 // script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
 // baseline is the one most of its body glyphs' characters share (to 0.01 pt; today's maker's rowOf); its extent their
 // advances'; its top and bottom their own ink's; its size today's (lineSize).
+// A glyph is cut into a line by its ink (isInk), never by its Unicode: TeX's math extension pieces are blank to PDF.js.
 import type { DocGlyph } from '../doc.ts'
 
 export interface CutLine {
@@ -21,6 +22,27 @@ export interface CutLine {
   size: number
   most: number
 }
+
+/**
+ * Whether a glyph is ink: what a line, a row, an element's box and the ink beside or under a unit hold. On the page, a glyph whose
+ * outline paints something, whatever Unicode its font maps it to: TeX's math extension pieces where their font maps no Unicode
+ * are blank to PDF.js (CMEX10's "}" of \big, its code 9, read as U+0009; its bar's extension, code 12, as U+000C; a Bigg "(",
+ * code 32, as U+0020; OT1's stroke of an "Ł", CMR10's code 32): 1,515 glyphs of the 88 papers' pages, every one drawn by its
+ * outline, and none of their 6.0 M page glyphs paints nothing (a font's space would: its outline empty, ink.mjs's top = bottom
+ * and ix0 = ix1 at its origin). Read by its Unicode, the brace of 2610.30034v1 p4 t60 stood on no line and in no box of its
+ * element, erased with the element's group and never drawn again. Inside a form XObject the glyphs are an included figure's,
+ * read as today's figure reading reads them, a blank one a word space: there the outline is no reading of what PDF.js draws
+ * (of the 88 papers' 9,355 blank glyphs in forms, 3,320 carry an outline, a .notdef box, that PDF.js never draws: not in their
+ * font)
+ */
+export const isInk = (g: {
+  u: string
+  form: boolean
+  ix0: number
+  ix1: number
+  top: number
+  bottom: number
+}): boolean => (g.form ? /\S/.test(g.u) : g.ix1 > g.ix0 || g.top > g.bottom)
 
 export const r2 = (v: number): number => {
   const r = Math.round(v * 100) / 100
@@ -51,7 +73,7 @@ export function lineSize(gs: readonly DocGlyph[]): number {
   return r2(Math.min(SIZE_MAX, sizes[sizes.length >> 1] as number))
 }
 
-/** the lines of `list` (each an index `at` resolves to its page and glyph), blank glyphs aside */
+/** the lines of `list` (each an index `at` resolves to its page and glyph), of its glyphs that are ink (isInk) */
 export function cutLines(list: readonly number[], at: (i: number) => { page: number; g: DocGlyph }): CutLine[] {
   type Open = {
     page: number
@@ -85,7 +107,7 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
   }
   for (const i of list) {
     const { page, g } = at(i)
-    if (!/\S/.test(g.u)) continue
+    if (!isInk(g)) continue
     // (a glyph whose ink reaches across the line's ink so far, not back to the line's start, stands on the line wherever its
     // origin is: a big delimiter or operator, whose origin TeX's math extension sets at its top (17 pt over a 10 pt line in
     // 2610.21026v1 p20, which cut the rest of its formula off as a line of its own on the same baseline), a fraction's

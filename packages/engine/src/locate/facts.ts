@@ -6,7 +6,7 @@
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
-import { r2 } from './lines.ts'
+import { isInk, r2 } from './lines.ts'
 // @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
 // back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
 import * as accents from './today/accents.mjs'
@@ -496,10 +496,11 @@ export function fillRunsOf(glyphs: readonly DocGlyph[], o: LineEndOptions = {}):
   const kept = out.filter(([t]) => t.length)
   return new Set(kept.map(([, f]) => f)).size > 1 ? kept : null
 }
-/** an element's own brackets: its first and last glyphs that set ink, where they pair ([ ], ( ), { }, ⟨ ⟩) around more (T12) */
+/** an element's own brackets: its first and last glyphs that set ink (isInk, whatever their Unicode: a big delimiter PDF.js reads
+ *  as a blank is its last), where they pair ([ ], ( ), { }, ⟨ ⟩) around more (T12) */
 export function bracketsOf(gs: readonly DocGlyph[]): [DocGlyph, DocGlyph] | null {
   const PAIRS: Record<string, string> = { '[': ']', '(': ')', '{': '}', '\u27e8': '\u27e9' }
-  const tg = gs.filter((x) => /\S/.test(x.u))
+  const tg = gs.filter(isInk)
   const b0 = tg[0],
     b1 = tg.at(-1)
   return tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u ? [b0, b1] : null

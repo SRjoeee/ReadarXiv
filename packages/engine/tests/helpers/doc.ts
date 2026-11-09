@@ -1,5 +1,6 @@
 // A document made by hand for the back half's tests: each page a list of lines, each line its text set left to right from
 // x 72 at 6 pt a glyph, 12 pt apart from the top, one font unless a glyph says otherwise; boxes placed between glyphs.
+// A space is a glyph of the font's space, whose outline is empty: no extent across or up from its origin (ink.mjs's reading).
 import type { Doc, DocGlyph, DocPage } from '../../src/doc.ts'
 
 export interface LineSpec {
@@ -32,6 +33,7 @@ export function docOf(pages: PageSpec[]): Doc {
         let x = l.x ?? 72
         for (const ch of l.text) {
           const font = l.font ?? 'ABCDEF+CMR10'
+          const space = ch === ' '
           glyphs.push({
             u: ch,
             code: (ch.codePointAt(0) as number) + (l.codeShift ?? 0),
@@ -40,11 +42,11 @@ export function docOf(pages: PageSpec[]): Doc {
             x0: x,
             x1: x + 0.6 * size,
             y,
-            top: y + 0.7 * size,
-            bottom: y - 0.2 * size,
+            top: space ? y : y + 0.7 * size,
+            bottom: space ? y : y - 0.2 * size,
             size,
             ix0: x,
-            ix1: x + 0.6 * size,
+            ix1: space ? x : x + 0.6 * size,
             n: li,
             k: glyphs.length,
             form: !!l.form,

@@ -51,7 +51,7 @@ import {
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { type InkInput, type InkStats, inkOf } from './ink.ts'
-import { type CutLine, cutLines, lineSize, r2 } from './lines.ts'
+import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
 import { bySentence, type Word, wordsOn } from './words.ts'
@@ -432,7 +432,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       let set = false
       let text = false
       for (let b = span[0]; b < span[1]; b++) {
-        if (!/\S/.test(gB(b).u)) continue
+        if (!isInk(gB(b))) continue
         set = true
         if (unitB[b] === u && roleB[b] === ROLE.text) text = true
       }
@@ -721,7 +721,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         (x) => NAME_END.test(x.name) && o + x.glyph > (r[0] as number) && o + x.glyph <= (r.at(-1) as number),
       )
       if (end) {
-        const after = r.filter((b) => b >= o + end.glyph && !gB(b).blank).map((b) => m.bToA[b] as number)
+        const after = r.filter((b) => b >= o + end.glyph && isInk(gB(b))).map((b) => m.bToA[b] as number)
         if (after.length && after.every((a) => a >= 0)) mem.counterA = after
       }
       members.push(mem)
@@ -908,7 +908,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
             g.x1 > l.x0 &&
             g.x0 < l.x1,
         )
-        if (q && !onOwn && /\S/.test(g.u) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
+        if (q && !onOwn && isInk(g) && g.y >= q[1] && g.y <= q[3] && g.x1 > q[0] && g.x0 < q[2]) held.push(a)
       }
       kept.push(...cutLines(held, atA))
     }
@@ -1002,7 +1002,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (mem.name !== undefined) {
       const ctr = new Set(mem.counterA ?? [])
       mem.plain = textOf(mem.text.filter((a) => !ctr.has(a)).map(gA))
-      const cs = [...ctr].map(gA).filter((g) => !g.blank)
+      const cs = [...ctr].map(gA).filter(isInk)
       if (cs.length && cs.length < mem.text.length)
         mem.counter = [
           textOf(cs),
@@ -1056,7 +1056,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const j = standsOn(mem.lines, page, lo, hi, own)
         return j >= 0 ? (mem.lines[j] as Line)[4] : own
       }
-      const shown = gl.filter((a) => /\S/.test(gA(a).u))
+      // (its glyphs that are ink, whatever their Unicode (isInk): a big delimiter PDF.js reads as a blank, 2610.30034v1 p4 t60's
+      // \big\} (CMEX10's code 9, U+0009), is the element's ink, its group erases it and its box draws it again)
+      const shown = gl.filter((a) => isInk(gA(a)))
       const groups: number[][] = []
       const ink: Ink[] = []
       /** each of the unit's lines its box, by the line's index */
@@ -1373,7 +1375,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const pg = inkA.pages[a[0] - 1]
     if (!pg || b[0] !== a[0]) return false
     for (const g of pg.glyphs) {
-      if (g.blank || g.unseen || !/\S/.test(g.u)) continue
+      if (g.unseen || !isInk(g)) continue
       const mid = (g.x0 + g.x1) / 2
       if (mid > a[3] && mid < b[2] && Math.abs(g.y - a[4]) < ON_ROW * size) return true
     }
@@ -1387,7 +1389,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     let x = Number.NEGATIVE_INFINITY
     for (const g of lead.lines.at(-1) === a ? (lead.lineGlyphs.at(-1) ?? []) : []) {
       const d = gA(g)
-      if (/\S/.test(d.u)) x = Math.max(x, d.ix1 > d.ix0 ? d.ix1 : d.x1)
+      if (isInk(d)) x = Math.max(x, d.ix1 > d.ix0 ? d.ix1 : d.x1)
     }
     return Number.isFinite(x) ? x : a[3]
   }
@@ -2044,8 +2046,8 @@ function standsOn(lines: readonly Line[], page: number, lo: number, hi: number, 
   return best
 }
 
-/** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph with ink by its text (no blank,
- *  something of it shown) or of a box (a page-sized one aside: a background), -Infinity for none; each page's ink sorted by its
+/** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph that is ink (isInk, whatever its
+ *  Unicode; something of it shown) or of a box (a page-sized one aside: a background), -Infinity for none; each page's ink sorted by its
  *  tops once, read by halving from the top down (roomOf asks it under each member's last line and each run's) */
 type InkUnder = (page: number, foot: number, x0: number, x1: number) => number
 /** the next ink's line under a height across x0..x1: of the ink whose top stands under `foot`, the highest baseline, a glyph's
@@ -2060,7 +2062,7 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
     const W = pg.view[2] - pg.view[0]
     const H = pg.view[3] - pg.view[1]
     const all: [number, number, number, number][] = []
-    for (const g of pg.glyphs) if (/\S/.test(g.u) && !g.unseen) all.push([g.top, Math.min(g.y, g.top), g.x0, g.x1])
+    for (const g of pg.glyphs) if (isInk(g) && !g.unseen) all.push([g.top, Math.min(g.y, g.top), g.x0, g.x1])
     for (let b = 0; b < pg.kinds.length; b++) {
       const qx0 = pg.boxes[4 * b]!
       const qy0 = pg.boxes[4 * b + 1]!
@@ -2169,7 +2171,7 @@ function roomOf(
   const off = offA[tp - 1] as number
   const under: DocGlyph[] = []
   inkA.pages[tp - 1]!.glyphs.forEach((g, j) => {
-    if (/\S/.test(g.u) && !g.unseen && g.y < T && g.x1 > bx0 && g.x0 < bx1 && !travels.has(off + j)) under.push(g)
+    if (isInk(g) && !g.unseen && g.y < T && g.x1 > bx0 && g.x0 < bx1 && !travels.has(off + j)) under.push(g)
   })
   let nextBase: number | null = null
   if (under.length) {

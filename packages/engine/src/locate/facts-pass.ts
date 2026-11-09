@@ -29,7 +29,7 @@ import {
   styleOf,
   tailOf,
 } from './facts.ts'
-import { r2 } from './lines.ts'
+import { isInk, r2 } from './lines.ts'
 import { spellOf } from './today/today.types.ts'
 
 /** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
@@ -117,15 +117,13 @@ export function factsOf({
     const p = (pageA[a] as number) - 1
     return inkA.pages[p]!.glyphs[a - (m.offA[p] as number)]!
   }
-  // (a page's glyphs by baseline, the blank aside, each with its global index; those whose baseline is within [lo, hi])
+  // (a page's glyphs that are ink (isInk) by baseline, each with its global index; those whose baseline is within [lo, hi])
   const inkByPage = new Map<number, { x0: number; x1: number; y: number; a: number }[]>()
   const bandOn = (p: number, lo: number, hi: number) => {
     let l = inkByPage.get(p)
     if (!l) {
       const o = m.offA[p - 1] as number
-      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) =>
-        /\S/.test(g.u) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : [],
-      )
+      l = inkA.pages[p - 1]!.glyphs.flatMap((g, k) => (isInk(g) ? [{ x0: g.x0, x1: g.x1, y: g.y, a: o + k }] : []))
       l.sort((x, y) => x.y - y.y)
       inkByPage.set(p, l)
     }
@@ -166,7 +164,7 @@ export function factsOf({
     const o = m.offA[p - 1] as number
     const out: InkBox[] = []
     inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
-      if (/\S/.test(g.u) && !g.unseen && (claimedA[o + j] as number) < 0)
+      if (isInk(g) && !g.unseen && (claimedA[o + j] as number) < 0)
         out.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
     })
     for (const b of boxes(p)) if (!ownedBox.has(`${p}|${b.j}`)) out.push(b)
@@ -600,7 +598,7 @@ export function factsOf({
       // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
       inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
         const c = claimedA[o + j] as number
-        if (/\S/.test(g.u) && !g.unseen && c !== mem.ord && c !== mem.leader)
+        if (isInk(g) && !g.unseen && c !== mem.ord && c !== mem.leader)
           f!.push({ x0: g.x0, x1: g.x1, y0: g.bottom, y1: g.top, y: g.y })
       })
       for (const b of boxes(p)) if (!mine.has(`${p}|${b.j}`)) f.push(b)
