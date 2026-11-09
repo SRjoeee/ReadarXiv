@@ -7,7 +7,7 @@ import { sentenceCuts } from '@readarxiv/text'
 import { asOut, projectionOf, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
 import { contentOf, refill, type Tok } from './markers.ts'
-import { decode, escapeTags, INVISIBLE, LETTER, LINE_END, SAYS, SENTINEL, standInOf } from './text.ts'
+import { decode, displayEnds, escapeTags, INVISIBLE, LETTER, LINE_END, SAYS, SENTINEL, standInOf } from './text.ts'
 
 export type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
 export interface TagsPlan {
@@ -44,6 +44,9 @@ const ownStop = (stop: string | undefined): string | undefined =>
 
 /** A unit's tags wire */
 export function planTags(unit: UnitIn): TagsPlan {
+  // (a display that ends its sentence states the stop it ends it with: written after it, taken back on reading, read by the
+  // cutter as its sentence's end)
+  const content = displayEnds(unit.content)
   const items: Item[] = []
   /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
   const stopsAt: [number, string][] = []
@@ -95,7 +98,7 @@ export function planTags(unit: UnitIn): TagsPlan {
     }
     return at
   }
-  const length = walk(unit.content, 0, 0)
+  const length = walk(content, 0, 0)
   const slots: TagSlot[] = []
   const kept: { id: string; depth: number }[] = []
   const open: number[] = []
@@ -143,7 +146,7 @@ export function planTags(unit: UnitIn): TagsPlan {
   if (unit.sentences) {
     // (the projection the cutter reads: each group's stop at its end, as the source would write it, `orig` each of its
     // offsets' in the unit's projection, a stop's that of the group's end)
-    const plain = projectionOf(unit.content)
+    const plain = projectionOf(content)
     let projection = ''
     const orig: number[] = []
     let from = 0

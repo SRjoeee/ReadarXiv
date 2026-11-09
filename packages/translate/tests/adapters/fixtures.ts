@@ -225,6 +225,20 @@ export const HEAD_STOP: UnitIn = unit(
   ],
   true,
 )
+/** displays that state no stop of their own (the owner's report of 2026-11-09 on 2609.33403v1 §4.2, words of our own): TeX set
+ *  the first at its sentence's end, the next sentence beginning after it ("… as: [display] The next …"), the second inside its
+ *  sentence, which goes on after it ("… tuple: [display] where …") */
+export const DISPLAY_ENDS: UnitIn = unit(
+  'display-ends',
+  [
+    t('Each part is formalized as: '),
+    el('d1', 'display'),
+    t(' The next field is a list of effects, formalized as a tuple: '),
+    el('d2', 'display'),
+    t(' where kind is its kind.'),
+  ],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -236,6 +250,7 @@ export const MICROSOFT_UNITS: UnitIn[] = [
   SILENT_LABEL,
   SILENT_AROUND,
   /* 28 */ HEAD_STOP,
+  /* 29 */ DISPLAY_ENDS,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */

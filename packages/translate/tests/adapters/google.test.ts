@@ -3,7 +3,7 @@ import { google, readTagged } from '../../src/adapters/google.ts'
 import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
+import { GOOGLE_REPLIES, DISPLAY_ENDS, HEAD_STOP, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -14,7 +14,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -102,5 +102,29 @@ describe('google: a stop that is a line end', () => {
     expect(t.write(LABEL_AFTER_BREAK, 'zh-Hans')).toBe(
       t.write({ ...LABEL_AFTER_BREAK, content: strip(LABEL_AFTER_BREAK.content) }, 'zh-Hans'),
     )
+  })
+})
+
+// (a display that states no stop of its own, at its sentence's end: the next sentence begins after it, its first letter upper
+// case; the owner's report of 2026-11-09 on 2609.33403v1, one sentence to every translator across both displays)
+describe('google: a display that states no stop of its own', () => {
+  it('ends its sentence where the text after it begins one: a stop after it, and the cutter cuts there; not where it goes on', () => {
+    const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(g.write(DISPLAY_ENDS, 'zh-Hans')).toBe(
+      'Each part is formalized as: <x id="1"/>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <x id="2"/> where kind is its kind.',
+    )
+  })
+  it("reads the reply's stop after it as the one the wire wrote, taken back", () => {
+    const r = readTagged(
+      DISPLAY_ENDS,
+      '每个部分形式化为：<x id="1"/>。<x id="3"/>下一个字段是一组效果，形式化为一个元组：<x id="2"/>其中种类是它的种类。',
+    )
+    expect(r?.content).toEqual([
+      { t: 'text', s: '每个部分形式化为：' },
+      { t: 'el', id: 'd1' },
+      { t: 'text', s: '下一个字段是一组效果，形式化为一个元组：' },
+      { t: 'el', id: 'd2' },
+      { t: 'text', s: '其中种类是它的种类。' },
+    ])
   })
 })
