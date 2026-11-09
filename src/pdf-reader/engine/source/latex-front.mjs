@@ -882,37 +882,115 @@ function paperMacros(files) {
     // marked where it was called, left a translation's leading on every page after it)
     const p0 = prose.length === 1 ? prose[0] : undefined
     const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
-    const stores = !!p0 && use.stored.has(p0) && !use.typeset.has(p0), into = stores ? storedIn(t.slice(k + 1, e - 1), p0) : null
-    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(stores ? { stores: true } : {}), ...(into ? { storesIn: into } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+  }
+  resolveKeeps(out)
+  return out
+}
+/** the arguments a call of the paper's macro `h` at s[i] hands it, by parameter number (its optional first where it takes one and
+ *  the call writes it), each the text inside its brackets or braces, or its single token; null where the call is not whole */
+function callArgsOf(s, i, h) {
+  const out = []
+  let k = i, p = 1
+  if (h.opt) {
+    const k0 = skipSpaces(s, k)
+    if (s[k0] === '[') { const e0 = matchGroup(s, k0, '[', ']'); if (e0 < 0) return null; out[1] = s.slice(k0 + 1, e0 - 1); k = e0 }
+    p = 2
+  }
+  for (; p <= h.params; p++) {
+    const k0 = skipSpaces(s, k)
+    if (k0 >= s.length || s[k0] === '}') return null
+    const e0 = s[k0] === '{' ? matchGroup(s, k0) : s[k0] === '\\' ? commandAt(s, k0).end : k0 + 1
+    if (e0 < 0) return null
+    out[p] = s[k0] === '{' ? s.slice(k0 + 1, e0 - 1) : s.slice(k0, e0)
+    k = e0
   }
   return out
 }
-/** the macro a storing body keeps its parameter `p` in (`storesIn`): the one a definition inside it defines with #p in its
- *  body, as LaTeX's \\author keeps its text (\\def\\author#1{\\gdef\\@author{#1}}); null where none does */
-function storedIn(body, p) {
-  const re = /\\(?:[gex]?def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
-  for (const m of body.matchAll(re)) {
-    const k = m.index + m[0].length, e = matchGroup(body, k)
-    if (e > 0 && body.slice(k, e).includes(`#${p}`)) return m[1] ?? m[2] ?? m[3]
+/**
+ * Each of the paper's macros' kept parameters (`keeps`: parameter -> the macro it is kept in), as their definitions state them:
+ * a definition inside the body of a macro whose body holds the parameter, as LaTeX's \\author keeps its text
+ * (\\def\\author#1{\\gdef\\@author{#1}}, spconf's \\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}), and through a call of another of the
+ * paper's macros that keeps the argument it is handed in the macro another argument names (Meta FAIR's preprint class:
+ * \\addtolist's \\xdef#3{…#2…}, so \\contribution[2][]{\\addtolist[#1]{#2}{\\contributionlist}…} keeps its #2 in
+ * \\contributionlist, and \\correspondence[1]{\\metadata[Correspondence]{#1}} its #1 in \\metadatalist, two calls down)
+ */
+function resolveKeeps(macros) {
+  const DEF = /\\(?:[gex]?def\s*(?:\\([A-Za-z@]+)|#(\d))\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
+  const keeps = new Map()
+  for (const [name, m] of macros) {
+    const k = new Map()
+    for (const d of m.def.matchAll(DEF)) {
+      const at = d.index + d[0].length, e = matchGroup(m.def, at)
+      if (e < 0) continue
+      const lit = d[1] ?? d[3] ?? d[4], target = lit ? { lit } : { param: Number(d[2]) }
+      for (const q of m.def.slice(at, e).matchAll(/#(\d)/g)) if (!k.has(Number(q[1]))) k.set(Number(q[1]), target)
+    }
+    keeps.set(name, k)
   }
-  return null
+  for (let pass = 0; pass < 4; pass++) {
+    let changed = false
+    for (const [name, m] of macros) {
+      const k = keeps.get(name)
+      for (const c of m.def.matchAll(/\\([A-Za-z@]+)/g)) {
+        const h = macros.get(c[1]), hk = keeps.get(c[1])
+        if (!h || c[1] === name || !hk?.size) continue
+        const args = callArgsOf(m.def, c.index + c[0].length, h)
+        if (!args) continue
+        for (const [q, t] of hk) {
+          const pm = /^\s*#(\d)\s*$/.exec(args[q] ?? '')
+          if (!pm || k.has(Number(pm[1]))) continue
+          const b = t.lit ? null : args[t.param] ?? '', lit = t.lit ?? /^\s*\\([A-Za-z@]+)\s*$/.exec(b)?.[1], par = lit ? null : /^\s*#(\d)\s*$/.exec(b)
+          const target = lit ? { lit } : par ? { param: Number(par[1]) } : null
+          if (target) { k.set(Number(pm[1]), target); changed = true }
+        }
+      }
+    }
+    if (!changed) break
+  }
+  for (const [name, m] of macros) {
+    const lits = [...keeps.get(name)].filter(([p, t]) => t.lit && p <= m.params)
+    if (lits.length) m.keeps = new Map(lits.map(([p, t]) => [p, t.lit]))
+  }
 }
-/** the bodies the paper's own files give \\maketitle and \\@maketitle (a class or a style it ships: \\def, \\renewcommand) */
-function maketitleBodies(own) {
+/** the bodies the paper's own files give a command (\\def, \\newcommand, \\renewcommand), its definitions in order */
+function bodiesOf(own, name) {
   const out = []
-  const re = /\\(?:[gex]?def\s*\\(@?maketitle)(?![A-Za-z@])\s*|(?:re)?newcommand\*?\s*(?:\{\s*\\(@?maketitle)\s*\}|\\(@?maketitle)(?![A-Za-z@]))\s*)(?=\{)/g
+  const n = name
+  const re = new RegExp(String.raw`\\(?:[gex]?def\s*\\${n}(?![A-Za-z@])\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\${n}\s*\}|\\${n}(?![A-Za-z@]))\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)`, 'g')
   for (const { text } of own) {
     const t = uncommented(text)
     for (const m of t.matchAll(re)) { const k = m.index + m[0].length, e = matchGroup(t, k); if (e > 0) out.push(t.slice(k + 1, e - 1)) }
   }
   return out
 }
-/** each tabular a body opens, its text from its \\begin to its \\end (a nested one within it, and on its own too) */
-function tabularsIn(body) {
-  const out = [], open = []
+/** what the class's title command sets: the bodies of \\maketitle and \\@maketitle and of each command of the paper's own files
+ *  they call, as deep as three calls (Meta FAIR's \\maketitle sets \\mymaketitle) */
+function titleBodies(own, macros) {
+  const out = [], seen = new Set()
+  const visit = (name, depth) => {
+    if (seen.has(name) || depth > 3) return
+    seen.add(name)
+    for (const body of bodiesOf(own, name)) {
+      out.push(body)
+      for (const c of body.matchAll(/\\([A-Za-z@]+)/g)) if (!macros.get(c[1])?.keeps) visit(c[1], depth + 1)
+    }
+  }
+  visit('maketitle', 0)
+  visit('@maketitle', 0)
+  return out
+}
+/** each group a body opens (a brace group, a tabular), its start and end (a nested one within it, and on its own too) */
+function groupsIn(body) {
+  const out = []
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '\\') { i++; continue }
+    if (body[i] === '{') { const e = matchGroup(body, i); if (e > 0) out.push([i, e]) }
+  }
+  const open = []
   for (const m of body.matchAll(/\\(begin|end)\s*\{(tabular\*?)\}/g)) {
     if (m[1] === 'begin') open.push(m.index)
-    else if (open.length) out.push(body.slice(open.pop(), m.index))
+    else if (open.length) out.push([open.pop(), m.index])
   }
   return out
 }
@@ -923,32 +1001,58 @@ function ownLater(name, b, before, ctx) {
   if (FRONT_MATTER.has(name) || !ctx.ownAuthors?.has(name)) return
   for (const u of topUnits(b.units.slice(before))) u.last = true
 }
+/** a call of such a command: its argument of text the block's (frontBlock, its role ownAuthorsOf's), its other arguments as they
+ *  are (a mark's key, a label); the call's end, or -1 where the argument is not there */
+function ownAuthorCall(s, end, name, to, b, ctx) {
+  const { role, param } = ctx.ownAuthors.get(name), macro = ctx.macros.get(name)
+  const { args, end: e } = frontArgs(s, end, name, ctx, to)
+  const reqs = args.filter(a => a.kind === 'req'), opt = args.find(a => a.kind === 'opt')
+  const arg = macro?.opt && param === 1 ? opt : reqs[param - 1 - (macro?.opt ? 1 : 0)]
+  if (!arg) return -1
+  const before = b.units.length
+  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role)
+  ownLater(name, b, before, ctx)
+  return e
+}
 /**
  * The author block's commands of a class the paper ships that the role table does not know, as TeX's definitions state them:
- * a command of LaTeX's \\author form (one argument of text, stored in a macro: `storesIn`) whose macro the class's \\maketitle
- * sets in the tabular it sets an author block's in (LaTeX's \\@author, or the macro of a command the role table knows of the
- * block: \\address's \\@address). Its role the block's rows' as TeX sets them: the macro that opens the tabular names, as
- * \\author's first rows are (FRONT_NAMES), one after it places. ICASSP's spconf.sty: \\name{…} and \\address{…}, its
- * \\@maketitle's `\\begin{tabular}[t]{c}\\@name \\\\ \\@address` (2610.20967v1: its names no unit, an ink unit of the notes,
- * translated with the author block off, its affiliations' marks set flat in the translation). A command the class sets
- * elsewhere (spconf's \\toappear, in the foot), one of a class the paper does not ship, and one that takes the block's text in
- * more than one argument (spconf's \\twoauthors) are none
+ * a command whose one argument of text its definition keeps in a macro (`keeps`, LaTeX's \\author's form) that the class's title
+ * command sets (\\maketitle, \\@maketitle and what they call) in the group, a brace group or a tabular, it sets an author block's
+ * macro in (LaTeX's \\@author, or that of a command the role table knows of the block: \\address's \\@address), and none the role
+ * table knows (a title, an abstract, a date, a note). Its role the block's rows' as TeX sets them: the macro that opens the
+ * group names, as \\author's first rows are (FRONT_NAMES), one after it places. ICASSP's spconf.sty: \\name{…}, the first row of
+ * `\\begin{tabular}[t]{c}\\@name \\\\ \\@address` (2610.20967v1: its names an ink unit of the notes, translated with the author block
+ * off, its affiliations' marks set flat). Meta FAIR's preprint class (2604.14228v3): its \\contribution notes, the paragraph after
+ * the places in the names' and places' group (no unit's, their glyphs on the title box's fill were figure texts, translated
+ * with the author block off, each run laid at its own anchor). None: what the title sets in another group, a venue's line, a
+ * licence, a teaser figure (acmart's \\acmConference, egpubl's \\teaser: read as places, a figure's caption was a place), and so
+ * Meta FAIR's \\correspondence, which it sets after the abstract with \\date; a command the class sets elsewhere (spconf's
+ * \\toappear, in the foot); one of a class the paper does not ship; and one that keeps more than one argument of text (spconf's
+ * \\twoauthors)
  */
 function ownAuthorsOf(own, macros) {
   const known = new Set(['@author']), unknown = new Map()
   for (const [name, m] of macros) {
-    if (!m.storesIn) continue
-    if (FRONT_MATTER.has(name) || FRONT_ROLES[name]?.[0] === 'author') known.add(m.storesIn)
-    else if (!FRONT_ROLES[name] && !HEADINGS.has(name) && !OWN_UNIT_ARG.has(name)) unknown.set(m.storesIn, name)
+    if (!m.keeps) continue
+    if (FRONT_MATTER.has(name) || FRONT_ROLES[name]?.[0] === 'author') for (const t of m.keeps.values()) known.add(t)
+    else if (!FRONT_ROLES[name] && !HEADINGS.has(name) && !OWN_UNIT_ARG.has(name)) {
+      // (its one argument of text: a required one it keeps, its optional first (a mark's key) aside)
+      const texts = [...m.keeps].filter(([p]) => !(m.opt && p === 1))
+      if (texts.length === 1) unknown.set(texts[0][1], { name, param: texts[0][0] })
+    }
   }
   const out = new Map()
   if (!unknown.size) return out
-  for (const body of maketitleBodies(own))
-    for (const tab of tabularsIn(body)) {
-      const set = [...tab.matchAll(/\\([A-Za-z@]+)/g)].map(m => m[1]).filter(n => known.has(n) || unknown.has(n))
-      if (!set.some(n => known.has(n))) continue
-      set.forEach((n, k) => { const c = unknown.get(n); if (c && !out.has(c)) out.set(c, k === 0 ? 'names' : 'places') })
+  for (const body of titleBodies(own, macros)) {
+    const groups = groupsIn(body)
+    for (const occ of body.matchAll(/\\([A-Za-z@]+)/g)) {
+      const u = unknown.get(occ[1])
+      if (!u || out.has(u.name)) continue
+      const g = groups.filter(([a, e]) => a < occ.index && e > occ.index).sort((x, y) => x[1] - x[0] - (y[1] - y[0]))[0]
+      const set = g ? [...body.slice(g[0], g[1]).matchAll(/\\([A-Za-z@]+)/g)].map(m => m[1]).filter(n => known.has(n) || unknown.has(n)) : []
+      if (set.some(n => known.has(n))) out.set(u.name, { role: set[0] === occ[1] ? 'names' : 'places', param: u.param })
     }
+  }
   return out
 }
 /** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
@@ -2198,12 +2302,11 @@ function walk(s, from, to, b, ctx) {
         i = content.end; continue
       }
     }
-    if (FRONT_MATTER.has(name) || ctx.ownAuthors?.has(name)) {
+    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      const before = b.units.length
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, ctx.ownAuthors?.get(name) ?? roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
-      ownLater(name, b, before, ctx)
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2811,7 +2914,8 @@ function frontMatter(s, from, to, b, ctx) {
       if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name) || ctx.ownAuthors?.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to), before = b.units.length; for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, ctx.ownAuthors?.get(c.name) ?? roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } ownLater(c.name, b, before, ctx); past = end; continue }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
+    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
