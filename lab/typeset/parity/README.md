@@ -89,10 +89,12 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   a device px off v2's (the first run's `pixels`, triage-1 P1).
 - **The rows**: the pair's door rows (`packages/typeset/tests/replay/rows.ts`: the release's stored rows), taken whole by
   today's door and handed to the entry as its Rows (gate-l1.ts `outOfDoor`): the same translation of every unit on both
-  sides. A unit whose addresses v2's part holds as elements where today's held them as text (joined by its glyphs, below) is
-  handed today's row said in v2's unit (`l1.ts` `addressedRow`): the same text, each address the element v2 holds for it where
-  the translator kept it, the groups today's unit had round them gone, the sentences counted in v2's projection; where the row
-  cannot be said so exactly, none (the unit stays the original's, and `shown` counts it). Both lay under the default toggles
+  sides. A unit whose kept runs v2's part holds as elements where today's held them otherwise (its addresses, today's text; an
+  ink unit's scripts TeX set in a text face, today's text or text and a placeholder: joined by its glyphs, below) is handed
+  today's row said in v2's unit (`l1.ts` `keptRow`): the same text, each element where the translator kept what today's held
+  for it, in their order and at one way of placing them alone, the groups today's unit had round them gone, the sentences
+  counted in v2's projection; where the row cannot be said so exactly, none (the unit stays the original's, and `shown`
+  counts it). Both lay under the default toggles
   (references and the author block the original's).
 - **The original**: arXiv's page (its pixels, its vertical rules read off them, its link annotations), the part's members
   (their lines on A, TeX's alignment, font state, labels and measure; `dir` for a turned text), else today's prepare dump
@@ -108,11 +110,12 @@ what gate-l1's runner adapted (its stops record no join, so a member the entry l
 ends or opens a line, was read as no member joined). A member's unit id is its text, but an ink unit's whose text the part
 names as the source unit it echoes (a contents line its heading's, a note set as its source footnote, an author block's names:
 `bundle.ts` placedOf): the ink unit's own, the format's `unitId` over its kind and the echoed content, today's id of that ink
-unit. A member no id joins whose unit holds its e-mail or web addresses as elements (`\url{…}`, kept as A's ink), which today's
-prepare held as text, so that the two contents and ids differ, is then joined to today's unit of the same glyphs: the one no
-member joined whose text is the member's unit's with each address as its text, set on the same lines of A (as many, each on
-its page at the same baseline), whatever kind each reading gave them (`l1.ts` `addressedJoin`, over today's prepare dump;
-gate-l1.ts joins by it too).
+unit. A member no id joins whose unit holds as elements kept runs today's prepare held otherwise — its e-mail or web addresses
+(`\url{…}`, kept as A's ink), today's text; an ink unit's scripts TeX set in a text face (`$…$`), today's text or text and a
+placeholder —, so that the two contents and ids differ, is then joined to today's unit of the same glyphs: the one no member
+joined whose pieces read as the member's unit's, each element as today's placeholder of its source or as atoms whose characters
+are its own, set on the same lines of A (as many, each on its page at the same baseline), whatever kind each reading gave them
+(`l1.ts` `keptJoin`, over today's prepare dump; gate-l1.ts joins by it too).
 
 ## The measures: each a distance from the original, and when v2 is nearer
 

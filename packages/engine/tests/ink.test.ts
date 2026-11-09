@@ -519,6 +519,59 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(note.lines[0]![2]).toBe(76)
   })
 
+  it('keeps a script TeX set in a text face an element of its ink unit in its own ink, as a formula’s run, never its text', () => {
+    // (2610.30854v1 p1's names, no source unit's: `Lifan Jiang$^{1,2}$` under Times sets the marks' digits in the text face, 8.11
+    // pt and 3.98 over the names' 10.96 pt baseline. Read as the unit's text, the marks were drawn flat at the names' size in the
+    // translation ("Jiang1,2"). TeX set them smaller than the line's text and off its baseline, a script whatever its face: each
+    // run an element drawn as its ink. An address after a mark is its own run, the mark no character of it)
+    const { B, A } = pair({
+      lines: [
+        'Body text here',
+        { text: 'Lifan Jiang', x: 72, y: 688 },
+        { text: '1,2', x: 138, y: 691.6, size: 7 },
+        { text: ', Yibo Zhao', x: 150.6, y: 688 },
+        { text: '2', x: 216.6, y: 691.6, size: 7 },
+        { text: 'Mail: ', x: 72, y: 640 },
+        { text: '1', x: 108, y: 643.6, size: 7 },
+        { text: 'alan.chan@example.org', x: 112.2, y: 640 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 14 + 11 + 3 + 11 + 1 + 6 + 1 + 21],
+      ],
+    })
+    const L = locate(
+      instrumentOf(B, [unitOf('para', 'Body text here')], [[0, -1, -1, -1, -1, -1, -1, -1]]),
+      A,
+      align(B, A),
+      { pages: rawOf(A) },
+    )
+    const made = L.members.filter((m) => m.unit >= 0 && L.units[m.unit]!.kind.startsWith('ink'))
+    const said = made.map((m) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : p.t === 'el' ? [p.kind, p.src] : p.t)),
+    )
+    // (each run of scripts written as TeX writes a script, so that every reader of the source reads it as a source unit's mark)
+    expect(said).toEqual([
+      ['Lifan Jiang', ['math', '$^{1,2}$'], ', Yibo Zhao', ['math', '$^{2}$']],
+      ['Mail: ', ['math', '$^{1}$'], ['url', '\\url{alan.chan@example.org}']],
+    ])
+    const names = made[0]!
+    const g = A.pages[0]!.glyphs
+    const els = new Map(names.elements)
+    for (const [id, a, b] of [
+      ['1', 25, 27],
+      ['3', 39, 39],
+    ] as const) {
+      expect(els.get(id)!.ink).toHaveLength(1)
+      // (on the engine's hundredth of a point)
+      const h = (v: number) => Math.round(v * 100) / 100
+      expect(els.get(id)!.ink[0]!.slice(0, 5)).toEqual([1, h(g[a]!.x0), h(g[a]!.bottom), h(g[b]!.x1), h(g[b]!.top)])
+      expect(els.get(id)!.text).toBeUndefined()
+    }
+    for (const a of [25, 26, 27, 39]) expect(names.text).not.toContain(a)
+    expect(names.text).toContain(24)
+  })
+
   it('leaves a unit made on A the original’s where A sets text inside it our compile does not: a content difference', () => {
     // (2610.21084v1's e-mail block: arXiv's page sets the initials our compile does not; the unit made on A is A's text, and it
     // stays the original's, as a source unit whose glyphs differ does: the coordinator's call of 2026-11-07)
