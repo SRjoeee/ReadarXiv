@@ -28,11 +28,11 @@ export const CLASS_PIXELS = 500
  *  this share of another's (TeX sets one hbox's glyphs on one baseline at one size: a script, a fraction, an accent or a
  *  \raisebox shifts one, each by a third of an em or more) */
 const SCRIPT_RISE = 0.15
-const SCRIPT_SIZE = 0.85
+export const SCRIPT_SIZE = 0.85
 /** a paragraph's leading off the original's that a reader sees: a twentieth of its pitch (0.6 pt of a 12 pt pitch) */
 export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
-const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
+export const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
 /** a cased letter (Unicode: it has another case) */
 const cased = (ch) => ch.toLowerCase() !== ch.toUpperCase()
 /** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
