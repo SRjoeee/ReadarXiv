@@ -309,7 +309,8 @@ describe('the author calls the marked original states (\\axtcall, CALL_TEX: the 
     const p = open('\\maketitle\nWords.', '\\author{Ashish Vaswani\\thanks{Equal contribution.} \\\\ Google Brain \\And Noam Shazeer \\\\ Google Research}')
     const tex = marked(p)
     expect(tex).toContain(`\\axtcall{${idOf(p, 'Noam Shazeer')}}\\And `)
-    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    // (and the note's call after the first name, before the place on the next row: two calls stated)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(2)
     expect(tex).toContain(CALL_TEX)
   })
   it('before an author block\'s command right after another\'s, never before the first (ICML\'s \\icmlauthor)', () => {
@@ -317,6 +318,22 @@ describe('the author calls the marked original states (\\axtcall, CALL_TEX: the 
     const tex = marked(p)
     expect(tex).toContain(`\\axtcall{${idOf(p, 'John Roe')}}\\icmlauthor{`)
     expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+  })
+  it('after a note\'s call inside an author block, before the unit after it: the mark the note set is the text before\'s', () => {
+    // (2411.13093v4, NeurIPS: one \\author in the preamble, its names apart by \\quad, Xiawu Zheng's \\thanks between two names
+    // of a row: its "∗" was the next unit's label, which kept the row from being laid as one line)
+    const p = open('\\maketitle\nWords.', '\\author{Yongdong Luo$^{1}$ \\quad Xiawu Zheng$^{1}$\\thanks{Corresponding author.} \\quad Guilin Li$^{1}$ \\quad Haojia Lin$^{1}$ \\\\ Chaoyou Fu$^{2}$}')
+    const id = units(p).findIndex(u => u.kind === 'author' && textOf(u).startsWith('Guilin Li'))
+    const tex = marked(p)
+    // (the note's own text between its marks in the layout compile)
+    expect(tex).toMatch(new RegExp(`Corresponding author\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${id}\\}`))
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    // (a note that opens its block marks no text before it: its mark, set before the name, is the name's lead, none stated; a
+    // note before an \\and: the \\and's call alone)
+    expect(marked(open('\\maketitle\nWords.', '\\author{\\thanks{Equal contribution.}Jane Doe \\\\ The University}'))).not.toContain('\\axtcall{')
+    const and = marked(open('\\maketitle\nWords.', '\\author{Jane Doe\\thanks{Equal contribution.} \\and John Roe}'))
+    expect(and.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    expect(and).toMatch(/\\axtcall\{\d+\}\\and /)
   })
   it('none for one author\'s block, and no definition in the head: the paper\'s bytes as before', () => {
     const p = open('\\maketitle\nWords.', '\\author{Jane Doe \\\\ The University}')

@@ -80,11 +80,13 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{\\axt@ifh#1\\relax{}{\\axt@ucs#1s\\@nil}}\\axt@alg#1e\\@nil}')
     // (a unit's that is no cell's, an author block's name or place set in a tabular's cell: its start mark's index carried out
     // through ordinary groups alone (a brace group, \\begingroup: an \\aftergroup past a box, a \\noalign or math would put a token
-    // where TeX does not read one) to the innermost alignment entry, and its column's class written at the template's end where
-    // it is the cell's one unit: two units in a cell, or a cell's unit there, and the line is more than the unit)
+    // where TeX does not read one) to the innermost alignment entry, and its column's class written at the template's end for each
+    // unit that reaches it: several units share the cell's line (2411.13093v4's names apart by \\quad, a \\thanks between two), and
+    // the class places that line, which the lay runs as one (rowLinesOf); none where a cell's own unit is there)
     expect(LAYOUT_TEX).toContain('\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{')
-    expect(LAYOUT_TEX).toContain('\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\let\\axt@uc\\@undefined\\else')
-    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tec\\axt@uc\\@nil{#1}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}')
     // (a cell's column: its start mark's index defined in the cell's group, carried out by \\aftergroup to the innermost
     // alignment entry's and no further; each column template of LaTeX's ends in its class, written where the index is defined at
     // the template's own group level)

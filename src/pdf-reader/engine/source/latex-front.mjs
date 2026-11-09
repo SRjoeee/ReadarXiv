@@ -1872,6 +1872,14 @@ function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
   const states = (at, after) => { const u = top.find(v => v.start >= after); if (u && !CALLED_AT.has(u)) CALLED_AT.set(u, at) }
   if (callAt !== undefined) states(callAt, from)
   for (const e of ends) if (e.and) states(e.at, e.end)
+  // (and the end of each note's call that marks text before it in its row, a \\thanks between two names: the mark the note set
+  // is that text's, the unit after it the next one's. Not a note that opens its row: its mark, set before the name, is the
+  // name's lead)
+  const rows = blocks.flat()
+  for (const n of notes) {
+    const row = rows.find(([x, y]) => n.at >= x && n.at < y)
+    if (row && top.some(v => v.start >= row[0] && v.start < n.at)) states(n.end, n.end)
+  }
 }
 /**
  * Where the marked compile states an author's call (layout/marks.mjs CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in

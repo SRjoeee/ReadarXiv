@@ -105,8 +105,9 @@ const CASES = {
     ].join('\n'), cls), { [i]: 'l', [i + 1]: 'c', [i + 2]: 'r', [i + 3]: 'c', [i + 4]: 'r' }]]
   })),
   // (an author block's units, no cell's: NeurIPS's \And, each author a tabular[t]{c} of their own, and LaTeX's \author with
-  // \and under \maketitle, each name and place its cell's line, in a brace group of its own or not: their column's class. Not
-  // where the cell's line is more than the unit: two units in one cell, a unit in a box inside the cell. A unit that is a
+  // \and under \maketitle, each name and place its cell's line, in a brace group of its own or not: their column's class, each of
+  // two units that share one cell's line too (the class places their line, which the lay runs as one). Not a unit in a box
+  // inside the cell, whose line the box's is. A unit that is a
   // paragraph (a p column's) its paragraph's; a body's paragraph in a list and one holding a tabular theirs; longtable's
   // caption, in a \noalign, set as before)
   authors: [doc('\\usepackage{longtable}\n\\title{A}\n\\author{' + U(10, 'Alice Smith') + ' \\\\ ' + U(11, 'Some University') + ' \\and ' + U(12, 'Bob Jones') + '}', [
@@ -123,7 +124,7 @@ const CASES = {
     `${U(28, 'a paragraph holding a tabular \\begin{tabular}{c} x \\end{tabular} and more words')}`,
     '',
     `\\begin{longtable}{c} \\caption{${U(29, 'A caption')}}\\\\ x \\\\ ${LONG} \\\\ \\end{longtable}`,
-  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: 'c', 10: 'c', 11: 'c', 12: 'c', 20: 'l', 21: '-', 22: '-', 23: '-', 24: 'c', 26: 'j', 27: 'j', 28: 'j' }],
+  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: 'c', 10: 'c', 11: 'c', 12: 'c', 20: 'l', 21: 'c', 22: 'c', 23: '-', 24: 'c', 26: 'j', 27: 'j', 28: 'j' }],
   // (tabularray's tblr measures a cell in an \hbox, then sets it as a paragraph, \raggedright, \centering or \raggedleft: its
   // paragraph's; nicematrix's NiceTabular builds its preamble with LaTeX's; a plain \halign, no template of LaTeX's: nothing)
   others: [doc('\\usepackage{tabularray,nicematrix}', [

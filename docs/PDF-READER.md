@@ -2907,9 +2907,14 @@ block's units are never cells (PIPELINE 39), yet they are set in tables: LaTeX's
 first author's, justified elsewhere, five of the eight names and their places laid from their originals' starts. A unit's
 start mark now carries its index out the same way, but through ordinary groups alone (a brace group, `\begingroup`, as the
 paragraph's end is followed): never past a box, a `\noalign`, math or a note, where the unit is no line of the cell's or the
-token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class where
-it is the cell's one unit; where two units, or a cell's unit, share the cell's line, the class places the line, not either,
-and none is written. `readAlign` reads it as a cell's: the class where the unit's own paragraph says nothing (a name set again
+token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class for
+each unit that reaches it; where a cell's own unit shares the line, none. Several units sharing a cell's line (2411.13093v4's
+names apart by `\quad`, cut in two by a `\thanks`) wrote none at first: the class places their line, not either, and the lay
+then had no line of several members, so each, given the class, would have been set on its own middle. The lay now has one
+(§18.16, `rowLinesOf`): a line whose members TeX states alike is laid as one run, placed as the class places it, and each of
+them states the class (2026-11-10). Where locate does not make them one line (ink kept between them, a member over two lines),
+each is centred on its own original's middle, where the ink's reading laid it from its start. `readAlign` reads it as a
+cell's: the class where the unit's own paragraph says nothing (a name set again
 as a paragraph, acmart's reference format, keeps its paragraph's). Nothing of B moves (the same gate, its case `authors`: 96
 documents, each PDF byte for byte the one before). A `\thanks` mark TeX set glued after a name (its `\rlap`) is the name's
 trail (§18.16) and travels with it, so the room beside the name is no longer fenced by it (1706.03762v7's first name, set at
@@ -3193,7 +3198,11 @@ marks from the next author's lead. TeX's gaps there are sums (ICML's 6.64 pt bef
 `\scriptspace` and two word spaces; article's `\and`, `\hskip 1em plus .17fil` stretched by a centred line's slack), and neither
 the PDF, whose fonts are the Type 1 programs and not the metrics TeX read, nor the log states a font's `\fontdimen` or a line's
 glue set ratio to sum them from (the coordinator's option of 2026-11-10, measured and dropped). The marked compile states the
-calls instead: a point `<i>c` before each author's call where TeX is in horizontal mode, unit i the first after it. An author's
+calls instead: a point `<i>c` before each author's call where TeX is in horizontal mode, unit i the first after it, and one
+right after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, kept in the
+stored `\@author` as the calls are: the mark the note set is the text before's (2411.13093v4's "Xiawu Zheng¹∗", whose "∗" was
+the next unit's label and kept the row from being laid as one line); a note that opens its row marks no text before it, and its
+mark stays the name's lead. An author's
 member owns, as its trail, every free glyph TeX set on its last line between its end mark and the next call, before any unit's
 mark or bracket, whatever the gap; a row of another line there stays where TeX set it, as before (1706.03762v7's e-mails, each
 under its place before NeurIPS' `\And`: taken as the place's trail, the place was laid on two lines at 8.97 pt where TeX set one
