@@ -57,7 +57,8 @@ for (const pair of pairs) {
   const t0 = performance.now()
   const pages = {}
   globalThis.__ckPage = (p, pg, page) => {
-    if (p === pair) pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait }
+    if (p === pair)
+      pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait, ...(page.inks ? { inks: page.inks } : {}) }
   }
   // (the reader's lay of the pair, as openReader binds it once the head is read: its target the pair's, as render.mjs opens
   // the reader on it, its toggles TOGGLES's, its metrics the layered ones, its patterns the served ones)

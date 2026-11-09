@@ -1,15 +1,16 @@
-// Each crop of a laid page drawn through its own ink alone (unit/crops.ts cropClip): the part states every piece's ink on A,
-// each element's boxes (El.ink, one a line of TeX's), each label's (Label.ink and its name, number and punctuation) and each
-// babel name's counter (Word.counter); a crop's own are its piece's boxes on the line it was cut from (its element's, by the
-// element its place among the row's pieces holds: a crop's `piece` is that place, not the part's id), the page's other
-// pieces' the ink its rectangle must leave behind. What the part does not state stays in reach of a margin: ink in no group
-// (a table's rule, a figure's stroke), always shown in the crop render, and, for a crop cut from another page of its member,
-// the ink of that page's members that are not this page's.
-import type { Ink, Part } from '@readarxiv/format'
+// The facts each crop of a laid page is cut by (the reader's paint.ts cropsOf): its own ink, the box it was cut from (an
+// element's crop states it as it is laid, emit/display.ts: its ink on its line as the part states it, El.ink, or the part of
+// it the crop draws, inside its own brackets where the translation sets its own round it; a label's crop here: its label's
+// boxes, Label.ink and its name, number and punctuation), and the page's every piece's (each element's ink and brackets,
+// each label's and babel name's counter's, on the pages the page's crops are cut from). No margin of the typesetter's: a
+// glyph's antialiased edge is a device pixel of the render a crop is cut from, which the reader alone knows (round 5's
+// parity: a margin fixed in points leaves a 1x screen's edge pixels out). What the part does not state a crop cannot keep
+// apart: ink in no group (a table's rule, a figure's stroke), ink of an element its box leaves out (a glyph PDF.js reads as
+// a blank, an extensible delimiter: locate's element boxes are its glyphs of a Unicode that is not blank), and, for a crop
+// cut from another page of its member, the ink of that page's members that are not this page's.
+import type { Box, Ink, Part } from '@readarxiv/format'
 import type { Item, Laid } from '../types.ts'
-import { cropClip } from '../unit/crops.ts'
 
-type Rect = [number, number, number, number]
 type Stated = { ord: number; piece: string; ink: Ink }
 
 /** every piece's ink the part states: its elements', its label's and its counter's */
@@ -17,7 +18,10 @@ function inkOf(part: Part): Stated[] {
   const out: Stated[] = []
   for (const flow of part.flows)
     for (const m of flow) {
-      for (const [id, el] of m.els ?? []) for (const ink of el.ink) out.push({ ord: m.ord, piece: id, ink })
+      for (const [id, el] of m.els ?? []) {
+        for (const ink of el.ink) out.push({ ord: m.ord, piece: id, ink })
+        for (const ink of el.brackets ?? []) out.push({ ord: m.ord, piece: id, ink })
+      }
       const l = m.label
       if (l)
         for (const ink of [l.ink, l.name?.[1], l.num?.[1], l.punct?.[1]])
@@ -28,14 +32,17 @@ function inkOf(part: Part): Stated[] {
   return out
 }
 
-const rect = (ink: Ink): Rect => [ink[1], ink[2], ink[3], ink[4]]
+const box = (ink: Ink): Box => [ink[1], ink[2], ink[3], ink[4]]
 
-/** the page's laid members, each crop of theirs where another piece's ink stands in its rectangle drawn through its clip.
- *  `elOf(ord, piece)`: the part's element (its El id) a crop of member `ord` is cut from, by the crop's piece (its place among
- *  the row's pieces); a label's crop is its piece 'label' */
-export function clipCrops(members: Laid[], part: Part, elOf: (ord: number, piece: string) => string | null): Laid[] {
+/**
+ * The page's laid members, each label's crop stating its own ink (`ink`: its label's boxes on its page; an element's crop
+ * states its own as it is laid), and the page's every piece's ink on the pages its crops are cut from (`inks`: none where it
+ * draws no crop)
+ */
+export function cropInks(members: Laid[], part: Part): { members: Laid[]; inks: Ink[] } {
   let stated: Stated[] | null = null
-  return members.map((m) => {
+  const pages = new Set<number>()
+  const out = members.map((m) => {
     if (m.state !== 'laid' || !m.lines.some((l) => l[3].some((it) => 'src' in it))) return m
     stated ??= inkOf(part)
     const all = stated
@@ -46,20 +53,14 @@ export function clipCrops(members: Laid[], part: Part, elOf: (ord: number, piece
       items.map((it): Item => {
         if (!('src' in it)) return it
         const page = it.src[0]
-        const on = all.filter((s) => s.ink[0] === page)
-        // (its own: its piece's boxes on its page; of a piece TeX set on several lines, those of the line it was cut from)
-        const piece = it.piece === 'label' ? 'label' : elOf(m.ord, it.piece)
-        let own = on.filter((s) => s.ord === m.ord && s.piece === piece)
-        const line = own.filter((s) => s.ink[5] === it.src[5])
-        if (line.length && line.length < own.length) own = line
-        const clip = cropClip(
-          it.src,
-          own.map((s) => rect(s.ink)),
-          on.filter((s) => !own.includes(s)).map((s) => rect(s.ink)),
-        )
-        return clip ? { ...it, clip } : it
+        pages.add(page)
+        if (it.ink || it.piece !== 'label') return it
+        const own = all.filter((s) => s.ink[0] === page && s.ord === m.ord && s.piece === 'label')
+        return own.length ? { ...it, ink: own.map((s) => box(s.ink)) } : it
       }),
     ])
     return { ...m, lines }
   })
+  const all = stated as Stated[] | null
+  return { members: out, inks: all ? all.filter((s) => pages.has(s.ink[0])).map((s) => s.ink) : [] }
 }

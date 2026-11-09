@@ -43,7 +43,7 @@ describe("a laid page's crops", () => {
         },
       ],
     }
-    expect(cropsOf(page).map((c) => [c.piece, c.from])).toEqual([
+    expect(cropsOf(page, { x: 0.5, y: 0.5 }).map((c) => [c.piece, c.from])).toEqual([
       ['14', 3],
       ['15', 4],
     ])
@@ -136,40 +136,145 @@ describe("a laid page's crops", () => {
     })
     expect(modes).toEqual(['darken', 'darken'])
   })
-  it('draws a crop through the rectangles it states, so that another piece’s ink in its rectangle stays behind', async () => {
-    // (2610.21312v1-zh p5 t58: line 1's formula, its source reaching 0.3 pt under its ink into line 2's glyph tops, drawn in
-    // place; its clip its own ink's box and the rest of its source clear of line 2's)
-    const src: [number, number, number, number, number, number] = [5, 72.8, 160.27, 279.09, 174.74, 165.97]
-    const clip: [number, number, number, number][] = [
-      [73.2, 160.57, 278.69, 174.44],
-      [116.39, 160.27, 279.09, 174.74],
-      [72.8, 160.63, 116.39, 174.74],
-    ]
+})
+
+type Box = [number, number, number, number]
+const meet = (a: Box, b: Box): Box | null => {
+  const x0 = Math.max(a[0], b[0]),
+    y0 = Math.max(a[1], b[1]),
+    x1 = Math.min(a[2], b[2]),
+    y1 = Math.min(a[3], b[3])
+  return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null
+}
+const inside = (a: Box, b: Box) =>
+  a[0] >= b[0] - 1e-9 && a[1] >= b[1] - 1e-9 && a[2] <= b[2] + 1e-9 && a[3] <= b[3] + 1e-9
+/** whether rectangles `rs` reach box `n` anywhere outside box `own` */
+const reaches = (rs: Box[], n: Box, own: Box) =>
+  rs.some((r) => {
+    const m = meet(r, n)
+    return !!m && !inside(m, own)
+  })
+/** whether rectangles `rs` cover box `b` whole (sampled) */
+const covers = (rs: Box[], b: Box) => {
+  for (let x = b[0] + 0.001; x < b[2]; x += (b[2] - b[0]) / 97)
+    for (let y = b[1] + 0.001; y < b[3]; y += (b[3] - b[1]) / 31)
+      if (!rs.some((r) => x >= r[0] - 1e-9 && x <= r[2] + 1e-9 && y >= r[1] - 1e-9 && y <= r[3] + 1e-9)) return false
+  return true
+}
+const grow = ([x0, y0, x1, y1]: Box, d: number): Box => [x0 - d, y0 - d, x1 + d, y1 + d]
+const close = (a: readonly number[] | undefined, b: readonly number[]) => {
+  expect(a?.length).toBe(b.length)
+  for (const [i, v] of b.entries()) expect(a![i]).toBeCloseTo(v, 9)
+}
+
+describe('a crop cut through its own ink and a device pixel round it, clear of every other piece’s (crop-edge)', () => {
+  afterEach(() => vi.restoreAllMocks())
+  // (2610.21312v1-zh p5 t58: line 1's formula and line 2's "det M = 1", their boxes 0.06 pt over each other; the crop of line
+  // 1's drawn in place, its source the typesetter's: the box with its 0.4 / 0.3 margin)
+  const O: Box = [73.2, 160.57, 278.69, 174.44],
+    N: Box = [73.2, 153.6, 116.39, 160.63]
+  const layout: [number, number, number, number, number, number] = [5, 72.8, 160.27, 279.09, 174.74, 165.97]
+  const pageOf = (
+    item: Partial<Extract<Item, { src: unknown }>>,
+    inks: Page['inks'] = [
+      [5, ...O, 165.97],
+      [5, ...N, 153.71],
+    ],
+  ): Page => ({
+    page: 5,
+    wait: { rows: [], faces: [] },
+    links: [],
+    inks,
+    members: [
+      {
+        ord: 58,
+        page: 5,
+        state: 'laid',
+        off: 3,
+        lit: { left: [], right: [], own: [] },
+        lines: [[165.97, 73.2, 290, [{ s: 'tr', x: 72.8, src: layout, k: 1, piece: '1', ink: [O], ...item }]]],
+      },
+    ],
+  })
+  it('carries its own ink whole and a device pixel round it, and nothing of another’s ink or its edge (2.667 px a point)', () => {
+    const px = 3 / 8
+    const [c] = cropsOf(pageOf({}), { x: px, y: px })
+    // (its source the device pixel round its ink, drawn in place)
+    close(c!.src, grow(O, px))
+    close(c!.at, grow(O, px))
+    expect(covers(c!.clip!, O)).toBe(true)
+    expect(reaches(c!.clip!, grow(N, px), O)).toBe(false)
+    // (its ring kept where no other ink stands: under its subscripts, right of line 2's formula)
+    expect(covers(c!.clip!, [N[2] + px + 0.01, O[1] - px, O[2] + px, O[1]])).toBe(true)
+  })
+  it('carries its own ink’s every edge pixel where a device pixel is wider than the typesetter’s margin (1.333 px a point)', () => {
+    // (the typesetter's margin, 0.3 pt up and down, is under half a device pixel at a 1x screen's 100 %: round 5's probe over
+    // the 22 pairs, 583 of the elements' ink pixels outside it)
+    const px = 3 / 4
+    const [c] = cropsOf(pageOf({}, [[5, ...O, 165.97]]), { x: px, y: px })
+    close(c!.src, grow(O, px))
+    expect(c!.clip).toBeUndefined()
+  })
+  it('takes no ring at an edge cut between two glyphs of its element (a URL broken), and cuts there', () => {
+    const [c] = cropsOf(pageOf({ src: [5, 72.8, 160.27, 200, 174.74, 165.97], cut: 2 }, [[5, ...O, 165.97]]), {
+      x: 0.5,
+      y: 0.5,
+    })
+    close(c!.src, [O[0] - 0.5, O[1] - 0.5, 200, O[3] + 0.5])
+  })
+  it('leaves its element’s brackets behind where it draws the ink between them, its element’s whole box no neighbour', () => {
+    // (2610.21312v1-zh p12 t200: "[784,256,256,10]" drawn inside the translation's own brackets; the page states the element's
+    // whole box, which holds the crop's own, and its brackets apart)
+    const box: Box = [163.74, 287.51, 237.35, 297.47],
+      left: Box = [163.74, 287.51, 166.51, 297.47],
+      right: Box = [234.59, 287.51, 237.35, 297.47],
+      inner: Box = [166.51, 287.51, 234.59, 297.47]
     const page: Page = {
-      page: 5,
+      page: 12,
       wait: { rows: [], faces: [] },
       links: [],
+      inks: [
+        [12, ...box, 290],
+        [12, ...left, 290],
+        [12, ...right, 290],
+      ],
       members: [
         {
-          ord: 58,
-          page: 5,
+          ord: 200,
+          page: 12,
           state: 'laid',
           off: 3,
           lit: { left: [], right: [], own: [] },
-          lines: [[165.97, 73.2, 290, [{ s: 'tr', x: 72.8, src, k: 1, piece: '0', clip }]]],
+          lines: [
+            [
+              290,
+              72,
+              300,
+              [{ s: '', x: 166.11, src: [12, 166.11, 287.21, 234.99, 297.77, 290], k: 1, piece: '2', ink: [inner] }],
+            ],
+          ],
         },
       ],
     }
-    const [c] = cropsOf(page)
-    const near = (a: readonly number[] | undefined, b: readonly number[]) => {
-      expect(a?.length).toBe(b.length)
-      for (const [i, v] of b.entries()) expect(a![i]).toBeCloseTo(v, 9)
-    }
-    near(c!.src, [72.8, 160.27, 279.09, 174.74])
-    // (drawn in place: its line's baseline its source's, at its source's x)
-    near(c!.at, [72.8, 160.27, 279.09, 174.74])
-    expect(c!.clip?.length).toBe(clip.length)
-    for (const [i, r] of clip.entries()) near(c!.clip![i], r)
+    const px = 3 / 8
+    const [c] = cropsOf(page, { x: px, y: px })
+    expect(covers(c!.clip!, inner)).toBe(true)
+    expect(reaches(c!.clip!, grow(left, px), inner)).toBe(false)
+    expect(reaches(c!.clip!, grow(right, px), inner)).toBe(false)
+    // (its ring kept over and under its ink: its element's box, which holds it, no neighbour's)
+    expect(covers(c!.clip!, [left[2] + px, inner[3], right[0] - px, inner[3] + px])).toBe(true)
+    expect(covers(c!.clip!, [left[2] + px, inner[1] - px, right[0] - px, inner[1]])).toBe(true)
+  })
+  it('is cut as the typesetter’s source where no ink of its own is stated', () => {
+    const [c] = cropsOf(pageOf({ ink: undefined }), { x: 0.5, y: 0.5 })
+    close(c!.src, layout.slice(1, 5))
+    expect(c!.clip).toBeUndefined()
+  })
+  it('is drawn through its clip, at the device pixel of the render it is cut from', async () => {
+    const page = pageOf({})
+    // (a viewport at scale 2 and an output scale of 1: half a point a device pixel)
+    const [c] = cropsOf(page, { x: 0.5, y: 0.5 })
+    expect(c!.clip?.length).toBeGreaterThan(1)
     const calls: string[] = []
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
       () =>
@@ -194,6 +299,6 @@ describe("a laid page's crops", () => {
     // (the clip's rectangles where the crop is drawn, device px of this page's frame: y down from its top)
     const dev = ([x0, y0, x1, y1]: [number, number, number, number]) =>
       `rect ${[x0 * 2, (792 - y1) * 2, (x1 - x0) * 2, (y1 - y0) * 2].map((v) => Math.round(v * 100) / 100).join(' ')}`
-    expect(calls).toEqual(['save', 'path', ...clip.map(dev), 'clip', 'draw', 'restore'])
+    expect(calls).toEqual(['save', 'path', ...c!.clip!.map(dev), 'clip', 'draw', 'restore'])
   })
 })
