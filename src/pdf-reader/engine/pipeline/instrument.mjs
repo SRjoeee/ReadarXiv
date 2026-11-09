@@ -930,12 +930,16 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const units = paper.units
   const bundle = bundleUnitsOf(paper)
   const inkBase = bundle.length
-  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true })
+  // (B read once, its raw glyphs let go page by page as the Doc's are made: the ownership reads the Doc's glyphs, which carry every
+  // field it reads (their character, place, ink box, size, font, fill, show and place in it, blank, form, clip, figure) and which it
+  // never writes. It read a copy of each glyph of its own made from pageInk's, so that B's glyphs were held three times at once:
+  // lane mem-front, after L9 §3 6)
+  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true, rawGlyphs: false })
   const lower = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
   // (each page as wrapFinal hands it to the ownership: layout/wrap-final.mjs)
   const pages = read.pages.map(({ raw, page }) => {
     if (!raw) return { glyphs: [], turned: [], shapes: new Map(), pictures: [], figures: new Map(), boxes: [], paths: [], points: [], boxAt: [], regions: [], view: [...page.view] }
-    return { regions: raw.regions, glyphs: raw.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.unseen ? { unseen: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: raw.turned, shapes: raw.shapes, pictures: raw.pictures, figures: raw.figures, unseen: raw.unseen, cut: raw.cut, boxes: raw.boxes, paths: raw.paths, points: raw.points.map(lower), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], boxAt: raw.boxAt, view: [...page.view] }
+    return { regions: raw.regions, glyphs: page.glyphs, turned: raw.turned, shapes: raw.shapes, pictures: raw.pictures, figures: raw.figures, unseen: raw.unseen, cut: raw.cut, boxes: raw.boxes, paths: raw.paths, points: raw.points.map(lower), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], boxAt: raw.boxAt, view: [...page.view] }
   })
   const texts = options.texts, inkless = options.inkless ?? null
   const shown = textsOf(texts)
