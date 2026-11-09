@@ -13,6 +13,7 @@ import {
   hasTap,
   ledgerRound,
   markSpaced,
+  quotesUnmarked,
   readGz,
   roundsOf,
   sample,
@@ -28,7 +29,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
     const differ: string[] = []
     const count = { rounds: 0, ofMarks: 0, givenUp: 0, display: 0, held: 0, tail: 0, merged: 0 }
     // (the rounds and spaces the mark-space ruling of 2026-11-10 takes from today's tokens, tap.ts markSpaced)
-    const ruled = { rounds: 0, spaces: 0 }
+    const ruled = { rounds: 0, spaces: 0, quoteRounds: 0, quotes: 0 }
     const seen = new Set<string>()
     for (const rule of ['U.marks', 'B.tokens'])
       for (const e of sample(rule).entries)
@@ -59,10 +60,16 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
           if (got.marks.tail) count.tail++
           if (got.marks.tail?.[1]) count.merged++
           const roles = rolesOf(e.pair)
-          const today = markSpaced([...want], new Set(roles.cjk ? [roles.cjk.body, roles.cjk.bold] : []))
+          const cjkIds = new Set(roles.cjk ? [roles.cjk.body, roles.cjk.bold] : [])
+          const spaced = markSpaced([...want], cjkIds)
+          const today = { ...spaced, ...quotesUnmarked(spaced.tokens, cjkIds) }
           if (today.removed) {
             ruled.rounds++
             ruled.spaces += today.removed
+          }
+          if (today.changed) {
+            ruled.quoteRounds++
+            ruled.quotes += today.changed
           }
           const d =
             firstDifference(got.marks, slotOf(e.pair, e.ord, r, 'U.marks'), 'marks') ??
@@ -70,7 +77,7 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
           if (d) differ.push(`${key}: ${d}`)
         }
     expect(differ).toEqual([])
-    expect(ruled).toEqual({ rounds: 2, spaces: 4 })
+    expect(ruled).toEqual({ rounds: 2, spaces: 4, quoteRounds: 3, quotes: 10 })
     // (a held line's mark is dropped nowhere on the corpus: tests/unit/marks.test.ts)
     expect(count).toEqual({ rounds: 50, ofMarks: 11, givenUp: 0, display: 3, held: 0, tail: 9, merged: 3 })
   })

@@ -96,3 +96,21 @@ describe('B.tokens: no space beside a full-width mark’s blank side (xeCJK)', (
     expect(linesOf('這是一句。 Transformer 很好。', 300, 'zh-TW')[0]).toBe('這是一句。Transformer 很好。')
   })
 })
+
+describe('B.tokens: a curly quote an alphabet sets proportional is no full-width mark (no blank half to hang)', () => {
+  // (1810.04805v2-es p8 t155: a Spanish line ending in a closing curly quote stood half an em past its measure: B.break hangs a
+  // closing mark's blank half past a line's end (hangOf, by the token's `punct`), and the tokens gave a Latin target's quote the
+  // CJK marks' class; its Latin face sets it proportional, with no blank, so the hang set the quote's own ink past the edge)
+  it('ends no line of a German paragraph past its measure where a line ends with a closing quote', () => {
+    // (a paragraph of four lines on 100 pt from x 72; its second line ends with the closing quote. Each laid line's drawn end, the
+    // Page line's x1, against the measure's end, 172)
+    const lines = layPage(
+      part({ ...entry(100), kind: 'para', lines: entry(100).lines.slice(0, 4) }),
+      rowsOf('Aaaa bbbb cccc dddd eeee ffff gggg „hhh” iiii jjjj kkkk llll mmmm nnnn oooo pppp'),
+      rulesFor('de'),
+      metrics,
+    ).members[0]!.lines
+    expect(lines.map(([, , , items]) => (items.at(-1) as { s: string }).s.trimEnd().at(-1))).toContain('\u201d')
+    expect(lines.map(([, , x1]) => x1 <= 172 + 1e-6)).toEqual(lines.map(() => true))
+  })
+})

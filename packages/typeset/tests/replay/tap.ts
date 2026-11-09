@@ -81,6 +81,23 @@ export function markSpaced<T extends SpacedToken>(
   )
   return { tokens: out, removed: tokens.length - out.length }
 }
+/**
+ * Today's tokens as the second ruling of 2026-11-10 makes them (lane cjk-space, B.tokens: a mark's class, `punct`, only where it
+ * is full-width): a curly quote's today gave a class where the target sets it in its Latin face (not one of `cjk`'s faces) none.
+ * With how many it changed
+ */
+export function quotesUnmarked<T extends { s?: unknown; cls?: unknown; punct?: unknown; face?: { id?: unknown } }>(
+  tokens: readonly T[],
+  cjk: ReadonlySet<string>,
+): { tokens: T[]; changed: number } {
+  let changed = 0
+  const out = tokens.map((t) => {
+    if (t.cls !== 'cjk' || typeof t.s !== 'string' || !t.punct || CJK.test(t.s) || cjk.has(String(t.face?.id))) return t
+    changed++
+    return { ...t, punct: null }
+  })
+  return { tokens: out, changed }
+}
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:

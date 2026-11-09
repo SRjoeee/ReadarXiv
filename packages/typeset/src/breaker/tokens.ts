@@ -564,7 +564,10 @@ export function tokens(i: TokensInput): Tokens {
               t.cont = true
             } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
               t.glue = true
-            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = punctOf(s)
+            // (a mark's class where it is full-width (markBlankEdge's definition: of the CJK blocks, or set in the target's CJK
+            // face); none where an alphabet's target sets a curly quote in its Latin face, proportional, no blank half to hang or take)
+            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0)
+              t.punct = CJK.test(s) || face.id !== faceOf(st, 'latin').id ? punctOf(s) : null
             if (
               !runs &&
               !all &&
