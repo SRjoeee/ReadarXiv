@@ -5,7 +5,7 @@
 // `\em`, which loose holds to the unit's end); a `must` span is rebuilt around its own stretches. An element that sets nothing
 // (`silent`), and a head of such elements alone, is no edge either (cut there, `exam\-ple` went as two stretches): as on the
 // markers wire, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group came
-// before it, else at its end.
+// before it, else at its end. The stop TeX set at a group's end (`stop`) ends the stretch its words end, as on the wires.
 import { headLength } from './accept.ts'
 import type { OutPiece, Piece, UnitIn } from './contract.ts'
 
@@ -30,7 +30,8 @@ const LETTERS = /\p{L}/gu
 
 export function runsOf(unit: UnitIn): Runs {
   const parts: Runs['parts'] = []
-  const build = (content: readonly Piece[]): Tpl[] => {
+  // (`stop`: the stop TeX set at the group's end, its source writing none: its last stretch ends with it)
+  const build = (content: readonly Piece[], stop?: string): Tpl[] => {
     const out: Tpl[] = []
     // (what sets nothing: before the group's first word or element, or after)
     const front: Tpl[] = []
@@ -63,7 +64,7 @@ export function runsOf(unit: UnitIn): Runs {
           out.push({ t: 'el', id: p.id })
         } else if (p.must) {
           close()
-          out.push({ t: 'span', id: p.id, content: build(p.content) })
+          out.push({ t: 'span', id: p.id, content: build(p.content, p.stop) })
         } else {
           // (its head, a declaration's place, stays in a copy of it: never loose, held to the unit's end)
           const k = headLength(p.content)
@@ -74,10 +75,12 @@ export function runsOf(unit: UnitIn): Runs {
             out.push({ t: 'span', id: p.id, content: build(head) })
           }
           walk(p.content.slice(k))
+          if (p.stop) text = (text ?? '') + p.stop
         }
       }
     }
     walk(content)
+    if (stop) text = (text ?? '') + stop
     close()
     return [...front, ...out, ...back]
   }

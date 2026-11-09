@@ -18,10 +18,10 @@ const span = (open: string, content: Piece[], style = 'bold'): Piece & { t: 'spa
 })
 const bf = (s: string | Piece[]) => span('\\textbf{', typeof s === 'string' ? [t(s)] : s)
 const em = (s: string) => span('\\emph{', [t(s)], 'italic')
-/** the `must` spans' texts, in order */
-const kept = (content: Piece[]): string[] => {
+/** the `must` spans' texts, in order (`faced`: the groups the caller read TeX's face of, marks/faces.ts) */
+const kept = (content: Piece[], faced: ReadonlySet<Piece> = new Set()): string[] => {
   const out: string[] = []
-  const stack: Piece[] = [...runIns(content)].reverse()
+  const stack: Piece[] = [...runIns(content, faced)].reverse()
   while (stack.length) {
     const p = stack.pop() as Piece
     if (p.t !== 'span') continue
@@ -147,6 +147,26 @@ describe('the run-in labels of a unit, stated must', () => {
     const content = [t('College of Information Science'), line, em('and Electronic Engineering,')]
     expect(kept(content)).toEqual(['and Electronic Engineering,'])
     expect(line).not.toHaveProperty('stop')
+  })
+  // (2608.25210v2 p2 on staging, 2026-11-09: `\topic{Current approaches to infer provenance are not reliable}`, the paper's
+  // `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, went on no wire and came back regular: a paper's macro was
+  // never a style group, whatever TeX set it in)
+  it('a group of a command that names no style, which TeX set in a face of its own, read as a style group', () => {
+    const head = span('\\topic{', [t('Current methods are not reliable')], 'bold')
+    const body = t('  \nTo infer the source, one could rank sentences.')
+    expect(kept([head, body])).toEqual([])
+    expect(kept([head, body], new Set([head]))).toEqual(['Current methods are not reliable'])
+    // (a paper's macro TeX set in the face around it, \revised{…} inside a sentence: no face, no style group)
+    const plain = span('\\revised{', [t('retrieval approaches')], 'other')
+    expect(kept([t('One could use '), plain, t(' instead.')], new Set())).toEqual([])
+  })
+  it('reads the stop TeX set at a group’s end (its `stop`) as its text’s end: a head past the unit’s head', () => {
+    const head = span('\\topic{', [t('Verifiable sources')], 'bold')
+    head.stop = '.'
+    const content = [t('We define two notions. '), head, t(' We use insights from it.')]
+    expect(kept(content, new Set([head]))).toEqual(['Verifiable sources'])
+    const bare = span('\\topic{', [t('Verifiable sources')], 'bold')
+    expect(kept([t('We define two notions. '), bare, t(' We use insights from it.')], new Set([bare]))).toEqual([])
   })
   it('reads groups nested past any recursion limit (its walks keep their own stacks)', () => {
     let inner: Piece[] = [t('Setup:')]

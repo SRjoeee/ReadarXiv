@@ -185,6 +185,20 @@ const applyCmd = (src: string | undefined, s: TStyle, d: Designs): TStyle | null
   for (const [re, f] of STYLE_CMDS) if (re.test(src as string)) return f(s, d)
   return null
 }
+/** what a group's open sets: its command's style (applyCmd), else the face TeX set it in where its part states one (a paper's
+ *  macro, `\topic{…}` setting `{\bf #1.}`: SpanAt.style, read off its glyphs), else nothing */
+const openStyle = (p: Extract<V0Piece, { t: 'open' }>, s: TStyle, d: Designs): TStyle | null => {
+  const named = applyCmd(p.src, s, d)
+  if (named || !p.face) return named
+  const f = p.face
+  const fam = s.fam ?? 'serif'
+  return {
+    ...s,
+    bold: !!f.bold,
+    italic: !!f.slant,
+    ...(f.role !== fam ? { fam: f.role, design: d[f.role] } : {}),
+  }
+}
 
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,
@@ -589,7 +603,7 @@ export function tokens(i: TokensInput): Tokens {
       continue
     }
     if (p.t === 'ph' && (glueOf(p.src) || ['zero', 'space'].includes(i.cls2[k] ?? ''))) continue
-    if (p.t === 'open' && applyCmd(p.src, base, designs)) headId = p.id
+    if (p.t === 'open' && openStyle(p, base, designs)) headId = p.id
     break
   }
   const kernOn = (g: { em?: number; bp?: number; brk: boolean }) => {
@@ -644,7 +658,7 @@ export function tokens(i: TokensInput): Tokens {
       if (tokens.at(-1)?.blockTo !== opened) tokens.push({ blockTo: opened, w100: 0, brk: true })
     }
     if (p.t === 'open') {
-      const next = applyCmd(p.src, style(), designs)
+      const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })
       return

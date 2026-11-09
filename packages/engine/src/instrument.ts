@@ -2,7 +2,7 @@
 // INSTRUMENT. B (our marked compile) is never shown: it is read for who owns each glyph and box, and its ownership is carried
 // onto arXiv's page by align and locate. Today's front end makes it through its adapter (src/pdf-reader/engine/pipeline/
 // instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
-import type { Piece } from '@readarxiv/format'
+import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
@@ -65,15 +65,17 @@ export interface InstrumentUnit {
    *  reads a source */
   classes?: [piece: string, PieceClass][]
   /** what its source says of each group (by its open piece's id), which the part states as the span's facts (format's
-   *  SpanAt: `cmd`, `colour`, `to`) */
+   *  SpanAt: `cmd`, `colour`, `to`, `style`) */
   spans?: [piece: string, SpanClass][]
 }
 /** what a group's source says: the command its open begins with (its name and star), the fill TeX set its run in, a link
- *  group's target where the source names it (linkTargetOf) */
+ *  group's target where the source names it (linkTargetOf); and, where its command names no style the tables know, the face
+ *  TeX set its text in, read off its glyphs on B where it is not the face around it (marks/faces.ts) */
 export interface SpanClass {
   cmd?: string
   colour?: number
   to?: { url: string } | { dest: string }
+  style?: Style
 }
 /** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
 export interface PieceClass {

@@ -1096,6 +1096,21 @@ only how it meets the rest of the extension.
   10, its reply's markers out of place); stated, 4,383 of the 4,572 units whose wire the two facts change go out as
   today's wire, byte for byte (the rest differ by the package's own rules: an element inside a word, a span on no wire).
   The tags wire still sends it as an element (Google keeps tags; no measure says it cuts there).
+- **What TeX set for a group that its source does not say** (lane runin-stop, 2026-11-09). A group's style was read off its
+  command's name alone — the front end's table, the run-in rule's `STYLE_OPEN`, the typesetter's `STYLE_CMDS` — so a paper's
+  macro set none: 2608.25210v2's run-in heads are its `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, and they
+  went on no wire (no style group, so no run-in label) and were drawn regular whatever came back (Google keeps every group,
+  today's wire kept `\topic` as two markers: both drew it regular), the stop the macro sets in no source of the unit's. The
+  rebuilt reader reads them off the unit's text glyphs on B (`packages/engine/src/marks/faces.ts`, the source's letters and the
+  glyphs' matched in order, as a unit's words are placed on A): a group whose command names no style the table knows, set in a
+  face that is not the face around it (its parent's own text), states that face — the unit's span its `style` named for what
+  it changes, the part's `SpanAt.style` its Style, which the typesetter draws it in where its command names none; it is a
+  style group to the run-in rule, so a head before a capital, a stop or a colon is `must`. The punctuation TeX set between a
+  group's last letter and the source's next one, where the source writes only white space there and both words are matched
+  whole, is the group's `stop`, which every wire and the runs floor write at its end (inside a kept span, before its close).
+  Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
+  sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
+  4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its

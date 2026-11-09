@@ -50,6 +50,7 @@ export type Piece =
       id: string
       style: string
       must?: 1 | undefined
+      stop?: string | undefined
       open?: string | undefined
       close?: string | undefined
       content: Piece[]
@@ -59,7 +60,7 @@ export type Piece =
 /**
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
- * identity only (`stop`, `silent` and `after` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled; a group the unit's edge cuts
+ * identity only (`stop`, `silent` and `after` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled (its command's style, or where the command names none the face TeX set its text in, read off its glyphs, named for what it changes; `stop` read off them too, not in the id); a group the unit's edge cuts
  * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). A figure text's
  * run of glyphs in another face than its own is a group of no source, neither end, its style what the face changes (`bold`,
  * `medium`, `italic`, `upright`, a role) and its face the part's (SpanAt.style). `unit`: a unit
@@ -94,6 +95,9 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       id: z.string(),
       style: SpanKind,
       must: flag.optional(),
+      // the punctuation TeX sets at the group's end that its source does not write (a paper's macro's own `{\bf #1.}`, read off
+      // its glyphs: marks/faces.ts): a translator may write it at the group's end so that the sentence ends there
+      stop: z.string().optional(),
       open: z.string().optional(),
       close: z.string().optional(),
       content: z.array(Piece),
@@ -188,8 +192,9 @@ export const El = z.object({
 })
 /** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
 export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])
-/** a group of the source on A: its style (a figure text's run's, read off its glyphs: what the typesetter draws its
- *  translation in), the paragraph TeX opened at it; the command its open begins with (its name and
+/** a group of the source on A: its style (a figure text's run's, read off its glyphs; a source group's whose command names no
+ *  style the rules know, the face TeX set its text in, read off its glyphs on B: what the typesetter draws its translation
+ *  in), the paragraph TeX opened at it; the command its open begins with (its name and
  *  star), the fill TeX set its run in; a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
  *  its name): what the typesetter pairs the group's translation with its annotations by */

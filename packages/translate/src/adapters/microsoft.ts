@@ -62,7 +62,7 @@ export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(mi
 export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
-export const MICROSOFT_DIGEST = '3515dfd4bb2a213a9fed6e42a0ceb8df356f4c951bc046d60792bc65ee7c1316'
+export const MICROSOFT_DIGEST = '8cdb19197451f07e1d9510edae834f01e9da7e950cc5a773aed9c4e8647b3bbb'
 
 export interface MicrosoftOptions {
   fetch: Fetch

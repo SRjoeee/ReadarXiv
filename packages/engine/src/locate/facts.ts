@@ -93,6 +93,16 @@ export function faceKeyOf(base: string): string {
 export const styleKeyOf = (st: Pick<Style, 'role' | 'bold' | 'slant'>): string =>
   `${st.role}|${st.bold ? 'b' : ''}|${st.slant ? 'i' : ''}`
 
+/** what a face changes of the face around it (`role|b|i` each, faceKeyOf's), in LaTeX's names: the role, `bold` or `medium`,
+ *  `italic` or `upright`, joined by `-` (a figure text's run's, ink.ts; a source group's, marks/faces.ts) */
+export function changeOf(key: string, base: string): string {
+  const [r, b, i] = key.split('|')
+  const [R, B, I] = base.split('|')
+  return [r !== R ? r : '', b !== B ? (b ? 'bold' : 'medium') : '', i !== I ? (i ? 'italic' : 'upright') : '']
+    .filter(Boolean)
+    .join('-')
+}
+
 /**
  * The style a run of glyphs is set in, as today's reader reads it off the page (C5 `originalStyle` L2:765: the majority font
  * class by character, math glyphs aside, its size the most common one; C5's `upper` L2:1099: most letters that can tell are

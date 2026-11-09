@@ -31,7 +31,8 @@ const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 type Item =
-  | { t: 'text'; s: string; at: number }
+  /** `fixed`: no text of the source (a group's stop, written at its end): no sentence begins in it */
+  | { t: 'text'; s: string; at: number; fixed?: true }
   | { t: 'void'; out: OutPiece[]; at: number; len: number; stop: string | undefined }
   | { t: 'open'; id: string; letters: boolean; depth: number }
   | { t: 'close' }
@@ -44,6 +45,8 @@ const ownStop = (stop: string | undefined): string | undefined =>
 /** A unit's tags wire */
 export function planTags(unit: UnitIn): TagsPlan {
   const items: Item[] = []
+  /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
+  const stopsAt: [number, string][] = []
   const kinds = new Map<number, { kind: string; stop: string | undefined; reads: string | undefined }>()
   /** the elements of pieces that go as one void, by their projection offsets: what each reads as to the cutter */
   const readsOf = (ps: readonly Piece[], at0: number): number => {
@@ -69,6 +72,11 @@ export function planTags(unit: UnitIn): TagsPlan {
       } else if (SOLID.test(textOf(p.content))) {
         items.push({ t: 'open', id: p.id, letters: LETTER.test(textOf(p.content)), depth })
         at = walk(p.content, at, depth + 1)
+        // (the stop TeX set at its end, its source writing none: before its close)
+        if (p.stop) {
+          items.push({ t: 'text', s: p.stop, at, fixed: true })
+          stopsAt.push([at, p.stop])
+        }
         items.push({ t: 'close' })
       } else {
         const len = projectionOf(p.content).length
@@ -103,7 +111,7 @@ export function planTags(unit: UnitIn): TagsPlan {
     if (it.t === 'text') {
       for (let k = 0; k < it.s.length; k++) {
         const ch = it.s[k] as string
-        reach(it.at + k)
+        if (!it.fixed) reach(it.at + k)
         if (/\s/.test(ch)) {
           if (!/\s$/.test(wire) && !(k > 0 && /\s/.test(it.s[k - 1] as string))) wire += ' '
         } else wire += escapeTags(ch)
@@ -133,18 +141,32 @@ export function planTags(unit: UnitIn): TagsPlan {
   const cuts: number[] = []
   const marks: number[] = []
   if (unit.sentences) {
-    const projection = projectionOf(unit.content)
+    // (the projection the cutter reads: each group's stop at its end, as the source would write it, `orig` each of its
+    // offsets' in the unit's projection, a stop's that of the group's end)
+    const plain = projectionOf(unit.content)
+    let projection = ''
+    const orig: number[] = []
+    let from = 0
+    for (const [end, stop] of [...stopsAt, [plain.length, ''] as [number, string]]) {
+      for (let i = from; i < end; i++) orig.push(i)
+      projection += plain.slice(from, end) + stop
+      for (let i = 0; i < stop.length; i++) orig.push(end)
+      from = end
+    }
+    orig.push(plain.length)
     let at = 0
     let sent = ''
     // (an element that sets its sentence's own stop reads with it: the sentence ends there)
-    const standIn = (p: number) => {
+    const standIn = (q: number) => {
+      const p = orig[q] as number
       const k = kinds.get(p)
       // (what the host says it reads as, but an annotation is one whatever its text: it belongs to the sentence before)
       const byKind = standInOf(k?.kind ?? 'other')
       const s = byKind !== 'annotation' && k?.reads !== undefined ? k.reads : byKind
       return k?.stop ? `${s === undefined || s === 'annotation' ? 'Xx' : s}${k.stop}` : s
     }
-    for (const c of sentenceCuts(projection, standIn)) {
+    for (const q of sentenceCuts(projection, standIn)) {
+      const c = orig[q] as number
       const w = Math.min(wire.length, Math.max(0, (cutAt[c] as number) - lead))
       if (w <= at || w >= wire.length) continue
       marks.push(slots.length + marks.length + 1)

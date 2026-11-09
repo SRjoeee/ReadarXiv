@@ -212,6 +212,19 @@ export const SILENT_AROUND: UnitIn = unit('silent-around', [
   span('m', 'other', [t('Method')]),
   t(' '),
 ])
+/** run-in heads a paper's macro sets (2608.25210v2's `\topic{…}`, `{\bf #1.}`, words of our own): a kept span TeX ends with a
+ *  stop of its own, which its source does not write (`stop`, the source reader's), written at the span's end on the wire; a
+ *  span on no wire with one, written after its words */
+export const HEAD_STOP: UnitIn = unit(
+  'head-stop',
+  [
+    { t: 'span', id: 'h', style: 'bold', must: true, stop: '.', content: [t('Current methods are not reliable')] },
+    t('  \nTo infer the source, one could rank sentences. We call it '),
+    { t: 'span', id: 'f', style: 'bold', stop: '.', content: [t('verifiable sources')] },
+    t(' Then we go on.'),
+  ],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
@@ -222,6 +235,7 @@ export const MICROSOFT_UNITS: UnitIn[] = [
   /* 25, 26, 27 */ SILENT,
   SILENT_LABEL,
   SILENT_AROUND,
+  /* 28 */ HEAD_STOP,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */

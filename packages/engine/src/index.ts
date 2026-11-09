@@ -16,6 +16,7 @@ export * from './xref.types.ts'
 // (the unit's id, which the front half's adapter computes for the seam: format's)
 export { unitId } from '@readarxiv/format'
 // (a unit's run-in labels stated `must`, which the front half's adapter states for the seam)
+export { type GroupFact, groupFacts } from './marks/faces.ts'
 export { runIns } from './marks/run-ins.ts'
 export { align, HOW, HUNK, type HunkClass, hunkName, type Mapping } from './align/align.ts'
 export { lcs } from './align/myers.ts'

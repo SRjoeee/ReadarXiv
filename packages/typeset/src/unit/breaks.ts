@@ -34,11 +34,15 @@ export type LayoutUnit = {
   centred?: boolean | null
   flush?: string | null
 }
-/** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's) */
+/** the face TeX set a group's text in where its command names no style the rules know (the part's SpanAt.style: role, weight,
+ *  slant) */
+export type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
+/** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's; a
+ *  group's open with the face TeX set it in, where its part states one) */
 export type V0Piece =
   | { t: 'text'; s: string; k?: number }
   | { t: 'ph'; src: string; k?: number }
-  | { t: 'open'; src?: string; id?: unknown; k?: number }
+  | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace }
   | { t: 'close'; src?: string; id?: unknown; k?: number }
   | { t: 'nested'; src?: string; k?: number }
 /** where a break ends a line: the file's line after it, TeX's room after it in pitches and its frame's pitch (null where the

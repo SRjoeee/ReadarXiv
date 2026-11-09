@@ -14,7 +14,15 @@ import type { Doc, DocPoint } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
-import { faceKeyOf, type StyleGlyph, styleKeyOf, styleOf as glyphStyleOf, turnedStyleGlyph, unitSize } from './facts.ts'
+import {
+  changeOf,
+  faceKeyOf,
+  type StyleGlyph,
+  styleKeyOf,
+  styleOf as glyphStyleOf,
+  turnedStyleGlyph,
+  unitSize,
+} from './facts.ts'
 import {
   classOf,
   claimInk,
@@ -418,15 +426,6 @@ function figureRuns(
     i = j
   }
   return { content: runIns(content), styles }
-}
-/** what a run's face changes of its text's own (`role|b|i` each), in LaTeX's names: the role, `bold` or `medium`, `italic` or
- *  `upright`, joined by `-` */
-function changeOf(key: string, base: string): string {
-  const [r, b, i] = key.split('|')
-  const [R, B, I] = base.split('|')
-  return [r !== R ? r : '', b !== B ? (b ? 'bold' : 'medium') : '', i !== I ? (i ? 'italic' : 'upright') : '']
-    .filter(Boolean)
-    .join('-')
 }
 
 // ---------------------------------------------------------------- B's marks on A

@@ -99,7 +99,10 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         out.push(e?.nested ? { t: 'nested', k: Number(p.id) } : { t: 'ph', src: srcOfEl(p.id, e), k: Number(p.id) })
       } else {
         const id = Number(p.id)
-        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id })
+        // (the face TeX set it in, where its command names no style the rules know: SpanAt.style)
+        const st = spans.get(p.id)?.style
+        const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant } } : {}
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face })
         walk(p.content)
         out.push({ t: 'close', src: '}', id })
       }
