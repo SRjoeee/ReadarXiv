@@ -357,6 +357,34 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
+  it('keeps right-aligned labels set from their end where two of them, one text, share a start too', () => {
+    // (the 88's figures read under a looser measure, any two runs of an end column sharing a start: 1,175 labels of 27 papers
+    // turned to be set from their start: 2608.04322v1 p3's axis labels "GSM8K" "MATH" "HellaSwag", 2610.10492v1's two "Population
+    // mean", 1810.04805v2's "[SEP]"s. Two runs of one text share both edges and tell no measure; a paragraph's full lines are of
+    // different texts, its other lines inside its measure)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'Population mean', x: 210, y: 640, form: true },
+          { text: 'Accuracy', x: 252, y: 628, form: true },
+          { text: 'Population mean', x: 210, y: 616, form: true },
+          { text: 'Loss', x: 276, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['Population mean', 'r'],
+      ['Accuracy', 'r'],
+      ['Population mean', 'r'],
+      ['Loss', 'r'],
+    ])
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

@@ -345,12 +345,13 @@ function spanIn(u, b) {
  *  the page's own frame turned to it (`along`), and its point on the page (`x`, `y`) — its start (its first glyph's origin), end
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
- *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line) */
+ *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
+ *  (CHANGED) its glyphs' characters (`text`: a paragraph's full lines are of different texts, setsOf's measure) */
 function edgesOf(r, gs) {
   const f = r.frame, s0 = f.ox * f.ux + f.oy * f.uy, len = Math.max(0, ...gs.map(x => along(f, x.ex, x.ey)))
   const at = s => ({ along: s0 + s, x: f.ox + f.ux * s, y: f.oy + f.uy * s })
   const square = Math.abs(f.ux) < 1e-3 || Math.abs(f.uy) < 1e-3
-  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null }
+  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null, text: gs.map(x => x.u).join('') }
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
@@ -408,19 +409,32 @@ function setsOf(mine, evidence, stats) {
   // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
   // tick's label stays centred)
   const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
-  // (an end column whose runs share a start too, two at least, is a paragraph's measure: lines TeX or the figure's maker set
-  // justified, each from its start, the first indented. Its end is no edge a line was set from: right-aligned labels share no
-  // start. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end — 2411.13093v4
-  // p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
+  // (a paragraph's measure: an end column and a start column along the runs that hold two lines or more of different texts in
+  // common (its full lines), the end column's other lines all starting inside it (an entry's first line, indented by hand) and
+  // the start column's all ending inside it (a paragraph's last line). Its lines were set justified, each from its start, its
+  // end no edge a line was set from. Right-aligned labels share no start but where two are one text (2610.10492v1's two
+  // "Population mean") or as wide, which tells no measure: a longer label of the column starts before them. CHANGED: today's set
+  // a paragraph's indented line, which shares its end and not its start, from its end — 2411.13093v4 p18's prompt, an entry's
+  // translated first line flush against the box's right edge, its next line from the left)
   const measured = new Map()
   const isMeasure = (line, c) => {
-    const key = `${line.axis}:${c}`
-    if (measured.has(key)) return measured.get(key)
-    const start = lines.find(l => l.edge === 'start' && l.axis === line.axis)
-    const shared = new Map()
-    for (let j = 0; j < evidence.length; j++) if (find(line.parent, j) === c) { const s = find(start.parent, j); shared.set(s, (shared.get(s) ?? 0) + 1) }
-    const yes = [...shared.values()].some(n => n >= 2)
-    measured.set(key, yes)
+    if (line.axis !== 'along') return false
+    if (measured.has(c)) return measured.get(c)
+    const start = lines.find(l => l.edge === 'start' && l.axis === 'along')
+    const inEnd = []
+    for (let j = 0; j < evidence.length; j++) if (find(line.parent, j) === c) inEnd.push(j)
+    const byStart = new Map()
+    for (const j of inEnd) { const s = find(start.parent, j); (byStart.get(s) ?? byStart.set(s, []).get(s)).push(j) }
+    let yes = false
+    for (const [s, full] of byStart) {
+      if (full.length === inEnd.length || new Set(full.map(j => evidence[j].text)).size < 2) continue
+      const from = Math.max(...full.map(j => evidence[j].start.along)), to = Math.min(...full.map(j => evidence[j].end.along))
+      const indented = inEnd.every(j => find(start.parent, j) === s || evidence[j].start.along > from)
+      let short = true
+      for (let j = 0; j < evidence.length && short; j++) if (find(start.parent, j) === s && find(line.parent, j) !== c) short = evidence[j].end.along < to
+      if (indented && short) { yes = true; break }
+    }
+    measured.set(c, yes)
     return yes
   }
   const chosen = new Map()
