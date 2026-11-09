@@ -200,6 +200,17 @@ The gate judges by them where they and today's output differ.
    before (and the original's skip there past its pitch): the paragraph under it starts lower by what TeX's gap lacks, its
    first line off TeX's baseline. Its `anchor` difference within that (0.1 pt the drawing's rounding) is the ruling's
    (`nearer` "the ruling's"): never worse, and no fault of v2's; one lower than that is judged as any.
+9. **The references' leading** (2026-11-10, the owner: "on the references' leading, go ahead as you recommend"): a paragraph
+   that borrows room spreads into it (option (i)), each frame of a paragraph keeps TeX's share of its lines where that holds
+   within its page's band, and the paragraphs that borrow vote in the page's target. Two `line-count` differences are the
+   ruling's (`verdict.mjs` leadRuling): (a) a paragraph over pages whose lines v2 splits as TeX's share of them on the page
+   (each frame's first line at its share, nearest, ties later, as `pageCutsOf`), each side setting as many of its lines over
+   the pages both drew (`sharePass`, the paper's pass: a count of fewer or more lines than today's is the fit's, judged as
+   any), 1512.03385v1-zh p7 t153; (b) a paragraph that does not borrow, set at its page's band over a target the borrowing
+   paragraphs moved by voting the leadings option (i) gave them, its line count on the page other than where the pair is
+   laid without (i) (`v2.mjs` lays each pair first with option (i)'s line of `slots.mjs` skipped, `hook.mjs`, and records
+   each pass's target and each member's line count of that lay, `before`, beside this lay's targets, `fills`, through a call
+   `hook.mjs` puts in `fill-pass.ts`), 2610.20484v1-zh p8 t85.
 
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a

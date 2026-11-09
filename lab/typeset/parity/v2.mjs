@@ -25,6 +25,7 @@ const { typesetLay } = await import('../../../packages/reader/src/compose/typese
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
 const { todayJoin } = await import('./join.mjs')
+const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -60,6 +61,19 @@ for (const pair of pairs) {
     if (p === pair)
       pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait, ...(page.inks ? { inks: page.inks } : {}) }
   }
+  // (each fill pass's target, with each unit begun on the page, its fill leading and whether it borrows room under its lines (a
+  // state, or a run's, that took the borrow knob); and `before`, the pair laid first with option (i)'s line of slots.mjs skipped
+  // (hook.mjs): each page's target and each member's line count there, the owner's ruling of 2026-11-10's counterfactual, the
+  // page before (i) moved the borrowing paragraphs' fill leadings, which still vote. The verdict's leadRuling reads them. A
+  // page's pass is run again by each page laid after it, alike: the last kept)
+  const fills = {}
+  const targets = (into) => (pg, begun, continuing, P) => {
+    const borrows = (p) => (p.layout?.state?.borrow ?? 0) > 0 || (p.runs ?? []).some((q) => (q.layout?.state?.borrow ?? 0) > 0)
+    const voter = (p) => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines ?? 0 })
+    const band = P.adaptiveFill?.band ?? 0
+    const told = fillTarget(begun.map(voter), continuing.map(voter), band)
+    into[pg] = { target: told?.target ?? null, band, units: Object.fromEntries(begun.map((p) => [p.id, [p.fillLead ?? null, borrows(p) ? 1 : 0]])) }
+  }
   // (the reader's lay of the pair, as openReader binds it once the head is read: its target the pair's, as render.mjs opens
   // the reader on it, its toggles TOGGLES's, its metrics the layered ones, its patterns the served ones)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
@@ -74,9 +88,27 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
+  // (first without option (i): each pass's target and each member's line count on each page alone)
+  const before = {},
+    offTargets = {}
+  const keep = globalThis.__ckPage
+  globalThis.__ckPage = (p, pg, page) => {
+    if (p === pair) before[pg] = { lines: Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0])) }
+  }
+  globalThis.__parityFill = targets(offTargets)
+  globalThis.__parityNoOptionI = true
+  try {
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+  } finally {
+    globalThis.__parityNoOptionI = undefined
+  }
+  globalThis.__ckPage = keep
+  globalThis.__parityFill = targets(fills)
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+  for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
+  globalThis.__parityFill = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
@@ -126,7 +158,7 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)

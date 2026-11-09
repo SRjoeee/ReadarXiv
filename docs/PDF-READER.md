@@ -2565,8 +2565,8 @@ of one run on one page whose columns meet). Each run of the unit (its blocks bet
 later frame k of its n laid lines, k = n × the source's lines before that frame over all of them, at the line end nearest
 it that a token opens (a line a long token's cut opens, a URL's or a hyphenated word's tail, begins inside a token; ties the
 later, the earlier frame the fuller), one line at least on each side; the break token (`frame`: the unit's block the frame
-begins with) then stands at that line's first token, and only where the fit sets that line in an earlier frame (where it
-does not, the frame's slots are full already). A run laid in one line is cut in it at each frame's share of its tokens, the
+begins with) then stands at that line's first token; where the fit sets that line in that frame or later, the page fill alone
+reads it, and only where the share holds within the page's band (§18.11, 2026-11-10). A run laid in one line is cut in it at each frame's share of its tokens, the
 one short line. The breaker reaches a frame by its block (`blockBase` for a run laid alone), so a column break is laid,
 held and stranded as a page break is. The breaker's held break, `strand` and `keepsPages` are as above. Nothing of the
 alignment or the row's sentences is read for it any more: `pageStartsOf`, the sentence share and the row's sentences on the
@@ -2845,6 +2845,40 @@ page 4 unit 85, 4.37 pt lower, its leading 1.29 to 1.23). Those first lines leav
 parity check's anchor measure reads as farther from the original than today's on five pages: this rule and B′ (a first line
 stays on TeX's) meet there, and the paragraph above, the one B′ takes the room from, has none. A paragraph of one line has no
 leading at all, and the gap under it stays TeX's.
+
+**A paragraph that borrows room spreads into it; a paragraph over frames keeps TeX's share where the page's band allows
+(2026-11-10).** The owner, on the references' leading: 「关于参考文献行距方案，就按你推荐的推进」 ("On the references'
+leading, go ahead as you recommend"). Three things were recommended, and he took them together. First, the gap under a
+paragraph that borrows TeX's room under it is measured from the borrow's limit (the foot `Room.runs` and `Room.sep` allow, a
+separation over the next ink), not from TeX's last line: at its own leading L its last line may stand down to (L − 1)
+pitches over that limit (`floorOver`, read by `footFloorAt` and `paraFloorAt` where the state borrows). Before, a reference
+whose translation needed its every line, and borrowed the room under it, was held by the gap to the original's pitch among
+entries spread to 1.38 (1810.04805v2's references, pages 10 to 12: entries set solid beside spread ones). Second, a
+paragraph over frames keeps TeX's share of its lines in each frame (`pageCutsOf`: each frame's first line at its share,
+the nearest line, ties the later) where every frame before its last holds that share at a leading at or above its page's
+band floor, the target less the band (`frameShareOf`, `fillPage`); otherwise the fit's split stands, as without it. The cut
+at the share where the fit set that line in that frame or later is marked (`share`) and read by the page fill's lay alone
+when it keeps the share; every other lay reads the tokens as before. Unbounded, the share set the earlier frame as tight as
+it took, down to the original's pitch: of the 50 frames it tightened over the corpus's 90 pairs, 34 stood at 1.0, most a pair
+of lines at a column's foot where the fit had left one (2610.37668v1 page 17, 2610.21084v1 page 1), which read worse than the
+one line; the band floor is the page's rhythm rule (`adaptiveFill.band`, §18.5), no new number. Third, a paragraph that borrows still votes in its
+page's target, so a page whose borrowing paragraphs now spread further may take a looser target (2610.20484v1 page 8, 1.45
+where it was 1.30: a paragraph of 19 lines at 1.50, 12 lines where today's reader sets 13). A recommendation to lay a list's
+items at the list's tightest entry plus the band (option (iii)) was shown and declined: it set the references at 0.810 of
+their blocks.
+
+Measured over 1810.04805v2-zh's references (56 entries of two original lines or more; the share of each block its laid lines
+span, first to last): round 6 0.854 (13 at 0.95 or more), option (i) 0.877 (13), (i) with (iii) 0.810 (11); the bounded share
+moves none of them. Over the corpus's 90 pairs (r6's bundles), the share lays something (i) does not in 598 frames: 449 keep
+it, 4 of them set tighter than their own fill leading and still at or over the floor (2610.22065v1 page 5, unit 94, at 1.30
+over 1.23: 8 lines and 2, TeX's, where the fit left 7 and 3), and 149 fall back to the fit's split (43 that would have gone
+under the floor, 102 whose own fill leading is under it, 4 that hold it at no leading); no frame is set at 1.0 to hold it.
+The bounded lay differs from (i) alone on 9 of the 2,566 pages, 6 units. The parity check reads a line count that is TeX's
+share (the same lines in all, its split alone moved: `sharePass`), and one set at a band the borrowing paragraphs moved by
+the leadings (i) gave them (its count other than where the pair is laid without (i)), as the ruling's (`leadRuling`); the
+replays of today's fill
+read a round that borrows, its fill leadings, and a run's tokens without the share's cut, as this ruling's (`borrowsAt`,
+round.ts `L9 (i)`, `F6 runs (share)`).
 
 ### 18.12 A table cell's alignment is its column's, as LaTeX built it (2026-11-09)
 

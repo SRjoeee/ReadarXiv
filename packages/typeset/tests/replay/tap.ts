@@ -44,6 +44,31 @@ function underALine(blocks: readonly { free?: unknown; pitch0?: unknown }[], s: 
   const pitch = (b: { pitch0?: unknown }) => (typeof b.pitch0 === 'number' ? b.pitch0 : 1.2 * s)
   return blocks.some((b) => room(b) > 0) && !blocks.some((b) => Math.floor(room(b) / pitch(b) + 1e-6) > 0)
 }
+/**
+ * Whether a unit's round borrowed room under its lines, as today's walk laid it: its fit's state, or a state of one of its runs,
+ * took the borrow knob (`borrow` above 0). Option (i), the owner's of 2026-11-10 (the gap under a paragraph that borrows room
+ * measured from the borrow's limit, slots.mjs floorOver), moves such a unit's fill leadings (S.fill.leads) and none other's: a
+ * replay that differs there in them alone is the ruling's (round.ts `L9 (i)`)
+ */
+export function borrowsAt(pair: string, ord: number, round: number): boolean {
+  const u = ledger(pair).units.find((x) => x.ord === ord)
+  const at = (by: string) =>
+    u?.slots.find((s) => s.by === by && s.round === round)?.value as Record<string, unknown> | undefined
+  const borrows = (l: unknown) => Number((l as { state?: { borrow?: unknown } } | undefined)?.state?.borrow ?? 0) > 0
+  const runs = ((at('X.runs')?.laidRuns as { runs?: { layout?: unknown }[] } | null | undefined)?.runs ?? []) as {
+    layout?: unknown
+  }[]
+  return borrows(at('X.walk')?.layout) || runs.some((r) => borrows(r.layout))
+}
+/** the pages of a pair's units, by U.admit, and every unit with a line on one of them: a page's fill reads its every unit */
+export function onPagesOf(pair: string, ords: ReadonlySet<number>): { pages: Set<number>; units: Set<number> } {
+  const L = ledger(pair)
+  const pagesOf = (u: Ledger['units'][number]) =>
+    ((u.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as { pages?: number[] } | undefined)?.pages ??
+      []) as number[]
+  const pages = new Set(L.units.filter((u) => ords.has(u.ord)).flatMap(pagesOf))
+  return { pages, units: new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord)) }
+}
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:

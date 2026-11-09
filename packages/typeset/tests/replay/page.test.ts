@@ -1,8 +1,9 @@
 // The page's composition (layPagePrepared: L8 layFlow, L9, L10, L11, E1) replayed against the baseline's reader dumps on three
 // pairs: every page laid from its own part, each laid unit's size, leading, lines with their text and crops equal to the dump's,
 // and each member on two pages laid alike from each page's part (risk 1 of the page decision); but one whose frames the port
-// fills each at its own leading (pass.ts framed), and one on a page where today's held a paragraph's gap to the next one's
-// leading (tap.ts flooredIn: the gap ruling of 2026-11-08). The corpus: lab/typeset/gate.mjs.
+// fills each at its own leading or holds TeX's share (pass.ts framed), one on a page where today's held a paragraph's gap to the
+// next one's leading (tap.ts flooredIn: the gap ruling of 2026-11-08), and one on a page of a unit whose fill leadings option (i)
+// moves (pass.ts laysOf `lead`: the owner's of 2026-11-10). The corpus: lab/typeset/gate.mjs.
 import { describe, expect, it } from 'vitest'
 import { readerDump } from './display.ts'
 import { framed, laysOf, trackedCells } from './pass.ts'
@@ -22,8 +23,9 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
         const gap = flooredIn(pair)
         // (a unit on a page of one a run of which the room ruling lays otherwise: tap.ts roomUnderIn)
         const room = roomUnderIn(pair)
-        // (a unit whose frames the port fills each at its own leading: pass.ts framed)
-        const { lays } = laysOf(pair)
+        // (a unit whose frames the port fills each at its own leading or hold TeX's share: pass.ts framed; a unit on a page of
+        // one whose fill leadings option (i) moves: pass.ts laysOf `lead`)
+        const { lays, lead } = laysOf(pair)
         // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its size and its lines' text today's)
         const untracked = trackedCells(pair)
         const want = readerDump(pair).units
@@ -44,7 +46,10 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
                     { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
                     `ord ${u.ord}`,
                   )
-            return d && (gap.units.has(u.ord) || room.units.has(u.ord) || framed(lays.get(u.ord))) ? null : d
+            return d &&
+              (gap.units.has(u.ord) || room.units.has(u.ord) || lead.units.has(u.ord) || framed(lays.get(u.ord)))
+              ? null
+              : d
           })
           .filter((d) => d !== null)
         expect(differ).toEqual([])

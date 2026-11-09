@@ -5,8 +5,9 @@ import * as m from './cuts.mjs'
 import type { FitBlock, FitParams, LaidLine, Tokens } from '../fit/types.ts'
 import type { Token } from './tokens.ts'
 
-/** a cut: the page and frame a line begins, at a token (pageCutsOf) */
-export type Cut = { page: number; frame: number; at: number }
+/** a cut: the page and frame a line begins, at a token (pageCutsOf); `share`, a cut of the frames' share only, which a lay keeps
+ *  only at a state that holds the share */
+export type Cut = { page: number; frame: number; at: number; share?: true }
 /** a token that sets nothing of the text (L2:4162 textless) */
 export const textless: (t: Token) => boolean = m.textless
 /** where a unit's lines are cut at its frames' shares (L2:3894 pageCutsOf) */

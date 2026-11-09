@@ -854,6 +854,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
   headRuling(out, { v2, n, facts, orig })
+  leadRuling(out, { v2, n, facts, orig })
   recount(out)
   out.units = units
   return out
@@ -927,6 +928,109 @@ function headRuling(p, { v2, n, facts, orig }) {
       f.v2--
     }
   }
+}
+
+/** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
+ *  references' leading, go ahead as you recommend"), and for TeX's share the ruling of 2026-10-30 it holds within the band */
+const SHARE_RULING =
+  "TeX's share of a paragraph's lines in each frame: the owner's ruling of 2026-10-30 (frames fill as TeX does, by the paragraph's height), the share kept where every frame before the last holds it within its page's band by the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\")"
+const BAND_RULING =
+  "the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\"): the paragraphs that borrow room, the gap under them measured from the borrow's limit (option (i)), vote in the page's target, and a paragraph at the band's top moves with it"
+/**
+ * A line count on a page that the owner's rulings explain, the ruling's: not worse, nor v2's fault.
+ * (1) A paragraph over pages whose lines v2 splits otherwise than today, the same lines in all, its lines on this page TeX's
+ * share of them (shareOn: the typesetter's pageCutsOf, each frame's first line at its share of the lines, nearest, ties later):
+ * 1512.03385v1-zh p7 t153, 6 of 8 where TeX set 8 of 10 and today 7 + 1. Marked here (`share`), ruled by the paper's pass
+ * (sharePass), which counts each side's lines of it over its pages: where the totals differ, the count is the fit's, judged as
+ * any. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs that borrow room moved by
+ * voting the fill leadings option (i) gave them, its line count on the page other than the pair laid without (i) sets
+ * (v2.mjs `fills`, `before`): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45 where it was 1.30, 12 lines where it set 13
+ */
+function leadRuling(p, { v2, n, facts, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const o = orig.get(d.unit.split(' ')[0])
+    const q = o?.part !== null && o?.part !== undefined ? facts.get(o.part) : null
+    if (!q) continue
+    if (bandMoved(q.ord, v2, n)) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = BAND_RULING
+    } else if (shareOn(q, v2, n)) d.share = true
+  }
+}
+/** the paper's pass of leadRuling's (1): a line count marked `share` is the ruling's where each side sets as many lines of
+ *  its unit over the pages both drew it on, its split alone moved; the caller recounts */
+export function sharePass(pages, recount) {
+  const total = new Map()
+  for (const p of pages)
+    for (const u of p.units ?? []) {
+      const t = u.sides?.today?.lines,
+        v = u.sides?.v2?.lines
+      if (typeof t !== 'number' || typeof v !== 'number') continue
+      const a = total.get(u.key) ?? { today: 0, v2: 0 }
+      a.today += t
+      a.v2 += v
+      total.set(u.key, a)
+    }
+  for (const p of pages) {
+    for (const d of p.diffs) {
+      if (!d.share) continue
+      delete d.share
+      const a = total.get(d.unit.split(' ')[0])
+      if (!d.worse || !a || a.today !== a.v2) continue
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = SHARE_RULING
+    }
+    recount(p)
+  }
+}
+/** whether v2 lays on page `n` TeX's share of member `q`'s lines, `q` a paragraph over pages (its original lines on two or more):
+ *  its frames (the part's lines on one page whose columns meet), each one's first line at its share of v2's lines, the nearest
+ *  line, ties to the later, past the frame before's (breaker/cuts.mjs pageCutsOf over one run) */
+function shareOn(q, v2, n) {
+  const on = (pg) => (v2.pages[pg]?.members ?? []).filter((m) => m.ord === q.ord).reduce((a, m) => a + (m.lines?.length ?? 0), 0)
+  if (new Set(q.lines.map((l) => l[0])).size < 2) return false
+  const frames = []
+  for (const l of q.lines) {
+    const f = frames.at(-1)
+    if (f && f.page === l[0] && Math.min(f.x1, l[3]) > Math.max(f.x0, l[2])) {
+      f.lines++
+      f.x0 = Math.min(f.x0, l[2])
+      f.x1 = Math.max(f.x1, l[3])
+    } else frames.push({ page: l[0], x0: l[2], x1: l[3], lines: 1 })
+  }
+  const N = Object.keys(v2.pages).reduce((a, pg) => a + on(Number(pg)), 0),
+    T = q.lines.length
+  const cuts = [0]
+  let before = 0
+  for (let f = 1; f < frames.length; f++) {
+    before += frames[f - 1].lines
+    const want = (N * before) / T
+    let k = -1
+    for (let j = cuts.at(-1) + 1; j < N; j++) if (k < 0 || Math.abs(j - want) <= Math.abs(k - want)) k = j
+    if (k < 0) return false
+    cuts.push(k)
+  }
+  cuts.push(N)
+  return frames.reduce((a, f, i) => a + (f.page === n ? cuts[i + 1] - cuts[i] : 0), 0) === on(n)
+}
+/** whether member `ord`, which does not borrow, is set at its page's band over a target the paragraphs that borrow room moved
+ *  by option (i), and its line count on page `n` moved with it: its drawn leading the band's top over the pass's target (or its
+ *  own fill leading under it), another over the page's target before (i), and another line count there (v2.mjs `fills`, and
+ *  `before`: the pair laid without (i)) */
+function bandMoved(ord, v2, n) {
+  const [pg, f] = Object.entries(v2.fills ?? {}).find(([, x]) => x.units?.[ord]) ?? []
+  const was = v2.before?.[pg]?.target,
+    off = v2.before?.[n]?.lines?.[ord]
+  if (!f || typeof f.target !== 'number' || typeof was !== 'number' || Math.abs(f.target - was) < 1e-9) return false
+  const [lead, borrows] = f.units[ord]
+  const m = (v2.pages[n]?.members ?? []).find((x) => x.ord === ord)
+  const L = m?.fit?.lead
+  if (borrows || typeof lead !== 'number' || typeof L !== 'number' || typeof off !== 'number' || off === (m.lines?.length ?? 0)) return false
+  const at = (t) => Math.min(lead, Math.round((t + f.band) * 1000) / 1000)
+  return Math.abs(L - at(f.target)) < 0.005 && Math.abs(L - at(was)) > 0.005
 }
 
 /**
