@@ -1769,7 +1769,7 @@ function markFirst(src) { return MARK_FIRST.test(rowText(src)) }
  *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's), nor a conditional (`ifs`, the paper's
  *  \\newif names; TeX's own): a row's end in one of its branches (`\\ifanonymous … \\\\ … \\else … \\fi`) is that branch's, and a
  *  cut there would part the \\if from its \\fi over two units, each written back with its own marks */
-function frontEnds(s, from, to, ifs = new Set()) {
+function frontEnds(s, from, to, ifs = new Set(), rowEnds = null) {
   const out = []
   for (let k = from; k < to;) {
     const c = s[k]
@@ -1788,6 +1788,8 @@ function frontEnds(s, from, to, ifs = new Set()) {
       out.push({ at: k, end: e, and: false }); k = e; continue
     }
     if (FRONT_AND.test(name)) { out.push({ at: k, end, and: true }); k = end; continue }
+    // (a command of the paper's that ends the paragraph, as its every definition does: IJCAI's \\affiliations, frontRowEndsOf)
+    if (rowEnds?.has(name)) { out.push({ at: k, end, and: false }); k = end; continue }
     k = end
   }
   return out
@@ -1816,7 +1818,7 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
     const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
     if (args.some(a => a.kind === 'req')) notes.push({ at, end })
   }
-  const ends = frontEnds(s, from, to, ctx.ifs).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
+  const ends = frontEnds(s, from, to, ctx.ifs, ctx.frontRowEnds).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
   // each block's rows and each row's kind
   const blocks = [[]]
   let start = from
@@ -2458,6 +2460,41 @@ function walk(s, from, to, b, ctx) {
   endText()
 }
 
+/**
+ * The paper's macros of no argument that end the paragraph TeX is setting, by name: a name every definition of which, in any of
+ * the package's files and in any form (DEFINITION), takes no parameter and has a body that ends it at its top level — `\\par`, or
+ * a row's end, `\\\\`, \\newline, \\cr (FRONT_ROW) —, whatever else it does. Inside an author block it ends a row, as `\\\\` does
+ * (frontEnds): IJCAI's style, which a paper ships, defines inside its \\@maketitle `\\def\\affiliations{\\egroup\\vskip
+ * 0.05in minus 0.05in\\par\\bgroup\\Large\\rm}` and \\emails alike, written inside \\author between its names, its places and
+ * its e-mails: read as text, the last name and the first place were one row, and the last place ran on through \\emails into the
+ * e-mail rows, a unit TeX set as two paragraphs that no reading located (2611.00342v1: English whatever the toggle). A name
+ * also defined otherwise (with parameters, by \\let, with a body that ends no paragraph) is none
+ */
+function frontRowEndsOf(texts) {
+  const out = new Set(), other = new Set()
+  for (const t of texts.map(uncommented)) {
+    for (const m of t.matchAll(DEFINITION)) {
+      if (m.index > 0 && t[m.index - 1] === '\\') continue
+      const [, nc, nb, nd, nl, nx, ny] = m, name = nc ?? nb ?? nd ?? nl ?? nx ?? ny, k = skipSpaces(t, m.index + m[0].length)
+      const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
+      if (e > 0 && endsParagraph(t, k + 1, e - 1)) out.add(name); else other.add(name)
+    }
+  }
+  for (const n of other) out.delete(n)
+  return out
+}
+/** whether s[from, to) ends the paragraph at its top level: a `\\par` or a row's end (FRONT_ROW) outside every group */
+function endsParagraph(s, from, to) {
+  for (let k = from; k < to; ) {
+    const c = s[k]
+    if (c === '{') { const e = matchGroup(s, k); if (e < 0 || e > to) return false; k = e; continue }
+    if (c !== '\\') { k++; continue }
+    const { name, end } = commandAt(s, k)
+    if (name === 'par' || FRONT_ROW.test(name)) return true
+    k = end
+  }
+  return false
+}
 /** the paper's macros of no argument whose body ends a table's row (ROW_END), by name: a name every definition of which, in any of
  *  the package's files and in any form, takes no parameter and has such a body — `\\newcommand{\\x}{…}`, \\renewcommand,
  *  \\providecommand, \\DeclareRobustCommand (starred or not, no `[n]` after the name), `\\def\\x{…}`, \\gdef, \\edef, \\xdef (no
@@ -3161,7 +3198,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { frontRowEnds: frontRowEndsOf(ownTexts), rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
   ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
