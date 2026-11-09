@@ -3157,8 +3157,10 @@ read every class but `other` as the page's text, its text in the target's face a
 star's text is U+2217, which a text face draws small on the math axis, where TeX set CMSY7's star at 6.97 pt. A mark is a glyph
 TeX set raised in its own font at its script size: a footnote's or a `\thanks` mark (`El.mark`) and a symbol set as a
 superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
-a symbol set on the line stays text, and a mark's link goes with its crop. Over the 88 papers' parts 180 marks (155 of them
-digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
+a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
+was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
+two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Over the 88 papers' parts 180
+marks (155 of them digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
 too, so the parity never told it.
 
 **The space the wire sets beside a marker is the wire's** (`packages/translate` `wire/markers.ts`; staging's round 7: 2610.20967v1
