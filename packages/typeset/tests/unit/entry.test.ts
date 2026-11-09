@@ -1530,28 +1530,46 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       'italic',
     ])
   })
-  it("carries a superscript's raise in the page's items (the checkpoint's (10): a raised run drawn on the baseline)", () => {
-    // (a footnote's mark drawn as the page's text, raised whatever its rendering: design-a's Item had no raise, so the page's
-    // drawing set it on the baseline)
-    const m = member({
-      els: [
-        [
-          '1',
-          { kind: 'num', mark: 1, ink: [[1, 150, 703, 154, 709, 703]], text: '3', style: { role: 'serif', size: 7 } },
-        ],
-      ],
-    })
-    const r = row([
-      { t: 'text', s: 'Ein Satz' },
-      { t: 'el', id: '1' },
-      { t: 'text', s: ' darin, der weiter läuft.' },
-    ])
-    const [laid] = layPage(part(m), rowsOf([r]), rules, metrics()).members
-    const raised = laid!.lines
-      .flatMap((l) => l[3])
-      .filter((it): it is Extract<Item, { face: unknown }> => 'face' in it && !!it.rise)
-    expect(raised.map((it) => it.s.trim())).toEqual(['3'])
-    expect(raised[0]!.rise).toBeGreaterThan(0)
+  it("draws a mark as TeX drew it, its ink at its size and raise, whatever unit holds it (1706.03762v7's author stars)", () => {
+    // (a footnote mark (El.mark: \footnotemark, a \thanks mark) and a symbol TeX set as a superscript (El.sym's second) are
+    // glyphs of their own font set raised, at TeX's script size: drawn as the page's text, their text in the target's face at
+    // a superscript's share of the line's size, 1706.03762v7 p1's seven CMSY7 stars came out 1.6 pt tall where TeX's are 2.7
+    // and its first author's, the same star as his trail's crop, at full size. Drawn as their ink, on the line TeX set them
+    // on (El.ink's base, an element's line), each stands as far over the translation's baseline as over the original's. The
+    // checkpoint's (10), a raised run drawn on the baseline, is kept: the crop's raise is its ink's)
+    const ink: [number, number, number, number, number, number] = [1, 150, 703, 154, 706.2, 700]
+    const drawn = (el: object) => {
+      const r = row([
+        { t: 'text', s: 'Ein Satz' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' darin, der weiter l\u00e4uft.' },
+      ])
+      const [laid] = layPage(part(member({ els: [['1', el as never]] })), rowsOf([r]), rules, metrics()).members
+      return laid!.lines.flatMap((l) => l[3].map((it) => ({ it, y: l[0] })))
+    }
+    const crop = (items: ReturnType<typeof drawn>) =>
+      items.find((x) => 'src' in x.it) as { it: Item & { src: number[] }; y: number } | undefined
+    for (const el of [
+      {
+        kind: 'num',
+        mark: 1,
+        ink: [ink],
+        text: '\u2217',
+        copy: '\u00b9',
+        style: { role: 'serif', size: 6.97, design: 'CMSY7' },
+      },
+      { kind: 'num', mark: 1, ink: [ink], text: '3', style: { role: 'serif', size: 7 } },
+      { kind: 'symbol', sym: ['\u2217', 1], copy: '^\u2217', ink: [ink] },
+    ]) {
+      const items = drawn(el)
+      const c = crop(items)
+      expect(c?.it.src.slice(1)).toEqual([149.6, 702.7, 154.4, 706.5, 700])
+      expect(items.some((x) => 'face' in x.it && /[\u22173]/.test(x.it.s))).toBe(false)
+    }
+    // (a symbol TeX set on the line, no superscript, stays the page's text, as before)
+    const level = drawn({ kind: 'symbol', sym: ['\u2264'], copy: '\u2264', ink: [[1, 150, 699, 156, 705, 700]] })
+    expect(crop(level)).toBeUndefined()
+    expect(level.some((x) => 'face' in x.it && x.it.s.includes('\u2264'))).toBe(true)
   })
 })
 

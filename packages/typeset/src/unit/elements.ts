@@ -153,7 +153,12 @@ export function elements(i: ElementsInput): Elements {
       // U.leadMark: the row's first placeholder, nothing visible before it, whose mark the page shows before line 1
       const first =
         k === phs[0] && pieces.slice(0, k).every((q) => q.t === 'ph' || !/\S/.test((q as { s?: string }).s ?? ''))
-      out.set(k, first && e.symbol!.leads ? { mode: 'kept', text: '' } : { ...e.symbol!.res })
+      // (a symbol set as a superscript, a mark, is drawn as its ink where it has one (lay/read.ts readingsOf's `mark`): its crop)
+      if (first && e.symbol!.leads) out.set(k, { mode: 'kept', text: '' })
+      else if (e.drawn?.mode === 'crop' && e.gap) {
+        gapOf.set(k, e.gap)
+        out.set(k, { ...e.drawn })
+      } else out.set(k, { ...e.symbol!.res })
     } else {
       const cls = renderingClass(e.cls)
       let g = e.gap,
