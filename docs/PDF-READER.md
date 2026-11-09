@@ -2842,6 +2842,35 @@ room. Reading the alignment by `inkOf` instead clears the first four and makes t
 character, before a formula's crop its text does not hold, is a comma; a closing mark the breaker already compressed), so the
 parity's reading was left as it is.
 
+### 18.13 A table cell's room is what TeX set on its line (2026-11-09)
+
+The owner's ruling of 2026-11-08 puts each cell in its own room, sized as today's reader sizes it. The typesetter took that
+room from the part's lines, whose x0 and x1 are the glyphs' advances. Today's rectangle came from the layout file's glyph
+boxes, which also take in a glyph's ink where it overhangs its advance. The two differ where an element's ink stands past
+the line's advances. On 2610.17024v1 page 14, each "p=5 n=20 …" cell opens with an italic p whose ink starts at 149.79,
+while the line's advances start at 150.42. The translation opens with that same p. At 7.97 pt its line needs 99.84 pt: its
+two CJK characters tracked by −0.01 em and its five spaces shrunk to `spaceMin`. Today's room is 99.85 pt; the advances
+give 99.22. So v2 set ten cells at 0.975, 7.77 pt, where today and the original have 7.97. It also drew the p's crop from
+the advances' start, its ink 1.03 pt right of where TeX set it. Nothing else differed: the tokens, their widths, the
+breaker's shrink, the cell's own size (no tie) and its one line are today's.
+
+A cell's room is now what TeX set on its line: its glyphs' advances and its elements' ink on its baseline
+(`lay/adapt.ts` `rectOf`). A centred cell's room stays centred on its advances' middle, which is TeX's centre, and is as
+wide as its own ink needs (2602.23285v2 page 19's "Top-τ": the τ's ink stands 0.74 pt past its line's end). The further
+widening still goes half way to the glyph beside it, measured between advances, since `Room.side` stops at the
+neighbour's box. Over the 22 parity pairs, only cells of two pairs move. The ten cells grow to 7.97, and 2610.21880v1
+page 5's t124 grows a step toward its original (2.19 pt; original 2.57, today 2.12). No cell shrinks. The others that open
+with the p now draw it 0.63 pt nearer TeX's place. The parity over those two pairs (28 pages, against round 5's sheet)
+shows 2610.17024v1 page 14 no longer worse and nothing newly worse.
+
+Two cells stay smaller than today's, and v2 does not copy what today does there. On 2602.23285v2 page 18, "Sum pooling"
+is clipped at its floor in its own room, as today's is, and both widen half way to the "0" of the next column. v2 measures
+from that glyph's box at 167.78, which gives 160.88. Today's `paperTo` reads the page's ink map in 1.5 pt cells and found
+the "0" at 168.38, which gives 161.18. 0.9 of the size needs 161.17, so today's 6.66 rests on 0.013 pt of the map's
+quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred header, so its room is centred on its own
+middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
+6.49 pt off its middle and 12.98 pt past its own room.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
