@@ -108,7 +108,7 @@ export function readingOf(src: string): string | null {
 /** what today's unit holds, in its order: each character of its texts, and each placeholder (`k` its piece's index, the number
  *  its door row cites it by), its groups' opens and closes none: today's source projection, an atom an offset of it */
 type Atom = { c: string } | { k: number; src: string }
-const atomsOf = (t: TodayPrepared): Atom[] =>
+const atomsOf = (t: Pick<TodayPrepared, 'pieces'>): Atom[] =>
   t.pieces.flatMap((p, k): Atom[] =>
     p.kind === 'text' ? (p.s ?? '').split('').map((c) => ({ c })) : p.kind === 'ph' ? [{ k, src: p.src ?? '' }] : [],
   )
@@ -120,13 +120,14 @@ const sameAtom = (a: Atom, b: Atom) => ('c' in a ? 'c' in b && a.c === b.c : 'k'
  * atoms whose characters (a placeholder's its reading, readingOf) are the element's reading, so a script today's held part as
  * text and part as a placeholder (2610.20967v1 p1's "Tsai1" and "$,2$") is one —, in order, all of today's atoms read; groups
  * read through. Returns each element's run, [from, to) of today's atoms, by its piece's index (sourcePieces' k), and how many
- * were read by their characters; null where the two differ
+ * were read by their characters, with their sources; null where the two differ
  */
 function heldRuns(
   flat: readonly V0Piece[],
   atoms: readonly Atom[],
-): { runs: Map<number, [number, number]>; read: number } | null {
+): { runs: Map<number, [number, number]>; read: number; bySrc: string[] } | null {
   const runs = new Map<number, [number, number]>()
+  const bySrc: string[] = []
   let j = 0,
     read = 0
   for (const p of flat) {
@@ -157,8 +158,22 @@ function heldRuns(
     }
     runs.set(p.k!, [from, j])
     read++
+    bySrc.push(p.src)
   }
-  return j === atoms.length ? { runs, read } : null
+  return j === atoms.length ? { runs, read, bySrc } : null
+}
+
+/**
+ * Whether v2's unit (its flat pieces, sourcePieces' form) reads as today's unit of the same glyphs with its scripts kept as
+ * elements (rebuild/script-face): heldRuns reads it (every text today's characters, every element today's placeholder of its own
+ * source or the run of today's atoms its reading is, in order, all of today's read), at least one element by its characters,
+ * and every element so read a formula's run (`$^{…}$`, `$_{…}$`, `$…$`: a script, or a formula holding scripts, TeX set in a
+ * text face), never an address. The differential's "its scripts kept as elements" (stage 1a's --baseline, lab/pdf/prepare-back/
+ * stated.mjs): the coordinator's ruling of 2026-11-09 accepts such a loss entry by entry, by this check alone
+ */
+export function scriptsKeptAsElements(flat: readonly V0Piece[], today: Pick<TodayPrepared, 'pieces'>): boolean {
+  const held = heldRuns(flat, atomsOf(today))
+  return !!held && held.read > 0 && held.bySrc.every((src) => FORMULA.test(src) && !ADDRESS.test(src))
 }
 
 /**
