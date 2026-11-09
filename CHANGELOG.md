@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the pages no longer zoom when ⌘ is pressed while a scroll is still moving, as it is by macOS's screenshot shortcuts (⌘⇧4, ⌘⇧5). A wheel zooms only with a pinch or with Ctrl held; ⌘ with + and − zooms as before.
 - The language menus call some languages by the names most people know them by, in English, in Chinese and in each language's own words (about a hundred names change; a language you chose stays chosen). Underneath, the PDF reader, the translation and the settings were rebuilt, and nothing else you see changes, but for one thing: the translations this computer kept from earlier versions are let go once, so a page you translated before is translated again the first time you open it after the update.
 - Fixed: in the PDF reader, a box or a second paragraph that a paper sets inside a paragraph's own text, such as a prompt in a frame under a list item or a funding note under "Submitted to the editors", is translated on its own lines, as the original sets it. A box's translation had started on the line above it and run over its frame.
 - Fixed: in the PDF reader, a figure's label written on a box over the plot, such as an annotation's or a node's, is translated where a grid line or other ink runs under the box. The box hides that ink, but the label was kept in English as if the ink crossed its words.

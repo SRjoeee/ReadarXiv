@@ -315,9 +315,9 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   7 px and darkens to 45 % under the pointer.
 - **Hidden through a zoom**, until the reader next scrolls (the owner's decision of 2026-11-01: 「缩放时让它直接消失行不行？因为在缩放的行为路径中，用户本来就不能上下滑动，这时候手柄消失、等滑动时再出现也是可以的…我们完全可以用这种更直接的解法」).
   A zoom moves each pane's scroll to keep its point under the pointer, but that is not the reader scrolling. Both handles go
-  at once, with no fade, from the zoom's first Ctrl or ⌘ wheel over the pages or its first change of scale, whatever asked
+  at once, with no fade, from the zoom's first Ctrl-wheel over the pages or its first change of scale, whatever asked
   it: a pinch, a key, the menu or a fit. A scroll shows its pane's handle again once the reader's own input has come since
-  the zoom's last change of scale: a wheel without Ctrl or ⌘, a key other than the zoom's, a touch, a press anywhere (a
+  the zoom's last change of scale: a wheel without Ctrl, a key other than the zoom's, a touch, a press anywhere (a
   link, the contents, the page pill). The zoom's own scrolls come with none (each step's anchoring, a commit's, and the
   panes' level once the zoom settles, a glide's end 150 ms or more on) and leave them hidden; a scroll begun at once after a
   step shows from its first frame. The handle comes back already at its length and place, on the auto-hide timing above; a
@@ -461,12 +461,18 @@ The states are §8's.
 
 ### 6.8 Pinch zoom
 
-A trackpad pinch (or Ctrl/⌘ with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
+A trackpad pinch (or Ctrl with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
 does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. While
 the fingers move the pinch is shown by transform; `PINCH_COMMIT_MS` (200 ms) after its last step it is committed: the scale
 written once (`updateScale({ scaleFactor, drawingDelay: 0 })`), both panes put, the pages drawn once. The browser's own zoom
 is taken only over the pages. The overlays follow the pinch exactly (§10.1).
 
+- **Only Ctrl makes a wheel a zoom.** A trackpad pinch arrives in Chrome as a wheel event with Ctrl held, and Ctrl with the
+  wheel is a mouse's zoom; ⌘ with the wheel is no zoom gesture on macOS. A wheel with ⌘ held is a scroll like any other,
+  never a zoom, in the chrome's pinch, the panes' inputs and the scroll indicator alike. **Why** (the owner's report,
+  2026-11-10): the page sometimes zoomed when he pressed ⌘⇧ — macOS's screenshot keys (⌘⇧4, ⌘⇧5), which he uses all the
+  time, hold ⌘ while a trackpad's scroll or its momentum is still running, and every wheel with ⌘ was then taken as a
+  zoom. The keys are unchanged: ⌘ or Ctrl with − and + zoom by a tenth (§7).
 - **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
   commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
   the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
@@ -485,7 +491,7 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   other pane, the same place in its view: the same point of the same page while the pair is level), wherever it lies — on a
   page, in the gap between two, beside one: a share of the page box it is level with, or px from its edge where it is
   outside (the gaps and margins do not scale). The pair stays level through the gesture, and its rest finds nothing to level.
-- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; the pinch's first step ends whatever the
+- **The follower stands aside.** A wheel with Ctrl is no scroll input; the pinch's first step ends whatever the
   follower moves, calls its rest off (and a zoom's before it still to be levelled: this one's end levels the pair) and holds
   it from binding until the commit; the commit's scrolls are the view's own puts, and the pair is levelled only once the
   zoom settles.

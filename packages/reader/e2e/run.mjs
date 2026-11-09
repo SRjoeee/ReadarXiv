@@ -3645,6 +3645,40 @@ await check(
 )
 
 await check(
+  "the pinch's wheel is Ctrl's alone: a wheel with Ctrl, ⌘ held beside it or not, is the pinch's own; a wheel with ⌘ held, or ⌘⇧, is the reader's input and commits a pinch under way, as one without (§6.8; macOS's screenshot keys hold ⌘ while a scroll runs, the owner's report of 2026-11-10)",
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), SAMPLE)
+    await drawnOn(page, 'right', 1, null)
+    const rows = await page.evaluate(() => {
+      const p = window.__h.panes,
+        c = document.querySelector('.axt-pane.right'),
+        cr = c.getBoundingClientRect()
+      const out = []
+      for (const keys of [
+        { ctrlKey: true },
+        { ctrlKey: true, metaKey: true },
+        { metaKey: true },
+        { metaKey: true, shiftKey: true },
+      ]) {
+        p.pinch('right', 1.05, [cr.left + 200, cr.top + 200])
+        c.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true, ...keys }))
+        out.push([Object.keys(keys).join('+'), p.probe().pinching !== null])
+      }
+      return out
+    })
+    await page.waitForTimeout(600)
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    assert(
+      JSON.stringify(rows.map((r) => r[1])) === JSON.stringify([true, true, false, false]),
+      `a pinch under way after each wheel ${JSON.stringify(rows)}`,
+    )
+    return rows
+  },
+)
+
+await check(
   "port: the left's internals pinned, its root write quiet, the pages ahead held until the layer's first page or let go (B-149, B-019, B-047, B-050, B-231, B-017)",
   async () => {
     const { page, context, errors } = await newPage({ viewport: { width: 1400, height: 600 } })
