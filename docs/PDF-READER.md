@@ -5934,7 +5934,15 @@ lines) follows it, the original's with it off, translated with it on (the author
   of revtex's, set once: 2610.21770v1's third, broken over two lines, had been marked and set again), never two rows of one block (article sets
   1706.03762v7's three "Google Brain" rows each where it stands: all 15 of its block's units laid); a row that opens with its
   first letter as a command in a group (`{\L}ukasz`) has its start mark before the group (`patch`), so that the letter is its
-  own ink.
+  own ink. A row ends too at a command of the paper's that ends the paragraph and sets no text of its own (`frontRowEndsOf`: a macro of
+  no argument every definition of which, in any of the package's files, has a body that ends the paragraph at its top level,
+  `\par` or a row's end, with no letter past its commands, its braces and the glue a skip reads): IJCAI's style, shipped with the
+  paper, defines inside its `\@maketitle` `\def\affiliations{\egroup\vskip 0.05in minus 0.05in\par\bgroup\Large\rm}` and
+  `\emails` alike, written inside `\author` between its names, its places and its e-mails (2611.00342v1, 2026-11-10). Read as
+  text, the last name's row took the first place (a name) and the last place ran on through `\emails` into the e-mail rows, a
+  unit TeX set as two paragraphs that no reading located: English whatever the toggle. A body that sets prose with its row end
+  (2608.16190's `\def\authorblock{Anik Jha\\ Independent Researcher}`, `\author`'s whole argument) is the paper's prose, read
+  where it is defined. Over the 92 papers' sources only 2611.00342v1's units move.
 - **A class's own author command** (`source/latex-front.mjs` `ownAuthorsOf`, 2026-11-09, the owner's priority report on
   2610.20967v1-zh: "the author block is off, yet the authors' names are translated, and their small 1s are drawn as big 1s").
   The role table knows the author block by its commands' names, LaTeXML's; a class a paper ships may have its own. ICASSP's
