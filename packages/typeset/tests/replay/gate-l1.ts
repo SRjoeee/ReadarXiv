@@ -445,6 +445,10 @@ export function gateL1Pair(
     substitute?: readonly Substitute[]
     /** each page laid again by design-a's entry (layPage over the part and the rows), compared with the runner's lay */
     entry?: boolean
+    /** the members no id or glyphs joined (`members`), each joined to one of today's units (`today`, the ords no member is
+     *  joined to): ord -> today's ord, its row then laid in the member's unit (the parity's: stage 1a's statement of the unit
+     *  the member's holds whole, the two of one content, lab/typeset/parity/join.mjs heldJoin) */
+    held?: (members: readonly L1Placed[], today: readonly number[]) => ReadonlyMap<number, number>
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -562,6 +566,16 @@ export function gateL1Pair(
       if (!u) continue
       unitOf.set(o, u)
       keptOf.set(o, prepared.get(t)!)
+    }
+  }
+  // (then, where the caller joins them (the parity's `held`), the members neither joined to today's unit theirs holds whole)
+  if (o.held) {
+    const joined = new Set([...unitOf.values()].map((u) => u.ord))
+    const free = [...byOrd].filter(([ord]) => !unitOf.has(ord)).map(([, x]) => x.m)
+    const left = L.units.filter((u) => !joined.has(u.ord)).map((u) => u.ord)
+    for (const [ord, t] of o.held(free, left)) {
+      const u = L.units.find((x) => x.ord === t)
+      if (u) unitOf.set(ord, u)
     }
   }
   /** a member's door row as the translation package's Result holds it, in the unit's own pieces: the door's, or today's row

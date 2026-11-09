@@ -11,10 +11,16 @@
 // alone, joined by that one's id (l1.ts todayUnitOf). A member whose unit holds kept runs as elements that today's held otherwise
 // (its addresses, today's text; an ink unit's scripts in a text face, today's text or text and a placeholder) joins no id of
 // today's: it is joined, after the ids, to today's unit of its glyphs, the same reading set on the same lines of A (l1.ts
-// keptJoin, over today's prepare dump).
+// keptJoin, over today's prepare dump). A member neither joins is joined, last, to today's unit stage 1a states its unit holds
+// whole (lab/pdf/prepare-back/stated.mjs: held whole (f), by the author block (b'), by the block's units on its line (f'), the
+// statement naming the holder): a unit whose kind moved, its id with it (an ink unit's id names its kind: rebuild/author-toggle's
+// AND, today's inkorphan, v2's inknames), the coordinator's ruling of 2026-11-10, heldJoin.
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { INK_KIND } from '../../../packages/engine/src/locate/today/ink-units.mjs'
 import { unitId } from '../../../packages/format/src/ids.ts'
-import { keptJoin, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
+import { sourcePieces } from '../../../packages/typeset/src/lay/read.ts'
+import { keptJoin, L1_BUNDLES, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'
 
 const INK = new Set(Object.values(INK_KIND))
 /** a member's own unit id: its text, or the ink unit's where its text names the source unit it echoes (`units` by id) */
@@ -25,13 +31,67 @@ function ownIdOf(m, units) {
   return named ? todayUnitOf(named).id : m.text
 }
 
+/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by (stated.mjs's keys) */
+const HOLDS = new Set(['held', 'names', 'heldBlock'])
+/** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
+ *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
+export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
+/** a paper's statements of today's units the candidate does not make (its dump's `replaced` units with `stated`), none where
+ *  lab-data holds no dump of it or the run stated none so */
+export function candidateStated(paper) {
+  const f = join(L1_DUMPS, `${paper}.prepare.json`)
+  if (!existsSync(f)) return []
+  return JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.replaced && u.stated)
+}
+/**
+ * The members `members` (no id or glyphs joined them), each joined to the unit of today's (`free`, today's ords no member is
+ * joined to) that stage 1a states its unit holds whole (`stated`: candidateStated's), the statement naming its unit as the
+ * holder: one of today's for one member; where several members of one id hold as many of today's units, by their order, as
+ * the baseline joins equal ids. `same`: the two units' contents one (today's prepare dump's flat pieces, `prepared` by ord, and
+ * the unit's source pieces, each its text or its element's source), so that today's row says v2's unit: the rows the lay is
+ * given (gate-l1's `held`) take those alone. `units` the bundle's units by id. Returns member ord -> { today, same }
+ */
+export function heldJoin(members, units, stated, free, prepared = null) {
+  const open = new Set(free)
+  const by = new Map()
+  for (const s of stated)
+    if (HOLDS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
+      if (!by.has(s.stated.holder)) by.set(s.stated.holder, [])
+      by.get(s.stated.holder).push(s.stated.ord)
+    }
+  const mine = new Map()
+  for (const m of [...members].sort((a, b) => a.ord - b.ord)) {
+    const id = ownIdOf(m, units)
+    if (!id || !by.has(id)) continue
+    if (!mine.has(id)) mine.set(id, [])
+    mine.get(id).push(m)
+  }
+  const out = new Map()
+  for (const [id, ms] of mine) {
+    const ts = by.get(id).sort((a, b) => a - b)
+    if (ts.length !== ms.length) continue
+    ms.forEach((m, k) => {
+      const t = prepared?.get(ts[k])
+      const src = typeof m.text === 'string' ? units.get(m.text) : undefined
+      const flat = src ? sourcePieces(todayUnitOf(src).content) : null
+      const same =
+        !!t &&
+        !!flat &&
+        t.pieces.length === flat.length &&
+        t.pieces.every((p, j) => p.kind === flat[j].t && (p.kind === 'text' ? p.s === flat[j].s : (p.src ?? null) === (flat[j].src ?? null)))
+      out.set(m.ord, { today: ts[k], same })
+    })
+  }
+  return out
+}
+
 /**
  * `pages` the entry's Pages by page (each `{ members: [{ ord, … }] }`), `bundle` the paper's L1 bundle (its parts' flows and
  * its units by id: l1Paper), `units` today's units ({ ord, id }: the ledger's), `prepared` today's prepare dump's units by ord
- * (l1.ts todayPrepared; none, no join by the glyphs). Returns `{ [part ord]: { today: today's ord } }` for every member of the
- * Pages that joins one.
+ * (l1.ts todayPrepared; none, no join by the glyphs), `stated` the candidate's statements of today's units (candidateStated;
+ * none, no join by them). Returns `{ [part ord]: { today: today's ord } }` for every member of the Pages that joins one.
  */
-export function todayJoin(pages, bundle, units, prepared = null) {
+export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
   const byId = new Map()
   for (const u of [...units].sort((a, b) => a.ord - b.ord)) {
     if (!u.id) continue
@@ -58,6 +118,13 @@ export function todayJoin(pages, bundle, units, prepared = null) {
     const free = [...members.values()].filter((m) => !join.has(m.ord))
     const left = [...prepared.values()].filter((t) => ledgered.has(t.ord) && !joined.has(t.ord))
     for (const [ord, t] of keptJoin(free, bundle.units, left)) join.set(ord, t)
+  }
+  // (last, the members no id or glyphs joined, by stage 1a's statement of today's unit their unit holds whole)
+  if (stated.length) {
+    const joined = new Set(join.values())
+    const free = [...members.values()].filter((m) => !join.has(m.ord))
+    const left = units.map((u) => u.ord).filter((o) => !joined.has(o))
+    for (const [ord, { today }] of heldJoin(free, bundle.units, stated, left, prepared)) join.set(ord, today)
   }
   const out = {}
   for (const page of Object.values(pages)) for (const m of page.members) if (join.has(m.ord)) out[m.ord] = { today: join.get(m.ord) }

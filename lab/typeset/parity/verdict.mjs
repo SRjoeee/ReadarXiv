@@ -6,6 +6,7 @@
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind } from './blind.mjs'
+import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { paintedEntries } from './paint.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
@@ -595,7 +596,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       continue
     }
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
-    diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, true, 'today')
+    // (a member of the author block's, under the default toggles: the names toggle, off, keeps the block the original's whole,
+    // whatever today translated of it, the ruling's: NAMES_RULING)
+    const ruled = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
+    if (ruled) out.diffs.at(-1).ruling = NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -930,6 +935,9 @@ function headRuling(p, { v2, n, facts, orig }) {
   }
 }
 
+/** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
+const NAMES_RULING =
+  "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
 /** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
  *  references' leading, go ahead as you recommend"), and for TeX's share the ruling of 2026-10-30 it holds within the band */
 const SHARE_RULING =
