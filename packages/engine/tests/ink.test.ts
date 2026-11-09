@@ -324,6 +324,35 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
   })
 
+  it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {
+    // (2411.13093v4 p18, Figure 8: a prompt set as a justified paragraph in an included figure, its entries' first lines indented
+    // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
+    // was read set from its end: its translation laid flush against the box's right edge, its next line from the left. Lines
+    // that share both edges, two at least, are a paragraph's measure: every line of it is set from its start)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'The entry of the box indented here', x: 96, y: 640, form: true },
+          { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
+          { text: 'set as one block of the prose it holds', x: 72, y: 616, form: true },
+          { text: 'its last one', x: 72, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.align])).toEqual([
+      ['The entry of the box indented here', 'l'],
+      ['and its lines go on to the measure end', 'l'],
+      ['set as one block of the prose it holds', 'l'],
+      ['its last one', 'l'],
+    ])
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

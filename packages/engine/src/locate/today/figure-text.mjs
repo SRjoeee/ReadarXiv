@@ -1,5 +1,6 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none): run by locate over arXiv's page (../ink.ts), held equal to today's by
+// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
+// justified paragraph set from its start (setsOf): run by locate over arXiv's page (../ink.ts), held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
@@ -407,6 +408,21 @@ function setsOf(mine, evidence, stats) {
   // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
   // tick's label stays centred)
   const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
+  // (an end column whose runs share a start too, two at least, is a paragraph's measure: lines TeX or the figure's maker set
+  // justified, each from its start, the first indented. Its end is no edge a line was set from: right-aligned labels share no
+  // start. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end — 2411.13093v4
+  // p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
+  const measured = new Map()
+  const isMeasure = (line, c) => {
+    const key = `${line.axis}:${c}`
+    if (measured.has(key)) return measured.get(key)
+    const start = lines.find(l => l.edge === 'start' && l.axis === line.axis)
+    const shared = new Map()
+    for (let j = 0; j < evidence.length; j++) if (find(line.parent, j) === c) { const s = find(start.parent, j); shared.set(s, (shared.get(s) ?? 0) + 1) }
+    const yes = [...shared.values()].some(n => n >= 2)
+    measured.set(key, yes)
+    return yes
+  }
   const chosen = new Map()
   for (const { u } of mine) {
     const i = at.get(u)
@@ -415,8 +431,9 @@ function setsOf(mine, evidence, stats) {
       const c = find(line.parent, i), n = line.units.get(c) > 1 ? line.runs.get(c) : 0
       if (n < 2) continue
       const vote = line.votes.get(c)[line.edge]
-      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}` }
+      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}`, line, c }
     }
+    if (best?.edge === 'end' && isMeasure(best.line, best.c)) best.edge = 'start'
     if (best) chosen.set(u, best)
   }
   // (the sets: a column's units of one edge, and a key's units on one baseline)
