@@ -920,10 +920,13 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const rows = rowsOf([row([{ t: 'text', s: 'Jia' }]), { ...row([{ t: 'text', s: 'Zhao' }]), id: idB }], true)
     const laid = layPage({ ...part(liu), flows: [[liu, zhao]] }, rows, rules, metrics()).members
     expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
-    // (its trail cut from where TeX set it and drawn right after the translation, its group off with its text)
+    // (its trail cut from where TeX set it and drawn right after the translation, its group off with its text; set on its line
+    // as TeX set it there: the crop's baseline the line's, so that its marks stand as far over the translation's baseline as
+    // over the original's. By its glyphs' own baseline, all of them raised, 703, they were drawn 3 pt low, on the line:
+    // 2610.10069v1 p1's daggers, 1706.03762v7 p1's first name's star)
     const items = laid[0]!.lines[0]![3]
     const crop = items.find((it) => 'src' in it) as Item & { src: number[]; x: number; w: number }
-    expect(crop.src.slice(1)).toEqual([143.6, 701.5, 158.8, 707.5, 703])
+    expect(crop.src.slice(1)).toEqual([143.6, 701.5, 158.8, 707.5, 700])
     const text = items.find((it) => 'face' in it) as Item & { x: number }
     expect(crop.x).toBeCloseTo(text.x + 15, 5)
     expect(laid[0]!.off & 3).toBe(3)

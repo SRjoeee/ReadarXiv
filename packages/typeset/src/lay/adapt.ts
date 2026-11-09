@@ -542,7 +542,11 @@ export function adapt(i: AdaptInput): Adapted {
   const trail = i.reading.own ? (m.els ?? []).find(([, e]) => e.trail && e.ink.length === 1) : undefined
   if (trail && tokens.length) {
     const [p, x0, y0, x1, y1, base] = trail[1].ink[0]!
-    const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: base })
+    // (on the line TeX set it on, its member's last (El.trail): a crop's baseline is its line's (crops.ts), so that a mark raised
+    // over the name stands as far over the translation; its ink's own is its glyphs', which raised marks alone hold off the line,
+    // and drawn by it they stood on the line: 2610.10069v1 p1's daggers, 1706.03762v7 p1's star)
+    const on = lines.findLast((l) => l[0] === p)
+    const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: on ? on[4] : base })
     const crop = {
       mode: 'crop' as const,
       page: p,
