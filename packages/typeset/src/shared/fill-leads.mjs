@@ -177,4 +177,4 @@ function guessCloser(p, K, L, floorAt) {
   return null
 }
 
-export { fillLeadsOf, closerLead, guessCloser }
+export { fillLeadsOf, closerLead, guessCloser, framesOf }

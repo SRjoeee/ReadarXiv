@@ -37,6 +37,9 @@ export type FitState = {
   /** by block, the leading of a frame before the unit's last (a page's, a column's), where the page fill set it looser than
    *  `lead`, which is the last frame's (S.fill.leads): each frame of a paragraph filled over its own block */
   leads?: number[]
+  /** how much lower the unit's first block stands than TeX set it, the room the gap over it lacks where the paragraph over it
+   *  cannot end higher (S.fill.page headOf), in the page fill's states alone */
+  head?: number
 }
 /** the unit's parameters: the target's rules (resolveRules' params), U.params', and the call's measure and patterns */
 export type FitParams = {

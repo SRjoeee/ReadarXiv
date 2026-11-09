@@ -187,6 +187,12 @@ The gate judges by them where they and today's output differ.
    Judged once a stated fact names it.
 6. **Page numbers** keep their size, right-aligned (`folio`).
 7. **Ink**: the PDF's own black (`ink`).
+8. **A paragraph's leading spans its frames** (2026-11-09, the owner: "as you recommend", on 2610.20967v1-zh p4). Where a
+   paragraph ends in one line alone at the top of a column or a page (TeX's widow: its only original line there, its other
+   lines in a frame before), that line cannot rise, and the gap under it follows the paragraph's leading as v2 laid its frame
+   before (and the original's skip there past its pitch): the paragraph under it starts lower by what TeX's gap lacks, its
+   first line off TeX's baseline. Its `anchor` difference within that (0.1 pt the drawing's rounding) is the ruling's
+   (`nearer` "the ruling's"): never worse, and no fault of v2's; one lower than that is judged as any.
 
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a

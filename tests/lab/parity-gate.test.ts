@@ -497,3 +497,44 @@ describe("hl-sentence's page placement on a unit today laid with a borrowed line
     expect(sentences(measure(v2With(whole, [leftBy.flat()]), page(), { ruled: new Set([26]) }))).toMatchObject([{ worse: true }])
   })
 })
+
+describe("anchor: a paragraph under another's last line alone at its column's top starts lower by the gap it lacks (the owner's ruling of 2026-11-09)", () => {
+  // (2610.20967v1-zh p4: t79 over the foot of the left column, its last line alone at the top of the right (TeX's widow), t85 a
+  // pitch under it. v2 sets t79's left frame at its own leading, 18 a line here, and t85 lower by what the gap under t79's last
+  // line lacks to that leading, 18 - 12 = 6; today keeps t85 on TeX's baseline. The owner, 2026-11-09: as recommended)
+  const col1 = (ys: number[]) => ys.map((y) => factLine(54, 298, y))
+  const col2 = (ys: number[]) => ys.map((y) => factLine(315, 558, y))
+  type At = [y: number, x0: number, x1: number]
+  const laidAt = (ord: number, ls: At[]) => ({ ord, state: 'laid', lines: ls.map(([y, x0, x1]) => [y, x0, x1, []]), lit: { left: [], right: [], own: [] } })
+  const drawn = (ls: At[]) => ls.map(([y, x0, x1]) => drawnLine(x0, x1, y, 'x'.repeat(20)))
+  /** t79's lines in the right column (its last at the column's top), t85 a pitch under its last, set `drop` lower by v2 */
+  const page = (o: { upper?: number[]; drop?: number } = {}) => {
+    const upper = o.upper ?? [400]
+    const drop = o.drop ?? 6
+    const q0 = upper.at(-1)! - 12
+    const facts = [
+      { ord: 79, kind: 'para', align: 'j', style: { size: 10 }, lines: [...col1([180, 168, 156, 144, 132]), ...col2(upper)] },
+      { ord: 85, kind: 'para', align: 'j', style: { size: 10 }, lines: col2([q0, q0 - 12, q0 - 24, q0 - 36]) },
+    ]
+    const u: At[] = [[180, 54, 298], [162, 54, 298], [144, 54, 298], ...upper.map((y): At => [y, 315, 558])]
+    const qT: At[] = [[q0, 330, 558], [q0 - 18, 315, 558]]
+    const qV: At[] = [[q0 - drop, 330, 558], [q0 - drop - 18, 315, 558]]
+    const v2 = v2Of({ members: [laidAt(79, u), laidAt(85, qV)], facts, today: { 79: { today: 79 }, 85: { today: 85 } } })
+    const r = rec({
+      today: { units: [{ id: 79, lines: drawn(u) }, { id: 85, lines: drawn(qT) }] },
+      v2: { units: [{ id: 79, lines: drawn(u) }, { id: 85, lines: drawn(qV) }] },
+    })
+    return measure(v2, r)
+  }
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const anchors = (p: ReturnType<typeof page>) => (of('anchor')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
+  it("v2's first line lower by what the gap under the line over it lacks: the ruling's, not worse", () => {
+    expect(anchors(page())).toEqual([['t85 para', false, 'ruling']])
+  })
+  it('lower than the gap asks: worse', () => {
+    expect(anchors(page({ drop: 9 }))).toEqual([['t85 para', true, 'today']])
+  })
+  it('the line over it no widow (two lines of its paragraph in that column): worse', () => {
+    expect(anchors(page({ upper: [412, 400] }))).toEqual([['t85 para', true, 'today']])
+  })
+})

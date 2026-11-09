@@ -794,9 +794,80 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const pastOf = (side) => [...borrowed[side]].filter(([, k]) => k > 0).map(([key]) => key)
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
+  headRuling(out, { v2, n, facts, orig })
   recount(out)
   out.units = units
   return out
+}
+
+/**
+ * A paragraph whose first line v2 sets lower than TeX's under the owner's ruling of 2026-11-09 ("as you recommend", on the
+ * coordinator's proposal from 2610.20967v1-zh p4): where the paragraph over it ends in one line alone at the top of its column
+ * (TeX's widow: its only original line there, its paragraph's other lines in a frame before, on this page or one before), that
+ * line cannot rise, and the paragraph's leading is the whole paragraph's, as v2 laid its frame before (the least distance
+ * between two of its lines there); the gap under it follows that leading and the original's own skip there past its pitch
+ * (capped at a pitch), so the paragraph under it starts lower by what TeX's gap lacks. Its `anchor` difference within that
+ * (and 0.1 pt, the drawing's rounding) is the ruling's: not worse, nor v2's fault; one past it is judged as any. Read off the
+ * part's lines and v2's own lay, both sides drawn as the page shows them
+ */
+function headRuling(p, { v2, n, facts, orig }) {
+  const across = (a, b) => Math.min(a[3], b[3]) > Math.max(a[2], b[2])
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'anchor' || !d.unit) continue
+    const name = d.unit
+    const o = orig.get(name.split(' ')[0])
+    const q = o?.part !== null && o?.part !== undefined ? facts.get(o.part) : null
+    const q0 = q?.lines.find((l) => l[0] === n)
+    if (!q || !q0 || q.lines[0] !== q0) continue
+    // (the line TeX set over its first in its column, and its paragraph: no other line between)
+    let over = null
+    for (const m of facts.values())
+      for (const l of m.lines)
+        if (m !== q && l[0] === n && across(l, q0) && l[4] > q0[4] + 0.05 && (!over || l[4] < over.l[4])) over = { m, l }
+    if (!over) continue
+    const u = over.m
+    const mine = u.lines.filter((l) => l[0] === n && across(l, q0))
+    const i = u.lines.indexOf(over.l)
+    // (its last line, alone in that column, its paragraph's lines before it in another frame)
+    if (i !== u.lines.length - 1 || mine.length !== 1 || i < 2) continue
+    const prev = u.lines[i - 1]
+    if (prev[0] === n && across(prev, over.l)) continue
+    // (v2's lay of it: its last line on that original line; two lines at least in its frame before)
+    const laid = Object.keys(v2.pages)
+      .map(Number)
+      .sort((a, b) => a - b)
+      .flatMap((pg) => (v2.pages[pg]?.members ?? []).filter((m) => m.ord === u.ord).flatMap((m) => m.lines.map((l) => ({ pg, y: l[0], x0: l[1], x1: l[2] }))))
+    const last = laid.at(-1)
+    if (!last || last.pg !== n || Math.abs(last.y - over.l[4]) > 0.05) continue
+    const frame = []
+    for (let k = laid.length - 2; k >= 0; k--) {
+      const a = laid[k],
+        b = frame.at(-1) ?? null
+      if (b ? a.pg !== b.pg || !(Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)) || a.y <= b.y : a.pg === n && Math.min(a.x1, last.x1) > Math.max(a.x0, last.x0)) break
+      frame.push(a)
+    }
+    if (frame.length < 2) continue
+    const pitch = Math.min(...frame.slice(1).map((a, k) => a.y - frame[k].y))
+    // (its original pitch in that frame, and TeX's gap from its last line to the paragraph under it)
+    const before = u.lines.slice(0, i).filter((l) => l[0] === prev[0] && across(l, prev))
+    const p0 = Math.min(...before.slice(1).map((l, k) => before[k][4] - l[4]).filter((v) => v > 0))
+    if (!Number.isFinite(p0)) continue
+    const gap = over.l[4] - q0[4]
+    const lacks = pitch + Math.min(Math.max(0, gap - p0), p0) - gap
+    const v = d.v2?.value ?? ''
+    const drop = -Number(/baseline (-?[\d.]+)/.exec(v)?.[1])
+    if (!(drop > 0) || drop > lacks + 0.1) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the owner's ruling of 2026-11-09 (as recommended): a paragraph's leading is the whole paragraph's, and where the paragraph over it cannot end higher (its last line alone at its column's top), the paragraph under it starts lower by what the gap lacks"
+    const f = p.faults.anchor
+    const k = f?.v2Says.findIndex((x) => x.startsWith(`${name}:`)) ?? -1
+    if (k >= 0) {
+      f.v2Says.splice(k, 1)
+      f.v2--
+    }
+  }
 }
 
 /**
