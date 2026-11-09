@@ -3,7 +3,7 @@
 // CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small capitals, TeX's explicit glue
 // as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the marks dropped after a display or
 // a held line's mark and the class's tail marks (U.marks' decisions, T16, T17: unit/marks.ts, called where today decides them,
-// its trace in the answer), the spaces a spaceless script does not set, and
+// its trace in the answer), the spaces a spaceless script does not set and those beside a full-width mark's blank side, and
 // each token's place in the unit's plain text (the word table's). Ported from engine 065c1d973 layer2.mjs: tokensOf2
 // L2:2524-2890, baseOf L2:2253-2297, STYLE_CMDS and applyCmd L2:2106-2122, glueOf L2:2394-2416, spacelessEdge L2:2417-2430, selfCaps / plainOf / upperOf / caseRuns L2:2448-2483, renameRuns
 // L2:1309-1320, cropPartsOf L2:1875-1878, LINK_OPEN L2:2245, hexOf L2:4569.
@@ -331,6 +331,19 @@ const spacelessEdge = (t: Token | null, end: boolean) => {
   const cps = [...t.s],
     ch = end ? cps.at(-1)! : cps[0]!
   return SPACELESS.test(ch) || SPACELESS_QUOTES.test(ch)
+}
+/**
+ * A token whose edge is a full-width mark's blank side: its last character a closing mark set as CJK's (its white after its
+ * ink), or its first an opening mark (its white before), by the marks' class table (script.ts punctOf), whether the target's
+ * faces set the mark in one half of its em or in its middle. A space there is no space of the text's: the mark carries the
+ * white, and a translator's space beside it doubled it (2611.03953v2-zh's references, each name followed by U+FF0C and a space:
+ * about 1 em of white a name where the original's comma and space held 0.3 em). xeCJK sets none after a closing mark whatever
+ * follows it (\xeCJK_FullRight_and_Boundary: ignores the spaces after it)
+ */
+const markBlankEdge = (t: Token | null, end: boolean) => {
+  if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+  const cps = [...t.s]
+  return punctOf(end ? cps.at(-1)! : cps[0]!) === (end ? 'close' : 'open')
 }
 
 /** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
@@ -798,23 +811,23 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   while (tokens.at(-1)?.space) tokens.pop()
-  if (!keepAll && !i.spacedSource) {
-    const drawnAt = (q: number, step: number) => {
-      for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
-      return null
-    }
-    const kept = tokens.filter(
-      (t, q) =>
-        !t.space ||
-        t.keep ||
-        t.st?.fam === 'mono' ||
-        !spacelessEdge(drawnAt(q - 1, -1), true) ||
-        !spacelessEdge(drawnAt(q + 1, 1), false),
-    )
-    if (kept.length < tokens.length) {
-      tokens.length = 0
-      for (const t of kept) tokens.push(t)
-    }
+  // (a space is not set between two characters of a spaceless script, nor beside a full-width mark's blank side whatever
+  // stands on its other side (markBlankEdge): a space after its head (`keep`) and one in a monospaced run are the text's)
+  const spaceless = !keepAll && !i.spacedSource
+  const drawnAt = (q: number, step: number) => {
+    for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
+    return null
+  }
+  const kept = tokens.filter((t, q) => {
+    if (!t.space || t.keep || t.st?.fam === 'mono') return true
+    const before = drawnAt(q - 1, -1),
+      after = drawnAt(q + 1, 1)
+    if (markBlankEdge(before, true) || markBlankEdge(after, false)) return false
+    return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
+  })
+  if (kept.length < tokens.length) {
+    tokens.length = 0
+    for (const t of kept) tokens.push(t)
   }
   return { tokens, base, marks }
 }
