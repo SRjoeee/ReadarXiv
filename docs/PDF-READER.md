@@ -2886,9 +2886,9 @@ macros. No source piece says so, and the marked compile's log states a fill for 
 Microsoft replies hold every link group around exactly its title), and the typesetter draws a group in its stated fill,
 but no fill was stated, so the title came back in the unit's own fill. Today's reader read each piece that may set a colour
 off its own glyphs (§18.1, "A character's colour"); the rebuild's typesetter has no glyphs to read. The engine now does it
-(`locate/fills.ts`): the unit's source characters are matched in order to its text glyphs on A (the longest common
-subsequence, as `words.ts` places its words), punctuation with its letters, white space aside. Each group, and each colour
-switch's run, is a scope; a scope's fill is the one most of its own text's glyphs hold, else most of all its text's. A
+(`locate/group-style.ts`): the unit's source letters are matched in order to its text glyphs' (the longest common
+subsequence, as `words.ts` places its words; letters and digits alone, as today's reader read them). Each group, and each
+colour switch's run, is a scope; a scope's fill is the one most of its own text's glyphs hold, else most of all its text's. A
 group whose fill is not the one around it, or not the unit's own, states it (SpanAt.colour, where the log states none: a
 colour piece's row wins). Each group set apart carries its fill itself, because a translation keeps some groups and drops
 others: Microsoft moves an `\emph`'s markers to the end, empty, and 2501.14787v1's `\emph{\href{…}{…}}` would otherwise have
@@ -2896,9 +2896,11 @@ stated the fill on the `\emph` alone.
 
 **A unit's own fill is its text's outside those groups.** A member's style was read over all of its glyphs, so a link that
 holds most of a unit's letters made the whole unit the link's colour. Where a group or a colour switch's run is set apart,
-the member's `Style.fill` is now its own text's. Where every letter of a unit is a group's (RevTeX's `\bibinfo` fields),
-its own text is the punctuation between them, which is why punctuation is matched. So a link's colour stays on its own
-words, or on none where the reply loses its group, and never spreads to the rest of the unit.
+the member's `Style.fill` is now its own text's. Where every letter of a unit is a group's (RevTeX's `\bibfield` and
+`\bibinfo` fields), its own fill is its text's outside its links and colour pieces, whose fill is by definition hyperref's
+or their own, never the unit's; only a unit wholly inside its link keeps the link's. So a link's colour stays on its own
+words, or on none where the reply loses its group, and never spreads to the rest of the unit. Punctuation is no reading of a
+unit's own (a first version read it, below).
 
 **A unit our compile sets more of is located from what arXiv set.** 1810.04805v2's reference 325 stayed English: its
 `.bbl` writes "Cloze procedure" in UTF-8 quotes, arXiv's 2016 tree read their bytes as characters its OT1 font has no
@@ -2909,27 +2911,62 @@ sets one right after the other, is no ink of A: the unit is located from the gly
 source. A run at a unit's edge, or between partners that stand apart on A, is a line A may have set elsewhere that no block
 move paired (align classes its hunks before its moves), and stays a content difference.
 
-Over the 88 papers of stage 1a's corpus (round 6's parts against this change's), only fills and one member move. 1,534
-groups of 843 members in 20 papers now state a fill: 659 links (`\href` 634, `\hyperref` 25), the groups inside them
-(RevTeX's `\bibfield` and `\bibinfo`, an `\emph` journal), a paper's colouring macros (2610.19159v1's), 213 bare groups (`{…}`),
-and 16 `\textcolor` groups the log gives no row. 135 members in 7 papers lose a fill their links or colour words
-had given them, every one now black (2610.19159v1 101, 2610.21098v1 17, 2610.20507v1 9). No member takes a colour it did
-not have, and no figure text moves. 1810.04805v2's reference 325 is the one unit gained, drawn from A's lines as today
-draws it. Of the four content differences before, three remain: 2610.21084v1's abstract (a stray "4" our marked compile
-sets before it, a run at the unit's edge), 2610.21084v1's correspondence footnote (`aonly`) and 1007.0072v1's `\today`
-(`char`).
+Over the 88 papers of stage 1a's corpus, round 6's parts against this change's (each member counted once), only fills,
+faces and one member move. 1,543 groups of 843 members in 20 papers now state a fill: 525 links (`\href` 507, `\hyperref`
+18), the groups inside them (RevTeX's `\bibfield` and `\bibinfo`, an `\emph` journal), a paper's colouring macros
+(2610.19159v1's), 175 bare groups (`{…}`), and 14 `\textcolor` groups the log gives no row. 131 members in 6 papers lose a
+fill their links or colour words had given them, every one now black (2610.19159v1 101, 2610.21098v1 17, 2610.20507v1 9).
+No member takes a colour it did not have, and no figure text moves. 1810.04805v2's reference 325 is the one unit gained,
+drawn from A's lines as today draws it. Of the four content differences before, three remain: 2610.21084v1's abstract (a
+stray "4" our marked compile sets before it, a run at the unit's edge), 2610.21084v1's correspondence footnote (`aonly`)
+and 1007.0072v1's `\today` (`char`).
 
-The parity over the four pairs whose parts move (1810.04805v2-zh, 2609.20976v1-ja, 2608.16117v1-de, 2609.36054v2-zh; 84
-pages each run) against round 6's sheet: with the default toggles nothing moves. With every toggle on, the pages worse go
-from 18 to 17. 1810.04805v2 page 11 is no longer worse: reference 325 is laid and measures as today's on every count, and
-its three link titles are blue. 2609.20976v1 page 13 loses its links difference: v2's link text measure is 27 before and 33
-after, the original's and today's count. By eye, page 10's four titles are blue and the Hendrycks and Jernite entries
-colour their titles alone, as the original does.
+The parity over the 16 pairs whose parts move (fills and faces together, against round 6's final sheet; 261 pages each
+run): with the default toggles the pages worse go from 38 to 37 (1810.04805v2 page 14's style difference gone), with every
+toggle on from 56 to 46, and no page is newly worse. With every toggle on: 1810.04805v2 page 11 is no longer worse
+(reference 325 laid and measured as today's, its three link titles blue); 2609.20976v1 page 13 loses its links difference
+(v2's link text measure 27 before, 33 after: the original's and today's count) and its frame difference, page 14 its style
+and frame differences; 2610.22065v1 page 7 its style difference; seven reference pages their frame differences, references
+drawn italic past their frame now upright (2608.04322v1 p12, 2610.10069v1 p27, 2610.20967v1 p5, 2610.30034v1 p15, 2610.40645v1
+p39 and the two of 2609.20976v1). On v2's side 63 units' italic or bold shares move to today's and one away from it: 2608.25210v2
+page 3's `We {\em \revised{are the first} to …}`, whose `\revised` group now states italic and the reply keeps, 0.35 of its
+characters italic against the original's 0.37 (today 0). By eye: page 10's four titles blue and the Hendrycks and Jernite
+entries colouring their titles alone; page 13's authors upright and journals blue; 2610.21313v1's IEEEtran affiliations
+with their institutes italic and their places upright, as the original (round 6 drew them all italic).
 
-Not changed here. A member's slant is still read over all of its glyphs: 2609.20976v1 page 13 draws whole references
-italic where their titles hold most letters, because the stored replies empty the `\emph` groups the typesetter's `baseOf`
-counts. That is the same fault for the face, left to its own change. A run of B-only glyphs at a unit's edge (2610.21084v1's
-abstract, a stray "4" our marked compile sets before it) stays the original's.
+**A unit's own slant and weight are its own text's too (the coordinator's call, the same fault for the face).** The
+references of 2609.20976v1 page 13 were drawn italic whole, their authors too: their `\emph` titles and journals hold most
+of their letters, the member's style read over all of them was italic, and the typesetter's `baseOf`, which takes an italic
+base off where the translation's italic groups hold half its text, found none, the stored replies having moved the `\emph`
+groups' markers to the end, empty. The face is now read as the fill is, by its own scopes: each group, and each face
+declaration's run (a bare command the group table names a face for, `\em`, `\bfseries`); a glyph's face is its font's
+weight and slant, a math font's none. Where a scope is set apart, the member's `Style.bold` and `Style.slant` are its own
+text's; where it has no text of its own, its text's outside the groups that name a face, else all of it. A face is stated
+(SpanAt.style, where the instrument states none: runin-stop's faces read on B stay) only on a group whose command names no
+face, read off its own text alone and where it is not the face around it or the unit's own: the typesetter applies a named
+command's face itself (`\emph` toggles, `\textbf` sets) and a stated one only to the rest, absolutely, so no group is
+counted twice; a group whose text is all a declaration's run states none, or `{\em …}` would be set italic and toggled back.
+Figure texts are left as they are: their groups are their runs of glyphs in another face than their own, their own the face
+of most of their glyphs by definition, their text in their run's order, which a reading in the stream's order misread
+(2610.37668v1's "PSNR 33.42 dB" took its italic run's face). `baseOf` stays: its flip is right where a unit has no
+observable text of its own (a unit wholly inside `\emph`, whose majority is italic) and wrong where an italic unit's
+translation is mostly `\emph`, as it was before.
+
+A first version also matched punctuation, so that RevTeX's own fill was read off the marks between its fields. On 2602.23285v2
+page 1 it read the author line `\textbf{Yasuko Matsubara}♣, \textbf{Jimeng Sun}♡, …` regular off its commas, and the stored
+reply moves the names' `\textbf` groups to the end, empty: the names, bold on arXiv's page, by today and by round 6, would have
+been drawn regular. Read off letters alone, as today reads them, the line has no text of its own and stays bold; RevTeX's own
+fill is read outside its links.
+
+Over the 88 papers (each member once), 476 members in 47 papers change their base face, every one by losing it: italic to
+upright 305, bold to regular 171; none takes an italic or a bold it did not have. 464 groups state a face (169 bare groups,
+115 `\textcolor`, 48 `\bibinfo`, 13 `\hyperref`; 89 `\textup` and 19 `\textmd`, whose command the typesetter names, which
+ignores a stated face on them). A sample of 24 of the 476, cropped from arXiv's pages, and each of the rare kinds (a
+theorem's item, an inkreferences entry, four IEEEtran affiliations): every new base is the face of the unit's own text
+there (an affiliation's "Haining, China" upright under its `\textit` institute names; the stored reply keeps those groups).
+
+Not changed here. An italic unit whose translation is mostly `\emph` is still drawn upright by `baseOf`. A run of B-only
+glyphs at a unit's edge (2610.21084v1's abstract, a stray "4" our marked compile sets before it) stays the original's.
 
 ## 19. The engine's contract
 
