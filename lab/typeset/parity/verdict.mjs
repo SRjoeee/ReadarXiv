@@ -917,10 +917,14 @@ function headRuling(p, { v2, n, facts, orig }) {
   }
 }
 
-const LEAD_RULING =
-  "the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\"): the gap under a paragraph that borrows room measured from the borrow's limit (option (i)), each frame of a paragraph keeping TeX's share of its lines where that holds within its page's band, and the paragraphs that borrow room voting in the page's target"
+/** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
+ *  references' leading, go ahead as you recommend"), and for TeX's share the ruling of 2026-10-30 it holds within the band */
+const SHARE_RULING =
+  "TeX's share of a paragraph's lines in each frame: the owner's ruling of 2026-10-30 (frames fill as TeX does, by the paragraph's height), the share kept where every frame before the last holds it within its page's band by the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\")"
+const BAND_RULING =
+  "the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\"): the paragraphs that borrow room, the gap under them measured from the borrow's limit (option (i)), vote in the page's target, and a paragraph at the band's top moves with it"
 /**
- * A line count on a page that the owner's ruling of 2026-11-10 explains (LEAD_RULING), the ruling's: not worse, nor v2's fault.
+ * A line count on a page that the owner's rulings explain, the ruling's: not worse, nor v2's fault.
  * (1) A paragraph over pages whose lines v2 splits otherwise than today, the same lines in all, its lines on this page TeX's
  * share of them (shareOn: the typesetter's pageCutsOf, each frame's first line at its share of the lines, nearest, ties later):
  * 1512.03385v1-zh p7 t153, 6 of 8 where TeX set 8 of 10 and today 7 + 1. Marked here (`share`), ruled by the paper's pass
@@ -938,7 +942,7 @@ function leadRuling(p, { v2, n, facts, orig }) {
     if (bandMoved(q.ord, v2, n)) {
       d.worse = false
       d.nearer = 'ruling'
-      d.ruling = LEAD_RULING
+      d.ruling = BAND_RULING
     } else if (shareOn(q, v2, n)) d.share = true
   }
 }
@@ -964,7 +968,7 @@ export function sharePass(pages, recount) {
       if (!d.worse || !a || a.today !== a.v2) continue
       d.worse = false
       d.nearer = 'ruling'
-      d.ruling = LEAD_RULING
+      d.ruling = SHARE_RULING
     }
     recount(p)
   }
