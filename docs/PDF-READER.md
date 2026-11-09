@@ -3194,9 +3194,11 @@ marks from the next author's lead. TeX's gaps there are sums (ICML's 6.64 pt bef
 the PDF, whose fonts are the Type 1 programs and not the metrics TeX read, nor the log states a font's `\fontdimen` or a line's
 glue set ratio to sum them from (the coordinator's option of 2026-11-10, measured and dropped). The marked compile states the
 calls instead: a point `<i>c` before each author's call where TeX is in horizontal mode, unit i the first after it. An author's
-member owns, as its trail, every free glyph TeX set between its end mark and the next call, before any unit's mark or bracket,
-whatever the gap or the line; the last author of such calls, whose own call is stated, owns what TeX set on its last line
-before the paragraph TeX ends after it (ICML's "Zuo Bai 2 †"). What TeX set after a call and before its author's start is that
+member owns, as its trail, every free glyph TeX set on its last line between its end mark and the next call, before any unit's
+mark or bracket, whatever the gap; a row of another line there stays where TeX set it, as before (1706.03762v7's e-mails, each
+under its place before NeurIPS' `\And`: taken as the place's trail, the place was laid on two lines at 8.97 pt where TeX set one
+at 9.96). The last author of such calls, whose own call is stated, owns what TeX set on its last line before the paragraph TeX
+ends after it (ICML's "Zuo Bai 2 †"). What TeX set after a call and before its author's start is that
 author's lead: its label, whatever its form. Where no call is stated, the rules before: the trail by the word's gap, the label
 walked back to the end mark before. A call TeX meets in the preamble, in vertical mode or between two rows of an alignment
 states none: a class that stores its list and sets it whole sets no item's start. **2604.14228v3's notes are not done**: its

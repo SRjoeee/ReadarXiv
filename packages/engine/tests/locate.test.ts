@@ -224,6 +224,30 @@ describe('locate', () => {
       ),
     ).toEqual([])
   })
+  it('leaves a row of another line before the next call no trail of the member before it (1706.03762v7’s e-mails)', () => {
+    // (NeurIPS' block: a name, its place, its e-mail on a row of its own, then \And; the e-mail, no unit's, stood between the
+    // place's end mark and the next call, and taken as the place's trail it was laid after the place's translation, the place
+    // two lines at 8.97 pt where TeX set one at 9.96. What TeX set on the member's last line is its trail, no other row)
+    const lines = [
+      { text: 'University of Toronto', x: 72, y: 700 },
+      { text: '1', x: 72 + 126 + 1.66, y: 703.6, size: 7 },
+      { text: 'a@b.org', x: 72, y: 688 },
+      { text: 'Lukasz Kaiser', x: 300, y: 712 },
+    ]
+    const units2 = [unitOf('affiliation', 'University of Toronto'), unitOf('author', 'Lukasz Kaiser')]
+    const B2 = docOf([
+      {
+        lines,
+        points: [
+          ['0e', 21],
+          ['1c', 29],
+          ['1s', 29],
+        ],
+      },
+    ])
+    const L = locate(instrumentOf(B2, units2, [[0, -1, -1, 1]]), B2, align(B2, B2))
+    expect(L.members[0]!.elements.map(([k, e]) => [k, e.copy, e.trail])).toEqual([['~', '1', 1]])
+  })
   it('gives the last author of stated calls the ink TeX set on its line before its paragraph’s end, whatever the gap', () => {
     // (2611.03953v2 p1: the last \icmlauthor's marks, "2 †", a thin space after "Zuo Bai", no call after them: the paragraph TeX
     // ends there (`qe3c`) is where its run ends, as the next call is where any other author's does)
