@@ -340,9 +340,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         lines: [
           body('Body text of the paper set here'),
           body('and more body text in that face'),
-          { text: '"ASR": "the number of the ', x: 72, y: 640, form: true, font: 'ABCDEF+CMTT10' },
-          { text: 'attractions', x: 72 + 26 * 6, y: 640, form: true, font: 'ABCDEF+CMR10' },
-          { text: '.",', x: 72 + 37 * 6, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: '"key": "count all the ', x: 72, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: 'harbours', x: 72 + 22 * 6, y: 640, form: true, font: 'ABCDEF+CMR10' },
+          { text: '.",', x: 72 + 30 * 6, y: 640, form: true, font: 'ABCDEF+CMTT10' },
           { text: 'Loss curve', x: 72, y: 600, form: true, font: 'ABCDEF+CMR10' },
         ],
       },
@@ -354,8 +354,8 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
     const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A), artefacts: true })
     const fixed = new Map(L.members.filter((m) => m.figure).map((m) => [m.plain, m.fixed]))
-    expect(fixed.get('"ASR": "the number of the')).toBe(true)
-    expect(fixed.get('attractions')).toBe(true)
+    expect(fixed.get('"key": "count all the')).toBe(true)
+    expect(fixed.get('harbours')).toBe(true)
     expect(fixed.get('Loss curve')).toBe(false)
   })
 
