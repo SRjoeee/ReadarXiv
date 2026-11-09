@@ -90,6 +90,10 @@ export async function readPdf<X = never>(
   })
   // (each font's map, read once a document: by its id in the page's common objects)
   const maps = new Map<string, Set<string> | null>()
+  // (each font's name, and its name with its subset's tag taken off, one string a document: every glyph of a font holds the one,
+  // pageInk's `names` and docPageOf's `bases`; read once a glyph, each held its own, 72 MiB of 2610.19159v1's two Docs, lane L9)
+  const names = new Map<unknown, string>()
+  const bases = new Map<string, string>()
   const pages: ReadPage<X>[] = []
   let info: Record<string, unknown> | null = null
   try {
@@ -122,10 +126,11 @@ export async function readPdf<X = never>(
         shapesAll: o.shapesAll ?? false,
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
+        names,
       })
       const annotations = o.annotations ? ((await page.getAnnotations?.().catch(() => [])) ?? []) : null
       const view = [...page.view] as [number, number, number, number]
-      pages.push({ ...docPageOf(ink, view, page.rotate ?? 0), extra, annotations })
+      pages.push({ ...docPageOf(ink, view, page.rotate ?? 0, bases), extra, annotations })
       page.cleanup()
     }
   } finally {
@@ -182,7 +187,17 @@ function docPageOf(
   ink: PageInk,
   view: [number, number, number, number],
   rotate: number,
+  bases: Map<string, string> = new Map(),
 ): { page: DocPage; raw: PageInk | null } {
+  /** a font's name with its subset's tag taken off, one string a font (the reader's table) */
+  const baseOf = (font: string): string => {
+    let b = bases.get(font)
+    if (b === undefined) {
+      b = font.replace(/^[A-Z]{6}\+/, '')
+      bases.set(font, b)
+    }
+    return b
+  }
   const unread = ink.rotated
     ? 'rotated'
     : ink.capped
@@ -203,7 +218,7 @@ function docPageOf(
       u,
       code,
       font,
-      base: font.replace(/^[A-Z]{6}\+/, ''),
+      base: baseOf(font),
       x0: g.x0,
       x1: g.x1,
       y: g.y,
@@ -235,7 +250,7 @@ function docPageOf(
     turned.push({
       u,
       code,
-      base: font.replace(/^[A-Z]{6}\+/, ''),
+      base: baseOf(font),
       n: t.n,
       k: t.k,
       at: t.at,
