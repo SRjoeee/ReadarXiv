@@ -61,10 +61,11 @@ export async function wrap(
       })
     plans.set(i + 1, { facts: pg.extra, ...plan, isFigure, textOf: textGroupOf })
   })
-  const made = await wrapOf(bytesA, plans, deps)
+  // (the section alone: A and it never composed, nor the whole hashed, which no step of the prepare reads)
+  const made = await wrapOf(bytesA, plans, { ...deps, compose: false })
   if ('refused' in made) return made
   return {
-    bytes: made.bytes.slice(bytesA.length),
+    bytes: made.section,
     pages: made.pages,
     groups: new Set(made.groups.keys()),
     ocgs: made.groups,

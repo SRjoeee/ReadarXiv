@@ -42,28 +42,31 @@ export type WrapPage = {
   names?: Map<string, number>
   figureWhy?: Map<string, string>
 }
-export type Wrap = {
-  bytes: Uint8Array
+/** what a wrap made of the pages, whichever way its bytes are given */
+type WrapMade = {
   xref: number
-  sha256: string
   pages: Map<number, WrapPage>
   groups: Map<string, number>
   stats: Omit<WrapStats, 'unhidden' | 'labelKept'>
   forms?: number
   unwrapped?: true
 }
-export const wrapOf = wrap_js.wrapOf as (
-  finalBytes: Uint8Array,
-  plans: Map<number, WrapPlan>,
-  o: {
-    PL: PdfLib
-    deflate: (b: Uint8Array) => Uint8Array
-    inflate: (b: Uint8Array, limit: number) => Uint8Array
-    groupsPage?: number
-    sequencesPage?: number
-    groupsDoc?: number
-  },
-) => Promise<Wrap | WrapRefusal>
+/** the document composed: finalBytes and the section, and its digest (wrapFinal's) */
+export type Wrap = WrapMade & { bytes: Uint8Array; sha256: string }
+/** the section alone (`compose: false`, the back half's: wrap.ts keeps the add-on alone), empty where no page is wrapped */
+export type WrapSection = WrapMade & { section: Uint8Array }
+type WrapOptions = {
+  PL: PdfLib
+  deflate: (b: Uint8Array) => Uint8Array
+  inflate: (b: Uint8Array, limit: number) => Uint8Array
+  groupsPage?: number
+  sequencesPage?: number
+  groupsDoc?: number
+}
+export const wrapOf = wrap_js.wrapOf as {
+  (finalBytes: Uint8Array, plans: Map<number, WrapPlan>, o: WrapOptions & { compose: false }): Promise<WrapSection | WrapRefusal>
+  (finalBytes: Uint8Array, plans: Map<number, WrapPlan>, o: WrapOptions & { compose?: true }): Promise<Wrap | WrapRefusal>
+}
 /** a page's wrap's bounds: its content streams' decoded bytes, its operators' heap */
 export const WRAP_DECODED_PAGE = wrap_js.WRAP_DECODED_PAGE as number
 export const WRAP_HELD_PAGE = wrap_js.WRAP_HELD_PAGE as number

@@ -72,3 +72,34 @@ describe('wrapOf over arXiv’s producers', () => {
     expect(addOn.groups.has('0.1.e')).toBe(false)
   })
 })
+
+describe('wrapOf for the prepare: the section alone', () => {
+  // (the back half's wrap keeps the add-on alone: the section appended to A, never A and it composed, nor a digest of the whole,
+  // which nothing of the prepare reads. Composing them held a copy of A as long as A, and the digest's job another, at the
+  // wrap's end: 33.5 MiB on 2609.19644v1, lane mem-back)
+  it('gives the composed document\'s own tail, its xref and pages, and no whole', async () => {
+    const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (a rule under) Tj ET\nq 90 0 0 0.4 72 690 cm BI /W 1 /H 1 /IM true /D [1 0] ID \u0000 EI Q\n')
+    const { made } = await wrappedOf(bytes)
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() })
+    const page = await (await task.promise).getPage(1)
+    const ops = await page.getOperatorList()
+    const facts = alignOf(OPS as unknown as Record<string, number>, ops)
+    const ink = pageInk(OPS as unknown as Record<string, number>, ops, page.commonObjs, { rotate: 0, indices: true, turned: true })
+    await task.destroy()
+    const paths = ink.paths ?? []
+    const plan = planOf(ink.glyphs, ink.glyphs.map(() => '0.1.t'), paths, paths.map(k => (k === -3 ? '0.1.t' : null)), facts)
+    const alone = await wrapOf(bytes, new Map([[1, { facts, ...plan }]]), { PL, deflate, inflate, compose: false })
+    if ('refused' in alone || !('section' in alone)) throw new Error('refused')
+    expect(Buffer.from(alone.section).equals(Buffer.from(made.bytes.subarray(bytes.length)))).toBe(true)
+    expect(alone.xref).toBe(made.xref)
+    expect([...alone.groups]).toEqual([...made.groups])
+    expect('bytes' in alone || 'sha256' in alone).toBe(false)
+  })
+  it('gives an empty section where no page is wrapped', async () => {
+    const bytes = await pdfOf('BT /F1 10 Tf 72 700 Td (no group) Tj ET\n')
+    const alone = await wrapOf(bytes, new Map(), { PL, deflate, inflate, compose: false })
+    if ('refused' in alone || !('section' in alone)) throw new Error('refused')
+    expect(alone.section.length).toBe(0)
+    expect(alone.unwrapped).toBe(true)
+  })
+})
