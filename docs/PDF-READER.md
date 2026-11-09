@@ -2913,7 +2913,11 @@ names apart by `\quad`, cut in two by a `\thanks`) wrote none at first: the clas
 then had no line of several members, so each, given the class, would have been set on its own middle. The lay now has one
 (§18.16, `rowLinesOf`): a line whose members TeX states alike is laid as one run, placed as the class places it, and each of
 them states the class (2026-11-10). Where locate does not make them one line (ink kept between them, a member over two lines),
-each is centred on its own original's middle, where the ink's reading laid it from its start. `readAlign` reads it as a
+each is centred on its own original's middle, where the ink's reading laid it from its start. And the index passes a box the
+column's template sets around the content: colortbl's (xcolor's `table`) sets each cell in an `\hbox` and `\unhbox`-es it into
+the cell, so that no unit of 2411.13093v4's author block stated a class; the content's level is noted before each column's
+content (`\axt@cl`), a box group at or above it is the template's, one below it the paper's (a name in an `\mbox`, whose line is
+the box's), and after a table set in the cell none is passed. `readAlign` reads it as a
 cell's: the class where the unit's own paragraph says nothing (a name set again
 as a paragraph, acmart's reference format, keeps its paragraph's). Nothing of B moves (the same gate, its case `authors`: 96
 documents, each PDF byte for byte the one before). A `\thanks` mark TeX set glued after a name (its `\rlap`) is the name's

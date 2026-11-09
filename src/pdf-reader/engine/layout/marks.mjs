@@ -814,7 +814,12 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   places were laid from their starts, centred only where the ink happened to read so) — states the same: its start mark's
  *   index carried out by \aftergroup through ordinary groups alone (a brace group, \begingroup: \axt@agplain, as the
  *   paragraph's end is followed), never past a box, a \noalign, math or a note, where the unit is no line of the cell's or the
- *   token would land where TeX reads none (longtable's caption in its \noalign); the template's end writes it for each unit
+ *   token would land where TeX reads none (longtable's caption in its \noalign) — but a box the column's template sets around
+ *   the content: colortbl's \setbox\z@\hbox, which it \unhbox-es into the cell (xcolor's `table`, 2411.13093v4: no unit of its
+ *   author block stated a class), whose content is the cell's line all the same. \axt@cl, before each column's content (array's
+ *   \insert@column wrapped while \@classz builds the column; \protected, a preamble expanded again keeps it), notes the
+ *   content's level, and a box group at or above it is the template's (\axt@agtbox); a box below it is the paper's, and the
+ *   template's end forgets the level, so that after a table set in the cell none is passed; the template's end writes it for each unit
  *   that reaches it (\axt@tel: several units share the cell's line, 2411.13093v4's names apart by \quad and a \thanks between
  *   two), the class placing that line, which the lay runs as one where its members state it alike (rowLinesOf); none where a
  *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
@@ -1147,12 +1152,13 @@ export const LAYOUT_TEX = [
   '\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{\\axt@ifh#1\\relax{}{\\axt@ucs#1s\\@nil}}\\axt@alg#1e\\@nil}\\def\\axt@tcs t#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@cs{#1}\\fi}',
   '\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else\\ifnum\\currentgrouplevel>\\z@\\expandafter\\gdef\\csname axt@cu@#1\\endcsname{\\axt@cs{#1}}\\expandafter\\aftergroup\\csname axt@cu@#1\\endcsname\\fi\\fi}',
   '\\def\\axt@ifh#1#2\\relax{\\if h#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}\\def\\axt@ucs#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@us{#1}\\fi}',
-  '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}{}\\fi\\fi}',
+  '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\axt@usg{#1}}{\\axt@agtbox{\\axt@usg{#1}}}\\fi\\fi}\\def\\axt@usg#1{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}',
+  '\\def\\axt@agtbox#1{\\ifnum\\currentgrouptype=2 \\ifnum\\currentgrouplevel>\\axt@clvl\\relax\\else#1\\fi\\fi}\\protected\\def\\axt@cl{\\xdef\\axt@clvl{\\the\\currentgrouplevel}}\\gdef\\axt@clvl{-1}',
   '\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else\\edef\\axt@uc{#1 \\the\\currentgrouplevel}\\edef\\axt@ulv{\\the\\currentgrouplevel}\\fi\\fi}\\def\\axt@uls#1 #2\\@nil{#1}\\def\\axt@clv{\\ifdefined\\axt@cc\\expandafter\\axt@lvl\\axt@cc\\@nil\\else-1\\fi}\\def\\axt@lvl#1 #2\\@nil{#2}\\def\\axt@ulv{-1}',
-  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
   '\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}',
   '\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}',
-  '\\def\\axt@czw{\\axt@cz\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
+  '\\def\\axt@czw{\\let\\axt@icol\\insert@column\\def\\insert@column{\\noexpand\\axt@cl\\axt@icol}\\axt@cz\\let\\insert@column\\axt@icol\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
   '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\ifx\\@classz\\axt@czw\\expandafter\\axt@mkp\\else\\expandafter\\axt@mkw\\fi{#1}}}\\fi',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',

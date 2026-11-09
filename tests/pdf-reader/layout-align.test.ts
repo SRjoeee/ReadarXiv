@@ -85,8 +85,12 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     // the class places that line, which the lay runs as one (rowLinesOf); none where a cell's own unit is there)
     expect(LAYOUT_TEX).toContain('\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{')
     expect(LAYOUT_TEX).toContain('\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else')
-    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}')
     expect(LAYOUT_TEX).toContain('\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}')
+    // (and past a box the column's template sets around the content, colortbl's \\setbox\\z@\\hbox it \\unhbox-es into the cell
+    // (2411.13093v4's xcolor `table`): a box at or above the content's level, which \\axt@cl notes before each column's content and
+    // the template's end forgets; never a box of the paper's, below it, nor after a table set in the cell)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agtbox#1{\\ifnum\\currentgrouptype=2 \\ifnum\\currentgrouplevel>\\axt@clvl\\relax\\else#1\\fi\\fi}\\protected\\def\\axt@cl{\\xdef\\axt@clvl{\\the\\currentgrouplevel}}')
     // (a cell's column: its start mark's index defined in the cell's group, carried out by \\aftergroup to the innermost
     // alignment entry's and no further; each column template of LaTeX's ends in its class, written where the index is defined at
     // the template's own group level)
@@ -96,7 +100,9 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     // run in the cell, and an \\xdef that expanded them again set its alignment box at the build: the table never ended)
     expect(LAYOUT_TEX).toContain('\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}')
     // (a \\@mkpream entered while one runs finds \\@classz wrapped and leaves it: wrapped again, the wrapper would call itself)
-    expect(LAYOUT_TEX).toContain('\\def\\axt@czw{\\axt@cz\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}')
+    // (\\axt@cl before the column's content: array's \\insert@column, while \\@classz builds the column, \\protected so that a
+    // preamble expanded again keeps it)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@czw{\\let\\axt@icol\\insert@column\\def\\insert@column{\\noexpand\\axt@cl\\axt@icol}\\axt@cz\\let\\insert@column\\axt@icol\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}')
     expect(LAYOUT_TEX).toContain('\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\ifx\\@classz\\axt@czw\\expandafter\\axt@mkp\\else\\expandafter\\axt@mkw\\fi{#1}}}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}')
