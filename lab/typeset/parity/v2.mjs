@@ -74,6 +74,20 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
+  // (first with the spaces beside a full-width mark put back, hook.mjs: each member's line count on each page of that lay, its pages
+  // not kept; the verdict's markSpaceRuling reads it, the coordinator's ruling of 2026-11-10)
+  const spaced = {}
+  const keep = globalThis.__ckPage
+  globalThis.__ckPage = (p, pg, page) => {
+    if (p === pair) spaced[pg] = Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0]))
+  }
+  globalThis.__parityMarkSpaces = true
+  try {
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+  } finally {
+    globalThis.__parityMarkSpaces = undefined
+  }
+  globalThis.__ckPage = keep
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
@@ -126,7 +140,7 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, spaced, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)

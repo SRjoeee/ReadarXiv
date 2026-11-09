@@ -854,6 +854,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
   headRuling(out, { v2, n, facts, orig })
+  markSpaceRuling(out, { v2, n, orig })
   recount(out)
   out.units = units
   return out
@@ -926,6 +927,26 @@ function headRuling(p, { v2, n, facts, orig }) {
       f.v2Says.splice(k, 1)
       f.v2--
     }
+  }
+}
+
+/**
+ * A unit's line count v2 sets other than today's because B.tokens sets no space beside a full-width mark's blank side (the
+ * coordinator's ruling of 2026-11-10 on lane cjk-space's parity: xeCJK's rule; where it saves a line, the line held a lone
+ * fragment, and the line-count measure is an instrument): the difference is the ruling's, not worse, only where the pair laid
+ * with those spaces put back (v2.mjs's first lay, hook.mjs: `spaced`, each member's line count on each page) sets today's count
+ * on the page. A count those spaces do not explain, or a pair laid without that lay, is judged as any
+ */
+function markSpaceRuling(p, { v2, n, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const part = orig.get(d.unit.split(' ')[0])?.part
+    const spaced = part === null || part === undefined ? undefined : v2.spaced?.[n]?.[part]
+    if (spaced === undefined || spaced !== d.today?.value) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the coordinator's ruling of 2026-11-10: no space beside a full-width mark's blank side (xeCJK's rule); the unit laid with those spaces put back sets today's count"
   }
 }
 

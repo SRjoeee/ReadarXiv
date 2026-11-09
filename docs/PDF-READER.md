@@ -3232,6 +3232,13 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
   spaces stretch past twice their width: Chinese 1 before, 4 after; the three new ones each hold a URL after a full stop, whose
   dropped space leaves the line two spaces to take its slack, one of them the URL's own line break on A, read into its text as
   a space.
+- **A mark's class is a full-width mark's alone** (`tokens.ts`, the token's `punct`, by the same definition): a curly quote an
+  alphabet's target sets in its Latin face is proportional and has no blank half, so no half of it hangs past a line's end, as
+  `hangOf` hung every closing mark's (1810.04805v2-es p8 t155: a closing quote half an em past the measure, the only such line of
+  the corpus's).
+- The parity counts a unit's line count the rule moves as the rule's only where the pair laid with those spaces put back sets
+  today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): 2 pages by default, 5 with every switch
+  on, each a line holding a lone fragment saved.
 - Not this rule's: xeCJK's shrinking of the mark's blank (a mark's blank half as shrink on every line, `fits` and `placeItems`)
   would take more onto a line (2611.03953v2's first entry through the next name again); it would also replace the squeeze's two
   thresholds. A later step.
