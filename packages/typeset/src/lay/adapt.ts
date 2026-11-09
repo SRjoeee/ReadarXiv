@@ -12,7 +12,7 @@ import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.types.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
-import type { Row } from '../shared/row-start.ts'
+import type { Row, RowLine } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
 import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
 import type { Breaks } from '../unit/breaks.ts'
@@ -21,6 +21,7 @@ import {
   type DecorLabel,
   decorAfter,
   decorBefore,
+  INK_UNIT_KINDS,
   type KeptRow,
   type ShortSkip,
   type Side,
@@ -77,6 +78,8 @@ export type AdaptInput = {
   /** the middle of the free paper it shares on its baseline with a member that may widen into it too, left and right
    *  (sharedPaper; NaN where it shares none) */
   shared?: readonly [number, number]
+  /** the line of TeX's it shares whole with the members beside it, set centred or flush right (rowLinesOf) */
+  line?: Omit<RowLine, 'left' | 'right'>
 }
 export type Adapted = { member: FlowMember } | { stop: string }
 
@@ -181,6 +184,60 @@ export function sharedPaper(flows: readonly (readonly Placed[])[], page: number)
         B = at(b.m.ord)
       A[1] = Number.isFinite(A[1]) ? Math.min(A[1], mid) : mid
       B[0] = Number.isFinite(B[0]) ? Math.max(B[0], mid) : mid
+    }
+  return out
+}
+
+/**
+ * The lines of TeX's that several members of a flow share whole, set centred or flush right (RowLine), by ord: each member of
+ * one on its one line, joined to the one before on it (Placed.join on its baseline), nothing of the page kept between them (no
+ * join kept: what stays there would stay inside the run), no name among them (S.names sets a babel name on its own, or as the
+ * lead of the member it binds), no cell nor figure text (set in boxes of their own). Its alignment is TeX's: the one its
+ * members' own marks state (Placed.align where `read` holds no 'align'), all alike; a member made on A (an ink unit: text TeX
+ * set that no unit owns, amsart's "AND" between two names) states none of TeX's for the line and takes the line's. A line
+ * TeX set justified or flush left needs nothing: its members run on from its first one's start already (S.rowStart). Its
+ * extent is TeX's: its first glyph's start (the first member's label's, where it stands on the line) to its last one's end
+ */
+export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, Omit<RowLine, 'left' | 'right'>> {
+  const out = new Map<number, Omit<RowLine, 'left' | 'right'>>()
+  const onRow = (a: Placed, b: Placed) => {
+    const l = a.lines.at(-1),
+      f = b.lines[0]
+    return !!b.join && !!l && !!f && l[0] === f[0] && Math.abs(l[4] - f[4]) < 0.05
+  }
+  const ink = new Set(INK_UNIT_KINDS)
+  for (const flow of flows)
+    for (let k = 0; k < flow.length; ) {
+      let j = k
+      while (j + 1 < flow.length && onRow(flow[j]!, flow[j + 1]!)) j++
+      const row = flow.slice(k, j + 1)
+      k = j + 1
+      if (row.length < 2) continue
+      if (
+        row.some(
+          (m, q) =>
+            m.lines.length !== 1 ||
+            m.why ||
+            m.kind === 'name' ||
+            m.kind === 'cell' ||
+            m.kind === 'figure' ||
+            (q > 0 && m.join?.[1]),
+        )
+      )
+        continue
+      const told = row.filter((m) => !ink.has(m.kind) && !(m.read ?? []).includes('align')).map((m) => m.align)
+      const align = told[0]
+      if ((align !== 'c' && align !== 'r') || told.some((a) => a !== align)) continue
+      const l0 = row[0]!.lines[0]!,
+        lb = row[0]!.label?.ink
+      const onLine = !!lb && lb[0] === l0[0] && (row[0]!.label!.line === 0 || Math.abs(lb[5] - l0[4]) < 0.05)
+      const line = {
+        ords: row.map((m) => m.ord),
+        align,
+        x0: onLine ? Math.min(l0[2], lb![1]) : l0[2],
+        x1: row.at(-1)!.lines[0]![3],
+      } as const
+      for (const m of row) out.set(m.ord, line)
     }
   return out
 }
@@ -487,7 +544,11 @@ export function adapt(i: AdaptInput): Adapted {
   const trail = i.reading.own ? (m.els ?? []).find(([, e]) => e.trail && e.ink.length === 1) : undefined
   if (trail && tokens.length) {
     const [p, x0, y0, x1, y1, base] = trail[1].ink[0]!
-    const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: base })
+    // (on the line TeX set it on, its member's last (El.trail): a crop's baseline is its line's (crops.ts), so that a mark raised
+    // over the name stands as far over the translation; its ink's own is its glyphs', which raised marks alone hold off the line,
+    // and drawn by it they stood on the line: 2610.10069v1 p1's daggers, 1706.03762v7 p1's star)
+    const on = lines.findLast((l) => l[0] === p)
+    const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: on ? on[4] : base })
     const crop = {
       mode: 'crop' as const,
       page: p,
@@ -503,6 +564,18 @@ export function adapt(i: AdaptInput): Adapted {
       },
     ) as typeof tokens
   }
+  // (the line of TeX's it shares whole, laid as one run (lay/flow.ts layLine), with the room its own line may take beside it,
+  // as U.decor's widen reads it (sideOf): the run's left its first member's, its right its last one's. None where its label
+  // stays where TeX set it (neither drawn anew nor carried as its crop): its text would leave it)
+  const own = i.line && blocks[0] ? sideOf(blocks[0]) : undefined
+  const lineOf: RowLine | undefined =
+    i.line && own && !(label && !label.drawn && !decor.carried)
+      ? {
+          ...i.line,
+          left: Math.max(own.column[0], ...own.left),
+          right: Math.min(own.column[1], ...own.right),
+        }
+      : undefined
   const member: FlowMember = {
     ord: m.ord,
     kind,
@@ -529,6 +602,7 @@ export function adapt(i: AdaptInput): Adapted {
     shareRow: after?.join ? { page: last[0], baseline: last[4], size: sizeOf(last, m) } : null,
     wide,
     ...(rowStart ? { rowStart } : {}),
+    ...(lineOf ? { line: lineOf } : {}),
   }
   return { member }
 }

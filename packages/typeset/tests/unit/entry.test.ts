@@ -1016,10 +1016,13 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const rows = rowsOf([row([{ t: 'text', s: 'Jia' }]), { ...row([{ t: 'text', s: 'Zhao' }]), id: idB }], true)
     const laid = layPage({ ...part(liu), flows: [[liu, zhao]] }, rows, rules, metrics()).members
     expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
-    // (its trail cut from where TeX set it and drawn right after the translation, its group off with its text)
+    // (its trail cut from where TeX set it and drawn right after the translation, its group off with its text; set on its line
+    // as TeX set it there: the crop's baseline the line's, so that its marks stand as far over the translation's baseline as
+    // over the original's. By its glyphs' own baseline, all of them raised, 703, they were drawn 3 pt low, on the line:
+    // 2610.10069v1 p1's daggers, 1706.03762v7 p1's first name's star)
     const items = laid[0]!.lines[0]![3]
     const crop = items.find((it) => 'src' in it) as Item & { src: number[]; x: number; w: number }
-    expect(crop.src.slice(1)).toEqual([143.6, 701.5, 158.8, 707.5, 703])
+    expect(crop.src.slice(1)).toEqual([143.6, 701.5, 158.8, 707.5, 700])
     const text = items.find((it) => 'face' in it) as Item & { x: number }
     expect(crop.x).toBeCloseTo(text.x + 15, 5)
     expect(laid[0]!.off & 3).toBe(3)
@@ -1051,6 +1054,117 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const inked: Metrics = { ...metrics(), ink: (_f, size, t) => [0.7, 0.2, (size * [...t].length) / 2] }
     const three = layPage({ ...part(liu), flows: [[liu, zhao, shang]] }, rows3, rules, inked).members
     expect(three[2]!.lines[0]![1]).toBeCloseTo(three[1]!.lines[0]![2] + 3, 5)
+  })
+  it('lays a line of several members TeX centred as one run, centred where TeX centred the line (2610.21106v1’s “A AND B”)', () => {
+    // (amsart's authors: one centred paragraph, its names two units and the "AND" between them text no unit owns, made on A;
+    // each member's translation shorter than its original. Laid each by itself, the first name stood centred on its own
+    // original's middle, the AND ran on after it, and the second name stayed centred on its own: a hole before it. TeX
+    // centred the line as a whole: its names and separators run on, the run centred on the line's middle)
+    const idB = 'b'.repeat(64),
+      idC = 'c'.repeat(64)
+    const line = (x0: number, x1: number) => [1, 0, x0, x1, 700, 707, 698, 72, 540, 0, 10] as Placed['lines'][number]
+    const ni = member({
+      ord: 0,
+      kind: 'author',
+      align: 'c',
+      lines: [line(230, 280)],
+      room: { below: 20, side: [72, 283.8] },
+    })
+    const and = member({
+      ord: 1,
+      kind: 'inkorphan',
+      align: 'j',
+      text: idB,
+      join: [3.8],
+      lines: [line(283.8, 304)],
+      room: { below: 20, side: [280, 307.9] },
+    })
+    const yuni = member({
+      ord: 2,
+      kind: 'author',
+      align: 'c',
+      text: idC,
+      join: [3.9],
+      lines: [line(307.9, 376)],
+      room: { below: 20, side: [304, 540] },
+    })
+    const rows3 = rowsOf(
+      [
+        row([{ t: 'text', s: 'Ni' }]),
+        { ...row([{ t: 'text', s: 'und' }]), id: idB },
+        { ...row([{ t: 'text', s: 'Yuni' }]), id: idC },
+      ],
+      true,
+    )
+    const inked: Metrics = { ...metrics(), ink: (_f, size, t) => [0.7, 0.2, (size * [...t].length) / 2] }
+    const lay = (flows: Placed[][]) => layPage({ ...part(ni), flows }, rows3, rules, inked).members
+    // (each member's drawn text: its first item's start, its line's end)
+    const ends = (ms: ReturnType<typeof lay>) =>
+      ms.map((m) => [(m.lines[0]![3][0] as Item & { x: number }).x, m.lines[0]![2]] as const)
+    const run = lay([[ni, and, yuni]])
+    expect(run.map((m) => m.state)).toEqual(['laid', 'laid', 'laid'])
+    const [a, b, c] = ends(run)
+    // (each from the one before's end at TeX's separation: no hole)
+    expect(b![0]).toBeCloseTo(a![1] + 3.8, 5)
+    expect(c![0]).toBeCloseTo(b![1] + 3.9, 5)
+    // (the run centred on the line's middle, its first glyph's start and its last one's end as TeX set them)
+    expect((a![0] + c![1]) / 2).toBeCloseTo((230 + 376) / 2, 5)
+    // (a line TeX set flush left runs on from its start, as before: its first member where TeX set it)
+    const left = ends(
+      lay([
+        [
+          { ...ni, align: 'l' },
+          { ...and, align: 'l' },
+          { ...yuni, align: 'l' },
+        ],
+      ]),
+    )
+    expect(left[0]![0]).toBeCloseTo(230, 5)
+    expect(left[2]![0]).toBeCloseTo(left[1]![1] + 3.9, 5)
+    // (one TeX set flush right ends where TeX ended it, the run before it)
+    const right = ends(
+      lay([
+        [
+          { ...ni, align: 'r' },
+          { ...and, align: 'r' },
+          { ...yuni, align: 'r' },
+        ],
+      ]),
+    )
+    expect(right[1]![0]).toBeCloseTo(right[0]![1] + 3.8, 5)
+    expect(right[2]![1]).toBeCloseTo(376, 5)
+    // (and one whose members' marks state no alignment alike, or none of TeX's, is laid member by member as before: here the
+    // second name's mark says justified, so the first name stays centred on its own original's middle)
+    const mixed = ends(lay([[ni, and, { ...yuni, align: 'j' }]]))
+    expect((mixed[0]![0] + mixed[0]![1]) / 2).toBeCloseTo(255, 5)
+    // (in a CJK target, under the page's fill: the fill tracks a unit short of its leading's fill, which none of the run's may
+    // be, its last one no more than those laid before another (S.share): tracked, the last name ran on past where the run was
+    // centred, 2610.10069v1's third name 5.7 pt and its line 3.2 pt right of TeX's middle)
+    const zh = rulesFor('zh')
+    const body = member({
+      ord: 3,
+      text: 'd'.repeat(64),
+      lines: [
+        [1, 0, 72, 540, 600, 607, 598, 72, 540, 0, 10],
+        [1, 0, 72, 540, 588, 595, 586, 72, 540, 0, 10],
+        [1, 0, 72, 300, 576, 583, 574, 72, 540, 0, 10],
+      ],
+      room: { below: 20, next: 24 },
+    })
+    const rowsZh = rowsOf(
+      [
+        row([{ t: 'text', s: '\u502a\u9999' }]),
+        { ...row([{ t: 'text', s: '\u4ee5\u53ca' }]), id: idB },
+        { ...row([{ t: 'text', s: '\u718a\u5141\u59ae' }]), id: idC },
+        { ...row([{ t: 'text', s: '\u8fd9\u662f\u4e00\u6bb5\u6b63\u6587\u3002'.repeat(12) }]), id: 'd'.repeat(64) },
+      ],
+      true,
+    )
+    const filled = layPage({ ...part(ni), flows: [[ni, and, yuni], [body]] }, rowsZh, zh, inked).members
+    expect(filled.slice(0, 3).map((m) => m.state)).toEqual(['laid', 'laid', 'laid'])
+    const [fa, , fc] = ends(filled)
+    expect(filled.slice(0, 3).map((m) => m.fit?.track)).toEqual([0, 0, 0])
+    expect((fa![0] + fc![1]) / 2).toBeCloseTo((230 + 376) / 2, 5)
   })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
