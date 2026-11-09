@@ -7,17 +7,20 @@
 // link's, its authors and journal drawn in it). Today's reader read both off the glyphs (layer2.mjs measuredStyle: each piece
 // that may set a colour, the colour its own glyphs hold; the unit's, the colour of its glyphs outside them).
 //
-// The source's letters and the glyphs' letters are matched in order (the longest common subsequence, Myers', as words.ts
-// places a unit's words on A and marks/faces.ts reads a group's face on B), compared folded (compatibility decomposition,
-// marks off, lower case); a text macro's text (the marking probe's, its glyphs the unit's text) is the source's there, an
-// element whose ink is its own has no glyph among them. Each group, and each colour switch's run (the rest of its group: an
-// element whose class states the fill TeX set its run in, El.colour), is a scope of its own; the unit's text in no scope is
-// the unit's. A scope's fill is the one most of its own text's glyphs are set in (those of no scope within it), where it has
-// none, most of all its text's; a glyph whose fill the page does not tell is not read. A group's fill is stated where it is
-// not the fill of the scope around it, or not the unit's own: each group set apart carries its fill itself, since a
-// translation keeps some groups and not others (a link span is `must`; Microsoft's reply may move an `\emph`'s markers to the
-// end, empty: 2501.14787v1's `\emph{\href{…}{…}}`, whose fill the \emph alone stated was drawn on nothing). A vote of glyphs
-// and two inequalities, no threshold.
+// The source's characters and the glyphs' are matched in order (the longest common subsequence, Myers', as words.ts places a
+// unit's words on A and marks/faces.ts reads a group's face on B), compared folded (compatibility decomposition, marks off,
+// lower case), white space aside; a text macro's text (the marking probe's, its glyphs the unit's text) is the source's
+// there, an element whose ink is its own has no glyph among them. Its punctuation too, not its letters alone: where every
+// letter of a unit is a group's (RevTeX's bibliography, each field a `\bibinfo`), the marks between them are its own text,
+// set in its own fill, and a reading of its letters alone gave the unit its longest field's fill, a title link's.
+//
+// Each group, and each colour switch's run (the rest of its group: an element whose class states the fill TeX set its run in,
+// El.colour), is a scope of its own; the unit's text in no scope is the unit's. A scope's fill is the one most of its own
+// text's glyphs are set in (those of no scope within it), where it has none, most of all its text's; a glyph whose fill the
+// page does not tell is not read. A group's fill is stated where it is not the fill of the scope around it, or not the unit's
+// own: each group set apart carries its fill itself, since a translation keeps some groups and not others (a link span is
+// `must`; Microsoft's reply may move an `\emph`'s markers to the end, empty: 2501.14787v1's `\emph{\href{…}{…}}`, whose fill
+// the \emph alone stated was drawn on nothing). A vote of glyphs and two inequalities, no threshold.
 import type { Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { StyleGlyph } from './facts.ts'
@@ -33,15 +36,15 @@ export interface Fills {
   apart: boolean
 }
 
-const LETTER = /[\p{L}\p{N}]/u
-/** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */
+/** a character as both sides are compared: decomposed, marks off, lower case, white space aside (a ligature its letters, an
+ *  ellipsis its three stops) */
 const fold = (ch: string): number[] =>
   [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER.test(c))
+    .filter((c) => /\S/u.test(c))
     .map((c) => c.codePointAt(0) as number)
-/** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about
- *  content; past it the letters not reached are not read */
-const WORK_PER_LETTER = 256
+/** the steps an alignment may take, per character of the two sides: a resource bound (myers.ts `work`), never a decision
+ *  about content; past it the characters not reached are not read */
+const WORK_PER_CHARACTER = 256
 
 /** the value most of `xs` hold, a tie to the one met first; undefined for none */
 const mostOf = (xs: readonly number[]): number | undefined => {
@@ -78,7 +81,7 @@ export function fillsOf(
   // ---- the scopes (0 the unit's own), each with the scope around it and the group it is (none: a switch's run, the unit)
   const parent: number[] = [-1]
   const groupOf: (string | null)[] = [null]
-  // ---- the source's letters, each with its scope
+  // ---- the source's characters, each with its scope
   const P: number[] = []
   const scopeOf: number[] = []
   const walk = (list: readonly Piece[], scope: number) => {
@@ -106,7 +109,7 @@ export function fillsOf(
     }
   }
   walk(content, 0)
-  // ---- the glyphs' letters, each with its glyph; matched in order
+  // ---- the glyphs' characters, each with its glyph; matched in order
   const G: number[] = []
   const gOf: number[] = []
   glyphs.forEach((g, q) => {
@@ -120,7 +123,7 @@ export function fillsOf(
   const direct: Set<number>[] = Array.from({ length: S }, () => new Set())
   const all: Set<number>[] = Array.from({ length: S }, () => new Set())
   if (P.length && G.length) {
-    const { pairs } = lcs(Int32Array.from(P), Int32Array.from(G), WORK_PER_LETTER * (P.length + G.length))
+    const { pairs } = lcs(Int32Array.from(P), Int32Array.from(G), WORK_PER_CHARACTER * (P.length + G.length))
     for (let k = 0; k < pairs.length; k += 2) {
       const q = gOf[pairs[k + 1] as number] as number
       const fill = (glyphs[q] as StyleGlyph).fill

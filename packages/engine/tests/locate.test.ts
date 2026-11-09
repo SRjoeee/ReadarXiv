@@ -2707,6 +2707,37 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
       ['6', { cmd: 'href', to, colour: 0x80 }],
     ])
   })
+  it('reads a unit’s own fill off its own marks where every letter of it is a group’s: a link never colours the rest', () => {
+    // (RevTeX's bibliography: each field a `\\bibinfo` group, the punctuation between them the entry's own. Read over its letters
+    // alone the entry's fill was its longest field's, the title link's, and the authors and journal, whose groups a translation
+    // may drop, drawn in it)
+    const lines = ['Dan Hendrycks, Bridging nonlinearities', 'and stochastic regularizers, CoRR.']
+    const { B, A } = pair(lines, (n, x0) => (n === 0 ? x0 >= 72 + 15 * 6 : x0 < 72 + 27 * 6))
+    const content = [
+      span('1', 'other', '\\bibinfo{author}{', [text('Dan Hendrycks')]),
+      text(', '),
+      span('2', 'link', `\\href{${to.url}}{`, [
+        span('3', 'other', '\\bibinfo{title}{', [text('Bridging nonlinearities and stochastic regularizers')]),
+      ]),
+      text(', '),
+      span('4', 'other', '\\bibinfo{journal}{', [text('CoRR')]),
+      text('.'),
+    ]
+    const u = unitWith(content, [
+      ['1', { cmd: 'bibinfo' }],
+      ['2', { cmd: 'href', to }],
+      ['3', { cmd: 'bibinfo' }],
+      ['4', { cmd: 'bibinfo' }],
+    ])
+    const m = partOf(instrumentOf(B, [u], [[0, 0]]), B, A)
+    expect(m.spans).toEqual([
+      ['1', { cmd: 'bibinfo' }],
+      ['2', { cmd: 'href', to, colour: 0x80 }],
+      ['3', { cmd: 'bibinfo', colour: 0x80 }],
+      ['4', { cmd: 'bibinfo' }],
+    ])
+    expect(m.style.fill).toBeUndefined()
+  })
   it('states none where a group’s fill is the one around it, nor a unit’s own where its text is all one fill', () => {
     // (a unit wholly inside its link: its own fill the link's, as its glyphs read it, no group of it set apart)
     const all = pair(['Bridging nonlinearities and', 'stochastic regularizers.'], () => true)
