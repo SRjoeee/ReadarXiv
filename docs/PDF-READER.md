@@ -3149,6 +3149,26 @@ original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fi
 2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
 right this way: that case is held by a synthetic test alone.
 
+**A mark is drawn as TeX drew it, whatever holds it** (`lay/read.ts` `readingsOf`'s `mark`; staging's round 7 with the author
+block on: 1706.03762v7 p1). Seven of its eight stars were drawn as the text "∗" at 5.25 to 6.18 pt, 1.6 pt tall where TeX's are
+2.7, and the first author's at full size. The seven are `\footnotemark[1]` in the authors' own text, elements of class `num`
+with `El.mark`; the first is his `\thanks` mark, no unit's, his trail (above), drawn as its crop. `drawnAs` (today's L2:1757)
+read every class but `other` as the page's text, its text in the target's face at a superscript's share of the line's size: the
+star's text is U+2217, which a text face draws small on the math axis, where TeX set CMSY7's star at 6.97 pt. A mark is a glyph
+TeX set raised in its own font at its script size: a footnote's or a `\thanks` mark (`El.mark`) and a symbol set as a
+superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
+a symbol set on the line stays text, and a mark's link goes with its crop. Over the 88 papers' parts 180 marks (155 of them
+digits, 17 in author blocks) and 92 raised symbols (10 in author blocks) move from text to their ink. Today draws them as text
+too, so the parity never told it.
+
+**The space the wire sets beside a marker is the wire's** (`packages/translate` `wire/markers.ts`; staging's round 7: 2610.20967v1
+p1). Each name stood 4.3 pt off its marks where TeX's gap is 1.35: the names are `Song-Ze Yu$^{1}$, …`, each mark glued to its
+name, and Microsoft's markers wire sets a space of its own beside a marker a word touches (DESIGN §6.2: a marker touching a word
+is read as part of it), which the reading took back only beside a stop or a digit, so beside a CJK name it stayed; the places'
+leading marks likewise. The plan now states the markers it set a space before and after, and the reading takes the reply's white
+space on that side back whatever stands beside it, as the HTML page's rehydrate does: the source set the element glued there.
+A tie is an element of its own, so a tie between two words no longer reads back with our two spaces round it.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
