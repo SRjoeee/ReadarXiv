@@ -1,20 +1,11 @@
 // A prepared paper's units for the measurements: the `*.units` objects of a bundle directory (packages/format's Units,
-// as the prepare writes them), each unit's first page from its `*.part` objects. A nested unit's piece (`t: 'unit'`) is an
-// element here, as the translator sees it; a unit the paper keeps (`kept`) is left out. With no directory, a synthetic
-// paper of `n` units cycled from a fixed set of shapes.
+// as the prepare writes them), each unit's first page from its `*.part` objects. Each unit as a translator is given it
+// (packages/translate unitInOf: a nested unit its mark, as every host sends it); a unit the paper keeps (`kept`) is left out.
+// With no directory, a synthetic paper of `n` units cycled from a fixed set of shapes.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Piece, UnitIn } from '../../../packages/translate/src/index.ts'
-
-type FormatPiece =
-  | { t: 'text'; s: string }
-  | { t: 'el'; id: string; kind: string }
-  | { t: 'span'; id: string; style: string; must?: 1; content: FormatPiece[] }
-  | { t: 'unit'; id: string }
-const typed = (ps: FormatPiece[]): Piece[] =>
-  ps.map(p =>
-    p.t === 'unit' ? { t: 'el', id: p.id, kind: 'note-mark' } : p.t === 'span' ? { t: 'span', id: p.id, style: p.style, ...(p.must ? { must: true } : {}), content: typed(p.content) } : p,
-  )
+import type { Unit } from '../../../packages/format/src/index.ts'
+import { type Piece, type UnitIn, unitInOf } from '../../../packages/translate/src/index.ts'
 
 export interface Paper {
   units: UnitIn[]
@@ -33,10 +24,10 @@ export function paperOf(dir: string | undefined, n = 1200): Paper {
     if (!f.endsWith('.units') && !f.endsWith('.part')) continue
     const o = JSON.parse(readFileSync(join(dir, f), 'utf8'))
     if (f.endsWith('.units')) {
-      for (const u of o.units as { id: string; kind: string; content: FormatPiece[]; sentences?: true; kept?: true }[]) {
+      for (const u of o.units as Unit[]) {
         if (u.kept || seen.has(u.id)) continue
         seen.add(u.id)
-        units.push({ id: u.id, kind: u.kind, content: typed(u.content), ...(u.sentences ? { sentences: true } : {}) })
+        units.push(unitInOf(u))
       }
     } else if (f.endsWith('.part')) {
       pages = Math.max(pages, o.page as number)

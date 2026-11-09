@@ -3,9 +3,10 @@
 // `axt:provider-status` binds a scope to the chain built from the settings as stored; `axt:translate` takes a call's units and
 // answers one result a unit, the chain's (packages/translate: the translators, their fall-through and acceptance, the rows and
 // the store are the background's); `axt:cancel-scope` withdraws the scope, on the reader's abort and when the page goes (an
-// extension page is no tab the background watches).
+// extension page is no tab the background watches). A unit goes as a translator is given it (packages/translate unitInOf: what
+// the wires read of it, a nested unit its mark), never format's unit itself, whose nested unit no wire can write.
 import type { Row as Result, Unit } from '@readarxiv/format'
-import type { UnitIn } from '@readarxiv/translate'
+import { type UnitIn, unitInOf } from '@readarxiv/translate'
 import type { TranslationTransport } from '@/providers/transport'
 import { isPermanentErrorKind } from '@/providers/types'
 
@@ -13,8 +14,8 @@ import { isPermanentErrorKind } from '@/providers/types'
 const KEYS = new Set(['no-key', 'auth'])
 const failed = (id: string, kind: string): Result => (KEYS.has(kind) ? { id, ok: false, why: { kind: 'unconfigured', code: kind } } : isPermanentErrorKind(kind as never) ? { id, ok: false, why: { kind: 'refused' } } : { id, ok: false, why: { kind: 'unavailable' } })
 
-/** a unit's text, by its length the call's size is planned */
-const lengthOf = (pieces: readonly Unit['content'][number][]): number => pieces.reduce((n, p) => n + (p.t === 'text' ? p.s.length : p.t === 'span' ? lengthOf(p.content) : p.t === 'el' ? 3 : 0), 0)
+/** a unit's text, by its length the call's size is planned: each element a marker's three characters */
+const lengthOf = (pieces: UnitIn['content']): number => pieces.reduce((n, p) => n + (p.t === 'text' ? p.s.length : p.t === 'span' ? lengthOf(p.content) : 3), 0)
 
 export function hostTranslate(o: { transport: TranslationTransport; paper: string }) {
   return async function* translate(units: readonly Unit[], _target: string, x: { signal: AbortSignal; context?: { title?: string; abstract?: string } }): AsyncIterable<Result> {
@@ -32,9 +33,9 @@ export function hostTranslate(o: { transport: TranslationTransport; paper: strin
       }
       // calls the size of the chain's batches, in the reader's order (the nearest first): each call's results are given as it
       // answers, the chain putting the latest call first
-      const calls: Unit[][] = []
-      let cur: Unit[] = [], n = 0
-      for (const u of units) {
+      const calls: UnitIn[][] = []
+      let cur: UnitIn[] = [], n = 0
+      for (const u of units.map(unitInOf)) {
         const len = lengthOf(u.content)
         if (cur.length && (n + len > status.maxBatchChars || cur.length >= status.maxBatchItems)) { calls.push(cur); cur = []; n = 0 }
         cur.push(u)
@@ -46,7 +47,7 @@ export function hostTranslate(o: { transport: TranslationTransport; paper: strin
       let next = 0
       for (const call of calls) {
         if (x.signal.aborted || stopped) break
-        const res = await transport.translate({ units: call as unknown as UnitIn[], target: status.targetLanguage, ...context, scope })
+        const res = await transport.translate({ units: call, target: status.targetLanguage, ...context, scope })
         if (!res.ok) { stopped = res.error.kind; break }
         for (const r of res.results) {
           // the reader's Result: the chain's, without the page's words about who answered or why it failed
