@@ -462,6 +462,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
 
   // ------------------------------------------------ cross: each side's lines over rules and other units' boxes
+  // (a drawn line by its ink, inkOf: a CJK mark's blank half at its edge crosses nothing, 2608.06701 p1 t351's opening U+201C
+  // hung before a box's rule its ink stands past)
   const rules = rec.px?.rules ?? []
   const events = { today: new Map(), v2: new Map() }
   for (const [side, M, laidKeys] of [
@@ -469,14 +471,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     ['v2', V, new Set([...laidV2.keys()].map(keyOfPart))],
   ]) {
     const boxes = []
-    for (const [key, ls] of M) for (const l of ls) boxes.push({ key, ...band(l), drawn: true })
+    for (const [key, ls] of M) for (const l of ls) boxes.push({ key, ...band(inkOf(l)), drawn: true })
     for (const [key, o] of orig) if (!laidKeys.has(key)) for (const l of o.lines) boxes.push({ key, ...band(l), drawn: false })
     for (const [key, ls] of M) {
       const o = orig.get(key)
       const own = (o?.lines ?? []).map(band)
       const said = new Set()
-      for (const l of ls) {
-        if (l.rot) continue
+      for (const drawn of ls) {
+        if (drawn.rot) continue
+        const l = inkOf(drawn)
         const b = band(l)
         for (const r of rules) {
           const x = (r[0] + r[2]) / 2
