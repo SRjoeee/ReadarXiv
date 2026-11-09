@@ -38,6 +38,11 @@ export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
 export const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 export const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
+/** a CJK character's mark class, the tokens' `punct` (L2:2096-2104): `close` where its ink stands in its em's first half, the
+ *  second blank, `open` where in its second; null where it is neither. A CJK character alone, where the rules' faces set the
+ *  marks in one half of the em (not `centredPunct`) */
+export const punctOf = (s: string): 'open' | 'close' | null =>
+  PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
 
 /** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 (no-start.mjs NO_START) */
 const NO_START: [number, number][] = (

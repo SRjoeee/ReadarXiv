@@ -50,7 +50,8 @@ const base = {
   grouped: () => true,
   designs: { serif: 'times', sans: 'helvetica', mono: 'courier' },
   faceOf: () => face('"axt-x"'),
-  rules: { cjkQuotes: true, floorMin: 0.6 },
+  // (a Simplified Chinese target's: its faces set a mark in one half of its em, its marks compressed)
+  rules: { cjkQuotes: true, floorMin: 0.6, centredPunct: false, compressMax: 2 },
 }
 const tr = (s: string) => ({ state: 'whole', pieces: [{ t: 'text', s, tr: true }] })
 
@@ -97,6 +98,52 @@ describe('S.figures', () => {
       [true, null, 10, 0xff0000],
       [false, 'unfit', undefined, undefined],
     ])
+  })
+})
+
+describe('S.figures sets a translation on its anchor by its ink, as the breaker sets every line (B.break leadOf, hangOf)', () => {
+  // (an ideograph or a full-width mark a whole em, any other character half of one)
+  const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]/u
+  const metrics: Metrics = {
+    ready: () => true,
+    advance: (_f, size, text) => [...text].reduce((a, c) => a + (CJK.test(c) ? size : size / 2), 0),
+    ink: () => [70, 20, 0],
+  }
+  const one = (f: FigureRow, s: string, rules: Partial<typeof base.rules> = {}) =>
+    figures({ ...base, rules: { ...base.rules, ...rules }, figures: [f], unit: () => tr(s) as never, metrics })
+      .figures[0]!
+  it('ends a right-aligned one’s ink at its original’s end, a closing mark’s blank half past it (1810.04805v2 p16 t476)', () => {
+    // (a Chinese "Masked LM" in full-width parentheses, 50 wide at 10, its ink 40: the opening mark's first half and the closing
+    // mark's second blank. By its advance
+    // it ended at 150 and its ink 5 short of it, 0.5 em: the parity's 3.49 pt at 6.97)
+    const got = one(row(1, { anchor: 'end', length: 50 }), '（蒙面LM）')
+    expect([got.drawn, got.size, got.x, got.y]).toEqual([true, 10, 105, 200])
+  })
+  it('centres a centred one’s ink, an opening mark’s blank half before it (2610.21312v1 p5 t299)', () => {
+    // ("(a) exact" in Chinese, 45 wide, its ink 40 from its first mark's second half; centred on 130 in a box of 60: its ink
+    // 110-150)
+    const got = one(row(2, { anchor: 'centre', length: 60 }), '（a）精确')
+    expect([got.drawn, got.size, got.x]).toEqual([true, 10, 105])
+  })
+  it('starts a left-aligned one’s ink at its original’s start, an opening mark’s blank half before it', () => {
+    const got = one(row(3, { anchor: 'start', length: 60 }), '「注意」力')
+    expect([got.drawn, got.size, got.x]).toEqual([true, 10, 95])
+  })
+  it('sets a turned one by its ink along its run', () => {
+    // (a y-axis title a quarter turned, its run from (150, 380) up for 55, centred: "time (s)" in Chinese 50 along it, its ink 45, from 5
+    // along the run)
+    const got = one(row(4, { anchor: 'centre', x: 150, y: 380, ux: 0, uy: 1, length: 55 }), '时间（秒）')
+    expect([got.drawn, got.size, got.x, got.y, got.angle]).toEqual([true, 10, 150, 385, 90])
+  })
+  it('fits a translation by its ink: its blank halves no part of the line it needs', () => {
+    // (the same label in a box of 40 with no room: its ink 40 fits at its whole size, where its advance of 50 would have shrunk its
+    // set to 0.8)
+    const got = one(row(5, { anchor: 'end', length: 40 }), '（蒙面LM）')
+    expect([got.drawn, got.size, got.x]).toEqual([true, 10, 95])
+  })
+  it('sets a target’s marks centred in their em by their advance, as its body lines are (centredPunct)', () => {
+    const got = one(row(6, { anchor: 'end', length: 50 }), '（蒙面LM）', { centredPunct: true })
+    expect([got.drawn, got.size, got.x]).toEqual([true, 10, 100])
   })
 })
 

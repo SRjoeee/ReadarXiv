@@ -1,19 +1,20 @@
 // S.figures over the part (design-b §1.6 L4; shared/figures.ts, today's paintFigures): a page's figure texts, each drawn in its
 // translation where it says something its source does not, in the faces of its style, each set (a size tie) at one size, on its
-// original's baseline from its anchor's edge into the free line beside its box, the original's where it does not fit. Its
-// facts are the part's, as the prepare states them from today's figure reading (layout/figure-text.mjs): its line (its box
-// along its run and its baseline), its anchor (Placed.align: l start, c centre, r end), its room before and after its box
-// (Room.side), the stroke under its text (Room.under), its style (size, fill, family, weight, slant) and its groups' (a run of
-// its glyphs in another face: SpanAt.style, its translation inside the group drawn in it), its own text
-// (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along x, from its run's
-// origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn at its angle (its
-// items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs,
-// its text group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label
-// today's figure reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one
-// whose anchor the part does not state (`kind`, align 'j'), its row none (`none`) or failed (the row's why, as the entry's
-// contentOf), the same as its source (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`). A part made
-// before the prepare stated a figure text's own text (Placed.plain) is not read here: the entry reads its figure texts as it
-// did before (entry.ts).
+// original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
+// full-width mark's blank half at its edge past the anchor's edge, its target's centredPunct and compressMax), the original's
+// where it does not fit. Its facts are the part's, as the prepare states them from today's figure reading
+// (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
+// end), its room before and after its box (Room.side), the stroke under its text (Room.under), its style (size, fill, family,
+// weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
+// it), its own text (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along
+// x, from its run's origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn
+// at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs, its text
+// group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label today's figure
+// reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one whose anchor the
+// part does not state (`kind`, align 'j'), its row none (`none`) or failed (the row's why, as the entry's contentOf), the same
+// as its source (`none`), unfit or crowded (`unfit`), a face no served face holds (`served`). A part made before the prepare
+// stated a figure text's own text (Placed.plain) is not read here: the entry reads its figure texts as it did before
+// (entry.ts).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { faceOf } from '../breaker/faces.ts'
 import { fontString } from '../breaker/measure.ts'
@@ -112,7 +113,6 @@ export function figuresOf(
     }
   }
   if (!rowsOf.length) return { laid, why, wait: [] }
-  const R = o.R as unknown as { cjkQuotes?: boolean; floorMin: number }
   const got = figures({
     figures: rowsOf,
     unit: (id) => {
@@ -126,7 +126,12 @@ export function figuresOf(
     grouped: () => true,
     designs: o.paper.designs,
     faceOf: (st, cls) => faceOf(o.paper.roles, st, cls),
-    rules: { cjkQuotes: R.cjkQuotes, floorMin: R.floorMin },
+    rules: {
+      cjkQuotes: o.R.cjkQuotes,
+      floorMin: o.R.floorMin,
+      centredPunct: o.R.centredPunct,
+      compressMax: o.R.compressMax,
+    },
     metrics: o.metrics,
   })
   const w100 = (s: string, f: Parameters<typeof fontString>[0]) => o.metrics.advance(fontString(f, 100), 100, s)

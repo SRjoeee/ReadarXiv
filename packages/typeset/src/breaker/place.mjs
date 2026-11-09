@@ -1,7 +1,7 @@
 // B.place (design-b §1.5, G1): each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
 // breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
 // lab/typeset/move-fit.mjs; typed by place.types.ts.
-import { latinishOf, lineExtent, squeezable } from './break.mjs'
+import { hangOf, latinishOf, lineExtent, squeezable } from './break.mjs'
 import { inFlow, slotsAt } from './slots.mjs'
 import { toLastLines } from '../fit/last-lines.ts'
 
@@ -14,9 +14,9 @@ function placeItems(lines, f, P) {
   for (const line of lines) {
     const cap = line.x1 - line.x0
     const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0) + (it.kern ?? 0), 0)
-    // a closing mark at the line's end may stand in the margin by its blank half
+    // a closing mark at the line's end may stand in the margin by its blank half (hangOf)
     const end = line.items.at(-1)
-    const hang = end?.t.punct === 'close' && !end.cut && P._compress < 2 ? 0.5 * f : 0
+    const hang = hangOf(end, P._compress) * f
     let slack = cap - natural + hang
     const spaces = line.items.filter(it => it.t.space)
     const spW = spaces.reduce((s, it) => s + it.w, 0)

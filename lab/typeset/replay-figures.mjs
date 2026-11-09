@@ -1,7 +1,8 @@
-// lab/typeset/replay-figures.mjs [<pair>…]: S.figures replayed on every figure text of the baseline's 123 reader dumps (or the
-// pairs named): each page's figure units as today's bundle holds them, their rows as the door gave them, faces, widths and
-// rules as today's run had them (packages/typeset/tests/replay/figures.ts), each outcome projected as the dump projects it and
-// compared whole (unit, page, drawn, why, line: x0, baseline, turn, text). Prints the counts and the classes of difference by
+// lab/typeset/replay-figures.mjs [--marks=today] [<pair>…]: S.figures replayed on every figure text of the baseline's 123 reader
+// dumps (or the pairs named): each page's figure units as today's bundle holds them, their rows as the door gave them, faces,
+// widths and rules as today's run had them (packages/typeset/tests/replay/figures.ts), each outcome projected as the dump
+// projects it and compared whole (unit, page, drawn, why, line: x0, baseline, turn, text). `--marks=today` sets a translation
+// by its advance, as today's did (figures.ts); else by its ink, as v2 does. Prints the counts and the classes of difference by
 // the first differing field, up to five cases a class; writes nothing. Run from the worktree's root (heavy: through
 // heavy-slot.sh test):
 //   node lab/typeset/replay-figures.mjs
@@ -11,8 +12,11 @@ import { replayFigures } from '../../packages/typeset/tests/replay/figures.ts'
 import { LAB } from '../../packages/typeset/tests/replay/tap.ts'
 
 const READER = join(LAB, 'refactor-2026-11', 'baseline', 'reader')
-const pairs = process.argv.slice(2).length
-  ? process.argv.slice(2)
+const args = process.argv.slice(2)
+const marks = args.includes('--marks=today') ? 'today' : undefined
+const named = args.filter(a => !a.startsWith('--'))
+const pairs = named.length
+  ? named
   : readdirSync(READER).filter(f => f.endsWith('.reader.json')).map(f => f.replace(/\.reader\.json$/, '')).sort()
 const count = { pairs: 0, figures: 0, equal: 0, differ: 0, extra: 0, threw: 0 }
 const classes = new Map()
@@ -20,7 +24,7 @@ const t0 = performance.now()
 for (const pair of pairs) {
   count.pairs++
   let r
-  try { r = replayFigures(pair) } catch (e) { count.threw++; console.log(`${pair} threw: ${e?.stack?.slice(0, 600) ?? e}`); continue }
+  try { r = replayFigures(pair, { marks }) } catch (e) { count.threw++; console.log(`${pair} threw: ${e?.stack?.slice(0, 600) ?? e}`); continue }
   count.figures += r.total
   count.equal += r.equal
   count.differ += r.differ.length

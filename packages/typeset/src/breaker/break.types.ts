@@ -27,3 +27,9 @@ export const lineExtent: (
   scale: number,
   measure: FitMeasure,
 ) => { a: number; d: number; text: { a: number; d: number } } = m.lineExtent
+/** a mark that may stand at a line's edge: a laid item's token's mark class, and whether the mark has lost its blank half */
+export type EdgeMark = { t: Pick<Token, 'punct'>; cut?: boolean } | null | undefined
+/** an opening mark's leading blank half at a line's start, none of its ink, em: lost wherever the state compresses (break.mjs) */
+export const leadOf: (it: EdgeMark, compress: number) => number = m.leadOf
+/** a closing mark's trailing blank half at a line's end, none of its ink, em: hung past the line's edge (break.mjs) */
+export const hangOf: (it: EdgeMark, compress: number) => number = m.hangOf

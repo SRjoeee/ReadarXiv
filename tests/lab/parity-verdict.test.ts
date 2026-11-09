@@ -581,3 +581,30 @@ describe("align: a drawn line's alignment is where its ink stands, a CJK mark's 
     expect(aligns(p)).toEqual([])
   })
 })
+
+describe("cross: a drawn line over a rule or another unit by its ink, a CJK mark's blank half no ink", () => {
+  // (2608.06701 p1 t351: a figure text set left by its ink, opening with U+201C at 3.56 pt; its box starts the mark's blank
+  // half, 1.78 pt, before its ink, which starts where the original's does, 1.19 pt past the box's rule at 416.07; read by its
+  // box, the line crossed the rule)
+  const S = 10
+  const f = v2Of({
+    members: [{ ord: 351, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+    facts: [{ ord: 351, kind: 'figure', align: 'l', style: { size: S }, lines: [factLine(72, 140, 700, S)] }],
+    today: { 351: { today: 351 } },
+  })
+  const page = (t: Line[], v: Line[], rules: number[][]) => {
+    const r = rec({ today: { units: [{ id: 351, lines: t }] }, v2: { units: [{ id: 351, lines: v }] } })
+    return measure(f, { ...r, px: { rules } })
+  }
+  const rule = [69.5, 650, 70, 750]
+  it('a line whose opening mark hangs its blank half over a rule crosses none', () => {
+    const p = page([drawnLine(72, 140, 700, '甲乙丙丁', S)], [drawnLine(67, 135, 700, '（甲乙丙）', S)], [rule])
+    expect(p.faults.cross?.v2 ?? 0).toBe(0)
+    expect(worse(p)).toEqual([])
+  })
+  it('a line whose ink is over a rule crosses it, as before', () => {
+    const p = page([drawnLine(72, 140, 700, '甲乙丙丁', S)], [drawnLine(62, 130, 700, '甲乙丙丁', S)], [rule])
+    expect(p.faults.cross?.v2).toBe(1)
+    expect(worse(p)).toContain('cross')
+  })
+})
