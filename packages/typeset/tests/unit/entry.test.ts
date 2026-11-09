@@ -2,12 +2,13 @@
 // 'waiting', nothing off; a face not loaded: the same), a row that will not come ('none'), a member laid from its row and its
 // facts alone (no Units object: its pieces made from the member's stated El, rowPieces), its text group off, an element
 // drawn on a laid line off with it.
-import type { OutPiece, Part, Placed, Row } from '@readarxiv/format'
+import type { El, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
+import { statedBreaks } from '../../src/unit/breaks.ts'
 
 const metrics = (ready: Metrics['ready'] = () => true): Metrics => ({
   ready,
@@ -518,6 +519,39 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const onRow = right.lines.find(([y]) => Math.abs(y - 688) < 1)!
     expect(onRow[2]).toBeLessThanOrEqual(200 + 0.01)
     expect(onRow[2]).toBeGreaterThan(195)
+  })
+  it('sets its lines at TeX’s \\baselineskip (Placed.lead): a gap TeX’s \\lineskip rule opened is not counted again', () => {
+    // (2602.23285v2-ja p4 t29: the original's third line, on TeX's text block bottom, set 16 pt under its second for a formula
+    // 13 tall on it (its second line 2 deep, \lineskip 1), the \baselineskip 12. The translation sets the formula on its second
+    // line, which TeX's rule pushes 2 pt down: with the pitch TeX set the paragraph at, its third line comes 12 under that,
+    // over the bottom, and the paragraph keeps its size; with its pitch read as the upper median of its gaps, 16, the gap the
+    // \lineskip rule made, the push was added to that gap, the third line fell past the bottom and the paragraph shrank. A part
+    // that states no \baselineskip (Placed.read 'lead': its lead read off its lines) lays as before)
+    const tall = [['1', { kind: 'other', ink: [[1, 150, 670, 170, 685, 672]], copy: 'x' }]] as Placed['els']
+    const r = row([
+      { t: 'text', s: `${'wort '.repeat(9)}` },
+      { t: 'el', id: '1' },
+      { t: 'text', s: ` ${'wort '.repeat(12).trim()}` },
+    ])
+    const lay = (read?: string[]) => {
+      const a = member({
+        els: tall,
+        lines: [
+          [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+          [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+          [1, 0, 72, 200, 672, 685, 670, 72, 300, 0, 10],
+        ],
+        room: { below: 0, next: 300, runs: [[2, 200, 0]], sep: 12 },
+        ...(read ? { read } : {}),
+      })
+      return layPage({ ...part(a), paper: { ...part(a).paper, lineskip: [1, 1] } }, rowsOf([r]), still, metrics())
+        .members[0]!
+    }
+    const stated = lay()
+    expect([stated.state, stated.fit?.size]).toEqual(['laid', 10])
+    // (to a tenth: the stub's text descends 0.02 pt, which the push takes in)
+    expect(stated.lines.map(([y]) => Math.round(y * 10) / 10)).toEqual([700, 686, 674])
+    expect(lay(['style', 'lead']).fit!.size).toBeLessThan(10)
   })
   it('borrows nothing where the part states no TeX room: a part made before, its runs’ room or its separation unstated', () => {
     // (a part made before 2026-11-08 may state the room under each run otherwise, Room.ends: read by nothing; its last line's
@@ -1446,9 +1480,11 @@ describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragr
     expect(laid.lines[1]![0]).toBe(688)
   })
   it('starts a block where the break’s next line opens another frame: no pitch tells its room (a title’s two lines)', () => {
+    // (a heading TeX sets no paragraph for states no \baselineskip: its lead read off its lines)
     const m = member({
       kind: 'heading',
       align: 'c',
+      read: ['style', 'lead'],
       lines: [lineAt(700, 120, 250), lineAt(680, 90, 280)],
       els: [['1', { kind: 'space', ink: [], brk: 1, ends: [0, 0] }]],
     })
@@ -1556,6 +1592,21 @@ describe('U.breaks over the part’s facts: TeX’s forced breaks and the paragr
     expect(laid.state).toBe('laid')
     expect(laid.lines[0]![0]).toBe(700)
     expect(textOf(laid.lines[0]!)).toMatch(/^Der Kasten/)
+  })
+  it('reads a forced break’s frame at TeX’s \\baselineskip where the part states it, not the median of its gaps', () => {
+    // (the frame's other gaps 14, a \lineskip gap TeX opened under a tall line, and 12, its \baselineskip: the median's 13
+    // closed the break's gap to a pitch TeX never set the paragraph at)
+    const lines = [lineAt(700, 72, 180), lineAt(676, 72, 300), lineAt(662, 72, 300), lineAt(650, 72, 240)]
+    const els = new Map<string, El>([['1', { kind: 'space', ink: [], brk: 1, ends: [0, 1] }]])
+    const pieces: Parameters<typeof statedBreaks>[1] = [
+      { t: 'text', s: 'Premier vers' },
+      { t: 'ph', src: '\\\\', k: 1 },
+      { t: 'text', s: 'la suite' },
+    ]
+    const at = (pitch?: number) =>
+      statedBreaks({ lines, els, spans: new Map(), ...(pitch ? { pitch } : {}) }, pieces, [null, null, null]).get(1)
+    expect(at()).toEqual({ next: 1, room: 1, pitch: 13 })
+    expect(at(12)).toEqual({ next: 1, room: 1, pitch: 12 })
   })
   it('starts at an element TeX opened a paragraph at, the element first on that line (El.opens)', () => {
     const m = member({

@@ -420,7 +420,7 @@ export function factsOf({
     }
     const breakLines = new Set(breaks.map(([, j]) => j))
     for (const [el, j] of breaks) {
-      const e = breakEnd(mem.lines, j, breakLines, ins.tex.lineskip)
+      const e = breakEnd(mem.lines, j, breakLines, ins.tex.lineskip, mem.read.includes('lead') ? undefined : mem.lead)
       if (e) el.ends = e
     }
     // (a paragraph TeX opened inside the unit (C13, C15): a paragraph end of B's between its glyphs, its first line on A the line

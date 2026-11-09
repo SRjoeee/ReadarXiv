@@ -269,6 +269,9 @@ export const Placed = z.object({
   why: PrepWhy.optional(),
   join: z.union([z.tuple([num]), z.tuple([num, flag])]).optional(),
   bound: flag.optional(),
+  // the pitch TeX set its lines at: its paragraph's \baselineskip where the marked compile states it (LINES_TEX's AXT-LINES as
+  // the paragraph ends), which TeX's \lineskip rule widens under a line too tall for it and never narrows; else, 'lead' in
+  // `read`, the pitch of its lines on A (their gaps' median, a gap that rule opened among them) or 1.2 of its size
   lead: num,
   style: Style,
   align: z.enum(['j', 'l', 'c', 'r']),

@@ -213,6 +213,13 @@ describe('forced breaks and the room after them (C14)', () => {
     expect(breakEnd(lines, 0, new Set([0]))).toEqual([0, 0])
     expect(breakEnd(lines, 3, new Set([3]))).toBeNull()
   })
+  it('reads its room against TeX’s \\baselineskip where the paragraph states it, not the median of its gaps', () => {
+    // (a frame whose other gaps are TeX's \lineskip rule's (14 pt, tall lines) and its \baselineskip 12: the break's gap of 24
+    // is one line of room at 12, under one at the median's 14)
+    const lines = [L(72, 300, 700), L(72, 300, 686), L(72, 200, 672), L(72, 300, 648), L(72, 300, 636)]
+    expect(breakEnd(lines, 2, new Set([2]))).toEqual([2, 0.714])
+    expect(breakEnd(lines, 2, new Set([2]), undefined, 12)).toEqual([2, 1])
+  })
 })
 
 describe('short skips (E15)', () => {

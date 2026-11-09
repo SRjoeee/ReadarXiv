@@ -260,6 +260,8 @@ export function adapt(i: AdaptInput): Adapted {
     paraAt: br?.paraAt ?? null,
     lineskip: i.lineskip,
     centred: before.centredFlag,
+    // (TeX's \baselineskip where the part states it: Placed.lead, read off the lines where 'lead' is read)
+    pitch: (m.read ?? []).includes('lead') ? null : m.lead,
   }) as FitBlock[]
   // (the room each block may borrow under it (today's freeFor RUN:1677, which RUN:2193 gives every block but a cell's), from TeX's
   // facts alone (the owner's ruling of 2026-11-08): a block that ends a run of its text lines the part states the room under
