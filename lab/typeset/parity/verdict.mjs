@@ -921,22 +921,52 @@ const LEAD_RULING =
   "the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\"): the gap under a paragraph that borrows room measured from the borrow's limit (option (i)), each frame of a paragraph keeping TeX's share of its lines where that holds within its page's band, and the paragraphs that borrow room voting in the page's target"
 /**
  * A line count on a page that the owner's ruling of 2026-11-10 explains (LEAD_RULING), the ruling's: not worse, nor v2's fault.
- * (1) v2's lines of a paragraph over pages on this page are TeX's share of them (shareOn: the typesetter's pageCutsOf, each
- * frame's first line at its share of the lines, nearest, ties later), as TeX split the original's over its frames: 1512.03385v1-zh
- * p7 t153, 6 of 8 where TeX set 8 of 10. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs
- * that borrow room voted to, where without their votes the band would have held it otherwise (v2.mjs `fills`: each pass's target
- * and its target without them): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45, 1.35 without them. A line count either
- * leaves otherwise is judged as any
+ * (1) A paragraph over pages whose lines v2 splits otherwise than today, the same lines in all, its lines on this page TeX's
+ * share of them (shareOn: the typesetter's pageCutsOf, each frame's first line at its share of the lines, nearest, ties later):
+ * 1512.03385v1-zh p7 t153, 6 of 8 where TeX set 8 of 10 and today 7 + 1. Marked here (`share`), ruled by the paper's pass
+ * (sharePass), which counts each side's lines of it over its pages: where the totals differ, the count is the fit's, judged as
+ * any. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs that borrow room voted to,
+ * where without their votes the band would have held it otherwise (v2.mjs `fills`: each pass's target and its target without
+ * them): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45, 1.35 without them
  */
 function leadRuling(p, { v2, n, facts, orig }) {
   for (const d of p.diffs) {
     if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
     const o = orig.get(d.unit.split(' ')[0])
     const q = o?.part !== null && o?.part !== undefined ? facts.get(o.part) : null
-    if (!q || !(shareOn(q, v2, n) || bandMoved(q.ord, v2, n))) continue
-    d.worse = false
-    d.nearer = 'ruling'
-    d.ruling = LEAD_RULING
+    if (!q) continue
+    if (bandMoved(q.ord, v2, n)) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = LEAD_RULING
+    } else if (shareOn(q, v2, n)) d.share = true
+  }
+}
+/** the paper's pass of leadRuling's (1): a line count marked `share` is the ruling's where each side sets as many lines of
+ *  its unit over the pages both drew it on, its split alone moved; the caller recounts */
+export function sharePass(pages, recount) {
+  const total = new Map()
+  for (const p of pages)
+    for (const u of p.units ?? []) {
+      const t = u.sides?.today?.lines,
+        v = u.sides?.v2?.lines
+      if (typeof t !== 'number' || typeof v !== 'number') continue
+      const a = total.get(u.key) ?? { today: 0, v2: 0 }
+      a.today += t
+      a.v2 += v
+      total.set(u.key, a)
+    }
+  for (const p of pages) {
+    for (const d of p.diffs) {
+      if (!d.share) continue
+      delete d.share
+      const a = total.get(d.unit.split(' ')[0])
+      if (!d.worse || !a || a.today !== a.v2) continue
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = LEAD_RULING
+    }
+    recount(p)
   }
 }
 /** whether v2 lays on page `n` TeX's share of member `q`'s lines, `q` a paragraph over pages (its original lines on two or more):

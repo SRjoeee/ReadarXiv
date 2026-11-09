@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass } from '../../lab/typeset/parity/verdict.mjs'
+import { measurePage, pastRoomPass, recount, sharePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 
@@ -549,16 +549,21 @@ describe("line-count: the owner's ruling of 2026-11-10 (option (i), the frames' 
   const counts = (p: { diffs: { flag: string }[] }) => (of('line-count')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
   const laidN = (ord: number, k: number, y0 = 700, o: object = {}) => ({ ord, state: 'laid', lines: Array.from({ length: k }, (_, i) => [y0 - 15 * i, 72, 300, []]), lit: { left: [], right: [], own: [] }, ...o })
   const drawnN = (k: number, y0 = 700) => Array.from({ length: k }, (_, i) => drawnLine(72, 300, y0 - 15 * i, 'x'.repeat(20)))
-  const split = (onPage: number, next: number, todayOn = 7) => {
+  /** page N measured, and the paper's pass over it and page N + 1 as each side drew the unit there (`todayNext` lines today) */
+  const split = (onPage: number, next: number, todayOn = 7, todayNext = 1) => {
     const facts = [{ ord: 153, kind: 'para', align: 'j', style: { size: 10 }, lines: [...Array.from({ length: 8 }, (_, i) => factLine(72, 300, 700 - 12 * i)), [N + 1, 0, 72, 300, 700, 708, 698, 48, 300, 0, 10], [N + 1, 0, 72, 300, 688, 696, 686, 48, 300, 0, 10]] }]
     const v2 = v2Of({ members: [laidN(153, onPage)], facts, today: { 153: { today: 153 } }, more: { [N + 1]: [laidN(153, next)] } })
-    return measure(v2, sides(153, drawnN(todayOn), drawnN(onPage)))
+    const p = measure(v2, sides(153, drawnN(todayOn), drawnN(onPage)))
+    const after = { diffs: [], units: [{ key: 't153', sides: { today: { lines: todayNext }, v2: { lines: next } } }] }
+    sharePass([p, after], recount)
+    return p
   }
-  it("v2's lines on the page TeX's share of them: the ruling's, not worse", () => {
+  it("v2's lines on the page TeX's share of them, the same lines in all: the ruling's, not worse", () => {
     expect(counts(split(6, 2))).toEqual([['t153 para', false, 'ruling']])
   })
-  it('a count that is not the share stays judged: worse', () => {
+  it('a count that is not the share, or the same share of more or fewer lines than today sets: judged, worse', () => {
     expect(counts(split(5, 3))).toEqual([['t153 para', true, 'today']])
+    expect(counts(split(6, 2, 7, 2))).toEqual([['t153 para', true, 'today']])
   })
   // (2610.20484v1-zh p8 t85: the pass's target 1.45 with the votes of the paragraphs that borrow room, 1.30 without them; t85, which
   // does not borrow, its fill leading 1.6, set at the band's top over the target, 1.50, 12 lines where today's 1.35 set 13 and TeX 19)

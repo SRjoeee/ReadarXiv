@@ -20,7 +20,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, pastRoomPass, recount, SAYS, staleOf, summaryOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, verdictOf } from './verdict.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
@@ -130,6 +130,11 @@ for (const [pair, raw] of drawn) {
   for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows }))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
+  // (a line count v2 splits as TeX's share, the same lines in all: the ruling of 2026-11-10's, verdict.mjs sharePass)
+  sharePass(
     mine.filter((p) => !p.error),
     recount,
   )
