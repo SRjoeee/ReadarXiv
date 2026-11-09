@@ -84,13 +84,35 @@ const BELOW = 0.215,
 const r2 = (v: number) => Math.round(v * 100) / 100
 /** a line's size: the median of its main glyphs' sizes as the prepare states it (Line's 11th field), else the member's */
 const sizeOf = (l: Line, m: Placed): number => (l[10] as number | undefined) ?? m.style.size
-export const rectOf = (l: Line, m: Placed): Rect => [
-  l[0],
-  r2(l[2]),
-  r2(l[4] - BELOW * sizeOf(l, m)),
-  r2(l[3]),
-  r2(l[4] + ABOVE * sizeOf(l, m)),
-]
+export const rectOf = (l: Line, m: Placed): Rect => {
+  const [x0, x1] = m.kind === 'cell' ? cellExtent(l, m) : [l[2], l[3]]
+  return [l[0], r2(x0), r2(l[4] - BELOW * sizeOf(l, m)), r2(x1), r2(l[4] + ABOVE * sizeOf(l, m))]
+}
+/**
+ * A table cell's own room on a line (the owner's ruling of 2026-11-08: each cell in its own room, sized as today): what TeX set
+ * on it, its glyphs' advances (the line's x0 and x1) and its elements' ink on its baseline, which an italic letter's overhang
+ * takes past its advance (2610.17024v1 p14's cells "p=5 n=20 …": the p's ink at 149.79, its line's advances from 150.42).
+ * Today's rectangle held it (texRects: the layout file's glyph boxes); a room of the advances alone was that much narrower, and
+ * a translation opening with that p was set a step under the original's size where today's kept it. A centred cell's stays
+ * centred where TeX centred its line, its advances' middle (TeX's column class, Placed.align), as wide as its own ink needs
+ * (2602.23285v2 p19's "Top-τ", the τ's ink 0.74 pt past its line's end). A held line's is its own
+ */
+function cellExtent(l: Line, m: Placed): [number, number] {
+  let x0 = l[2],
+    x1 = l[3]
+  if (l[9] & KEPT) return [x0, x1]
+  const band = 0.4 * sizeOf(l, m)
+  for (const [, e] of m.els ?? [])
+    for (const k of e.ink)
+      if (k[0] === l[0] && Math.abs(k[5] - l[4]) < band && k[1] < l[3] && k[3] > l[2]) {
+        x0 = Math.min(x0, k[1])
+        x1 = Math.max(x1, k[3])
+      }
+  if (m.align !== 'c') return [x0, x1]
+  const mid = (l[2] + l[3]) / 2,
+    half = Math.max(mid - x0, x1 - mid)
+  return [mid - half, mid + half]
+}
 /** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (today's
  *  decor read every glyph of the label: a bracket before its name, "(a)", no part names, is its ink's all the same) */
 function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNullable<DecorLabel['chars']> }) | null {
