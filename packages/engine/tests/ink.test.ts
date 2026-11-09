@@ -550,9 +550,10 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const said = made.map((m) =>
       L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : p.t === 'el' ? [p.kind, p.src] : p.t)),
     )
+    // (each run of scripts written as TeX writes a script, so that every reader of the source reads it as a source unit's mark)
     expect(said).toEqual([
-      ['Lifan Jiang', ['math', '$1,2$'], ', Yibo Zhao', ['math', '$2$']],
-      ['Mail: ', ['math', '$1$'], ['url', '\\url{alan.chan@example.org}']],
+      ['Lifan Jiang', ['math', '$^{1,2}$'], ', Yibo Zhao', ['math', '$^{2}$']],
+      ['Mail: ', ['math', '$^{1}$'], ['url', '\\url{alan.chan@example.org}']],
     ])
     const names = made[0]!
     const g = A.pages[0]!.glyphs

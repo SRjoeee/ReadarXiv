@@ -170,11 +170,20 @@ function groupsOf(st, base) {
 /** the characters a formula's own frame reads, each written by the token that sets it in a formula (a control word as TeX prints
  *  one, a space after it): the math shift `\$`, a group's braces `\{` `\}`, the escape `\backslash` */
 const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
-/** a kept run's placeholder source: a formula of its characters, or an address. CHANGED: today's strips `$ \ { }` from a formula's
+/** a kept run's placeholder source: a formula of its characters, or an address; a run of scripts of one sign (`sign`, scriptsOf)
+ *  written as TeX writes a script, `$^{…}$` raised and `$_{…}$` lowered, so that every reader of the source reads it as it reads a
+ *  source unit's mark (the instrument adapter: a symbol drawn raised, `sym`, a superscript's copy text): written `$*$`, a note's
+ *  mark of one symbol was drawn as that symbol on the line's baseline at its size (CHANGED, with scriptsOf). CHANGED: today's strips `$ \ { }` from a formula's
  *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
  *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
  *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
-const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
+const phSource = (fam, text, sign = 0) => {
+  if (fam !== 'math') return sourceView(`\\url{${text.replace(/[\\{}]/g, '')}}`)
+  const t = text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])
+  return sourceView(sign > 0 ? `$^{${t}}$` : sign < 0 ? `$_{${t}}$` : `$${t}$`)
+}
+/** a word's scripts' one sign (scriptsOf): raised (1) or lowered (-1) where every glyph of it is a script of that sign, else 0 */
+const signOf = w => (w.sc && w.sc.every(v => v === w.sc[0]) ? w.sc[0] : 0)
 /** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
  *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
  *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993
@@ -536,12 +545,17 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
           // or opens the next with a script is no formula's part on the other, 2610.20030v1 p1's "Krajnc¹" and "¹Jožef Stefan
           // Institute" two marks. CHANGED: today's read no script in a text face, and joined every run of one face)
           const broken = wi === 0 && !!lastPh && (lastPh.tail !== 0 || (w.sc?.[0] ?? 0) !== 0)
-          if (lastPh && lastPh.open && lastPh.fam === w.fam && !broken) { lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; lastPh.tail = w.sc?.at(-1) ?? 0; pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src); return }
+          if (lastPh && lastPh.open && lastPh.fam === w.fam && !broken) {
+            lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; lastPh.tail = w.sc?.at(-1) ?? 0
+            if (lastPh.sign !== signOf(w)) lastPh.sign = 0
+            pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src, lastPh.sign)
+            return
+          }
           if (space) text += ' '
           flushText()
-          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0 }
+          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0, sign: signOf(w) }
           phs.push(ph)
-          pieces.push({ t: 'ph', src: phSource(w.fam, w.text) })
+          pieces.push({ t: 'ph', src: phSource(w.fam, w.text, ph.sign) })
           return
         }
         for (const p of phs) p.open = false

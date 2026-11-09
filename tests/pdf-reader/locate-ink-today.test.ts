@@ -276,9 +276,11 @@ describe('today’s ink makers in the engine package', () => {
       ['Department of Physics3'],
       ['of strength ', '<$Cn2$>', ' here'],
     ])
+    // (a run of scripts its source as TeX writes one, raised or lowered: read so by every reader of the source, as a source unit's
+    // `$^{1,2}$`; a formula's run holding its scripts, C_n², its characters as before)
     expect(copy.map(said)).toEqual([
-      ['Lifan Jiang', '<$1,2$>', ', Yibo Zhao and CO', '<$2$>', ' in SMALL and up here'],
-      ['Department of Physics', '<$3$>'],
+      ['Lifan Jiang', '<$^{1,2}$>', ', Yibo Zhao and CO', '<$_{2}$>', ' in SMALL and up here'],
+      ['Department of Physics', '<$^{3}$>'],
       ['of strength ', '<$Cn2$>', ' here'],
     ])
     // (each mark its own kept run's glyphs, none of them the text's; the leading mark the label still, its glyph the text's)
@@ -325,10 +327,13 @@ describe('today’s ink makers in the engine package', () => {
     ])
     expect(today.map((u) => u.glyphs.label)).toEqual([undefined, undefined, undefined])
     expect(copy.map(said)).toEqual([
-      ['Equal contribution, ', '<$†$>', 'Corresponding authors.'],
+      ['Equal contribution, ', '<$^{†}$>', 'Corresponding authors.'],
       ['Corresponding author'],
-      ['Matej Krajnc', '<$1$>', ' ', '<$1$>', 'Jozef Stefan Institute'],
+      ['Matej Krajnc', '<$^{1}$>', ' ', '<$^{1}$>', 'Jozef Stefan Institute'],
     ])
+    // (a mark of one symbol read by the adapter as a raised symbol, drawn raised as a source unit's `$^{†}$` is; written `$†$`, it
+    // was a symbol drawn on the baseline at the line's size)
+    expect(classesOf([{ t: 'ph', src: copy[0]!.pieces[1]!.src! }])[0]![1].sym).toEqual(['†', true])
     expect(copy.map((u) => u.glyphs.label)).toEqual([[[1, 31]], [[1, 75]], undefined])
     // (a label's glyphs its text's, as before: claimed and kept where they stand with its line)
     expect(copy[1]!.glyphs.text).toContainEqual([1, 75])
