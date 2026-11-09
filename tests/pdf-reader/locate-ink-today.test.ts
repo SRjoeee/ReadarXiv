@@ -16,14 +16,16 @@ import { EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mj
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
-function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {
+function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number; space?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {
   const glyphs: G[] = []
   lines.forEach((l, n) => {
     const size = l.size ?? 10
     let x = l.x ?? 72
     for (const u of l.s) {
-      glyphs.push({ u, x0: x, x1: x + 0.5 * size, ix0: x, ix1: x + 0.5 * size, y: l.y, size, top: l.y + 0.7 * size, bottom: l.y - 0.2 * size, font: l.font ?? 'ABCDEF+CMR10', fill: 0, n, k: glyphs.length, form: !!l.form, ...(u === ' ' ? { blank: true } : {}), ...(l.fid ? { fid: l.fid } : {}) })
-      x += 0.5 * size
+      // (a space's advance the line's own where it states one: a justified line's, stretched)
+      const advance = u === ' ' && l.space !== undefined ? l.space : 0.5 * size
+      glyphs.push({ u, x0: x, x1: x + advance, ix0: x, ix1: x + advance, y: l.y, size, top: l.y + 0.7 * size, bottom: l.y - 0.2 * size, font: l.font ?? 'ABCDEF+CMR10', fill: 0, n, k: glyphs.length, form: !!l.form, ...(u === ' ' ? { blank: true } : {}), ...(l.fid ? { fid: l.fid } : {}) })
+      x += advance
     }
   })
   const pt = ([name, glyph]: [string, number]) => ({ name, glyph, box: 0 })
@@ -434,7 +436,7 @@ describe('today’s ink makers in the engine package', () => {
       { s: 'Body owned text', y: 700 },
       { s: 'The entry of the box indented here', x: 92, y: 640, form: true, fid: 1 },
       { s: 'and its lines go on to the measure end', x: 72, y: 628, form: true, fid: 1 },
-      { s: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true, fid: 1 },
+      { s: 'set in one block of its prose', x: 72, y: 616, form: true, fid: 1, space: 12.5 },
       { s: 'its last one', x: 72, y: 604, form: true, fid: 1 },
     ])
     const anchors = (I: Impl) => {
@@ -445,7 +447,7 @@ describe('today’s ink makers in the engine package', () => {
     expect(anchors(T as unknown as Impl)).toEqual([
       ['The entry of the box indented here', 'start'],
       ['and its lines go on to the measure end', 'start'],
-      ['set as one blocky paragraph, its prose', 'start'],
+      ['set in one block of its prose', 'start'],
       ['its last one', 'start'],
     ])
   })

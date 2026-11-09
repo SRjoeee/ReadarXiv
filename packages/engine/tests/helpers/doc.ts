@@ -13,6 +13,8 @@ export interface LineSpec {
   size?: number
   /** its glyphs are shown inside a form XObject (an included figure's) */
   form?: boolean
+  /** the advance of its spaces (a justified line's, stretched to its measure); its glyphs' by default */
+  space?: number
 }
 export interface PageSpec {
   lines: (string | LineSpec)[]
@@ -34,13 +36,14 @@ export function docOf(pages: PageSpec[]): Doc {
         for (const ch of l.text) {
           const font = l.font ?? 'ABCDEF+CMR10'
           const space = ch === ' '
+          const advance = space && l.space !== undefined ? l.space : 0.6 * size
           glyphs.push({
             u: ch,
             code: (ch.codePointAt(0) as number) + (l.codeShift ?? 0),
             font,
             base: font.replace(/^[A-Z]{6}\+/, ''),
             x0: x,
-            x1: x + 0.6 * size,
+            x1: x + advance,
             y,
             top: space ? y : y + 0.7 * size,
             bottom: space ? y : y - 0.2 * size,
@@ -53,7 +56,7 @@ export function docOf(pages: PageSpec[]): Doc {
             blank: !/\S/.test(ch),
             fill: 0,
           })
-          x += 0.6 * size
+          x += advance
         }
       })
       const boxes: number[] = []

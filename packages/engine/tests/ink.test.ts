@@ -341,7 +341,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           'a paragraph whose word',
           { text: 'The entry of the box indented here', x: 96, y: 640, form: true },
           { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
-          { text: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true },
+          { text: 'set in one block of its prose', x: 72, y: 616, form: true, space: 15 },
           { text: 'its last one', x: 72, y: 604, form: true },
           { text: 'continues on its last line', y: 560 },
         ],
@@ -352,7 +352,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(figs.map((m) => [m.plain, m.align])).toEqual([
       ['The entry of the box indented here', 'l'],
       ['and its lines go on to the measure end', 'l'],
-      ['set as one blocky paragraph, its prose', 'l'],
+      ['set in one block of its prose', 'l'],
       ['its last one', 'l'],
     ])
   })
@@ -369,7 +369,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           'a paragraph whose word',
           { text: 'The entry of the box indented here', x: 96, y: 640, size: 10.02, form: true },
           { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
-          { text: 'set as one blocky paragraph, its prose', x: 72, y: 616, form: true },
+          { text: 'set in one block of its prose', x: 72, y: 616, form: true, space: 15 },
           { text: 'its lines set in one justified measure', x: 72, y: 604, size: 10.02, form: true },
           { text: 'its last one', x: 72, y: 592, form: true },
           { text: 'continues on its last line', y: 560 },
@@ -380,7 +380,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
       ['The entry of the box indented here', 'l'],
       ['and its lines go on to the measure end', 'l'],
-      ['set as one blocky paragraph, its prose', 'l'],
+      ['set in one block of its prose', 'l'],
       ['its lines set in one justified measure', 'l'],
       ['its last one', 'l'],
     ])
@@ -415,9 +415,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
   })
 
   it('keeps right-aligned labels set from their end where their glyphs are as wide, whatever their texts', () => {
-    // (2610.20808v1 p8's language codes "pt" "en" "es" "zh" "hi", as wide in their glyphs, share both edges; a shorter one starts
-    // inside them. Lines of different texts as wide tell no measure: a justified paragraph's full lines are of glyphs of different
-    // widths, set to one width by the stretch of their spaces)
+    // (2610.20808v1 p8's language codes "pt" "en" "es" "zh" "hi", as wide, share both edges; a shorter one starts inside them.
+    // Lines of different texts as wide tell no measure: a justified paragraph's full lines are set to one width by the stretch of
+    // their spaces, and these have none)
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
@@ -438,6 +438,32 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['eng', 'r'],
       ['spa', 'r'],
       ['ja', 'r'],
+    ])
+  })
+
+  it('keeps right-aligned labels set from their end where two as wide hold other glyphs, their spaces as set', () => {
+    // (2610.40394v1 p18's bar chart: "Ordinary Differential Equations" and "History & General Mathematics" start and end together,
+    // the one more letters, the other more spaces, each word space as the face sets it (2.348 pt both, at 8.445 pt). A justified
+    // paragraph's lines are stretched apart: 2411.13093v4 p18's full lines' word spaces run from 3.96 to 6.36 pt, its unjustified
+    // lines' 3.90)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'History of General Mathematics', x: 120, y: 640, form: true },
+          { text: 'Ordinary Differential Equation', x: 120, y: 628, form: true },
+          { text: 'Topology', x: 252, y: 616, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['History of General Mathematics', 'r'],
+      ['Ordinary Differential Equation', 'r'],
+      ['Topology', 'r'],
     ])
   })
 
