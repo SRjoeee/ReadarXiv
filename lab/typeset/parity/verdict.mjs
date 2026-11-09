@@ -5,6 +5,7 @@
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { measureBlind } from './blind.mjs'
 import { paintedEntries } from './paint.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
@@ -85,6 +86,7 @@ export const WEIGHT = {
   lead: 3,
   block: 3,
   elements: 3,
+  toggles: 3,
   stretch: 2,
   style: 2,
   pixels: 2,
@@ -92,6 +94,7 @@ export const WEIGHT = {
   erased: 2,
   groups: 2,
   labels: 2,
+  scripts: 2,
   size: 1,
   links: 1,
   borders: 1,
@@ -129,6 +132,8 @@ export const SAYS = {
   folio: "a page number at its size, right-aligned (the owner's ruling 6)",
   lead: "a text's leading tighter than the original's while its block has room: its pitch over its size against the original's",
   ink: "a text whose original ink is black drawn in another fill (the owner's ruling 7: the PDF's own black)",
+  scripts: "the original's scripts (a run of arXiv's glyphs smaller than its line's text and off its baseline: a superscript, a footnote or affiliation mark) a side draws flat or loses, characters (the original: none); where both do, listed apart (both)",
+  toggles: "a unit the toggles keep the original's (the author block, the references) drawn translated, its class read off the original: an author's name arXiv's metadata states, a reference hyperref anchors (the original: none); where both do, listed apart (both)",
 }
 
 // ---------------------------------------------------------------- links
@@ -185,9 +190,9 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept }) {
   const n = rec.page
-  const out = { pair, page: n, worse: 0, diffs: [], faults: {}, measures: {}, units: [] }
+  const out = { pair, page: n, worse: 0, diffs: [], both: [], faults: {}, measures: {}, units: [] }
   const error =
     rec.error ??
     (!rec.today ? "today's side not drawn" : !rec.v2 ? "v2's side not drawn" : rec.today.error ? `today's page not laid: ${rec.today.error}` : rec.today.lit.length && !rec.today.litBoxes ? "today's sentence boxes not read (a drawing of before they were)" : null)
@@ -598,7 +603,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   const { borrowed } = measureFidelity(fc)
   judgeJoined(fc, fc.figurePairs, new Map((rec.today.figures ?? []).map((u) => [u.id, u])), 'a figure text')
-  judgeJoined(fc, joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band), new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
+  const namePairs = joinedOf(rec.today.names ?? [], V, facts, keyOfPart, /^name$/, band)
+  judgeJoined(fc, namePairs, new Map((rec.today.names ?? []).map((u) => [u.id, u])), 'a name')
+  // (the original's scripts drawn flat, a unit the toggles keep drawn translated: against the original itself, the defects both
+  // sides share listed apart, blind.mjs)
+  measureBlind({ ...fc, namePairs }, out, { kept: kept ?? null, toggles: v2.toggles })
   // (no ruling stands between v2's line budget and today's: the no-borrowing ruling of 2026-11-08 that made v2's size, line
   // count and their knock-ons on a unit today laid with a borrowed line the ruling's was replaced the same day by borrowing
   // bounded by TeX's facts, which `block` judges; size and line count are judged against today again, but where today's
@@ -1146,6 +1155,8 @@ export function summaryOf(pages) {
       nearerPages: pages.filter((p) => p.diffs.some((d) => d.flag === f && d.nearer === 'v2')).length,
       v2FaultPages: pages.filter((p) => p.faults[f]?.v2).length,
       todayFaultPages: pages.filter((p) => p.faults[f]?.today).length,
+      bothPages: pages.filter((p) => p.both?.some((b) => b.flag === f)).length,
+      bothUnits: pages.reduce((n, p) => n + (p.both ?? []).filter((b) => b.flag === f).length, 0),
     }
   }
   const worst = [...pages]

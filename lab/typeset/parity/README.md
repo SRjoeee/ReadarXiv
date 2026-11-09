@@ -96,7 +96,8 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   counted in v2's projection; where the row cannot be said so exactly, none (the unit stays the original's, and `shown`
   counts it). Both lay under the default toggles
   (references and the author block the original's).
-- **The original**: arXiv's page (its pixels, its vertical rules read off them, its link annotations), the part's members
+- **The original**: arXiv's PDF (its Info `/Author`, arXiv's metadata; its `cite.*` destinations, hyperref's: read by PDF.js in
+  measure.mjs), arXiv's page (its pixels, its vertical rules read off them, its link annotations), the part's members
   (their lines on A, TeX's alignment, font state, labels and measure; `dir` for a turned text), else today's prepare dump
   (`baseline/prepare/<paper>.prepare.json`).
 
@@ -147,6 +148,12 @@ are its own, set on the same lines of A (as many, each on its page at the same b
 | `folio` | a page number (a running head or foot whose text holds the page's number, or a note that does on the page's first or last row: a first page's folio is read as a note): its drawn size's shrink against arXiv's glyphs' and its end off the original's end (the owner's ruling 6: its size kept, right-aligned) | half the fit's step; as `anchor` | as `size`, `anchor` |
 | `lead` | a text's leading tighter than the original's while its block has room: its drawn pitch over its size (the median of its consecutive baselines' gaps under 2.5 sizes) against the original's lines', the tightening as a share of it, counted where its last drawn line stands a pitch or more over the original's last (a block it fills may be tightened to fit); the original's 0 (1810.04805 p8's "We first examine…", 2010.11929 p5) | a twentieth of it | 0.6 pt of a 12 pt pitch, a step a reader sees between neighbouring paragraphs |
 | `ink` | the units both draw whose original ink is black (arXiv's page reaches luminance 0.05 or less in their lines) and whose drawn fill is not black (the owner's ruling 7: the PDF's own black) | any | the owner's ruling |
+| `scripts` | the original's scripts a side draws flat or loses, in characters (`blind.mjs`): a run of arXiv's glyphs (PDF.js's runs) in a unit's lines set smaller than its line's text (under 0.85 of its size, half of it at the least: LaTeX's least size beside a text) and off its baseline (0.075 of its size or more, half of TeX's least script shift, cmsy10's sub1 of 0.15 em; within 0.6 of it, as a side's drawn script is read), touching its nucleus or another script (no wider apart than a word space at its widest, 0.5 em: TeX sets no glue between them); the line's text TeX's line, its size the part's (today's prepare dump's) and its baseline the one A's characters at that size stand on. A side carries a script where it keeps its ink in place (an element whose ink its drawing shows there, a display inside a theorem; or ink outside its own lines of the unit it never took), where a crop of the unit cut from it sets it off the baseline of the drawn line it stands on as on A (on that page or another: a translation flows its crops over a page break, 2608.16117v1 p3's "(·)′" set on page 4), or where its text draws one raised or lowered and smaller (on the page first, then over the unit's other pages, the paper's pass `scriptsPass`); a page whose lines of the unit a side does not lay keeps the original's. 2610.20967v1 p1's "Song-Ze Yu¹": the marks on the baseline at the line's size on both sides; `size`, a unit's median, and `elements`, an element's own baselines, never read them | any: one more character is worse | the original's every mark stands raised or lowered where TeX set it |
+| `toggles` | a unit the toggles keep the original's drawn translated (its drawn text holds letters or digits other than its original's, in its original's order: drawn in its own words, elements cut as crops, it is no translation), its class read off the original, never off either reader's classification (`blind.mjs`): under the defaults the author block and the references (the reader's `CLASS_DEFAULTS`; every switch on keeps none, so the toggles-on run judges nothing here). An author block's unit holds an author's name where arXiv's metadata states it (the PDF's Info `/Author`, which arXiv's GenPDF writes from the submission's metadata, names "; " apart; empty on a PDF of before it stamped them: 1706.03762, 1810.04805, 1512.03385), at its first occurrence in A's text (its letters and digits, case and diacritics aside), the unit whose line holds its middle character (placed by its share of the run's advance); a reference is the unit whose line starts nearest below and right of an anchor `cite.<key>` (hyperref's `\bibitem`, an XYZ destination raised a `\baselineskip` over its entry's first line, which so stands half its size or more under it, the entry before's last line at its height: 1512.03385v1 p9; a PDF with none, 7 of the 22, names no reference). Each reader's own lines of its units place a fact, never their kinds. 2610.20967v1 p1's names, translated by both with the author toggle off (neither classed them as the author block: the class's own `\name` was in no role table), and 2608.25210v2 p17's reference [64], an ink unit both translate. Where today translates a unit a fact names and v2 keeps it, v2 is nearer, and `shown` counts no translation missing there. A place, an e-mail, a unit of a paper without either fact is not judged | none: always worse | what the toggles keep is the original's on the page |
+
+Where both sides depart from the original alike on `scripts` or `toggles`, the page lists it apart (`both`: the original's
+value, each side's and its distance), with no verdict: a defect today and v2 share, which a verdict of v2 against today cannot
+see (the maintainer found these by eye, 2026-11-09). The sheet counts the pages and units of each (`bothPages`, `bothUnits`).
 
 The highlight's granularity is judged apart from its coverage (`sentences.mjs`, under the `highlight` flag), since boxes
 that cover a unit's lines tell nothing of whether they are the unit's or a sentence's (the maintainer found on staging,
@@ -209,12 +216,14 @@ gate. All floors and bounds were set before the first run from what a reader see
   and which is nearer; the faults; the original, today's and v2's panes; the difference of the two panes (v2's ink alone
   red, today's alone blue, the original faint).
 - `parity.json`: whether the gate passes (`pass`), the run, what keeps it from being judged whole (`incomplete`), the floors
-  and bounds, the summary, the ten worst pages, and every page's differences, faults, page measures (links, sentence boxes,
+  and bounds, the summary, the ten worst pages, the pages where both sides depart alike (`pagesBoth`), each paper's facts of the
+  classes the toggles keep (`facts`: the authors arXiv's metadata names and how many A sets, the `cite.*` anchors, the units
+  each places), and every page's differences, its shared departures (`both`), faults, page measures (links, sentence boxes,
   darkness, pixels off the original, the rules found) and per unit both sides' measures.
 
 Pages are ordered by a score: each measure's worse differences (8 at most) times its weight (`shown`, `weight`, `anchor`,
-`align`, `cross`, `gap`, `turn` 3; `stretch`, `style`, `pixels`, `figures` 2; `size`, `links`, `borders`, `highlight` 1;
-`line-count` 0.5).
+`align`, `cross`, `gap`, `turn`, `toggles` 3; `stretch`, `style`, `pixels`, `figures`, `scripts` 2; `size`, `links`, `borders`,
+`highlight` 1; `line-count` 0.5).
 
 ## The release check
 
