@@ -3207,6 +3207,35 @@ no page newly worse, `scripts` nearer v2 on three pages (t167 15 of 15 character
 the wire sends "Closed-Form Inverses" whole, its marker a space apart, and the mark is drawn raised (El.mark): no mark eats or
 splits a word there. The reading's own faults (`\vs` read as text) stay where TeX set no ink to tell them.
 
+### 18.18 No space beside a full-width mark's blank side (2026-11-10)
+
+On staging (2611.03953v2, zh, References on) the translated references set their author lists with wide gaps, each line a
+name or two short of the original's. Microsoft returns a list such as `Fu, Z., He, B.,` with each comma a full-width one
+(U+FF0C) and a space after it; the comma is an em wide, its ink in the first quarter, so each separator held 0.77 em of the comma's blank and
+the 0.25 em space, about 1 em (10.2 pt at 9.96), where the original's comma and space held 0.3 em (TeX's justified 3.8 to 4.6
+pt). Nothing else made the lines short: no break was forbidden, the fit kept its line counts, the justification stretched each
+space 0.47 to 0.95 pt (1.19 to 1.38 times); a first line missed its next name by 0.29 to 9.06 pt (the lab's `lanes/diag-refgaps.md`).
+xeCJK sets no space after a full-width closing mark, whatever follows it (`\xeCJK_FullRight_and_Boundary:` ignores the spaces
+after it), and sets the mark's blank as glue that may shrink by half an em.
+
+- **A space beside a full-width mark's blank side is none of the text's** (`breaker/tokens.ts` `markBlankEdge`): a space after a
+  full-width closing mark or before an opening mark is not set, whatever stands on the mark's other side; the marks are the
+  breaker's class table (`script.ts` `punctOf`), read off the character, so Traditional Chinese's centred marks count too.
+  Full-width by Unicode: a mark of the CJK blocks (East Asian Width F or W) wherever it stands; a curly quote (East Asian Width
+  A) only where the target sets it in its CJK face, its face not the one its style sets Latin text in: a Latin target sets
+  the quotes in its Latin face, proportional, and keeps the space. A space after a run-in head and one in a monospaced run stay,
+  as the rule for two CJK characters leaves them.
+- Over the corpus's 90 pairs with stored rows (round 8's parts, References on, every laid line; `lanes/cjk-space.md`): Chinese
+  reference lines holding a full-width mark and a space 2,941 of 9,368 before, 26 after (a run-in head's space and a monospaced
+  run's, which stay); every kind 4,267 of 70,821 lines before, 675 after; Japanese references 94 of 527, none after. The Latin
+  targets' lines are unchanged. 39 Chinese references (47 members of every kind) set a line fewer, none more. Lines whose
+  spaces stretch past twice their width: Chinese 1 before, 4 after; the three new ones each hold a URL after a full stop, whose
+  dropped space leaves the line two spaces to take its slack, one of them the URL's own line break on A, read into its text as
+  a space.
+- Not this rule's: xeCJK's shrinking of the mark's blank (a mark's blank half as shrink on every line, `fits` and `placeItems`)
+  would take more onto a line (2611.03953v2's first entry through the next name again); it would also replace the squeeze's two
+  thresholds. A later step.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
