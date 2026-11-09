@@ -3227,8 +3227,9 @@ as kept blocks); I6 the same. The differential over them: lost 111 (+48 accepted
 kept as part of a display, accepted, and 4 kept blocks' units accepted as kept. The parity over the census's pairs whose
 arXiv PDF the lab holds (seven of the twenty-two; 2608.04322v1's is in the gate pack, moved off this machine) against round 7's
 final, default and every toggle on alike: 15 and 20 pages worse as before, none newly worse, none no longer, no difference newly
-worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone: translated again); below the line v2's highlight nearer on 3 (it no
-longer fills a display's block: 2608.25210v2 p9 and p10) and its figure texts renumbered (the same values).
+worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone: translated again); below the
+line v2's highlight nearer on 3 (it no longer fills a display's block: 2608.25210v2 p9 and p10) and its figure texts
+renumbered (the same values).
 
 **Not done.** A display the source ends with `$$` has no place TeX reads before its end: its start alone states no region,
 and its ink is read as before (176 displays in 9 of the 88 papers); so is one a class ends itself (the 4 SIAM proofs' last
