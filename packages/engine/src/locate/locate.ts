@@ -496,15 +496,37 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     let bad: string | null = null
     const aIdx: number[] = []
-    for (const b of list) {
+    // (B's glyphs with no partner inside the unit, between two of its own whose partners A sets one right after the other:
+    // glyphs our compile set where arXiv's set nothing (1810.04805v2 u325: our tree sets the .bbl's UTF-8 quotes round "Cloze
+    // procedure", arXiv's 2016 tree read their bytes as characters its OT1 font has no glyph for, TeX's "Missing character",
+    // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
+    // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
+    // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
+    // that no block move paired): a content difference, the unit the original's, as before)
+    const prevPaired = new Int32Array(list.length).fill(-1)
+    for (let i = 0, last = -1; i < list.length; i++) {
+      prevPaired[i] = last
+      if ((m.bToA[list[i] as number] as number) >= 0) last = i
+    }
+    let nextPaired = -1
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i] as number
       const a = m.bToA[b] as number
       if (a >= 0) {
         aIdx.push(a)
+        nextPaired = i
         continue
       }
       if (m.hunkB[b] === HUNK.hyphen || m.offpageB[b]) continue
-      bad ??= `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
+      const pv = prevPaired[i] as number
+      if (pv >= 0 && nextPaired >= 0) {
+        const ap = m.bToA[list[pv] as number] as number
+        const an = m.bToA[list[nextPaired] as number] as number
+        if (an === ap + 1) continue
+      }
+      bad = `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
     }
+    aIdx.reverse()
     const boxPartners: [ap: number, ai: number, p: number, x: number][] = []
     for (const [p, x] of boxes) {
       const kind = B.pages[p]!.kinds[x] as number

@@ -2580,3 +2580,33 @@ describe('the places on A where a sentence may begin (Placed.words, Unit.sentenc
     expect(at('three')).toEqual([off('three'), 1, 72 + 10 * 6])
   })
 })
+
+describe('locate: the glyphs of B with no partner on A inside a unit', () => {
+  it('locates a unit whose compile sets characters arXiv’s did not, its ink on A the glyphs A set (1810.04805v2 u325)', () => {
+    // (arXiv's 2016 tree read the .bbl's UTF-8 quotes as characters its OT1 font has no glyph for, and TeX set nothing there
+    // (its "Missing character"); our tree sets “Cloze procedure”. Every glyph A set is the unit's, in order, and A sets nothing
+    // between them that is not: its ink on A is whole, nothing of it left unerased, nothing of another's taken)
+    const B = docOf([{ lines: ['Wilson L Taylor. 1953. “Cloze', 'procedure”: A new tool for', 'Absent on A at all'] }])
+    const A = docOf([{ lines: ['Wilson L Taylor. 1953. Cloze', 'procedure: A new tool for'] }])
+    const units = [
+      unitOf('reference', 'Wilson L Taylor. 1953. “Cloze procedure”: A new tool for'),
+      unitOf('reference', 'Absent on A at all'),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 0, 1]]), A, align(B, A))
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.members[0]!.lines.map((l) => [l[0], l[2], l[4]])).toEqual([
+      [1, 72, 700],
+      [1, 72, 688],
+    ])
+    expect([...L.members[0]!.text].sort((x, y) => x - y)).toEqual(A.pages[0]!.glyphs.map((_, j) => j))
+    // (a unit none of whose glyphs A set is not there to translate: it stays as A has it, nothing)
+    expect(L.members[1]).toMatchObject({ located: false, cause: 'content difference: bonly' })
+  })
+  it('leaves a unit the original’s where B’s glyphs with no partner stand at its edge: no glyph of A after them says A set none', () => {
+    // (a run before the unit's first glyph A set, or after its last, may be a line A set elsewhere that no block move paired)
+    const B = docOf([{ lines: ['“Cloze procedure: A new tool for'] }])
+    const A = docOf([{ lines: ['Cloze procedure: A new tool for'] }])
+    const L = locate(instrumentOf(B, [unitOf('reference', '“Cloze procedure: A new tool for')], [[0]]), A, align(B, A))
+    expect(L.members[0]).toMatchObject({ located: false, cause: 'content difference: bonly' })
+  })
+})
