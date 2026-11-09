@@ -3455,10 +3455,21 @@ own), each part carrying its pages' cell rules (`rules`).
     `\tl_head:n`: the first word's head was our `\leavevmode`, so that 2610.21084v1's footnotes read "(. Chung)", "(.M. Solomon)",
     "(. Verma)" where arXiv's read "(M. Chung)", "(J.M. Solomon)", "(D. Verma)", and the ink unit made of them, holding the
     initials arXiv's page sets and ours did not, was refused (a content difference). Unmarked, the three names are the paper's
-    to the class: our final pass's text is arXiv's but for arXiv's stamp and its abstract's first word, at one compile more
-    (cas-common writes the abstract's body to a file verbatim, `\verbatimwrite`, once its optional argument's look-ahead has read
-    the body's first token, our line probe `\axtlines`: the file reads "{4}…", our compile sets a "4" there and the abstract
-    is refused, left open). 2610.20848v1, elsarticle's, copies the name whole: its text arXiv's before and after, its one
+    to the class: our final pass's text is arXiv's but for arXiv's stamp, at one compile more. In the same compile the guard
+    reads a class's verbatim copy of our source (`guard.mjs` `cutCopyUnits`): a line of a file the compile wrote that holds a
+    mark as our source writes it (no space after its control word: `\write` writes one) is a copy of our line, and where its
+    head is our line cut inside our TeX the copy lost the start of it, the unit out of place, unmarked. cas-common's abstract
+    is one: `\RenewDocumentEnvironment{abstract}{o}{…\verbatimwrite{\jobname.abs}}{\endverbatimwrite}`, read back by
+    `\file_input:n`; the look-ahead for its optional argument reads the body's first token before moreverb's `\verbatimwrite`
+    makes every character other, and the copy loses it where it is a control word (TeX Live 2025, tried: a letter is kept,
+    `\relax` lost). Ours was the line probe's name, so that the copy read "{4}\leavevmode\axtmark{4s}…", our page set a "4"
+    before the abstract and the unit was refused for that content of ours, left English. Unmarked, the paragraph is the
+    paper's own to the class (its first character a letter, kept), and its lines an ink unit's. A copy of whole lines stands:
+    comment.sty's, acmart's acks (2608.25210v2, 2610.22065v1), whose marks TeX reads back where it sets the text; so does one
+    that begins inside the paper's own text, which arXiv's copy cuts alike. Over the 88 papers' marked compiles, marks stand
+    in a copy of ours in these three papers alone; of the classes and packages they load, cas-common writes body text
+    verbatim to a file after a look-ahead, acmart (through comment.sty) and memoir (its own `\verbatim@out`, which no paper
+    of the 88 uses) without one, and elsarticle keeps its abstract in a box. 2610.20848v1, elsarticle's, copies the name whole: its text arXiv's before and after, its one
     author unmarked. Over the 88 papers' marked compiles, the log names a unit's own mark set twice in five: these two, through the aux; acmart's (2402.10294v1,
     2608.25210v2: the authors set again in the ACM Reference Format at `\maketitle`, their text arXiv's; 2610.22065v1's title, a
     heading's mark) hold none in a file and are as before. A unit set twice is never at the copy's place, nor does it take its
