@@ -3149,6 +3149,70 @@ original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fi
 2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
 right this way: that case is held by a synthetic test alone.
 
+### 18.17 Every display TeX sets is the paper's (2026-11-09)
+
+On 2608.08481v1 page 7, displays (7) and (8) sit at the page's foot in REVTeX's `widetext`, and no source unit owns them. The
+marked compile stated a formula only inside a source unit, so v2 cut them into ink units made on arXiv's page: their left
+sides kept as blocks, the right part of (7) and a line of (8), set in a text face by `\mathrm`, sent to the translator as
+text with placeholders and drawn translated (the foot's notes by their place; script-face's "a formula in a text face that
+no source unit owns"). A face rule would guess; TeX knows each display it sets.
+
+**The marks** (`marks.mjs` `POINTS_TEX`, after the column brackets): two points around each display, `dps<n>` and `dpe<n>`,
+n its number in the pass, read by pageInk as the region `display` (`ink.mjs` `REGION_POINT`), apart from every other point
+as a code region's are. Every display passes `\everydisplay` (appended at `begindocument/end`, after every package's), and
+the start is set there, the first thing in the formula's list. TeX refuses an `\halign` in a display whose list holds
+anything, so what a display will be is known from the pass before: each pass writes each display's number, environment and
+line to the aux at once, and whether an `\halign` opened it; a display known as no alignment, of the same environment and
+line, gets its start; one not known (a first pass) gets none. TeX gives a display's end no hook, and what is set after the
+display's box (a `\vadjust`'s point, the first version) is in the page's list, where a column's `\lastbox` reads it: REVTeX's
+balance takes each column's last box off to leave its depth out (`revtex4.cls`, `\setbox\z@\lastbox`), and a point after
+the display at the left column's foot moved the right column over 08481's `widetext` by up to 2.55 pt and the `widetext`
+by 1.70 pt. So the end is set inside the formula, the last thing before its number, where the source ends the display while
+TeX is still in it: at its environment's end, by a hook on the environment it began in (`env/<name>/end`, added the first
+time a display begins there: equation, equation*, displaymath, a class's own; in math, inner too, since amsmath sets the
+rest of an equation holding a `split` in a cell its end closes; only in that environment, once), and at `\]`. An alignment's
+points are set by its `\halign` in display math, through `\everycr`: the start after the preamble's `\cr`, an end after each
+row's, at the alignment's own level. These are in the page's list, and a point makes the glue after it a place to break:
+amsmath ends each row with a `\noalign` of `\interdisplaylinepenalty` (10000), and a point after it let TeX break
+2010.11929v2's `align` over pages 3 and 4. Each is set by what ends the list (`\axt@dpat`, e-TeX's `\lastnodetype`): after a
+penalty, a glue or nothing, the point and a `\penalty10000`; after a row's box, the point and the row's depth given back under
+it (a kern of minus the depth, an empty box that deep, no interline glue), so that a column ending there ends with a box of
+the row's depth as `\lastbox` reads it; after a kern, none; after anything else, the point alone. An alignment's region runs
+from its start to its last end, its rows' numbers inside it; an equation's number is outside its region.
+
+**The reading** (v2, `packages/engine/src/locate/today/ledger.mjs`, CHANGED): a line at least half of whose glyphs TeX set
+in a display is the formula's (`math`), by the second rule, after code and before every rule of place (references, heads,
+notes, orphans), so that whatever its face and wherever it stands, under a footnote rule, in a box, beside a column, it is
+kept as the paper has it; a run in a display is no figure unit (`figure-text.mjs`). The regions are carried onto arXiv's page
+as the code regions are. The layout file's `REGION_KINDS` stays `code`: today's maker passes a display region by, and
+today's engine reads nothing new. The rule reads no line's place: with rebuild/refs-toggle's pairing of the body brackets,
+which reads 08481's foot as body lines, the same ink units go (a scratch merge of both: p7's three translated ink units gone
+on either reading).
+
+**Measured.** The 88 papers' compiles, each made at this TeX on its own pinned image: every glyph of every page of each
+paper's marked compile and final pass where round 7's compile set it, but 7 glyphs on 4 pages of 2 papers within one unit of
+the PDF writer's text adjustment (0.001 to 0.009 pt, numbers and a comma after a point, where dvipdfmx and xdvipdfmx set the
+text position again; the lines around them in place); no TeX error that round 7's had not. 4,544 displays started, 4,364
+closed; 180 with no end: the `$$` ones (9 papers) and 4 that end a proof in SIAM's classes, whose theorem marks (ntheorem's
+`thmmarks`) end such a display themselves. Stage 1a against round 7's r7: the ink units drawn translated 6,910 -> 6,901, the 9
+now kept on 5 papers (2608.08481v1 4: (6)'s right part with its number, (7)'s right part, (8)'s second line, and a line of p6;
+2608.25210v2 2, an underbrace's labels; 2610.18513v1 1, a `\sup`; 2610.22299v1 1, display (1); 2610.30854v1 1), none new or
+changed, every source unit as it was; the kept blocks' rows 8,350 -> 9,101 (20 papers: a display's lines no unit owns, with
+no letter pair, were `symbols` and lit nothing; as the formula's they light as kept blocks); I6 the same. The parity against
+round 7's final, default and every toggle on alike: 49 and 58 pages worse as before, none newly worse and none no longer; two
+differences newly worse on a page already worse, 2608.25210v2 p10's underbrace labels (`shown`: today translates them, v2
+keeps them now); below the line v2's highlight nearer on 6 (it no longer fills a display's block: 2608.04322v1 p4 and p5,
+2608.25210v2 p9 and p10), the figure texts of 2608.25210v2 pp. 2 and 11 renumbered (the same values).
+
+**Not done.** A display the source ends with `$$` has no place TeX reads before its end: its start alone states no region,
+and its ink is read as before (176 displays in 9 of the 88 papers); so is one a class ends itself (the 4 SIAM proofs' last
+displays, which the class's theorem marks, ntheorem's `thmmarks`, end by a route of their own). A display in a first
+pass, or under `\nofiles`, has no start. A package that sets `\everydisplay` after `begindocument/end`, or takes `\halign`
+before it, leaves its displays unmarked. An `\intertext` line falls inside its alignment's region and is kept (none in the
+88). A number set by `\leqno` stands before the formula, outside its region. Text a display sets in a text face (`\text`,
+an underbrace's label) is the display's and kept with it: 2610.22299v1's display (1), a sentence in `\text`, now stays the
+original's, while (2), whose words a source unit owns, is translated with that unit.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
