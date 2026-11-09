@@ -3545,6 +3545,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     for (const u of us) {
       if (u.start < at) continue
       copy(at, u.start)
+      // (a call stated right where the unit begins — a note's call ended against it, `\\thanks{…}\\,$^{1}$`, 2610.17108v1 —, which
+      // the copy before it, up to the unit's start alone, does not reach: written before the unit's bytes)
+      for (const [pos, bytes] of called) if (pos === u.start) add(...bytes)
       const inner = spans && [], b = render(u, inner)
       // a unit written back inside an optional argument's brackets (a theorem's title): a ] its translation holds outside
       // any group would end them early (a translated "Convergence [see the appendix]"), so the unit goes in a group of its own

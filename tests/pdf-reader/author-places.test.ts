@@ -328,6 +328,11 @@ describe('the author calls the marked original states (\\axtcall, CALL_TEX: the 
     // (the note's own text between its marks in the layout compile)
     expect(tex).toMatch(new RegExp(`Corresponding author\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${id}\\}`))
     expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    // (the unit after the note begun right where the note's call ends, `\\thanks{…}\\,$^{1,2}$`: the call written there all the
+    // same, before the unit's bytes; 2610.17108v1's had none, its "∗" the next unit's label)
+    const glued = open('\\maketitle\nWords.', '\\author{\\textbf{Sam Smith}\\,$^{1}$\\quad Vic Vance\\thanks{Corresponding.}\\,\\,$^{1,2}$\\quad \\textbf{Ann Eve}\\,$^{1}$}')
+    const gid = units(glued).findIndex((u, k) => u.kind === 'author' && k > 0 && textOf(u).includes('Ann Eve'))
+    expect(marked(glued)).toMatch(new RegExp(`Corresponding\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${gid}\\}`))
     // (a note that opens its block marks no text before it: its mark, set before the name, is the name's lead, none stated; a
     // note before an \\and: the \\and's call alone)
     expect(marked(open('\\maketitle\nWords.', '\\author{\\thanks{Equal contribution.}Jane Doe \\\\ The University}'))).not.toContain('\\axtcall{')
