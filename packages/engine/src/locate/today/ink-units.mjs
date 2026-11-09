@@ -1,8 +1,8 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but six changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but seven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
-// them, never stripped, MATH_SPECIAL): run
+// them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, scriptOf): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -30,8 +30,10 @@
 //      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
-//      its source the run's characters; a word that is a web address is one in whatever face, and so is an e-mail address in a
-//      word, the word's characters around it the text's (a note of an address alone is then no unit);
+//      its source the run's characters; so is a run of scripts in whatever face, each glyph TeX set smaller than its line's text
+//      and off its baseline (a formula's digit in a text face, an affiliation's or a note's mark), a formula's (`math`); a word
+//      that is a web address is one in whatever face, and so is an e-mail address in a word, the word's characters around it
+//      the text's (a note of an address alone is then no unit);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -83,7 +85,7 @@ export const EDGE = 0.75
 export const INDENT = 6
 /** two glyphs one word: closer than this share of their size */
 const WORD_GAP = 0.12
-/** a script: a glyph set at this share of its line's text size or less */
+/** a label's mark (labelLength): a glyph set at this share of its line's text size or less (what a script is, scriptsOf) */
 const SCRIPT = 0.85
 /** a unit's label as the reader keeps one: up to three digits or marks of a label (layer-proto/layer2.mjs LABEL, labelOf), or
  *  up to three marks of no letter or digit (layer-proto/tex.mjs, the marks a first line holds before its first word). "⁷,⁸" is
@@ -189,17 +191,11 @@ function wordsOf(G, gs, fams) {
   const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => leftOf(G[a].x0, G[b].x0))
   const joined = accentTexts(G, gs)
   const out = []
-  // (the line's text size, the one most of its glyphs have: a script set smaller than it, raised or lowered, is no text of the
-  // line's but its formula's — C_n²'s "2", a text face's digit, drawn on the baseline as a word of the translation, 2610.19274v1)
-  const sizes = new Map()
-  for (const g of order) { const z = Math.round(G[g].size * 10) / 10; sizes.set(z, (sizes.get(z) ?? 0) + 1) }
-  let body = 0, most = 0
-  for (const [z, n] of sizes) if (n > most) { most = n; body = z }
+  const scripts = scriptsOf(G, order)
   let cur = null, prev = null
   for (const g of order) {
     const x = G[g], f = famOf(fams, x.font)
-    let fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
-    if (fam === 'text' && cur?.fam === 'math' && prev !== null && x.size < SCRIPT * body && Math.abs(x.y - G[prev].y) < body && x.x0 - G[prev].x1 <= WORD_GAP * body && !/\p{L}{2}/u.test(x.u ?? '')) fam = 'math'
+    const fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : scripts.has(g) ? 'math' : 'text'
     if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], ts: [], text: '', fam }; out.push(cur) }
     const t = joined.get(g) ?? x.u
     cur.gs.push(g); cur.ts.push(t); cur.text += t
@@ -209,6 +205,23 @@ function wordsOf(G, gs, fams) {
   for (const w of out) if (w.fam === 'text' && URL_WORD.test(w.text)) w.fam = 'mono'
   return out.flatMap(w => (w.fam === 'text' ? addressed(w) : [w]))
 }
+
+/** a line's scripts (rule 4): of its glyphs `order`, those TeX set smaller than the line's text and off its baseline, raised or
+ *  lowered — the line's text size the one most of its glyphs have, its baseline the one most of those at that size stand on,
+ *  each read on the engine's hundredth of a point, as locate reads a box's glyphs on one baseline (TeX sets one box's glyphs at
+ *  one size on one baseline: equal, no threshold). A script is no text of the line's but its formula's, or a mark TeX set over
+ *  or under it, whatever its face: C_n²'s "2" in a text face (2610.19274v1), an affiliation's `$^{1,2}$` under Times, whose
+ *  digits are the text face's (2610.30854v1 p1's names: read as their text, drawn flat at the names' size, "Jiang1,2"), a
+ *  footnote's mark Computer Modern sets in CMR7. A glyph set smaller on the baseline (small capitals) or off it at the line's
+ *  size (a capital's accent, a raised box) is none. CHANGED: today's read a text face's glyph a formula's only after a math run,
+ *  set at less than SCRIPT of the line's size within a size of the glyph before it and abutting it; every other script in a
+ *  text face was the line's text, translated and drawn on its baseline at its size */
+function scriptsOf(G, order) {
+  const body = modeOf(order.map(g => r2(G[g].size)))
+  const base = modeOf(order.filter(g => r2(G[g].size) === body).map(g => r2(G[g].y)))
+  return new Set(order.filter(g => r2(G[g].size) < body && r2(G[g].y) !== base))
+}
+
 /** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
  *  the text's (an address's stop, a bracket), as the front end keeps one in a source unit's text (latex-front.mjs keepAddresses,
  *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). CHANGED: today's said it as text, in a colour group of its
@@ -246,18 +259,36 @@ function addressed(w) {
  * labelOf), so the unit's text does not say it: said there, it was drawn twice, the original's beside the translation's
  * (2610.20716v1 p1)
  */
-function labelLength(G, words) {
-  const text = words.filter(w => w.fam === 'text').flatMap(w => w.gs)
+function labelLength(G, words, fams) {
+  // (a glyph in a text face as today's read one: a text word's, or a script's a formula's run holds, scriptsOf. CHANGED: today's
+  // had every script of a text face in a text word)
+  const texty = (w, g) => w.fam === 'text' || (w.fam === 'math' && !['math', 'mono'].includes(famOf(fams, G[g].font)))
+  const text = words.flatMap(w => w.gs.filter(g => texty(w, g)))
   if (!text.length) return 0
   const base = modeOf(text.map(g => r2(G[g].y))), size = modeOf(text.map(g => r2(G[g].size)))
   let n = 0, marks = ''
   for (const w of words) for (const g of w.gs) {
     const x = G[g]
-    if (w.fam !== 'text' || /\p{L}/u.test(x.u ?? '') || !(x.size < SCRIPT * size) || !(x.y - base > RAISE * size)) return LABEL_MARKS.test(marks) ? n : 0
+    if (!texty(w, g) || /\p{L}/u.test(x.u ?? '') || !(x.size < SCRIPT * size) || !(x.y - base > RAISE * size)) return LABEL_MARKS.test(marks) ? n : 0
     n++
     marks += x.u ?? ''
   }
   return 0
+}
+
+/** a first line's words with its label's `n` glyphs (labelLength) a text word's, as today's read them: a run of scripts the label
+ *  takes whole read as text, one it begins cut after it, its glyphs after the label a run of their own. CHANGED: today's had them
+ *  a text word's in any case, a script in a text face being text */
+function labelAsText(words, n) {
+  const out = []
+  for (const w of words) {
+    const k = Math.min(n, w.gs.length)
+    n -= k
+    if (k === 0 || w.fam === 'text') { out.push(w); continue }
+    out.push({ gs: w.gs.slice(0, k), ts: w.ts.slice(0, k), text: w.ts.slice(0, k).join(''), fam: 'text' })
+    if (k < w.gs.length) out.push({ ...w, gs: w.gs.slice(k), ts: w.ts.slice(k), text: w.ts.slice(k).join('') })
+  }
+  return out
 }
 
 /** whether two words of a line, `w` left of `v`, stand APART */
@@ -466,7 +497,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
       // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
       // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand;
       // CHANGED: stated, `labelled`, as the glyphs of the unit's label)
-      let label = li === 0 ? labelLength(pages[l.page - 1].glyphs, l.words) : 0, first = 0
+      let label = li === 0 ? labelLength(pages[l.page - 1].glyphs, l.words, fams) : 0, first = 0
+      if (label > 0) l.words = labelAsText(l.words, label)
       l.words.forEach((w, wi) => {
         let said = w.text
         if (label > 0) {
