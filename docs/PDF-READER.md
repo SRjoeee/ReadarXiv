@@ -3224,12 +3224,11 @@ of p6; 2610.18513v1 1, a `\sup`; 2610.30854v1 1, equation (19)); 2610.22299v1's 
 translated as round 7 translated them; none new or changed; every source unit as it was; the kept blocks' rows 1,175 -> 1,755
 (14 papers: a display's lines no unit owns, with no letter pair, were `symbols` and lit nothing; as the formula's they light
 as kept blocks); I6 the same. The differential over them: lost 111 (+48 accepted) -> 109 (+54): 2608.08481v1 t118 to t121
-kept as part of a display, accepted, and 4 kept blocks' units accepted as kept. The parity over the census's pairs whose
-arXiv PDF the lab holds (seven of the twenty-two; 2608.04322v1's is in the gate pack, moved off this machine) against round 7's
-final, default and every toggle on alike: 15 and 20 pages worse as before, none newly worse, none no longer, no difference newly
-worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone: translated again); below the
-line v2's highlight nearer on 3 (it no longer fills a display's block: 2608.25210v2 p9 and p10) and its figure texts
-renumbered (the same values).
+kept as part of a display, accepted, and 4 kept blocks' units accepted as kept. The parity over the census's eight pairs of
+the twenty-two against round 7's final, default and every toggle on alike: 16 and 21 pages worse as before, none newly worse,
+none no longer, no difference newly worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone:
+translated again); below the line v2's highlight nearer on 6 (it no longer fills a display's block: 2608.04322v1 p4 and p5,
+2608.25210v2 p9 and p10) and 2608.25210v2's figure texts renumbered (the same values).
 
 **Not done.** A display the source ends with `$$` has no place TeX reads before its end: its start alone states no region,
 and its ink is read as before (176 displays in 9 of the 88 papers); so is one a class ends itself (the 4 SIAM proofs' last
