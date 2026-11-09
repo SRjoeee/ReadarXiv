@@ -1,22 +1,32 @@
 // @vitest-environment node
 // Stage 1a's statement of the baseline's units the candidate does not make (lab/pdf/prepare-back/stated.mjs, which run.mjs's
 // --baseline and restate.mjs write into a dump), the cause the differential's acceptance list (baseline/acceptance.json) reads.
-// The two causes of the coordinator's rulings of 2026-11-09, each accepted entry by entry by a mechanical check: an ink unit
-// whose scripts are now elements (rebuild/script-face) where the two units read alike, its marks read as v2's elements as the
-// parity's keptJoin reads them; and an orphan line now the author block's names line (inknames, of the names toggle). Synthetic
-// units in the dumps' form.
+// The causes of the coordinator's rulings of 2026-11-09, each accepted entry by entry by a mechanical check: (a) an ink unit whose
+// scripts are now elements (rebuild/script-face) where the two units read alike, its marks read as v2's elements as the parity's
+// keptJoin reads them; (b') a unit whose glyphs a unit of the author block's (the names toggle) now holds; (c) a line whose marks
+// are the name before's trail (rebuild/front-matter); (d) (a) with an element's characters in another order; (e) a unit whose
+// lines v2 keeps whole as the original's (stated, not accepted: the ruling waits on whether they are display formulas). Synthetic units in the dumps' form.
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { CAUSE, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
-import { scriptsKeptAsElements } from '../../packages/typeset/tests/replay/l1.ts'
+import { scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
 
 type DumpPiece = { kind: string; s?: string; src?: string }
 type Line = { page: number; x0: number; x1: number; baseline: number; top: number; bottom: number }
 /** a dump's unit: its id, ord, kind, flat pieces and lines (one line on page 1 at the given x and baseline) */
 const unit = (id: string, ord: number, kind: string, pieces: DumpPiece[], at: [number, number, number] = [72, 300, 600]) => {
   const line: Line = { page: 1, x0: at[0], x1: at[1], baseline: at[2], top: at[2] + 8, bottom: at[2] - 2 }
-  return { id, ord, kind, text: '', pieces: pieces.map((p, k) => ({ k, ...p })), lines: [line] }
+  return { id, ord, kind, text: '', pieces: pieces.map((p, k) => ({ k, ...p })), lines: [line] } as {
+    id: string
+    ord: number
+    kind: string
+    text: string
+    pieces: DumpPiece[]
+    lines: Line[]
+    kept?: true
+    elements?: { k: number; kind: string; segs: Line[] }[]
+  }
 }
 const text = (s: string): DumpPiece => ({ kind: 'text', s })
 const ph = (src: string): DumpPiece => ({ kind: 'ph', src })
@@ -72,11 +82,99 @@ describe("the baseline's units the candidate does not make, stated with how it r
 
   it('states nothing for a line now of another kind that is not the names toggle, nor for one at another place', () => {
     expect(statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])])).toEqual([])
-    // (a note's line of today's, not an orphan (2610.21313v1 t112, an e-mail line today read as a note's): not the ruling's)
-    expect(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'inknames', [text('x')])])).toEqual([])
     expect(
       statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknames', [text('x')], [72, 300, 400])]),
     ).toEqual([])
+  })
+})
+
+describe("(b') a unit whose glyphs a unit of the author block now holds, whatever today's kind", () => {
+  it("states a note's line of today's (an e-mail line) now an inknames line as the author block's", () => {
+    const base = [unit(id('a'), 112, 'inknotes', [text('ada@example.org')])]
+    const units = [unit(id('b'), 140, 'inknames', [text('ada@example.org')])]
+    expect(said(statedOf(base, units))).toEqual([[112, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`]])
+  })
+
+  it("states a line whose glyphs are now an affiliation's element, and a names line now the author unit, as the author block's", () => {
+    const aff = unit(id('b'), 3, 'affiliation', [text('Institute of Things '), ph('\\url{ada@example.org}')], [72, 300, 640])
+    aff.lines.push({ page: 1, x0: 72, x1: 200, baseline: 600, top: 608, bottom: 598 })
+    const base = [
+      unit(id('a'), 110, 'inknotes', [text('ada@example.org')], [72, 200, 600]),
+      unit(id('c'), 123, 'inknotes', [text('Ada Lovelace1')], [72, 300, 680]),
+    ]
+    const units = [aff, unit(id('d'), 94, 'author', [text('Ada Lovelace'), ph('$^{1}$')], [72, 300, 680])]
+    expect(said(statedOf(base, units))).toEqual([
+      [110, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`],
+      [123, `made on arXiv's page as ${'d'.repeat(12)}: ${CAUSE.names}`],
+    ])
+  })
+
+  it("states one whose glyphs an author block unit today made too now holds (an e-mail now its affiliation's element)", () => {
+    const base = [unit(id('a'), 110, 'inknotes', [text('ada@example.org')]), unit(id('b'), 3, 'affiliation', [text('Institute')])]
+    expect(said(statedOf(base, [unit(id('b'), 3, 'affiliation', [text('Institute')])]))).toEqual([
+      [110, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`],
+    ])
+  })
+
+  it("states nothing where the unit holding its glyphs is not the author block's, or holds only part of its line", () => {
+    expect(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'para', [text('x')])])).toEqual([])
+    expect(statedOf([unit(id('a'), 1, 'inknotes', [text('x')])], [unit(id('b'), 1, 'author', [text('x')], [72, 200, 600])])).toEqual([])
+  })
+})
+
+describe("(c) a line whose marks are the name before's trail", () => {
+  /** the trail front-matter gives the name before: its glyphs' box and characters */
+  const trail = (x0: number, x1: number, s: string) => ({ page: 1, x0, x1, top: 598, bottom: 586, baseline: 588.37, text: s })
+  it("states today's \"<marks>, and\" now v2's \"and\" after the name before's trail as its marks the trail", () => {
+    const base = [unit(id('a'), 185, 'inkorphan', [text('7,8, and')], [325.12, 362.44, 588.37])]
+    const units = [unit(id('b'), 185, 'inkorphan', [text('and')], [343.58, 362.44, 588.37])]
+    expect(said(statedOf(base, units, { trails: [trail(325.12, 339.69, '7,8,')] }))).toEqual([
+      [185, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.trail}`],
+    ])
+  })
+
+  it("reads today's text with the trail's characters taken out in order, a raised mark today's text lost too", () => {
+    const base = [unit(id('a'), 651, 'inkorphan', [text(', and')], [350.53, 381.26, 588.37])]
+    const units = [unit(id('b'), 651, 'inkorphan', [text('and')], [362.41, 381.26, 588.37])]
+    expect(said(statedOf(base, units, { trails: [trail(350.53, 358.51, '2,')] }))).toEqual([
+      [651, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.trail}`],
+    ])
+  })
+
+  it('is another reading where the trail does not start today\'s line, or today holds more than the trail and v2\'s text', () => {
+    const base = [unit(id('a'), 1, 'inkorphan', [text('7,8, and')], [325.12, 362.44, 588.37])]
+    const units = [unit(id('b'), 1, 'inkorphan', [text('and')], [343.58, 362.44, 588.37])]
+    const other = [unit(id('a'), 1, 'inkorphan', [text('7,8, and so')], [325.12, 362.44, 588.37])]
+    for (const [b, t] of [
+      [base, trail(330, 339.69, '7,8,')],
+      [other, trail(325.12, 339.69, '7,8,')],
+    ] as const)
+      expect(said(statedOf(b, units, { trails: [t] }))).toEqual([[1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+})
+
+describe("(d) an ink unit's scripts kept as an element, its characters in another order", () => {
+  it("reads an element whose characters are today's there in another order, the rest today's", () => {
+    expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$'), text(' (top)')]), { pieces: [text('and '), ph('$s=$'), text('21 (top)')] })).toBe(true)
+    const base = [unit(id('a'), 747, 'inkcontents', [text('and '), ph('$s=$'), text('21 (top)')])]
+    const units = [unit(id('b'), 747, 'inkcontents', [text('and '), ph('$s=12$'), text(' (top)')])]
+    expect(said(statedOf(base, units))).toEqual([[747, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.orderAsElement}`]])
+  })
+
+  it("is no such reading where the characters differ (a word space today's reading set inside the run counts), or none moved", () => {
+    expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$'), text(' (top)')]), { pieces: [text('and '), ph('$s=$'), text(' 21 (top)')] })).toBe(false)
+    expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$')]), { pieces: [text('and '), ph('$s=$'), text('13')] })).toBe(false)
+    expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$')]), { pieces: [text('and '), ph('$s=$'), text('12')] })).toBe(false)
+  })
+})
+
+describe("(e) a unit whose lines v2 keeps whole as the original's", () => {
+  it('states one whose every line is now a kept block of its kind, its lines today\'s, as its lines kept whole', () => {
+    const base = [unit(id('a'), 118, 'inknotes', [text('x = '), ph('$y$')], [107.91, 253.18, 195.57])]
+    const kept = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 253.18, 195.57]), kept: true as const }
+    expect(said(statedOf(base, [kept]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
+    const moved = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 240, 195.57]), kept: true as const }
+    expect(said(statedOf(base, [moved]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
   })
 })
 
@@ -86,9 +184,10 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) =>
       new RegExp(e.match).test(cause),
     )
-  it('accepts the two ruled causes, and not another reading', () => {
-    expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.scripts}`)).toBe(true)
-    expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`)).toBe(true)
+  it('accepts the ruled causes, and neither another reading nor lines kept whole (their ruling waits on the images)', () => {
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement])
+      expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
+    expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
   })
 })

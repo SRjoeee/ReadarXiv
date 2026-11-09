@@ -3,29 +3,52 @@
 // (baseline/tools/diff.mjs: a loss whose cause an entry of baseline/acceptance.json matches is accepted). For one of today's ink
 // units and figure texts, a unit made on arXiv's page that stands for it, read otherwise there: of its kind, no baseline unit's
 // id, at its place (its first line's page and box) or, with no line, at its ord (today's bundle's order, which the dump keeps),
-// with how it reads otherwise: its cause where it stays the original's, or its characters in another order, piece by piece, or
-// its scripts kept as elements; none of its kind, a kept block of its kind at its place, or the author block's names line there
-import { scriptsKeptAsElements } from '../../../packages/typeset/tests/replay/l1.ts'
+// with how it reads otherwise (CAUSE); none of its kind, a kept block of its kind at its place; none of either, a unit of the
+// author block's now holding its glyphs. Each cause the coordinator's rulings of 2026-11-09 accept is a check of the two units
+// (and of the trails the candidate's members carry), never a list of ids
+import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../../packages/typeset/tests/replay/l1.ts'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
   order: 'its characters in another order',
   head: "its head's number in its phrase",
-  // (the coordinator's ruling of 2026-11-09, (a): an ink unit whose raised or lowered marks today held as text, or as text and a
-  // placeholder, are now its elements (rebuild/script-face), its text and theirs read as today's unit's, keptJoin's reading)
+  // ((a): an ink unit whose raised or lowered marks today held as text, or as text and a placeholder, are now its elements
+  // (rebuild/script-face), its text and theirs read as today's unit's, keptJoin's reading)
   scripts: 'its scripts kept as elements',
-  // (the same ruling, (b): an orphan line of today's that the author block's names read as theirs (ink-units.mjs rule 8, of the
-  // names toggle: its letters mostly the words of the author units the front end reads from the class's definitions))
+  // ((d): (a) with an element's characters, as many and each as often, in another order than today's there)
+  orderAsElement: 'its characters in another order, read as an element',
+  // ((b'): a unit whose glyphs a unit of the author block now holds (an author or affiliation unit the front end reads from the
+  // class's definitions, or an ink unit ink-units.mjs reads as theirs, inknames), the names toggle's, whatever today's kind)
   names: 'a line of the author block, kept by the names toggle',
+  // ((c): today's line whose leading marks are the trail rebuild/front-matter gives the name before, the rest v2's unit)
+  trail: "its marks are the name before's trail",
+  // ((e)'s first condition, stated for the coordinator's ruling, not accepted: a unit whose every line v2 now keeps whole as a
+  // block of its kind, no text of it sent; whether those lines are display formulas (its second) is no fact this reads)
+  kept: "its lines kept whole as the original's",
   another: 'another reading',
 })
 
+/** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
+const ON = 0.05
+
+/** the trails among a candidate's elements (`[k, el]`, as locate's members and a part's members carry them: El.trail, its ink
+ *  one box `[page, x0, bottom, x1, top, baseline]`, its characters `copy`), each as statedOf reads one */
+export const trailsOf = (els) =>
+  els
+    .filter(([, e]) => e?.trail && e.ink?.length === 1)
+    .map(([, e]) => {
+      const [page, x0, bottom, x1, top, baseline] = e.ink[0]
+      return { page, x0, x1, bottom, top, baseline, text: e.copy ?? '' }
+    })
+
 /**
- * `base` the baseline dump's units, `units` the candidate's own (none stated yet): each baseline unit the candidate does not
- * make, in the baseline's order, with its stated cause; one it has no statement for (absent from the candidate) is left out
+ * `base` the baseline dump's units, `units` the candidate's own (none stated yet), `trails` the trails the candidate's members
+ * carry (rebuild/front-matter's El.trail: its ink's box `page`, `x0`, `x1`, `top`, `bottom`, `baseline` and its characters
+ * `text`): each baseline unit the candidate does not make, in the baseline's order, with its stated cause; one it has no
+ * statement for (absent from the candidate) is left out
  */
-export function statedOf(base, units) {
+export function statedOf(base, units, { trails = [] } = {}) {
   const out = []
   const have = new Map()
   for (const u of units) have.set(u.id, (have.get(u.id) ?? 0) + 1)
@@ -37,6 +60,8 @@ export function statedOf(base, units) {
     b.x0 < a.x1 &&
     Math.min(a.top, a.bottom) < Math.max(b.top, b.bottom) &&
     Math.min(b.top, b.bottom) < Math.max(a.top, a.bottom)
+  const sameLine = (a, b) =>
+    a.page === b.page && Math.abs(a.x0 - b.x0) <= ON && Math.abs(a.x1 - b.x1) <= ON && Math.abs(a.baseline - b.baseline) <= ON
   const standsFor = (u) => {
     const L = u.lines?.[0]
     const k = free.findIndex((c) => c.kind === u.kind && (L && c.lines?.[0] ? meets(L, c.lines[0]) : c.ord === u.ord))
@@ -45,6 +70,38 @@ export function statedOf(base, units) {
   const chars = (p) => [...(p.kind === 'text' ? p.s : p.kind === 'ph' ? p.src : '')].sort().join('')
   // (the dump's flat pieces as sourcePieces' form, which keptJoin's reading takes)
   const flatOf = (ps) => ps.map((p) => ({ ...p, t: p.kind }))
+  // (a unit's glyphs' characters, white space no glyph: its texts' and its elements' readings, null where an element has none)
+  const glyphsOf = (ps) => {
+    let s = ''
+    for (const p of ps) {
+      const r = p.kind === 'text' ? p.s : p.kind === 'ph' ? readingOf(p.src ?? '') : ''
+      if (r === null) return null
+      s += r
+    }
+    return s.replace(/\s+/g, '')
+  }
+  // ((c): one line each; today's line from the trail's first glyph to v2's line's end, the trail before v2's line on it;
+  // today's characters with the trail's taken out, in their order (today's reading may have dropped a raised one), v2's)
+  const trailOf = (u, c) => {
+    if (u.lines?.length !== 1 || c.lines?.length !== 1) return false
+    const L = u.lines[0],
+      K = c.lines[0]
+    if (L.page !== K.page || Math.abs(L.x1 - K.x1) > ON) return false
+    const t = trails.find((t) => t.page === L.page && Math.abs(t.x0 - L.x0) <= ON && t.x1 <= K.x0 + ON && meets(L, t))
+    if (!t) return false
+    const today = glyphsOf(u.pieces),
+      mine = glyphsOf(c.pieces)
+    if (today === null || mine === null) return false
+    let i = 0
+    for (const m of t.text.replace(/\s+/g, '')) if (today[i] === m) i++
+    return i > 0 && today.slice(i) === mine
+  }
+  // ((e): v2's unit a kept block of its kind (no text of it sent), its lines today's, every one)
+  const keptWhole = (u, c) =>
+    !c.pieces?.length &&
+    !!u.lines?.length &&
+    c.lines?.length === u.lines.length &&
+    u.lines.every((l) => c.lines.some((k) => sameLine(l, k)))
   const howOf = (u, c) => {
     if (c.why?.startsWith('content difference')) return c.why
     // (a running head's number of its phrase, which today's took for its folio: "5 of 21" for "of 21", ink-units.mjs phrased)
@@ -52,8 +109,26 @@ export function statedOf(base, units) {
       return CAUSE.head
     const same = u.pieces.length === c.pieces.length && u.pieces.every((p, k) => p.kind === c.pieces[k].kind && chars(p) === chars(c.pieces[k]))
     if (same) return CAUSE.order
-    return /^ink/.test(u.kind) && scriptsKeptAsElements(flatOf(c.pieces), u) ? CAUSE.scripts : CAUSE.another
+    if (/^ink/.test(u.kind) && scriptsKeptAsElements(flatOf(c.pieces), u)) return CAUSE.scripts
+    if (/^ink/.test(u.kind) && scriptsKeptInAnotherOrder(flatOf(c.pieces), u)) return CAUSE.orderAsElement
+    if (trailOf(u, c)) return CAUSE.trail
+    if (keptWhole(u, c)) return CAUSE.kept
+    return CAUSE.another
   }
+  // ((b'): a unit of the author block's (the names class: author, affiliation, inknames) holding every line of today's unit: a
+  // line of its, or an element's box, on that line's baseline across its whole width; today's made it too or not (2610.21313v1's
+  // e-mails, an ink note's today, now the elements of the affiliations today made too))
+  const covers = (k, l) =>
+    k.page === l.page && Math.abs(k.baseline - l.baseline) <= ON && k.x0 <= l.x0 + ON && k.x1 >= l.x1 - ON
+  const heldByBlock = (u) =>
+    u.lines?.length
+      ? units.find(
+          (n) =>
+            !n.replaced &&
+            unitClass(n.kind) === 'names' &&
+            u.lines.every((l) => (n.lines ?? []).some((k) => covers(k, l)) || (n.elements ?? []).some((e) => e.segs.some((k) => covers(k, l)))),
+        )
+      : undefined
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
@@ -68,14 +143,8 @@ export function statedOf(base, units) {
       !c && /^ink/.test(u.kind) && L0
         ? units.find((k) => k.kind === u.kind && !k.pieces?.length && !k.replaced && k.lines?.some((l) => meets(L0, l)))
         : null
-    // (none of either: an orphan line of today's (text no unit owned, `inkorphan`), at its place a names line, of the names
-    // toggle, that ink-units.mjs rule 8 reads as the author block's (2610.20848v1 t161, 2610.21084v1 t585); its first line
-    // meeting today's first. A line today read as another class's, a note's, is no such statement)
-    let names = null
-    if (!c && !kept && L0 && unitClass(u.kind) === 'orphan') {
-      const k = free.findIndex((n) => /^ink/.test(n.kind) && unitClass(n.kind) === 'names' && n.lines?.[0] && meets(L0, n.lines[0]))
-      if (k >= 0) names = free.splice(k, 1)[0]
-    }
+    // (none of either: a unit of the author block's now holding its glyphs, whatever today's kind)
+    const names = !c && !kept ? heldByBlock(u) : undefined
     const why = c
       ? `made on arXiv's page as ${c.id.slice(0, 12)}: ${howOf(u, c)}`
       : kept

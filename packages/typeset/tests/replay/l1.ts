@@ -120,16 +120,20 @@ const sameAtom = (a: Atom, b: Atom) => ('c' in a ? 'c' in b && a.c === b.c : 'k'
  * atoms whose characters (a placeholder's its reading, readingOf) are the element's reading, so a script today's held part as
  * text and part as a placeholder (2610.20967v1 p1's "Tsai1" and "$,2$") is one —, in order, all of today's atoms read; groups
  * read through. Returns each element's run, [from, to) of today's atoms, by its piece's index (sourcePieces' k), and how many
- * were read by their characters, with their sources; null where the two differ
+ * were read by their characters, with their sources; null where the two differ. `anyOrder`: an element read by its characters
+ * holds the run of today's atoms whose characters are its reading's in any order (as many, each as often), `reordered` how many
+ * stood in another order
  */
 function heldRuns(
   flat: readonly V0Piece[],
   atoms: readonly Atom[],
-): { runs: Map<number, [number, number]>; read: number; bySrc: string[] } | null {
+  anyOrder = false,
+): { runs: Map<number, [number, number]>; read: number; bySrc: string[]; reordered: number } | null {
   const runs = new Map<number, [number, number]>()
   const bySrc: string[] = []
   let j = 0,
-    read = 0
+    read = 0,
+    reordered = 0
   for (const p of flat) {
     if (p.t === 'text') {
       for (let i = 0; i < p.s.length; i++, j++) {
@@ -152,15 +156,17 @@ function heldRuns(
     while (got.length < r.length) {
       const x = atoms[j]
       const s = !x ? null : 'c' in x ? x.c : readingOf(x.src)
-      if (!s || !r.startsWith(got + s)) return null
+      if (!s || (!anyOrder && !r.startsWith(got + s))) return null
       got += s
       j++
     }
+    if (anyOrder && (got.length !== r.length || [...got].sort().join('') !== [...r].sort().join(''))) return null
+    if (got !== r) reordered++
     runs.set(p.k!, [from, j])
     read++
     bySrc.push(p.src)
   }
-  return j === atoms.length ? { runs, read, bySrc } : null
+  return j === atoms.length ? { runs, read, bySrc, reordered } : null
 }
 
 /**
@@ -174,6 +180,18 @@ function heldRuns(
 export function scriptsKeptAsElements(flat: readonly V0Piece[], today: Pick<TodayPrepared, 'pieces'>): boolean {
   const held = heldRuns(flat, atomsOf(today))
   return !!held && held.read > 0 && held.bySrc.every((src) => FORMULA.test(src) && !ADDRESS.test(src))
+}
+
+/**
+ * scriptsKeptAsElements with an element's characters read in another order: every element read by its characters holds the
+ * run of today's atoms whose characters are its reading's, as many and each as often (a word space today's reading set inside
+ * the run is a character too), at least one in another order (a stack TeX set at one x, a fraction's numerator over its
+ * denominator, today read by x, v2 in the stream's order: 2307.16209v1's list of figures), the rest of the unit today's. The
+ * differential's "its characters in another order, read as an element" (the coordinator's ruling of 2026-11-09, (d))
+ */
+export function scriptsKeptInAnotherOrder(flat: readonly V0Piece[], today: Pick<TodayPrepared, 'pieces'>): boolean {
+  const held = heldRuns(flat, atomsOf(today), true)
+  return !!held && held.reordered > 0 && held.bySrc.every((src) => FORMULA.test(src) && !ADDRESS.test(src))
 }
 
 /**

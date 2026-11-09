@@ -17,7 +17,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { prepareBack, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
-import { statedOf } from './stated.mjs'
+import { statedOf, trailsOf } from './stated.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
@@ -210,7 +210,8 @@ if (located) for (const [o, b] of located.born) {
 // it offline) has none of its units to state: its dump is the candidate's alone, which the differential lists so.
 if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const base = JSON.parse(readFileSync(join(BASELINE, `${id}.prepare.json`), 'utf8')).units
-  for (const { u, why } of statedOf(base, units)) {
+  const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
+  for (const { u, why } of statedOf(base, units, { trails })) {
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
     states.unlaid++
   }
