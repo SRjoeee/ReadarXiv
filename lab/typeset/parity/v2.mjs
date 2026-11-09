@@ -25,6 +25,7 @@ const { typesetLay } = await import('../../../packages/reader/src/compose/typese
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
 const { todayJoin } = await import('./join.mjs')
+const { readAsChain } = await import('./rows.mjs')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -65,7 +66,10 @@ for (const pair of pairs) {
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
   if (!target) throw new Error(`v2.mjs: ${pair} names no target`)
   const metrics = metricsOf(pair)
-  globalThis.__parityLay = await typesetLay({
+  // (the rows as the chain reads a reply, rows.mjs: the door's stored replies, each group they did not bring back placed where
+  // the translation states it)
+  const units = l1Paper(paperOf(pair))?.units ?? new Map()
+  const lay = await typesetLay({
     served: {
       metrics,
       hyph: async (langs) => Object.fromEntries(langs.map((l) => [l, patterns(l)])),
@@ -74,6 +78,7 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
+  globalThis.__parityLay = (part, rows) => lay(part, readAsChain(rows, units))
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
