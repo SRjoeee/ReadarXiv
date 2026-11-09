@@ -765,7 +765,7 @@ describe("shown: a unit today draws on lines of the original that v2 draws trans
   const v2Units = { units: [{ id: 485, lines: [drawnLine(334.39, 558.2, 93.86, 'abcdefgh', 6.97), drawnLine(334.39, 558.2, 86.01, 'abcdefgh', 6.97)] }] }
   it("names them apart (`within`), no translation missing; a unit on a line v2 draws no member on stays one", () => {
     const p = measure(v2, rec({ today, v2: v2Units }), prep)
-    const shown = p.diffs.filter((d) => d.flag === 'shown')
+    const shown = (p.diffs as { flag: string; unit: string; worse: boolean }[]).filter((d) => d.flag === 'shown')
     expect(shown.map((d) => [d.unit, d.worse])).toEqual([['t600 inknotes', true]])
     expect(p.measures.within).toEqual(['t517 inknotes', 't518 inknotes'])
   })
