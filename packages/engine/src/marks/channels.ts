@@ -28,7 +28,9 @@ const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
  * LaTeX's \@chnum, its reading of the column's letter after \newcolumntype and *{n}{…}, \multicolumn's own spec where the cell
  * is one): c centred, l flush left, r flush right (TeX's \hfil on the side or sides the slack goes); m, p and b none, their
  * lines a paragraph's. The cell's first (tabularx sets its table once for each trial width, the same). A cell no template of
- * LaTeX's set (a plain \halign) states nothing
+ * LaTeX's set (a plain \halign) states nothing. A unit that is no cell's but its cell's one unit, set in its line (an author
+ * block's name or place in the tabular \maketitle sets it in: its AXT-ALIGN `h`, an \hbox's, which tells nothing), states its
+ * cell's class the same way (marks.mjs LAYOUT_TEX)
  */
 export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
   const last = new Map<number, 'j' | 'l' | 'c' | 'r' | null>()
