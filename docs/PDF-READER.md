@@ -6015,10 +6015,11 @@ lines) follows it, the original's with it off, translated with it on (the author
   abstract and the keywords: what a class puts in its title macro is its own choice, and the block is the one run of it after the
   title that TeX sets from the author data, in every class of the 88 (LaTeX's `\@author` in a tabular, IEEEtran's blocks, amsart's
   `\andify`, REVTeX's lists, llncs's institutes, acmart's `\@mkauthors` and a paper's literal override of it, a class's own lists).
-  Over the 88 papers (stage 1a against round 7's), 27 move, no unit's text and no
-  source unit's number: 37 ink units made the names' in the block (the "and" or "AND" between names in 17 papers; the places and
-  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; 2 headings, then
-  ended by the front matter environment's point, MEASURED_FM); 18
+  Over the 88 papers (stage 1a against round 7's), 26 move, no unit's text and no
+  source unit's number: 35 ink units made the names' in the block (the "and" or "AND" between names in 17 papers; the places and
+  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; the 2 class headings
+  the stream took first given back by the front matter environment's point, which over the 92 papers moves those two alone,
+  every glyph proof as before, the TeX gate's 96 documents compiling to the same PDFs); 18
   units of the block's kinds set elsewhere `textnames` (2610.22065v1's 8 names in its reference format, amsart's addresses at the
   paper's end in 2610.20581v1, 2610.21037v1 and 2610.21884v1); 5 ink units of the names set elsewhere the text they are
   (2610.21106v1's addresses at its end, 2610.30034v1's three biographies' names); alta's e-mail line, inside its title box, no
