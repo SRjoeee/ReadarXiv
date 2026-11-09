@@ -993,12 +993,17 @@ export const POINTS_TEX = [
   // began in, once. A display the source ends with $$ has no such place and gets no end: its start alone states no region (the
   // reader leaves it as before). One not known (a first pass, a display the pass before did not set there) gets none. An
   // alignment's are set by its \\halign, which in display math (no inner math: an align's measuring pass sets its rows in a box)
-  // adds to \\everycr after the class's own (\\ialign and eqnarray empty it first): after the preamble's \\cr, a \\noalign of the
-  // start point and a \\penalty10000, so that the glue under it follows a penalty as it followed \\abovedisplayskip, then the end
-  // point after each row's \\cr, at the alignment's own level (an inner alignment that keeps \\everycr sets none); nothing before
-  // the \\noalign, which TeX would read as a row's start. A row's end is in the page's list, after the row: the row's depth is
-  // given back under it (\\axt@dpdp: a kern of minus the depth, an empty box that deep, no interline glue), so that a column ending
-  // there ends with a box of the row's depth, as \\lastbox reads it, and every height, break and glue is as it was. The display's
+  // adds to \\everycr after the class's own (\\ialign and eqnarray empty it first): after the preamble's \\cr a \\noalign of the
+  // start point, after each row's \\cr one of the end point, at the alignment's own level (an inner alignment that keeps
+  // \\everycr sets none); nothing before the \\noalign, which TeX would read as a row's start. These points are in the page's
+  // list, and a point makes the glue after it a place to break: amsmath ends each row with a \\noalign of
+  // \\interdisplaylinepenalty, 10000, and a point after it let TeX break 2010.11929v2's align over pages 3 and 4. So each is set
+  // by what ends the list (\\axt@dpat, e-TeX's \\lastnodetype): after a penalty, a glue or nothing, the point and a \\penalty10000,
+  // so that the glue after it still follows a penalty; after a row's box, the point and the row's depth given back under it
+  // (\\axt@dpdp: a kern of minus the depth, an empty box that deep, no interline glue), so that a column ending there ends with a
+  // box of the row's depth, as \\lastbox reads it, and every height and glue is as it was; after a kern, none (a glue after it
+  // makes the kern a place to break, which a point would take away); after anything else (a whatsit, a mark), the point alone,
+  // the glue after it a place to break as it was. The display's
   // number, its knowledge and its level are macros, no register; nothing typeset moves: every glyph where it was, on documents of
   // every display form (equation, equation*, \\[ \\], displaymath, align, align* with \\intertext, gather, multline, eqnarray,
   // flalign, alignat, split, aligned, a minipage's, a theorem's, an item's, $$\\halign$$), each display's ink between its points
@@ -1008,7 +1013,8 @@ export const POINTS_TEX = [
   '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
   '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
   '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
-  '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@point{dps\\axt@dpm}\\penalty\\@M}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@point{dpe\\axt@dpm}\\axt@dpdp}\\fi\\fi}',
+  '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
+  '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
   '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
   '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
 ].join('')

@@ -746,13 +746,17 @@ describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it 
     expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}')
     expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}')
     expect(POINTS_TEX).toContain('\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname')
-    // (each of its rows closed after its \\cr, by \\everycr's \\noalign, its first point after the preamble with a \\penalty10000,
-    // so that no place to break is made: the glue under it follows a penalty, as it followed \\abovedisplayskip; nothing before
+    // (each of its rows closed after its \\cr, by \\everycr's \\noalign, its first point after the preamble's; nothing before
     // the \\noalign that TeX would read as a row's start)
-    expect(POINTS_TEX).toContain('\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@point{dps\\axt@dpm}\\penalty\\@M}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@point{dpe\\axt@dpm}\\axt@dpdp}\\fi\\fi}')
-    // (a row's end is in the page's list, after the row: the row's depth given back under it, a kern of minus the depth and an
-    // empty box that deep, so that a column ending there ends with a box of the row's depth, as \\lastbox finds it, and the
-    // heights, the breaks and the next row's glue are the same)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}')
+    // (a point between rows is in the page's list, and makes the glue after it a place to break: amsmath's rows end with a
+    // \\noalign of \\interdisplaylinepenalty, 10000, and the glue under it follows a penalty; a point after that penalty let TeX
+    // break 2010.11929v2's align over pages 3 and 4. So each point is set by what ends the list: after a penalty, a glue or
+    // nothing, the point and a \\penalty10000, so the glue after it still follows a penalty; after a row's box, the point and the
+    // row's depth given back under it, a kern of minus the depth and an empty box that deep, so that a column ending there ends
+    // with a box of the row's depth, as \\lastbox reads it; after a kern, none, which a glue after makes a place to break; after
+    // anything else (a whatsit, a mark), the point alone)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}')
     expect(POINTS_TEX).toContain('\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}')
   })
 })
