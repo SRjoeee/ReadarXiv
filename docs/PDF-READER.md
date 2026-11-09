@@ -2789,6 +2789,20 @@ frames still fill their own blocks (1810.04805v2 pages 6-7, unit 119: four lines
 had set five on page 6 and one of two characters alone on page 7). Over the 22 parity pairs (344 pages) the two move the
 lines of 18 members' frames on 15 pages; the parity check finds one page fewer worse (1810.04805v2 page 7), none newly.
 
+**A paragraph's leading is the whole paragraph's, over its frames.** A paragraph TeX broke over a column or a page can end in
+one line alone at the top of its last frame (TeX's widow). That frame has no leading of its own: it takes the paragraph's, its
+frame before's. The gap under the paragraph follows it (the ruling above), but the line cannot rise, the first of its column,
+and the next paragraph's first line stays on TeX's baseline, so the gap stayed the original's pitch: the owner on staging,
+2610.20967v1 page 4, a one-line continuation 10.41 pt over a paragraph spread to 13.43 and under one spread to 14.78, in a
+paper with no `\parskip` whose original reads evenly. Where the paragraph over it cannot end higher, the paragraph under it
+starts lower by what the gap lacks, within its own lines, at the loosest leading of its first frame that still sets it
+(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Today's reader and every round
+before set the gap at the pitch. Over the 22 parity pairs six paragraphs move so, default and toggles on alike (2610.20967v1
+page 4 unit 85, 4.37 pt lower, its leading 1.29 to 1.23). Those first lines leave TeX's baseline by 0.7 to 6.9 pt, which the
+parity check's anchor measure reads as farther from the original than today's on five pages: this rule and B′ (a first line
+stays on TeX's) meet there, and the paragraph above, the one B′ takes the room from, has none. A paragraph of one line has no
+leading at all, and the gap under it stays TeX's.
+
 ### 18.12 A table cell's alignment is its column's, as LaTeX built it (2026-11-09)
 
 The owner's comment #42 (2602.23285v2-ja page 7): the translation of the header "Acc" grew rightward from the cell's left
