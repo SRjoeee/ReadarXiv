@@ -9,7 +9,7 @@ import { cover } from '../../src/breaker/cover.ts'
 import { measure } from '../../src/breaker/measure.ts'
 import { type TStyle, tokens } from '../../src/breaker/tokens.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
-import { firstDifference, hasDerived, hasTap, readGz, roundsOf, sample, TAP } from './tap.ts'
+import { firstDifference, hasDerived, hasTap, markSpaced, readGz, roundsOf, sample, TAP } from './tap.ts'
 import { type In, type Reading, rolesOf, tokenFacts, tokensInput } from './tokens-input.ts'
 
 describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('B.tokens: replayed on the tap', () => {
@@ -20,6 +20,8 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
     let rounds = 0,
       count = 0,
       covers = 0
+    // (the rounds and spaces the mark-space ruling of 2026-11-10 takes from today's tokens, tap.ts markSpaced)
+    const ruled = { rounds: 0, spaces: 0 }
     const kinds = new Set<string>()
     for (const e of sample('B.tokens').entries)
       for (const [round, c] of roundsOf(e)) {
@@ -62,13 +64,20 @@ describe.skipIf(!hasTap || !hasDerived('B.tokens') || !hasDerived('U.breaks'))('
             'leadEnd',
           ] as const)
             if (t[kind] !== undefined && t[kind] !== null) kinds.add(kind)
-        const d = firstDifference(measured, [...want], 'tokens') ?? firstDifference(got.base, want.base, 'base')
+        const roles = rolesOf(e.pair)
+        const today = markSpaced([...want], new Set(roles.cjk ? [roles.cjk.body, roles.cjk.bold] : []))
+        if (today.removed) {
+          ruled.rounds++
+          ruled.spaces += today.removed
+        }
+        const d = firstDifference(measured, today.tokens, 'tokens') ?? firstDifference(got.base, want.base, 'base')
         if (d) differ.push(`${key}: ${d}`)
         // (the comparison tells a width off by a billionth)
         const off = measured.map((t, j) => (j ? t : { ...t, w100: t.w100 + 1e-9 }))
-        if (measured.length && !firstDifference(off, [...want])) differ.push(`${key}: a changed width went unseen`)
+        if (measured.length && !firstDifference(off, today.tokens)) differ.push(`${key}: a changed width went unseen`)
       }
     expect(differ).toEqual([])
+    expect(ruled).toEqual({ rounds: 1, spaces: 3 })
     expect(rounds).toBe(42)
     expect(covers).toBe(42)
     expect(count).toBeGreaterThan(1000)

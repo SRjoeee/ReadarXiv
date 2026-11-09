@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
+import { CJK, punctOf } from '../../src/breaker/script.ts'
 
 export const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
 export const TAP = join(LAB, 'refactor-2026-11', 'baseline', 'tap')
@@ -43,6 +44,42 @@ function underALine(blocks: readonly { free?: unknown; pitch0?: unknown }[], s: 
   const room = (b: { free?: unknown }) => (typeof b.free === 'number' ? b.free : 0)
   const pitch = (b: { pitch0?: unknown }) => (typeof b.pitch0 === 'number' ? b.pitch0 : 1.2 * s)
   return blocks.some((b) => room(b) > 0) && !blocks.some((b) => Math.floor(room(b) / pitch(b) + 1e-6) > 0)
+}
+/** a token of today's as the mark-space ruling reads it */
+type SpacedToken = {
+  space?: boolean
+  keep?: boolean
+  s?: unknown
+  cls?: unknown
+  st?: { fam?: unknown } | null
+  face?: { id?: unknown }
+}
+/**
+ * Today's tokens as the ruling of 2026-11-10 makes them (lane cjk-space, B.tokens: no space beside a full-width mark's blank
+ * side, xeCJK's rule, whatever stands on the mark's other side; tests/unit/mark-space.test.ts): each space today set after a
+ * closing mark or before an opening mark (script.ts punctOf) that is full-width, a mark of the CJK blocks or one set in the
+ * target's CJK face (`cjk`, its faces' ids: rolesOf's), removed; a space after a head (`keep`) or in a monospaced run stays.
+ * With how many it removed: a replay counts the ruling where it applies, and compares nothing of it against today
+ */
+export function markSpaced<T extends SpacedToken>(
+  tokens: readonly T[],
+  cjk: ReadonlySet<string>,
+): { tokens: T[]; removed: number } {
+  const edge = (t: T | undefined, end: boolean) => {
+    if (!t || t.space || t.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
+    const cps = [...t.s],
+      ch = end ? cps.at(-1)! : cps[0]!
+    return punctOf(ch) === (end ? 'close' : 'open') && (CJK.test(ch) || cjk.has(String(t.face?.id)))
+  }
+  const near = (q: number, step: number) => {
+    for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]
+    return undefined
+  }
+  const out = tokens.filter(
+    (t, q) =>
+      !t.space || !!t.keep || t.st?.fam === 'mono' || !(edge(near(q - 1, -1), true) || edge(near(q + 1, 1), false)),
+  )
+  return { tokens: out, removed: tokens.length - out.length }
 }
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**

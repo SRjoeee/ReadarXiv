@@ -28,7 +28,19 @@ const entry = (width: number, kind: Placed['kind'] = 'reference'): Placed => ({
   lead: 12,
   style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
   align: 'j',
-  lines: [0, 1, 2, 3, 4].map((k) => [1, 0, 72, 72 + width, 700 - 12 * k, 707 - 12 * k, 698 - 12 * k, 72, 72 + width, 0, 10]),
+  lines: [0, 1, 2, 3, 4].map((k) => [
+    1,
+    0,
+    72,
+    72 + width,
+    700 - 12 * k,
+    707 - 12 * k,
+    698 - 12 * k,
+    72,
+    72 + width,
+    0,
+    10,
+  ]),
   room: { below: 40, next: 44 },
 })
 const part = (m: Placed): Part => ({
@@ -76,7 +88,9 @@ describe('B.tokens: no space beside a full-width mark’s blank side (xeCJK)', (
   it('sets no space beside a curly quote the target sets in its CJK face, and keeps one where an alphabet sets it (de)', () => {
     // (a curly quote is of ambiguous width: an em in a CJK face, proportional in a Latin one; German sets it in its Latin face)
     expect(linesOf('他说“你好” Transformer 很好。', 300)[0]).toBe('他说“你好”Transformer 很好。')
-    expect(linesOf('Der Satz „eins” umfasst zwei Wörter.', 300, 'de')[0]!.trim()).toBe('Der Satz „eins” umfasst zwei Wörter.')
+    expect(linesOf('Der Satz „eins” umfasst zwei Wörter.', 300, 'de')[0]!.trim()).toBe(
+      'Der Satz „eins” umfasst zwei Wörter.',
+    )
   })
   it('sets no space after a mark the target sets in its em’s middle (zh-TW: centred marks)', () => {
     expect(linesOf('這是一句。 Transformer 很好。', 300, 'zh-TW')[0]).toBe('這是一句。Transformer 很好。')
