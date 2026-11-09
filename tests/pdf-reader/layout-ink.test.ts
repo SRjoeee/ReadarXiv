@@ -385,6 +385,13 @@ describe('pageInk', () => {
     // (a second end of one region, which TeX may set where a group gives a paragraph's state back, closes nothing)
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'cds9', glyph: 4 }, { name: 'cde9', glyph: 6 }, { name: 'cde9', glyph: 6 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 4, to: 6 }])
     expect([...regionMask([{ kind: 'code', from: 1, to: 3 }, { kind: 'other', from: 0, to: 5 }], 5, 'code')]).toEqual([0, 1, 1, 0, 0])
+    // (a display's points (marks.mjs POINTS_TEX): one before its first ink and one after its last, a non-alignment display's; an
+    // alignment's after each of its rows, the region running to the last of them; one TeX broke over a page or a column from its
+    // column body's start to the last end there)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps3', glyph: 2 }, { name: 'dpe3', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 2, to: 5 }])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps4', glyph: 2 }, { name: 'dpe4', glyph: 4 }, { name: 'dpe4', glyph: 7 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 2, to: 7 }])
+    expect(regionsOfPoints([{ name: 'bs2', glyph: 1 }, { name: 'dpe4', glyph: 3 }, { name: 'dpe4', glyph: 6 }, { name: 'be2', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 1, to: 6 }])
+    expect([...regionMask([{ kind: 'display', from: 1, to: 3 }], 5, 'display')]).toEqual([0, 1, 1, 0, 0])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {

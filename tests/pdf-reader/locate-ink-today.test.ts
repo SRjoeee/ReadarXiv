@@ -205,6 +205,25 @@ describe('today’s ink makers in the engine package', () => {
     expect(one(TODAY)).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
     expect(one(T as unknown as Impl)).toEqual({ lines: [['symbols', 'ab'], ['math', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['An orphan line of words after it here'] })
   })
+  it('keep a line TeX set in a display as the formula’s, by its points, whatever its face and wherever it stands (the one change)', () => {
+    // (2608.08481v1 p7: displays (7) and (8) in REVTeX's widetext at the page's foot, under the footnote rule, no source unit's;
+    // their lines in a text face (\\mathrm), cut into ink units of the foot, the right part of (7) and a line of (8) translated.
+    // The marked compile states each display TeX sets (marks.mjs POINTS_TEX, its region `display`): the copy keeps its lines as
+    // the formula's, today's reads them by their place and face)
+    const pg = pageOf([
+      { s: 'Body owned text', y: 700 },
+      { s: 'D(l) = 4pi(2l + 1) k R(r) dr', x: 90, y: 80 },
+      { s: 'A(m) = Y(t) sum Y(t) cos sin d', x: 90, y: 60 },
+      { s: '7', x: 500, y: 80 },
+    ], { points: [['bs1', 0], ['be1', 15]], regions: [{ kind: 'display', from: 15, to: 15 + 28 + 30 + 1 }] })
+    const cls = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) }) as { lines: { cls: string }[] }
+      return { lines: ledger.lines.map((l) => l.cls), ink: I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).length }
+    }
+    expect(cls(TODAY)).toEqual({ lines: ['notes', 'notes', 'symbols'], ink: 2 })
+    expect(cls(T as unknown as Impl)).toEqual({ lines: ['math', 'math', 'math'], ink: 0 })
+  })
   it('state the glyphs of the label they read out of a unit’s text, those glyphs its text’s still as today’s (the one addition)', () => {
     // (2610.22065v1 p1: an affiliation the class prints from its own lists, its raised "2" no text of the unit's (labelLength);
     // today's left its glyph among the unit's text glyphs alone, so locate, which states a label from the glyphs it is told,

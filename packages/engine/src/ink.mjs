@@ -79,12 +79,18 @@ const LEVEL = 1e-3
 const TURN_SKEW = 0.02
 /** a TikZ picture's points (layout/marks.mjs POINTS_TEX, around pgf's picture): a figure's text and lines lie between them */
 export const PICTURE_START = 'zs', PICTURE_END = 'ze'
-/** a region's points (layout/marks.mjs regionsTex): `<kind>s<n>` before a line TeX set in a region of that kind, `<kind>e<n>`
- *  after it, the kind's name one of REGION_POINT_KINDS. A code region's: each line of the body of an environment the source
- *  sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), whatever box or picture holds it */
-export const REGION_POINT = /^(cd)([se])(\d+)$/
-/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs: 'code') */
-export const REGION_POINT_KINDS = Object.freeze({ cd: 'code' })
+/** a region's points (layout/marks.mjs regionsTex, POINTS_TEX): `<kind>s<n>` before a line TeX set in a region of that kind,
+ *  `<kind>e<n>` after it, the kind's name one of REGION_POINT_KINDS. A code region's: each line of the body of an environment
+ *  the source sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), whatever box or picture holds it. A
+ *  display's: each display TeX sets, its start before its formula's first ink and its end the last thing in its formula,
+ *  before its number, or after each of its rows where TeX set it as an alignment; a display the source ends with $$ has no
+ *  end, and its start alone states no region */
+export const REGION_POINT = /^(cd|dp)([se])(\d+)$/
+/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs, holds 'code'; 'display' is read
+ *  by the engine's ledger and figures alone, the file's maker passing it by) */
+export const REGION_POINT_KINDS = Object.freeze({ cd: 'code', dp: 'display' })
+/** the kinds whose region runs to its last end: an alignment's rows each end with one (marks.mjs POINTS_TEX \\axt@dpcr) */
+const TO_LAST_END = new Set(['display'])
 /** a column body's bracket (marks.mjs POINTS_TEX: `bs<n>` before it, `be<n>` after it) */
 const BODY_BRACKET = /^b[se]\d+$/
 /** a figure's curve as this many chords (`turned`'s shapes), and the numbers a page's shapes hold at most */
@@ -990,9 +996,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
  * a folio, shipped outside the body, is no line of the region)
  */
 export function regionsOfPoints(points, glyphCount) {
-  const open = new Map(), closed = new Set(), out = []
+  const open = new Map(), closed = new Map(), out = []
   let bodyStart = null
-  const push = (kind, from, to) => { if (to > from) out.push({ kind, from, to }) }
+  const push = (kind, from, to) => { if (to > from) { const r = { kind, from, to }; out.push(r); return r } return null }
   for (const p of points) {
     if (BODY_BRACKET.test(p.name)) {
       if (p.name[1] === 's') bodyStart = p.glyph
@@ -1001,16 +1007,19 @@ export function regionsOfPoints(points, glyphCount) {
     }
     const m = REGION_POINT.exec(p.name)
     if (!m) continue
-    const key = `${m[1]}${m[3]}`
+    const key = `${m[1]}${m[3]}`, kind = REGION_POINT_KINDS[m[1]]
     if (m[2] === 's') { open.set(key, p.glyph); continue }
-    // (an end its region's start closed already, a second one TeX set where the paragraph's group gave its state back, closes
-    // nothing)
-    if (!open.has(key) && closed.has(key)) continue
+    // (an end its region's start closed already: a code paragraph's second one, which TeX set where the paragraph's group gave
+    // its state back, closes nothing; a display alignment's next row's, which carries its region on to it)
+    if (!open.has(key) && closed.has(key)) {
+      const r = closed.get(key)
+      if (r && TO_LAST_END.has(kind)) r.to = Math.max(r.to, Math.min(p.glyph, glyphCount))
+      continue
+    }
     const from = open.get(key) ?? bodyStart
     if (from === null || from === undefined) continue
     open.delete(key)
-    closed.add(key)
-    push(REGION_POINT_KINDS[m[1]], from, Math.min(p.glyph, glyphCount))
+    closed.set(key, push(kind, from, Math.min(p.glyph, glyphCount)))
   }
   return out.sort((a, b) => a.from - b.from)
 }
