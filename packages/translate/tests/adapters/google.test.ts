@@ -4,7 +4,7 @@ import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
 import { el, span, t, unit } from '../pieces.ts'
-import { GOOGLE_REPLIES, DISPLAY_ENDS, HEAD_STOP, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
+import { DISPLAY_ENDS, GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, SOURCE_LINES, UNITS } from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -15,7 +15,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -145,6 +145,11 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
       'We show the standard deviations of the layer responses.',
       'The rest follows.',
     ])
+  })
+  it('the fixture unit the digest holds it by: boundary markers before the citation and before the next sentence alone', () => {
+    expect(g.write(SOURCE_LINES, 'zh-Hans')).toBe(
+      'Sampling remains computationally expensive. <x id="2"/><x id="1"/> proposes a one-step sampler. <x id="3"/>Then we go on.',
+    )
   })
 })
 

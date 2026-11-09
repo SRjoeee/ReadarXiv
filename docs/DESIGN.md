@@ -1157,9 +1157,11 @@ only how it meets the rest of the extension.
   (`… no history. 220⏎firm-runs per model.`, a number then lower case, which Intl.Segmenter continues). Against today's
   cutter over the same units restated in today's pieces (`mt.mjs` `serializeTags`, `cutsOf`), the units asked in the same
   sentences rise from 9,918 to 16,517 of 17,957 (paragraphs 8,609 of 8,733); most of the rest are references, where the tie
-  reads as a word here (its kind is `other`) and as a space in today's: typed `space`, they would be 17,061. No digest moves
-  (no fixture unit holds such a shape); the answers store's key is the wire's bytes, so a unit whose tags wire changed is
-  asked again. Microsoft reports its own sentences, which this cutter does not touch.
+  reads as a word here (its kind is `other`) and as a space in today's: typed `space`, they would be 17,061. Google's and
+  Chrome's behaviour digest moves (a fixture unit of our own words with both shapes, `SOURCE_LINES`; no earlier one held
+  either), and with it the chain's identity, so a page's rows are made again from the answers store, whose key is the wire's
+  bytes: only a unit whose tags wire changed is asked again. Microsoft reports its own sentences, which this cutter does not
+  touch, and its digest stays.
   **What Microsoft does after an abbreviation's stop** (1512.03385v1 p7: "Fig.~\ref{fig:std} shows" came back
   「无花果。7 显示…」, the fruit). The request is `Analysis of Layer Responses. @c# Fig. @d# shows …`, today's wire and the markers wire
   byte for byte, the tie and the reference one marker, the space after the stop the wire's own (a marker right after a full

@@ -239,6 +239,18 @@ export const DISPLAY_ENDS: UnitIn = unit(
   ],
   true,
 )
+/** a unit as the PDF's source reader states it, words of our own: its TeX source's own line ends, which TeX reads as spaces,
+ *  and a citation that opens a sentence after a stop, its verb after it (the tags wire's cutter, lane fig-cut 2026-11-10: a
+ *  line end cut a sentence, and the citation was read as the sentence before's) */
+export const SOURCE_LINES: UnitIn = unit(
+  'source-lines',
+  [
+    t('Sampling remains\ncomputationally expensive. '),
+    el('c', 'cite'),
+    t(' proposes a one-step\nsampler. Then we go on.'),
+  ],
+  true,
+)
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
   /* 17 */ BERT_ABSTRACT,
