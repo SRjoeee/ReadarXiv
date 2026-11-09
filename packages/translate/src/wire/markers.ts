@@ -174,7 +174,8 @@ const stopOf = (els: readonly El[]): string | undefined =>
 /**
  * Whether an element can stand inside a word, its characters the word's: one that reads as a word to the sentence splitter
  * (text.ts standInOf: a formula; a macro, an escaped character, code, which it reads as none). Never one its reader states
- * nothing of (`other`: the PDF's source reader's kind for a tie, a skip, a switch, a forced break, which set no character),
+ * nothing of (`other`: the PDF's source reader's kind for a skip, a switch, which set no character; a tie is its `space`, a
+ * forced break its `break`),
  * a display, a space or a break, a reference's number or an annotation
  */
 const inWord = (q: El): boolean => q.kind !== 'other' && q.kind !== DISPLAY && (standInOf(q.kind) ?? 'x') === 'x'

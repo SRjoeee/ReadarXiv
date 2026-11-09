@@ -34,6 +34,8 @@ export declare function spansOf(
 export declare function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null
 /** a forced break's source (tex.mjs FORCED_BREAK) */
 export declare const FORCED_BREAK: RegExp
+/** the kind a bundle's element states: a tie `space`, a forced line break `break`, any other today's classOf's, `other` for none */
+export declare function elementKindOf(piece: { t: string; src?: string }): string
 /** a citation's note, where it holds a letter */
 export declare function noteOf(src: string): string | null
 /** the command a source begins with, and whether the source is that command alone */

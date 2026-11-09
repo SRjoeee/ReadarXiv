@@ -3,11 +3,13 @@
 import { describe, expect, it } from 'vitest'
 import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
 import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
+import { classOf as marksClassOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
 import { BACKREF_LIST, displayStop, isInkless, serialize } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import {
   boundedEmpty,
   classesOf,
   contentOf,
+  elementKindOf,
   FORCED_BREAK,
   glueOf,
   glyphPiecesOf,
@@ -145,6 +147,21 @@ describe('the instrument adapter’s element classes', () => {
       expect(glueOf(s)).toEqual(todayGlue(s))
       expect(FORCED_BREAK.test(s)).toBe(todayBreak.test(s))
     }
+  })
+})
+
+// (the kind a bundle's element states, which a translator's sentence cutter reads it by: today's cutter read a tie and a
+// forced break as a space, the package's read them, kind `other`, as a word, and cut `R.~S.~Sutton` after its initials; lane
+// fig-cut 2026-11-10)
+describe('the kind the adapter states of an element', () => {
+  it('a tie is a space and a forced line break a break, as TeX sets them; any other today’s classOf’s, `other` for none', () => {
+    expect(elementKindOf(ph('~'))).toBe('space')
+    for (const s of ['\\\\', '\\\\*', '\\\\[2pt]', '\\newline']) expect(elementKindOf(ph(s))).toBe('break')
+    expect(elementKindOf(ph('\\ref{fig:std}'))).toBe('ref')
+    expect(elementKindOf(ph('\\cite{x}'))).toBe('cite')
+    for (const s of ['\\vspace{6pt}', '\\noindent', '\\label{x}']) expect(elementKindOf(ph(s))).toBe('other')
+    for (const s of ['\\item', '\\ ', '\\quad', '\\linebreak', '$x$', '\\textsc{Blip}', '\\url{a.b}', '\\footnote{x}', '~~'])
+      expect(elementKindOf(ph(s))).toBe(marksClassOf(ph(s)) ?? 'other')
   })
 })
 
