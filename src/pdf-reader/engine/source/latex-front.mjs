@@ -2463,7 +2463,7 @@ function walk(s, from, to, b, ctx) {
 /**
  * The paper's macros of no argument that end the paragraph TeX is setting, by name: a name every definition of which, in any of
  * the package's files and in any form (DEFINITION), takes no parameter and has a body that ends it at its top level — `\\par`, or
- * a row's end, `\\\\`, \\newline, \\cr (FRONT_ROW) —, whatever else it does. Inside an author block it ends a row, as `\\\\` does
+ * a row's end, `\\\\`, \\newline, \\cr (FRONT_ROW) — and sets no text of its own (setsText). Inside an author block it ends a row, as `\\\\` does
  * (frontEnds): IJCAI's style, which a paper ships, defines inside its \\@maketitle `\\def\\affiliations{\\egroup\\vskip
  * 0.05in minus 0.05in\\par\\bgroup\\Large\\rm}` and \\emails alike, written inside \\author between its names, its places and
  * its e-mails: read as text, the last name and the first place were one row, and the last place ran on through \\emails into the
@@ -2477,12 +2477,18 @@ function frontRowEndsOf(texts) {
       if (m.index > 0 && t[m.index - 1] === '\\') continue
       const [, nc, nb, nd, nl, nx, ny] = m, name = nc ?? nb ?? nd ?? nl ?? nx ?? ny, k = skipSpaces(t, m.index + m[0].length)
       const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
-      if (e > 0 && endsParagraph(t, k + 1, e - 1)) out.add(name); else other.add(name)
+      if (e > 0 && endsParagraph(t, k + 1, e - 1) && !setsText(t.slice(k + 1, e - 1))) out.add(name); else other.add(name)
     }
   }
   for (const n of other) out.delete(n)
   return out
 }
+/** whether a body sets text of its own: a letter past its commands, its groups' braces and the glue or dimensions a skip reads
+ *  (TeX's units and its plus and minus: `\\vskip 0.05in minus 0.05in`). One that does is the paper's prose, its row ends its own
+ *  (2608.16190's `\\def\\authorblock{Anik Jha\\\\ Independent Researcher}`, written as \\author's whole argument: storedBodies) */
+const setsText = body => /\p{L}/u.test(body.replace(/\\(?:[A-Za-z@]+|.)/g, ' ').replace(/[{}]/g, ' ').replace(GLUE_SPEC, ' '))
+/** a dimension or a glue as TeX reads one after a skip: a number, its unit (TeX's, `true` before it), each `plus` and `minus` */
+const GLUE_SPEC = /(?:[-+]?\s*(?:\d+(?:\.\d*)?|\.\d+)\s*(?:true\s*)?(?:pt|pc|in|bp|cm|mm|dd|cc|sp|em|ex|mu|fil{1,3})(?![A-Za-z])\s*(?:(?:plus|minus)(?![A-Za-z])\s*)?)+/g
 /** whether s[from, to) ends the paragraph at its top level: a `\\par` or a row's end (FRONT_ROW) outside every group */
 function endsParagraph(s, from, to) {
   for (let k = from; k < to; ) {
