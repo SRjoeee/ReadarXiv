@@ -2843,6 +2843,24 @@ room. Reading the alignment by `inkOf` instead clears the first four and makes t
 character, before a formula's crop its text does not hold, is a comma; a closing mark the breaker already compressed), so the
 parity's reading was left as it is.
 
+A unit that is no cell's but is set as a cell's line states the same (2026-11-09, the owner's batch 3 on 1706.03762v7-zh page
+1: "the names, places and e-mails are not centred on their columns; the first two are, the later ones are not"). An author
+block's units are never cells (PIPELINE 39), yet they are set in tables: LaTeX's `\maketitle` sets `\author` in a
+`tabular[t]{c}` and `\and` opens another, as NeurIPS's `\And` does, each name, place and e-mail a row. Their `AXT-ALIGN` said
+`h` and nothing more, so locate read each from arXiv's ink: centred where the stack of the column happened to read so, the
+first author's, justified elsewhere, five of the eight names and their places laid from their originals' starts. A unit's
+start mark now carries its index out the same way, but through ordinary groups alone (a brace group, `\begingroup`, as the
+paragraph's end is followed): never past a box, a `\noalign`, math or a note, where the unit is no line of the cell's or the
+token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class where
+it is the cell's one unit; where two units, or a cell's unit, share the cell's line, the class places the line, not either,
+and none is written. `readAlign` reads it as a cell's: the class where the unit's own paragraph says nothing (a name set again
+as a paragraph, acmart's reference format, keeps its paragraph's). Nothing of B moves (the same gate, its case `authors`: 96
+documents, each PDF byte for byte the one before). A `\thanks` mark TeX set glued after a name (its `\rlap`) is the name's
+trail (§18.14) and travels with it, so the room beside the name is no longer fenced by it (1706.03762v7's first name, set at
+9.22 pt before it). Not done: a name whose own element is such a mark, or whose `\thanks` mark TeX set past an `\hspace`, is
+centred with the mark's ink, up to 1.6 pt off the column's centre, which TeX takes without the mark; and a mark past a skip
+still stays and bounds the translation beside it (1706.03762v7's sixth and eighth names, set at 9.71 and 8.47 pt).
+
 ### 18.13 A table cell's room is what TeX set on its line (2026-11-09)
 
 The owner's ruling of 2026-11-08 puts each cell in its own room, sized as today's reader sizes it. The typesetter took that
@@ -2871,6 +2889,38 @@ the "0" at 168.38, which gives 161.18. 0.9 of the size needs 161.17, so today's 
 quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred header, so its room is centred on its own
 middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
 6.49 pt off its middle and 12.98 pt past its own room.
+
+### 18.14 The member before is the one TeX set before it (2026-11-09)
+
+The owner's batch 3 on 2610.22065v1-zh page 1: "in the ACM reference format the names are filled out with very large spaces,
+in today's and in v2's; is the original written badly? The names should simply run on and break at the line's end." TeX
+stretched nothing there: the original's first line puts 1.98 pt between its names, Libertine's own space at its 7.97 pt (0.25
+em), its last comma 0.88 pt past the measure (microtype's protrusion); its second line 1.62 to 1.64 pt, shrunk. acmart sets
+the authors' names again in its reference format, one paragraph, each name a unit of `\author`'s; the places
+`\affiliation` holds between them in the units' order are set nowhere in it. Locate chains members into one flow where the
+second's first line is the first's last line, on its baseline after its end, in one paragraph of TeX's, and took for the
+member before a member the one before it in the units' order: a place TeX never set there, so no flow, and every name was laid
+alone at its original's start, each translation shorter than its name leaving a gap before the next; today did the same in
+part. So the gaps were no TeX artefact for a translation to copy or not: a translation never takes the glue of the original's
+lines, which belongs to the source's words and breaks, and the breaker justifies its own. A member with no place in TeX's
+stream (no glyph TeX printed, none made on A) is now never the member before (nor the body's last member an insert is passed
+over to, nor the last note), and a member made on A whose first glyph TeX set right after a member's last, on that member's
+last row, stands after it (`locate.ts` `standsAfter`; before the member whose first glyph comes next otherwise, as before):
+the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
+page and stood after every member. Each row's names then run on from the one before, at the original's separation from its
+translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
+members).
+
+**A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
+translation leaves a great deal of redundant blank space"). Its class sets `$^{1,*}$` and ", " after each `\author`'s text,
+none of any unit's: left where TeX set them, the ink stood between two names on their row, the join was kept (S.rowStart lays
+no follower past ink that stays), and each translated name was laid at its original's start, a hole after it. Locate now
+claims, for a located member, the ink TeX set right after its last glyph in the stream, no other unit's between, each glyph on
+the row (`ON_ROW`) and no word's gap after the one before (the ink units' word rule, today's): the member's trail, an element
+of no piece in its group `.e`, on its last line. The typesetter draws it as its crop right after the member's own tokens,
+glued; the follower runs on from its end at TeX's separation, and the room beside the member is no longer fenced by it (a
+`\thanks` mark in an `\rlap`, 1706.03762v7's first name). Ink past a skip (an `\hspace`, a proof's QED box after `\hfill`)
+is no trail and stays. One rule with §18.12's: what TeX set on a line is laid as the line, with the alignment TeX gave it.
 
 ## 19. The engine's contract
 
@@ -5641,6 +5691,32 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   1706.03762v7's three "Google Brain" rows each where it stands: all 15 of its block's units laid); a row that opens with its
   first letter as a command in a group (`{\L}ukasz`) has its start mark before the group (`patch`), so that the letter is its
   own ink.
+- **A class's own author command** (`source/latex-front.mjs` `ownAuthorsOf`, 2026-11-09, the owner's priority report on
+  2610.20967v1-zh: "the author block is off, yet the authors' names are translated, and their small 1s are drawn as big 1s").
+  The role table knows the author block by its commands' names, LaTeXML's; a class a paper ships may have its own. ICASSP's
+  spconf.sty stores `\name{…}` as LaTeX's `\author` stores its text (`\def\name#1{\gdef\@name{{\em #1}\\}}`) and its
+  `\@maketitle` sets `\@name` and `\address`'s `\@address` as the rows of one tabular. `\name` was no command of the block: its
+  names no unit, an ink unit of the notes (always translated), its affiliations' marks read as text (under Times a superscript's
+  digit is in the text face, which the ink units' rule 4 takes for words). Read from the paper's own definitions instead: a
+  command whose one argument of text its definition keeps in a macro (`keeps`: a definition in its body, as LaTeX's `\author`,
+  or through a call of another of the paper's macros that keeps what it is handed in the macro another argument names: the
+  Meta FAIR preprint class's `\addtolist`, `\xdef#3{…#2…}`) whose macro the class's title command (`\maketitle`,
+  `\@maketitle`, and the commands of the paper's files they call) sets in the group, a brace group or a tabular, it sets a
+  known block's macro in (LaTeX's `\@author`, or the macro of a command the role table knows of the block) is of the block, its
+  names where its macro opens that group, as `\author`'s first rows are, else its places; frontBlock cuts it as `\author`'s,
+  its marks its elements. 2604.14228v3 (that class): its `\contribution` notes, the paragraph after the places in the group the
+  title sets the names and places in, are places; their glyphs on the title box's fill had been figure texts, translated with the
+  block off, each run laid at its own anchor. What the title sets in another group is none: taking all it sets made a venue's
+  line, a licence and a teaser's caption places (2610.22214v1, 2402.10294v1, egpubl's 2610.30875v1), and so the class's
+  `\correspondence`, which its title sets after the abstract in the metadata's group with `\date`, is no unit and stays figure
+  texts: classing it with the block needs a fact TeX does not state (its e-mail, its name an author's). Its units are numbered after every other
+  unit but before the entries (`last`): numbered after the entries, the unit stood where a bibliography BibTeX makes in the
+  first pass is appended, and `madeBibliography`, which holds every unit before the entries as it was, kept the bibliography as
+  none. Over the 88 papers 2610.20967v1 alone moves (one unit, kind author, no other unit's number); over the 190 sources on disk
+  2604.13605v1 too (the same class; its shipped .bbl's entries one number on). Not covered: a command that takes the block's text
+  in more than one argument (spconf's `\twoauthors`), a block a paper's macro of no argument holds (2610.30854v1's
+  `\PaperAuthors`, set by its own `\MakeJointTitle`), a class the paper does not ship, and a title block written out with no
+  author command at all (2610.19282v1, 2610.21924v1, 2610.21827v1: their names are paragraphs).
 - **A paper's macro of its text in an author block** (`storedBodies`): `\affiliation[a]{\CU}`, `\CU` a `\newcommand` of the
   affiliation's text (2609.20976v1), is cut where it is defined, of the kind of the place it is called from; where the macro is
   called once in running text (`once`), its unit is marked in its definition (`frontMarks`), the one place TeX sets it, and is laid
