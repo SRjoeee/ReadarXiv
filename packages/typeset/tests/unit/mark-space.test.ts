@@ -73,6 +73,11 @@ describe('B.tokens: no space beside a full-width mark’s blank side (xeCJK)', (
     expect(linesOf('模型 Big Model 很好。', 300)[0]).toBe('模型 Big Model 很好。')
     expect(linesOf('一个 GPU，两个 GPU。', 300)[0]).toBe('一个 GPU，两个 GPU。')
   })
+  it('sets no space beside a curly quote the target sets in its CJK face, and keeps one where an alphabet sets it (de)', () => {
+    // (a curly quote is of ambiguous width: an em in a CJK face, proportional in a Latin one; German sets it in its Latin face)
+    expect(linesOf('他说“你好” Transformer 很好。', 300)[0]).toBe('他说“你好”Transformer 很好。')
+    expect(linesOf('Der Satz „eins” umfasst zwei Wörter.', 300, 'de')[0]!.trim()).toBe('Der Satz „eins” umfasst zwei Wörter.')
+  })
   it('sets no space after a mark the target sets in its em’s middle (zh-TW: centred marks)', () => {
     expect(linesOf('這是一句。 Transformer 很好。', 300, 'zh-TW')[0]).toBe('這是一句。Transformer 很好。')
   })

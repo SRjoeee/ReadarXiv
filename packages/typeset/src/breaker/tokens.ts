@@ -20,7 +20,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { cjkClassRe, kinsokuOf, keptPair, noStart, punctOf, SPACELESS } from './script.ts'
+import { CJK, cjkClassRe, kinsokuOf, keptPair, noStart, punctOf, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -333,17 +333,20 @@ const spacelessEdge = (t: Token | null, end: boolean) => {
   return SPACELESS.test(ch) || SPACELESS_QUOTES.test(ch)
 }
 /**
- * A token whose edge is a full-width mark's blank side: its last character a closing mark set as CJK's (its white after its
- * ink), or its first an opening mark (its white before), by the marks' class table (script.ts punctOf), whether the target's
- * faces set the mark in one half of its em or in its middle. A space there is no space of the text's: the mark carries the
- * white, and a translator's space beside it doubled it (2611.03953v2-zh's references, each name followed by U+FF0C and a space:
- * about 1 em of white a name where the original's comma and space held 0.3 em). xeCJK sets none after a closing mark whatever
- * follows it (\xeCJK_FullRight_and_Boundary: ignores the spaces after it)
+ * A token whose edge is a full-width mark's blank side: its last character a closing mark (its white after its ink), or its
+ * first an opening mark (its white before), by the marks' class table (script.ts punctOf), whether the target's faces set the
+ * mark in one half of its em or in its middle. Full-width by Unicode: a mark of the CJK blocks (script.ts CJK: the full-width and
+ * wide forms, East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target
+ * sets it in its CJK face (`cjkFace`), an em wide; an alphabet's target sets it in its Latin face, proportional. A space there is
+ * no space of the text's: the mark carries the white, and a translator's space beside it doubled it (2611.03953v2-zh's
+ * references, each name followed by U+FF0C and a space: about 1 em of white a name where the original's comma and space held
+ * 0.3 em). xeCJK sets none after a closing mark whatever follows it (\xeCJK_FullRight_and_Boundary: ignores the spaces after it)
  */
-const markBlankEdge = (t: Token | null, end: boolean) => {
+const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boolean) => {
   if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
-  const cps = [...t.s]
-  return punctOf(end ? cps.at(-1)! : cps[0]!) === (end ? 'close' : 'open')
+  const cps = [...t.s],
+    ch = end ? cps.at(-1)! : cps[0]!
+  return punctOf(ch) === (end ? 'close' : 'open') && (CJK.test(ch) || cjkFace(t))
 }
 
 /** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
@@ -818,11 +821,13 @@ export function tokens(i: TokensInput): Tokens {
     for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
     return null
   }
+  // (a token set in the target's CJK face: not the face its style sets Latin text in)
+  const cjkFace = (t: Token) => !!t.face && !!t.st && t.face.id !== faceOf(t.st, 'latin').id
   const kept = tokens.filter((t, q) => {
     if (!t.space || t.keep || t.st?.fam === 'mono') return true
     const before = drawnAt(q - 1, -1),
       after = drawnAt(q + 1, 1)
-    if (markBlankEdge(before, true) || markBlankEdge(after, false)) return false
+    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false
     return !(spaceless && spacelessEdge(before, true) && spacelessEdge(after, false))
   })
   if (kept.length < tokens.length) {
