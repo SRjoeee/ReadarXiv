@@ -385,6 +385,37 @@ describe('today’s ink makers in the engine package', () => {
     expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
     expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
   })
+  it('join a line of no text word to the unit its line before belongs to in one of TeX’s paragraphs, and start no unit with one (2609.20976v1)', () => {
+    // (JCAP's `E-mail: \the\email@toks`, one paragraph TeX broke before its last address: that line holds an address alone, a
+    // kept run and no text word, and was a kept block of its own beside the unit of the line before it, which the author block
+    // took; now the unit's next line. Where the compile marks another paragraph between (a `q<n>` point), it stays apart)
+    const first = 'E-mail: alan.chan@example.org, bo.writer@example.ac,'
+    const second = 'cy.third@example.in'
+    const at = 31
+    const pageWith = (paras: [string, number][]) =>
+      pageOf([
+        { s: 'Journal of Tests', y: 760 },
+        { s: 'Body owned text', y: 700 },
+        { s: first, y: 688 },
+        { s: second, y: 676 },
+      ], { points: [['bs1', 16], ['be1', at]], paras })
+    const one = (pg: ReturnType<typeof pageWith>) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const I = T as unknown as Impl
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inknotes').map((u) => u.pieces)
+    }
+    const joined = one(pageWith([['q1', at]]))
+    expect(joined).toHaveLength(1)
+    expect(joined[0]!.at(-1)).toEqual({ t: 'ph', src: `\\url{${second}}` })
+    expect(joined[0]!.filter((p) => p.t === 'ph')).toHaveLength(3)
+    // (another paragraph begins at the address: the unit ends on the line before, the address no unit's)
+    const apart = one(pageWith([['q1', at], ['q2', at + first.length]]))
+    expect(apart).toHaveLength(1)
+    expect(apart[0]!.filter((p) => p.t === 'ph')).toHaveLength(2)
+    // (no paragraph marked: by the lines' places alone it joins nothing)
+    expect(one(pageWith([]))[0]!.filter((p) => p.t === 'ph')).toHaveLength(2)
+  })
   it('write each TeX special of an ink unit’s math run by the command that sets it in a formula, where today’s strips it: a brace alone no display', () => {
     // (2610.21377v1 p42's `$J_0\in\{0,\dots,J-1\}$`, its closing brace a run of its own between the upright digits, and 2608.06007v1
     // p17's bibliography titles `$\{$Intra-Operator$\}$`: the glyph `{` in the symbol font's math face. Today's strips `$ \ { }`

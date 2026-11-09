@@ -1,9 +1,9 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but seven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but eight changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
-// leading raised scripts, no run over a line's break at a script, scriptsOf): run
+// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -35,7 +35,8 @@
 //      and off its baseline (a formula's digit in a text face, an affiliation's or a note's mark), a formula's (`math`), a run
 //      over a line's break one only where no script stands at the break; a word that is a web address is one in whatever face,
 //      and so is an e-mail address in a word, the word's characters around it the text's (a note of an address alone is then no
-//      unit);
+//      unit; a line of no text word, an address or a URL TeX broke onto a line of its own, is the next line of the unit its
+//      line before belongs to in one of TeX's paragraphs as the compile marked them, and starts none: CHANGED);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -437,9 +438,12 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const [words, ended] = trimmed(G, from, L.cls, folios)
     // (an entry's line its unit's whatever it holds: a URL alone in a typewriter face, as \url breaks it, or numbers alone — TeX
     // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
-    if (L.cls === 'references' ? !words.length : !words.some(textual)) continue
+    if (!words.length) continue
+    // (a line of no text word — an address, a URL, a formula, a script — is no unit's line but the next of one of TeX's paragraphs
+    // whose line before it a unit holds (below). CHANGED: today's left every such line out)
+    const bare = L.cls !== 'references' && !words.some(textual)
     // (a list's line whose page number the ledger cut as a line of its own ends its entry as well: ledger.mjs listedOf)
-    segs.push({ ...L, words, ended: ended || (L.cls === 'contents' && L.listed === true) })
+    segs.push({ ...L, words, ended: ended || (L.cls === 'contents' && L.listed === true), ...(bare ? { bare: true } : {}) })
   }
   // units of lines (rule 3)
   const groups = [], entryGroups = new Map()
@@ -472,6 +476,13 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // foot between its parts its own unit — every entry its own)
     if (s.cls === 'references') { const g = entryGroups.get(s.entry); if (g) g.push(s); else { groups.push([s]); entryGroups.set(s.entry, groups.at(-1)) } continue }
     if (prev?.cls === 'references') { groups.push([s]); continue }
+    // (a line of no text word joins the unit its line before belongs to, in one of TeX's paragraphs as the compile marked them —
+    // never by the lines' places alone — and starts none: left out, it is a kept block's (rule 10) as before. JCAP's e-mail line
+    // broken before its last address, 2609.20976v1; ACM's permission note before its DOI. CHANGED, with the line's filter above)
+    if (s.bare) {
+      if (joins && paras && prev.para === s.para) last.push(s)
+      continue
+    }
     if (joins) last.push(s)
     else groups.push([s])
   }

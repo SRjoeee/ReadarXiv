@@ -5130,7 +5130,15 @@ text's as before; and no run is joined over a line's break where a script stands
 after its atom and breaks a formula only after a binary operation or a relation (2610.20030v1 p1's "Krajnc¹" and "¹Jožef Stefan
 Institute" one element on two lines, drawn as text): over the 88 corpus papers 79 ink units of 21 papers move and one more
 states its label, 69 runs written as scripts (50 raised, 19 lowered), 4 display lines in a text face of 2608.08481v1 no longer
-translated, no source unit), and
+translated, no source unit; and a line of no text word — an address, a URL TeX broke onto a line of its own — is the next line of
+the unit its line before belongs to in one of TeX's paragraphs as the compile marked them, never by the lines' places alone, and
+starts no unit (round 8 B2, rebuild/block-residue): left out of every unit since an address became a kept run, JCAP's
+`E-mail: \the\email@toks`, broken before its last address, was the block's names unit on its first line and a kept block on its
+second (2609.20976v1 p1, lost in the differential, the block's rule taking the one and not the other). Over the 88 papers 59 such
+lines stand in a class made units; 3 join, the e-mail line and ACM's permission note's DOI after "ACM ISBN …" (2402.10294v1,
+2610.22214v1), each a kept block before; the other 56 stay apart, each beginning its paragraph or another than the line before's
+(addresses under their affiliations, footnotes' URLs after their marks, 3 typewriter words, a table's figures): no line of code
+joins a unit of prose, and 2610.19159v1's transcripts, code its regions keep, hold none), and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
