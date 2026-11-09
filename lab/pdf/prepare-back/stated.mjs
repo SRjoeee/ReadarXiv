@@ -47,6 +47,14 @@ export const CAUSE = Object.freeze({
   // after the other, no glyph of ink between them: TeX's inter-word or inter-member space alone, read off arXiv's glyphs on the
   // line (2609.26457v1 t279: the name before's raised "1", then "and"): accepted)
   heldBlock: "held whole by the author block's units on its line",
+  // ((g), the coordinator's ruling of 2026-11-10, round 8 B2: v2's unit made on arXiv's page, laid, on today's lines, its text
+  // arXiv's glyph text there and today's a subsequence of it: characters our old compile did not set, 2610.21084v1's initials,
+  // which cas-common lost where our marks stood in the names it took apart: accepted)
+  arxivText: "another reading, now arXiv's text",
+  // ((h), the same ruling: v2's unit today's text on today's lines and whole lines more that carry no text word, each held by its
+  // elements, which the join rule adds (ink-units.mjs: an address or a URL TeX broke onto a line of its own, 2610.22214v1's ACM
+  // DOI): accepted)
+  wrapped: 'held whole, with its wrapped no-word lines',
   another: 'another reading',
 })
 
@@ -163,7 +171,37 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if (/^ink/.test(u.kind) && scriptsKeptInAnotherOrder(flatOf(c.pieces), u)) return CAUSE.orderAsElement
     if (trailOf(u, c)) return CAUSE.trail
     if (keptWhole(u, c)) return u.lines.every((l) => displays.some((k) => inside(l, k))) ? CAUSE.display : CAUSE.kept
+    if (arxivTextOf(u, c)) return CAUSE.arxivText
+    if (wrappedOf(u, c)) return CAUSE.wrapped
     return CAUSE.another
+  }
+  // ((g): made on A and laid (its text arXiv's glyph text by its making), on today's lines one for one, today's glyph text a
+  // subsequence of its)
+  const onLines = (u, c, n) => n <= (c.lines?.length ?? 0) && u.lines.length === n && u.lines.every((l, i) => meets(l, c.lines[i]))
+  const subsequence = (t, h) => {
+    let i = 0
+    for (const ch of h) if (ch === t[i]) i++
+    return i === t.length
+  }
+  const arxivTextOf = (u, c) => {
+    if (!/^ink/.test(c.kind) || !['drawn', 'laid'].includes(c.state) || c.why || !u.lines?.length) return false
+    if (!onLines(u, c, c.lines?.length ?? 0)) return false
+    const t = glyphTextOf(u),
+      h = glyphTextOf(c)
+    return !!t && t !== h && subsequence(t, h)
+  }
+  // ((h): today's lines its first ones, each line past them held by its elements alone, and its glyph text without those
+  // elements today's)
+  const wrappedOf = (u, c) => {
+    const n = u.lines?.length ?? 0
+    if (!n || (c.lines?.length ?? 0) <= n || !u.lines.every((l, i) => meets(l, c.lines[i]))) return false
+    const extra = c.lines.slice(n)
+    const on = (k, l) => k.page === l.page && Math.abs(k.baseline - l.baseline) <= ON && k.x0 < l.x1 && l.x0 < k.x1
+    const els = (c.elements ?? []).filter((e) => e.segs.length && e.segs.every((k) => extra.some((l) => on(k, l))))
+    if (!extra.every((l) => els.some((e) => e.segs.some((k) => on(k, l))))) return false
+    const drop = new Set(els.map((e) => e.k))
+    const t = glyphTextOf(u)
+    return !!t && glyphTextOf({ ...c, pieces: c.pieces.filter((p) => !drop.has(p.k)) }) === t
   }
   // ((b'): a unit of the author block's (the names class: author, affiliation, inknames) holding every line of today's unit: a
   // line of its, or an element's box, on that line's baseline across its whole width; today's made it too or not (2610.21313v1's
