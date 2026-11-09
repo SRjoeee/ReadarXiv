@@ -26,7 +26,11 @@ export class PageGlyph implements DocGlyph {
   unseen: true | undefined
   nu?: true
   along?: number
-  constructor(c: Float64Array, i: number, g: Omit<DocGlyph, 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'size' | 'ix0' | 'ix1'>) {
+  constructor(
+    c: Float64Array,
+    i: number,
+    g: Omit<DocGlyph, 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'size' | 'ix0' | 'ix1'>,
+  ) {
     this.c = c
     this.i = i
     this.u = g.u
@@ -90,6 +94,9 @@ export function pageGlyphsOf(list: readonly DocGlyph[]): PageGlyph[] {
 
 /** a glyph with fields other than its coordinates changed, of its own kind: a page glyph keeps its page's array (a spread would
  *  copy its own fields alone), a plain glyph is its spread */
-export function glyphWith<G extends DocGlyph>(g: G, patch: Partial<Omit<DocGlyph, 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'size' | 'ix0' | 'ix1'>>): G {
+export function glyphWith<G extends DocGlyph>(
+  g: G,
+  patch: Partial<Omit<DocGlyph, 'x0' | 'x1' | 'y' | 'top' | 'bottom' | 'size' | 'ix0' | 'ix1'>>,
+): G {
   return Object.assign(Object.create(Object.getPrototypeOf(g)) as G, g, patch)
 }

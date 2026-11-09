@@ -64,8 +64,16 @@ type WrapOptions = {
   groupsDoc?: number
 }
 export const wrapOf = wrap_js.wrapOf as {
-  (finalBytes: Uint8Array, plans: Map<number, WrapPlan>, o: WrapOptions & { compose: false }): Promise<WrapSection | WrapRefusal>
-  (finalBytes: Uint8Array, plans: Map<number, WrapPlan>, o: WrapOptions & { compose?: true }): Promise<Wrap | WrapRefusal>
+  (
+    finalBytes: Uint8Array,
+    plans: Map<number, WrapPlan>,
+    o: WrapOptions & { compose: false },
+  ): Promise<WrapSection | WrapRefusal>
+  (
+    finalBytes: Uint8Array,
+    plans: Map<number, WrapPlan>,
+    o: WrapOptions & { compose?: true },
+  ): Promise<Wrap | WrapRefusal>
 }
 /** a page's wrap's bounds: its content streams' decoded bytes, its operators' heap */
 export const WRAP_DECODED_PAGE = wrap_js.WRAP_DECODED_PAGE as number
