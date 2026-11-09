@@ -167,7 +167,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
                 return false
               },
               ...(named ? { named: (j: number) => named(i, j) } : {}),
-              ends: carried[i]!.points.filter((x) => FRONT_ELEMENT.test(x.name)).map((x) => x.glyph),
+              ends: carried[i]!.fronts.map((x) => x.glyph),
             }
           }),
           ins.units,
@@ -380,8 +380,6 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
   }
 }
 
-/** the point the marked compile sets where TeX begins a front matter environment no author's (marks.mjs POINTS_TEX `fm<n>`) */
-const FRONT_ELEMENT = /^fm\d+$/
 /** the kinds of the ink units the author block takes: today's ledger's notes and orphans, and its names (rule 8) */
 const BLOCK_TAKES = new Set(['inknotes', 'inkorphan', 'inknames'])
 /**
@@ -522,13 +520,22 @@ interface Carried {
   paraEnds: (DocPoint & { point: number; para: number })[]
   regions: { kind: string; from: number; to: number }[]
   pictures: DocPoint[]
+  /** where TeX begins a front matter environment no author's (DocMarks `fronts`) */
+  fronts: DocPoint[]
 }
 
 /** B's marks carried onto A's pages: a mark that stands before B glyph n stands before that glyph's partner on A (the first glyph
  *  of its page from n on that has one), else after the partner of the last one before n that has one; none where its page has
  *  no glyph with a partner. A paragraph end keeps the counts of its page's points and paragraph points before it */
 export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried[] {
-  const out: Carried[] = inkA.pages.map(() => ({ points: [], paras: [], paraEnds: [], regions: [], pictures: [] }))
+  const out: Carried[] = inkA.pages.map(() => ({
+    points: [],
+    paras: [],
+    paraEnds: [],
+    regions: [],
+    pictures: [],
+    fronts: [],
+  }))
   B.pages.forEach((pg, p) => {
     const n = pg.glyphs.length
     const o = m.offB[p] as number
@@ -627,6 +634,10 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
     for (const x of marks.pictures) {
       const w = put(x)
       if (w) out[w[0] - 1]!.pictures.push(w[1])
+    }
+    for (const x of marks.fronts ?? []) {
+      const w = put(x)
+      if (w) out[w[0] - 1]!.fronts.push(w[1])
     }
   })
   return out

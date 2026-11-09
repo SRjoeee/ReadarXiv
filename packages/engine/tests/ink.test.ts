@@ -714,8 +714,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
   })
 
   it('ends the author block where TeX begins the abstract environment, its literal heading no line of the block (2610.20967v1)', () => {
-    // (spconf's \abstract sets "ABSTRACT" itself, no babel name: the marked compile's point `fm<n>` before the environment, on B,
-    // carried onto A before the heading's first glyph)
+    // (spconf's \abstract sets "ABSTRACT" itself, no babel name: the marked compile's point `fm<n>` at the start of the paragraph
+    // the environment begins, on B, kept apart from the marks' points (DocMarks `fronts`), carried onto A before the heading's
+    // first glyph)
     const text = ['A Title', 'Ann Lee', 'Some University', 'ABSTRACT', 'Abstract text here', 'Body text here']
     const at = (k: number) => text.slice(0, k).join('').length
     // (the heading set apart under the block, as the environment's skip sets it)
@@ -724,10 +725,16 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       lines,
       points: [
         ['bs1', 0],
-        ['fm1', at(3)],
         ['be1', text.join('').length],
       ],
     })
+    B.pages[0]!.marks = {
+      paras: [],
+      paraEnds: [],
+      regions: [],
+      pictures: [],
+      fronts: [{ name: 'fm1', glyph: at(3), box: 0 }],
+    }
     const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
     const units = [
       title,

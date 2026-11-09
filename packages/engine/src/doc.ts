@@ -79,6 +79,8 @@ export interface DocTurned {
 export interface DocMarks {
   paras: DocPoint[]
   paraEnds: (DocPoint & { point: number; para: number })[]
+  /** where TeX begins a front matter environment no author's (`fm<n>`): the author block's end (locate/author-block.ts) */
+  fronts?: DocPoint[]
   regions: { kind: string; from: number; to: number }[]
   pictures: DocPoint[]
 }
