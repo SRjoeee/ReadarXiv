@@ -774,13 +774,14 @@ describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it 
     // in its own list. Every point in a math list or a restricted list)
     expect(POINTS_TEX).not.toContain('\\everyhbox')
     expect(POINTS_TEX).toContain('\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}')
-    expect(POINTS_TEX).toContain('\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\def\\axt@dxz{\\axt@dxcl}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}')
     expect(POINTS_TEX).toContain('\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}')
     // (the math's end after its group, by a stack: a local definition is gone once the group ends)
     expect(POINTS_TEX).toContain('\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}')
     expect(POINTS_TEX).toContain('\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}')
     // (the three text commands wrapped once the document began, each command's own definition kept; inside \\axt@dpgo's body,
-    // so their parameters doubled)
+    // so their parameters doubled; as robust as each was, the points \\protected: a moving argument (a \\subsection's,
+    // 2608.04322v1) writes them as they are, and a fragile \\fbox there fails as it failed)
     expect(POINTS_TEX).toContain('\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi')
     expect(POINTS_TEX).toContain('\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}')
     expect(POINTS_TEX).toContain('\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}')
