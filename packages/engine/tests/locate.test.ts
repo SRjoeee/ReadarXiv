@@ -131,6 +131,41 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 2], [1]])
     expect(L.members[2]!.join).toEqual([2])
   })
+  it('gives a member the ink TeX set glued after it on its row that no unit owns, its trail, which travels with its text', () => {
+    // (2604.14228v3's names: the class sets each \author's text, then `$^{1,*}$` and ", " of its own; left where TeX set them,
+    // they held each next name where it stood ("kept" between), every translated name laid at its original's start, a hole
+    // after it; and a mark set after a skip, a QED box past an \hfill, stays where TeX set it)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Jiacheng Liu', x: 72, y: 700 },
+          { text: '1,*,', x: 72 + 12 * 6, y: 703, size: 6 },
+          { text: 'Xiaohan Zhao', x: 72 + 12 * 6 + 4 * 3.6 + 3, y: 700 },
+          { text: 'A proof ends.', x: 72, y: 688 },
+          { text: '#', x: 300, y: 688 },
+        ],
+      },
+    ])
+    const units2 = [unitOf('author', 'Jiacheng Liu'), unitOf('author', 'Xiaohan Zhao'), unitOf('para', 'A proof ends.')]
+    const L = locate(instrumentOf(B2, units2, [[0, -1, 1, 2, -1]]), B2, align(B2, B2))
+    const [liu, zhao, proof] = L.members as [
+      (typeof L.members)[number],
+      (typeof L.members)[number],
+      (typeof L.members)[number],
+    ]
+    expect(liu.elements).toEqual([
+      ['~', { kind: 'other', copy: '1,*,', ink: [[1, 144, 701.8, 158.4, 707.2, 703]], trail: 1 }],
+    ])
+    // (its line reaches the trail's end, and the member after it runs on from there at TeX's separation, nothing kept between)
+    expect(liu.lines[0]![3]).toBe(158.4)
+    expect(zhao.join).toEqual([3])
+    expect(L.flows[0]).toEqual([0, 1])
+    // (its glyphs its travelling elements' group, drawn otherwise where its text is)
+    expect(L.groups[0]!.glyphs.slice(12, 16)).toEqual(['0.1.e', '0.1.e', '0.1.e', '0.1.e'])
+    // (the QED box past the proof's skip stays: no trail, in no group)
+    expect(proof.elements).toEqual([])
+    expect(L.groups[0]!.glyphs.at(-1)).toBeNull()
+  })
   it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
     // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two
     // columns, the head's line in the left half, its paragraph's first line over both; the columns as the names' binding

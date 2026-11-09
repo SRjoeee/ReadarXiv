@@ -896,6 +896,41 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // (tied: one size, the smaller)
     expect(sizes([{ rule: 'size', ords: [0, 1] }])).toEqual([fb, fb])
   })
+  it('lays a member’s trail as its crop after its translation’s end, and the member after it on the row from there (2604.14228v3)', () => {
+    // (a class's marks and separator after an author's name, no unit's, the leader's trail (El.trail): left where TeX set them,
+    // the next name stood at its original's start past a hole; carried, the names run on as TeX's line did)
+    const idB = 'b'.repeat(64)
+    const liu = member({
+      ord: 0,
+      kind: 'author',
+      align: 'l',
+      lines: [[1, 0, 72, 158.4, 700, 707, 698, 72, 300, 0, 10]],
+      els: [['~', { kind: 'other', copy: '1,*,', ink: [[1, 144, 701.8, 158.4, 707.2, 703]], trail: 1 }]],
+      room: { below: 20, next: 24, side: [72, 300] },
+    })
+    const zhao = member({
+      ord: 1,
+      kind: 'author',
+      align: 'l',
+      text: idB,
+      join: [3],
+      lines: [[1, 0, 161.4, 233.4, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 20, next: 24, side: [72, 300] },
+    })
+    const rows = rowsOf([row([{ t: 'text', s: 'Jia' }]), { ...row([{ t: 'text', s: 'Zhao' }]), id: idB }], true)
+    const laid = layPage({ ...part(liu), flows: [[liu, zhao]] }, rows, rules, metrics()).members
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
+    // (its trail cut from where TeX set it and drawn right after the translation, its group off with its text)
+    const items = laid[0]!.lines[0]![3]
+    const crop = items.find((it) => 'src' in it) as Item & { src: number[]; x: number; w: number }
+    expect(crop.src.slice(1)).toEqual([143.6, 701.5, 158.8, 707.5, 703])
+    const text = items.find((it) => 'face' in it) as Item & { x: number }
+    expect(crop.x).toBeCloseTo(text.x + 15, 5)
+    expect(laid[0]!.off & 3).toBe(3)
+    // (the next name from the trail's drawn end (its crop's, a crop's antialiased edge with it, as an element's at a line's end),
+    // at TeX's separation: no hole)
+    expect(laid[1]!.lines[0]![1]).toBeCloseTo(crop.x + crop.w + 3, 5)
+  })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
     const name = member({

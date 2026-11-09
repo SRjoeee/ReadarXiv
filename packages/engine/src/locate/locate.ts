@@ -728,6 +728,36 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
   }
 
+  // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
+  // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
+  // \thanks mark \maketitle sets in an \rlap after a name), claimed as its element TRAIL, which travels with its text (its group
+  // `.e`, El.trail: laid after its translation's end). Left where TeX set it, that ink fenced the member's room beside it and kept
+  // the member after it on the row where it stood: 2604.14228v3's translated names each at its original's start, a hole after
+  // each, 1706.03762v7's first name set small before its \thanks mark. Glued: its glyphs one after the other in TeX's stream,
+  // no other unit's between, each on the row (ON_ROW) and no word's gap (WORD_GAP, the ink units' word rule) after the one before;
+  // a mark TeX set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  for (const mem of members) {
+    if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
+      continue
+    const end = m.bToA[mem.bLast] as number
+    if (end < 0) continue
+    const last = gA(end)
+    let prev = last
+    const trail: number[] = []
+    for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
+      const a = m.bToA[b] as number
+      if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
+      const g = gA(a)
+      if (!isInk(g) || Math.abs(g.y - last.y) >= ON_ROW * last.size || g.x0 < prev.x0) break
+      if (g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)) break
+      trail.push(a)
+      prev = g
+    }
+    if (!trail.length) continue
+    for (const a of trail) claimedA[a] = mem.ord
+    mem.els.set(TRAIL, trail)
+  }
+
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
   // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
@@ -1258,6 +1288,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
       }
       mem.elements.push([id, el])
+    }
+    // its trail (above): an element of no piece, its ink a crop's, its text its glyphs'
+    const tr = mem.els.get(TRAIL)
+    if (tr?.length) {
+      const L = cutLines(tr, atA)[0]
+      if (L)
+        mem.elements.push([
+          TRAIL,
+          {
+            kind: 'other',
+            copy: tr.map((a) => gA(a).u).join(''),
+            ink: [[L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base]],
+            trail: 1,
+          },
+        ])
     }
     // its label: the class's mark before it
     if (mem.label.length) {
@@ -1876,6 +1921,11 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
+ *  wordsOf: ink-units.mjs WORD_GAP) */
+const WORD_GAP = 0.12
+/** the element id of a member's trail (no piece's: a piece's id is its index) */
+export const TRAIL = '~'
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
  *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a
