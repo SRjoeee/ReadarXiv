@@ -740,3 +740,33 @@ describe('a line of several members TeX centred (rowLinesOf) is judged by the li
     expect(aligns(measure(right.f, page([[300, 360], [364, 430]]), [], right.led, [], right.rows))).toEqual([['line t2, t4', true, 'today']])
   })
 })
+
+describe("shown: a unit today draws on lines of the original that v2 draws translated as one of its own members misses none", () => {
+  // (2608.25210v2 p17 with every toggle on: today cut reference [64] into two ink units, t517 "[64] Bin Zhang, …" and t518
+  // ". Benchmarking the text-to-sql" after the year on the entry's second line; v2 lays the entry whole, its source unit 485,
+  // translated over the same two lines. Joined by id, today's pieces have no member of v2's: read as two translations missing)
+  const prep = [
+    { ord: 517, kind: 'inknotes', lines: [{ page: N, x0: 317.96, x1: 558.2, baseline: 93.86, top: 98.77, bottom: 92.2, size: 6.97 }, { page: N, x0: 334.39, x1: 455.01, baseline: 86.01, top: 90.87, bottom: 84.35, size: 6.97 }] },
+    { ord: 518, kind: 'inknotes', lines: [{ page: N, x0: 469.82, x1: 558.2, baseline: 86.01, top: 90.87, bottom: 84.35, size: 6.97 }] },
+    { ord: 600, kind: 'inknotes', lines: [{ page: N, x0: 72, x1: 290, baseline: 86.01, top: 90.87, bottom: 84.35, size: 6.97 }] },
+  ]
+  const v2 = v2Of({
+    members: [{ ord: 485, state: 'laid', lines: [] }],
+    facts: [{ ord: 485, kind: 'reference', align: 'j', style: { size: 6.97 }, lines: [factLine(334.39, 558.2, 93.86, 6.97), factLine(334.39, 558.2, 86.01, 6.97)] }],
+    today: { 485: { today: 485 } },
+  })
+  const today = {
+    units: [
+      { id: 517, lines: [drawnLine(317.96, 558.2, 93.86, 'abcdefgh', 6.97), drawnLine(334.39, 455.01, 86.01, 'abcd', 6.97)] },
+      { id: 518, lines: [drawnLine(469.82, 558.2, 86.01, 'abcd', 6.97)] },
+      { id: 600, lines: [drawnLine(72, 290, 86.01, 'abcd', 6.97)] },
+    ],
+  }
+  const v2Units = { units: [{ id: 485, lines: [drawnLine(334.39, 558.2, 93.86, 'abcdefgh', 6.97), drawnLine(334.39, 558.2, 86.01, 'abcdefgh', 6.97)] }] }
+  it("names them apart (`within`), no translation missing; a unit on a line v2 draws no member on stays one", () => {
+    const p = measure(v2, rec({ today, v2: v2Units }), prep)
+    const shown = (p.diffs as { flag: string; unit: string; worse: boolean }[]).filter((d) => d.flag === 'shown')
+    expect(shown.map((d) => [d.unit, d.worse])).toEqual([['t600 inknotes', true]])
+    expect(p.measures.within).toEqual(['t517 inknotes', 't518 inknotes'])
+  })
+})

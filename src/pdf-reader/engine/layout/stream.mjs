@@ -42,7 +42,7 @@ export const OWNED = 6
 export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
-const BRACKET = /^([bf])([se])\d+$/
+const BRACKET = /^([bf])([se])(\d+)$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
@@ -180,7 +180,12 @@ export function folioOf(page, regions) {
  *  selector */
 const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
 
-/** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
+/** each page's regions: of each glyph, of each box, at each point; every page begins outside any body. A glyph is in a body
+ *  while a body's opening point (`bs<n>`) stands before it and that body's closing one (`be<n>`, the same n) not yet: the
+ *  brackets nest where a page's columns are balanced, both split from one box whose opening point stays at the left column's
+ *  top and whose closing one comes after the right column's end, the left column's own pair inside them (`bs58 bs57 … be57 …
+ *  be58`, 2608.25210v2 p17). Read as one flag, the left column's close put the right column outside every body: its
+ *  references' text refused across the page break and drawn as notes */
 /** a page's columns as the maker reads them (make.mjs columnOf, its column count the marks file's, columnsOf): by the page's
  *  column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x range's column, 0 or 1 on a page of
  *  two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
@@ -196,16 +201,22 @@ export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
   let body = false, depth = 0, bodies = false
+  const open = new Set()
   const apply = name => {
     const m = BRACKET.exec(name)
     if (!m) return
-    if (m[1] === 'b') { body = m[2] === 's'; bodies = true } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
+    if (m[1] === 'b') {
+      if (m[2] === 's') open.add(m[3])
+      else open.delete(m[3])
+      body = open.size > 0
+      bodies = true
+    } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
   for (let q = 0, g = 0; g <= glyphs.n; g++) {
     while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
     if (g < glyphs.n) glyph[g] = code(body, depth)
   }
-  body = false; depth = 0
+  body = false; depth = 0; open.clear()
   for (let q = 0, b = 0; b < nBoxes; b++) {
     while (q < points.length && points[q].box <= b) apply(points[q++].name)
     box[b] = code(body, depth)
