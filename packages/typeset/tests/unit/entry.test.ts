@@ -769,6 +769,49 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(pitch).toBeGreaterThan(12)
     expect(first[2]! - 592).toBeGreaterThanOrEqual(pitch - 0.05)
   })
+  it('holds the gap under a paragraph’s one line at the top of the next column to its own leading: the paragraph under it starts lower', () => {
+    // (the owner on staging, 2610.20967v1-zh p4: a paragraph spread over the foot of the left column ends in one line at the top
+    // of the right, TeX's widow line, its next paragraph a pitch under it, no \parskip. That line cannot rise (the column's first
+    // line) and the next paragraph's first line stays on TeX's: the gap stayed the original's pitch, 10.41, under a paragraph
+    // set at 14.78 and over one at 13.43. A paragraph's leading is the whole paragraph's: its frame of one line has none of its
+    // own and takes the frame before's, and where the paragraph cannot end higher the one under it starts lower)
+    const zh = rulesFor('zh')
+    const at = (y: number, x0: number, x1: number): Placed['lines'][number] => [
+      1,
+      0,
+      x0,
+      x1,
+      y,
+      y + 7,
+      y - 2,
+      x0,
+      x1,
+      0,
+      10,
+    ]
+    const ids = ['b', 'c'].map((c) => c.repeat(64))
+    const left = (y0: number, n: number) => Array.from({ length: n }, (_, i) => at(y0 - 12 * i, 72, 300))
+    const right = (y0: number, n: number) => Array.from({ length: n }, (_, i) => at(y0 - 12 * i, 320, 548))
+    // (a paragraph over the two columns, five lines and one, its translation three lines: two over the left's five, one on the
+    // right's first; the next paragraph under it in the right column, two lines of translation in four)
+    const a = member({ ord: 0, lines: [...left(640, 5), ...right(700, 1)], room: { below: 0, next: 12 } })
+    const b = member({ ord: 1, text: ids[0], lines: right(688, 4), room: { below: 200, next: 212 } })
+    const rows = rowsOf(
+      [row([{ t: 'text', s: '\u6587'.repeat(110) }]), { ...row([{ t: 'text', s: '\u5b57'.repeat(80) }]), id: ids[0]! }],
+      true,
+    )
+    const laid = layPage({ ...part(a), flows: [[a, b]] }, rows, zh, metrics()).members
+    const [la, lb] = [laid.find((x) => x.ord === 0)!, laid.find((x) => x.ord === 1)!]
+    expect([la.state, lb.state]).toEqual(['laid', 'laid'])
+    const ys = la.lines.map(([y]) => y)
+    // (its lines: those of the left column spread looser than the pitch, the last on the right column's first line)
+    expect(ys.at(-1)).toBe(700)
+    const own = ys[0]! - ys[1]!
+    expect(own).toBeGreaterThan(12.5)
+    // (the next paragraph's first line its own leading's distance under it, no nearer)
+    expect(700 - lb.lines[0]![0]).toBeGreaterThanOrEqual(own - 0.05)
+    expect(lb.lines.length).toBe(2)
+  })
   it('grows a page’s body a step at a time, to the largest every body unit still holds, a page that holds none tried once', () => {
     // (the page fill's one size, today's effect (the owner, 2026-11-08: it should look about as today's does), found with the fewest lays:
     // from the original's size up a step (0.025) at a time, the first step a unit no longer holds ending it. A German paragraph

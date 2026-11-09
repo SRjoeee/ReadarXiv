@@ -31,3 +31,5 @@ export const closerLead: (
   sets: (k: number) => Layout | null,
   guess: number | null,
 ) => { k: number; l: Layout } | null = m.closerLead
+/** each block's frame (a page's, a column's, a paragraph's TeX states inside the unit), by block (S.fill.leads framesOf) */
+export const framesOf: (blocks: readonly FitBlock[]) => number[] = m.framesOf

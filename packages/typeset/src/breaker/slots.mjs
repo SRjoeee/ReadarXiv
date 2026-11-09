@@ -151,6 +151,9 @@ function slotsAt(blocks, st, P, s) {
       // has its first line a pitch under it)
       const flows = firstBlock && b.onLead && k > 0
       let y = shared ? b.startY : flows ? b.startY - k * pitch : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      // (the page fill's states, `head`: the unit's first block lower by the room the gap over it lacks, where the paragraph over
+      // it cannot end higher (S.fill.page headOf: its last line alone on its frame's first line, TeX's widow), its foot its own)
+      if (st.head && firstBlock && !shared && b.startY === undefined) y -= st.head
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05 && !shared) break

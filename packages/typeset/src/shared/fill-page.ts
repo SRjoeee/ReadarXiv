@@ -7,7 +7,7 @@
 // tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
-import { fillLeadsOf } from './fill-leads.types.ts'
+import { closerLead, fillLeadsOf, framesOf } from './fill-leads.types.ts'
 import { BODY_KINDS, fillTarget } from './fill-target.ts'
 import { keepsShare } from './share.ts'
 import { settleLayout } from './settle.ts'
@@ -281,6 +281,39 @@ export function fillPage(
       grown.map((f) => [f.p.id, f.p.run ?? null, f.st.knob === 'grow']),
     )
   }
+  // (the gap over a unit whose paragraph over it cannot end higher: its first block lower by what the gap lacks, headOf, within
+  // its own lines (borrowing nothing under them: the room it takes is its own slack, never the gap under it); laid at its
+  // state so, else at the loosest closer leading of its first frame that sets it, else as it was)
+  const onPage = [
+    ...filled.map((f) => ({ u: f.p, l: f.l, st: f.st })),
+    ...[...units, ...continuing]
+      .filter((p) => !filled.some((f) => f.p === p))
+      .map((p) => ({ u: p, l: p.layout as Layout, st: p.layout.state })),
+  ]
+  for (const f of filled) {
+    const head = headOf(f.p, onPage)
+    if (!(head > 0)) continue
+    const of = framesOf(f.p.blocks),
+      alone = !of.some((g) => g > 0)
+    const withLead = (L: number): FitState =>
+      alone
+        ? { ...f.st, head, borrow: 0, lead: L }
+        : {
+            ...f.st,
+            head,
+            borrow: 0,
+            leads: f.p.blocks.map((_, bi) => (of[bi] === 0 ? L : (f.st.leads?.[bi] as number))),
+          }
+    const L0 = alone ? f.st.lead : (f.st.leads?.[0] ?? f.st.lead),
+      floor = Math.max(1, P.leadFloor ?? 1)
+    const K = Math.ceil((L0 - floor) / 0.01 - 1e-9),
+      L = (k: number) => (k >= K ? floor : r3(L0 - k * 0.01))
+    const l0 = at(f.p, withLead(L0))
+    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => at(f.p, withLead(L(k))), null) : null
+    if (!found) continue
+    f.st = withLead(L(found.k))
+    f.l = found.l
+  }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
     p.P = { ...p.P, leadBase: st.lead }
@@ -294,6 +327,55 @@ export function fillPage(
     onFilled(p, target)
   }
   return told
+}
+
+/**
+ * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (the owner on staging,
+ * 2610.20967v1-zh p4): a paragraph over a column or page break whose last line stands alone on the first and only line TeX
+ * set in its last frame (TeX's widow), the unit's first line the next line TeX set in that column. The gap under a paragraph
+ * follows its own leading (the owner's ruling of 2026-11-08, (a)), and its own is the whole paragraph's: a frame of one line
+ * has none and takes its frame before's, where it holds two lines or more, as filled (`leads`). Its last line cannot rise
+ * (footFloorAt: no room to give in a frame of one line), so the unit under it starts lower by the deficit: that leading's
+ * pitch and the original's own skip there past its pitch (capped at a pitch, as footFloorAt reads it) less TeX's gap. 0
+ * where nothing is asked: a first line a unit shares a row with (`startY`, its first line pinned: P.halfLead.head false), a
+ * run but a unit's first, another line TeX set between, no such paragraph over it
+ */
+function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitState }[]): number {
+  const b = q.blocks[0]
+  if (!b || (q.P.blockBase ?? 0) !== 0 || !q.P.halfLead?.head || b.startY !== undefined || b.onLead) return 0
+  const unitOf = (x: FillLaid) => x.parent ?? x
+  const across = (x: { x0: number; x1: number }, y: { x0: number; x1: number }) =>
+    Math.min(x.x1, y.x1) > Math.max(x.x0, y.x0)
+  for (const { u, l, st } of onPage) {
+    if (unitOf(u) === unitOf(q) || !u.P.halfLead) continue
+    if (u.parent && u.run !== (u.parent.runs?.length ?? 0) - 1) continue
+    const [third, before, last] = l.lines.slice(-3)
+    if (!last || !before || !third || last.block !== u.blocks.length - 1) continue
+    const bl = u.blocks[last.block]!,
+      bp = u.blocks[before.block]!
+    // (its last line alone on the one line TeX set in its last frame, a frame of its own)
+    if (bl.B.length !== 1 || Math.abs(last.baseline - bl.B[0]!) > 0.05) continue
+    if (bp.page === bl.page && across(bp, bl)) continue
+    // (two lines at least in the frame before: the paragraph's leading there)
+    if (!(third.page === before.page && across(third, before) && third.baseline > before.baseline)) continue
+    // (the unit's first line the next line TeX set under it in its column: no line of another unit's between)
+    if (bl.page !== b.page || !across(bl, b) || !(bl.B[0]! > b.B[0]!)) continue
+    const between = onPage.some(
+      (o) =>
+        o.u !== u &&
+        unitOf(o.u) !== unitOf(q) &&
+        o.u.blocks.some(
+          (c) => c.page === b.page && across(c, b) && c.B.some((y) => y < bl.B[0]! - 0.05 && y > b.B[0]! + 0.05),
+        ),
+    )
+    if (between) continue
+    const L = st.leads?.[before.block] ?? st.lead,
+      p0 = bp.pitch0 ?? 1.2 * u.s,
+      gap = bl.B[0]! - b.B[0]!
+    const lacks = L * p0 + Math.min(Math.max(0, gap - p0), p0) - gap
+    return lacks > 0.05 ? Math.round(lacks * 100) / 100 : 0
+  }
+  return 0
 }
 
 /** a unit's decision in the fill (the tap's passes[].units, less today's `next` and `closer`: the gap ruling of 2026-11-08):
