@@ -2707,7 +2707,7 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
       ['6', { cmd: 'href', to, colour: 0x80 }],
     ])
   })
-  it('reads a unit’s own fill off its own marks where every letter of it is a group’s: a link never colours the rest', () => {
+  it('reads a unit whose every letter is a group’s off its letters outside its links: a link never colours the rest', () => {
     // (RevTeX's bibliography: each field a `\\bibinfo` group, the punctuation between them the entry's own. Read over its letters
     // alone the entry's fill was its longest field's, the title link's, and the authors and journal, whose groups a translation
     // may drop, drawn in it)
@@ -2805,5 +2805,193 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     expect(partOf(instrumentOf(B, [logged], [[0, 0]]), B, A).spans).toEqual([
       ['1', { cmd: 'textcolor', colour: 0xff0000 }],
     ])
+  })
+})
+
+describe('locate: the face TeX set a unit’s own text in, outside its groups (Style.slant, Style.bold, SpanAt.style)', () => {
+  // (a member's style was read over all of its glyphs: 2609.20976v1 p13's references, whose italic titles and journals hold most
+  // of their letters, drawn italic whole, their authors too, where Microsoft's replies move the \emph groups' markers to the end,
+  // empty, and the typesetter's baseOf finds no italic group to take off. Today's reader read the base outside every piece that
+  // sets it, layer2.mjs measuredStyle)
+  const partOf = (ins: Instrument, B: Doc, A: Doc) => {
+    const L = locate(ins, A, align(B, A))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    return read('part', part.bytes).flows.flat()[0]!
+  }
+  const to = { url: 'https://doi.org/10.1002/andp.19163540702' }
+  const span = (id: string, style: string, open: string, content: Piece[]): Piece => ({
+    t: 'span',
+    id,
+    style,
+    ...(style === 'link' ? { must: 1 as const } : {}),
+    open,
+    close: '}',
+    content,
+  })
+  const unitWith = (content: Piece[], more: Partial<InstrumentUnit> = {}): InstrumentUnit => ({
+    id: unitId('reference', content),
+    kind: 'reference',
+    content,
+    ...more,
+  })
+  /** B and A of the same lines, the glyphs `face` names set in that font on both (TeX sets one font in both compiles) */
+  const faced = (lines: string[], face: (line: number, x0: number) => string | undefined) => {
+    const B = docOf([{ lines }])
+    const A = docOf([{ lines }])
+    for (const D of [B, A])
+      for (const g of D.pages[0]!.glyphs) {
+        const f = face(g.n, g.x0)
+        if (f) {
+          g.base = f
+          g.font = `ABCDEF+${f}`
+        }
+      }
+    return { B, A }
+  }
+  const at = (n: number) => 72 + n * 6
+
+  it('reads a unit’s slant off its own text where its italic groups hold most of its letters (2609.20976v1 p13 [3])', () => {
+    const lines = ['A. Einstein, Die grundlage der allgemeinen', 'relativitatstheorie, Annalen der Physik 354.']
+    const { B, A } = faced(lines, (n, x) =>
+      (n === 0 && x >= at(13)) || (n === 1 && (x < at(19) || (x >= at(21) && x < at(39)))) ? 'CMTI10' : undefined,
+    )
+    const content = [
+      text('A. Einstein, '),
+      span('3', 'italic', '\\emph{', [text('Die grundlage der allgemeinen relativitatstheorie')]),
+      text(', '),
+      span('7', 'link', `\\href{${to.url}}{`, [span('8', 'italic', '\\emph{', [text('Annalen der Physik')])]),
+      text(' 354.'),
+    ]
+    const u = unitWith(content, {
+      spans: [
+        ['3', { cmd: 'emph' }],
+        ['7', { cmd: 'href', to }],
+        ['8', { cmd: 'emph' }],
+      ],
+    })
+    const m = partOf(instrumentOf(B, [u], [[0, 0]]), B, A)
+    expect(m.style.slant).toBeUndefined()
+    // (the \emph groups carry their face by their command; the link holds no text of its own: nothing stated)
+    expect(m.spans).toEqual([
+      ['3', { cmd: 'emph' }],
+      ['7', { cmd: 'href', to }],
+      ['8', { cmd: 'emph' }],
+    ])
+  })
+  it('reads a unit’s weight off its own text where a bold group holds most of it', () => {
+    const lines = ['A rather long bold lead sentence here and', 'a tail.']
+    const { B, A } = faced(lines, (n, x) => (n === 0 && x < at(38) ? 'CMBX10' : undefined))
+    const content = [
+      span('0', 'bold', '\\textbf{', [text('A rather long bold lead sentence here')]),
+      text(' and a tail.'),
+    ]
+    const m = partOf(instrumentOf(B, [unitWith(content, { spans: [['0', { cmd: 'textbf' }]] })], [[0, 0]]), B, A)
+    expect(m.style.bold).toBeUndefined()
+  })
+  it('states the face of a group its command names none of, where it is not the unit’s own (2501.14787v1’s \\emph{\\href})', () => {
+    // (the link's text italic inside an \emph: a translation keeps the link and may drop the \emph, so the link carries it)
+    const lines = ['as described in the notes', 'Adjoint methods and sensitivity', 'by S. G. Johnson.']
+    const { B, A } = faced(lines, (n) => (n === 1 ? 'CMTI10' : undefined))
+    const content = [
+      text('as described in the notes '),
+      span('5', 'italic', '\\emph{', [
+        span('6', 'link', `\\href{${to.url}}{`, [text('Adjoint methods and sensitivity')]),
+      ]),
+      text(' by S. G. Johnson.'),
+    ]
+    const u = unitWith(content, {
+      spans: [
+        ['5', { cmd: 'emph' }],
+        ['6', { cmd: 'href', to }],
+      ],
+    })
+    const m = partOf(instrumentOf(B, [u], [[0, 0, 0]]), B, A)
+    const spans = new Map(m.spans)
+    expect(spans.get('5')).toEqual({ cmd: 'emph' })
+    expect(spans.get('6')).toMatchObject({ cmd: 'href', to, style: { role: 'serif', slant: 1 } })
+    expect(spans.get('6')?.style?.bold).toBeUndefined()
+    expect(m.style.slant).toBeUndefined()
+  })
+  it('states no face a declaration inside a group sets, and keeps an italic unit italic around its upright \\emph', () => {
+    // (`{\em Journal of Things}`: the switch sets the rest of its group, which the typesetter applies; a face stated on the
+    // group too would be toggled back by it)
+    const lines = ['See the Journal of Things for details.']
+    const { B, A } = faced(lines, (n, x) => (x >= at(8) && x < at(25) ? 'CMTI10' : undefined))
+    const content = [
+      text('See the '),
+      span('2', 'other', '{', [{ t: 'el' as const, id: '3', kind: 'other', src: '\\em' }, text('Journal of Things')]),
+      text(' for details.'),
+    ]
+    const u = unitWith(content, { classes: [['3', { cls: 'zero', cmd: 'em', bare: true }]] })
+    const m = partOf(instrumentOf(B, [u], [[0]]), B, A)
+    expect(m.spans).toBeUndefined()
+    expect(m.style.slant).toBeUndefined()
+    // (a theorem's body italic, two words of it upright by \emph: the unit's own face italic, as its own text is)
+    const th = faced(['We prove that every bounded set is closed.'], (n, x) =>
+      x >= at(14) && x < at(27) ? undefined : 'CMTI10',
+    )
+    const tc = [
+      text('We prove that '),
+      span('1', 'italic', '\\emph{', [text('every bounded')]),
+      text(' set is closed.'),
+    ]
+    const tm = partOf(instrumentOf(th.B, [unitWith(tc, { spans: [['1', { cmd: 'emph' }]] })], [[0]]), th.B, th.A)
+    expect(tm.style.slant).toBe(1)
+  })
+  it('keeps a unit bold whose every letter a bold group holds, its marks between them regular (2602.23285v2’s author line)', () => {
+    // (`\\textbf{Yasuko Matsubara}♣, \\textbf{Jimeng Sun}♡, …`: the commas between the names are TeX's regular, the names'
+    // groups are not `must`, and Microsoft's stored reply moves them to the end, empty. Its own text is its letters', as
+    // today's reader reads it (layer2.mjs measuredStyle, letters and digits alone): none outside the bold groups, so the
+    // unit's face is theirs; read off its commas it was regular, and the names were drawn regular)
+    const lines = ['Yasuko Matsubara, Jimeng Sun, Takashi']
+    const { B, A } = faced(lines, (n, x) => (x === at(16) || x === at(28) ? undefined : 'CMBX10'))
+    const content = [
+      span('1', 'bold', '\\textbf{', [text('Yasuko Matsubara')]),
+      text(', '),
+      span('7', 'bold', '\\textbf{', [text('Jimeng Sun')]),
+      text(', '),
+      span('12', 'bold', '\\textbf{', [text('Takashi')]),
+    ]
+    const u = unitWith(content, {
+      spans: [
+        ['1', { cmd: 'textbf' }],
+        ['7', { cmd: 'textbf' }],
+        ['12', { cmd: 'textbf' }],
+      ],
+    })
+    const m = partOf(instrumentOf(B, [u], [[0]]), B, A)
+    expect(m.style.bold).toBe(1)
+  })
+  it('reads a unit with no text of its own off its text outside the groups that name a face (RevTeX, every field a group)', () => {
+    const lines = ['S. Weinberg, Physical Review Letters of the', 'Society 40, 223 (1978)']
+    const { B, A } = faced(lines, (n, x) => ((n === 0 && x >= at(13)) || (n === 1 && x < at(7)) ? 'CMTI10' : undefined))
+    const content = [
+      span('0', 'other', '\\bibfield{author}{', [text('S. Weinberg,')]),
+      text(' '),
+      span('13', 'link', `\\href{${to.url}}{`, [
+        span('14', 'italic', '\\emph{', [text('Physical Review Letters of the Society')]),
+        text(' 40, 223 (1978)'),
+      ]),
+    ]
+    const u = unitWith(content, {
+      spans: [
+        ['0', { cmd: 'bibfield' }],
+        ['13', { cmd: 'href', to }],
+        ['14', { cmd: 'emph' }],
+      ],
+    })
+    const m = partOf(instrumentOf(B, [u], [[0, 0]]), B, A)
+    expect(m.style.slant).toBeUndefined()
+    expect(new Map(m.spans).get('13')?.style).toBeUndefined()
   })
 })

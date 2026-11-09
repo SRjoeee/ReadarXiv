@@ -690,7 +690,8 @@ const SPAN_STYLES: [RegExp, string][] = [
   [/^\\(?:textcolor|color|colorbox)\b/, 'colour'],
   [/^\\(?:underline|uline)\b/, 'underline'],
 ]
-const styleOf = (src: string) => SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
+export const groupStyleOf = (src: string) =>
+  SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 /** today's flat pieces ([open … close] pairs) as the format's nested ones (pipeline/instrument.mjs:56-82 contentOf, ported; an ink
  *  unit's pieces hold no nested unit): an element's kind today's classOf's, `other` for none; its run-in labels `must` */
 export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
@@ -706,7 +707,7 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
         level.push({ t: 'el', id, kind: classOf(p) ?? 'other', src: unicodeOf(p.src) })
         break
       case 'open': {
-        const style = styleOf(unicodeOf(p.src))
+        const style = groupStyleOf(unicodeOf(p.src))
         const span: Extract<Piece, { t: 'span' }> = {
           t: 'span',
           id,
