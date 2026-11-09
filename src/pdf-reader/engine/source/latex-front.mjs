@@ -917,7 +917,8 @@ function tabularsIn(body) {
   return out
 }
 /** a block of such a command's (ownAuthorsOf), which no engine before cut a unit of: each of its units numbered after every
- *  other unit of the source, the bibliography's entries too (`last`, entriesLast), so that no other unit's number moves */
+ *  other unit of the source but the bibliography's entries (`last`, entriesLast), so that no unit's number moves but theirs,
+ *  which nothing reads by its number */
 function ownLater(name, b, before, ctx) {
   if (FRONT_MATTER.has(name) || !ctx.ownAuthors?.has(name)) return
   for (const u of topUnits(b.units.slice(before))) u.last = true
@@ -2605,15 +2606,16 @@ const BIB_KINDS = new Set(['reference'])
  * appendix's last paragraphs' next neighbour, on page 10, and those of its page 16 the marks did not bound were found nowhere
  */
 function entriesLast(units) {
-  // (`last`: a block of the author block's no engine before cut a unit of (ownLater), after the entries too: every other unit
-  // keeps its number)
+  // (`last`: a block of the author block's no engine before cut a unit of (ownLater), after every other unit but the entries,
+  // which stay last: a bibliography BibTeX makes in the prepare's first pass is appended after the units (layout/paper.mjs
+  // madeBibliography, which holds those before it as they were))
   const last = units.filter(u => u.last)
   const later = units.filter(u => u.later && !u.last && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind) && !u.last)
   if (!later.length && !entries.length && !last.length) return null
   const walked = units.slice()
   const rest = units.filter(u => !u.later && !u.last && !BIB_KINDS.has(u.kind))
   units.length = 0
-  units.push(...rest, ...later, ...entries, ...last)
+  units.push(...rest, ...later, ...last, ...entries)
   const index = new Map(units.map((u, i) => [u, i]))
   return walked.map(u => index.get(u))
 }
