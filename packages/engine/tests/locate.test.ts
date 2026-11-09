@@ -139,7 +139,8 @@ describe('locate', () => {
       {
         lines: [
           { text: 'Jiacheng Liu', x: 72, y: 700 },
-          { text: '1,*,', x: 72 + 12 * 6, y: 703, size: 6 },
+          // (raised 4.5 pt over a 10 pt line: past a row's baseline rule (ON_ROW, 0.4 of the size), on the line by its box)
+          { text: '1,*,', x: 72 + 12 * 6, y: 704.5, size: 6 },
           { text: 'Xiaohan Zhao', x: 72 + 12 * 6 + 4 * 3.6 + 3, y: 700 },
           { text: 'A proof ends.', x: 72, y: 688 },
           { text: '#', x: 300, y: 688 },
@@ -154,7 +155,7 @@ describe('locate', () => {
       (typeof L.members)[number],
     ]
     expect(liu.elements).toEqual([
-      ['~', { kind: 'other', copy: '1,*,', ink: [[1, 144, 701.8, 158.4, 707.2, 703]], trail: 1 }],
+      ['~', { kind: 'other', copy: '1,*,', ink: [[1, 144, 703.3, 158.4, 708.7, 704.5]], trail: 1 }],
     ])
     // (its line reaches the trail's end, and the member after it runs on from there at TeX's separation, nothing kept between)
     expect(liu.lines[0]![3]).toBe(158.4)

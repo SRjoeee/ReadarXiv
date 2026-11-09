@@ -734,8 +734,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // `.e`, El.trail: laid after its translation's end). Left where TeX set it, that ink fenced the member's room beside it and kept
   // the member after it on the row where it stood: 2604.14228v3's translated names each at its original's start, a hole after
   // each, 1706.03762v7's first name set small before its \thanks mark. Glued: its glyphs one after the other in TeX's stream,
-  // no other unit's between, each on the row (ON_ROW) and no word's gap (WORD_GAP, the ink units' word rule) after the one before;
-  // a mark TeX set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
+  // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
+  // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
       continue
@@ -748,7 +749,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const a = m.bToA[b] as number
       if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
       const g = gA(a)
-      if (!isInk(g) || Math.abs(g.y - last.y) >= ON_ROW * last.size || g.x0 < prev.x0) break
+      if (!isInk(g) || g.top <= last.bottom || g.bottom >= last.top || g.x0 < prev.x0) break
       if (g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)) break
       trail.push(a)
       prev = g
