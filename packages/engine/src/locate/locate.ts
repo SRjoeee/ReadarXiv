@@ -276,6 +276,9 @@ export interface LocateOptions {
   pages?: readonly (PageInk | null)[]
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
+  /** keep the artefacts, units and figure texts set wholly in a face of one pitch (rebuild/mono-blocks, Rule 1): a prototype the
+   *  owner rules on, off unless asked */
+  artefacts?: boolean
 }
 
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
@@ -825,9 +828,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return best
   })()
   const bodyFixed = fixedFaces.has(bodyFace)
+  const artefacts = !!o.artefacts && !bodyFixed
   const fixedFace = (font: string) => fixedFaces.has(font.replace(/^[A-Z]{6}\+/, ''))
   const artefact = (text: readonly number[], turned: readonly [number, number][] = []): boolean => {
-    if (bodyFixed) return false
+    if (!artefacts) return false
     let any = false
     for (const a of text) {
       const g = gA(a)

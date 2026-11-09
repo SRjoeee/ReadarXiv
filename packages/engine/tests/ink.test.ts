@@ -285,7 +285,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       { text: '{ "ASR": null, "DET": [] }', font: 'ABCDEF+CMTT10' },
       { text: 'call the model now', font: 'ABCDEF+CMR10' },
     ]
-    const make = (body: string) => {
+    const make = (body: string, artefacts = true) => {
       const B = docOf([{ lines: lines(body) }])
       const A = docOf([
         {
@@ -307,7 +307,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         unitOf('para', '{ "ASR": null, "DET": [] }'),
         unitOf('para', 'call the model now'),
       ]
-      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A) })
+      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A), artefacts })
     }
     const L = make('ABCDEF+CMR10')
     expect(L.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, true, false])
@@ -322,6 +322,10 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const T = make('ABCDEF+CMTT10')
     expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
     expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
+    // (a prototype the owner rules on: off unless asked)
+    const off = make('ABCDEF+CMR10', false)
+    expect(off.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
+    expect(off.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
   })
 
   it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {

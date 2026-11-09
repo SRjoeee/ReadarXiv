@@ -25,6 +25,8 @@ export interface PrepareDeps {
   /** what the front half reads of an ink unit's pieces (its elements' classes: the instrument adapter's classesOf), for the units
    *  locate makes on A; none: their elements carry the kinds alone */
   classesOf?: LocateOptions['classesOf']
+  /** keep the artefacts (LocateOptions.artefacts: a prototype the owner rules on, off unless asked) */
+  artefacts?: boolean
 }
 
 export type Tally = {
@@ -72,6 +74,7 @@ export async function* prepareBack(
     // (A's pages as pageInk read them: locate makes the ink units, kept blocks and figure texts there, ink.ts)
     pages: read.pages.map((p) => p.raw),
     classesOf: deps.classesOf,
+    ...(deps.artefacts ? { artefacts: true } : {}),
   })
   const t3 = now()
   const addOn = await wrap(original, located, read.pages, deps)
