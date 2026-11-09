@@ -80,11 +80,15 @@ export function shareOf(
 ): Share | null {
   const b = blocks.find((q) => q.page === row.page && q.B.some((y) => Math.abs(y - row.baseline) < 0.05))
   if (!b) return null
+  // (the block's extent from where it was laid: a member laid from the one before's end (S.rowStart's `start`) stands left of its
+  // original's extent where that one's translation is the shorter, and its row is still its own: read by the original's alone,
+  // the third of three members on a row had no share to be laid from and stood at the second's original start, 2610.22065v1's
+  // names every other one)
   const share: Share = {
     page: row.page,
     y: row.baseline,
     band: row.size,
-    x0: b.x0,
+    x0: Math.min(b.x0, b.start ?? b.x0),
     x1: b.x1,
     end: null,
     at: null,

@@ -38,7 +38,7 @@
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
 import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
-import { decode, ENTITY, escapeMarkers, INVISIBLE, LETTER, LINE_END, SAYS, standInOf } from './text.ts'
+import { decode, displayEnds, ENTITY, escapeMarkers, INVISIBLE, LETTER, LINE_END, SAYS, standInOf } from './text.ts'
 
 export const DISPLAY = 'display'
 
@@ -316,7 +316,9 @@ type Group = { id: string | null; seen: boolean; lead: OutPiece[]; end: OutPiece
 
 /** A unit's markers wire and what reading a reply needs */
 export function planMarkers(unit: UnitIn): MarkersPlan {
-  const { ids, inner, at, beside, stops: aroundStops } = around(unit.content)
+  // (a display that ends its sentence states the stop it ends it with: written after its marker, taken back on reading)
+  const content = displayEnds(unit.content)
+  const { ids, inner, at, beside, stops: aroundStops } = around(content)
   const items = itemsOf(inner, at)
   // (the stop TeX set at the end of a span around the rest: after its words, the innermost's first)
   const innerEnd = at + projLength(inner)
@@ -410,7 +412,7 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
   const lead = wire.length - wire.trimStart().length
   const trimmed = wire.trim()
   const map = plainAt.slice(lead, lead + trimmed.length)
-  map.push(projLength(unit.content))
+  map.push(projLength(content))
   return {
     wire: trimmed,
     slots,

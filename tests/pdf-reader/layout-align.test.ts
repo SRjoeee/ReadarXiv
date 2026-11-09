@@ -77,7 +77,14 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
   })
 
   it('the probe is LAYOUT_TEX\'s: for a unit\'s, a heading\'s and a cell\'s end mark; through \\message, which sets nothing', () => {
-    expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{}\\axt@alg#1e\\@nil}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{\\axt@ifh#1\\relax{}{\\axt@ucs#1s\\@nil}}\\axt@alg#1e\\@nil}')
+    // (a unit's that is no cell's, an author block's name or place set in a tabular's cell: its start mark's index carried out
+    // through ordinary groups alone (a brace group, \\begingroup: an \\aftergroup past a box, a \\noalign or math would put a token
+    // where TeX does not read one) to the innermost alignment entry, and its column's class written at the template's end where
+    // it is the cell's one unit: two units in a cell, or a cell's unit there, and the line is more than the unit)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\let\\axt@uc\\@undefined\\else')
+    expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tec\\axt@uc\\@nil{#1}\\fi}')
     // (a cell's column: its start mark's index defined in the cell's group, carried out by \\aftergroup to the innermost
     // alignment entry's and no further; each column template of LaTeX's ends in its class, written where the index is defined at
     // the template's own group level)

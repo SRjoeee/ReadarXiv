@@ -121,7 +121,8 @@ export const Units = z.object({ format, units: z.array(Unit) })
 // ---------------------------------------------------------------- what laying a page reads
 /** TeX's font state, the fill read from A: role, size, bold, slant (1 italic, 2 slanted), faked small capitals' size share,
  *  set in small capitals (a placement's: most of its letters that can tell are faked small capitals, today's vote; a face of
- *  real small capitals is its design's), upper case, fill 0xRRGGBB, the design where it is not the paper's */
+ *  real small capitals is its design's), upper case, fill 0xRRGGBB (a placement's: its text's outside the groups whose fill is
+ *  another, SpanAt.colour, where it has such groups), the design where it is not the paper's */
 export const Style = z.object({
   role: z.enum(['serif', 'sans', 'mono']),
   size: num,
@@ -189,13 +190,19 @@ export const El = z.object({
   // code units (as the text holds them: a space between two glyphs, a ligature's letters, an astral character's two): the unit
   // the typesetter slices `copy` in
   breaks: z.array(z.tuple([num, int])).optional(),
+  // a member's trail (its id `~`, no piece's): the ink TeX set right after its last glyph, glued to it on its row, that no unit
+  // owns (a class's marks after a name and its separator, a \thanks mark), which travels with its text: drawn as its crop after
+  // the translation's end. A typesetter of before reads it as an element no piece names, never drawn: its unit's group, and
+  // nothing moves where the unit is the original's
+  trail: flag.optional(),
 })
 /** where a link goes: an address, or a destination in the paper (PDF.js's dest as JSON: a named one `"name"`) */
 export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z.string() })])
 /** a group of the source on A: its style (a figure text's run's, read off its glyphs; a source group's whose command names no
  *  style the rules know, the face TeX set its text in, read off its glyphs on B: what the typesetter draws its translation
  *  in), the paragraph TeX opened at it; the command its open begins with (its name and
- *  star), the fill TeX set its run in; a link group's target where its source names it, as Link.to states an annotation's (an
+ *  star), the fill TeX set its run in (a colour piece's, read off the marked compile's log; any other group's, read off its
+ *  text's glyphs on A where it is not the fill around it: a link's that hyperref colours); a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
  *  its name): what the typesetter pairs the group's translation with its annotations by */
 export const SpanAt = z.object({
@@ -269,6 +276,9 @@ export const Placed = z.object({
   why: PrepWhy.optional(),
   join: z.union([z.tuple([num]), z.tuple([num, flag])]).optional(),
   bound: flag.optional(),
+  // the pitch TeX set its lines at: its paragraph's \baselineskip where the marked compile states it (LINES_TEX's AXT-LINES as
+  // the paragraph ends), which TeX's \lineskip rule widens under a line too tall for it and never narrows; else, 'lead' in
+  // `read`, the pitch of its lines on A (their gaps' median, a gap that rule opened among them) or 1.2 of its size
   lead: num,
   style: Style,
   align: z.enum(['j', 'l', 'c', 'r']),

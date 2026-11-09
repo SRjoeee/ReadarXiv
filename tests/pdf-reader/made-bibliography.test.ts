@@ -67,6 +67,17 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
     expect(marked.asked.length).toBeGreaterThan(0)
     expect(marked.asked.every(q => q.bibtex === false)).toBe(true)
   })
+  it('makes the entries where a class\'s own author command cut a unit no engine before cut: that unit before the entries, as every unit (2610.20967v1\'s spconf \\name)', async () => {
+    // (the block's unit numbered after the others but before the entries: numbered after them, it stood where the entries
+    // come, every unit before them was not as before, and the bibliography was kept as none, its entries an ink unit)
+    const sty = '\\def\\@maketitle{\\begin{tabular}[t]{c}\\@name \\\\ \\@address\\end{tabular}}\n\\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}\n\\def\\address#1{\\gdef\\@address{#1}}\n'
+    const paper = paperOf({ 'main.tex': doc(`\\maketitle\n${BODY}`, `${PRE}\n\\usepackage{spconf}\n\\name{Jane Doe$^{1}$}\n\\address{$^1$Some University}`), 'spconf.sty': sty, 'refs.bib': BIB })
+    expect(kinds(paper).at(-1)).toBe('author')
+    const r = await madeBibliography(paper, { compile: host({ 'main.aux': AUX, 'main.bbl': BBL }).compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+    if (!('paper' in r)) throw new Error('no paper')
+    expect(kinds(r.paper).slice(-2)).toEqual(['author', 'reference'])
+  })
   it('asks the host which compiler made arXiv\'s PDF first, where the package names none, and the paper opened again keeps it', async () => {
     const paper = source()
     expect(paper.meta.compilerGuessed).toBe(true)

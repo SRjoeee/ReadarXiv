@@ -473,7 +473,9 @@ export function readMember(i: ReadInput): ReadOut {
   const kept = new Map<number, string[]>()
   for (const [k, r] of res) if (r.mode === 'kept' && r.gap) kept.set(k, [...r.gap.lines, ...(r.gap.held ?? [])])
   const read = (m.read ?? []).includes('breaks')
-  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read }, pieces, cls2), {
+  // (a frame's pitch TeX's \baselineskip where the part states it, Placed.lead: no 'lead' read)
+  const pitch = (m.read ?? []).includes('lead') ? null : m.lead
+  const br = breakMaps(statedBreaks({ lines: m.lines, els, spans, read, pitch }, pieces, cls2), {
     pieces,
     rects: [...i.rects],
     lineInfo: new Map(i.rects.map((r, j) => [rectKey(r), { j }])),
@@ -533,7 +535,8 @@ export function readMember(i: ReadInput): ReadOut {
   const made = tokensOf({
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
-    // (a colour piece's run in the fill TeX set it in, El.colour or SpanAt.colour: today's tex.mjs colourOf over the log's)
+    // (a group's run in the fill TeX set it in, El.colour or SpanAt.colour: a colour piece's the log's, today's tex.mjs
+    // colourOf; any other group's, a link's that hyperref colours, its glyphs' on A, today's measuredStyle `pieces`)
     colourOf: (k) => {
       const p = pieces[k]
       const c =

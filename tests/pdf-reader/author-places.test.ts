@@ -121,6 +121,79 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     const body = open('Before it.\n\n\\centerline{A centred line of words.}\n\nAfter it.')
     expect(units(body).map(textOf)).toEqual(['Before it.', 'After it.'])
   })
+  it('a class\'s own command of LaTeX\'s \\author form whose text its \\maketitle sets in the author block\'s tabular: of the block, names where it opens the tabular (ICASSP\'s spconf.sty \\name, 2610.20967v1)', () => {
+    // (spconf.sty's own definitions: \\name and \\address store their text as LaTeX's \\author does, and \\@maketitle sets both in
+    // one tabular, the names its first row. \\name is no command the role table knows: its names were no unit, an ink unit of the
+    // notes, translated with the author block off, its affiliations' marks set flat in the translation)
+    const sty = [
+      '\\def\\maketitle{\\par\\begingroup\\@maketitle\\endgroup\\@thanks}',
+      '\\def\\@maketitle{\\newpage\\null\\begin{center}{\\large \\bf \\@title\\par}\\vskip 1.5em {\\large \\begin{tabular}[t]{c}\\@name \\\\ \\@address\\end{tabular}\\par}\\end{center}\\par\\vskip 1.5em}',
+      '\\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}',
+      '\\def\\address#1{\\gdef\\@address{#1}}',
+      '\\def\\toappear#1{\\gdef\\@toappear{#1}}',
+      '\\def\\ps@titlepagestyle{\\def\\@oddfoot{\\@toappear}}',
+    ].join('\n')
+    const paper = (pre: string) => openPaper(new Map([
+      ['main.tex', enc(`\\documentclass{article}\n\\usepackage{spconf}\n\\title{A Title}\n${pre}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n`)],
+      ['spconf.sty', enc(sty)],
+    ]))
+    const p = paper('\\name{Song-Ze Yu$^{1}$, Fang-Duo Tsai$^{1,2}$, Yi-Hsuan Yang$^{1}$}\n\\address{$^1$National Taiwan University $^2$University of California, San Diego}\n\\toappear{To appear in a conference}')
+    expect(names(p)).toEqual(['Song-Ze Yu, Fang-Duo Tsai, Yi-Hsuan Yang'])
+    expect(places(p)).toEqual(['National Taiwan University University of California, San Diego'])
+    // (a unit no engine before cut: numbered after every other, so that no other unit's number moves)
+    expect(units(p).map(u => u.kind)).toEqual(['heading', 'affiliation', 'para', 'author'])
+    // (its affiliations' marks are the unit's elements, set where TeX set them, raised, never its text)
+    const name = units(p).find(u => u.kind === 'author')!
+    expect(name.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['$^{1}$', '$^{1,2}$', '$^{1}$'])
+    // (marked where the class sets the stored text, as an \\author's are)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toMatch(/\\name\{\\leavevmode\\axtmark\{\d+s\}Song-Ze Yu/)
+    // (a stored text the class sets elsewhere, \\toappear's in the foot, is none of the block)
+    expect(units(p).map(textOf).join('|')).not.toMatch(/To appear/)
+    // (a command of the paper's own named the same that stores nothing, a model's name, is no author block)
+    const model = open('\\maketitle\nThe \\name{} model.', '\\newcommand{\\name}{MIDI-REPA}\n\\author{Alice Smith}')
+    expect(names(model)).toEqual(['Alice Smith'])
+    expect(places(model)).toEqual([])
+  })
+  it('a class\'s own command whose text a list keeps and its title sets in the author block\'s group: of the block, after its places (Meta FAIR\'s \\contribution, 2604.14228v3)', () => {
+    // (the class (adapted from Meta FAIR's preprints) keeps each command's text in a list by one helper, \\addtolist, and its
+    // title command sets the names', the places' and the contributions' lists as the paragraphs of one group, the metadata's
+    // (\\correspondence, \\date) in another after the abstract. Neither \\contribution nor \\correspondence is a command the role
+    // table knows: no unit's, their glyphs on the title box's fill were figure texts, translated with the author block off,
+    // each run laid at its own anchor)
+    const cls = [
+      '\\LoadClass{article}',
+      '\\renewcommand\\addtolist[5][]{\\begingroup\\if\\relax#3\\relax\\def\\sep{}\\else\\def\\sep{#5}\\fi\\let\\protect\\@unexpandable@protect\\xdef#3{\\expandafter{#3}\\sep #4[#1]{#2}}\\endgroup}',
+      '\\newcommand\\authorlist{}',
+      '\\newcommand\\authorformat[2][]{{\\sffamily #2$^{#1}$}}',
+      '\\renewcommand\\author[2][]{\\addtolist[#1]{#2}{\\authorlist}{\\authorformat}{, }}',
+      '\\newcommand\\affiliationlist{}',
+      '\\newcommand\\affiliationformat[2][]{{\\normalsize $^{#1}$#2}}',
+      '\\newcommand\\affiliation[2][]{\\addtolist[#1]{#2}{\\affiliationlist}{\\affiliationformat}{, }}',
+      '\\newcommand\\contributionlist{}',
+      '\\newcommand\\contributionformat[2][]{{\\small $^{#1}$#2}}',
+      '\\newcommand\\contribution[2][]{\\addtolist[#1]{#2}{\\contributionlist}{\\contributionformat}{, }}',
+      '\\newcommand\\metadatalist{}',
+      '\\newcommand\\metadataformat[2][]{{\\small {\\sffamily \\bfseries #1:} #2}}',
+      '\\newcommand\\metadata[2][]{\\addtolist[#1]{#2}{\\metadatalist}{\\metadataformat}{\\par}}',
+      '\\newcommand\\correspondence[1]{\\metadata[Correspondence]{#1}}',
+      '\\renewcommand{\\title}[1]{\\newcommand{\\titlelist}{{\\huge\\sffamily #1}}}',
+      '\\newcommand{\\mymaketitle}{\\begin{tcolorbox}{\\raggedright{\\titlelist\\par}\\vskip 0.2cm \\authorlist\\par\\vskip 0.2cm \\affiliationlist\\par \\contributionlist\\par}\\abstractlist\\par{\\metadatalist\\par}\\end{tcolorbox}}',
+      '\\renewcommand{\\maketitle}{\\mymaketitle}',
+    ].join('\n')
+    const p = openPaper(new Map([
+      ['main.tex', enc('\\documentclass{style}\n\\title{A Title}\n\\author[1,*]{{Jiacheng Liu}}\n\\author[1,\\dagger]{{Zhiqiang Shen}}\n\\affiliation[1]{VILA Lab, Some University}\n\\contribution[*]{These authors contributed equally to this work}\n\\contribution[\\dagger]{Corresponding author}\n\\correspondence{Zhiqiang Shen (\\email{z@some.edu})}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n')],
+      ['style.cls', enc(cls)],
+    ]))
+    expect(names(p)).toEqual(['Jiacheng Liu', 'Zhiqiang Shen'])
+    // (its notes the paragraph after its places in their group: the block's places)
+    expect(places(p)).toEqual(['VILA Lab, Some University', 'These authors contributed equally to this work', 'Corresponding author'])
+    // (the metadata's list the title sets in a group of its own after the abstract, with the date's: none of the block's by TeX's
+    // grouping; the rule that took everything the title sets made a venue's line, a licence and a teaser's caption places)
+    expect(units(p).map(textOf).join('|')).not.toMatch(/Zhiqiang Shen \(/)
+    // (a stored text the title sets that the role table knows keeps its kind: the title a heading; the date none of the block)
+    expect(units(p)[0]).toMatchObject({ kind: 'heading' })
+  })
   it('an e-mail, a web address and an ORCID written out stay the original\'s ink: placeholders of the place they stand in', () => {
     const p = open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ University of Somewhere, alice@some.edu, ORCID 0000-0002-1825-0097, see https://some.edu/alice}')
     expect(places(p)).toEqual(['University of Somewhere, , ORCID , see'])

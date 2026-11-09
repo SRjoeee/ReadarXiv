@@ -1072,6 +1072,17 @@ only how it meets the rest of the extension.
   write and read back the same way; until 2026-11-09 the adapter stated none, and 2,118 of the 88 corpus papers' 31,535
   units went out without a display's own punctuation (live, Microsoft's own sentence lengths: one sentence where the stops
   make two in 1007.0072v1's `we can get @c# Then`, five for eight in 2608.23393v1).
+  A display that states no punctuation of its own (the author wrote none) ends its sentence where the text after it begins
+  one: the first thing after it that sets something is text beginning with an upper-case letter (Unicode Lu, Lt; an element
+  stated `silent` and one that reads as white space are passed over). TeX goes on in the display's paragraph either way, and
+  the sentence's own first letter is what tells "… as: [display] The next …" from "… tuple: [display] where …". Both wires
+  then write a stop after it as its own and take the reply's back (`packages/translate` wire/text.ts `displayEnds`), and the
+  tags wire's cutter reads it as the sentence's end (the owner's report of 2026-11-09 on 2609.33403v1 §4.2: a paragraph of two
+  displays and three sentences went to Microsoft as one sentence, translated and lit as one). Over the 88 corpus papers'
+  33,159 units, 94 displays in 78 units of 22 papers take it (every one followed by a sentence's first word: The, In, We,
+  For, Here, Then, This, …); the 328 followed by lower case, 52 at their unit's end and 10 before an element take none. Live
+  (Microsoft, zh-Hans, 2026-11-09, 8 units of 6 papers and one of our own words, two requests): every display given the stop
+  had its sentence cut after it (9 of 9), none followed by lower case did (0 of 5), and no stop came back after the marker.
 - **Fewer markers, each read from TeX** (TRANSLATE_VERSION 10, the rules audit of 2026-11-04). Each marker is a hard
   boundary to Microsoft and a chance of a fallback: over the 53 sweep papers' units, those with more than 20 markers went to
   Google 22 to 42 % of the time, those with none never. What the wire tells is read from TeX's own tables and definitions,
@@ -1112,6 +1123,22 @@ only how it meets the rest of the extension.
   Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
   sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
   4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).
+- **A bundle's unit reaches every translator one way** (lane unit-projection, 2026-11-09). A unit of `packages/format`
+  (its pieces as the prepare writes them) is not the translator contract's: a nested unit (a footnote set inside a
+  paragraph) is a piece of its own, and an element's TeX source, a group's open and close and a heading's depth only name
+  them. `packages/translate`'s `unitInOf` is the one projection, and the Worker, the extension's reader host and the lab
+  call it. It keeps every field format states that the contract declares, which is what the wires read, and leaves the rest
+  (`src`, `keys`, `open`, `close`, `depth`, and `kept`, whose unit the caller leaves out). Its test records every field the
+  wires, the adapters and the chain read of a unit that sets every field of format's schema, and fails on any it left. A
+  nested unit goes as its mark, an element of kind `note-mark`: today's wire reads a nested unit as an annotation of the
+  sentence before it (`mt.mjs` `splitContextOf`), and the package's cutter reads a note's mark so (`standInOf`). The kind
+  changes only where Google's sentences are cut. Over the 88 corpus papers' 30,266 units, Microsoft's wire is byte for byte
+  the same with kind `unit`, which the Worker sent, and Google's differs in 38 of the 152 units that hold a nested unit.
+  In those 38, today's cutter (the units restated in today's pieces) cuts as `note-mark` does in 20 and as `unit` does in
+  none, and `note-mark` shares more sentences with today's in 34 (4 equal). With `unit`, the footnote's mark read as a
+  word: a sentence ran on past it, or the mark opened the next sentence. Before, the extension's reader cast format's units,
+  and both adapters threw on every unit that holds a nested unit, so translating here gave those units no translation
+  (152 units of 36 of the 88 papers).
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its

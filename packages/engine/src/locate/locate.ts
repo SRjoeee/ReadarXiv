@@ -50,7 +50,8 @@ import {
 } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { type InkInput, type InkStats, inkOf } from './ink.ts'
+import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
+import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -121,6 +122,12 @@ export interface Member {
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
+  /** its groups whose text TeX set in a fill other than the fill around it, read off its glyphs on A (group-style.ts;
+   *  SpanAt.colour where the instrument states none): each one's open piece id and fill */
+  spanFills?: [string, number][]
+  /** its groups whose command names no face and whose own text TeX set in a face other than the face around it, read off its
+   *  glyphs on A (group-style.ts; SpanAt.style where the instrument states none): each one's open piece id and style */
+  spanFaces?: [string, Style][]
   /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
@@ -372,6 +379,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   /** the instrument's units, then those made on A */
   const units: InstrumentUnit[] = [...ins.units]
   const members: Member[] = []
+  // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
+  const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -496,15 +505,37 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     let bad: string | null = null
     const aIdx: number[] = []
-    for (const b of list) {
+    // (B's glyphs with no partner inside the unit, between two of its own whose partners A sets one right after the other:
+    // glyphs our compile set where arXiv's set nothing (1810.04805v2 u325: our tree sets the .bbl's UTF-8 quotes round "Cloze
+    // procedure", arXiv's 2016 tree read their bytes as characters its OT1 font has no glyph for, TeX's "Missing character",
+    // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
+    // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
+    // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
+    // that no block move paired): a content difference, the unit the original's, as before)
+    const prevPaired = new Int32Array(list.length).fill(-1)
+    for (let i = 0, last = -1; i < list.length; i++) {
+      prevPaired[i] = last
+      if ((m.bToA[list[i] as number] as number) >= 0) last = i
+    }
+    let nextPaired = -1
+    for (let i = list.length - 1; i >= 0; i--) {
+      const b = list[i] as number
       const a = m.bToA[b] as number
       if (a >= 0) {
         aIdx.push(a)
+        nextPaired = i
         continue
       }
       if (m.hunkB[b] === HUNK.hyphen || m.offpageB[b]) continue
-      bad ??= `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
+      const pv = prevPaired[i] as number
+      if (pv >= 0 && nextPaired >= 0) {
+        const ap = m.bToA[list[pv] as number] as number
+        const an = m.bToA[list[nextPaired] as number] as number
+        if (an === ap + 1) continue
+      }
+      bad = `content difference: ${hunkName(m.hunkB[b] as number) === 'none' ? 'bonly' : hunkName(m.hunkB[b] as number)}`
     }
+    aIdx.reverse()
     const boxPartners: [ap: number, ai: number, p: number, x: number][] = []
     for (const [p, x] of boxes) {
       const kind = B.pages[p]!.kinds[x] as number
@@ -726,6 +757,37 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       members.push(mem)
     }
+  }
+
+  // ---- a member's trail: the ink TeX set right after its last glyph, glued to it on its row, that no unit owns (a class's marks
+  // after a name and its separator: Meta FAIR's \authorformat sets `#2$^{#1}$` and \addtolist ", " after each \author's text; the
+  // \thanks mark \maketitle sets in an \rlap after a name), claimed as its element TRAIL, which travels with its text (its group
+  // `.e`, El.trail: laid after its translation's end). Left where TeX set it, that ink fenced the member's room beside it and kept
+  // the member after it on the row where it stood: 2604.14228v3's translated names each at its original's start, a hole after
+  // each, 1706.03762v7's first name set small before its \thanks mark. Glued: its glyphs one after the other in TeX's stream,
+  // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
+  // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
+  // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  for (const mem of members) {
+    if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
+      continue
+    const end = m.bToA[mem.bLast] as number
+    if (end < 0) continue
+    const last = gA(end)
+    let prev = last
+    const trail: number[] = []
+    for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
+      const a = m.bToA[b] as number
+      if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
+      const g = gA(a)
+      if (!isInk(g) || g.top <= last.bottom || g.bottom >= last.top || g.x0 < prev.x0) break
+      if (g.x0 - prev.x1 > WORD_GAP * Math.max(g.size, prev.size)) break
+      trail.push(a)
+      prev = g
+    }
+    if (!trail.length) continue
+    for (const a of trail) claimedA[a] = mem.ord
+    mem.els.set(TRAIL, trail)
   }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
@@ -997,6 +1059,41 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       ...(caps.ratio !== undefined ? { sc: caps.ratio } : {}),
       ...(caps.caps ? { caps: 1 as const } : {}),
     }
+    // (the fill and the face TeX set its text in, group by group (group-style.ts): a group's fill where it is not the fill
+    // around it, a link's that hyperref colours, and the face of a group whose command names none where it is not the face
+    // around it, stated for the typesetter to draw its translation in; and where a group or a switch's run is set apart so,
+    // the unit's own fill, slant and weight are its own text's, not those most of all its glyphs hold, which a link or an
+    // \emph holding most of its letters makes theirs)
+    const colourSwitch = (el: Extract<Piece, { t: 'el' }>) => classOf.get(el.id)?.colour !== undefined
+    const faceSwitch = (el: Extract<Piece, { t: 'el' }>) => {
+      const c = classOf.get(el.id)
+      return !!c?.bare && !!c.cmd && namesFace(commandStyleOf(`\\${c.cmd}`))
+    }
+    const switches = (el: Extract<Piece, { t: 'el' }>) => colourSwitch(el) || faceSwitch(el)
+    // (not a figure text's: its groups are its runs of glyphs in another face than its own, which is the face of most of its
+    // glyphs by their definition (ink.ts figureRuns), its text in its run's order, not its glyphs' stream order: read again in
+    // the stream's, 2610.37668v1's "PSNR 33.42 dB" took its italic run's face for its own)
+    if (unit && !mem.figure && !unit.figure && mem.text.length && hasScopes(unit.content, switches)) {
+      const g = groupStyleOf(
+        unit.content,
+        [...mem.text].sort((x, y) => x - y).map(gA),
+        (el) => classOf.get(el.id)?.text,
+        colourSwitch,
+        faceSwitch,
+      )
+      if (g.fill.groups.length) mem.spanFills = g.fill.groups
+      if (g.fill.apart && g.fill.own !== undefined) {
+        if (g.fill.own > 0) mem.style.fill = g.fill.own
+        else delete mem.style.fill
+      }
+      if (g.face.groups.length) mem.spanFaces = g.face.groups
+      if (g.face.apart && g.face.own) {
+        if (g.face.own.bold) mem.style.bold = 1
+        else delete mem.style.bold
+        if (!g.face.own.italic) delete mem.style.slant
+        else mem.style.slant ??= 1
+      }
+    }
     // (a babel name's own text, its counter aside: S.names leaves it the original's where the target's word is it already, and
     // sets the counter after the target's word)
     if (mem.name !== undefined) {
@@ -1016,16 +1113,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           ],
         ]
     }
-    // the lead: the pitch of its lines, where it has two on one page; else its size's
+    // the lead: TeX's \baselineskip where its paragraph states it (LINES_TEX's AXT-LINES, as the paragraph ends: the one TeX
+    // appended its lines at), the pitch TeX set its lines at, which TeX's \lineskip rule only widens, under a line too tall for
+    // it, never narrows; else (read) the pitch of its lines, where it has two on one page, else its size's, today's rule. A gap
+    // the \lineskip rule opened is no pitch of the paragraph: read as one (2602.23285v2 p4 t29, gaps 10.96 and 12.24, read
+    // 12.24), a translation that set the tall line elsewhere had that gap added to the push its own tall line took. A
+    // paragraph whose lines stand nearer than the \baselineskip stated was not set at it (a negative skip after a forced
+    // break, a part of it set before a display under another): read
     const pitches: number[] = []
     for (let q = 1; q < cut.length; q++)
       if (cut[q]!.page === cut[q - 1]!.page) {
         const d = cut[q - 1]!.base - cut[q]!.base
         if (d > 0 && d < 3 * size) pitches.push(r2(d))
       }
-    if (mem.lines.length) mem.read.push('style', 'lead')
+    const skip = mem.unit >= 0 && mem.name === undefined ? texSkip.get(mem.unit) : undefined
+    const stated = skip !== undefined && skip > 0 && pitches.every((d) => d >= skip - ON_BASE)
+    if (mem.lines.length) mem.read.push(...(stated ? ['style'] : ['style', 'lead']))
     pitches.sort((x, y) => x - y)
-    mem.lead = pitches.length ? (pitches[Math.floor(pitches.length / 2)] as number) : r2(1.2 * size)
+    // (a stated pitch to a thousandth: it is laid line after line, and 12 pt, 11.9552 PDF units, written 11.96 drifts 0.005 a line)
+    mem.lead = stated
+      ? Math.round(skip * 1000) / 1000
+      : pitches.length
+        ? (pitches[Math.floor(pitches.length / 2)] as number)
+        : r2(1.2 * size)
     // elements: each one's own ink, one box per line of TeX's it stands on (its glyphs and its rules)
     const unitText = unit ? sourceText(unit.content) : ''
     // (the line of the unit's own each of its glyphs was cut into, its KEPT lines aside: the line TeX set it on)
@@ -1259,6 +1369,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       }
       mem.elements.push([id, el])
     }
+    // its trail (above): an element of no piece, its ink a crop's, its text its glyphs'
+    const tr = mem.els.get(TRAIL)
+    if (tr?.length) {
+      const L = cutLines(tr, atA)[0]
+      if (L)
+        mem.elements.push([
+          TRAIL,
+          {
+            kind: 'other',
+            copy: tr.map((a) => gA(a).u).join(''),
+            ink: [[L.page, r2(L.x0), r2(L.bottom), r2(L.x1), r2(L.top), L.base]],
+            trail: 1,
+          },
+        ])
+    }
     // its label: the class's mark before it
     if (mem.label.length) {
       const L = cutLines(mem.label, atA)[0]
@@ -1416,8 +1541,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
   const standsBefore = new Map<number, number[]>()
   const standing = new Set<number>()
+  // (one whose first glyph TeX set right after a member's last, on that member's last row, stands after it: the paragraph goes
+  // on past that member into text no unit owns. acmart's reference format, its last author's name a unit of \author's that TeX
+  // sets late in the stream and ". 2027. ABNAT: …" after it, the title set again, made on A: no member begins after it on the
+  // page, and standing where it was made, after every member, the member before it was another row's (2610.22065v1), its
+  // translation laid at its original's start past a gap. Else before the member whose first glyph comes next, as above)
+  const lastAt = new Map<number, number>()
+  for (const x of members) if (x.bLast >= 0 && !madeOnA(x)) lastAt.set(x.bLast, x.ord)
+  const standsAfter = new Map<number, number[]>()
   for (const x of members) {
-    if (!madeOnA(x) || x.bLast < 0) continue
+    if (!madeOnA(x) || x.bFirst < 0) continue
+    let b = x.bFirst - 1
+    while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0 && !madeB.has(b)) b--
+    const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
+    const lead = o === undefined ? undefined : members[o]
+    const a = lead?.lines.at(-1),
+      l = x.lines[0]
+    if (!lead || !a || !l || a[0] !== l[0] || a[1] !== l[1] || l[2] < a[3] - 0.5) continue
+    if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
+    ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
+    standing.add(x.ord)
+  }
+  for (const x of members) {
+    if (!madeOnA(x) || x.bLast < 0 || standing.has(x.ord)) continue
     let b = x.bLast + 1
     while (b < NB && pageB[b] === pageB[x.bLast] && (unitB[b] as number) < 0 && !madeB.has(b)) b++
     const next = b < NB && pageB[b] === pageB[x.bLast] ? firstAt.get(b) : undefined
@@ -1429,6 +1575,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const put = (o: number) => {
     for (const x of standsBefore.get(o) ?? []) put(x)
     seq.push(members[o]!)
+    for (const x of standsAfter.get(o) ?? []) put(x)
   }
   for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
@@ -1439,9 +1586,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // notes as one paragraph, a note on the row the one before ends: 2608.06701v1 p5), but a member made on A that B printed
   // right before it)
   let note: number | null = null
+  // (a member of the instrument's that B never printed — a unit whose marks TeX set nowhere, acmart's \affiliation between two
+  // names its reference format sets again — has no place in TeX's stream: never the member before. 2610.22065v1: the authors'
+  // names each a flow of their own, each laid at its original's start, the gaps between them read as stretched spaces)
+  const inStream = (x: Member) => x.bFirst >= 0 || madeOnA(x)
   for (let q = 0; q < seq.length; q++) {
     const mem = seq[q]!
     let k = q - 1
+    while (k >= 0 && !inStream(seq[k]!)) k--
     if (!insert(mem) && k >= 0 && insert(seq[k]!) && body !== null) k = body
     else if (mem.kind === 'footnote' && note !== null && !(k >= 0 && standsBefore.get(mem.ord)?.includes(seq[k]!.ord)))
       k = note
@@ -1484,8 +1636,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       flows.push(flow)
       flowOf.set(mem.ord, flow)
     }
-    if (!insert(mem) && !madeOnA(mem)) body = q
-    if (mem.kind === 'footnote') note = q
+    if (!insert(mem) && !madeOnA(mem) && inStream(mem)) body = q
+    if (mem.kind === 'footnote' && inStream(mem)) note = q
   }
   // (the flows in the members' order, each at its first member's place there: the instrument's, then those made on A)
   flows.sort((f, g) => Math.min(...f) - Math.min(...g))
@@ -1849,6 +2001,13 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 const ON_ROW = 0.4
+/** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
+const ON_BASE = 0.05
+/** a word ends where two glyphs stand this share of their size apart, and a trail with it (the ink units' word rule, today's
+ *  wordsOf: ink-units.mjs WORD_GAP) */
+const WORD_GAP = 0.12
+/** the element id of a member's trail (no piece's: a piece's id is its index) */
+export const TRAIL = '~'
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
  *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a

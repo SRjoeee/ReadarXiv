@@ -731,15 +731,17 @@ export function roomOf(gap: number, pitch: number, natural: number): number {
 /**
  * A forced break's line and room (El.ends): `line` the index of the line TeX ended at it (the line of the last glyph before its
  * point in B's stream, carried to A); its room after, in pitches, by the member's lines: the gap from that line's baseline to
- * the next one's against the pitch of its other consecutive lines on that page and column (today's forcedBreaks TEX:120's
- * geometry, which found the line by its short end: SHORT; ownership and TeX's point find it instead). Null room where no
- * pitch is known (one line, or a page change)
+ * the next one's against the paragraph's pitch, TeX's \baselineskip `stated` (Placed.lead, where its paragraph states it),
+ * else the pitch of its other consecutive lines on that page and column (today's forcedBreaks TEX:120's geometry, which found
+ * the line by its short end: SHORT; ownership and TeX's point find it instead), whose median a gap TeX's \lineskip rule opened
+ * under a tall line passes for a pitch. No room where no pitch is known (one line, or a page change)
  */
 export function breakEnd(
   lines: readonly Line[],
   line: number,
   breaks: ReadonlySet<number>,
   lineskip?: [number, number],
+  stated?: number,
 ): [number, number] | null {
   const L = lines[line]
   const N = lines[line + 1]
@@ -752,7 +754,7 @@ export function breakEnd(
     if (breaks.has(j) || a[0] !== b[0] || a[1] !== b[1] || a[9] & 1 || b[9] & 1) continue
     gaps.push(a[4] - b[4])
   }
-  const pitch = pitchOf(gaps)
+  const pitch = stated ?? pitchOf(gaps)
   if (pitch === null) return [line, 0]
   const gap = L[4] - N[4]
   return [line, roomOf(gap, pitch, naturalOf(pitch, L[4] - L[6], N[5] - N[4], lineskip))]

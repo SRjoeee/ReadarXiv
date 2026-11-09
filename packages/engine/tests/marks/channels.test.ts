@@ -64,6 +64,16 @@ describe('readAlign: each unit’s alignment as TeX stated it at its end mark', 
     expect(readAlign('AXT-ALIGN 3 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN t4 p 0 0.0pt 1 1.0pt 1 1.0pt').get(4)).toBe('l')
     // (a line not of the form, a class TeX has no letter of: none)
     expect(readAlign('AXT-CELL 80 6\nAXT-CELL 81\nAXT-CELL x 0').size).toBe(0)
+    // (an author block's unit, no cell's, the one unit of its cell's line (1706.03762v7's names and places, each a row of
+    // NeurIPS's tabular[t]{c}): its \hbox's skips tell nothing, its cell's class does; a name set again as a paragraph
+    // (acmart's reference format) its paragraph's)
+    expect(
+      Object.fromEntries(
+        readAlign(
+          'AXT-ALIGN 176 h 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-CELL 176 0\nAXT-ALIGN 4 h 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-CELL 4 0\nAXT-ALIGN 4 p 0 0.0pt 0 0.0pt 1 1.0pt',
+        ),
+      ),
+    ).toEqual({ 4: 'j', 176: 'c' })
   })
 })
 
