@@ -772,13 +772,13 @@ const h = {
       : f
     const q = (h.panes as Panes).boxOf(side, n, b) as { left: number; top: number; width: number; height: number }
     const r = el.getBoundingClientRect()
-    // (one shape a sentence, and one of its kept ink: the bands each pane shows of the member lit whole)
+    // (one shape a sentence: the bands each pane shows of the member lit whole; `own` its displays, blocks of their own)
     return {
       x: r.left + el.clientLeft + q.left + q.width / 2,
       y: r.top + el.clientTop + q.top + q.height / 2,
       left: m?.lit.left.filter((b) => b.length).length ?? 0,
       right: ((committed ? m?.lit.right : m?.lit.left) ?? []).filter((b) => b.length).length,
-      own: m?.lit.own.some(([, x]) => x.length) ? 1 : 0,
+      own: m?.lit.own.filter(([, x]) => x.length).length ?? 0,
     }
   },
   readers: [] as { reader: Reader; root: HTMLElement; asked: { url: string; at: number }[] }[],

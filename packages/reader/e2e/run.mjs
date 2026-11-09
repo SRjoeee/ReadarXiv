@@ -1050,7 +1050,8 @@ await check(
           side,
           lit: r.lit?.id ?? null,
           bands: r.bands,
-          want: { left: pt.left + pt.own, right: pt.right + pt.own },
+          // (its sentences' shapes; its displays, blocks of their own, never with it)
+          want: { left: pt.left, right: pt.right },
         })
       }
     }
@@ -1069,6 +1070,118 @@ await check(
       `a miss kept ${JSON.stringify(after)}`,
     )
     return { hovers: out.length }
+  },
+)
+
+await check(
+  'compose: a sentence across a display lit as a bar on each of its rows, the display never with it, on both panes; the display alone where hovered (s1-columns, a member’s lit restated)',
+  async () => {
+    const { page, context, errors } = await newPage()
+    await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
+    await page.evaluate(() => window.__h.layer('s1-columns'))
+    await laidShown(page, 1)
+    // (a laid member's first four lines on A in one column, restated as the typesetter states a sentence going on past a display
+    // (the owner's report of 2026-11-09, 2602.23285v2 p15): its first line one sentence, its second and fourth the next, its
+    // third a display of its own (piece 901) between them; the same boxes on both panes)
+    const got = await page.evaluate(() => {
+      for (const m of window.__h.composer.laid(1).members) {
+        if (m.state !== 'laid' || m.lit.dir || m.lit.left.length !== 1) continue
+        const rows = [...m.lit.left[0]].sort((a, b) => b[3] - a[3]).slice(0, 4)
+        if (
+          rows.length < 4 ||
+          rows.some((b, i) => i && Math.min(b[2], rows[i - 1][2]) - Math.max(b[0], rows[i - 1][0]) < 20)
+        )
+          continue
+        const per = [[rows[0]], [rows[1], rows[3]]]
+        m.lit = { left: per, right: per, own: [['901', [rows[2]]]] }
+        return { ord: m.ord, row: rows[1], display: rows[2] }
+      }
+      return null
+    })
+    assert(got, 'no laid member of four lines in one column on page 1')
+    const pointAt = (side, b) =>
+      page.evaluate(
+        ([s, b]) => {
+          const el = window.__h.panes.pageElement(s, 1),
+            q = window.__h.panes.boxOf(s, 1, b),
+            r = el.getBoundingClientRect()
+          return { x: r.left + el.clientLeft + q.left + q.width / 2, y: r.top + el.clientTop + q.top + q.height / 2 }
+        },
+        [side, b],
+      )
+    /** each pane's outlines painted and whether one of them holds the display's middle (the path's own fill) */
+    const painted = () =>
+      page.evaluate((d) => {
+        const out = {}
+        for (const side of ['left', 'right']) {
+          const layer = window.__h.panes.pageElement(side, 1).querySelector(':scope > .axt-hl-layer')
+          const q = window.__h.panes.boxOf(side, 1, d),
+            mx = q.left + q.width / 2,
+            my = q.top + q.height / 2
+          let outlines = 0,
+            filled = false
+          for (const el of layer?.children ?? []) {
+            const [L, T, W, H] = ['left', 'top', 'width', 'height'].map((k) => parseFloat(el.style[k]))
+            const path = el.querySelector('path')
+            if (path) {
+              outlines += (path.getAttribute('d').match(/M/g) ?? []).length
+              if (path.isPointInFill(new DOMPoint(mx - L, my - T))) filled = true
+            } else {
+              outlines++
+              if (mx >= L && mx <= L + W && my >= T && my <= T + H) filled = true
+            }
+          }
+          out[side] = { outlines, filled }
+        }
+        return out
+      }, got.display)
+    const steps = {}
+    for (const side of ['right', 'left']) {
+      const pt = await pointAt(side, got.row)
+      await page.mouse.move(pt.x, pt.y)
+      await page.waitForTimeout(80)
+      steps[`sentence from ${side}`] = {
+        lit: await page.evaluate(() => window.__h.highlight.lit),
+        ...(await painted()),
+      }
+    }
+    const pd = await pointAt('left', got.display)
+    await page.mouse.move(pd.x, pd.y)
+    await page.waitForTimeout(80)
+    steps.display = {
+      lit: await page.evaluate(() => window.__h.highlight.lit),
+      bands: await page.evaluate(() => window.__h.highlight.bands()),
+      ...(await painted()),
+    }
+    await page.mouse.move(3, 3)
+    await page.waitForTimeout(300)
+    await page.evaluate((o) => window.__h.highlight.light({ id: o, s: -1 }), got.ord)
+    steps.whole = { bands: await page.evaluate(() => window.__h.highlight.bands()), ...(await painted()) }
+    await context.close()
+    assert(!errors.length, errors.join('; '))
+    for (const side of ['right', 'left']) {
+      const x = steps[`sentence from ${side}`]
+      assert(
+        x.lit?.id === got.ord && x.lit.s === 1 && ['left', 'right'].every((p) => x[p].outlines === 2 && !x[p].filled),
+        `the sentence hovered from the ${side}: ${JSON.stringify(x)}`,
+      )
+    }
+    const d = steps.display
+    assert(
+      d.lit?.id === got.ord &&
+        d.lit.s === -2 - 901 &&
+        d.bands.left === 1 &&
+        d.bands.right === 1 &&
+        d.left.filled &&
+        d.right.filled,
+      `the display hovered: ${JSON.stringify(d)}`,
+    )
+    const w = steps.whole
+    assert(
+      w.bands.left === 2 && w.bands.right === 2 && ['left', 'right'].every((p) => w[p].outlines === 3 && !w[p].filled),
+      `the member lit whole: ${JSON.stringify(w)}`,
+    )
+    return { ord: got.ord }
   },
 )
 
