@@ -882,8 +882,72 @@ function paperMacros(files) {
     // marked where it was called, left a translation's leading on every page after it)
     const p0 = prose.length === 1 ? prose[0] : undefined
     const then = params ? tailOf(t.slice(k + 1, e - 1)) : null
-    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(p0 && use.stored.has(p0) && !use.typeset.has(p0) ? { stores: true } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
+    const stores = !!p0 && use.stored.has(p0) && !use.typeset.has(p0), into = stores ? storedIn(t.slice(k + 1, e - 1), p0) : null
+    out.set(name, { params, opt, prose: p0, def: t.slice(k + 1, e - 1), defFile: file, ...(stores ? { stores: true } : {}), ...(into ? { storesIn: into } : {}), ...(params ? {} : { body: { file, start: k + 1, end: e - 1 } }), ...(then ? { then } : {}) })
   }
+  return out
+}
+/** the macro a storing body keeps its parameter `p` in (`storesIn`): the one a definition inside it defines with #p in its
+ *  body, as LaTeX's \\author keeps its text (\\def\\author#1{\\gdef\\@author{#1}}); null where none does */
+function storedIn(body, p) {
+  const re = /\\(?:[gex]?def\s*\\([A-Za-z@]+)\s*(?:#\d\s*)*|(?:re)?newcommand\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[\d\]\s*)?)(?=\{)/g
+  for (const m of body.matchAll(re)) {
+    const k = m.index + m[0].length, e = matchGroup(body, k)
+    if (e > 0 && body.slice(k, e).includes(`#${p}`)) return m[1] ?? m[2] ?? m[3]
+  }
+  return null
+}
+/** the bodies the paper's own files give \\maketitle and \\@maketitle (a class or a style it ships: \\def, \\renewcommand) */
+function maketitleBodies(own) {
+  const out = []
+  const re = /\\(?:[gex]?def\s*\\(@?maketitle)(?![A-Za-z@])\s*|(?:re)?newcommand\*?\s*(?:\{\s*\\(@?maketitle)\s*\}|\\(@?maketitle)(?![A-Za-z@]))\s*)(?=\{)/g
+  for (const { text } of own) {
+    const t = uncommented(text)
+    for (const m of t.matchAll(re)) { const k = m.index + m[0].length, e = matchGroup(t, k); if (e > 0) out.push(t.slice(k + 1, e - 1)) }
+  }
+  return out
+}
+/** each tabular a body opens, its text from its \\begin to its \\end (a nested one within it, and on its own too) */
+function tabularsIn(body) {
+  const out = [], open = []
+  for (const m of body.matchAll(/\\(begin|end)\s*\{(tabular\*?)\}/g)) {
+    if (m[1] === 'begin') open.push(m.index)
+    else if (open.length) out.push(body.slice(open.pop(), m.index))
+  }
+  return out
+}
+/** a block of such a command's (ownAuthorsOf), which no engine before cut a unit of: each of its units numbered after every
+ *  other unit of the source, the bibliography's entries too (`last`, entriesLast), so that no other unit's number moves */
+function ownLater(name, b, before, ctx) {
+  if (FRONT_MATTER.has(name) || !ctx.ownAuthors?.has(name)) return
+  for (const u of topUnits(b.units.slice(before))) u.last = true
+}
+/**
+ * The author block's commands of a class the paper ships that the role table does not know, as TeX's definitions state them:
+ * a command of LaTeX's \\author form (one argument of text, stored in a macro: `storesIn`) whose macro the class's \\maketitle
+ * sets in the tabular it sets an author block's in (LaTeX's \\@author, or the macro of a command the role table knows of the
+ * block: \\address's \\@address). Its role the block's rows' as TeX sets them: the macro that opens the tabular names, as
+ * \\author's first rows are (FRONT_NAMES), one after it places. ICASSP's spconf.sty: \\name{…} and \\address{…}, its
+ * \\@maketitle's `\\begin{tabular}[t]{c}\\@name \\\\ \\@address` (2610.20967v1: its names no unit, an ink unit of the notes,
+ * translated with the author block off, its affiliations' marks set flat in the translation). A command the class sets
+ * elsewhere (spconf's \\toappear, in the foot), one of a class the paper does not ship, and one that takes the block's text in
+ * more than one argument (spconf's \\twoauthors) are none
+ */
+function ownAuthorsOf(own, macros) {
+  const known = new Set(['@author']), unknown = new Map()
+  for (const [name, m] of macros) {
+    if (!m.storesIn) continue
+    if (FRONT_MATTER.has(name) || FRONT_ROLES[name]?.[0] === 'author') known.add(m.storesIn)
+    else if (!FRONT_ROLES[name] && !HEADINGS.has(name) && !OWN_UNIT_ARG.has(name)) unknown.set(m.storesIn, name)
+  }
+  const out = new Map()
+  if (!unknown.size) return out
+  for (const body of maketitleBodies(own))
+    for (const tab of tabularsIn(body)) {
+      const set = [...tab.matchAll(/\\([A-Za-z@]+)/g)].map(m => m[1]).filter(n => known.has(n) || unknown.has(n))
+      if (!set.some(n => known.has(n))) continue
+      set.forEach((n, k) => { const c = unknown.get(n); if (c && !out.has(c)) out.set(c, k === 0 ? 'names' : 'places') })
+    }
   return out
 }
 /** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
@@ -2133,10 +2197,12 @@ function walk(s, from, to, b, ctx) {
         i = content.end; continue
       }
     }
-    if (FRONT_MATTER.has(name)) {
+    if (FRONT_MATTER.has(name) || ctx.ownAuthors?.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      const before = b.units.length
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, ctx.ownAuthors?.get(name) ?? roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      ownLater(name, b, before, ctx)
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2539,12 +2605,15 @@ const BIB_KINDS = new Set(['reference'])
  * appendix's last paragraphs' next neighbour, on page 10, and those of its page 16 the marks did not bound were found nowhere
  */
 function entriesLast(units) {
-  const later = units.filter(u => u.later && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind))
-  if (!later.length && !entries.length) return null
+  // (`last`: a block of the author block's no engine before cut a unit of (ownLater), after the entries too: every other unit
+  // keeps its number)
+  const last = units.filter(u => u.last)
+  const later = units.filter(u => u.later && !u.last && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind) && !u.last)
+  if (!later.length && !entries.length && !last.length) return null
   const walked = units.slice()
-  const rest = units.filter(u => !u.later && !BIB_KINDS.has(u.kind))
+  const rest = units.filter(u => !u.later && !u.last && !BIB_KINDS.has(u.kind))
   units.length = 0
-  units.push(...rest, ...later, ...entries)
+  units.push(...rest, ...later, ...entries, ...last)
   const index = new Map(units.map((u, i) => [u, i]))
   return walked.map(u => index.get(u))
 }
@@ -2740,7 +2809,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
+    if (FRONT_MATTER.has(c.name) || ctx.ownAuthors?.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to), before = b.units.length; for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, ctx.ownAuthors?.get(c.name) ?? roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } ownLater(c.name, b, before, ctx); past = end; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
@@ -2987,6 +3056,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
   const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  // (the author block's commands of a class the paper ships that the role table does not know: ownAuthorsOf)
+  ctx.ownAuthors = ownAuthorsOf(own, ctx.macros)
   const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
