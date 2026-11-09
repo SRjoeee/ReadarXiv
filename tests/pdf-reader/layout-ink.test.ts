@@ -392,6 +392,11 @@ describe('pageInk', () => {
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps4', glyph: 2 }, { name: 'dpe4', glyph: 4 }, { name: 'dpe4', glyph: 7 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 2, to: 7 }])
     expect(regionsOfPoints([{ name: 'bs2', glyph: 1 }, { name: 'dpe4', glyph: 3 }, { name: 'dpe4', glyph: 6 }, { name: 'be2', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 1, to: 6 }])
     expect([...regionMask([{ kind: 'display', from: 1, to: 3 }], 5, 'display')]).toEqual([0, 1, 1, 0, 0])
+    // (a display's start with no end before its column body's end is a display the source ended with $$, which TeX gives no
+    // place to mark: no region, never the rest of the column; a code paragraph's start still runs to it. 2610.19159v1 p35's
+    // $$ displays in mdframed boxes took the page's box titles to its foot)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'cds2', glyph: 1 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 1, to: 9 }])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {

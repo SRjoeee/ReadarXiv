@@ -993,7 +993,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
  * point of one number paired, in stream order. Where TeX broke such a paragraph over a page or a column, its points stand apart:
  * a start with no end after it runs to the end of its column's body (the `be` after it), an end with no start before it from the
  * start of its column's body (the `bs` before it); with no bracket there, none: never a glyph taken by a guess (a running head or
- * a folio, shipped outside the body, is no line of the region)
+ * a folio, shipped outside the body, is no line of the region). A display's region runs from its start to its last end (an
+ * alignment's rows each end with one); a display's start with no end is one the source ended with $$, and states no region
  */
 export function regionsOfPoints(points, glyphCount) {
   const open = new Map(), closed = new Map(), out = []
@@ -1002,7 +1003,9 @@ export function regionsOfPoints(points, glyphCount) {
   for (const p of points) {
     if (BODY_BRACKET.test(p.name)) {
       if (p.name[1] === 's') bodyStart = p.glyph
-      else { for (const [key, from] of open) push(REGION_POINT_KINDS[key.replace(/\d+$/, '')], from, Math.min(p.glyph, glyphCount)); open.clear(); bodyStart = null }
+      // (a start of a kind that runs to its last end has no end TeX broke off: a display with none is one the source ended
+      // with $$, never the rest of the column)
+      else { for (const [key, from] of open) { const kind = REGION_POINT_KINDS[key.replace(/\d+$/, '')]; if (!TO_LAST_END.has(kind)) push(kind, from, Math.min(p.glyph, glyphCount)) } open.clear(); bodyStart = null }
       continue
     }
     const m = REGION_POINT.exec(p.name)
