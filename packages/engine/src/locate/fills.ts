@@ -17,10 +17,13 @@
 // Each group, and each colour switch's run (the rest of its group: an element whose class states the fill TeX set its run in,
 // El.colour), is a scope of its own; the unit's text in no scope is the unit's. A scope's fill is the one most of its own
 // text's glyphs are set in (those of no scope within it), where it has none, most of all its text's; a glyph whose fill the
-// page does not tell is not read. A group's fill is stated where it is not the fill of the scope around it, or not the unit's
-// own: each group set apart carries its fill itself, since a translation keeps some groups and not others (a link span is
-// `must`; Microsoft's reply may move an `\emph`'s markers to the end, empty: 2501.14787v1's `\emph{\href{…}{…}}`, whose fill
-// the \emph alone stated was drawn on nothing). A vote of glyphs and two inequalities, no threshold.
+// page does not tell is not read. The unit's own fill, where it has no text of its own (every character a group's: RevTeX's
+// `\bibfield{author}{… Weinberg,\ }\href{…}{…}`), is its text's outside its links and colour pieces (and colour switches'
+// runs): their text is set in hyperref's colour or in their own, never in the unit's; only where it has none, all its text's. A
+// group's fill is stated where it is not the fill of the scope around it, or not the unit's own: each group set apart carries
+// its fill itself, since a translation keeps some groups and not others (a link span is `must`; Microsoft's reply may move an
+// `\emph`'s markers to the end, empty: 2501.14787v1's `\emph{\href{…}{…}}`, whose fill the \emph alone stated was drawn on
+// nothing). A vote of glyphs and two inequalities, no threshold.
 import type { Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { StyleGlyph } from './facts.ts'
@@ -78,9 +81,12 @@ export function fillsOf(
   textOf: (el: El) => string | undefined = () => undefined,
   switches: (el: El) => boolean = () => false,
 ): Fills {
-  // ---- the scopes (0 the unit's own), each with the scope around it and the group it is (none: a switch's run, the unit)
+  // ---- the scopes (0 the unit's own), each with the scope around it, the group it is (none: a switch's run, the unit) and
+  // whether its text is set in a colour that is not the unit's by definition (a link's, a colour piece's, a switch's run, or
+  // inside one)
   const parent: number[] = [-1]
   const groupOf: (string | null)[] = [null]
+  const tinted: boolean[] = [false]
   // ---- the source's characters, each with its scope
   const P: number[] = []
   const scopeOf: number[] = []
@@ -90,12 +96,14 @@ export function fillsOf(
       if (p.t === 'span') {
         parent.push(cur)
         groupOf.push(p.id)
+        tinted.push((tinted[cur] as boolean) || p.style === 'link' || p.style === 'colour')
         walk(p.content, parent.length - 1)
         continue
       }
       if (p.t === 'el' && switches(p)) {
         parent.push(cur)
         groupOf.push(null)
+        tinted.push(true)
         cur = parent.length - 1
         continue
       }
@@ -122,6 +130,8 @@ export function fillsOf(
   // (each scope's glyphs whose fill is told, its own text's and all its text's, each glyph once)
   const direct: Set<number>[] = Array.from({ length: S }, () => new Set())
   const all: Set<number>[] = Array.from({ length: S }, () => new Set())
+  /** the unit's text's glyphs outside its links, colour pieces and switches' runs */
+  const untinted = new Set<number>()
   if (P.length && G.length) {
     const { pairs } = lcs(Int32Array.from(P), Int32Array.from(G), WORK_PER_CHARACTER * (P.length + G.length))
     for (let k = 0; k < pairs.length; k += 2) {
@@ -131,10 +141,11 @@ export function fillsOf(
       const s = scopeOf[pairs[k] as number] as number
       direct[s]!.add(q)
       for (let up = s; up >= 0; up = parent[up] as number) all[up]!.add(q)
+      if (!tinted[s]) untinted.add(q)
     }
   }
   const fillOf = (s: number): number | undefined => {
-    const own = direct[s]!.size ? direct[s]! : all[s]!
+    const own = direct[s]!.size ? direct[s]! : s === 0 && untinted.size ? untinted : all[s]!
     return mostOf([...own].sort((x, y) => x - y).map((q) => (glyphs[q] as StyleGlyph).fill))
   }
   const fills = Array.from({ length: S }, (_, s) => fillOf(s))

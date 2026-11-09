@@ -2738,6 +2738,33 @@ describe('locate: the fill TeX set a unit’s text in, group by group, read off 
     ])
     expect(m.style.fill).toBeUndefined()
   })
+  it('reads a unit with no text of its own off its text outside its links: a link’s fill is never the unit’s (2610.20507v1)', () => {
+    // (RevTeX's `\\bibfield{author}{… Weinberg,\\ }\\href{…}{\\bibfield{journal}{Phys. Rev. Lett.} \\textbf{40}, 223 (1978)}`:
+    // every character in a group, the author's comma too; the link holds most. A link's text is set in hyperref's colour and a
+    // colour piece's in its own, never in the unit's; the author group a translation may drop is the unit's)
+    const lines = ['S. Weinberg, Phys. Rev. Lett. 40,', '223 (1978)']
+    const { B, A } = pair(lines, (n, x0) => n === 1 || x0 >= 72 + 13 * 6)
+    const content = [
+      span('0', 'other', '\\bibfield{author}{', [text('S. Weinberg,')]),
+      text(' '),
+      span('13', 'link', `\\href{${to.url}}{`, [
+        span('14', 'other', '\\bibfield{journal}{', [text('Phys. Rev. Lett.')]),
+        text(' 40, 223 (1978)'),
+      ]),
+    ]
+    const u = unitWith(content, [
+      ['0', { cmd: 'bibfield' }],
+      ['13', { cmd: 'href', to }],
+      ['14', { cmd: 'bibfield' }],
+    ])
+    const m = partOf(instrumentOf(B, [u], [[0, 0]]), B, A)
+    expect(m.spans).toEqual([
+      ['0', { cmd: 'bibfield' }],
+      ['13', { cmd: 'href', to, colour: 0x80 }],
+      ['14', { cmd: 'bibfield', colour: 0x80 }],
+    ])
+    expect(m.style.fill).toBeUndefined()
+  })
   it('states none where a group’s fill is the one around it, nor a unit’s own where its text is all one fill', () => {
     // (a unit wholly inside its link: its own fill the link's, as its glyphs read it, no group of it set apart)
     const all = pair(['Bridging nonlinearities and', 'stochastic regularizers.'], () => true)
