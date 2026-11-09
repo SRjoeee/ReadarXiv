@@ -929,9 +929,9 @@ const BAND_RULING =
  * share of them (shareOn: the typesetter's pageCutsOf, each frame's first line at its share of the lines, nearest, ties later):
  * 1512.03385v1-zh p7 t153, 6 of 8 where TeX set 8 of 10 and today 7 + 1. Marked here (`share`), ruled by the paper's pass
  * (sharePass), which counts each side's lines of it over its pages: where the totals differ, the count is the fit's, judged as
- * any. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs that borrow room voted to,
- * where without their votes the band would have held it otherwise (v2.mjs `fills`: each pass's target and its target without
- * them): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45, 1.35 without them
+ * any. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs that borrow room moved by
+ * voting the fill leadings option (i) gave them, its line count on the page other than the pair laid without (i) sets
+ * (v2.mjs `fills`, `before`): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45 where it was 1.30, 12 lines where it set 13
  */
 function leadRuling(p, { v2, n, facts, orig }) {
   for (const d of p.diffs) {
@@ -1003,16 +1003,21 @@ function shareOn(q, v2, n) {
   cuts.push(N)
   return frames.reduce((a, f, i) => a + (f.page === n ? cuts[i + 1] - cuts[i] : 0), 0) === on(n)
 }
-/** whether member `ord`, which does not borrow, is set at its page's band over a target the paragraphs that borrow room moved:
- *  its drawn leading the band's top over the pass's target (or its own fill leading under it), and another without their votes */
+/** whether member `ord`, which does not borrow, is set at its page's band over a target the paragraphs that borrow room moved
+ *  by option (i), and its line count on page `n` moved with it: its drawn leading the band's top over the pass's target (or its
+ *  own fill leading under it), another over the page's target before (i), and another line count there (v2.mjs `fills`, and
+ *  `before`: the pair laid without (i)) */
 function bandMoved(ord, v2, n) {
-  const f = Object.values(v2.fills ?? {}).find((x) => x.units?.[ord])
-  if (!f || typeof f.target !== 'number' || typeof f.without !== 'number' || Math.abs(f.target - f.without) < 1e-9) return false
+  const [pg, f] = Object.entries(v2.fills ?? {}).find(([, x]) => x.units?.[ord]) ?? []
+  const was = v2.before?.[pg]?.target,
+    off = v2.before?.[n]?.lines?.[ord]
+  if (!f || typeof f.target !== 'number' || typeof was !== 'number' || Math.abs(f.target - was) < 1e-9) return false
   const [lead, borrows] = f.units[ord]
-  const L = (v2.pages[n]?.members ?? []).find((m) => m.ord === ord)?.fit?.lead
-  if (borrows || typeof lead !== 'number' || typeof L !== 'number') return false
+  const m = (v2.pages[n]?.members ?? []).find((x) => x.ord === ord)
+  const L = m?.fit?.lead
+  if (borrows || typeof lead !== 'number' || typeof L !== 'number' || typeof off !== 'number' || off === (m.lines?.length ?? 0)) return false
   const at = (t) => Math.min(lead, Math.round((t + f.band) * 1000) / 1000)
-  return Math.abs(L - at(f.target)) < 0.005 && Math.abs(L - at(f.without)) > 0.005
+  return Math.abs(L - at(f.target)) < 0.005 && Math.abs(L - at(was)) > 0.005
 }
 
 /**

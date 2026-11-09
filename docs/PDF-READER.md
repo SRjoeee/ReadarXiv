@@ -2873,8 +2873,9 @@ it, 4 of them set tighter than their own fill leading and still at or over the f
 over 1.23: 8 lines and 2, TeX's, where the fit left 7 and 3), and 149 fall back to the fit's split (43 that would have gone
 under the floor, 102 whose own fill leading is under it, 4 that hold it at no leading); no frame is set at 1.0 to hold it.
 The bounded lay differs from (i) alone on 9 of the 2,566 pages, 6 units. The parity check reads a line count that is TeX's
-share (the same lines in all, its split alone moved: `sharePass`), and one set at a band the borrowing paragraphs moved, as
-the ruling's (`leadRuling`); the replays of today's fill
+share (the same lines in all, its split alone moved: `sharePass`), and one set at a band the borrowing paragraphs moved by
+the leadings (i) gave them (its count other than where the pair is laid without (i)), as the ruling's (`leadRuling`); the
+replays of today's fill
 read a round that borrows, its fill leadings, and a run's tokens without the share's cut, as this ruling's (`borrowsAt`,
 round.ts `L9 (i)`, `F6 runs (share)`).
 

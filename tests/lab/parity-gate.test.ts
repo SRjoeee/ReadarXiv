@@ -565,20 +565,26 @@ describe("line-count: the owner's ruling of 2026-11-10 (option (i), the frames' 
     expect(counts(split(5, 3))).toEqual([['t153 para', true, 'today']])
     expect(counts(split(6, 2, 7, 2))).toEqual([['t153 para', true, 'today']])
   })
-  // (2610.20484v1-zh p8 t85: the pass's target 1.45 with the votes of the paragraphs that borrow room, 1.30 without them; t85, which
-  // does not borrow, its fill leading 1.6, set at the band's top over the target, 1.50, 12 lines where today's 1.35 set 13 and TeX 19)
-  const band = (o: { lead?: number; borrows?: number; without?: number } = {}) => {
+  // (2610.20484v1-zh p8 t85: the pass's target 1.45 with the paragraphs that borrow room voting the leadings option (i) gave them,
+  // 1.30 where the pair is laid without (i); t85, which does not borrow, its fill leading 1.6, set at the band's top over the
+  // target, 1.50, 12 lines where without (i) it set 13 at 1.35, as today's, and TeX 19)
+  const band = (o: { lead?: number; borrows?: number; before?: number; offLines?: number } = {}) => {
     const facts = [{ ord: 85, kind: 'para', align: 'j', style: { size: 10 }, lines: Array.from({ length: 19 }, (_, i) => factLine(72, 300, 700 - 12 * i)) }]
-    const fills = { [N]: { target: 1.45, without: o.without ?? 1.3, band: 0.05, units: { 85: [1.6, o.borrows ?? 0], 80: [1.3, 1] } } }
-    const v2 = v2Of({ members: [laidN(85, 12, 700, { fit: { size: 10, lead: o.lead ?? 1.5, track: 0, borrowed: 0 } })], facts, today: { 85: { today: 85 } }, fills })
+    const fills = { [N]: { target: 1.45, band: 0.05, units: { 85: [1.6, o.borrows ?? 0], 80: [1.3, 1] } } }
+    const v2 = {
+      ...v2Of({ members: [laidN(85, 12, 700, { fit: { size: 10, lead: o.lead ?? 1.5, track: 0, borrowed: 0 } })], facts, today: { 85: { today: 85 } }, fills }),
+      before: { [N]: { target: o.before ?? 1.3, lines: { 85: o.offLines ?? 13 } } },
+    }
     return measure(v2, sides(85, drawnN(13), drawnN(12)))
   }
-  it('a paragraph at the band over a target the borrowing paragraphs voted to, held otherwise without them: the ruling\'s', () => {
+  it('a paragraph at the band over a target the borrowing paragraphs moved by (i), held otherwise at their leadings before: the ruling\'s', () => {
     expect(counts(band())).toEqual([['t85 para', false, 'ruling']])
   })
-  it('the target the same without their votes, or the paragraph borrowing itself, or not at the band: judged', () => {
-    expect(counts(band({ without: 1.45 }))).toEqual([['t85 para', true, 'today']])
+  it('the target the same without (i), the paragraph borrowing itself, not at the band, or its count the same without (i): judged', () => {
+    expect(counts(band({ before: 1.45 }))).toEqual([['t85 para', true, 'today']])
     expect(counts(band({ borrows: 1 }))).toEqual([['t85 para', true, 'today']])
     expect(counts(band({ lead: 1.4 }))).toEqual([['t85 para', true, 'today']])
+    // (its line count the same without (i): the count not the band's (2610.40645v1-ja p32 t271, 5 lines at 1.19 and at 1.23))
+    expect(counts(band({ offLines: 12 }))).toEqual([['t85 para', true, 'today']])
   })
 })
