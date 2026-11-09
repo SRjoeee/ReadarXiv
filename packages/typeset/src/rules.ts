@@ -642,9 +642,10 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fit.floorMin'],
     file: 'shared/figures.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a translation fitted and anchored by its ink, as every line the breaker sets: the blank half of a full-width mark at its line's edge (B.break leadOf and hangOf at its target's first state: an opening mark's leading half, a closing mark's trailing half) is no part of the line it needs and stands past its anchor's edge, where today's set it by its advance (the parity's ink reading, 9744efab3: 32 figure texts of its pages a quarter em off their original's middle or half an em short of its end, 1810.04805v2 p16's masked-LM label 3.49 pt at 6.97)",
       replay:
-        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs): drawn, why and line (x0, baseline, rot, text), the figure rows, views and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
+        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs --marks=today): with today's marks (no mark's em holding a blank half, as a target whose faces centre them) drawn, why and line (x0, baseline, rot, text) all today's; by ink 609 move, 452 level ones' x0, 154 turned ones' place along their run, 3 left unfit by their advance drawn; the figure rows, views and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
       cases: 14351,
     },
   },

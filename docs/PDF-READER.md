@@ -5344,6 +5344,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   whose band its own meets, the other half that unit's; short of the band and room of a unit of another direction (each
   against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
   read within the reach as before, so the same units are drawn and the base is the same bytes.
+- **Its line by its ink** (v2's typesetter, `packages/typeset` S.figures): a translation is fitted to its line and set on its
+  anchor by its ink, as every line the breaker sets is. A full-width mark's ink stands in one half of its em, so the blank half
+  of a mark at the line's edge is none of the line (`breaker/break.mjs` `leadOf`, `hangOf`, the one rule the breaker's lines are
+  placed by: an opening mark that starts the line loses its leading half where the target's rules compress its marks, a closing
+  mark that ends it hangs its trailing half past the edge; a mark is a CJK one, `punctOf`, where the target's faces set the marks
+  in one half of the em, not Traditional Chinese's `centredPunct`): it needs no room and stands past the anchor's edge, a turned
+  text's along its run. Today's paintFigures set a translation by its advance, so a right-aligned label ending with a closing
+  mark ended its ink half an em short of its original's end (1810.04805v2 p16's "Masked LM" in Chinese, in full-width
+  parentheses: 3.49 pt at 6.97) and a centred one
+  with a mark at one end stood a quarter em off the original's middle, where a cell's line of the same text stood on it: 32
+  figure texts of the parity's pages once its `align` read a drawn line by its ink (9744efab3), none of them judged, today's
+  figure texts joining no unit. Over the 123 reader dumps 609 of 14,351 figure texts move (452 level, 154 turned along their run,
+  3 left unfit by their advance now drawn), every other outcome today's; replayed with no mark's em holding a blank half
+  (`lab/typeset/replay-figures.mjs --marks=today`), all 14,351 are today's. A figure text is still set as today's within its
+  line: no CJK–Latin autospace and no blank half taken between two marks, which the breaker's lines set.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
   its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:

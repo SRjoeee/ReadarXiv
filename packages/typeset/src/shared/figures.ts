@@ -1,16 +1,19 @@
 // S.figures (design-b §1.6 L4, T10, G16, A26): a page's figure texts (the content class `figures`, docs/route/orphan-text.md
 // stage 5), each drawn in its translation where it says something its source does not, in the faces of its font's family and
-// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts);
+// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts),
+// each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit`, `crowded`. Ported from engine 065c1d973 run.mjs paintFigures
 // RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs figureRuns,
 // figureRunsWidth, figureRunsDepth L2:4824-4839 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face
 // not loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+import { hangOf, leadOf } from '../breaker/break.types.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
-import { cjkClassRe } from '../breaker/script.ts'
+import { cjkClassRe, punctOf } from '../breaker/script.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
+import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
 import { CJK_FOOT, type FitFigure, fitFigureSet, sameAsSource } from './figure-fit.ts'
 
@@ -74,8 +77,8 @@ export type FiguresInput = {
   designs: Readonly<Record<string, string>>
   /** a style's face in a script class (B.faces) */
   faceOf: (st: TStyle, cls: 'cjk' | 'latin') => Face
-  /** the rules' cjkQuotes and the last floor (P.floorMin) */
-  rules: { cjkQuotes?: boolean; floorMin: number }
+  /** the rules' cjkQuotes, the last floor (P.floorMin), and what a line's edge marks are (centredPunct, compressMax: blanksOf) */
+  rules: { cjkQuotes?: boolean; floorMin: number; centredPunct: boolean; compressMax: number }
   metrics: Metrics
 }
 
@@ -153,6 +156,19 @@ export const figureRunsDepth = (runs: readonly FigureRun[], m: FitMeasure): numb
     0,
   )
 
+/** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
+ *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
+ *  marks as the tokens class them (punctOf: a CJK one, where the target's faces set the marks in one half of the em) */
+function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
+  const compress = firstCompress(rules)
+  const edge = (r: FigureRun | undefined, ch: string | undefined) => ({
+    t: { punct: r?.cls === 'cjk' && ch && !rules.centredPunct ? punctOf(ch) : null },
+  })
+  const a = runs[0],
+    z = runs.at(-1)
+  return [leadOf(edge(a, a && [...a.s][0]), compress), hangOf(edge(z, z && [...z.s].at(-1)), compress)]
+}
+
 /** a row a translation (rows.mjs: whole or partial, with its pieces) */
 const translated = (u: FigureUnit | undefined): u is FigureUnit & { pieces: NonNullable<FigureUnit['pieces']> } =>
   !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
@@ -162,7 +178,15 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
   const m = fitMeasure(i.metrics)
   const out: Figure[] = [],
     wait: [FaceId, string][] = []
-  const ready: { f: FigureRow; rec: Figure; text: string; runs: FigureRun[]; width1: number; depth1: number }[] = []
+  const ready: {
+    f: FigureRow
+    rec: Figure
+    text: string
+    runs: FigureRun[]
+    width1: number
+    depth1: number
+    blank1: [number, number]
+  }[] = []
   for (const f of i.figures) {
     const rec: Figure = { id: f.id, group: f.group, page: f.page, drawn: false, why: null }
     out.push(rec)
@@ -202,7 +226,15 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       Object.assign(rec, { why: covered.why, text })
       continue
     }
-    ready.push({ f, rec, text, runs, width1: figureRunsWidth(runs, m), depth1: figureRunsDepth(runs, m) })
+    ready.push({
+      f,
+      rec,
+      text,
+      runs,
+      width1: figureRunsWidth(runs, m),
+      depth1: figureRunsDepth(runs, m),
+      blank1: blanksOf(runs, i.rules),
+    })
   }
   // (each set fitted at one size, its units in their rows' order)
   const bySet = new Map<string, typeof ready>()

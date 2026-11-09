@@ -3,8 +3,11 @@
 // its anchor's edge, into the free line beside its box (its room, `before` and `after`); where one does not fit, its whole set
 // shrinks by one factor, the least its translations need, to `floor` of the size at the most (a label needing less is left
 // the original's, `unfit`); a translation that reaches the stroke under its original's text at the size its set gives it is
-// left the original's (`crowded`), and the rest of its set fitted again without it. Ported from engine 065c1d973
-// layer-proto/figure-fit.mjs (lineOf, CJK_FOOT, fitFigureSet, sameAsSource).
+// left the original's (`crowded`), and the rest of its set fitted again without it. A translation is fitted and anchored by its
+// ink, as every line the breaker sets: a full-width mark's blank half at its edge (`blank1`, B.break leadOf and hangOf) is no
+// part of the line it needs, and stands past its anchor's edge (today's set it by its advance: a centred label ending with a
+// closing mark a quarter em off its original's middle, a right-aligned one half an em short of its end). Ported from engine
+// 065c1d973 layer-proto/figure-fit.mjs (lineOf, CJK_FOOT, fitFigureSet, sameAsSource).
 
 /** a figure unit as the fit reads it: its box's length along its run, its size, its anchor, its room before and after its
  *  box, the depth under its baseline of a stroke under its text (null where none is) */
@@ -32,15 +35,18 @@ export const CJK_FOOT = 0.12
 /**
  * Where the translations of one set are drawn (figure-fit.mjs fitFigureSet): item by item its fit, null where it does not fit
  * at `floor` of its size (or has no width, size or box), false where at the size it is given it reaches the stroke under its
- * text. One factor for every item drawn: the least any of them needs, at least `floor`, those that reach their stroke aside
+ * text. One factor for every item drawn: the least any of them needs, at least `floor`, those that reach their stroke aside.
+ * An item's `width1` is its advance at size 1, `blank1` the blank halves at its edges, before its ink and after it (none
+ * where not given): its ink, its advance less them, is what it needs of its line and what its anchor places
  */
 export function fitFigureSet(
-  items: readonly { f: FitFigure; width1: number; depth1: number }[],
+  items: readonly { f: FitFigure; width1: number; depth1: number; blank1?: readonly [number, number] }[],
   floor: number,
 ): (FigureFit | null | false)[] {
-  const need = items.map(({ f, width1 }) => {
-    if (!(width1 > 0) || !(f.length > 0) || !(f.size > 0)) return 0
-    const full = width1 * f.size,
+  const ink1 = items.map(({ width1, blank1 }) => width1 - (blank1 ? blank1[0] + blank1[1] : 0))
+  const need = items.map(({ f }, i) => {
+    if (!(ink1[i]! > 0) || !(f.length > 0) || !(f.size > 0)) return 0
+    const full = ink1[i]! * f.size,
       line = lineOf(f)
     return full > line ? line / full : 1
   })
@@ -59,13 +65,15 @@ export function fitFigureSet(
       }
     })
   }
-  return items.map(({ f, width1 }, i) => {
+  return items.map(({ f, width1, blank1 }, i) => {
     if (!(need[i]! >= floor - 1e-9)) return null
     if (met[i]) return false
     const size = f.size * k,
-      w = width1 * size
-    const offset = f.anchor === 'start' ? 0 : f.anchor === 'end' ? f.length - w : (f.length - w) / 2
-    return { size, offset, width: w }
+      w = width1 * size,
+      ink = ink1[i]! * size
+    // (its ink from its anchor's edge, its advance from the blank half before its ink)
+    const at = f.anchor === 'start' ? 0 : f.anchor === 'end' ? f.length - ink : (f.length - ink) / 2
+    return { size, offset: at - (blank1 ? blank1[0] * size : 0), width: w }
   })
 }
 

@@ -104,6 +104,17 @@ const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || i
  *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
 const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
 /**
+ * A full-width mark's blank half at a line's edge, which is none of the line's ink, in em of the line's size: a mark's ink
+ * stands in one half of its em (a closing mark's in the first, an opening mark's in the second: the tokens' `punct`). An
+ * opening mark that opens a line loses its leading half wherever the state compresses the marks at all (compress 1 or 2: a
+ * target whose rules compress none keeps it, leadOf); a closing mark that ends a line hangs its trailing half past the line's
+ * edge, unless the mark has lost that half already (`cut`; at compress 2 every mark has, hangOf). So a line stands on its
+ * room by its ink: every line the breaker sets, justified, centred or flush (groupOf, stretchOf, placeItems), and a figure
+ * text on its anchor (S.figures)
+ */
+const leadOf = (it, compress) => (it?.t.punct === 'open' && compress >= 1 ? 0.5 : 0)
+const hangOf = (it, compress) => (it?.t.punct === 'close' && !it.cut && compress < 2 ? 0.5 : 0)
+/**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
  * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
@@ -325,7 +336,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       const t = tokens[q]
       if (t.space) { const tw = tokW(t, f, st, scale); items.push({ t, w: tw }); w += tw; sp += tw; prev = t; continue }
       let tw = tokW(t, f, st, scale), shift = 0
-      if (t.punct && st.compress >= 2) {
+      const lead = prev ? 0 : leadOf({ t }, st.compress) * f
+      if (lead) {
+        // the line's opening mark: its leading blank half (leadOf)
+        tw -= lead
+        shift = -lead
+      } else if (t.punct && st.compress >= 2) {
         tw -= half
         if (t.punct === 'open') shift = -half
       } else if (t.punct && st.compress === 1) {
@@ -338,8 +354,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
             if (items.length) w -= half
             else line.x -= half
           }
-        } else if (t.punct === 'open' && (!prev || prev.punct)) {
-          // an opening mark at the line's start, or after another mark: its leading blank half
+        } else if (t.punct === 'open' && prev?.punct) {
+          // an opening mark after another mark: its leading blank half
           tw -= half
           shift = -half
         }
@@ -353,8 +369,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       w += tw + asp + kern
       prev = t
     }
-    // a closing mark at the line's end hangs its blank half
-    const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
+    // a closing mark at the line's end hangs its blank half (hangOf)
+    const hang = hangOf(items.at(-1), st.compress) * f
     return { items, w, sp, hang }
   }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
@@ -385,7 +401,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     while (n > 0 && line.items[n - 1].t.space) x -= line.items[--n].w
     if (n < 2) return Infinity
     const end = line.items[n - 1]
-    const hang = end.t.punct === 'close' && !end.cut && st.compress < 2 ? half : 0
+    const hang = hangOf(end, st.compress) * f
     return (cap - (x - (end.kern ?? 0)) + hang) / (n - 1)
   }
   /** whether the line in hand squeezes to take group g, which does not fit it */
@@ -643,4 +659,4 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, latinishOf, squeezable }
+export { breakLines, hangOf, latinishOf, leadOf, squeezable }

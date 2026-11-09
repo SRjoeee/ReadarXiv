@@ -12,6 +12,10 @@ import type { FitBlock, FitParams, FitState, Layout } from './types.ts'
 
 type RunTrack = { track: number; trackLatin: number; compress: number }
 
+/** the compression a unit's first state sets its marks at (statesOf): 1 where its rules compress them at all (a line's edge
+ *  marks without their blank halves, B.break leadOf and hangOf), else 0. A figure text is set at it (S.figures) */
+export const firstCompress = (P: { compressMax: number }): number => (P.compressMax > 0 ? 1 : 0)
+
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
@@ -24,7 +28,7 @@ export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number):
     lead: P.leadBase,
     track: R ? R.track : t0,
     trackLatin: R ? R.trackLatin : 0,
-    compress: R ? R.compress : P.compressMax > 0 ? 1 : 0,
+    compress: R ? R.compress : firstCompress(P),
     borrow: 0,
     scale: top,
     knob: (P.capScale as number) < 1 ? 'clear' : 'none',

@@ -19,7 +19,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { cjkClassRe, kinsokuOf, keptPair, noStart, PUNCT_CLOSE, PUNCT_OPEN, SPACELESS } from './script.ts'
+import { cjkClassRe, kinsokuOf, keptPair, noStart, punctOf, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -531,8 +531,7 @@ export function tokens(i: TokensInput): Tokens {
               t.cont = true
             } else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1]!.cls === 'cjk')))
               t.glue = true
-            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0)
-              t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
+            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = punctOf(s)
             if (
               !runs &&
               !all &&

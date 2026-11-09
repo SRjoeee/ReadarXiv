@@ -5,7 +5,9 @@
 // projects today's (reader-entry.mjs othersOfSvg over layer2.mjs svgOfFigure): the anchor's place through the page's viewport
 // at the dump's scale, its CSS pixels on a 1/100 grid (n2), back to PDF units on a 1/100 grid (r2); its turn; its runs' text.
 // The document's groups of the figure units (the add-on's VIS, which `unhidden` reads) are not in the cache's JSON: taken as
-// held (no dump says `unhidden`).
+// held (no dump says `unhidden`). Today's S.figures set a translation by its advance, as a line whose marks' ems hold no blank
+// half: replayed with `marks: 'today'`, the target's rules state its faces centre the marks in the em (`centredPunct`, read by
+// S.figures' blanksOf alone), the rest the target's own; else by its ink, as v2 sets every line.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { faceOf } from '../../src/breaker/faces.ts'
@@ -70,7 +72,10 @@ const idsOf = (paper: string) => {
 }
 
 /** a pair's figure texts replayed, page by page, with the dump's; the first difference of each, by ord and page */
-export function replayFigures(pair: string): { equal: number; total: number; differ: string[]; extra: string[] } {
+export function replayFigures(
+  pair: string,
+  o: { marks?: 'today' } = {},
+): { equal: number; total: number; differ: string[]; extra: string[] } {
   const L = ledger(pair)
   const paper = paperOf(pair)
   const tf = todayFigures(paper)
@@ -80,7 +85,13 @@ export function replayFigures(pair: string): { equal: number; total: number; dif
   const want = new Map(dump.figures.map((f) => [`${f.ord}|${f.page}`, f]))
   if (!tf) return { equal: 0, total: dump.figures.length, differ: ['no bundle in the cache'], extra: [] }
   rules ??= derived('rules')
-  const R = rules!.targets[L.target]!.params as { cjkQuotes?: boolean; floorMin: number }
+  const own = rules!.targets[L.target]!.params as {
+    cjkQuotes?: boolean
+    floorMin: number
+    centredPunct: boolean
+    compressMax: number
+  }
+  const R = o.marks === 'today' ? { ...own, centredPunct: true } : own
   const info = L.info.paper as { designs: Record<string, string> }
   const roles = rolesOf(pair)
   const metrics = tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`)) as MeasureTable)
