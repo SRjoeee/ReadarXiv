@@ -3149,6 +3149,41 @@ original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fi
 2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
 right this way: that case is held by a synthetic test alone.
 
+### 18.17 A mark is drawn as TeX set it: as text or as its symbol only where its glyphs stand so (2026-11-09)
+
+On staging (round 7, default toggles) footnote marks in running text were drawn flat: 2610.17024v1 p11 t174's "3" after "with
+the released code." at the line's 8.97 pt on its baseline, where the original's is 6.58 pt raised 3.16 (p21 t448's "7" the
+same); 2610.10069v1 p20 t167's `$\vs^*$` drawn "使*成为", the bold s lost and the star 4.59 × 5.40 pt on the baseline (the
+original's 3.24 × 3.51, raised 4.86). Traced end to end, each mark is an element through the wire (Microsoft's marker, Google's
+tag) and the reply keeps it; it stops being a mark in the part, where locate states how it is drawn. The parity's `scripts`
+measure counted all three on both sides: today's reader draws them flat too.
+
+- **A text drawing is TeX's only where its glyphs stand on the line.** A citation, a reference or a macro (`TEXT_CLASSES`) is
+  stated a text (El.text), drawn as the line's text, where its glyphs share one baseline: "plain text carries no shift and no
+  size". That was read against the element's own glyphs alone, so a box TeX raised whole passed: `\REPOFOOTNOTE{}`, a paper's
+  macro around a footnote, natbib's superscript citations, an affiliation's macro. Each glyph must now also stand on the
+  baseline of the line it stands on (its ink row's, as two baselines are told: `ON_BASE`, the line's stated to a hundredth, a
+  glyph's as the PDF wrote it; TeX's positions fall on a half-hundredth often, 2610.40394v1 p34's line at 476.125 stated 476.12,
+  so a hundredth's rounding is no test). A footnote's mark (El.mark) is drawn raised whatever TeX set it as, and is asked no
+  place: newpx's superior figures stand on the baseline (2307.16209v1's 68 marks). Else the element is drawn as its ink.
+- **A symbol is drawn as its character only where TeX's ink is that symbol so drawn** (`locate.ts` Member.asInk, `bundle.ts`
+  `classed`). The source's reading (today's phClass2) makes a formula of no Latin letter or digit once its commands are dropped
+  a symbol, drawn on the baseline, raised only where the source begins with `^`; it knows no paper's macro (`\vs`, read as the
+  text "vs" by its own test, so taken for known) and no `\textsuperscript`. Where TeX's glyphs for it hold a Latin letter or
+  digit (`[A-Za-z0-9]`, the reading's own class: Greek letters and ℓ are symbols) or stand off the line's baseline where the
+  reading draws them on it (or on it where it raises them), the part states the element `other`, no `sym`: drawn as its ink.
+
+Over the 88 papers' parts 61 elements of 12 papers move, units and the prepare dumps unchanged (the differential byte for byte
+round 7's): 40 drawn as their ink for a raise their text dropped (2610.19274v1's 33 superscript citations, 7.97 pt raised 4.3 on
+the line's 9.96; 2608.06007v1's three affiliation macros; the two `\REPOFOOTNOTE`; 2610.21547v1's two footnote macros) and 21
+symbols whose ink is not their reading (t167's starred s; `\textsuperscript{*}`, `{†}` on 2610.21477v1, 2610.22214v1,
+2610.40576v1; 2610.21765v1's raised "†"; a Σ with its limits, a θ and 11 β with their scripts or accents, a √ with its
+content). The parity over the two pairs among those papers (2610.10069v1-zh, 2610.17024v1-zh), default and every switch on:
+no page newly worse, `scripts` nearer v2 on three pages (t167 15 of 15 characters drawn as scripts, today 14; t174 and t448 1 of
+1, today 0), v2's `scripts` faults there 3 pages to none. Not changed: 2610.10069v1 p1's title "…与封闭式反∗" ends as Microsoft's reply ends, "反" before the `\thanks` mark;
+the wire sends "Closed-Form Inverses" whole, its marker a space apart, and the mark is drawn raised (El.mark): no mark eats or
+splits a word there. The reading's own faults (`\vs` read as text) stay where TeX set no ink to tell them.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

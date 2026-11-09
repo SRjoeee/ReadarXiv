@@ -2381,6 +2381,146 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(elementOf(L, '2').text).toBe('e.g.')
   })
 
+  it('states no text of an element TeX set off its line’s baseline as a whole, but a footnote’s mark the typesetter raises', () => {
+    // (2610.17024v1 p11's `\REPOFOOTNOTE{}`, a paper's macro around a footnote: its "3" 6.58 pt and 3.16 pt over the line's
+    // baseline, one baseline of its own. Read against its own glyphs alone it was level, stated the text "3", and the typesetter
+    // drew it as the line's text: flat, at the line's size. Its glyphs stand on no baseline of its line's: no plain text, its ink
+    // cropped. A footnote's mark, which the typesetter draws raised whatever TeX set it as (El.mark), keeps its text, raised
+    // or a superior figure on the baseline (newpx's, 2307.16209v1's 68 marks); a macro on the line's baseline keeps its text,
+    // its glyph's baseline told from the line's as two baselines are (ON_BASE: 2610.40394v1 p34's line at 476.125, stated
+    // 476.12, its \ref's "5.3" read 476.13 on the hundredth)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'with the code.', x: 72, y: 700 },
+          { text: '3', x: 156, y: 703.16, size: 6.58 },
+          { text: ' The work', x: 159.95, y: 700 },
+          { text: '4', x: 213.95, y: 703.16, size: 6.58 },
+          { text: ' e.g.', x: 217.9, y: 700.006 },
+          { text: ' now', x: 241.9, y: 700 },
+          { text: '5', x: 265.9, y: 700 },
+        ],
+      },
+    ])
+    const content = [
+      text('with the code.'),
+      el('1', '\\REPOFOOTNOTE{}'),
+      text(' The work'),
+      el('3', '\\footnotemark'),
+      el('4', '\\eg'),
+      text(' now'),
+      el('6', '\\footnotemark'),
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro', unknown: true }],
+          ['3', { cls: 'num', mark: true }],
+          ['4', { cls: 'macro' }],
+          ['6', { cls: 'num', mark: true }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, E, 4],
+          [0, T, -1],
+          [0, E, 6],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const mark = elementOf(L)
+    expect(mark.text).toBeUndefined()
+    expect(mark.copy).toBe('3')
+    expect(mark.ink).toEqual([[1, 156, r2(703.16 - 0.2 * 6.58), r2(156 + 0.6 * 6.58), r2(703.16 + 0.7 * 6.58), 700]])
+    expect(elementOf(L, '3').text).toBe('4')
+    expect(elementOf(L, '4').text).toBe('e.g.')
+    expect(elementOf(L, '6').text).toBe('5')
+  })
+
+  it('states a symbol drawn as its ink where TeX’s glyphs are not that symbol as drawn: a letter among them, or a raise its reading lacks', () => {
+    // (2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred: the source's reading, which knows no `\vs`, is the symbol "*"
+    // drawn on the baseline at the line's size (phClass2, `sym` without its raise), so the typesetter drew a full-size * and the
+    // s was lost. TeX's ink is a bold s and a raised star: drawn as its ink, a formula's crop. A symbol on its line's baseline,
+    // `$\times$`, a Greek letter, `$\alpha$` (no Latin letter: a symbol to its reading, phClass), and one raised where its
+    // reading raises it, `$^\dagger$`, are drawn as their symbols still)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'make ', x: 72, y: 700 },
+          { text: 's', x: 102, y: 700, font: 'ABCDEF+CMBX10' },
+          { text: '∗', x: 108, y: 704.5, size: 7, font: 'ABCDEF+CMSY7' },
+          { text: ' a ', x: 112.2, y: 700 },
+          { text: '×', x: 130.2, y: 700, font: 'ABCDEF+CMSY10' },
+          { text: ' b', x: 136.2, y: 700 },
+          { text: '†', x: 148.2, y: 704.5, size: 7, font: 'ABCDEF+CMSY7' },
+          { text: ' now', x: 152.4, y: 700 },
+          { text: 'α', x: 176.4, y: 700, font: 'ABCDEF+CMMI10' },
+        ],
+      },
+    ])
+    const content = [
+      text('make '),
+      el('1', '$\\vs^*$'),
+      text(' a '),
+      el('3', '$\\times$'),
+      text(' b'),
+      el('5', '$^\\dagger$'),
+      text(' now'),
+      el('7', '$\\alpha$'),
+    ]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'symbol', copy: '*', sym: ['*'] }],
+          ['3', { cls: 'symbol', copy: '×', sym: ['×'] }],
+          ['5', { cls: 'symbol', copy: '†', sym: ['†', true] }],
+          ['7', { cls: 'symbol', copy: 'α', sym: ['α'] }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+          [0, E, 5],
+          [0, T, -1],
+          [0, E, 7],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const els = new Map(
+      read('part', o.bytes, o.digest)
+        .flows.flat()
+        .find((m) => m.ord === L.members.find((x) => x.unit === 0)!.ord)!.els,
+    )
+    expect([els.get('1')!.kind, els.get('1')!.sym]).toEqual(['other', undefined])
+    expect(els.get('1')!.ink).toHaveLength(1)
+    expect([els.get('3')!.kind, els.get('3')!.sym]).toEqual(['symbol', ['×']])
+    expect([els.get('5')!.kind, els.get('5')!.sym]).toEqual(['symbol', ['†', 1]])
+    expect([els.get('7')!.kind, els.get('7')!.sym]).toEqual(['symbol', ['α']])
+  })
+
   it('leaves a unit the original’s where an element TeX set ink for has none: not found is not "TeX set none" (math.md R3)', () => {
     // (a formula whose two points hold glyphs the ownership gave the unit's text, none its own: read as "TeX set no ink", it was
     // drawn as nothing and its glyphs erased with the text, as 2608.25210v2 p7's Algorithm 1 lost its 21 lines. Today's file

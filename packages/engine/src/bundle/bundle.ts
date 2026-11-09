@@ -78,14 +78,16 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   return { drawn: mem.pages.length > 0, fixed }
 }
 
-/** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set */
-export function classed(el: El, c: PieceClass | undefined): El {
+/** an element with what its source says of it (the instrument's PieceClass): its class as its kind, and the rest where set;
+ *  `asInk`, a symbol whose ink locate found not that symbol as its reading draws it (Member.asInk): a formula's, `other`, drawn
+ *  as its ink, no symbol's drawing (2610.10069v1 p20's `$\vs^*$`, read as "*" on the baseline, its bold s lost) */
+export function classed(el: El, c: PieceClass | undefined, asInk = false): El {
   if (!c) return el
-  const out: El = { ...el, kind: c.cls }
+  const out: El = { ...el, kind: asInk && c.cls === 'symbol' ? 'other' : c.cls }
   if (c.unknown) out.unknown = 1
   // (the source's copy text, but where locate states the page's: a URL's, its glyphs' text, which its break points count in)
   if (c.copy && out.copy === undefined) out.copy = c.copy
-  if (c.sym) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
+  if (c.sym && !asInk) out.sym = c.sym[1] ? [c.sym[0], 1] : [c.sym[0]]
   if (c.mark) out.mark = 1
   if (c.literal) out.literal = 1
   if (c.glue) out.glue = c.glue[2] ? [c.glue[0], c.glue[1], 1] : [c.glue[0], c.glue[1]]
@@ -130,7 +132,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     // (each element's class, copy text, a symbol's drawing and a footnote's mark as the instrument reads its source: the part
     // states them so that no rule of the typesetter reads a source)
     const cls = new Map(unit?.classes ?? [])
-    p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id))])
+    p.els = mem.elements.map(([id, el]) => [id, classed(el, cls.get(id), !!mem.asInk?.has(id))])
   }
   // (each group's command and fill, as the instrument reads its source; the paragraph TeX opened at it, as locate read it)
   // (and a figure text's runs in another face, each group's style read off its glyphs on A)
