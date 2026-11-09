@@ -5990,7 +5990,18 @@ lines) follows it, the original's with it off, translated with it on (the author
   line, MR 5's baseline test: JCAP's "Abstract."); where a graphic no unit owns (an image, a rule, a form's or a picture's text)
   stands between the block's last name or place and that unit, the block ends there (egpubl's teaser and its caption, elsarticle's
   `\hrule` over its abstract's heading), a graphic followed by more of the block being the block's (2610.19159v1's GitHub icon
-  before its places' links); a subtitle before the names is the title's. Where the title is drawn inside a pgf picture (a framed
+  before its places' links); and where TeX begins a front matter environment that is no author's (the abstract, the keywords,
+  IEEEtran's index terms: the marked compile's point `fm<n>` at the environment's before hook, `layout/marks.mjs` POINTS_TEX),
+  the block ends there, so that a heading a class sets for that element from a literal of its own on a line of its own, no babel
+  name (spconf's "ABSTRACT", 2610.20967v1; jmlr's "Abstract", 2610.21201v1), is the element's: the stream alone cannot tell it
+  from the block's own last lines (22065's notes, JCAP's e-mail line), TeX can. The point is armed at the environment's
+  before hook from `\begin{document}` on and set at the start of the next paragraph TeX begins (para/begin: the element's
+  heading or its text), as a babel name's start in vertical mode waits: never a node of the main vertical list, whose
+  `\lastskip` `\addvspace` reads and from which TeX takes nothing back (1706.03762v7's `\begin{abstract}` after a penalty
+  already on the page: "You can't use `\unpenalty` in vertical mode", tried first), so that every position is as before
+  (stage 1a's glyph proofs over the 92 papers below); one an environment sets in a box it keeps (elsarticle's `\absbox`) is set
+  in that box, before its heading; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is
+  disarmed where `\maketitle` runs first. A subtitle before the names is the title's. Where the title is drawn inside a pgf picture (a framed
   title box: 2604.14228v3's and alta's tcolorbox), the block is the rest of that picture, the frame TeX states its end, every unit
   inside keeping its kind and its run-in label (alta's "Abstract.", "Keywords:"). Its ink (the glyphs no unit owns in it, no
   figure's) is cut into ink units as before and each all of whose glyphs are the block's is of the names (`inknames`), a note's,
@@ -6006,17 +6017,15 @@ lines) follows it, the original's with it off, translated with it on (the author
   `\andify`, REVTeX's lists, llncs's institutes, acmart's `\@mkauthors` and a paper's literal override of it, a class's own lists).
   Over the 88 papers (stage 1a against round 7's), 27 move, no unit's text and no
   source unit's number: 37 ink units made the names' in the block (the "and" or "AND" between names in 17 papers; the places and
-  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; 2 headings, below); 18
+  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; 2 headings, then
+  ended by the front matter environment's point, MEASURED_FM); 18
   units of the block's kinds set elsewhere `textnames` (2610.22065v1's 8 names in its reference format, amsart's addresses at the
   paper's end in 2610.20581v1, 2610.21037v1 and 2610.21884v1); 5 ink units of the names set elsewhere the text they are
   (2610.21106v1's addresses at its end, 2610.30034v1's three biographies' names); alta's e-mail line, inside its title box, no
   figure text (a kept block: an address alone). 2604.14228v3's correspondence line is one ink unit of the names, its three figure
-  texts gone. What the stream cannot tell: a heading a class
-  sets on its own line for the element after the block from a literal of its own, no babel name and no rule before it
-  (spconf's "ABSTRACT", 2610.20967v1; the 'template' class's "Abstract", 2610.21201v1), stands where the block's own last lines
-  do (22065's notes, JCAP's e-mail line) and is taken with them; and a date line TeX generates under the names (REVTeX's
-  "(Dated: …)", `\today`) is the block's. A title block with no author command and no name rule 8 reads (2610.30854v1's
-  `\MakeJointTitle`) has none.
+  texts gone. A date line TeX sets under the names (REVTeX's "(Dated: …)", `\today`) is the block's, by the owner's
+  positional rule (the coordinator's call of 2026-11-10). A title block with no author command and no name rule 8 reads
+  (2610.30854v1's `\MakeJointTitle`) has none.
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).

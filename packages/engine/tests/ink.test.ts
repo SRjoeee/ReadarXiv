@@ -713,6 +713,37 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.members[1]!.kind).toBe('author')
   })
 
+  it('ends the author block where TeX begins the abstract environment, its literal heading no line of the block (2610.20967v1)', () => {
+    // (spconf's \abstract sets "ABSTRACT" itself, no babel name: the marked compile's point `fm<n>` before the environment, on B,
+    // carried onto A before the heading's first glyph)
+    const text = ['A Title', 'Ann Lee', 'Some University', 'ABSTRACT', 'Abstract text here', 'Body text here']
+    const at = (k: number) => text.slice(0, k).join('').length
+    // (the heading set apart under the block, as the environment's skip sets it)
+    const lines = text.map((t, i) => (i < 3 ? t : { text: t, y: 700 - 12 * i - 24 }))
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['fm1', at(3)],
+        ['be1', text.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, -1, -1, 2, 3]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    expect(made.find((m) => /University/.test(textOf(m)))!.kind).toBe('inknames')
+    expect(made.find((m) => /ABSTRACT/.test(textOf(m)))!.kind).not.toBe('inknames')
+  })
+
   it('leaves what a class prints from the author data away from the block the text it is (acmart’s reference format)', () => {
     // (2610.22065v1 p1: its \author units, set nowhere else, set in the reference format after the abstract, with "and" between
     // two of them; and a name a class prints again there, no unit's, that echoes the block's own unit: neither the names toggle's)

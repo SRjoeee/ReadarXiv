@@ -8,8 +8,10 @@
 // less that unit's run-in label (the glyphs before it on its first line, as own.mjs MR 5 reads a label: JCAP's "Abstract."); and
 // where a graphic no unit owns (an image, a rule, a form's or a picture's text) stands between the block's last name or place
 // and that unit, the block ends at the graphic (egpubl's teaser and its caption under the names, elsarticle's \hrule over its
-// abstract's heading), one followed by more of the block being the block's (an icon before a link of its places). A subtitle
-// before the names is the title's. Where the title is drawn inside a picture (a framed title box: 2604.14228v3's tcolorbox, the title, the names, the
+// abstract's heading), one followed by more of the block being the block's (an icon before a link of its places); and where TeX
+// begins a front matter environment no author's (the abstract, the keywords: the marked compile's `fm<n>` point), the block
+// ends there, a heading its class sets from a literal of its own, no babel name, on a line of its own before the element's
+// text being the element's (spconf's "ABSTRACT", jmlr's "Abstract"). A subtitle before the names is the title's. Where the title is drawn inside a picture (a framed title box: 2604.14228v3's tcolorbox, the title, the names, the
 // abstract and the correspondence line inside one pgf picture), the block is the rest of that picture: its frame is the block's
 // end TeX states; the abstract inside it keeps its own kind as any unit does, and so does every unit's run-in label (alta's
 // "Abstract." and "Keywords:").
@@ -17,9 +19,7 @@
 // (\@author in a tabular, IEEEtran's blocks, amsart's \andify, REVTeX's lists, llncs's institutes), acmart's \@mkauthors and a
 // paper's own override of it (2610.22065v1's literal lines), a class's own lists (2604.14228v3's \addtolist). What a class prints
 // from the same data elsewhere — acmart's reference format, a running head, amsart's addresses at the paper's end, an e-mail
-// footnote — is not under the title, and is the text it is. What the stream cannot tell: a heading a class sets on a line of its
-// own for the element after the block, from a literal of its own and no babel name (elsarticle's "Abstract", cas's "Keywords:"),
-// stands where the block's own last lines do (22065's notes, JCAP's e-mail line), and is taken with them.
+// footnote — is not under the title, and is the text it is.
 // Its ink (`has`): the glyphs no unit owns in it, outside a figure's (a form XObject's, another picture's), which locate's ink
 // units take as the block's names; its stretch (`within`): every glyph there, by which a unit of the author block is told set in
 // the block or elsewhere. An original module (no port statement).
@@ -40,6 +40,9 @@ export interface BlockPage {
   graphicBefore?: (j: number) => boolean
   /** whether a glyph no unit owns is of an ink unit of the names (the ink units' rule 8: its letters an author unit's words) */
   named?: (j: number) => boolean
+  /** where TeX begins a front matter environment no author's (the marked compile's `fm<n>` points: the abstract, the keywords),
+   *  each the glyph its point stands before */
+  ends?: readonly number[]
 }
 /** a source unit as the block reads it */
 export interface BlockUnit {
@@ -94,9 +97,12 @@ export function authorBlockOf(pages: readonly BlockPage[], units: readonly Block
   // unit owns that no more of the block follows)
   let first = -1
   let keep = last
-  let cut = pg.n
   let graphic = -1
-  for (let j = last + 1; j < pg.n; j++) {
+  // (the first front matter environment TeX begins after the title: one before it, a title block's kept abstract, ends nothing)
+  let cut = pg.n
+  for (const e of pg.ends ?? []) if (e > last && e < cut) cut = e
+  const stop = cut
+  for (let j = last + 1; j < stop; j++) {
     const u = pg.owner(j)
     // (a graphic no unit owns: before the glyph, or the glyph a form or a picture shows)
     if (graphic < 0 && first >= 0 && (pg.graphicBefore?.(j) || (u < 0 && (pg.form(j) || pg.pid(j) !== undefined))))
@@ -122,9 +128,11 @@ export function authorBlockOf(pages: readonly BlockPage[], units: readonly Block
       continue
     }
     cut = graphic >= 0 ? graphic : runIn(j, keep)
+    graphic = -1
     break
   }
-  if (cut === pg.n && graphic >= 0) cut = graphic
+  // (a graphic no more of the block followed, up to the page's end or the environment's point)
+  if (graphic >= 0) cut = graphic
   const within = (j: number) => first >= 0 && j >= first && j < cut
   return { page, within, has: (j) => within(j) && unowned(j) && !pg.form(j) && pg.pid(j) === undefined }
 }

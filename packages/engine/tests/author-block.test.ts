@@ -15,7 +15,14 @@ const NAME = { kind: 'name' }
  *  the names and its lines (`lines`, glyph → its line: glyphs on one baseline; each its own where not given) */
 const pageOf = (
   owners: number[],
-  o: { pid?: (number | undefined)[]; form?: boolean[]; graphic?: number[]; names?: number[]; lines?: number[] } = {},
+  o: {
+    pid?: (number | undefined)[]
+    form?: boolean[]
+    graphic?: number[]
+    names?: number[]
+    lines?: number[]
+    ends?: number[]
+  } = {},
 ): BlockPage => ({
   n: owners.length,
   owner: (j) => owners[j] ?? -1,
@@ -24,6 +31,7 @@ const pageOf = (
   onLine: (j, k) => (o.lines ? o.lines[j] === o.lines[k] : j === k),
   graphicBefore: (j) => !!o.graphic?.includes(j),
   named: (j) => !!o.names?.includes(j),
+  ends: o.ends ?? [],
 })
 const held = (b: ReturnType<typeof authorBlockOf>, n: number) =>
   Array.from({ length: n }, (_, j) => (b?.has(j) ? 1 : 0)).join('')
@@ -72,6 +80,16 @@ describe('the author block under the title', () => {
     // (author 2, ink 3-4 (an e-mail line); ink 5 ("Abstract.") on the abstract's first line, before it, 6-7)
     const b = authorBlockOf([pageOf([0, 0, 1, -1, -1, -1, 2, 2], { lines: [0, 0, 1, 2, 2, 3, 3, 3] })], [T, AU, ABS])
     expect(held(b, 8)).toBe('00011000')
+  })
+
+  it('ends where TeX begins an element of the front matter (the abstract environment): its class literal heading is its own', () => {
+    // (author 1, ink 2 (an affiliation line), the abstract environment begun before glyph 3: ink 3 ("ABSTRACT", spconf's literal
+    // heading on a line of its own), the abstract 4-5)
+    const b = authorBlockOf([pageOf([0, 1, -1, -1, 2, 2], { ends: [3] })], [T, AU, ABS])
+    expect(held(b, 6)).toBe('001000')
+    // (one TeX begins before the title, an abstract the class keeps for its title block (acmart, REVTeX): nothing ended)
+    const early = authorBlockOf([pageOf([-1, 0, 1, -1, 2], { ends: [0] })], [T, AU, ABS])
+    expect(held(early, 5)).toBe('00010')
   })
 
   it('takes nothing before the title, nor a unit of another kind’s ink after the block ends', () => {

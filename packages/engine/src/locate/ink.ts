@@ -167,6 +167,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
                 return false
               },
               ...(named ? { named: (j: number) => named(i, j) } : {}),
+              ends: carried[i]!.points.filter((x) => FRONT_ELEMENT.test(x.name)).map((x) => x.glyph),
             }
           }),
           ins.units,
@@ -379,6 +380,8 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
   }
 }
 
+/** the point the marked compile sets where TeX begins a front matter environment no author's (marks.mjs POINTS_TEX `fm<n>`) */
+const FRONT_ELEMENT = /^fm\d+$/
 /** the kinds of the ink units the author block takes: today's ledger's notes and orphans, and its names (rule 8) */
 const BLOCK_TAKES = new Set(['inknotes', 'inkorphan', 'inknames'])
 /**
