@@ -50,10 +50,11 @@ const nkOf = (list: readonly { n?: number; k?: number }[]): Int32Array => {
   })
   return nk
 }
-/** a read page as the wrap reads it: its glyphs' and turned glyphs' (n, k), its boxes' kinds and its facts, none of its ink */
+/** a read page as the wrap reads it: its glyphs' (its Doc's, which pageInk's raw ones are the same of: the read may let those go)
+ *  and turned glyphs' (n, k), its boxes' kinds and its facts, none of its ink */
 export function wrapPageOf(pg: ReadPage<AlignFacts>): WrapPageA | null {
   if (!pg.raw || !pg.extra) return null
-  return { extra: pg.extra, nk: nkOf(pg.raw.glyphs), paths: pg.raw.paths ?? [], turnedNK: nkOf(pg.raw.turned ?? []) }
+  return { extra: pg.extra, nk: nkOf(pg.page.glyphs), paths: pg.raw.paths ?? [], turnedNK: nkOf(pg.raw.turned ?? []) }
 }
 
 export async function wrap(

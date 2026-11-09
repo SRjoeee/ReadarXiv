@@ -10,7 +10,8 @@
 // a kept block fixed) with its ink on A.
 import { type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
-import type { Doc, DocPoint } from '../doc.ts'
+import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
+import { glyphWith } from '../glyph.ts'
 import type { PageInk } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
@@ -118,8 +119,9 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
     const g = B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
     return { form: g.form, fid: g.fid }
   }
+  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go, lane mem-front)
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
-    pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
+    pageOf(pg.view, o.raws[i] ?? null, pg.glyphs, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
   // (taken: a raw page is held from here by its today's page alone, which this step lets go at its end; and each page's shapes,
   // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them, lane mem-back)
@@ -561,6 +563,7 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
 function pageOf(
   view: number[],
   raw: PageInk | null,
+  docGlyphs: readonly DocGlyph[],
   c: Carried,
   turnedOwners: (string | null)[],
   formOf: (j: number) => { form: boolean; fid: number | undefined } | null,
@@ -588,11 +591,11 @@ function pageOf(
       unseen: new Set(),
       cut: new Map(),
     }
-  let glyphs: unknown[] = raw.glyphs.map((g, j) => {
+  // (a glyph with its figure changed made by glyphWith, which keeps a page glyph's coordinates, never a spread)
+  let glyphs: unknown[] = docGlyphs.map((g, j) => {
     const f = formOf(j)
-    if (!f || (!!g.form === f.form && (g as { fid?: number }).fid === f.fid)) return g
-    const { fid: _, ...rest } = g as typeof g & { fid?: number }
-    return { ...rest, form: f.form, ...(f.fid !== undefined ? { fid: f.fid } : {}) }
+    if (!f || (!!g.form === f.form && g.fid === f.fid)) return g
+    return glyphWith(g, { form: f.form, fid: f.fid })
   })
   let turned: unknown[] = (raw.turned ?? []).map((t, j) => {
     const f = turnedForm[j]
@@ -607,10 +610,9 @@ function pageOf(
       else if (x.name === 'ze') stack.pop()
     }
     let q = 0
-    glyphs = (glyphs as typeof raw.glyphs).map((g, i) => {
+    glyphs = (glyphs as DocGlyph[]).map((g, i) => {
       while (q < P.length && (P[q] as DocPoint).glyph <= i) apply(P[q++] as DocPoint)
-      const { pid: _, ...rest } = g as typeof g & { pid?: number }
-      return stack.length ? { ...rest, pid: stack.at(-1) } : rest
+      return glyphWith(g, { pid: stack.length ? stack.at(-1) : undefined })
     })
     turned = (turned as NonNullable<typeof raw.turned>).map((t) => {
       seq = 0
