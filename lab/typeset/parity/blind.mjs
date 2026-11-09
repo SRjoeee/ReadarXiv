@@ -345,7 +345,10 @@ export async function originalFacts(data) {
  * - references: for each anchor, the unit whose line starts nearest below and right of it (the entry's first line, its text
  *   after its label; hyperref raises the anchor a \baselineskip over it, so the line stands half its size or more under it, and
  *   the entry before's last line at the anchor's height is not it: 1512.03385v1 p9's entries set with no space between them),
- *   nearest by the two distances' sum: the other column's line at the anchor's height is a column away.
+ *   nearest by the two distances' sum: the other column's line at the anchor's height is a column away. And every unit standing
+ *   on that unit's lines (each of its lines on one of them: its page, its baseline within half the line's height, within that
+ *   unit's lines across): a line of TeX's paragraph is one entry's, and a reader that cut the entry draws its pieces there
+ *   (2608.25210v2 p17: today's t518, the tail of [64] after its year on the entry's second line).
  * Returns {names: {today, part}: ord -> the names it holds, references: {today, part}: the ords, found: the names found}
  */
 export function keptFacts({ authors = [], cites = [], pages = [], today = [], part = [] }) {
@@ -395,6 +398,18 @@ export function keptFacts({ authors = [], cites = [], pages = [], today = [], pa
         }
       if (best) references[side].add(best.ord)
     }
+  for (const [side, units] of [['today', today], ['part', part]]) {
+    const entries = units.filter((u) => references[side].has(u.ord))
+    for (const u of units) {
+      if (references[side].has(u.ord) || !u.lines.length) continue
+      const onEntry = (l) =>
+        entries.some((e) => {
+          const lo = Math.min(...e.lines.map((x) => x.x0)), hi = Math.max(...e.lines.map((x) => x.x1))
+          return e.lines.some((x) => x.page === l.page && Math.abs(x.y - l.y) <= 0.5 * (x.size ?? x.top - x.bottom) && l.x0 >= lo - 0.5 && l.x1 <= hi + 0.5)
+        })
+      if (u.lines.every(onEntry)) references[side].add(u.ord)
+    }
+  }
   return { names, references, found }
 }
 
@@ -472,7 +487,6 @@ export function measureBlind(c, out, { kept = null, toggles = 'defaults' } = {})
   }
   classify(kept.names, 'names')
   classify(kept.references, 'references')
-  const kept2 = new Set()
   for (const key of keys) {
     const cls = classOf.get(key)
     if (!cls || !keep.has(cls)) continue
@@ -486,7 +500,6 @@ export function measureBlind(c, out, { kept = null, toggles = 'defaults' } = {})
         .join(''),
     )
     if (!source) continue
-    kept2.add(key)
     const side = (ls) => {
       if (!ls) return { value: "the original's", off: 0 }
       const said = plain(ls.map((l) => l.text).join(''))
@@ -503,11 +516,13 @@ export function measureBlind(c, out, { kept = null, toggles = 'defaults' } = {})
     else if (t.off !== v.off) diff('toggles', name(key), what, cls, t, v, v.off > t.off, v.off < t.off ? 'v2' : 'today')
   }
   // (a unit today translates that the toggles keep, by the original's fact: v2 leaving it the original's is the toggles' intent,
-  // no translation missing)
+  // no translation missing. Its class is the fact, whether or not its words can be read against the original's runs: a piece of
+  // an entry today cut apart stands on a run that is not its alone, 2608.25210v2 p17's t518)
   for (const d of out.diffs) {
-    if (d.flag !== 'shown' || !d.worse || !d.what.startsWith('translated by today') || !kept2.has(String(d.unit).split(' ')[0])) continue
+    const key = String(d.unit).split(' ')[0]
+    if (d.flag !== 'shown' || !d.worse || !d.what.startsWith('translated by today') || !keep.has(classOf.get(key))) continue
     d.worse = false
     d.nearer = 'v2'
-    d.why = `the toggles keep it the original's (${classOf.get(String(d.unit).split(' ')[0])}, by the original's fact): no translation missing`
+    d.why = `the toggles keep it the original's (${classOf.get(key)}, by the original's fact): no translation missing`
   }
 }

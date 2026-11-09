@@ -290,6 +290,17 @@ describe('toggles: a unit the toggles keep, its class read off the original', ()
     const blind = measure(v2Of({ members: [{ ord: 124, state: 'left', lines: [] }] }), rec({ today: { units: [{ id: 123, lines: FLAT }] } }))
     expect(of('shown')(blind)[0]).toMatchObject({ worse: true })
   })
+  it("v2 keeping a piece of a reference that today cut apart is no translation missing, though no run of the original is the piece's alone", () => {
+    // (2608.25210v2 p17's t518: arXiv's line one run, "Liu, … Mao. 2024. Benchmarking the text-to-sql", across the pieces today
+    // cut; the words a side drew cannot be read against the piece's own, but its class is a reference's, by the anchor)
+    const p = measure(
+      v2Of({ members: [{ ord: 124, state: 'left', lines: [] }] }),
+      rec({ runs: [], today: { units: [{ id: 123, lines: FLAT }] } }),
+      kept({ names: false, references: true }),
+    )
+    expect(of('shown')(p)[0]).toMatchObject({ worse: false, nearer: 'v2' })
+    expect(p.worse).toBe(0)
+  })
   it("a unit drawn in the original's own words (its letters and digits in its order, elements cut as crops) is not translated", () => {
     const echo = [drawnLine(191.54, 421.38, 648.87, 'Song-Ze Yu1, Fang-Duo Tsai1￼, Yi-Hsuan Yang1')]
     const p = measure(v2Of(), rec({ today: { units: [{ id: 123, lines: echo }] }, v2: { units: [{ id: 124, lines: FLAT }] } }), kept())
@@ -366,6 +377,25 @@ describe("the original's facts of a unit's class, read off arXiv's PDF", () => {
       part: [],
     })
     expect([...k.references.today]).toEqual([323])
+  })
+  it("a reference is also every unit standing on its entry's lines: a reader that split the entry draws its pieces there", () => {
+    // (2608.25210v2 p17: today's reader cut [64] in two, t517 "[64] Bin Zhang, …" from the anchor and t518 ". Benchmarking the
+    // text-to-sql" after the year on the entry's second line; the anchor names t517 alone, and t518, translated by today with the
+    // references kept, read as a translation v2 misses. A line of TeX's paragraph is one entry's: a unit whose every line stands
+    // on a line of the entry's first unit, its baseline, within that unit's lines across, is the entry's)
+    const k = keptFacts({
+      authors: [],
+      cites: [{ page: 17, x: 307.28, y: 104.3 }],
+      pages: [],
+      today: [
+        { ord: 516, lines: [line(17, 318.19, 558.2, 101.7, 8.97)] },
+        { ord: 517, lines: [line(17, 317.96, 558.2, 93.86, 8.97), line(17, 334.39, 455.01, 86.01, 8.97)] },
+        { ord: 518, lines: [line(17, 469.82, 558.2, 86.01, 8.97)] },
+        { ord: 600, lines: [line(17, 72, 290, 86.01, 8.97)] },
+      ],
+      part: [],
+    })
+    expect([...k.references.today].sort()).toEqual([517, 518])
   })
   it("reads arXiv's metadata authors (its Info /Author, '; ' between names) and the cite.* destinations of the PDF", async () => {
     const doc = await PL.PDFDocument.create()
