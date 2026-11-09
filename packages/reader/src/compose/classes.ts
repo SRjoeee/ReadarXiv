@@ -4,7 +4,9 @@
 // (src/pdf-reader/engine/rules/content-classes.mjs UNIT_CLASS, TOGGLE_DEFAULTS at baf2083e0): `always` and `never` are no toggle.
 import type { ClassName } from '../prefs.ts'
 
-/** a unit kind's toggle, or 'always' (the source's body, the generated names, the contents, notes and orphans) */
+/** a unit kind's toggle, or 'always' (the source's body, the generated names, the contents, notes and orphans; and `textnames`,
+ *  a name or a place of the author block a class prints away from the block under the title, which no toggle governs: the
+ *  owner's ruling of 2026-11-09, docs/PDF-READER.md §19.13) */
 const TOGGLE_OF: Readonly<Record<string, ClassName>> = {
   cell: 'tables',
   author: 'names',

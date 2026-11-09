@@ -675,6 +675,84 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(E.flows.find((f) => f.includes(1))).toEqual([1])
   })
 
+  it('makes the ink TeX sets in the author block under the title its names, whatever unit it echoes (2610.22065v1 p1)', () => {
+    // (acmart's \@mkauthors@iii overridden by the paper: its names, places and notes literal lines no unit is, set between the
+    // title and the abstract; an orphan's ink and a note's before. And a venue line before the title: not the block's)
+    const lines = [
+      'Venue line here',
+      'A Title',
+      'Ann Lee',
+      'Dept of Physics, Some University',
+      'Equal contribution',
+      'Abstract text here',
+      'Body text here',
+    ]
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', lines.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const ins = instrumentOf(B, units, [[-1, 0, 1, -1, -1, 2, 3]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    const block = made.filter((m) => /Dept|Equal/.test(textOf(m)))
+    expect(block.length).toBeGreaterThan(0)
+    expect(block.every((m) => m.kind === 'inknames')).toBe(true)
+    expect(made.find((m) => /Venue/.test(textOf(m)))!.kind).toBe('inkorphan')
+    expect(L.members[1]!.kind).toBe('author')
+  })
+
+  it('leaves what a class prints from the author data away from the block the text it is (acmart’s reference format)', () => {
+    // (2610.22065v1 p1: its \author units, set nowhere else, set in the reference format after the abstract, with "and" between
+    // two of them; and a name a class prints again there, no unit's, that echoes the block's own unit: neither the names toggle's)
+    const Y = 640
+    const lines = [
+      'A Title',
+      'Ann Lee',
+      'Abstract text here',
+      { text: 'Kechao Tang', x: 72, y: Y },
+      { text: 'and', x: 72 + 12 * 6, y: Y },
+      { text: 'Ru Huang', x: 72 + 16 * 6, y: Y },
+      { text: '2027. A Title', x: 72 + 25 * 6, y: Y },
+      { text: 'Ann Lee', x: 72, y: Y - 12 },
+    ]
+    const n = ['A Title', 'Ann Lee', 'Abstract text here', 'Kechao Tang', 'and', 'Ru Huang', '2027. A Title', 'Ann Lee']
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', n.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('author', 'Kechao Tang'),
+      unitOf('author', 'Ru Huang'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 3, -1, 4, -1, -1]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members[1]!.kind).toBe('author')
+    expect(L.members[3]!.kind).toBe('textnames')
+    expect(L.members[4]!.kind).toBe('textnames')
+    const made = L.members.filter((m) => m.unit >= units.length)
+    expect(made.length).toBeGreaterThan(0)
+    expect(made.some((m) => m.kind === 'inknames')).toBe(false)
+  })
+
   it('reads a glyph as an included figure’s where its partner on B is one, A’s form flattened', () => {
     const B = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640, form: true }] }])
     const A = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640 }] }])

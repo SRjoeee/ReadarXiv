@@ -187,6 +187,11 @@ export const HELD = -2
 /** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
+/** the kinds of the author block's units (latex-front.mjs AUTHOR_KINDS: its names and its places) */
+const AUTHOR_KINDS = new Set(['author', 'affiliation'])
+/** the kind of a member of the author block's units set away from the block under the title (author-block.ts): the text it is
+ *  there, of no toggle (the reader's and the content classes' tables name it nowhere: always translated) */
+export const TEXT_NAMES = 'textnames'
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
@@ -799,7 +804,27 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    // (the source unit a glyph of A is: its member's claim, else its partner's owner on B)
+    const ownerOf = (a: number) => {
+      const c = claimedA[a] as number
+      if (c >= 0) return members[c]!.unit
+      const b = m.aToB[a] as number
+      return b >= 0 ? (unitB[b] as number) : -1
+    }
+    const {
+      made,
+      stats: st,
+      block,
+    } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf, ownerOf })
+    // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
+    // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
+    // block keeps its kind; where no title is located, none is told apart)
+    if (block)
+      for (const mem of members) {
+        if (!mem.located || !AUTHOR_KINDS.has(mem.kind) || !mem.text.length) continue
+        if (!mem.text.some((a) => pageA[a] === block.page + 1 && block.within(a - (m.offA[block.page] as number))))
+          mem.kind = TEXT_NAMES
+      }
     for (const x of made) {
       const u = units.length
       units.push(x.unit)
