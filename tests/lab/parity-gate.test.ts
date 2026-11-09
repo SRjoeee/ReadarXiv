@@ -515,8 +515,8 @@ describe("anchor: a paragraph under another's last line alone at its column's to
     })
     return measure(v2, r)
   }
-  const anchors = (p: ReturnType<typeof page>) =>
-    of('anchor')(p).map((d) => [(d as { unit: string }).unit, (d as { worse: boolean }).worse, (d as { nearer: string }).nearer])
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const anchors = (p: ReturnType<typeof page>) => (of('anchor')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
   it("v2's first line lower by what the gap under the line over it lacks: the ruling's, not worse", () => {
     expect(anchors(page())).toEqual([['t85 para', false, 'ruling']])
   })
