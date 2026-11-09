@@ -13,22 +13,34 @@ import * as accents from './today/accents.mjs'
 
 // ---------------------------------------------------------------- a face of one pitch (rebuild/mono-blocks, Rule 1: a prototype)
 /**
- * The faces a document sets at one pitch, a typewriter's (their PostScript names, the subset tag aside): every character the
- * document sets in the face one advance at its size, to the thousandth of it (the PDF's width unit), and two distinct letters
- * among them at least (a face's "i" and "m" share an advance only where it is a typewriter's). Read off the glyphs, never the
- * font's name nor its FixedPitch flag, which producers state wrong: 2411.13093v4 p19's Consolas subsets, 36 characters at 550
- * each, one flagged and one not; a CJK subset of one glyph and MSAM10 flagged
+ * The faces a document sets at one pitch, a typewriter's (their PostScript names, the subset tag aside): every font program of
+ * the face (an embedded subset) sets every character one advance at its size, within the face's own unit of it, a thousandth
+ * (the PDF's widths are whole thousandths; one read off the page lands either side of one), and one program two distinct
+ * letters at least (a face's "i" and "m" share an advance only where it is a typewriter's). Programs of one face may differ:
+ * 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and p19, each its own one. Read off the glyphs, never the font's
+ * name nor its FixedPitch flag, which producers state wrong: p19's Consolas subsets, 36 characters at 550 each, one flagged and
+ * one not; a CJK subset of one glyph and MSAM10 flagged
  */
 export function fixedFacesOf(glyphs: Iterable<DocGlyph>): Set<string> {
-  const seen = new Map<string, { letters: Set<string>; advances: Set<number> }>()
+  const programs = new Map<string, { face: string; letters: Set<string>; least: number; most: number }>()
   for (const g of glyphs) {
     if (!isInk(g) || !/\S/.test(g.u) || g.nu || !(g.size > 0) || !(g.x1 > g.x0)) continue
-    const face = bare(g.font)
-    const e = seen.get(face) ?? seen.set(face, { letters: new Set(), advances: new Set() }).get(face)!
+    const font = String(g.font)
+    const e =
+      programs.get(font) ??
+      programs.set(font, { face: bare(font), letters: new Set(), least: Infinity, most: -Infinity }).get(font)!
     if (/\p{L}/u.test(g.u)) e.letters.add(g.u)
-    e.advances.add(Math.round((1000 * (g.x1 - g.x0)) / g.size))
+    const advance = (1000 * (g.x1 - g.x0)) / g.size
+    e.least = Math.min(e.least, advance)
+    e.most = Math.max(e.most, advance)
   }
-  return new Set([...seen].filter(([, e]) => e.letters.size >= 2 && e.advances.size === 1).map(([f]) => f))
+  const faces = new Map<string, { one: boolean; letters: boolean }>()
+  for (const e of programs.values()) {
+    const f = faces.get(e.face) ?? faces.set(e.face, { one: true, letters: false }).get(e.face)!
+    f.one &&= e.most - e.least <= 1
+    f.letters ||= e.letters.size >= 2
+  }
+  return new Set([...faces].filter(([, f]) => f.one && f.letters).map(([face]) => face))
 }
 
 // ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
