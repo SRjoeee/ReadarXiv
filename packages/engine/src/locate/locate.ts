@@ -847,6 +847,27 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return any
   }
+  // (a figure's word set in another face inside a line of code: the ink glyphs right before and after it in its page's order
+  // stand on its baseline (ON_BASE) in a face of one pitch. 2411.13093v4 p19's code boxes set "attractions" and "coin" in
+  // Georgia inside their Consolas lines: translated alone, a line read `"The number of the 景点 ."`)
+  const nearInk = (a: number, step: 1 | -1): DocGlyph | null => {
+    for (let b = a + step; b >= 0 && b < NA && pageA[b] === pageA[a]; b += step) {
+      const g = gA(b)
+      if (isInk(g) && /\S/.test(g.u)) return g
+    }
+    return null
+  }
+  const insideCode = (text: readonly number[]): boolean => {
+    if (!artefacts || !text.length) return false
+    const first = gA(text[0]!)
+    const before = nearInk(text[0]!, -1)
+    const after = nearInk(text[text.length - 1]!, 1)
+    const onLine = (g: DocGlyph | null) =>
+      !!g && fixedFace(g.font) && Math.abs(g.y - first.y) <= ON_BASE * Math.max(g.size, first.size)
+    return onLine(before) && onLine(after)
+  }
+  const figureArtefact = (text: readonly number[], turned: readonly [number, number][]): boolean =>
+    artefact(text, turned) || (!turned.length && insideCode(text))
   stats.artefacts = { units: 0, bodyFixed }
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
@@ -865,7 +886,16 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf, artefact })
+    const { made, stats: st } = inkOf({
+      ins,
+      inkA,
+      raws: o.pages,
+      m,
+      pageA,
+      owned,
+      classesOf: o.classesOf,
+      artefact: figureArtefact,
+    })
     for (const x of made) {
       const u = units.length
       units.push(x.unit)

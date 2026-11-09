@@ -328,6 +328,37 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(off.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
   })
 
+  it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line (mono-blocks, Rule 1)', () => {
+    // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
+    // `["coin", "table", ...]` but "coin": kept, the line read "The number of the 景点 ." and `["硬币", "table"`. A word whose
+    // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
+    // code. A word of its own line stays translated)
+    const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
+    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
+    const A = docOf([
+      {
+        lines: [
+          body('Body text of the paper set here'),
+          body('and more body text in that face'),
+          { text: '"ASR": "the number of the ', x: 72, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: 'attractions', x: 72 + 26 * 6, y: 640, form: true, font: 'ABCDEF+CMR10' },
+          { text: '.",', x: 72 + 37 * 6, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: 'Loss curve', x: 72, y: 600, form: true, font: 'ABCDEF+CMR10' },
+        ],
+      },
+    ])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.font.endsWith('CMR10') && !g.blank && !g.form)
+          g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+    const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
+    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A), artefacts: true })
+    const fixed = new Map(L.members.filter((m) => m.figure).map((m) => [m.plain, m.fixed]))
+    expect(fixed.get('"ASR": "the number of the')).toBe(true)
+    expect(fixed.get('attractions')).toBe(true)
+    expect(fixed.get('Loss curve')).toBe(false)
+  })
+
   it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {
     // (2411.13093v4 p18, Figure 8: a prompt set as a justified paragraph in an included figure, its entries' first lines indented
     // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
