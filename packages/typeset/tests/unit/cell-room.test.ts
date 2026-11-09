@@ -51,6 +51,45 @@ describe('a table cell in its own room (today’s cells: run.mjs:2116, fitFurthe
     expect(m!.fit!.size).toBeGreaterThanOrEqual(8)
     expect(m!.lines[0]![2]).toBeLessThanOrEqual(132 + 1e-9)
   })
+  it('takes as its own room what TeX set on its line: its elements’ ink past its glyphs’ advances too, as today’s rectangle', () => {
+    // (2610.17024v1-zh p14's "p=5 n=20 m_e=2 κ=10 seed 43": its line's advances start at 150.42, the italic p's ink at 149.79,
+    // which today's rectangle held (texRects: the layout file's glyph boxes) and a room of the advances alone did not: 0.63 pt
+    // short, the translation, opening with that p, set a step under the original's size where today kept it. Here the p's
+    // ink 2 pt left of the line's start: its crop 7.8, a space shrunk to 4 and 10 letters, 61.8 pt, in its own 62 (98-160),
+    // not in the advances' 60)
+    const p = cell(0, 100, { els: [['0', { kind: 'other', ink: [[1, 98, 698, 105, 707, 700]], copy: 'p' }]] })
+    const rows: Rows = {
+      get: (k) =>
+        k === idOf(1)
+          ? {
+              id: idOf(1),
+              ok: true,
+              by: 'test',
+              content: [
+                { t: 'el', id: '0' },
+                { t: 'text', s: ` ${'x'.repeat(10)}` },
+              ],
+            }
+          : undefined,
+      done: true,
+    }
+    const [m] = laidOf([p], rows)
+    expect(m!.state).toBe('laid')
+    expect(m!.fit!.size).toBeCloseTo(10, 5)
+    const l = m!.lines[0]!
+    expect((l[3][0] as { x: number }).x).toBeGreaterThanOrEqual(98 - 1e-9)
+    expect(l[2]).toBeLessThanOrEqual(160 + 1e-9)
+    // (a centred cell's room stays centred where TeX centred its line, its advances' middle, as wide as its own ink needs:
+    // 2602.23285v2-ja p19's "Top-τ", the τ's ink 0.74 pt past its line's end. Here an element's ink 2 pt past the end, 100-162:
+    // the room 98-162, a short translation's middle 130, not the ink's 131)
+    const c = cell(0, 100, {
+      align: 'c',
+      els: [['0', { kind: 'other', ink: [[1, 150, 698, 162, 707, 700]], copy: 'p' }]],
+    })
+    const [mc] = laidOf([c], rowsOf({ 0: 'x'.repeat(6) }))
+    const lc = mc!.lines[0]!
+    expect(((lc[3][0] as { x: number }).x + lc[2]) / 2).toBeCloseTo(130, 5)
+  })
   it('runs a translation it cannot set at its floor there on over its paper, at the largest size that sets it (X.further)', () => {
     // (16 letters: 64 pt at the floor 0.8, past its 60; its side 52-152, half its size clear of the ink there: to 147)
     const [m] = laidOf([cell(0, 72)], rowsOf({ 0: 'x'.repeat(16) }))
