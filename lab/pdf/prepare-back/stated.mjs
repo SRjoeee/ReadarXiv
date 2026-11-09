@@ -1,7 +1,8 @@
 // lab/pdf/prepare-back/stated.mjs: stage 1a's --baseline statement (run.mjs, and restate.mjs over a run's dumps): each unit of
 // the baseline's the candidate does not make, stated as the candidate's, with the cause the differential reads
 // (baseline/tools/diff.mjs: a loss whose cause an entry of baseline/acceptance.json matches is accepted). For one of today's ink
-// units and figure texts, a unit made on arXiv's page that stands for it, read otherwise there: of its kind, no baseline unit's
+// units and figure texts, a unit made on arXiv's page that stands for it, read otherwise there: of its kind (a names unit's, or of
+// the ledger class the author block's rule gives it back outside the block), no baseline unit's
 // id, at its place (its first line's page and box) or, with no line, at its ord (today's bundle's order, which the dump keeps),
 // with how it reads otherwise (CAUSE); none of its kind, a kept block of its kind at its place; none of either, a unit of the
 // author block's now holding its glyphs. Each cause the coordinator's rulings of 2026-11-09 accept is a check of the two units
@@ -38,6 +39,9 @@ export const CAUSE = Object.freeze({
   another: 'another reading',
 })
 
+/** the ledger's classes of the blocks rule 8 makes names (ink-units.mjs: notes and orphans), which a names unit outside the author
+ *  block is again */
+const LEDGER_OF_NAMES = new Set(['inknotes', 'inkorphan'])
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
 
@@ -74,7 +78,11 @@ export function statedOf(base, units, { trails = [], labels = new Map() } = {}) 
     a.page === b.page && Math.abs(a.x0 - b.x0) <= ON && Math.abs(a.x1 - b.x1) <= ON && Math.abs(a.baseline - b.baseline) <= ON
   const standsFor = (u) => {
     const L = u.lines?.[0]
-    const k = free.findIndex((c) => c.kind === u.kind && (L && c.lines?.[0] ? meets(L, c.lines[0]) : c.ord === u.ord))
+    const at = (c) => (L && c.lines?.[0] ? meets(L, c.lines[0]) : c.ord === u.ord)
+    let k = free.findIndex((c) => c.kind === u.kind && at(c))
+    // (none of its kind: a names unit of today's rule 8 the author block's rule moved out of the block, its ledger class's now
+    // (rebuild/author-toggle: the names toggle the block under the title's alone), 2610.21084v1's page-foot note of the e-mails)
+    if (k < 0 && u.kind === 'inknames') k = free.findIndex((c) => LEDGER_OF_NAMES.has(c.kind) && at(c))
     return k < 0 ? null : free.splice(k, 1)[0]
   }
   const chars = (p) => [...(p.kind === 'text' ? p.s : p.kind === 'ph' ? p.src : '')].sort().join('')

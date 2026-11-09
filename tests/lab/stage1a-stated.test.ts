@@ -90,6 +90,26 @@ describe("the baseline's units the candidate does not make, stated with how it r
     expect(said(statedOf(base, units))).toEqual([[161, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.names}`]])
   })
 
+  it("states a names unit the author block's rule moved out of the block as its ledger class's unit standing for it (2610.21084v1 t587)", () => {
+    // (rule 8 made today's page-foot note of the authors' e-mails inknames; outside the author block under the title the block
+    // rule gives it back its ledger class, inknotes: the unit of today's kind no more, it stands for today's all the same, at its
+    // place or, neither with a line, at its ord; here refused, as it was when it was inknames)
+    const refused = { why: 'content difference: aonly' }
+    const today = { ...unit(id('a'), 587, 'inknames', [text('(. Chung)')]), lines: [] }
+    const v2 = { ...unit(id('b'), 587, 'inknotes', [text('(M. Chung)')]), lines: [], ...refused }
+    expect(said(statedOf([today], [v2]))).toEqual([[587, `made on arXiv's page as ${'b'.repeat(12)}: content difference: aonly`]])
+    const placed = { ...unit(id('c'), 12, 'inkorphan', [text('(M. Chung)')]), ...refused }
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], [placed]))).toEqual([
+      [587, `made on arXiv's page as ${'c'.repeat(12)}: content difference: aonly`],
+    ])
+    // (a unit of its own kind there first; no other kind's: a note of today's now an orphan line is no move of the block's)
+    const both = [placed, { ...unit(id('d'), 13, 'inknames', [text('(M. Chung)')]), ...refused }]
+    expect(said(statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], both))).toEqual([
+      [587, `made on arXiv's page as ${'d'.repeat(12)}: content difference: aonly`],
+    ])
+    expect(statedOf([{ ...unit(id('a'), 5, 'inknotes', [text('x')]), lines: [] }], [{ ...unit(id('b'), 5, 'inkorphan', [text('y')]), lines: [] }])).toEqual([])
+  })
+
   it('states no names line for a line now of another kind that is not the names toggle (held whole (f)), nor one at another place', () => {
     expect(said(statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])]))).toEqual([
       [1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
