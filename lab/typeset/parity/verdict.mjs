@@ -572,6 +572,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // its source's own words, letters and digits (the state `groups` reads a drawn cell in: an address alone, a reply that came
   // back as it went), misses no translation where v2 leaves the original's ink of it: those named apart, `echoed`)
   const echoed = []
+  // (and a unit today draws whose every line on the original v2 draws translated as one of its own members — the same line of
+  // TeX's, its baseline, the two overlapping across: a line is one paragraph's — misses no translation either: today cut a unit
+  // v2 lays whole, 2608.25210v2 p17's reference [64], today's t517 and t518 on the lines of v2's 485. Units TeX sets side by side
+  // on one line, a run-in head and its paragraph, a row's cells, do not overlap across. Those named apart, `within`)
+  const within = []
+  const v2Lines = [...V.keys()].flatMap((k) => orig.get(k)?.lines ?? [])
+  const onV2 = (l) =>
+    v2Lines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
   const todayRaw = new Map(rec.today.units.map((u) => [`t${u.id}`, u.lines]))
   for (const key of T.keys()) {
     if (V.has(key)) continue
@@ -580,6 +588,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const said = (todayRaw.get(key) ?? []).map((l) => l.text).join('')
     if (typeof src === 'string' && bare(src) !== '' && bare(said) === bare(src)) {
       echoed.push(`${key} ${o?.kind ?? ''}`.trim())
+      continue
+    }
+    if (o?.lines?.length && o.lines.every(onV2)) {
+      within.push(`${key} ${o.kind ?? ''}`.trim())
       continue
     }
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
@@ -828,6 +840,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     rules: rules.length,
     laid: { today: T.size, v2: V.size, gained },
     echoed,
+    within,
     figures: { today: figT, v2: figV, v2Laid: figLaid },
   }
   for (const f of FLAGS) {
