@@ -2888,6 +2888,44 @@ quantization. v2 takes 6.48. On 2608.04322v1 page 10, "Avg. HS" is a centred hea
 middle, and the nearer neighbour leaves it 6.10 pt. Today keeps 6.97 only by drawing the cell from its original's start,
 6.49 pt off its middle and 12.98 pt past its own room.
 
+### 18.14 A paragraph's pitch is TeX's `\baselineskip` (2026-11-09)
+
+The typesetter set a translation's lines on a grid whose pitch it read off the original's lines, the upper median of their
+gaps, and the engine stated a member's lead the same way. TeX's `\lineskip` rule widens a gap under a line too tall for the
+`\baselineskip`, so in a paragraph dense with inline formulas such a gap passed for the pitch. On 2602.23285v2-ja page 4,
+unit 29's three lines stand 10.96 and 12.24 pt apart, the second gap TeX's push for a formula on the third line, and 12.24
+was read as the pitch. The translation sets that formula on its second line, which TeX's rule pushes 1.28 pt down; on a grid
+that kept the 12.24 gap the push was added to it, the third line fell past TeX's text block bottom, and the paragraph shrank
+to 8.97 pt. TeX sets the line after a pushed one a `\baselineskip` under it, never the gap it opened for another line. The
+same reading took a gap over a display, up to 34 pt, for the pitch of a theorem or a paragraph whose other lines it split.
+
+The marked compile already stated each paragraph's `\baselineskip` (`AXT-LINES`, as the paragraph ends: the value TeX
+appended its lines at), read into `Room.sep` alone. The engine now states it as the member's lead (`Placed.lead`, to a
+thousandth, with `lead` no longer in `read`) wherever none of the member's lines on a page stands nearer than it: TeX never
+sets two lines of a paragraph nearer, and a member whose lines do was set under another (read as before). A forced break's
+room (`El.ends`) is read against it. The typesetter takes it as every block's pitch (`U.blocks`), a single line's too, where
+1.2 of the size stood in, and as a forced break's frame pitch (`U.breaks`): the even grid closes each gap the `\lineskip`
+rule opened to it, and a push of the translation's own is taken from TeX's pitch, never from a gap TeX opened for a line
+that is no longer there. The parity's `lead` measure reads the original's leading as that pitch too. A part that states no
+`\baselineskip` (a heading, the front matter, a figure text, a part made before) lays as before. To a hundredth the pitch
+drifted: 12 pt is 11.9552 PDF units, and 11.96 laid line after line moved a page fill's choice on a near tie (2610.21312v1
+page 8, unit 95, eleven lines became ten).
+
+Measured over the corpus's 88 papers (stage 1a against round 6's): the units, the heads and the dumps are as they were, and
+the differential against today's prepare is byte for byte round 6's; 2,277 parts move, by `Placed.lead` and `read` alone
+(23,051 members state their `\baselineskip`; 3,192 leads move by more than 0.05 pt, those a display's gap had set as far as
+34 pt), the next line read under 59 members' last (`Room.next`, whose reach is three quarters of the lead: a reference's next
+entry 7.85 pt under it, where 1.2 of its size had skipped it), and 27 forced breaks' rooms. Over the 22 parity pairs, 1,551 of
+12,557 laid members differ: 1,172 by their fit's numbers alone, their lines the same; 308 by under 0.05 pt; 55 by under 2 pt;
+15 by 2 to 5.7 pt; one by a line. Three units are set larger and none smaller: 2602.23285v2 unit 29 at 9.71 pt on pages 4
+and 5, where it was 8.97, and 2610.40645v1 page 12's unit 83 at its original's size and line count, 10.91 pt in six lines.
+Unit 29 stays under 9.96: its third line on page 4, a Japanese line whose ink rises 8.35 pt, stands under the formula's
+2.84 pt descent, and TeX's rule pushes it 1.22 pt past the text block bottom; TeX would carry that line to page 5, where the
+next paragraph leaves no room. The parity check over the 22 pairs (344 pages), with the default toggles and with every
+toggle on, finds no page newly worse and none no longer worse; below its line, 2610.40645v1 unit 83's size and line count become the original's, and its `lead` measure, which had
+read the original's leading as the median of gaps over displays and pushes (up to 25.7 pt where TeX's pitch is 13.55), no
+longer faults either side, on 16 pages.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
