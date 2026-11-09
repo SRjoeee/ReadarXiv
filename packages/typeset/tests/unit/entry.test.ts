@@ -930,6 +930,31 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // (the next name from the trail's drawn end (its crop's, a crop's antialiased edge with it, as an element's at a line's end),
     // at TeX's separation: no hole)
     expect(laid[1]!.lines[0]![1]).toBeCloseTo(crop.x + crop.w + 3, 5)
+    // (and a third from the second's end, though the second, laid from the first's, stands left of its own original: the row it
+    // shares is where its block was laid from, not its original's extent alone; read so, the third stood at the second's
+    // original start, 2610.22065v1's ACM reference format every other name)
+    const idC = 'c'.repeat(64)
+    const shang = member({
+      ord: 2,
+      kind: 'author',
+      align: 'l',
+      text: idC,
+      join: [3],
+      lines: [[1, 0, 236.4, 290.4, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 20, next: 24, side: [72, 300] },
+    })
+    const rows3 = rowsOf(
+      [
+        row([{ t: 'text', s: 'Jia' }]),
+        { ...row([{ t: 'text', s: 'Zhao' }]), id: idB },
+        { ...row([{ t: 'text', s: 'Shang' }]), id: idC },
+      ],
+      true,
+    )
+    // (the faces' ink reaching their advances' end, so that a name's ink ends where its text does)
+    const inked: Metrics = { ...metrics(), ink: (_f, size, t) => [0.7, 0.2, (size * [...t].length) / 2] }
+    const three = layPage({ ...part(liu), flows: [[liu, zhao, shang]] }, rows3, rules, inked).members
+    expect(three[2]!.lines[0]![1]).toBeCloseTo(three[1]!.lines[0]![2] + 3, 5)
   })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)
