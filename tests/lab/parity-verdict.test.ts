@@ -517,3 +517,67 @@ describe("shown: a unit today draws in its own source's words misses no translat
     expect(shown(page('（）', '()'))).toMatchObject([{ unit: 't499 inknotes', worse: true }])
   })
 })
+
+describe("align: a drawn line's alignment is where its ink stands, a CJK mark's blank half no ink", () => {
+  // (2608.25210 p13 t239, a centred cell ending with U+FF09 at 5.08 pt: v2's ink ends at its closing mark's ink, the first
+  // half of its em, and stands on the original's middle; its advance box, a blank half past the ink, does not)
+  const S = 10
+  const cell = (align: string, x0: number, x1: number) =>
+    v2Of({
+      members: [{ ord: 239, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } }],
+      facts: [{ ord: 239, kind: 'cell', align, style: { size: S }, lines: [factLine(x0, x1, 700, S)] }],
+      today: { 239: { today: 239 } },
+    })
+  type Crop = [number, number, number, number, number]
+  const page = (f: ReturnType<typeof v2Of>, t: Line[], v: Line[], tc: Crop[] = [], vc: Crop[] = []) =>
+    measure(f, rec({ today: { units: [{ id: 239, lines: t }], crops: tc }, v2: { units: [{ id: 239, lines: v }], crops: vc } }))
+  const aligns = (p: { diffs: { flag: string }[] }) => p.diffs.filter((d) => d.flag === 'align')
+
+  it("a centred line whose ink stands on the original's middle is nearer than one whose box does", () => {
+    // (the original 100–200, middle 150; v2's box 97.5–207.5, its ink to 202.5: middle 150; today's box 95–205, middle 150 by
+    // its box, its ink 95–200: 147.5)
+    const p = page(cell('c', 100, 200), [drawnLine(95, 205, 700, 'x'.repeat(10) + '）', S)], [drawnLine(97.5, 207.5, 700, 'x'.repeat(10) + '）', S)])
+    expect(aligns(p)).toMatchObject([{ unit: 't239 cell', worse: false, nearer: 'v2' }])
+  })
+  it("a right-aligned line ends where its closing mark's ink ends", () => {
+    const p = page(cell('r', 100, 200), [drawnLine(100, 200, 700, 'x'.repeat(9) + '）', S)], [drawnLine(105, 205, 700, 'x'.repeat(9) + '）', S)])
+    expect(aligns(p)).toMatchObject([{ unit: 't239 cell', worse: false, nearer: 'v2' }])
+  })
+  it("a line whose end is a crop's after a closing mark ends at the crop: the mark's blank half is no line's end", () => {
+    // (2610.20484 p10 t97: v2's text ends with U+FF0C before a formula's crop that its text holds no stand-in for, today's holds
+    // it as U+FFFC; both lines end at the crop's end, 200)
+    const crop: Crop = [239, 185.5, 698, 200, 707]
+    const p = page(cell('c', 100, 200), [drawnLine(100, 185, 700, '可行采样数，￼', S)], [drawnLine(100, 185, 700, '可行采样数，', S)], [crop], [crop])
+    expect(aligns(p)).toEqual([])
+    expect(p.faults.align?.v2 ?? 0).toBe(0)
+  })
+  it("a line whose start is a crop's before an opening mark starts at the crop", () => {
+    // (2608.25210 p13 t320: a word in U+FF08 and U+FF09 after a formula's crop at 97–104; the original 97–140)
+    const crop: Crop = [239, 97, 698, 104, 707]
+    const t = [drawnLine(105, 145, 700, '￼￼（角色）', S)],
+      v = [drawnLine(105, 145, 700, '（角色）', S)]
+    const p = page(cell('c', 97, 140), t, v, [crop], [crop])
+    expect(aligns(p)).toEqual([])
+    expect(p.faults.align?.v2 ?? 0).toBe(0)
+  })
+  it("a raised mark after a closing mark ends the line: the line's end is the mark's ink", () => {
+    // (a footnote mark "1" at 6 pt raised after U+3002, 190–194: the line's end is the mark's, not U+3002's blank half)
+    const host = drawnLine(100, 190, 700, '实验结果。', S)
+    const mark = { ...drawnLine(190, 194, 703, '1', 6), n: 1 }
+    const p = page(cell('r', 100, 194), [host, mark], [host, mark])
+    expect(p.faults.align?.v2 ?? 0).toBe(0)
+    expect(p.units.find((u: { key: string }) => u.key === 't239').sides.v2.align.off).toBeCloseTo(0, 2)
+  })
+  it("a left line opening with a crop is held to the crop's start: an opening mark's blank half allowed only where it opens the line", () => {
+    // (the original's start 72; today's crop at 72, v2's 5 pt in, each followed by U+FF08; before, the mark's allowance took
+    // the crop's 5 pt off)
+    const f = cell('l', 72, 300)
+    const p = page(f, [drawnLine(80.5, 300, 700, '（甲乙丙）', S)], [drawnLine(85.5, 300, 700, '（甲乙丙）', S)], [[239, 72, 698, 80, 707]], [[239, 77, 698, 85, 707]])
+    expect(aligns(p)).toMatchObject([{ unit: 't239 cell', worse: true }])
+  })
+  it("a left line opening with its own opening mark may set it at the margin or hang its blank half, as before", () => {
+    const f = cell('l', 72, 300)
+    const p = page(f, [drawnLine(72, 300, 700, '（甲乙丙）', S)], [drawnLine(67, 300, 700, '（甲乙丙）', S)])
+    expect(aligns(p)).toEqual([])
+  })
+})

@@ -163,5 +163,5 @@ lab/translate/equivalence-2026-11-07.md 1  # 2026-11-07: the accepted class's ev
 
 packages/reader/tests/chrome/parts.ts 4  # 2026-11-07: the host's own target names in the chrome's tests' parts (the extension's tables' words, as the menu shows them)
 packages/typeset/tests/unit/lit-sentences.test.ts 2  # 2026-11-08: a Chinese translation of three sentences and its starts, the CJK target's test input (lane hl-sentence: a translation set with no spaces cut at its sentences' first characters)
-tests/lab/parity-verdict.test.ts 2  # 2026-11-09: CJK lines drawn as the parity reads them back, the inputs of the shown measure (lane parity-read: a translated address, a line of marks alone)
+tests/lab/parity-verdict.test.ts 10  # 2026-11-09: CJK lines drawn as the parity reads them back, the inputs of the shown and align measures (lane parity-read: a translated address; a closing mark's blank half at a line's end, before or after a crop, under a raised mark; an opening mark at a line's start)
 tests/lab/parity-rows.test.ts 6  # 2026-11-09: Chinese rows as Microsoft stored them, the inputs and expectations of today's row said in v2's unit (lane parity-read: each address the element v2 holds, the sentences counted in v2's projection)
