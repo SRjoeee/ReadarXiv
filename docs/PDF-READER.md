@@ -3180,38 +3180,65 @@ it (a kern of minus the depth, an empty box that deep, no interline glue), so th
 the row's depth as `\lastbox` reads it; after a kern, none; after anything else, the point alone. An alignment's region runs
 from its start to its last end, its rows' numbers inside it; an equation's number is outside its region.
 
+**A display's text** (the coordinator's ruling of 2026-11-09, after 2610.22299v1 p1: display (1), a sentence in `\text`, kept
+in English beside display (2), translated): words TeX sets in text mode inside a display are text, translated as before. TeX's
+text mode inside math is an `\hbox` in math. `\everyhbox`, which every `\hbox` passes, was tried first and is unsafe: amsmath
+sets boxes in math of its own (`\resetMathstrut@` after a font change, at `\boldsymbol`'s `\endgroup`), `\setbox`'d and never
+placed, and a point after one fell between a nucleus and its script (2608.16117v1's `\boldsymbol{\mathcal{J}}^{trans}` moved
+0.26 pt); `\leaders` read the point for its glue (2610.21377v1's `\xrightarrow`, "Leaders not followed by proper glue"). So the
+text is bracketed inside the box, `dts<n>` first and `dte<n>` last, by the commands that make a text box in math, each
+wrapped once the document began, its own definition kept: amstext's `\textdef@` (`\text`, and `\textrm`, `\textbf` and the
+rest through `\nfss@text`), `\mbox` (core LaTeX's `\nfss@text`), `\fbox` (`\boxed`); only where the list the box stands in is
+a display's own math. Math opened again in a restricted list of a display's (such a box, an alignment's cell, a box in a
+`\vcenter`: `\everymath`) gets `dms<n>` first in it and `dme<n>` after it in that list (`\aftergroup`, a stack), so that a box
+that takes rows again (amsmath's split, `\unhcopy` in `\rendsplit@`) holds their math's points: a glyph's mode is its
+innermost region's (`ink.mjs` `displayTextMask`), and these two kinds pair alone (a box set once and placed elsewhere states
+nothing). Math in a `\vbox`'s paragraph gets none, as a point after it would be a paragraph's. A display not known from the
+pass before as no alignment states no text in its own list. Every point is in a math list or a restricted list: no node in a
+page's list or a paragraph's.
+
 **The reading** (v2, `packages/engine/src/locate/today/ledger.mjs`, CHANGED): a line at least half of whose glyphs TeX set
-in a display is the formula's (`math`), by the second rule, after code and before every rule of place (references, heads,
-notes, orphans), so that whatever its face and wherever it stands, under a footnote rule, in a box, beside a column, it is
-kept as the paper has it; a run in a display is no figure unit (`figure-text.mjs`). The regions are carried onto arXiv's page
+in a display, not in its text mode, is the formula's (`math`), by the second rule, after code and before every rule of place
+(references, heads, notes, orphans), so that whatever its face and wherever it stands, under a footnote rule, in a box,
+beside a column, it is kept as the paper has it; a line mostly a display's text goes through the rules of place and is read
+as text, as today's; a formula line with a short `\text{if}` stays the formula's. A run in a display's math is no figure unit
+(`figure-text.mjs`). Locate gives the lab's stage the lines it reads as a display's formula (`Located.displays`), and stage 1a
+states a unit of today's that v2 makes no unit of, every line inside one, as "kept on arXiv's page as part of a display"
+(`stated.mjs`, accepted by `baseline/acceptance.json`). The regions are carried onto arXiv's page
 as the code regions are. The layout file's `REGION_KINDS` stays `code`: today's maker passes a display region by, and
 today's engine reads nothing new. The rule reads no line's place: with rebuild/refs-toggle's pairing of the body brackets,
 which reads 08481's foot as body lines, the same ink units go (a scratch merge of both: p7's three translated ink units gone
 on either reading).
 
-**Measured.** The 88 papers' compiles, each made at this TeX on its own pinned image: every glyph of every page of each
-paper's marked compile and final pass where round 7's compile set it, but 7 glyphs on 4 pages of 2 papers within one unit of
-the PDF writer's text adjustment (0.001 to 0.009 pt, numbers and a comma after a point, where dvipdfmx and xdvipdfmx set the
-text position again; the lines around them in place); no TeX error that round 7's had not. 4,544 displays started, 4,364
-closed; 180 with no end: the `$$` ones (9 papers) and 4 that end a proof in SIAM's classes, whose theorem marks (ntheorem's
-`thmmarks`) end such a display themselves. Stage 1a against round 7's r7: the ink units drawn translated 6,910 -> 6,901, the 9
-now kept on 5 papers (2608.08481v1 4: (6)'s right part with its number, (7)'s right part, (8)'s second line, and a line of p6;
-2608.25210v2 2, an underbrace's labels; 2610.18513v1 1, a `\sup`; 2610.22299v1 1, display (1); 2610.30854v1 1), none new or
-changed, every source unit as it was; the kept blocks' rows 8,350 -> 9,101 (20 papers: a display's lines no unit owns, with
-no letter pair, were `symbols` and lit nothing; as the formula's they light as kept blocks); I6 the same. The parity against
-round 7's final, default and every toggle on alike: 49 and 58 pages worse as before, none newly worse and none no longer; two
-differences newly worse on a page already worse, 2608.25210v2 p10's underbrace labels (`shown`: today translates them, v2
-keeps them now); below the line v2's highlight nearer on 6 (it no longer fills a display's block: 2608.04322v1 p4 and p5,
-2608.25210v2 p9 and p10), the figure texts of 2608.25210v2 pp. 2 and 11 renumbered (the same values).
+**Measured.** The display marks alone (before the ruling on a display's text), the 88 papers' compiles, each made at that TeX
+on its own pinned image: every glyph of every page of each paper's marked compile and final pass where round 7's compile set
+it, but 7 glyphs on 4 pages of 2 papers within one unit of the PDF writer's text adjustment (0.001 to 0.009 pt, numbers and a
+comma after a point, where dvipdfmx and xdvipdfmx set the text position again; the lines around them in place); no TeX error
+that round 7's had not. 4,544 displays started, 4,364 closed; 180 with no end: the `$$` ones (9 papers) and 4 that end a proof
+in SIAM's classes, whose theorem marks (ntheorem's `thmmarks`) end such a display themselves. With a display's text (this
+TeX), the census: one paper of each of the 88's 25 document classes and those the attribution needs, 29 papers, each paper's
+marked compile and final pass against round 7's: every glyph where it was but 2610.37668v1's 4 pages within 0.009 pt as above,
+no TeX error that round 7's had not. Stage 1a over the 29 against round 7's r7: the ink units drawn translated 1,966 -> 1,960,
+the 6 now kept on 3 papers (2608.08481v1 4: (6)'s right part with its number, (7)'s right part, (8)'s second line, and a line
+of p6; 2610.18513v1 1, a `\sup`; 2610.30854v1 1, equation (19)); 2610.22299v1's display (1) and 2608.25210v2's brace labels
+translated as round 7 translated them; none new or changed; every source unit as it was; the kept blocks' rows 1,175 -> 1,755
+(14 papers: a display's lines no unit owns, with no letter pair, were `symbols` and lit nothing; as the formula's they light
+as kept blocks); I6 the same. The differential over them: lost 111 (+48 accepted) -> 109 (+54): 2608.08481v1 t118 to t121
+kept as part of a display, accepted, and 4 kept blocks' units accepted as kept. The parity over the census's pairs whose
+arXiv PDF the lab holds (seven of the twenty-two; 2608.04322v1's is in the gate pack, moved off this machine) against round 7's
+final, default and every toggle on alike: 15 and 20 pages worse as before, none newly worse, none no longer, no difference newly
+worse (the two the display marks alone made, 2608.25210v2 p10's brace labels kept, gone: translated again); below the line v2's highlight nearer on 3 (it no
+longer fills a display's block: 2608.25210v2 p9 and p10) and its figure texts renumbered (the same values).
 
 **Not done.** A display the source ends with `$$` has no place TeX reads before its end: its start alone states no region,
 and its ink is read as before (176 displays in 9 of the 88 papers); so is one a class ends itself (the 4 SIAM proofs' last
 displays, which the class's theorem marks, ntheorem's `thmmarks`, end by a route of their own). A display in a first
 pass, or under `\nofiles`, has no start. A package that sets `\everydisplay` after `begindocument/end`, or takes `\halign`
 before it, leaves its displays unmarked. An `\intertext` line falls inside its alignment's region and is kept (none in the
-88). A number set by `\leqno` stands before the formula, outside its region. Text a display sets in a text face (`\text`,
-an underbrace's label) is the display's and kept with it: 2610.22299v1's display (1), a sentence in `\text`, now stays the
-original's, while (2), whose words a source unit owns, is translated with that unit.
+88). A number set by `\leqno` stands before the formula, outside its region. Of a display's text, text set by `\hbox`
+written out, `\makebox`, `\framebox`, `\raisebox`, `\colorbox`, a package's own boxes, a `\vbox`'s (a `\parbox`, an
+`\intertext` line, a `tabular`'s cells) and a TikZ node's states none and stays kept; math in amsmath's `\text` (which sets
+its own `\everymath`) reads as the text's.
 
 ## 19. The engine's contract
 
