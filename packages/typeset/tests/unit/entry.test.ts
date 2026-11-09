@@ -1057,10 +1057,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     })
     const rowsZh = rowsOf(
       [
-        row([{ t: 'text', s: '倪香' }]),
-        { ...row([{ t: 'text', s: '以及' }]), id: idB },
-        { ...row([{ t: 'text', s: '熊允妮' }]), id: idC },
-        { ...row([{ t: 'text', s: '这是一段正文。'.repeat(12) }]), id: 'd'.repeat(64) },
+        row([{ t: 'text', s: '\u502a\u9999' }]),
+        { ...row([{ t: 'text', s: '\u4ee5\u53ca' }]), id: idB },
+        { ...row([{ t: 'text', s: '\u718a\u5141\u59ae' }]), id: idC },
+        { ...row([{ t: 'text', s: '\u8fd9\u662f\u4e00\u6bb5\u6b63\u6587\u3002'.repeat(12) }]), id: 'd'.repeat(64) },
       ],
       true,
     )
