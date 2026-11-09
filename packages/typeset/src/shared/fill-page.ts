@@ -21,7 +21,7 @@ import type { Share } from './share.ts'
 /** a unit (or a run of one) as the page's fill reads and lays it anew: what its lay left, its fill leadings, its row */
 export type FillLaid = {
   id: number
-  unit: { kind: string }
+  unit: { kind: string; item?: true }
   refused: boolean
   tokens: readonly Token[]
   blocks: readonly FitBlock[]
@@ -143,6 +143,35 @@ export function fillPage(
   // paragraph whose translation nearly fills its block under the leading its own block allows, 1810.04805v2 p8 t156 at 1.08
   // among neighbours at 1.38-1.5, its own 1.14)
   const leadOf = (p: FillLaid) => Math.min(p.fillLead === undefined ? Number.NaN : (p.fillLead ?? 0), r3(target + band))
+  // (a list's items, as TeX states them (a bibliography's entries, the paragraphs TeX set with an item's label): a run of them in
+  // one column, one after another, no item looser than its tightest's leading and the band, held there as the band holds a
+  // unit: not tracked to spread past it. Lab option (iii) of 2026-11-09, shown to the owner: 1810.04805v2's
+  // references, entries that need every line at the original's pitch among entries spread to 1.38-1.55)
+  const listCap = new Map<FillLaid, number>()
+  {
+    const col = (p: FillLaid) => p.blocks[0]
+    let run: FillLaid[] = []
+    const close = () => {
+      if (run.length > 1) {
+        const least = Math.min(...run.map((q) => leadOf(q)).filter((v) => Number.isFinite(v)))
+        if (Number.isFinite(least)) for (const q of run) listCap.set(q, r3(least + band))
+      }
+      run = []
+    }
+    for (const p of units) {
+      const a = run.at(-1),
+        b = col(p),
+        c = a ? col(a) : undefined
+      const same = !!b && !!c && b.page === c.page && Math.min(b.x1, c.x1) > Math.max(b.x0, c.x0)
+      if (!p.unit.item || p.fillLead === null || p.fillLead === undefined) {
+        close()
+        continue
+      }
+      if (a && !same) close()
+      run.push(p)
+    }
+    close()
+  }
   const filled: {
     p: FillLaid
     st: FitState
@@ -160,9 +189,10 @@ export function fillPage(
     // the page's size with it, so that neither takes back the room its leading gave)
     // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
     // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
-    const top = r3(target + band),
+    const cap = listCap.get(p),
+      top = Math.min(r3(target + band), cap ?? Number.POSITIVE_INFINITY),
       leads = p.fillLeads?.map((v) => (v === undefined ? v : Math.min(v, top))),
-      lead = p.lastLead !== undefined ? Math.min(p.lastLead, top) : leadOf(p)
+      lead = p.lastLead !== undefined ? Math.min(p.lastLead, top) : Math.min(leadOf(p), top)
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
     let st: FitState = {
       ...p.layout.state,
@@ -182,7 +212,9 @@ export function fillPage(
     // short of its fill at the band's edge or at its fill leading's top: tracking, the most that still sets it, then the
     // page's size
     const short =
-      p.fillLead !== undefined && (p.fillLead > target + band + 1e-9 || p.fillLead >= (p.fillTop ?? Number.NaN) - 1e-9)
+      p.fillLead !== undefined &&
+      !(cap !== undefined && (p.fillLead ?? 0) > cap + 1e-9) &&
+      (p.fillLead > target + band + 1e-9 || p.fillLead >= (p.fillTop ?? Number.NaN) - 1e-9)
     let full = !short,
       tracked = 0
     const untracked = { st, l }

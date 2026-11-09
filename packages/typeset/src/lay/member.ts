@@ -54,6 +54,8 @@ export type Prepared = {
   wide: FitBlock[] | null
   /** laid again in its row alone (S.relay) */
   noOver?: boolean
+  /** an item of a list, as TeX states it: a bibliography's entry, or a paragraph TeX set with an item's label */
+  item?: true
 }
 /** a member's lay: laid, with what the fill takes of it, or left the original's and why */
 export type MemberLay = { state: 'laid'; lay: FillLaid; over: boolean } | { state: Unlaid }
@@ -210,7 +212,7 @@ export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null
   // L9 S.fill.leads: each run's, then the unit's as one (its fit before its runs)
   const unit: FillLaid = {
     id: p.ord,
-    unit: { kind: p.kind },
+    unit: { kind: p.kind, ...(p.item ? { item: true as const } : {}) },
     refused: false,
     tokens,
     blocks,
@@ -222,7 +224,7 @@ export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null
   }
   const runUnits: FillLaid[] = (runs?.runs ?? []).map((r, i, all) => ({
     id: p.ord,
-    unit: { kind: p.kind },
+    unit: { kind: p.kind, ...(p.item ? { item: true as const } : {}) },
     refused: false,
     run: i,
     bi0: r.bi0,

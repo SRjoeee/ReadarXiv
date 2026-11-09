@@ -478,6 +478,9 @@ export function adapt(i: AdaptInput): Adapted {
   const member: FlowMember = {
     ord: m.ord,
     kind,
+    // (an item of a list, as TeX states it: a bibliography's entry, or a paragraph whose label is the mark TeX set before its
+    // text, \item's (Label.kind 'number'))
+    ...(kind === 'reference' || (kind === 'para' && m.label?.kind === 'number') ? { item: true as const } : {}),
     pages,
     tokens,
     blocks,
