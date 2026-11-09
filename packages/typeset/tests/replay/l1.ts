@@ -122,12 +122,14 @@ const sameAtom = (a: Atom, b: Atom) => ('c' in a ? 'c' in b && a.c === b.c : 'k'
  * read through. Returns each element's run, [from, to) of today's atoms, by its piece's index (sourcePieces' k), and how many
  * were read by their characters, with their sources; null where the two differ. `anyOrder`: an element read by its characters
  * holds the run of today's atoms whose characters are its reading's in any order (as many, each as often), `reordered` how many
- * stood in another order
+ * stood in another order. `spaces`: a white space atom inside an element's run (after its first atom, before its reading is
+ * read whole) is no character of it, a word space today's reading set between a formula's pieces; one before or after the run is
+ * the text's, as everywhere outside an element
  */
 function heldRuns(
   flat: readonly V0Piece[],
   atoms: readonly Atom[],
-  anyOrder = false,
+  { anyOrder = false, spaces = false }: { anyOrder?: boolean; spaces?: boolean } = {},
 ): { runs: Map<number, [number, number]>; read: number; bySrc: string[]; reordered: number } | null {
   const runs = new Map<number, [number, number]>()
   const bySrc: string[] = []
@@ -155,6 +157,10 @@ function heldRuns(
     let got = ''
     while (got.length < r.length) {
       const x = atoms[j]
+      if (spaces && got && x && 'c' in x && /\s/.test(x.c)) {
+        j++
+        continue
+      }
       const s = !x ? null : 'c' in x ? x.c : readingOf(x.src)
       if (!s || (!anyOrder && !r.startsWith(got + s))) return null
       got += s
@@ -174,23 +180,25 @@ function heldRuns(
  * elements (rebuild/script-face): heldRuns reads it (every text today's characters, every element today's placeholder of its own
  * source or the run of today's atoms its reading is, in order, all of today's read), at least one element by its characters,
  * and every element so read a formula's run (`$^{…}$`, `$_{…}$`, `$…$`: a script, or a formula holding scripts, TeX set in a
- * text face), never an address. The differential's "its scripts kept as elements" (stage 1a's --baseline, lab/pdf/prepare-back/
- * stated.mjs): the coordinator's ruling of 2026-11-09 accepts such a loss entry by entry, by this check alone
+ * text face), never an address; a word space today's reading set inside an element's run no character of it (the ruling's (d'):
+ * 2610.21377v1's ":=(1/5, 2/5)", today's placeholders round the fractions' digits). The differential's "its scripts kept as
+ * elements" (stage 1a's --baseline, lab/pdf/prepare-back/stated.mjs): the coordinator's ruling of 2026-11-09 accepts such a loss
+ * entry by entry, by this check alone. keptJoin's reading (the parity's) counts every space
  */
 export function scriptsKeptAsElements(flat: readonly V0Piece[], today: Pick<TodayPrepared, 'pieces'>): boolean {
-  const held = heldRuns(flat, atomsOf(today))
+  const held = heldRuns(flat, atomsOf(today), { spaces: true })
   return !!held && held.read > 0 && held.bySrc.every((src) => FORMULA.test(src) && !ADDRESS.test(src))
 }
 
 /**
  * scriptsKeptAsElements with an element's characters read in another order: every element read by its characters holds the
  * run of today's atoms whose characters are its reading's, as many and each as often (a word space today's reading set inside
- * the run is a character too), at least one in another order (a stack TeX set at one x, a fraction's numerator over its
+ * the run no character of it, (d')), at least one in another order (a stack TeX set at one x, a fraction's numerator over its
  * denominator, today read by x, v2 in the stream's order: 2307.16209v1's list of figures), the rest of the unit today's. The
  * differential's "its characters in another order, read as an element" (the coordinator's ruling of 2026-11-09, (d))
  */
 export function scriptsKeptInAnotherOrder(flat: readonly V0Piece[], today: Pick<TodayPrepared, 'pieces'>): boolean {
-  const held = heldRuns(flat, atomsOf(today), true)
+  const held = heldRuns(flat, atomsOf(today), { anyOrder: true, spaces: true })
   return !!held && held.reordered > 0 && held.bySrc.every((src) => FORMULA.test(src) && !ADDRESS.test(src))
 }
 

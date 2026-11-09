@@ -23,8 +23,11 @@ export const CAUSE = Object.freeze({
   names: 'a line of the author block, kept by the names toggle',
   // ((c): today's line whose leading marks are the trail rebuild/front-matter gives the name before, the rest v2's unit)
   trail: "its marks are the name before's trail",
-  // ((e)'s first condition, stated for the coordinator's ruling, not accepted: a unit whose every line v2 now keeps whole as a
-  // block of its kind, no text of it sent; whether those lines are display formulas (its second) is no fact this reads)
+  // ((e): a unit whose every line v2 now keeps whole as a block of its kind, no text of it sent, every one inside a display the
+  // engine states (a display element's box on A of a candidate unit's: TeX's marked compile states the display): accepted)
+  display: "its display lines kept as the original's",
+  // ((e)'s first condition alone, no display the engine states over them (2608.25210v2's address lines; 2608.08481v1's displays
+  // (7), (8), set at the page's foot, no source unit's): stated, not accepted)
   kept: "its lines kept whole as the original's",
   another: 'another reading',
 })
@@ -102,6 +105,15 @@ export function statedOf(base, units, { trails = [] } = {}) {
     !!u.lines?.length &&
     c.lines?.length === u.lines.length &&
     u.lines.every((l) => c.lines.some((k) => sameLine(l, k)))
+  // ((e): the displays the candidate's units state, each element of kind display's boxes on A; a line inside one: on its page,
+  // its extent within the box's, its baseline between the box's bottom and top)
+  const displays = units.flatMap((n) => (n.replaced ? [] : (n.elements ?? []).filter((e) => e.kind === 'display').flatMap((e) => e.segs)))
+  const inside = (l, k) =>
+    k.page === l.page &&
+    k.x0 <= l.x0 + ON &&
+    k.x1 >= l.x1 - ON &&
+    Math.min(k.top, k.bottom) <= l.baseline &&
+    l.baseline <= Math.max(k.top, k.bottom)
   const howOf = (u, c) => {
     if (c.why?.startsWith('content difference')) return c.why
     // (a running head's number of its phrase, which today's took for its folio: "5 of 21" for "of 21", ink-units.mjs phrased)
@@ -112,7 +124,7 @@ export function statedOf(base, units, { trails = [] } = {}) {
     if (/^ink/.test(u.kind) && scriptsKeptAsElements(flatOf(c.pieces), u)) return CAUSE.scripts
     if (/^ink/.test(u.kind) && scriptsKeptInAnotherOrder(flatOf(c.pieces), u)) return CAUSE.orderAsElement
     if (trailOf(u, c)) return CAUSE.trail
-    if (keptWhole(u, c)) return CAUSE.kept
+    if (keptWhole(u, c)) return u.lines.every((l) => displays.some((k) => inside(l, k))) ? CAUSE.display : CAUSE.kept
     return CAUSE.another
   }
   // ((b'): a unit of the author block's (the names class: author, affiliation, inknames) holding every line of today's unit: a

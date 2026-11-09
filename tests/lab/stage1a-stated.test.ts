@@ -47,6 +47,15 @@ describe("an ink unit's scripts kept as elements: read as today's unit, its mark
     expect(scriptsKeptAsElements(flat([text('OPT'), ph('$_{pen}$')]), { pieces: [text('OPTpen')] })).toBe(true)
   })
 
+  it("reads a word space today's reading set inside an element's run as no character (d'), inside the element only", () => {
+    // (2610.21377v1 t533's shape: today's placeholders round the stacked fractions' digits, word spaces before them)
+    const today = { pieces: [text('Set '), ph('$=($'), text(' 51'), ph('$,$'), text(' 25'), ph('$)$'), text(' and')] }
+    expect(scriptsKeptAsElements(flat([text('Set '), ph('$=(51,25)$'), text(' and')]), today)).toBe(true)
+    // (a space before the run is the text's before it, never the element's; and a unit's texts compare whole, white space too)
+    expect(scriptsKeptAsElements(flat([text('x'), ph('$12$')]), { pieces: [text('x 12')] })).toBe(false)
+    expect(scriptsKeptAsElements(flat([text('Ada Lovelace'), ph('$^{1}$')]), { pieces: [text('Ada  Lovelace1')] })).toBe(false)
+  })
+
   it('is no such reading where the texts differ, where no element was read by its characters, or where one read so is an address', () => {
     expect(scriptsKeptAsElements(flat([text('Ada Lovelace'), ph('$^{1}$')]), { pieces: [text('Ada Lovelace2')] })).toBe(false)
     expect(scriptsKeptAsElements(flat([text('Ada Lovelace'), ph('$^{1}$')]), { pieces: [text('Ada Lovelace1 and')] })).toBe(false)
@@ -161,14 +170,29 @@ describe("(d) an ink unit's scripts kept as an element, its characters in anothe
     expect(said(statedOf(base, units))).toEqual([[747, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.orderAsElement}`]])
   })
 
-  it("is no such reading where the characters differ (a word space today's reading set inside the run counts), or none moved", () => {
-    expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$'), text(' (top)')]), { pieces: [text('and '), ph('$s=$'), text(' 21 (top)')] })).toBe(false)
+  it("reads a word space today's reading set inside the run as no character (d'), but no other difference, nor none moved", () => {
+    // (2307.16209v1 t747's shape: "[s=] 21 [,ℓ=] 21 (bottom)" today, "[s=12,ℓ=12] (bottom)" in v2)
+    expect(
+      scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12,l=12$'), text(' (top)')]), {
+        pieces: [text('and '), ph('$s=$'), text(' 21 '), ph('$,l=$'), text(' 21 (top)')],
+      }),
+    ).toBe(true)
     expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$')]), { pieces: [text('and '), ph('$s=$'), text('13')] })).toBe(false)
     expect(scriptsKeptInAnotherOrder(flat([text('and '), ph('$s=12$')]), { pieces: [text('and '), ph('$s=$'), text('12')] })).toBe(false)
   })
 })
 
-describe("(e) a unit whose lines v2 keeps whole as the original's", () => {
+describe("(e) a unit whose lines v2 keeps whole as the original's, inside a display the engine states", () => {
+  it('states one whose kept lines lie inside a display element\'s box of the candidate\'s as its display lines kept', () => {
+    const base = [unit(id('a'), 118, 'inknotes', [text('x = '), ph('$y$')], [107.91, 253.18, 195.57])]
+    const kept = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 253.18, 195.57]), kept: true as const }
+    const para = unit(id('c'), 54, 'para', [text('so that '), ph('\\begin{equation}…')], [72, 300, 700])
+    para.elements = [{ k: 1, kind: 'display', segs: [{ page: 1, x0: 100, x1: 540, baseline: 195.57, top: 230, bottom: 140 }] }]
+    expect(said(statedOf(base, [kept, para]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.display}`]])
+    para.elements = [{ k: 1, kind: 'math', segs: [{ page: 1, x0: 100, x1: 540, baseline: 195.57, top: 230, bottom: 140 }] }]
+    expect(said(statedOf(base, [kept, para]))).toEqual([[118, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
+  })
+
   it('states one whose every line is now a kept block of its kind, its lines today\'s, as its lines kept whole', () => {
     const base = [unit(id('a'), 118, 'inknotes', [text('x = '), ph('$y$')], [107.91, 253.18, 195.57])]
     const kept = { ...unit(id('b'), 141, 'inknotes', [], [107.91, 253.18, 195.57]), kept: true as const }
@@ -184,8 +208,8 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) =>
       new RegExp(e.match).test(cause),
     )
-  it('accepts the ruled causes, and neither another reading nor lines kept whole (their ruling waits on the images)', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement])
+  it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
