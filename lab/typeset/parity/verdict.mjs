@@ -5,6 +5,7 @@
 // absolute bounds. `coverageOf` holds the run to what it asked: every asked pair drawn by this run from the pages v2.mjs laid
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
+import { paintedEntries } from './paint.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -708,6 +709,50 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     hl.wrong++
     fault('v2', 'highlight', `${name}: ${m.r} of ${m.of} drawn lines, ${m.l} of ${m.ofL} original lines outside its sentence boxes`)
     diff('highlight', name, "sentence boxes that miss its drawn lines (right) or its original's (left)", 'covered', { value: both ? 'none' : 'not translated', off: null }, { value: says(m), off: null }, true, 'today')
+  }
+  // (what the highlight fills that is no ink of its unit's text, apart from what it covers: a shape, as each reader paints it as
+  // the pointer lights it (a sentence, or a unit lit whole), over another block: a display (the part's El of kind 'display' on
+  // the page, its own unit's too: the original's ink, kept, the same on both panes and in both drawings), and on arXiv's page
+  // another unit's line too (the same for both sides; as drawn, the neighbours each drawing sets differ, and a pad over a
+  // small one, a figure's tick label, is no fill): counted where the shape holds the block's middle, v2 worse where it fills
+  // more blocks than today. The owner's reports of 2026-11-09: one shape over display (11) and the lines either side of it on both panes
+  // (2602.23285v2 p15), a paragraph over both of its displays (2609.33403v1), where today lights a bar a row and no display;
+  // coverage judged it nearer. Today's shapes are its rectangles (its runs, cut at a display, tile their rows: lighting.mjs
+  // paints one outline a run); v2's paint.mjs paintedEntries, the reader's own rule)
+  const displaysHere = [...facts.values()].flatMap((m) =>
+    (m.els ?? []).filter((e) => e[1] === 'display').flatMap((e) => e[2].map((b) => ({ ord: m.ord, box: [b[0], b[1], b[2], b[3]] }))),
+  )
+  const linesOnA = [...facts.values()].flatMap((m) => origBoxes(m.ord).map((b) => ({ ord: m.ord, box: [b.x0, b.y0, b.x1, b.y1] })))
+  const litOnPane = (side) =>
+    (v2.pages[n]?.members ?? []).filter((m) => !m.lit?.dir).flatMap((m) => [...(m.lit?.[side] ?? []).flat(), ...(m.lit?.own ?? []).flatMap(([, b]) => b)])
+  const others = { left: litOnPane('left'), right: litOnPane('right') }
+  const holdsMiddle = (rects, [x0, y0, x1, y1]) => {
+    const x = (x0 + x1) / 2,
+      y = (y0 + y1) / 2
+    return rects.some((r) => r[0] <= x && x <= r[2] && r[1] <= y && y <= r[3])
+  }
+  /** how many of `blocks` one of a side's shapes holds the middle of */
+  const filled = (shapes, blocks) => blocks.filter((b) => shapes.some((rects) => holdsMiddle(rects, b.box))).length
+  hl.fillsToday = 0
+  hl.fillsV2 = 0
+  for (const key of new Set([...todays, ...V.keys()])) {
+    const ord = ordOfKey.get(key)
+    const lit = laidV2.get(ord)?.lit
+    if (!lit || lit.dir) continue
+    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    const onA = [...displaysHere, ...linesOnA.filter((b) => b.ord !== ord)]
+    const tb = litT.has(key) ? rec.today.litBoxes[key.slice(1)] : null
+    const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
+    const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
+    const dv =
+      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA) +
+      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere)
+    hl.fillsToday += dt
+    hl.fillsV2 += dv
+    if (dt) fault('today', 'highlight', `${name}: its highlight fills ${dt} other blocks (a display, another unit's line)`)
+    if (dv) fault('v2', 'highlight', `${name}: its highlight fills ${dv} other blocks (a display, another unit's line)`)
+    if (dv !== dt)
+      diff('highlight', name, "other blocks its highlight's shapes fill (a display, another unit's line: its middle held), both panes", 0, { value: dt, off: dt }, { value: dv, off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
   }
   // (the highlight's granularity, apart from its coverage: a unit today pairs sentence by sentence paired so by v2, judged on
   // its boxes per sentence, sentences.mjs)
