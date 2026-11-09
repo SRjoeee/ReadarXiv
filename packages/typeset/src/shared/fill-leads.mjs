@@ -165,10 +165,10 @@ function frameLeadsOf(p, bx, lo, hi, laid) {
  * frame or later, its frame before not full at its state): each frame as frameLeadsOf fills it, at a state that holds the share,
  * a frame before the last holding the text before the cut of the frame after it; where it does not at `lo`, the loosest leading
  * closer, down to the original's pitch, at which it does, and no looser; where none does, `lo`. Returns its leadings as
- * frameLeadsOf's, `needs` (by frame before the last that a cut follows: the leading it holds its share at, null where none does)
- * and `lo`; null where the unit's tokens hold no frame's cut. The page fill keeps it where no frame needs a leading under both its
- * fill leading and its page's band (fillPage); every other lay is (i)'s, frameLeadsOf's, the cuts marked `share` read by none
- * (lab option (i)'s frame share, bounded by the band, 2026-11-09)
+ * frameLeadsOf's, `needs` (by frame before the last that a cut follows: the leading it is filled to holding its share, null
+ * where it does not hold it) and `lo`; null where the unit's tokens hold no frame's cut. The page fill keeps it where every such
+ * frame holds its share at or above its page's band floor (fillPage); every other lay is (i)'s, frameLeadsOf's, the cuts marked
+ * `share` read by none (lab option (i)'s frame share, bounded by the band, 2026-11-09)
  */
 function frameShareOf(p, bx, lo, hi, laid) {
   const of = framesOf(p.blocks), n = (of.at(-1) ?? 0) + 1, steps = Math.max(0, Math.ceil((hi - lo) / 0.01 - 1e-9))
@@ -181,7 +181,7 @@ function frameShareOf(p, bx, lo, hi, laid) {
   const holds = (l, fr) => cuts.every(([i, c]) => c !== fr || l.lines.every(x => !(x.from < i) || x.block + base < fr))
   let at = null
   const sets = st => { const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st); return !l.clipped && keepsPages(p.layout.lines, l.lines, p.tokens, true) && (at === null || holds(l, at)) }
-  const leads = p.blocks.map(() => undefined), needs = []
+  const leads = p.blocks.map(() => undefined), shared = [], missed = new Set()
   let last = lo
   const stateAt = () => ({ ...bx, share: 1, lead: last, leads: leads.slice() })
   for (let f = 0; f < n; f++) {
@@ -192,15 +192,15 @@ function frameShareOf(p, bx, lo, hi, laid) {
     const next = of.indexOf(f + 1)
     at = f < n - 1 && cuts.some(([, c]) => c === next + base) ? next + base : null
     if (at !== null) {
+      shared.push(f)
       put(lo)
       if (!sets(stateAt())) {
         const K = Math.ceil((lo - 1) / 0.01 - 1e-9), C = k => (k >= K ? 1 : r3(lo - k * 0.01))
         const found = K > 0 ? closerLead(K, k => { put(C(k)); return sets(stateAt()) ? true : null }, null) : null
         put(found ? C(found.k) : lo)
-        needs.push(found ? C(found.k) : null)
+        if (!found) missed.add(f)
         continue
       }
-      needs.push(lo)
     }
     // (the guess: a frame of one block before the last, its m lines from its first baseline to its last, (m - 1) pitches)
     const bis = of.flatMap((g, bi) => (g === f ? [bi] : [])), b = p.blocks[bis[0]]
@@ -224,6 +224,8 @@ function frameShareOf(p, bx, lo, hi, laid) {
     while (no - ok > 1) { const k = (ok + no) >> 1; put(L(k)); if (sets(stateAt())) ok = k; else no = k }
     put(L(ok))
   }
+  // (each frame a cut follows: the leading it holds its share at, as filled; null where it does not hold it)
+  const needs = shared.map(f => (missed.has(f) ? null : leads[of.indexOf(f)]))
   return { leads, last, needs, lo }
 }
 /**

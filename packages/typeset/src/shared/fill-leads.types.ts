@@ -24,7 +24,7 @@ export type FillUnit = {
   fillShare?: FillShare
 }
 /** a unit's frames at a state that holds the frames' share (frameShareOf): their leadings as fillLeads and lastLead, the
- *  leading each frame before the last holds its share at (null: none does), from the unit's fill leading `lo` */
+ *  leading each frame a cut follows is filled to holding it (null: it does not hold it), and the unit's fill leading `lo` */
 export type FillShare = { leads: (number | undefined)[]; last: number; needs: (number | null)[]; lo: number }
 /** the target's rules the fill leadings read */
 export type FillRules = { fillLead: number | null; fillLeadRel: number | null; leadFloor?: number }

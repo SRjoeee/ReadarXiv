@@ -162,14 +162,12 @@ export function fillPage(
     // the page's size with it, so that neither takes back the room its leading gave)
     // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
     // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
-    // (the frames' share (S.fill.leads frameShareOf) where it costs no frame a leading under both its fill leading and the
-    // page's band, target - band, today's rhythm rule: there each frame holds its share of the lines; else the fit's split,
-    // the share's cuts read by no lay. Lab option (i)'s frame share, bounded by the band (2026-11-09: a share that set two lines
+    // (the frames' share (S.fill.leads frameShareOf) where every frame before the last holds its share at or above the page's
+    // band floor, target - band, today's rhythm rule: there each frame holds its share of the lines; else the fit's split, the
+    // share's cuts read by no lay. Lab option (i)'s frame share, bounded by the band (2026-11-09: a share that set two lines
     // solid at a column's foot, 2610.37668v1-zh p17, read worse than the one line its fit left there))
     const floor = r3(target - band),
-      sh = p.fillShare?.needs.every((v) => v !== null && v >= Math.min(p.fillShare!.lo, floor) - 1e-9)
-        ? p.fillShare
-        : null
+      sh = p.fillShare?.needs.every((v) => v !== null && v >= floor - 1e-9) ? p.fillShare : null
     const top = r3(target + band),
       leads = (sh ? sh.leads : p.fillLeads)?.map((v) => (v === undefined ? v : Math.min(v, top))),
       lead = sh ? Math.min(sh.last, top) : p.lastLead !== undefined ? Math.min(p.lastLead, top) : leadOf(p)
