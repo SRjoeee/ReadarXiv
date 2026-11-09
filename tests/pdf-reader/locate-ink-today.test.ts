@@ -288,6 +288,51 @@ describe('today’s ink makers in the engine package', () => {
     expect(copy[1]!.glyphs.text).toContainEqual([1, 85])
     expect(copy[1]!.glyphs.runs).toEqual([[1, [[1, 107]]]])
   })
+  it('read a unit’s label as its first line’s leading scripts raised over its baseline, whatever their face, and two scripts at a line’s break as two runs', () => {
+    // (2610.40394v1 p1's note "*Equal contribution, †Corresponding authors.": its "*" 7.77 pt on the note's 7.97, raised 0.20 pt, a
+    // script, which today's label rule (under 0.85 of the size, raised over 0.2 of it) did not read as the label; a mark in a math
+    // face, CMSY's ∗, was a placeholder there. And 2610.20030v1 p1's "Matej Krajnc¹" ending a line and "¹Jožef Stefan Institute"
+    // opening the next: TeX sets a script on its line after the atom it belongs to and breaks a formula only after a binary
+    // operation or a relation, so the two marks are two runs, never one placeholder whose ink stands on two lines)
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: '*', x: 72, y: 688.2, size: 9.75 },
+      { s: 'Equal contribution, ', x: 76.875, y: 688 },
+      { s: '†', x: 176.875, y: 691, size: 6, font: 'ABCDEF+CMSY6' },
+      { s: 'Corresponding authors.', x: 179.875, y: 688 },
+      { s: '∗', x: 72, y: 643.6, size: 7, font: 'ABCDEF+CMSY7' },
+      { s: 'Corresponding author', x: 75.5, y: 640 },
+      { s: 'Matej Krajnc', x: 72, y: 600 },
+      { s: '1', x: 132, y: 603.6, size: 7, font: 'ABCDEF+CMR7' },
+      { s: '1', x: 72, y: 591.6, size: 6, font: 'ABCDEF+CMR6' },
+      { s: 'Jozef Stefan Institute', x: 75, y: 588 },
+    ], { points: [['bs1', 16], ['be1', 132]] })
+    type Made = { pieces: { t: string; s?: string; src?: string }[]; glyphs: { text: [number, number][]; label?: [number, number][] } }
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.pieces.some((p) => p.t === 'text' && !/Journal/.test(p.s ?? '')))
+    }
+    // (the pieces' sources in the front end's Latin-1 view of their UTF-8, read back as the adapter reads them)
+    const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? P.unicodeOf(p.s) : p.t === 'ph' ? `<${P.unicodeOf(p.src)}>` : ''))
+    const today = one(TODAY)
+    const copy = one(T as unknown as Impl)
+    expect(today.map(said)).toEqual([
+      ['*Equal contribution, ', '<$†$>', 'Corresponding authors.'],
+      ['<$∗$>', 'Corresponding author'],
+      ['Matej Krajnc1 1Jozef Stefan Institute'],
+    ])
+    expect(today.map((u) => u.glyphs.label)).toEqual([undefined, undefined, undefined])
+    expect(copy.map(said)).toEqual([
+      ['Equal contribution, ', '<$†$>', 'Corresponding authors.'],
+      ['Corresponding author'],
+      ['Matej Krajnc', '<$1$>', ' ', '<$1$>', 'Jozef Stefan Institute'],
+    ])
+    expect(copy.map((u) => u.glyphs.label)).toEqual([[[1, 31]], [[1, 75]], undefined])
+    // (a label's glyphs its text's, as before: claimed and kept where they stand with its line)
+    expect(copy[1]!.glyphs.text).toContainEqual([1, 75])
+  })
   it('keep an e-mail address in an ink unit a run of its own, as the front end keeps one in a source unit’s text (#28)', () => {
     // (2609.36054v2 p1's note "*Correspondence to: <address> and <address>. The views …", its addresses grey: today's said them as
     // text in colour groups the translator never saw, and they came back black. Kept, each is an element whose ink is the
