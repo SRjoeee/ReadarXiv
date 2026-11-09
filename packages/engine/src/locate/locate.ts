@@ -40,6 +40,7 @@ import {
   centredByBlock,
   fakedCaps,
   fillRunsOf,
+  fixedFacesOf,
   type StyleGlyph,
   sourceText,
   styleOf,
@@ -178,6 +179,8 @@ export interface Located {
     bornGlyphs: number
     /** the units made on A by today's rule (ink.ts), where A's pages were given */
     made?: InkStats
+    /** the source units kept as artefacts (rebuild/mono-blocks, Rule 1), and whether the paper's body face is one of one pitch */
+    artefacts?: { units: number; bodyFixed: boolean }
   }
 }
 
@@ -793,6 +796,62 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.els.set(TRAIL, trail)
   }
 
+  // ---- artefacts (rebuild/mono-blocks, Rule 1, a prototype the owner rules on): a unit whose text is set wholly in a face of one
+  // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
+  // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member
+  // fixed); a figure text so set too (ink.ts). Unless the paper's own body face, the face most of its source units' text glyphs
+  // are set in, is one of one pitch: a paper typeset in a typewriter face is translated as any. The pitch is read off the
+  // document's glyphs (facts.ts fixedFacesOf), never a face's name, a macro's or the font's FixedPitch flag. A unit holding a
+  // word of another face (a line of prose naming a function) is none
+  const fixedFaces = fixedFacesOf(inkA.pages.flatMap((pg) => pg.glyphs))
+  const bodyFace = (() => {
+    const n = new Map<string, number>()
+    for (const mem of members) {
+      if (!mem.located || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
+      for (const a of mem.text) {
+        const g = gA(a)
+        if (!isInk(g) || !/\S/.test(g.u)) continue
+        const f = g.font.replace(/^[A-Z]{6}\+/, '')
+        n.set(f, (n.get(f) ?? 0) + 1)
+      }
+    }
+    let best = '',
+      most = 0
+    for (const [f, c] of n)
+      if (c > most) {
+        most = c
+        best = f
+      }
+    return best
+  })()
+  const bodyFixed = fixedFaces.has(bodyFace)
+  const fixedFace = (font: string) => fixedFaces.has(font.replace(/^[A-Z]{6}\+/, ''))
+  const artefact = (text: readonly number[], turned: readonly [number, number][] = []): boolean => {
+    if (bodyFixed) return false
+    let any = false
+    for (const a of text) {
+      const g = gA(a)
+      if (!isInk(g) || !/\S/.test(g.u)) continue
+      if (!fixedFace(g.font)) return false
+      any = true
+    }
+    for (const [p, j] of turned) {
+      const t = inkA.pages[p - 1]?.turned?.[j]
+      if (!t || !/\S/.test(t.u)) continue
+      if (!fixedFaces.has(t.base)) return false
+      any = true
+    }
+    return any
+  }
+  stats.artefacts = { units: 0, bodyFixed }
+  for (const mem of members) {
+    if (!mem.located || mem.fixed || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
+    if (!artefact(mem.text)) continue
+    units[mem.unit] = { ...units[mem.unit]!, kept: true, fixed: true }
+    mem.fixed = true
+    stats.artefacts.units++
+  }
+
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
   // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
@@ -802,7 +861,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf })
+    const { made, stats: st } = inkOf({ ins, inkA, raws: o.pages, m, pageA, owned, classesOf: o.classesOf, artefact })
     for (const x of made) {
       const u = units.length
       units.push(x.unit)

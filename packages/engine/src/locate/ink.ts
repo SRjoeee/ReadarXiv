@@ -71,6 +71,9 @@ export interface InkInput {
   owned: (a: number) => boolean
   /** what the front half reads of an ink unit's pieces (today's classesOf, the instrument adapter's), where it is given */
   classesOf?: ((pieces: TodayPiece[]) => [string, PieceClass][]) | undefined
+  /** whether glyphs (A's, global; a figure text's turned ones by [page, index]) are an artefact: set wholly in a face of one
+   *  pitch where the paper's body face is not one (locate.ts, rebuild/mono-blocks Rule 1); a figure text so set is kept */
+  artefact?: ((text: readonly number[], turned: readonly [number, number][]) => boolean) | undefined
 }
 
 export interface InkStats {
@@ -78,6 +81,8 @@ export interface InkStats {
   kept: number
   figures: number
   glyphs: number
+  /** the figure texts kept as artefacts (InkInput.artefact) */
+  code: number
 }
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
@@ -308,7 +313,11 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
         content,
         figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
-        ...(f.why ? { why: `figure: ${f.why}`, fixed: true as const } : {}),
+        ...(f.why
+          ? { why: `figure: ${f.why}`, fixed: true as const }
+          : o.artefact?.(text, turned)
+            ? { why: 'figure: code', fixed: true as const }
+            : {}),
       },
       text,
       ph: [],
@@ -327,6 +336,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       kept: kept.length,
       figures: fig.units.length,
       glyphs: made.reduce((n, x) => n + x.text.length + x.ph.length, 0),
+      code: made.filter((x) => x.unit.why === 'figure: code').length,
     },
   }
 }

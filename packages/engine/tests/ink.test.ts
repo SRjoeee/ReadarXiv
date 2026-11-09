@@ -274,6 +274,56 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(unit.id).toBe(unitId('inkorphan', unit.content))
   })
 
+  it('keeps a unit and a figure text TeX set wholly in a face of one pitch, where the paper’s body face is not one (mono-blocks, Rule 1)', () => {
+    // (2411.13093v4 p18-19: an LLM prompt, JSON and OCR samples set in Consolas, inside included figures, and 2608.25210v2's prompt
+    // boxes in a typewriter face: translated, their keys and values came back garbled. What TeX or the figure's maker set wholly
+    // in a typewriter face is an artefact the paper shows exactly: kept as the original, as a code environment is. A line of
+    // prose holding a typewriter word is no artefact)
+    const lines = (body: string) => [
+      { text: 'Body text of the paper set here', font: body },
+      { text: 'and more body text in that face', font: body },
+      { text: '{ "ASR": null, "DET": [] }', font: 'ABCDEF+CMTT10' },
+      { text: 'call the model now', font: 'ABCDEF+CMR10' },
+    ]
+    const make = (body: string) => {
+      const B = docOf([{ lines: lines(body) }])
+      const A = docOf([
+        {
+          lines: [
+            ...lines(body),
+            { text: 'request = {', y: 640, form: true, font: 'ABCDEF+CMTT10' },
+            { text: 'Loss curve', y: 620, form: true, font: 'ABCDEF+CMR10' },
+          ],
+        },
+      ])
+      // (a roman face's characters each their own advance, as a proportional face sets them, the body's telling it for the
+      // document; the typewriter's one)
+      for (const D of [A, B])
+        for (const g of D.pages[0]!.glyphs)
+          if (g.font.endsWith('CMR10') && !g.blank && !g.form)
+            g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+      const units = [
+        unitOf('para', 'Body text of the paper set here and more body text in that face'),
+        unitOf('para', '{ "ASR": null, "DET": [] }'),
+        unitOf('para', 'call the model now'),
+      ]
+      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A) })
+    }
+    const L = make('ABCDEF+CMR10')
+    expect(L.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, true, false])
+    expect(L.members.filter((m) => m.unit >= 0 && m.unit < 3).map((m) => m.fixed)).toEqual([false, true, false])
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.fixed])).toEqual([
+      ['request = {', true],
+      ['Loss curve', false],
+    ])
+    expect(L.units[figs[0]!.unit]!.why).toBe('figure: code')
+    // (a paper whose body face is a typewriter's keeps nothing for it: its whole text would stay untranslated)
+    const T = make('ABCDEF+CMTT10')
+    expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
+    expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

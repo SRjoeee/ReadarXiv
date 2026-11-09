@@ -11,6 +11,26 @@ import { isInk, r2 } from './lines.ts'
 // back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
 import * as accents from './today/accents.mjs'
 
+// ---------------------------------------------------------------- a face of one pitch (rebuild/mono-blocks, Rule 1: a prototype)
+/**
+ * The faces a document sets at one pitch, a typewriter's (their PostScript names, the subset tag aside): every character the
+ * document sets in the face one advance at its size, to the thousandth of it (the PDF's width unit), and two distinct letters
+ * among them at least (a face's "i" and "m" share an advance only where it is a typewriter's). Read off the glyphs, never the
+ * font's name nor its FixedPitch flag, which producers state wrong: 2411.13093v4 p19's Consolas subsets, 36 characters at 550
+ * each, one flagged and one not; a CJK subset of one glyph and MSAM10 flagged
+ */
+export function fixedFacesOf(glyphs: Iterable<DocGlyph>): Set<string> {
+  const seen = new Map<string, { letters: Set<string>; advances: Set<number> }>()
+  for (const g of glyphs) {
+    if (!isInk(g) || !/\S/.test(g.u) || g.nu || !(g.size > 0) || !(g.x1 > g.x0)) continue
+    const face = bare(g.font)
+    const e = seen.get(face) ?? seen.set(face, { letters: new Set(), advances: new Set() }).get(face)!
+    if (/\p{L}/u.test(g.u)) e.letters.add(g.u)
+    e.advances.add(Math.round((1000 * (g.x1 - g.x0)) / g.size))
+  }
+  return new Set([...seen].filter(([, e]) => e.letters.size >= 2 && e.advances.size === 1).map(([f]) => f))
+}
+
 // ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
 /** the PostScript name without its subset tag */
 const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
