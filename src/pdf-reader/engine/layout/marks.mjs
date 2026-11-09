@@ -940,6 +940,19 @@ export const POINTS_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
+  // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
+  // env:abstract, env:keywords, env:IEEEkeywords). A class may set the element's heading from a literal of its own, no babel name
+  // (spconf's "ABSTRACT", jmlr's "Abstract"), which the stream alone cannot tell from the author block's own last lines: the
+  // point is the block's end TeX states (packages/engine/src/locate/author-block.ts). Armed at the environment's before hook
+  // (LaTeX's env/<name>/before, run by \\begin before the environment's own code) and set at the start of the next paragraph TeX
+  // begins (para/begin), the element's heading or its text, as a babel name's start in vertical mode waits: never a node of the
+  // main vertical list, where \\lastskip, which \\addvspace reads, and the places to break would move, and from which TeX
+  // takes nothing back (1706.03762v7's \\begin{abstract} after a penalty already on the page: "You can't use \\unpenalty in
+  // vertical mode"). One the environment sets in a box it keeps (elsarticle's \\absbox) is set in that box, where its heading
+  // is; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is disarmed where \\maketitle
+  // runs first. From \\begin{document} on, a count kept in a macro, while the gate is on)
+  '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
   // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
   // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
   // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by

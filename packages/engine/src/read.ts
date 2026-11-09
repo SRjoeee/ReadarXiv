@@ -285,6 +285,7 @@ function marksOf(ink: PageInk): { marks?: DocMarks } {
   const paraEnds = (ink.paraEnds ?? []).map((x) => ({ ...lower(x), point: x.point, para: x.para }))
   const regions = (ink.regions ?? []).map((r) => ({ kind: r.kind, from: r.from, to: r.to }))
   const pictures = (ink.pictures ?? []).map(lower)
-  if (!paras.length && !paraEnds.length && !regions.length && !pictures.length) return {}
-  return { marks: { paras, paraEnds, regions, pictures } }
+  const fronts = (ink.fronts ?? []).map(lower)
+  if (!paras.length && !paraEnds.length && !regions.length && !pictures.length && !fronts.length) return {}
+  return { marks: { paras, paraEnds, regions, pictures, ...(fronts.length ? { fronts } : {}) } }
 }

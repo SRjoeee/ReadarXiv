@@ -678,6 +678,18 @@ describe('LAYOUT_TEX', () => {
     for (const arg of args) expect(MARK_NAME.test(arg), arg).toBe(true)
     for (const key of NAME_KEYS) expect(key, key).toMatch(/^[a-z]{1,16}$/)
   })
+  it('LAYOUT_TEX sets a point where TeX begins a front matter environment, the author block\'s end (2610.20967v1)', () => {
+    // (`fm<n>`: armed at the environment's before hook from \begin{document} on, set at the start of the next paragraph TeX
+    // begins, never a node of the main vertical list, from which TeX takes nothing back and whose \lastskip \addvspace reads
+    // (1706.03762v7: "You can't use \unpenalty in vertical mode"); disarmed where \maketitle runs first: an abstract a class keeps
+    // for its title block)
+    for (const env of ['abstract', 'keywords', 'IEEEkeywords'])
+      expect(POINTS_TEX).toContain(`\\AddToHook{env/${env}/before}{\\axt@fmarm}`)
+    expect(POINTS_TEX).toContain('\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}')
+    expect(POINTS_TEX).toContain('\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}')
+    expect(POINTS_TEX).not.toContain('\\axt@point{fm\\axt@fm}\\axt@vback')
+  })
   it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
     // a rendering intent named after the destination, in each engine's literal; none in DVI
     expect(POINTS_TEX).toContain('\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}')

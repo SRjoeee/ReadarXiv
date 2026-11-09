@@ -5891,7 +5891,11 @@ affiliations, institutions, addresses and e-mail line, translated together or th
 affiliations"; the key `names` and its default, off, kept, so that by default the whole block is the original's). The toggle
 moves no version: a unit's class is the reader's, read from the kind the bundle carries (`UNIT_CLASS`), so a paper prepared
 before it is read so as it is; every class was already translated whatever the toggles say. What moves PIPELINE 39 is the
-block's units, below: whatever TeX sets an author block in, its units are the block's.
+block's units, below: whatever TeX sets an author block in, its units are the block's. And of 2026-11-09: the toggle governs the
+author block under the title, the whole of it, and affects nothing else: what a class prints from the author data elsewhere
+(acmart's reference format, a running head, amsart's addresses at the paper's end, an author's biography) is ordinary text of
+no toggle, and everything under the title that is the block's (its connectors, its notes, its correspondence and e-mail
+lines) follows it, the original's with it off, translated with it on (the author block under the title, below).
 
 - **Entries are units, each whole** (`source/latex-front.mjs` `bibliography`; PIPELINE 29, and PIPELINE 30 one unit an entry). The
   ground truth is the bibliography's TeX the compile reads: the paper's `thebibliography`, or the job's `.bbl` where
@@ -6040,8 +6044,8 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   title sets the names and places in, are places; their glyphs on the title box's fill had been figure texts, translated with the
   block off, each run laid at its own anchor. What the title sets in another group is none: taking all it sets made a venue's
   line, a licence and a teaser's caption places (2610.22214v1, 2402.10294v1, egpubl's 2610.30875v1), and so the class's
-  `\correspondence`, which its title sets after the abstract in the metadata's group with `\date`, is no unit and stays figure
-  texts: classing it with the block needs a fact TeX does not state (its e-mail, its name an author's). Its units are numbered after every other
+  `\correspondence`, which its title sets after the abstract in the metadata's group with `\date`, is no unit: the author block
+  under the title (below) takes its line, the title being drawn in the tcolorbox it is drawn in. Its units are numbered after every other
   unit but before the entries (`last`): numbered after the entries, the unit stood where a bibliography BibTeX makes in the
   first pass is appended, and `madeBibliography`, which holds every unit before the entries as it was, kept the bibliography as
   none. Over the 88 papers 2610.20967v1 alone moves (one unit, kind author, no other unit's number); over the 190 sources on disk
@@ -6067,6 +6071,54 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   taken their lines gone. A body a `.sty` or a `.cls` defines is no unit (jcappub's `\maketitle` and `\@fpheader`: the class's own code,
   "! ! ! ! Abstract. ! ! Keywords:", translated for nothing): its text is the class's, the ledger's, an ink unit where it is
   one.
+- **The author block under the title, whole, and nothing else** (`packages/engine/src/locate/author-block.ts`, `ink.ts`
+  `nameBlock`, `locate.ts` `TEXT_NAMES`; the owner's ruling of 2026-11-09 on staging's round 7: 2604.14228v3 p1's correspondence
+  line and 2610.22065v1 p1's second affiliation and its notes translated with the block off, the "AND" between 2610.21106v1's
+  names drawn in the target's word, and acmart's reference format, which the class prints from the same `\author` data, following the names
+  toggle). Read off TeX's stream on arXiv's page (A's glyphs in their content stream's order) by the source units that own its
+  glyphs: after the title, the block opens at its first name or place (a unit of kind author or affiliation, or an ink unit rule 8
+  made of the names) and runs through what TeX sets between and after them until TeX sets a unit of another kind (the abstract,
+  its babel name, a date of the source, a keyword list, the body), less that unit's run-in label (the glyphs before it on its first
+  line, MR 5's baseline test: JCAP's "Abstract."); where a graphic no unit owns (an image, a rule, a form's or a picture's text)
+  stands between the block's last name or place and that unit, the block ends there (egpubl's teaser and its caption, elsarticle's
+  `\hrule` over its abstract's heading), a graphic followed by more of the block being the block's (2610.19159v1's GitHub icon
+  before its places' links); and where TeX begins a front matter environment that is no author's (the abstract, the keywords,
+  IEEEtran's index terms: the marked compile's point `fm<n>` at the environment's before hook, `layout/marks.mjs` POINTS_TEX),
+  the block ends there, so that a heading a class sets for that element from a literal of its own on a line of its own, no babel
+  name (spconf's "ABSTRACT", 2610.20967v1; jmlr's "Abstract", 2610.21201v1), is the element's: the stream alone cannot tell it
+  from the block's own last lines (22065's notes, JCAP's e-mail line), TeX can. The point is armed at the environment's
+  before hook from `\begin{document}` on and set at the start of the next paragraph TeX begins (para/begin: the element's
+  heading or its text), as a babel name's start in vertical mode waits: never a node of the main vertical list, whose
+  `\lastskip` `\addvspace` reads and from which TeX takes nothing back (1706.03762v7's `\begin{abstract}` after a penalty
+  already on the page: "You can't use `\unpenalty` in vertical mode", tried first), so that every position is as before
+  (stage 1a's glyph proofs over the 92 papers below); one an environment sets in a box it keeps (elsarticle's `\absbox`) is set
+  in that box, before its heading; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is
+  disarmed where `\maketitle` runs first. A subtitle before the names is the title's. Where the title is drawn inside a pgf picture (a framed
+  title box: 2604.14228v3's and alta's tcolorbox), the block is the rest of that picture, the frame TeX states its end, every unit
+  inside keeping its kind and its run-in label (alta's "Abstract.", "Keywords:"). Its ink (the glyphs no unit owns in it, no
+  figure's) is cut into ink units as before and each all of whose glyphs are the block's is of the names (`inknames`), a note's,
+  an orphan's or a figure text's (the framed box's glyphs are kept from the figure texts) as much as one rule 8 named; an ink unit
+  rule 8 named outside it is its ledger line's class again (orphan or notes: acmart's reference format, the names of IEEE's
+  biographies); a source unit of the block's kinds placed outside it is a member of kind `textnames`, of no toggle (the reader's
+  and the content classes' tables name it nowhere: always translated), its unit's kind and id unchanged. Where no title is
+  located, nothing moves. Why the stream and not the box `\maketitle` sets: acmart's `\maketitle` sets the title box (title,
+  names, teaser), then the author notes, the authors' addresses and the permission block as footnote inserts, then the abstract,
+  CCS Concepts, the keywords and the ACM Reference Format; REVTeX's sets the abstract and the PACS line; elsarticle's and cas's the
+  abstract and the keywords: what a class puts in its title macro is its own choice, and the block is the one run of it after the
+  title that TeX sets from the author data, in every class of the 88 (LaTeX's `\@author` in a tabular, IEEEtran's blocks, amsart's
+  `\andify`, REVTeX's lists, llncs's institutes, acmart's `\@mkauthors` and a paper's literal override of it, a class's own lists).
+  Over the 88 papers (stage 1a against round 7's), 26 move, no unit's text and no
+  source unit's number: 35 ink units made the names' in the block (the "and" or "AND" between names in 17 papers; the places and
+  notes no unit is of 2402.10294v1, 2610.22065v1 and 2610.21201v1, 11; JCAP's e-mail line; 6 date lines; the 2 class headings
+  the stream took first given back by the front matter environment's point, which over the 92 papers moves those two alone,
+  every glyph proof as before, the TeX gate's 96 documents compiling to the same PDFs); 18
+  units of the block's kinds set elsewhere `textnames` (2610.22065v1's 8 names in its reference format, amsart's addresses at the
+  paper's end in 2610.20581v1, 2610.21037v1 and 2610.21884v1); 5 ink units of the names set elsewhere the text they are
+  (2610.21106v1's addresses at its end, 2610.30034v1's three biographies' names); alta's e-mail line, inside its title box, no
+  figure text (a kept block: an address alone). 2604.14228v3's correspondence line is one ink unit of the names, its three figure
+  texts gone. A date line TeX sets under the names (REVTeX's "(Dated: …)", `\today`) is the block's, by the owner's
+  positional rule (the coordinator's call of 2026-11-10). A title block with no author command and no name rule 8 reads
+  (2610.30854v1's `\MakeJointTitle`) has none.
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
@@ -6080,11 +6132,11 @@ block's units, below: whatever TeX sets an author block in, its units are the bl
   who had left it off sees them the original's). The ledger (layout/ledger.mjs) counts a place's glyphs under `names` in a base
   made since (they were `body`'s): diagnostic counts, which no reader, gate or sweep holds to a class. The face waves ask no slice
   of a unit the toggles hide (view/layer-side.mjs `shownNow`, warm.mjs `firstPageUnits` `shown`): the first page's wave asked the
-  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit
-  (layout/ink-units.mjs rule 8 reads an author unit's words alone), stays always translated: classing it as names is the maker's
-  change, with a PIPELINE of its own, not yet made. A paper whose own style sets its title block from macros of its own, no
-  `\author` at all (2610.30854v1's `\MakeJointTitle` in its `.sty`, from `\PaperAuthors` and `\PaperAffiliations`), has no
-  author unit: its lines are ink notes, always translated, which no rule over the block's words can reach. Next.
+  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit, is the
+  names' where it stands in the author block under the title (above, 2026-11-09). A paper whose own style sets its title block
+  from macros of its own, no `\author` at all (2610.30854v1's `\MakeJointTitle` in its `.sty`, from `\PaperAuthors` and
+  `\PaperAffiliations`), has no author unit: its lines are ink notes, always translated, which no rule over the block's words can
+  reach. Next.
 - **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
   over the local sources), against `next` 2346530d:
   - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):

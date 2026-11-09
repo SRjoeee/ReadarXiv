@@ -91,6 +91,8 @@ export type PageInk = {
   boxAt: number[]
   paras: InkPoint[]
   paraEnds?: (InkPoint & { point: number; para: number })[]
+  /** where TeX begins a front matter environment no author's (`fm<n>`, ink.mjs FRONT_POINT): the author block's end */
+  fronts?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
   shows?: number
