@@ -595,6 +595,29 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.flows.find((f) => f.includes(tail.ord))).toEqual([0, tail.ord])
     expect(tail.join).toEqual([2])
   })
+  it('sets a unit made on A in a flow as TeX set the paragraph its marked members state (2610.21106v1’s "AND" between two centred names)', () => {
+    // (amsart centres its authors' names, "A AND B", the AND no unit's, made on A justified by default: run on from the first
+    // name's translated end, it left the hole before the second, which stays centred on its own original (a centred follower is
+    // never laid from the one before's end): the parity's gap 36.11 pt where TeX set 3.32, round 6 22.47)
+    const { B, A } = pair({
+      lines: [
+        { text: 'Alice Smith', x: 200, y: 700 },
+        { text: 'AND', x: 200 + 11 * 6 + 3, y: 700 },
+        { text: 'Bob Jones', x: 200 + 11 * 6 + 3 + 3 * 6 + 3, y: 700 },
+        { text: 'Body text here', y: 676 },
+      ],
+      points: [
+        ['bs1', 0],
+        ['be1', 11 + 3 + 9 + 14],
+      ],
+    })
+    const c = (s: string): InstrumentUnit => ({ ...unitOf('author', s), align: 'c' })
+    const ins = instrumentOf(B, [c('Alice Smith'), c('Bob Jones'), unitOf('para', 'Body text here')], [[0, -1, 1, 2]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const and = L.members.find((m) => m.kind === 'inkorphan')!
+    expect(L.flows.find((f) => f.includes(and.ord))).toEqual([0, and.ord, 1])
+    expect(and.align).toBe('c')
+  })
   it('flows no unit made on A into the next where a paragraph end of TeX’s stands between them, nor one on another row', () => {
     const spec = (y: number) => ({
       lines: [
