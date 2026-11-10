@@ -21,19 +21,19 @@ type Glyph = {
 }
 /** a line's glyphs from x at size 10 on baseline y, each its own advance (a proportional face: 5 to 7 pt; one of one pitch: 6;
  *  a space 3, a word's) */
-function glyphsOf(text: string, x: number, y: number, font: string): Glyph[] {
+function glyphsOf(text: string, x: number, y: number, font: string, size = 10): Glyph[] {
   const out: Glyph[] = []
   for (const u of text) {
-    const w = u === ' ' ? 3 : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)
+    const w = ((u === ' ' ? 3 : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)) * size) / 10
     out.push({
       u,
       font,
-      size: 10,
+      size,
       x0: x,
       x1: x + w,
       y,
-      top: y + 7,
-      bottom: y - 2,
+      top: y + 0.7 * size,
+      bottom: y - 0.2 * size,
       ix0: x,
       ix1: x + w,
       form: true,
@@ -45,7 +45,10 @@ function glyphsOf(text: string, x: number, y: number, font: string): Glyph[] {
   return out
 }
 /** a page of glyph lines, each line's runs (its glyphs' ranges) figure units by k; `boxes` [x0, y0, x1, y1] each */
-function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }[][], boxes: number[][] = []) {
+function pageOf(
+  parts: { text: string; font: string; run?: boolean; x?: number; size?: number; dy?: number }[][],
+  boxes: number[][] = [],
+) {
   const glyphs: Glyph[] = []
   const units: TodayFigures['units'] = []
   const map = new Map<number, number>()
@@ -53,7 +56,7 @@ function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }
     let x = 72
     const y = 700 - 14 * li
     for (const p of line) {
-      const gs = glyphsOf(p.text, p.x ?? x, y, p.font)
+      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size)
       const k = units.length
       if (p.run !== false) {
         units.push({
@@ -61,7 +64,7 @@ function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }
           text: p.text.trim(),
           why: null,
           x: gs[0]!.x0,
-          y,
+          y: y + (p.dy ?? 0),
           length: gs.at(-1)!.x1 - gs[0]!.x0,
           anchor: 'start',
           before: 20,
@@ -440,5 +443,71 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(t!.why).toBeNull()
     expect(t!.els[0]).toMatchObject({ kind: 'code', boxes: [0] })
     expect(t!.els[1]).toMatchObject({ kind: 'cite', boxes: [1] })
+  })
+})
+
+describe('figure-lines: F1, a formula in a figure is an element, never sent (the owner’s ruling of 2026-11-10)', () => {
+  it('keeps a line that is a formula whole, its upright face one the document sets no word of apart from a formula (2609.19644v1 p37)', () => {
+    // ("P" in KaTeX's math italic, no run of today's; "Mah" its subscript in KaTeX_Main, smaller and lower; " = 0.5" after it)
+    const { page, fig } = pageOf([
+      [
+        { text: 'P', font: 'KaTeX_Math-Italic', run: false },
+        { text: 'Mah', font: 'KaTeX_Main-Regular', size: 7, dy: -1.5 },
+        { text: ' = 0.5', font: 'KaTeX_Main-Regular' },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.why).toBe('formula')
+  })
+  it('makes each formula of a line with words an element `math`: "x and y" in the body face, a letter in a math face', () => {
+    const { page, fig } = pageOf([
+      [
+        { text: 'x', font: 'CMMI10', run: false },
+        { text: ' and ', font: 'CMR10' },
+        { text: 'y', font: 'CMMI10', run: false },
+      ],
+    ])
+    // (CMR10 the face the paper's source units set their text in: no formula's own face)
+    const [t] = figureLinesOf([page], fig, () => false, null, new Set(['CMR10']))
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['el', 'text', 'el'])
+    expect(t!.els.map((e) => e.kind)).toEqual(['math', 'math'])
+  })
+  it('takes a script word that touches its base into the formula, an operator and a number a word space after it too', () => {
+    // ("x" math italic, "base" its \\text subscript in the roman face, then " = 3 for the loss")
+    const { page, fig } = pageOf([
+      [
+        { text: 'x', font: 'CMMI10', run: false },
+        { text: 'base', font: 'CMR7', size: 7, dy: -1.5 },
+        { text: ' = 3 for the loss', font: 'CMR10' },
+      ],
+    ])
+    const [t] = figureLinesOf([page], fig, () => false, null, new Set(['CMR10']))
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.els).toHaveLength(1)
+    const G = page.glyphs as Glyph[]
+    expect(t!.els[0]!.glyphs.map((g) => G[g]!.u).join('')).toBe('xbase=3')
+  })
+  it('reads a number’s sign and ASCII marks in a text face as no formula: "−1.04", "<task-root>/"', () => {
+    for (const text of ['gain −1.04 on it', 'open <task-root>/ now']) {
+      const { page, fig } = pageOf([[{ text, font: 'Helvetica' }]])
+      expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+  })
+  it('reads an upright face the document sets a word of apart from any formula as text: its words translated', () => {
+    // (KaTeX_Main also sets a label of its own, no formula on its line: a text face; "arg min" a word before the formula)
+    const { page, fig } = pageOf([
+      [
+        { text: 'arg min ', font: 'KaTeX_Main-Regular' },
+        { text: 'x', font: 'KaTeX_Math-Italic', run: false },
+      ],
+      [{ text: 'Legend', font: 'KaTeX_Main-Regular' }],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
   })
 })

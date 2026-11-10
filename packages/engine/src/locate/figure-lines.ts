@@ -16,6 +16,7 @@ import {
   type TodayPage,
   type TodayShape,
 } from './today/today.types.ts'
+import { classifyFont } from './facts.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
 interface G {
@@ -43,17 +44,18 @@ export interface FigureText {
   page: number
   /** its pieces in its line's order: text (its glyphs on its page, by index) or an element (`els`' index) */
   order: ({ t: 'text'; glyphs: number[] } | { t: 'el'; i: number })[]
-  /** its elements: `code` (a run of one pitch), `cite` (a stretch a decoration holds, a letter in it), `ref` (one with none); each
-   *  its glyphs and its boxes (a decoration's, a ground's) on its page */
-  els: { kind: 'code' | 'cite' | 'ref'; glyphs: number[]; boxes: number[] }[]
+  /** its elements: `code` (a run of one pitch), `math` (a formula, F1), `cite` (a stretch a decoration holds, a letter in it),
+   *  `ref` (one with none); each its glyphs and its boxes (a decoration's, a ground's) on its page */
+  els: { kind: 'code' | 'math' | 'cite' | 'ref'; glyphs: number[]; boxes: number[] }[]
   /** glyphs no run held that it takes (a comma between two addresses, a digit): its text's */
   claimed: number[]
   /** a doubled copy of its glyphs (a glyph of one of its characters over one of them): hidden with its text */
   copies: number[]
   /** boxes decorating the whole of it (a rule under all of it): hidden with its text */
   textBoxes: number[]
-  /** why its ink stays: crowded (unrelated ink its band meets), code (a line of code, kept whole), or null */
-  why: 'crowded' | 'code' | null
+  /** why its ink stays: crowded (unrelated ink its band meets), code (a line of code, kept whole), formula (a line no word of
+   *  which stands outside its formulas, kept whole, F1), or null */
+  why: 'crowded' | 'code' | 'formula' | null
   /** a closed shape round all of it: its room's edges over and under its baseline (PDF units up and down from it) */
   container: { over: number; under: number } | null
   /** the depth under its baseline of the stroke under its text (roomOf's `under`) */
@@ -83,16 +85,19 @@ interface Line {
  * The figure texts of a document's pages that its printed lines make anew (F0's lines, the lines of code) or whose crowding the
  * relation reading judges otherwise than today's reading: each with its runs (`ks`); a run of no such text stays as today's
  * reading made it. `owned(p, g)`: whether a glyph is a unit's or a block's (no figure's text). `fixed`: the faces the document
- * sets at one pitch where Rule 1 keeps such text (none: no line is read for F0)
+ * sets at one pitch where Rule 1 keeps such text (none: no line is read for F0). `textFaces`: the faces the document's source
+ * units set their text in (none read: no face is a formula's own by them, F1)
  */
 export function figureLinesOf(
   pages: readonly TodayPage[],
   fig: TodayFigures,
   owned: (p: number, g: number) => boolean,
   fixed: ReadonlySet<string> | null,
+  textFaces: ReadonlySet<string> | null = null,
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
+  const built: { p: number; glyphs: G[]; runOf: Map<number, number[]>; lines: Line[] }[] = []
   pages.forEach((pg, pi) => {
     const p = pi + 1
     const glyphs = (pg.glyphs ?? []) as G[]
@@ -179,9 +184,17 @@ export function figureLinesOf(
         again = true
       }
     }
-    // ---- each line read: its glyphs' roles, F (a face of one pitch) or T, in its order; its text F0's or code's
+    built.push({ p, glyphs, runOf, lines })
+  })
+  // ---- F1: a script set beside a formula's glyph is its formula's line; then the faces that are a formula's own (fact 3)
+  for (const b of built) scriptsJoined(b.lines, b.glyphs)
+  const formulaFaces = formulaFacesOf(built, textFaces, pitch)
+  const math = (g: G) => mathGlyph(g) || formulaFaces.has(bare(g.font))
+  for (const { p, glyphs, runOf, lines } of built) {
+    // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order; its text F0's, code's
+    // or a formula's
     for (const l of lines) {
-      const ft = readLine(l, glyphs, pitch)
+      const ft = readLine(l, glyphs, pitch, math)
       // (a tone under a text kept whole, a line of code or a run wholly of one pitch (Rule 1), is nothing to it: the text is the
       // original's, its tones with it)
       const tones = (keep: boolean) => (it: TodayMet) => !(keep && 'ground' in it && it.ground)
@@ -222,8 +235,81 @@ export function figureLinesOf(
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
       }
     }
-  })
+  }
   return out
+}
+
+/** (1) a mathematical character outside ASCII (a math symbol, Sm; a Greek letter; a mathematical alphanumeric, U+1D400-1D7FF; a
+ *  letter of the letterlike block, U+2100-214F); ASCII's + < = > | ~ count only in a math face (2) */
+const MATH_CHAR = /[\p{Sm}\p{Script=Greek}\u{1D400}-\u{1D7FF}]/u
+const isMathChar = (u: string) =>
+  ![...u].every((c) => c.codePointAt(0)! < 0x80) &&
+  (MATH_CHAR.test(u) ||
+    [...u].some((c) => c.codePointAt(0)! >= 0x2100 && c.codePointAt(0)! <= 0x214f && LETTER.test(c)))
+/** a glyph of a formula by facts (1) and (2): its character a mathematical one, or its face a math face by its name
+ *  (classifyFont's `math`: CMMI, CMSY, KaTeX_Math …; a math italic letter's Unicode is the plain letter, so the name is read) */
+function mathGlyph(g: G): boolean {
+  return classifyFont(g.font).fam === 'math' || isMathChar(g.u)
+}
+
+/** F1: a line's scripts. A line smaller than another (its size 0.9 of it at most), off its baseline by less than half its size
+ *  but more than a baseline's tolerance (RUN_DY), within the run gap of its extent, one of the two holding a formula's glyph by
+ *  facts (1) and (2): a script, a subscript word (\text{base}, "Mah" under KaTeX's P), joined to that line */
+function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
+  for (let again = true; again; ) {
+    again = false
+    for (let i = 0; i < lines.length && !again; i++)
+      for (let j = 0; j < lines.length && !again; j++) {
+        const a = lines[i]!,
+          b = lines[j]!
+        if (i === j || a.fig !== b.fig || b.size > 0.9 * a.size) continue
+        const dy = Math.abs(b.y - a.y)
+        if (dy > 0.5 * a.size || dy <= RUN_DY * a.size) continue
+        if (b.x0 > a.x1 + RUN_GAP * a.size || b.x1 < a.x0 - RUN_GAP * a.size) continue
+        if (![...a.gs, ...b.gs].some((g) => mathGlyph(glyphs[g]!))) continue
+        // (its runs in the line's order: the one nearer its start first)
+        const [l, r] = a.x0 <= b.x0 ? [a, b] : [b, a]
+        lines[i] = lineOf([...l.ks, ...r.ks], [...a.gs, ...b.gs], new Set([...a.free, ...b.free]), glyphs, a.fig)
+        lines.splice(j, 1)
+        again = true
+      }
+  }
+}
+
+/** (3) the faces that are a formula's own upright face: a face no math one by its name nor of one pitch, which the document's source
+ *  units set no text in (`textFaces`) and no figure's line sets a word in (two letters on end) without a glyph of a formula by facts
+ *  (1) and (2) on it: KaTeX_Main's "arg min", "log det", "Mah" beside KaTeX's math italic */
+function formulaFacesOf(
+  built: readonly { glyphs: G[]; lines: Line[] }[],
+  textFaces: ReadonlySet<string> | null,
+  pitch: (g: G) => boolean,
+): Set<string> {
+  const seen = new Set<string>()
+  const apart = new Set<string>()
+  for (const { glyphs, lines } of built)
+    for (const l of lines) {
+      const gs = l.gs.filter((g) => real(glyphs[g]))
+      const withMath = gs.some((g, i) => mathGlyph(glyphs[g]!) && !signed(gs, i, glyphs))
+      for (let i = 0; i < gs.length; i++) {
+        const g = glyphs[gs[i]!]!
+        const f = bare(g.font)
+        if (classifyFont(g.font).fam === 'math' || pitch(g)) continue
+        // (seen beside a formula: a face only a figure's numbers or words apart from formulas set is none)
+        if (withMath) seen.add(f)
+        // (a word of its face: this letter and the next, one face, no word space between)
+        const h = glyphs[gs[i + 1]!]
+        if (
+          !withMath &&
+          h &&
+          bare(h.font) === f &&
+          LETTER.test(g.u) &&
+          LETTER.test(h.u) &&
+          h.x0 - g.x1 < SPACE_GAP * Math.min(g.size, h.size)
+        )
+          apart.add(f)
+      }
+    }
+  return new Set([...seen].filter((f) => !apart.has(f) && !textFaces?.has(f)))
 }
 
 function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly G[], fig: string): Line {
@@ -246,6 +332,56 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
   }
 }
 
+/** a sign − ± ∓ right before a digit, no word space between: a number's, no formula's ("−1.04") */
+function signed(gs: readonly number[], i: number, glyphs: readonly G[]): boolean {
+  const g = glyphs[gs[i]!]!,
+    h = glyphs[gs[i + 1]!]
+  return /^[−±∓]$/u.test(g.u) && !!h && /\p{N}/u.test(h.u) && h.x0 - g.x1 < SPACE_GAP * g.size
+}
+
+/** F1: which of a line's glyphs (in its order) are a formula's. A cluster is glyphs no word space apart (SPACE_GAP); one holding
+ *  a formula's glyph (`math`: facts (1), (2), (3)) is a formula, a sign − ± ∓ right before a digit a number's, no formula's; a
+ *  formula takes the clusters beside it within the run gap that hold a formula's glyph or no letter (an operator, a number, a
+ *  bracket: "x = 3"), never a word ("x and y" two formulas) */
+function formulaOf(gs: readonly number[], glyphs: readonly G[], math: (g: G) => boolean): boolean[] {
+  const clusters: number[][] = []
+  let end = -Infinity
+  gs.forEach((g, i) => {
+    const x = glyphs[g]!
+    if (!clusters.length || x.x0 - end >= SPACE_GAP * x.size) clusters.push([i])
+    else clusters.at(-1)!.push(i)
+    end = Math.max(clusters.at(-1)!.length > 1 ? end : -Infinity, x.x1)
+  })
+  const isMath = clusters.map((c) => c.some((i) => math(glyphs[gs[i]!]!) && !signed(gs, i, glyphs)))
+  const noLetter = clusters.map((c) => !c.some((i) => LETTER.test(glyphs[gs[i]!]!.u)))
+  const inF = [...isMath]
+  const gap = (a: number[], b: number[]) => {
+    const x = glyphs[gs[a.at(-1)!]!]!,
+      y = glyphs[gs[b[0]!]!]!
+    return { d: y.x0 - Math.max(...a.map((i) => glyphs[gs[i]!]!.x1)), size: Math.max(x.size, y.size) }
+  }
+  for (let again = true; again; ) {
+    again = false
+    for (let c = 0; c < clusters.length; c++) {
+      if (!inF[c]) continue
+      for (const n of [c - 1, c + 1]) {
+        if (n < 0 || n >= clusters.length || inF[n] || !(isMath[n] || noLetter[n])) continue
+        const [a, b] = n < c ? [clusters[n]!, clusters[c]!] : [clusters[c]!, clusters[n]!]
+        const { d, size } = gap(a, b)
+        if (d < RUN_GAP * size) {
+          inF[n] = true
+          again = true
+        }
+      }
+    }
+  }
+  const out = new Array<boolean>(gs.length).fill(false)
+  clusters.forEach((c, k) => {
+    if (inF[k]) for (const i of c) out[i] = true
+  })
+  return out
+}
+
 /**
  * A line's figure text where it is one of F0's or a line of code, else null. Its glyphs' roles in its order: F (a face of one
  * pitch) or T; a stretch of T that spells a word is the line's text; one standing between F glyphs right before and right after
@@ -253,24 +389,25 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
  * Consolas line); else each stretch of F an element `code`. The glyphs no run holds before its first run's (an icon TeX set
  * before the first word) are none of it, as today's reading leaves them
  */
-function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): FigureText | null {
-  if (l.ks.length < 2 && !l.free.size) {
-    // (one run alone: F0 has nothing to join)
-    return null
-  }
+function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: (g: G) => boolean): FigureText | null {
   // (the glyphs no run holds before its first run's: the text's where each abuts the glyph after it, no word space between (an
-  // opening bracket, a code line's opening quote); from one standing a word space apart back, an icon TeX set before the first
-  // word, none of it)
+  // opening bracket, a code line's opening quote), or is a formula's; from one standing a word space apart back, an icon TeX
+  // set before the first word, none of it)
   let first = l.gs.findIndex((g) => !l.free.has(g))
   while (first > 0) {
     const a = glyphs[l.gs[first - 1]!]!,
       b = glyphs[l.gs[first]!]!
-    if (b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size)) break
+    if (b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size) && !math(a)) break
     first--
   }
   const gs = l.gs.slice(first)
-  const role = gs.map((g) => (pitch(glyphs[g]!) ? 'F' : 'T'))
-  if (!role.includes('F')) return null
+  const formula = formulaOf(gs, glyphs, math)
+  if (l.ks.length < 2 && !l.free.size && !formula.some(Boolean)) {
+    // (one run alone and no formula in it: F0 has nothing to join)
+    return null
+  }
+  const role = gs.map((g, i) => (formula[i] ? 'M' : pitch(glyphs[g]!) ? 'F' : 'T'))
+  if (!role.includes('F') && !role.includes('M')) return null
   const stretches: { r: string; gs: number[] }[] = []
   gs.forEach((g, i) => {
     const s = stretches.at(-1)
@@ -278,6 +415,20 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
     else stretches.push({ r: role[i]!, gs: [g] })
   })
   const words = stretches.filter((s) => s.r === 'T' && WORD.test(textOf(s.gs, glyphs).normalize('NFKC')))
+  // (F1: a line no word of which stands outside its formulas is kept whole, as today's runs of a math face are)
+  if (!words.length && role.includes('M'))
+    return {
+      ks: [...l.ks],
+      page: 0,
+      order: [{ t: 'text', glyphs: gs }],
+      els: [],
+      claimed: gs.filter((g) => l.free.has(g)),
+      copies: [],
+      textBoxes: [],
+      why: 'formula',
+      container: null,
+      under: null,
+    }
   if (!words.length) return null
   const code = words.every((s) => {
     const i = stretches.indexOf(s)
@@ -292,7 +443,7 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
     if (last && last.r === r) last.gs.push(...st.gs)
     else pieces.push({ r, gs: [...st.gs] })
   }
-  if (!code && !pieces.some((st) => st.r === 'F')) return null
+  if (!code && !pieces.some((st) => st.r === 'F' || st.r === 'M')) return null
   const ft: FigureText = {
     ks: [...l.ks],
     page: 0,
@@ -312,7 +463,7 @@ function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): Figu
   for (const s of pieces) {
     if (s.r === 'T') ft.order.push({ t: 'text', glyphs: s.gs })
     else {
-      ft.els.push({ kind: 'code', glyphs: s.gs, boxes: [] })
+      ft.els.push({ kind: s.r === 'M' ? 'math' : 'code', glyphs: s.gs, boxes: [] })
       ft.order.push({ t: 'el', i: ft.els.length - 1 })
     }
   }
