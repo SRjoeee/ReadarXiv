@@ -672,3 +672,29 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
     expect(accepted(CAUSE.displayPart)).toBe(true)
   })
 })
+
+describe("(k) on elements and (n): today's unit now wholly an element a figure text keeps as the original's ink", () => {
+  // (2608.06701v1 p1's shape: today's "Observation" and its run of one pitch "The path", two units; F0's one figure text, the run
+  // an element marked kept for its pitch, its box today's line)
+  const word = on(unit(id('a'), 344, 'inkfigures', [text('Observation')]), box(417.26, 449.1, 584.91, 588.75, 583.85))
+  const path = on(unit(id('c'), 346, 'inkfigures', [text('The path')]), box(452.39, 475.56, 584.91, 588.55, 583.85))
+  const joined = (keptBy: string | undefined, src = 'The path') => [
+    {
+      ...on(unit(id('b'), 344, 'inkfigures', [text('Observation'), text(':'), text(' '), ph(src)]), box(417.26, 475.56, 584.91, 588.75, 583.85)),
+      elements: [{ k: 3, kind: 'code', ...(keptBy ? { keptBy } : {}), segs: [box(452.39, 475.56, 584.91, 588.55, 583.85)] }],
+    },
+  ]
+  it('states the run kept as the original for its pitch, held by the text; the words before it held whole', () => {
+    const stated = statedOf([word, path], joined('pitch'))
+    expect(said(stated)).toEqual([
+      [344, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
+      [346, CAUSE.pitch],
+    ])
+    expect(stated[1].holder).toBe(id('b'))
+  })
+  it('states a stretch a decoration holds kept with it (n), and no element of another source, nor one not kept, so', () => {
+    expect(said(statedOf([path], joined('decoration')))).toEqual([[346, CAUSE.decoration]])
+    expect(said(statedOf([path], joined('pitch', 'The paths')))).not.toEqual([[346, CAUSE.pitch]])
+    expect(said(statedOf([path], joined(undefined)))).not.toEqual([[346, CAUSE.pitch]])
+  })
+})

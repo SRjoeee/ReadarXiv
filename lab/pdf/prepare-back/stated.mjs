@@ -69,6 +69,10 @@ export const CAUSE = Object.freeze({
   // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
   // cause, keptWhyOf: accepted)
   pitch: 'kept as the original: set wholly in a face of one pitch',
+  // ((n), F0 (rebuild/fig-text): today's unit now wholly a stretch of a figure text a decoration holds (a frame, an underline or
+  // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
+  // text; not accepted until the coordinator rules)
+  decoration: 'kept as the original: a stretch a decoration holds, carried with it',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -266,9 +270,21 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     Math.min(b.top, b.bottom) < Math.max(a.top, a.bottom) - ON
   const glyphTextOf = (x) => {
     const inked = new Set((x.elements ?? []).map((e) => e.k))
+    // (an element the unit keeps as the original's ink (`keptBy`, F0's: a run of one pitch, a stretch a decoration holds) reads
+    // as its source, the characters it shows)
+    const kept = new Set((x.elements ?? []).filter((e) => e.keptBy).map((e) => e.k))
     let s = ''
     for (const p of x.pieces ?? [])
-      s += p.kind === 'text' ? p.s : p.kind === 'ph' ? (inked.has(p.k) ? (readingOf(p.src ?? '') ?? '\ufffc') : '') : ''
+      s +=
+        p.kind === 'text'
+          ? p.s
+          : p.kind === 'ph'
+            ? kept.has(p.k)
+              ? (p.src ?? '')
+              : inked.has(p.k)
+                ? (readingOf(p.src ?? '') ?? '\ufffc')
+                : ''
+            : ''
     return s.replace(/\s+/g, '')
   }
   const heldBy = (u) => {
@@ -336,6 +352,22 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const mine = glyphTextOf(u)
     const whole = [...all].filter((n) => glyphTextOf(n) === mine)
     return { holder: whole.length === 1 ? whole[0] : null }
+  }
+  // ((k) on elements and (n), F0 (rebuild/fig-text): today's unit now wholly an element one unit of the candidate's keeps as the
+  // original's ink (`keptBy`): every line of it inside one box of that element, its glyph text the element's source's, white
+  // space aside (2608.06701v1 p1's "The path", today's run of one pitch, F0's element of "Observation: …")
+  const keptElementOf = (u) => {
+    const t = u.lines?.length ? glyphTextOf(u) : ''
+    if (!t) return null
+    for (const n of units) {
+      if (n.replaced) continue
+      for (const e of n.elements ?? []) {
+        if (!e.keptBy || !u.lines.every((l) => e.segs.some((k) => inside(l, k)))) continue
+        const p = (n.pieces ?? []).find((q) => q.k === e.k && q.kind === 'ph')
+        if (p && (p.src ?? '').replace(/\s+/g, '') === t) return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : CAUSE.decoration }
+      }
+    }
+    return null
   }
   // ((f), its stand-in of today's kind at its place, 2026-11-10: every line of today's meets a box of it and its glyph text holds
   // today's whole, in order (rebuild/run-on-kept's figure text not cut at a face or colour change, standing for one of today's
@@ -426,6 +458,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const mail = addressesOnly(writtenOf(u)) ? heldBy(u) : null
     if (mail && !mail.pieces?.length) {
       out.push({ u, why: `made on arXiv's page as ${mail.id.slice(0, 12)}: ${CAUSE.addresses}`, cause: 'addresses' })
+      continue
+    }
+    // ((k) on elements and (n) before a stand-in: the element's unit stands for the words beside it as well)
+    const keptEl = /^ink/.test(u.kind) ? keptElementOf(u) : null
+    if (keptEl) {
+      out.push({ u, why: keptEl.cause, cause: keyOf(keptEl.cause), holder: keptEl.n.id })
       continue
     }
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)
