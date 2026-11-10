@@ -60,10 +60,23 @@ export interface TodayFigureUnit {
   after?: number
   under?: number | null
 }
+/** a path's lines as pageInk keeps them (`shapes`): its segments (x0, y0, x1, y1 each), whether it is stroked and filled, its
+ *  half line width */
+export interface TodayShape {
+  segs: ArrayLike<number>
+  stroke: boolean
+  fill: boolean
+  hw: number
+}
+/** an item of ink a figure text's band meets (roomOf's `met`, the copy's): a glyph of its page by its index, or a box by its index
+ *  with its box [x0, y0, x1, y1], its lines where pageInk kept them, and its kind (a path's index, an image -3, …) */
+export type TodayMet = { g: number } | { b: number; box: number[]; shape: TodayShape | null; kind: number | undefined }
 export interface TodayFigures {
   units: TodayFigureUnit[]
   glyphs: Map<number, number>[]
   turned: Map<number, number>[]
+  /** (the copy's) each crowded figure text's met ink, by its k, and the depth under its baseline of the stroke under its text */
+  met: Map<number, { items: TodayMet[]; under: number | null }>
 }
 export interface TodayLedger {
   lines: unknown[]
@@ -82,6 +95,11 @@ export const figureUnitsOf = fig.figureUnitsOf as (
   },
 ) => TodayFigures
 export const figureGroup = fig.figureGroup as (k: number) => string
+/** the figure reading's measures, in its sizes (figure-text.mjs) */
+export const RUN_DY = fig.RUN_DY as number
+export const RUN_GAP = fig.RUN_GAP as number
+export const SPACE_GAP = fig.SPACE_GAP as number
+export const DRAW_BAND = fig.DRAW_BAND as readonly [number, number]
 export const ledgerOf = ledger.ledgerOf as (
   pages: readonly TodayPage[],
   own: { glyphs: (string | null)[][] },

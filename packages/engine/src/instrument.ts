@@ -60,6 +60,8 @@ export interface InstrumentUnit {
     before?: number
     after?: number
     under?: number
+    /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
+    over?: number
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string

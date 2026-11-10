@@ -114,6 +114,7 @@ export function figuresOf(
         before: run ? run[3] : side ? l[2] - side[0] : 0,
         after: run ? run[4] : side ? side[1] - l[3] : 0,
         under: m.room.under ?? null,
+        ...(m.room.over !== undefined ? { over: m.room.over } : {}),
       })
     }
   }
