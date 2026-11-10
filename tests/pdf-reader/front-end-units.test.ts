@@ -165,6 +165,26 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(texts(p)).toEqual(['Illustrative multi-group fluid channels.', 'After it.'])
     expect(patched(p)).toContain('\\IfFileExists{figures/a.png}{\\begin{figure}\\centering\\includegraphics{figures/a.png}\\caption{')
   })
+  it('etoolbox\'s \\ifdefempty{…}{}{…}: its branch of words a unit, as TeX\'s own conditionals\' (2608.25210v2\'s PVLDB Artifact Availability)', () => {
+    const pre = '\\usepackage{etoolbox}\n\\newcommand\\avail{https://example.org/x.git}'
+    const body = 'Words before it.\n\n\\ifdefempty{\\avail}{}{\n\\vspace{.3cm}\n\\begingroup\\small\\noindent\\raggedright\\textbf{Artifact Availability:}\\\\\nThe source code and data have been made available at \\url{\\avail}.\n\\endgroup\n}\n\nWords after it.'
+    const p = project(doc(body, pre))
+    expect(texts(p)).toEqual(['Words before it.', 'Artifact Availability: The source code and data have been made available at .', 'Words after it.'])
+    // (its test and its other branch as the paper writes them, in the marked original and a translation alike)
+    expect(patched(p)).toContain('\\ifdefempty{\\avail}{}{')
+  })
+  it('…a branch holding a heading walked as a body (etoolbox\'s \\iftoggle, 2610.37818v1\'s acknowledgements)', () => {
+    const p = project(doc('\\iftoggle{final}{%\n\\section*{Acknowledgements}\nThis work was done somewhere.\n}{}\n\nAfter it.', '\\usepackage{etoolbox}\n\\newtoggle{final}'))
+    expect(units(p).map(u => [u.kind, textOf(u)])).toEqual([['heading', 'Acknowledgements'], ['para', 'This work was done somewhere.'], ['para', 'After it.']])
+  })
+  it('…and where both branches hold words, neither is the translator\'s: the call one placeholder, counted, as TeX\'s own conditionals', () => {
+    const tex = doc('We use \\ifbool{long}{the long method words}{the short method words} here.', '\\usepackage{etoolbox}\n\\newbool{long}')
+    const p = project(tex)
+    expect(texts(p)).toEqual(['We use here.'])
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifbool{long}{the long method words}{the short method words}'])
+    expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
+    expect(texts(project(doc('Then \\ifthenelse{\\equal{a}{b}}{same words here}{} it goes on.', '\\usepackage{ifthen}')))).toEqual(['Then same words here it goes on.'])
+  })
   it('an argument after one whose walk ended the paragraph is walked as a block: no unit begins between two of the command\'s arguments (2610.37818v1)', () => {
     // (\IfFileExists{…}{\input{…}}{placeholder}: the \input ended the paragraph inside the second argument, and the third
     // began a unit at its brace, whose line probe the marked original wrote between the two: TeX took it for the third

@@ -22,6 +22,17 @@ describe('the table: LaTeXML\'s prototypes, and the commands written out where t
     expect(roles('raisebox')).toBe('{d[d[d{c')
     expect(roles('multicolumn')).toBe('{d{n{c')
   })
+  it('etoolbox\'s and ifthen\'s conditionals: their test a control sequence, a name or code, their two branches the content TeX sets (2608.25210v2)', () => {
+    expect(roles('ifdefempty')).toBe('{r{c{c')
+    expect(roles('ifdef')).toBe('{r{c{c')
+    expect(roles('ifcsdef')).toBe('{n{c{c')
+    expect(roles('iftoggle')).toBe('{n{c{c')
+    expect(roles('ifbool')).toBe('{n{c{c')
+    expect(roles('ifstrequal')).toBe('{x{x{c{c')
+    expect(roles('ifblank')).toBe('{x{c{c')
+    expect(roles('notblank')).toBe('{x{c{c')
+    expect(roles('ifthenelse')).toBe('{x{c{c')
+  })
   it('a package\'s form only where the paper loads it: moderncv\'s \\firstname{…} is not melba\'s declaration', () => {
     expect(roles('firstname', bindingsOf(['\\documentclass{moderncv}']))).toBe('{n')
     expect(roles('firstname', bindingsOf(['\\documentclass{article}']))).toBeNull()
