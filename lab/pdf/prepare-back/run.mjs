@@ -193,7 +193,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), text: textOfPieces(pieces), pieces }
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)

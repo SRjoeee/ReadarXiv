@@ -378,7 +378,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
         ...(f.why
           ? { why: `figure: ${f.why}`, fixed: true as const }
           : o.artefact?.(text, turned)
-            ? { why: 'figure: code', fixed: true as const }
+            ? { why: 'figure: code', fixed: true as const, pitch: true as const }
             : {}),
       },
       text,

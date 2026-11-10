@@ -318,6 +318,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['Loss curve', false],
     ])
     expect(L.units[figs[0]!.unit]!.why).toBe('figure: code')
+    // (each unit so kept is marked as kept by this rule, `pitch`, and no other: what the lab's dump and the parity read)
+    expect(L.units.slice(0, 3).map((u) => !!u.pitch)).toEqual([false, true, false])
+    expect(figs.map((m) => !!L.units[m.unit]!.pitch)).toEqual([true, false])
     // (a paper whose body face is a typewriter's keeps nothing for it: its whole text would stay untranslated)
     const T = make('ABCDEF+CMTT10')
     expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
@@ -353,6 +356,14 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(fixed.get('"key": "count all the')).toBe(true)
     expect(fixed.get('harbours')).toBe(true)
     expect(fixed.get('Loss curve')).toBe(false)
+    const pitch = new Map(
+      L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, !!L.units[m.unit]!.pitch]),
+    )
+    expect([pitch.get('"key": "count all the'), pitch.get('harbours'), pitch.get('Loss curve')]).toEqual([
+      true,
+      true,
+      false,
+    ])
   })
 
   it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {

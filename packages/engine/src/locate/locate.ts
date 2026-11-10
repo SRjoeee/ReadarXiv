@@ -877,7 +877,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
     if (!artefact(mem.text)) continue
-    units[mem.unit] = { ...units[mem.unit]!, kept: true, fixed: true }
+    units[mem.unit] = { ...units[mem.unit]!, kept: true, fixed: true, pitch: true }
     mem.fixed = true
     stats.artefacts.units++
   }

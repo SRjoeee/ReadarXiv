@@ -582,6 +582,9 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const onV2 = (l) =>
     v2Lines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
   const todayRaw = new Map(rec.today.units.map((u) => [`t${u.id}`, u.lines]))
+  // (the members v2's prepare keeps for their text set wholly in a face of one pitch, Rule 1: the original's text, no translation
+  // missing, the owner's ruling of 2026-11-10 (PITCH_RULING); v2.mjs's `pitch`, the candidate's dump's marks, by member ord)
+  const pitch = new Set(v2.pitch ?? [])
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
@@ -598,9 +601,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
     // (a member of the author block's, under the default toggles: the names toggle, off, keeps the block the original's whole,
     // whatever today translated of it, the ruling's: NAMES_RULING)
-    const ruled = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    const named = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    const kept = o?.part !== null && o?.part !== undefined && pitch.has(o.part)
+    const ruled = named || kept
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = NAMES_RULING
+    if (ruled) out.diffs.at(-1).ruling = kept ? PITCH_RULING : NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -626,7 +631,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const figT = (rec.today.figures ?? []).filter((u) => u.lines.some((l) => l.n > 0)).length
   const figV = rec.v2.units.filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0)).length
   const figLaid = [...laidV2.keys()].filter((o) => figOrds.has(o)).length
-  if (figV < figT) diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, true, 'today')
+  // (today's figure texts v2's prepare keeps for their text set wholly in a face of one pitch: each of today's drawn groups whose
+  // unit is joined to one of v2's figure members `pitch` names, figuresMatched's join by the original's box. Fewer than today's
+  // by no more than those is the ruling's, PITCH_RULING; a group the join does not pair stays counted)
+  const figPitch = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o)).length
+  if (figV < figT) {
+    const ruled = figV >= figT - figPitch
+    diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, !ruled, ruled ? 'ruling' : 'today')
+    if (ruled) out.diffs.at(-1).ruling = PITCH_RULING
+  }
 
   // ------------------------------------------------ against arXiv's page and the original's facts (fidelity.mjs), and the
   // owner's rulings of 2026-11-08
@@ -857,7 +870,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],
@@ -947,6 +960,9 @@ function headRuling(p, { v2, n, facts, orig }) {
   }
 }
 
+/** what a unit or a figure text v2's prepare keeps for its text set wholly in a face of one pitch rests on (`shown`, `figures`) */
+const PITCH_RULING =
+  "the owner's ruling of 2026-11-10 (option C, PDF-READER §18.21): text set wholly in a face of one pitch (code, a prompt, JSON, an OCR card) is kept as the original's; translating or keeping are both fine, a garbled translation never: no translation missing"
 /** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
