@@ -2,12 +2,11 @@
 // read as the paragraphs they print, each one figure text laid as a body paragraph is. Facts of the lines alone, every measure
 // the figure reading's in the text's size (ALIGN_TOL) or a share of it named here. A paragraph is lines of one figure, one under
 // the other with no blank line between, in one face family, size, weight and fill, at one pitch, on one left edge (its first
-// line may stand in, an indent, or out, a hanging indent), whose text goes on from line to line by a fact: TeX's hyphen at a
-// line's end; a justified block, the line reaching its right edge; or, ragged, a line filled (the next line's first word would
-// not have fitted), ending no sentence, the next beginning in lower case. A line that opens with a marker spelling no word (a
-// dash, a bullet, "(b)", "1.", "A.") begins an item of its own. Joined here: a paragraph one of whose joins is a hyphen's or a
-// justified line's, and a ragged one of three lines or more; two ragged lines alone are left as they were (stacked legend
-// entries read so, lanes/fig-text/img/ragged: the coordinator's decision of 2026-11-10).
+// line may stand in, an indent, or out, a hanging indent), whose text goes on from line to line by a fact of the text: TeX's
+// hyphen at a line's end, or a justified block, the line reaching its right edge. A line that opens with an item's enumerator (a
+// list's, figure-lines.ts listed) begins an item of its own. Ragged lines are joined by no guess from their shape: stacked legend
+// entries read so (lanes/fig-text/img/ragged); the lines a closed shape holds alone are F3's next step (the coordinator's
+// decisions of 2026-11-10 and 2026-11-11).
 
 /** how near two edges or two pitches are one, of the text's size (figure-text.mjs ALIGN_TOL) */
 export const PARA_ALIGN_TOL = 0.08
@@ -31,18 +30,11 @@ export interface ParaLine {
   face: string | null
   bold: boolean
   fill: number | null
-  /** its word spaces, where two or more follow no punctuation: whether they are one within the tolerance, and their mean;
-   *  its mean gap between clusters; its clusters that spell a word */
+  /** its word spaces, where two or more follow no punctuation: whether they are one within the tolerance, and their mean */
   uniform: boolean
   wordSpace: number | null
-  space: number | null
-  words: number
-  /** it opens with a marker that spells no word, more text after it: an item's */
+  /** it opens with an item's enumerator, more text after it */
   marker: boolean
-  /** its last cluster ends a sentence; its first cluster's width; its characters in its order */
-  ended: boolean
-  firstWidth: number
-  lead: string
   /** the ink that ends right before its start (a legend's sample, a frame's side): boxes by index */
   leaders: ReadonlySet<number>
 }
@@ -50,8 +42,8 @@ export interface ParaLine {
 export interface Para {
   /** its lines (indices into the lines given), top to bottom */
   lines: number[]
-  /** each join's evidence, line k to k + 1: TeX's hyphen dropped, a word's hyphen kept, a justified line, a ragged one */
-  ev: ('hyphen-drop' | 'hyphen-join' | 'justified' | 'ragged')[]
+  /** each join's evidence, line k to k + 1: TeX's hyphen dropped, a word's hyphen kept, a justified line */
+  ev: ('hyphen-drop' | 'hyphen-join' | 'justified')[]
   justified: boolean
 }
 
@@ -154,8 +146,7 @@ export function parasOf(lines: readonly ParaLine[], end: (a: number, b: number) 
         seen.add(block[i]!)
         ev.push(e)
       }
-      // (joined: a hyphen's or a justified line's join in it, or three ragged lines or more)
-      if (cur.length > 1 && (ev.some((e) => e !== 'ragged') || cur.length >= 3)) out.push({ lines: cur, ev, justified })
+      if (cur.length > 1) out.push({ lines: cur, ev, justified })
     }
   }
   return out
@@ -173,8 +164,5 @@ function goesOn(
   if (B.marker) return null
   const e = end()
   if (e !== 'space') return e === 'drop' ? 'hyphen-drop' : 'hyphen-join'
-  if (justified && A.x1 >= R - tol) return 'justified'
-  const filled = A.x1 + (A.space ?? 0.25 * A.size) + B.firstWidth > R + tol
-  const goes = /^\P{L}*\p{Ll}/u.test(B.lead) && !/^\p{N}/u.test(B.lead)
-  return A.words >= 2 && !A.ended && filled && goes ? 'ragged' : null
+  return justified && A.x1 >= R - tol ? 'justified' : null
 }

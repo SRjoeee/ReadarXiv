@@ -234,7 +234,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // (a unit kept for its text set wholly in a face of one pitch, or for an identifier, states (k), the differential's cause,
   // before the bundle's why)
   const why = keptWhyOf(base) ?? st.why
-  // (a figure's paragraph, F3: `para`, the evidence its lines are joined by, 'strong' or 'ragged': stage 1a and the parity read it)
+  // (a figure's paragraph, F3: `para`, the evidence its lines are joined by ('strong'): stage 1a and the parity read it)
   units.push({ ...base, state, ...(u.figure?.para ? { para: u.figure.para } : {}), ...(why ? { why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
 })
 if (located) for (const [o, b] of located.born) {

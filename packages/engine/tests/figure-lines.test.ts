@@ -20,11 +20,11 @@ type Glyph = {
   blank: boolean
 }
 /** a line's glyphs from x at size 10 on baseline y, each its own advance (a proportional face: 5 to 7 pt; one of one pitch: 6;
- *  a space 3, a word's) */
-function glyphsOf(text: string, x: number, y: number, font: string, size = 10): Glyph[] {
+ *  a space 3, a word's, or `space` where a justified line stretches it) */
+function glyphsOf(text: string, x: number, y: number, font: string, size = 10, space = 3): Glyph[] {
   const out: Glyph[] = []
   for (const u of text) {
-    const w = ((u === ' ' ? 3 : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)) * size) / 10
+    const w = ((u === ' ' ? space : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)) * size) / 10
     out.push({
       u,
       font,
@@ -46,7 +46,7 @@ function glyphsOf(text: string, x: number, y: number, font: string, size = 10): 
 }
 /** a page of glyph lines, each line's runs (its glyphs' ranges) figure units by k; `boxes` [x0, y0, x1, y1] each */
 function pageOf(
-  parts: { text: string; font: string; run?: boolean; x?: number; size?: number; dy?: number }[][],
+  parts: { text: string; font: string; run?: boolean; x?: number; size?: number; dy?: number; space?: number }[][],
   boxes: number[][] = [],
 ) {
   const glyphs: Glyph[] = []
@@ -56,7 +56,7 @@ function pageOf(
     let x = 72
     const y = 700 - 14 * li
     for (const p of line) {
-      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size)
+      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size, p.space)
       const k = units.length
       if (p.run !== false) {
         units.push({
@@ -645,18 +645,29 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
 
 describe('figure-lines: F3, a figure’s paragraph is one text; an item’s marker its label (the owner’s ruling of 2026-11-10)', () => {
   const body = (text: string) => [{ text, font: 'NimbusRomNo9L-Regu' }]
-  it('joins three ragged lines of prose, the text going on, into one text of three lines', () => {
-    const { page, fig } = pageOf([
-      body('the quick brown fox jumps over'),
-      body('lazy dogs while the others run'),
-      body('away from it'),
-    ])
+  /** a justified block's lines: each but the last set from 72 to `right`, its word spaces stretched alike (TeX's); the last as set */
+  const justified = (lines: string[], right = 260) =>
+    lines.map((text, i) => {
+      if (i === lines.length - 1) return body(text)
+      const letters = [...text].filter((u) => u !== ' ').reduce((w, u) => w + 5 + (u.codePointAt(0)! % 3), 0)
+      return [{ text, font: 'NimbusRomNo9L-Regu', space: (right - 72 - letters) / (text.split(' ').length - 1) }]
+    })
+  it('joins a justified block into one text, a space at each line’s end; leaves three ragged lines as they were', () => {
+    const { page, fig } = pageOf(
+      justified(['the quick brown fox jumps over the', 'lazy dogs while Garza et al. run', 'away from it']),
+    )
     const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
     expect(rest).toEqual([])
     expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'space', 'text', 'space', 'text'])
     expect(t!.why).toBeNull()
-    expect(t!.para).toEqual({ justified: false, by: 'ragged' })
+    expect(t!.para).toEqual({ justified: true, by: 'strong' })
+    const ragged = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs while the others run'),
+      body('away from it'),
+    ])
+    expect(figureLinesOf([ragged.page], ragged.fig, () => false, null)).toEqual([])
   })
   it('joins two lines at TeX’s hyphen, and leaves two ragged lines alone as they were', () => {
     const hyphen = pageOf([body('all of the foun-'), body('dation models')])
@@ -735,20 +746,19 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     ])
   })
   it('reads two fragments of a justified line across its stretched space as one line of its paragraph; a gutter under a title never', () => {
-    // (a justified block: its second line set in two runs 8 pt apart, past the run gap, the lines over and under it with ink
-    // across that gap: one line, the paragraph whole)
+    // (a justified block: its second line set in two runs 8 pt apart, past the run gap, the line over it with ink across that
+    // gap: one line, the paragraph whole)
     const just = pageOf([
-      body('the quick brown fox jumps over'),
+      justified(['a quick brown fox jumps over', 'x'], 249)[0]!,
       [
         { text: 'lazy dogs while.', font: 'NimbusRomNo9L-Regu' },
         { text: 'The others run', font: 'NimbusRomNo9L-Regu', x: 170 },
       ],
-      body('away from it all and then rest'),
-      body('for a while'),
+      body('away from it'),
     ])
     const [t, ...rest] = figureLinesOf([just.page], just.fig, () => false, null)
     expect(rest).toEqual([])
-    expect(t!.ks).toEqual([0, 1, 2, 3, 4])
+    expect(t!.ks).toEqual([0, 1, 2, 3])
     // (a title over two columns: the row under the first has the gutter too: two columns, each its own paragraph)
     const cols = pageOf([
       body('a title set over both of the columns here'),
@@ -767,15 +777,14 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     ])
   })
   it('frees a paragraph’s line its own lines crowd, and makes a framed stretch of one an element (2609.19644v1 p58)', () => {
-    const { page, fig } = pageOf([
-      body('the quick brown fox jumps over'),
-      body('lazy dogs while Garza et al. run'),
-      body('away from it'),
-    ])
+    const { page, fig } = pageOf(
+      justified(['the quick brown fox jumps over the', 'lazy dogs while Garza et al. run', 'away from it']),
+    )
     const G = page.glyphs as Glyph[]
     // (the second line's band meets a glyph of the first: its own paragraph's; and a frame round "Garza et al.")
     const at = G.findIndex((g) => g.u === 'G')
-    const frame = rect(G[at]!.x0 - 1, 683, G[at + 11]!.x1 + 1, 695)
+    const dot = G.findIndex((g, i) => i > at && g.u === '.')
+    const frame = rect(G[at]!.x0 - 1, 683, G[dot]!.x1 + 1, 695)
     fig.units[1]!.why = 'crowded'
     fig.met.set(1, { items: [{ g: 2 }, boxMet(0, frame)], under: null })
     const [t] = figureLinesOf([page], fig, () => false, null)
@@ -786,50 +795,49 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
   it('makes a framed citation an element where its brackets’ and commas’ ink crosses the frame (2609.19644v1 p58)', () => {
     // (Preview's link frame round "(Garza et al.," is tight on the words: the bracket's ink 0.7 pt left of it, the comma's
     // 0.4 pt right; the letters' ink inside)
-    const { page, fig } = pageOf([
-      body('the quick brown fox jumps over'),
-      body('lazy dogs (Garza et al., 2021) run'),
-      body('away from it'),
-    ])
+    const { page, fig } = pageOf(
+      justified(['a quick brown fox jumps over the', 'lazy dogs (Garza et al., 2021) run', 'away from it']),
+    )
     const G = page.glyphs as Glyph[]
     const a = G.findIndex((g) => g.u === '(')
     const c = G.findIndex((g, i) => g.u === ',' && i > a)
     const frame = rect(G[a]!.x0 + 0.7, 683, G[c]!.x1 - 0.4, 695)
     fig.units[1]!.why = 'crowded'
     fig.met.set(1, { items: [boxMet(0, frame)], under: null })
-    const [t] = figureLinesOf([page], fig, () => false, null)
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([['cite', '(Garzaetal.,']])
   })
   it('reads a frame its paragraph’s runs each met once: its box on its element once', () => {
-    const { page, fig } = pageOf([
-      body('the quick brown fox jumps over'),
-      body('lazy dogs while Garza et al. run'),
-      body('away from it'),
-    ])
+    const { page, fig } = pageOf(
+      justified(['the quick brown fox jumps over the', 'lazy dogs while Garza et al. run', 'away from it']),
+    )
     const G = page.glyphs as Glyph[]
     const at = G.findIndex((g) => g.u === 'G')
-    const frame = rect(G[at]!.x0 - 1, 683, G[at + 11]!.x1 + 1, 695)
+    const dot = G.findIndex((g, i) => i > at && g.u === '.')
+    const frame = rect(G[at]!.x0 - 1, 683, G[dot]!.x1 + 1, 695)
     for (const k of [0, 1, 2]) {
       fig.units[k]!.why = 'crowded'
       fig.met.set(k, { items: [boxMet(0, frame)], under: null })
     }
-    const [t] = figureLinesOf([page], fig, () => false, null)
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
   it('reads a paragraph’s line break as a word’s end: a framed stretch ending one line or starting the next is an element', () => {
-    const { page, fig } = pageOf([
-      body('the quick brown fox jumps over'),
-      body('lazy dogs while the others run'),
-      body('away from it'),
-    ])
+    const { page, fig } = pageOf(
+      justified(['the quick brown fox jumps over the', 'lazy dogs while the others run', 'away from it']),
+    )
     const G = page.glyphs as Glyph[]
-    // (a frame round "over", the first line's last word, and one round "lazy", the second line's first)
-    const o = G.findIndex((g, i) => g.u === 'o' && G[i + 1]?.u === 'v')
-    const z = G.findIndex((g) => g.u === 'z')
-    const end = rect(G[o]!.x0 - 1, 697, G[o + 3]!.x1 + 1, 709)
-    const start = rect(G[z - 2]!.x0 - 1, 683, G[z + 1]!.x1 + 1, 695)
+    // (a frame round "the", the first line's last word, and one round "lazy", the second line's first)
+    const first = G.flatMap((g, i) => (g.y === 700 && !g.blank ? [i] : [])).slice(-3)
+    const second = G.flatMap((g, i) => (g.y === 686 && !g.blank ? [i] : [])).slice(0, 4)
+    const end = rect(G[first[0]!]!.x0 - 1, 697, G[first[2]!]!.x1 + 1, 709)
+    const start = rect(G[second[0]!]!.x0 - 1, 683, G[second[3]!]!.x1 + 1, 695)
     fig.units[0]!.why = 'crowded'
     fig.units[1]!.why = 'crowded'
     fig.met.set(0, { items: [boxMet(0, end)], under: null })
@@ -838,7 +846,7 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.ks).toEqual([0, 1, 2])
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.boxes, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([
-      ['cite', [0], 'over'],
+      ['cite', [0], 'the'],
       ['cite', [1], 'lazy'],
     ])
   })

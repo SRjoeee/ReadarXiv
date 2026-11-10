@@ -56,9 +56,8 @@ export interface FigureText {
    *  text of it (F3) */
   label: number[]
   /** a paragraph of two lines or more (F3): whether its block is justified, and the evidence its lines are joined by, `strong`
-   *  (a join at TeX's hyphen or a justified line's) or `ragged` (three ragged lines or more and no stronger join); null a line
-   *  alone */
-  para: { justified: boolean; by: 'strong' | 'ragged' } | null
+   *  (a join at TeX's hyphen or a justified line's); null a line alone */
+  para: { justified: boolean; by: 'strong' } | null
   /** glyphs no run held that it takes (a comma between two addresses, a digit): its text's */
   claimed: number[]
   /** a doubled copy of its glyphs (a glyph of one of its characters over one of them): hidden with its text */
@@ -563,8 +562,6 @@ const romanValue = (s: string) =>
       next = ROMAN_DIGIT[s[k + 1] ?? ''] ?? 0
     return t + (v < next ? -v : v)
   }, 0)
-/** a sentence's end, closing marks after it */
-const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["')\]\u201d\u2019]*$/u
 
 /**
  * A line read (F0, F1): its glyphs' roles in its order. A stretch of T that spells a word is the line's text; one standing between
@@ -736,7 +733,7 @@ function figureParas(
   lines: ProseLine[]
   ends: ('space' | 'join' | 'drop')[]
   justified: boolean
-  by: 'strong' | 'ragged'
+  by: 'strong'
   of: number[]
 }[] {
   const prose = (r: Read) => r.kind === 'mixed' || r.kind === 'plain'
@@ -806,7 +803,7 @@ function figureParas(
     lines: para.lines.map((k) => live[k]!.x),
     ends: para.ev.map((e) => (e === 'hyphen-drop' ? 'drop' : e === 'hyphen-join' ? 'join' : 'space')),
     justified: para.justified,
-    by: para.ev.some((e) => e !== 'ragged') ? ('strong' as const) : ('ragged' as const),
+    by: 'strong' as const,
     of: para.lines.flatMap((k) => live[k]!.of),
   }))
 }
@@ -841,12 +838,8 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
   // (its word spaces: between two clusters of text, the first ending in no punctuation (TeX widens a space after one); a line
   // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap)
   const gaps: number[] = []
-  const all: number[] = []
-  for (let i = 1; i < cl.length; i++) {
-    const d = cl[i]!.x0 - cl[i - 1]!.x1
-    all.push(d)
-    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s)) gaps.push(d)
-  }
+  for (let i = 1; i < cl.length; i++)
+    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s)) gaps.push(cl[i]!.x0 - cl[i - 1]!.x1)
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
   const bottom = Math.min(...main.map((g) => g.bottom)),
     top = Math.max(...main.map((g) => g.top))
@@ -872,12 +865,7 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
     fill: most((g) => g.fill ?? 0),
     uniform: gaps.length >= 2 && Math.max(...gaps) - Math.min(...gaps) <= PARA_ALIGN_TOL * size,
     wordSpace: mean(gaps),
-    space: mean(all),
-    words: cl.filter((c) => c.text && WORD.test(c.s.normalize('NFKC'))).length,
     marker: read.marker.length > 0,
-    ended: SENTENCE_END.test(cl.at(-1)?.s ?? ''),
-    firstWidth: cl[0] ? cl[0].x1 - cl[0].x0 : 0,
-    lead: read.gs.map((g) => glyphs[g]!.u).join(''),
     leaders,
   }
 }
