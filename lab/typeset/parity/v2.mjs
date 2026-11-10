@@ -137,10 +137,15 @@ for (const pair of pairs) {
       const t = joinedAll0[m.ord]?.today
       return t !== undefined && doors?.get(t)?.[2] === 'kept'
     }
+    // (today's prepare kept its unit, never sending it: a figure text of names or code, its figureUnits' isName/isCode)
+    const todayKept = (m) => {
+      const t = joinedAll0[m.ord]?.today
+      return t !== undefined && prepared0?.get(t)?.kept === true
+    }
     let needs = new Map()
     const CUT = Symbol('cut')
     globalThis.__parityLay = (_part, rows) => {
-      if (rows) needs = freshNeeds([...all.values()], rows, units, { decided })
+      if (rows) needs = freshNeeds([...all.values()], rows, units, { decided, todayKept })
       throw CUT
     }
     const page0 = globalThis.__ckPage
@@ -167,7 +172,7 @@ for (const pair of pairs) {
       if (!joinedAll0[ord]) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
-    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
     if (FRESH === 'fill') continue
   }
   const noRow = new Set()

@@ -1524,7 +1524,7 @@ export function freshOf(pair, v2) {
     if (!ords.length) continue
     const causes = {}
     for (const o of ords) causes[cause[o] ?? 'no-row'] = (causes[cause[o] ?? 'no-row'] ?? 0) + 1
-    pages.push({ pair, page: pg, units: ords.map(keyOf), causes })
+    pages.push({ pair, page: pg, units: ords.map(keyOf), ords, causes })
   }
   // (each sent, whatever came back: `drawn` where its fresh row was a translation)
   const never = (v2.freshNew ?? []).filter((o) => first.has(o)).map((o) => ({ pair, page: first.get(o), unit: keyOf(o), drawn: fresh.has(o) }))
@@ -1533,7 +1533,9 @@ export function freshOf(pair, v2) {
   for (const f of Object.values(v2.facts ?? {})) for (const m of f.members ?? []) if (!kindOf.has(m.ord)) kindOf.set(m.ord, m.kind)
   const kinds = {}
   for (const o of fresh) kinds[kindOf.get(o) ?? '?'] = (kinds[kindOf.get(o) ?? '?'] ?? 0) + 1
-  return { units: fresh.size, kinds, pages, never }
+  const causes = {}
+  for (const o of fresh) causes[cause[o] ?? 'no-row'] = (causes[cause[o] ?? 'no-row'] ?? 0) + 1
+  return { units: fresh.size, kinds, causes, pages, never }
 }
 
 export function summaryOf(pages) {

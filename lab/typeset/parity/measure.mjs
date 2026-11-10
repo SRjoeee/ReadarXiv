@@ -185,7 +185,8 @@ for (const [pair, raw] of drawn) {
         const u = p.units?.find((x) => x.key === key)
         const v = u?.sides?.v2,
           t = u?.sides?.today
-        return { unit: key, kind: u?.kind ?? null, lines: v?.lines ?? null, olines: v?.olines ?? null, size: r2(v?.size), osize: r2(v?.osize), today: t ? { lines: t.lines, size: r2(t.size) } : null }
+        const ord = at.ords[at.units.indexOf(key)]
+        return { unit: key, kind: u?.kind ?? null, cause: v2.freshCause?.[ord] ?? 'no-row', lines: v?.lines ?? null, olines: v?.olines ?? null, size: r2(v?.size), osize: r2(v?.osize), today: t ? { lines: t.lines, size: r2(t.size) } : null }
       })
       p.fresh = { units: at.units, causes: at.causes, said, tint: rec ? tintOf(rec, ords) : [] }
     }
@@ -228,6 +229,10 @@ const result = {
             for (const [a, n] of Object.entries(f.kinds)) k[a] = (k[a] ?? 0) + n
             return k
           }, {}),
+          causes: freshes.reduce((k, f) => {
+            for (const [a, n] of Object.entries(f.causes)) k[a] = (k[a] ?? 0) + n
+            return k
+          }, {}),
           pages: freshes.flatMap((f) => f.pages),
           never: freshes.flatMap((f) => f.never),
           unjudged: pages.reduce((n, p) => n + p.diffs.filter((d) => d.nearer === 'fresh').length, 0),
@@ -264,6 +269,12 @@ process.exitCode = verdict.pass ? 0 : 1
 
 /** the sheet's look of a fresh unit (lane parity-fresh), written only where the run has one: a tint over its drawn lines on
  *  v2's pane, its unjudged differences neutral */
+const FRESH_CAUSE = {
+  'no-row': 'no stored row serves its unit',
+  'today-kept': "kept by today's name/code rule, sent by v2",
+  group: "a cell today's group decision kept (its reply not stored)",
+  unit: "its stored row answered another unit",
+}
 const FRESH_CSS = `
 <style>
 :root { --fresh: rgba(230, 160, 0, 0.28); --freshbg: #fff7e0; }
@@ -292,7 +303,7 @@ function sheet(r) {
     : ''
   const fr = r.fresh
   const freshCard = fr
-    ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, bold and slanted share, spacing and sentence pairing follow from the text drawn: listed as "fresh", never worse nor nearer (${fr.unjudged} differences); every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
+    ? `<article class="card"><h2>Drawn with a fresh translation: ${fr.units} units on ${fr.pages.length} pages</h2><p>Units no stored row of the pair's serves, or whose stored row answered another unit than v2's, laid with the row a reader gets (the translate package's chain, Microsoft's keyless adapter, from lab-data's cache), tinted on v2's pane. Their line count, size, bold and slanted share, spacing and sentence pairing follow from the text drawn: listed as "fresh", never worse nor nearer (${fr.unjudged} differences); every other measure judges them. By kind: ${esc(Object.entries(fr.kinds).map(([k, n]) => `${k} ${n}`).join(', '))}. By cause: ${esc(Object.entries(fr.causes).map(([k, n]) => `${FRESH_CAUSE[k] ?? k} ${n}`).join(', '))}.</p><ul>${fr.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.causes.unit ? `; ${u.causes.unit} whose stored row answered another unit` : ''}</li>`).join('')}</ul></article><article class="card${fr.never.length ? ' flagged' : ''}"><h2>Sent by v2, never by today: ${fr.never.length} units</h2><p>Units v2 sends a translator that today had no unit of (nothing of today's to compare): each is v2's own decision to translate.</p><ul>${fr.never.map((x) => `<li><a href="#${esc(`${x.pair}-p${x.page}`)}">${esc(x.pair)} p${x.page}</a>: ${esc(x.unit)}${x.drawn ? '' : ' (not drawn: refused or not in the cache)'}</li>`).join('')}</ul></article>`
     : ''
   const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
   const side = (x) => `${x.value === null || x.value === undefined ? '' : `${esc(x.value)} `}${x.off === null || x.off === undefined ? '' : `<span class="off">off ${esc(x.off)}</span>`}`
@@ -322,8 +333,10 @@ function sheet(r) {
         : `<p class="nums">laid: today ${m.laid?.today}, v2 ${m.laid?.v2} · links: original ${m.links?.original}, today ${m.links?.today}, v2 ${m.links?.v2} · borders: original ${m.borders?.original ?? '–'}, today ${m.borders?.today ?? '–'}, v2 ${m.borders?.v2 ?? '–'} · sentence boxes: today ${m.highlight?.today}, v2 ${m.highlight?.v2} · darkness: original text ${m.darkness?.originalText?.mean ?? m.darkness?.original?.mean ?? '–'}, today ${m.darkness?.today?.mean ?? '–'}, v2 ${m.darkness?.v2?.mean ?? '–'} · off arXiv's page outside the units: today ${m.diff?.outsideToday ?? '–'}, v2 ${m.diff?.outside ?? '–'} px</p>`
       const tint = k === 'v' && p.fresh?.tint.length ? p.fresh.tint.map((b) => `<i class="fresh" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></i>`).join('') : ''
       const img = (k, alt) => `<figure${k === 'v' && tint ? ' class="tinted"' : ''}><figcaption>${alt}${k === 'v' && p.fresh ? ` (${p.fresh.units.length} units with a fresh translation, tinted)` : ''}</figcaption>${k === 'v' && tint ? `<div class="tint"><img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">${tint}</div>` : `<img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">`}</figure>`
+      const freshLi = (x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})${x.today ? `; today ${x.today.lines} lines, size ${x.today.size}` : '; today: not drawn'}</li>`
+      const ruleKept = p.fresh?.said.filter((x) => x.cause === 'today-kept') ?? []
       const freshList = p.fresh
-        ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.map((x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})${x.today ? `; today ${x.today.lines} lines, size ${x.today.size}` : '; today: not drawn'}</li>`).join('')}</ul>`
+        ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
         : ''
       const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}</span>` : '<span class="v good">not worse than today</span>'
       return `<article class="card${p.worse ? ' flagged' : ''}" id="${esc(id)}"><h2>${esc(p.pair)} · page ${p.page} ${verdict}</h2>${nums}${freshList}${diffs}${shared}${fl ? `<div class="faults"><p class="h">Faults against the bounds (each side's, shared ones no verdict):</p>${fl}</div>` : ''}<div class="panes">${img('a', 'original')}${img('t', 'today')}${img('v', 'v2')}<figure class="diff"><figcaption>v2 against today (red v2's ink alone, blue today's)</figcaption><img loading="lazy" src="img/${id}-d.webp" alt="${esc(`difference, ${p.pair} page ${p.page}`)}"></figure></div></article>`

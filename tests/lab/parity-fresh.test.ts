@@ -49,6 +49,10 @@ describe('which members are laid with a fresh row', () => {
   it("a cell today's group decision kept, whose reply the stored rows do not hold, gets one: v2's own decision runs on it", () => {
     expect(needs.get(6)).toEqual({ id: 'f', cause: 'group' })
   })
+  it("a text today never sent (its name/code rule) gets one, named so", () => {
+    const n = freshNeeds([member(2, 'b')], rows, units, { todayKept: () => true })
+    expect(n.get(2)).toEqual({ id: 'b', cause: 'today-kept' })
+  })
   it('a served member, one the prepare gives a reason for, one the paper keeps, a name: none', () => {
     expect([...needs.keys()].sort()).toEqual([2, 3, 6])
   })
@@ -179,9 +183,10 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
     expect(freshOf('p-zh', v2)).toEqual({
       units: 3,
       kinds: { para: 1, figure: 2 },
+      causes: { 'no-row': 2, unit: 1 },
       pages: [
-        { pair: 'p-zh', page: 3, units: ['t7', 't8'], causes: { 'no-row': 1, unit: 1 } },
-        { pair: 'p-zh', page: 4, units: ['p30'], causes: { 'no-row': 1 } },
+        { pair: 'p-zh', page: 3, units: ['t7', 't8'], ords: [11, 12], causes: { 'no-row': 1, unit: 1 } },
+        { pair: 'p-zh', page: 4, units: ['p30'], ords: [30], causes: { 'no-row': 1 } },
       ],
       never: [
         { pair: 'p-zh', page: 4, unit: 'p30', drawn: true },
