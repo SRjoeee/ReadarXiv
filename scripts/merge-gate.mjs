@@ -16,15 +16,17 @@
 // assignment or holding an expansion is never allowed here, whatever its base.
 //
 // What it reads is the command line: a merge wherever it stands in it — after a `cd`, behind a wrapper, inside a
-// substitution, in the string or the here-document a shell is handed — and the request body a GraphQL call names as
-// a file. A pull request or a repository named by a variable is read at the variable's value only where the line
+// substitution, in what a shell is handed to run (a `-c` string, a here-document, a here-string, a pipe) — and the
+// request body a GraphQL call names as a file. A pull request or a repository named by a variable is read at the variable's value only where the line
 // leaves no doubt about it: inside the body of its own `for n in 5 6`, when that body sets `n` nowhere, or when the
 // whole line sets the name once, to a literal (`R=owner/name`); and only on a line whose every command is known not
 // to assign (a closed list of names: the shells have more ways to assign than a list of those could hold). A name
 // set twice, in a branch or a loop's later pass, or on a line that runs anything else, is nobody's to read. The
 // same doubt covers what leans on a directory or a branch: after a `cd` the shell may have skipped, behind a
 // wrapper, in a loop that moves. It does not follow the line into a program it runs (a script that merges is that
-// script's to answer for), and it sees shell commands only, not a merge another tool makes.
+// script's to answer for), it sees shell commands only, not a merge another tool makes, and it does not undo a line
+// written to hide a merge (a command name built by brace or glob expansion, an encoded payload): it guards against
+// forgetting the rule, not against meaning to break it.
 //
 // The first version read less: it took `gh pr merge` only as three words in a row, resolved every merge in the
 // directory the command started in, and kept a substitution inside quotes as text. The review of #635 walked past
@@ -151,8 +153,8 @@ function substitutionsIn(text) {
  *  removed; a redirection's target and a here-document's body are no words); word for word, `dynamic`: the shell
  *  would expand something in it (`$…`, a substitution), so the word is not what it reads as; its `scripts`: the text
  *  of every substitution it holds, in a word or in a here-document the shell expands, each a command line of its
- *  own; its `bodies`: the text of its here-documents; and `before` / `after`, the operators that join it to its
- *  neighbours. `compound`: more than one command, or a
+ *  own; its `bodies`: the text of its here-documents and here-strings; and `before` / `after`, the operators that
+ *  join it to its neighbours. `compound`: more than one command, or a
  *  substitution; `redirected`: a redirection or a here-document. */
 export function simpleCommands(text) {
   const commands = []
@@ -166,6 +168,7 @@ export function simpleCommands(text) {
   let wordIsDynamic = false
   let quote = null
   let target = false
+  let hereString = false
   let begun = false
   let joint = ''
   let before = ''
@@ -183,8 +186,9 @@ export function simpleCommands(text) {
       if (!target) {
         words.push(word)
         dynamic.push(wordIsDynamic)
-      }
+      } else if (hereString) bodies.push(word)
       target = false
+      hereString = false
     }
     word = null
     wordIsDynamic = false
@@ -201,6 +205,7 @@ export function simpleCommands(text) {
     scripts = []
     bodies = []
     target = false
+    hereString = false
     begun = false
   }
   const substitute = script => {
@@ -247,6 +252,12 @@ export function simpleCommands(text) {
       extend(SUBSTITUTION)
       substitute(text.slice(i + 1, end))
       i = end
+    } else if ((c === '<' || c === '>') && text[i + 1] === '(') {
+      // a process substitution: where it stands, a file name the shell makes up; what it holds, a script
+      const end = closing(text, i + 2)
+      extend(SUBSTITUTION)
+      substitute(text.slice(i + 2, end))
+      i = end
     } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<') {
       seen.redirected = true
       endWord()
@@ -257,6 +268,8 @@ export function simpleCommands(text) {
       seen.redirected = true
       if (word !== null && /^\d+$/.test(word)) word = null
       endWord()
+      // (`<<<`: the word that follows is what the command reads, kept with its here-documents)
+      hereString = text.startsWith('<<<', i)
       while (i + 1 < text.length && '<>&|'.includes(text[i + 1])) i++
       target = true
     } else if (c === '\n' && heredocs.length > 0) {
@@ -486,19 +499,21 @@ function shellInput(words, at) {
 }
 
 /** The command lines a command hands to a shell: the string after `bash -c`, the arguments of `eval`, and the
- *  here-documents of a shell that reads its commands from the standard input (`bash <<'EOF'`, `bash -s`: quoted or
- *  not, that body runs); with `at`, the index of the word that is the shell. A shell given a script file runs the
- *  file, which is not the line's to read. */
+ *  here-documents and here-strings of a shell that reads its commands from the standard input (`bash <<'EOF'`,
+ *  `bash -s`, `bash <<< '…'`: quoted or not, that text runs); with `at`, the index of the word that is the shell,
+ *  and `reads`, whether it reads the standard input at all. A shell given a script file runs the file, which is not
+ *  the line's to read. */
 function shellStrings({ words, bodies }, start) {
   for (let j = start; j < words.length; j++) {
     const name = words[j].slice(words[j].lastIndexOf('/') + 1)
-    if (name === 'eval') return { at: j, scripts: [words.slice(j + 1).join(' ')] }
+    if (name === 'eval') return { at: j, scripts: [words.slice(j + 1).join(' ')], reads: false }
     if (!SHELLS.has(name)) continue
     const { string, stdin, first } = shellInput(words, j)
-    if (string) return { at: j, scripts: first === undefined ? [] : [first] }
-    return { at: j, scripts: stdin || first === undefined ? bodies : [] }
+    if (string) return { at: j, scripts: first === undefined ? [] : [first], reads: false }
+    const reads = stdin || first === undefined
+    return { at: j, scripts: reads ? bodies : [], reads }
   }
-  return { at: start, scripts: [] }
+  return { at: start, scripts: [], reads: false }
 }
 
 /** Commands that cannot set a shell variable: programs of their own, and the builtins that only test, print, move
@@ -727,8 +742,12 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       const handed = shellStrings(command, start)
       const behind = handed.at > start || words.slice(0, handed.at).some(word => REPOINTS.test(word))
       const there = behind ? { ...within, dirKnown: false, branchKnown: false } : within
+      // a shell at the end of a pipe runs what the pipe carries: the words and the here-documents of the commands
+      // that feed it are what the line shows of that (`echo '…' | bash`, `cat <<EOF | sh`)
+      const piped = []
+      for (let k = index; handed.reads && k > 0 && /^\|&?$/.test(commands[k].before); k--) piped.push(...commands[k - 1].words.slice(1), ...commands[k - 1].bodies)
       for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
-      for (const script of handed.scripts) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
+      for (const script of [...handed.scripts, ...piped]) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
     }
     // (what a substitution runs is a command that ran: the branch, and any file, may be another after it)
     if (scripts.length > 0) context.branchKnown = false

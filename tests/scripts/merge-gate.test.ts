@@ -59,6 +59,8 @@ describe('simpleCommands', () => {
     expect(compound).toBe(true)
     expect(commandsOf('echo "a $(gh pr merge 5) b" `date`')[0]?.scripts).toEqual(['gh pr merge 5', 'date'])
     expect(commandsOf(`echo '$x' "$x"`)[0]?.dynamic).toEqual([false, false, true])
+    // a process substitution is a word the shell decides, and a script (#635, Codex)
+    expect(commandsOf('diff <(gh pr merge 5) >(cat) file')[0]).toMatchObject({ words: ['diff', '$(…)', '$(…)', 'file'], dynamic: [false, true, true, false], scripts: ['gh pr merge 5', 'cat'] })
   })
 
   it('drops a redirection with its target, a comment, and the body of a here-document', () => {
@@ -133,6 +135,19 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).map(m => m.ref), text).toEqual(['411'])
     }
+    // the other ways a line hands a shell its commands on the standard input: a here-string (#635, Codex), a pipe
+    for (const text of [
+      `bash <<< 'gh pr merge 411 --merge'`,
+      `sh -e <<<"gh pr merge 411"`,
+      `echo 'gh pr merge 411 --merge' | bash`,
+      `printf '%s\\n' 'gh pr merge 411' | tee log | sh -s`,
+      "cat <<'EOF' | bash\ngh pr merge 411\nEOF",
+    ]) {
+      expect(merges(text).map(m => m.ref), text).toEqual(['411'])
+    }
+    // (a here-string is data to anything that is no shell)
+    expect(merges(`cat <<< 'gh pr merge 411'`)).toEqual([])
+    expect(merges(`echo 'gh pr merge 411' | cat`)).toEqual([])
     // a shell given a script file runs the file, which is not the line's to read; its here-document is the file's input
     expect(merges("bash release.sh <<'EOF'\ngh pr merge 411\nEOF")).toEqual([])
     // (words handed to a program are not its script, but a wrapper may run them: read as a merge behind one, and asked about)
@@ -357,7 +372,7 @@ describe('mergesIn', () => {
     expect(merges(`gh api graphql -f query='query($id: ID!) { node(id: $id) { id } }' -F id="$ID"`)).toEqual([])
     expect(merges('gh api graphql -f query=@literal')).toEqual([])
     // a query the line does not show, and a body file the line does not name, are a request nobody can read
-    for (const text of ['gh api graphql -f query="$Q"', 'Q=$(cat merge.graphql); gh api graphql -f query="$Q"', 'gh api graphql --input "$FILE"', 'gh api graphql -F query=@$f', "gh api graphql --input - <<'EOF'\n{}\nEOF"]) {
+    for (const text of ['gh api graphql -f query="$Q"', 'Q=$(cat merge.graphql); gh api graphql -f query="$Q"', 'gh api graphql --input "$FILE"', 'gh api graphql -F query=@$f', "gh api graphql --input - <<'EOF'\n{}\nEOF", 'gh api graphql --input <(cat mutation.json)']) {
       expect(merges(text).at(-1), text).toMatchObject({ unreadable: true })
     }
     // a body file is read before the line runs, so it is trusted only while nothing on the line could have rewritten
@@ -527,6 +542,8 @@ describe('against the shell itself', () => {
     'n=603\ngh pr merge $n\n',
     'for n in 603 411\ndo\n  gh pr merge $n --merge\ndone',
     'bash -ce "gh pr merge 5 -R o/r"; bash -euo pipefail -c "cd a && gh pr merge 6 -R o/r"',
+    'bash <<< "gh pr merge 5 -R o/r"; echo "gh pr merge 6 -R o/r" | bash',
+    'cat <(echo x) > /dev/null; gh pr merge 7 -R o/r',
   ]
   /** The pull request a recorded `gh` call merged, or undefined when it was no merge */
   const merged = (args: string) => {
