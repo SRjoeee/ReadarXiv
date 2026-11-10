@@ -71,13 +71,17 @@ export interface TodayShape {
   hw: number
 }
 /** an item of ink a figure text's band meets (roomOf's `met`, the copy's): a glyph of its page by its index, or a box by its index
- *  with its box [x0, y0, x1, y1], its lines where pageInk kept them, and its kind (a path's index, an image -3, …) */
-export type TodayMet = { g: number } | { b: number; box: number[]; shape: TodayShape | null; kind: number | undefined }
+ *  with its box [x0, y0, x1, y1], its lines where pageInk kept them, and its kind (a path's index, an image -3, …); `ground`, a
+ *  tone painted before the text under part of it, which crowds nothing */
+export type TodayMet =
+  | { g: number }
+  | { b: number; box: number[]; shape: TodayShape | null; kind: number | undefined; ground?: boolean }
 export interface TodayFigures {
   units: TodayFigureUnit[]
   glyphs: Map<number, number>[]
   turned: Map<number, number>[]
-  /** (the copy's) each crowded figure text's met ink, by its k, and the depth under its baseline of the stroke under its text */
+  /** (the copy's) each crowded figure text's met ink, by its k, and the depth under its baseline of the stroke under its text;
+   *  an uncrowded one's tones under part of it alone */
   met: Map<number, { items: TodayMet[]; under: number | null }>
 }
 export interface TodayLedger {

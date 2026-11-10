@@ -202,6 +202,44 @@ describe('figure-lines: F0, a figure’s line of words and a run of one pitch', 
     )
     const [b] = figureLinesOf([badge.page], badge.fig, () => false, MONO)
     expect(b!.ks).toEqual([1, 2])
+    // (the same row on a band the whole line stands on, its badge on it (2610.19159v1 p53): the band holds the badge's label as
+    // well as the path, no chip's fill; the label 7 pt from the title stays its own)
+    const band = pageOf(
+      [
+        [
+          { text: 'Step 284', font: 'SFNS' },
+          { text: 'Agent Action: Write ', font: 'SFNS', x: 129 },
+          { text: 'a.py', font: 'LMMono10-Regular' },
+        ],
+      ],
+      [
+        [70, 696, 400, 709],
+        [70, 696, 124, 709],
+      ],
+    )
+    const banded = figureLinesOf([band.page], band.fig, () => false, MONO)
+    expect(banded.map((t) => t.ks)).toEqual([[1, 2]])
+  })
+  it('makes runs in two faces that abut, no word space between them, one text (2608.06701v1 p1’s bold "Thought" and its colon)', () => {
+    const { page, fig } = pageOf([
+      [
+        { text: 'Thought', font: 'Arial-BoldMT' },
+        { text: ': The user wants to implement the', font: 'ArialMT' },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, MONO)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.els).toEqual([])
+    expect(t!.why).toBeNull()
+    // (two labels a word space apart or more, in no face of one pitch: each its own, as today's reading made them)
+    const two = pageOf([
+      [
+        { text: 'Forward', font: 'Arial-BoldMT' },
+        { text: 'Backward', font: 'ArialMT', x: 116 },
+      ],
+    ])
+    expect(figureLinesOf([two.page], two.fig, () => false, MONO)).toEqual([])
   })
 })
 
@@ -247,6 +285,67 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(t!.why).toBeNull()
     expect(t!.container!.over).toBeCloseTo(712 - 0.2 - 700, 6)
     expect(t!.container!.under).toBeCloseTo(700 - (694 + 0.2), 6)
+  })
+  it('reads a fill drawn word by word as one fill: a highlight under the whole text its room, no word an element (2610.40576v1 p17)', () => {
+    const { page, fig } = pageOf([[{ text: 'So row 2, col3 must be 2.', font: 'DejaVuSans' }]])
+    const g = page.glyphs as Glyph[]
+    // (a piece under each word, abutting its neighbour's in the space between, on one band: the highlight a package sets word
+    // by word, a point beyond the text's ends)
+    const pieces: TodayShape[] = []
+    let from = g[0]!.x0 - 1
+    for (let i = 0; i <= g.length; i++)
+      if (i === g.length || g[i]!.blank) {
+        const to = i === g.length ? g.at(-1)!.x1 + 1 : (g[i]!.x0 + g[i]!.x1) / 2
+        pieces.push(rect(from, 697, to, 709, { stroke: false, fill: true, hw: 0 }))
+        from = to
+      }
+    crowd(
+      fig,
+      0,
+      pieces.map((s, i) => boxMet(i, s)),
+    )
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.why).toBeNull()
+    expect(t!.els).toEqual([])
+    expect(t!.container!.over).toBeCloseTo(709 - 700, 6)
+    // (a piece under one word alone, its neighbour's fill a word space away: that word's decoration still)
+    const one = pageOf([[{ text: 'see the final.py now', font: 'DejaVuSans' }]])
+    const h = one.page.glyphs as Glyph[]
+    crowd(one.fig, 0, [boxMet(0, rect(h[8]!.x0 - 1, 697, h[15]!.x1 + 1, 709, { stroke: false, fill: true, hw: 0 }))])
+    const [u] = figureLinesOf([one.page], one.fig, () => false, null)
+    expect(u!.els.map((e) => e.kind)).toEqual(['cite'])
+  })
+  it('makes a stretch a tone under it holds whole an element carrying the tone, in a text nothing crowds (2608.06701v1 p1)', () => {
+    // ("`host_label` static method in `CallbackBase`": a blue bar under each name, its backticks outside it, painted before it)
+    const { page, fig } = pageOf([[{ text: '`host_label` static method in `CallbackBase`', font: 'ArialMT' }]])
+    const g = page.glyphs as Glyph[]
+    const bar = (a: number, b: number): TodayMet => ({
+      ...boxMet(0, rect(g[a]!.x0 - 0.5, 697, g[b]!.x1 + 0.5, 709, { stroke: false, fill: true, hw: 0 })),
+      ground: true,
+    })
+    const first = bar(1, 10)
+    const second = { ...bar(31, 42), b: 1 }
+    fig.met.set(0, { items: [first, second], under: null })
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.boxes, e.glyphs.length])).toEqual([
+      ['cite', [0], 10],
+      ['cite', [1], 12],
+    ])
+    // (a tone whose edge cuts a word, a plot's region under a label's end: a ground still, nothing of the text's)
+    const cut = pageOf([[{ text: 'Accuracy rises', font: 'ArialMT' }]])
+    const h = cut.page.glyphs as Glyph[]
+    cut.fig.met.set(0, {
+      items: [
+        {
+          ...boxMet(0, rect(h[3]!.x0, 697, h.at(-1)!.x1 + 5, 709, { stroke: false, fill: true, hw: 0 })),
+          ground: true,
+        },
+      ],
+      under: null,
+    })
+    expect(figureLinesOf([cut.page], cut.fig, () => false, null)).toEqual([])
   })
   it('reads a diamond’s room at the text’s ends, where its slanted sides come nearest', () => {
     const { page, fig } = pageOf([[{ text: 'detected?', font: 'DejaVuSans' }]])

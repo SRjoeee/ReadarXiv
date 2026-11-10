@@ -300,7 +300,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       // there, as TeX set it (a heading a class sets in a boxed panel); else its middle; the unit's set below may take its
       // column's edge over either)
       u.anchor = room.told ? room.anchor : r.led ? 'start' : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
-      if (room.crowded) { u.why = 'crowded'; stats.crowded++; met.set(k, { items: room.met, under: room.under }) }
+      // (CHANGED: a crowded unit's met ink and its tones, an uncrowded one's tones under part of it, for the relation reading)
+      if (room.crowded) { u.why = 'crowded'; stats.crowded++; met.set(k, { items: [...room.met, ...room.grounds], under: room.under }) }
+      else if (room.grounds.length) met.set(k, { items: room.grounds, under: room.under })
       u.under = room.crowded ? null : room.under
       units.push(u)
       mine.push({ u, r, free: room })
@@ -661,7 +663,7 @@ function roomOf(pg, f, u, own) {
   let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
   // (CHANGED: each item of ink the band meets, a glyph's index `g` or a box's `b` with its box and its lines where pageInk kept
   // them; the scan goes on past the first, so that a unit the relation reading frees has its room and anchor read whole)
-  const met = [], metBox = new Set()
+  const met = [], metBox = new Set(), grounds = []
   let atBox = null
   const meet = () => {
     crowded = true
@@ -750,6 +752,11 @@ function roomOf(pg, f, u, own) {
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
     atBox = { b: b / 4, box: [B[b], B[b + 1], B[b + 2], B[b + 3]], shape: shape ?? null, kind: pg.paths?.[b / 4] }
+    // (CHANGED: a tone painted before the text, a fill of no stroke and no pattern an edge of whose box stands inside the text's
+    // extent, across its band: a tone under part of it, a highlight under a stretch of its words, which crowds nothing (shapeRoom);
+    // recorded for the relation reading (figure-lines.ts), which carries one holding a stretch of its words whole with them)
+    if (shape?.fill && !shape.stroke && !shape.pattern && !after && e[1] < band[3] && e[3] > band[1] && e[2] > 0 && e[0] < u.length && (e[0] > 0 || e[2] < u.length))
+      grounds.push({ ...atBox, ground: true })
     // (what of it shows: a cover painted after it hides it where it holds the band)
     const next = b / 4 + 1, al = shownBy(next, near ? along1 : null), fr = shownBy(next, free1)
     const un = next <= lastCover ? (top, a0, a1) => { if (seen(next, Math.max(a0, band[0]), Math.min(a1, band[2])).length) under1(top) } : under1
@@ -769,7 +776,7 @@ function roomOf(pg, f, u, own) {
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
   // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default; `under`, the
   // depth under its baseline of the nearest stroke under its text, PDF units, or null where none is)
-  return { crowded, met, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
+  return { crowded, met, grounds: grounds.filter(x => !metBox.has(x.b)), anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
