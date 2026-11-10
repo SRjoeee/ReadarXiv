@@ -3,7 +3,7 @@
 // connection test, and the session router's contract (cancel, retire). Engines are the package's own adapters over a
 // scripted fetch: Microsoft's endpoint, Google's, and the reader's LLM service as a fake on the tags wire
 import { chainOf, Fault, type FetchInit, type FetchReply, type Store, tagsWire, type Translator, type UnitIn } from '@readarxiv/translate'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { KeyValues } from '@/cache/translate-store'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
@@ -89,6 +89,29 @@ describe('the transport: a call', () => {
     const s = await t.status()
     expect(s.engine).toEqual({ id: 'google-web', demoted: { id: 'microsoft', kind: 'network', message: expect.any(String) } })
     expect(s.demotions).toEqual([{ id: 'microsoft', kind: 'network' }])
+  })
+})
+
+describe('the transport: what a call logs', () => {
+  it('a translator passed over for every unit of a call is logged once for the call, with the count: two calls of 60 units, two lines', async () => {
+    const lines: string[] = []
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const e = endpoints({ msStatus: () => 429 })
+      const h = harness({}, { fetch: e.fetch, warn: line => lines.push(line) })
+      const t = await h.make()
+      for (const call of [0, 1]) {
+        const units = Array.from({ length: 60 }, (_, i) => plain(`c${call}u${i}`, `Sentence ${i} of call ${call}.`))
+        const r = await t.translate({ units, target: 'cmn' })
+        expect(r.ok && r.results.every(x => x.ok && x.engine === 'google-web')).toBe(true)
+      }
+      const said = warn.mock.calls.map(c => c.join(' ')).filter(l => / passed over \(/.test(l))
+      expect(said).toEqual([expect.stringMatching(/^\[axt\] microsoft passed over \(rate-limit\) for 60 units: /), expect.stringMatching(/^\[axt\] microsoft passed over \(rate-limit\) for 60 units: /)])
+      expect(lines.filter(l => l.includes('passed over')).length).toBe(2)
+      expect(e.sent.microsoft).toBe(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 

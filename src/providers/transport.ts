@@ -110,6 +110,9 @@ export interface LocalTransportDeps extends TranslatorDeps {
   onFailure?: (info: { id: string; kind: ProviderErrorKind; message: string; status?: number }) => void
 }
 
+/** a hand-over a call met: the service, why, and for how many of the call's units */
+interface Told { id: string; kind: ProviderErrorKind; message: string; count: number }
+
 /** How long a hand-over of an engine that could not answer stands in the popup's words (fallback.ts's cooldown before) */
 const HANDOVER_MS = 60_000
 /** a probe of whether an engine serves the target now, for the status (providers/index.ts PROBE_MS before) */
@@ -247,6 +250,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     live.set(scope, mine)
     mine.add(ac)
     inFlight++
+    /** the hand-overs this call met, by service and kind: each logged once, when the call ends, with its count of units */
+    const told = new Map<string, Told>()
     try {
       const out = new Map<string, UnitResult>()
       // the rows first: a unit with one is answered by it, nothing asked
@@ -270,7 +275,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         const byT = passed.get(n.id) ?? new Map<string, Why['kind'][]>()
         passed.set(n.id, byT)
         byT.set(n.by, [...(byT.get(n.by) ?? []), n.why.kind])
-        handover(answerers.get(n.by), n.why)
+        handover(answerers.get(n.by), n.why, told)
       }
       const writes: [string, string][] = []
       if (todo.length) {
@@ -296,6 +301,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       if (sent > 0 || failed) deps.note?.(batchLine({ ...(call.scope !== undefined ? { scope: call.scope } : {}), segments: call.units.length, cached, calls: sent, done: results.filter(r => r.ok).length, ...(failed && !failed.ok ? { failed: failed.error.kind } : {}) }))
       return { ok: true, results, cached }
     } finally {
+      for (const x of told.values()) {
+        // the worker's console says it once a call, as the queues it replaced did (`[axt] batch failed`): pnpm e2e takes this
+        // line as the boundary no request of a session stopped by it may cross (#96, #223); the call's answer, which stops a
+        // session, comes after it
+        const units = `for ${x.count} unit${x.count === 1 ? '' : 's'}`
+        console.warn(`[axt] ${x.id} passed over (${x.kind}) ${units}: ${redact(x.message)}`)
+        deps.warn?.(`[axt] ${x.id} passed over ${units}: ${redact(x.message)}`)
+      }
       inFlight--
       mine.delete(ac)
       if (!mine.size) live.delete(scope)
@@ -307,11 +320,17 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     const a = answerers.get(identity) ?? (by === 'runs:mixed' ? built.primary : undefined)
     return a ? { engine: a.id, kind: a.kind } : {}
   }
-  /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's */
-  const handover = (a: Answerer | undefined, why: Why) => {
+  /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's; told once a
+   *  call (`told`), the units after the first counted (two calls of 60 units passing a cooling translator logged 120 lines) */
+  const handover = (a: Answerer | undefined, why: Why, told: Map<string, Told>) => {
     if (!a || why.kind === 'refused' || why.kind === 'aborted') return
     if (why.kind === 'unconfigured' && why.code === 'no-language') return
     const info = errorOf(why, why.kind === 'unconfigured' && why.code === 'key-refused' ? lastStatus : undefined)
+    const seen = told.get(`${a.id}|${info.kind}`)
+    if (seen) {
+      seen.count++
+      return
+    }
     const lasting = info.kind === 'no-key' || info.kind === 'auth'
     // a lasting hand-over already known (the health record's refused key, with its 401) keeps what it says
     if (lasting && demoted.get(a.id)?.until === Number.POSITIVE_INFINITY) return
@@ -319,10 +338,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: info.kind, message: info.message }
     // a refused key of a stored service of the reader's (a 401): the health record's (background/health-guard.ts)
     if (info.kind === 'auth' && info.status === 401 && serviceOf(config, a.id)) deps.onFailure?.({ id: a.id, kind: 'auth', message: info.message, status: 401 })
-    // the worker's console says it too, the moment the chain learnt it, as the queues it replaced did (`[axt] batch
-    // failed`): pnpm e2e takes this line as the boundary no request of a session stopped by it may cross (#96, #223)
-    console.warn(`[axt] ${a.id} passed over (${info.kind}): ${redact(info.message)}`)
-    deps.warn?.(`[axt] ${a.id} passed over: ${redact(info.message)}`)
+    told.set(`${a.id}|${info.kind}`, { id: a.id, kind: info.kind, message: info.message, count: 1 })
   }
   const answered = (id: string) => {
     lastAnswer = id
