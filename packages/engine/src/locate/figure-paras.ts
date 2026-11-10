@@ -51,7 +51,8 @@ export interface Para {
   justified: boolean
 }
 
-const sameFace = (a: ParaLine, b: ParaLine) =>
+/** two lines in one face family, weight, size and fill (a paragraph's; a node's label) */
+export const sameFace = (a: ParaLine, b: ParaLine) =>
   !!a.face &&
   a.face === b.face &&
   a.bold === b.bold &&

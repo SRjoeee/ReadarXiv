@@ -21,7 +21,7 @@ import {
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
-import { PARA_ALIGN_TOL, type ParaLine, parasOf } from './figure-paras.ts'
+import { PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
 interface G {
@@ -279,29 +279,34 @@ function linesOf(
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
     const taken = new Set<number>()
-    // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, one under the
-    // other, every one a line of words: one text, its lines top to bottom, its room the path's inside (roomIn), set as its lines
-    // are (their centres one: a node's label centred; else their left or right edges)
+    // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, a node's label
+    // (below), every one a line of words: one text, its lines top to bottom, centred, its room the path's inside (roomIn)
     for (const h of fig.holds ?? []) {
       if (h.p !== p) continue
       const ks = new Set(h.ks)
       const idx = lines.flatMap((l, i) => (l.ks.length && l.ks.every((k) => ks.has(k)) ? [i] : []))
       if (idx.length < 2 || new Set(idx.flatMap((i) => lines[i]!.ks)).size !== ks.size) continue
-      if (idx.some((i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed'))) continue
+      if (
+        idx.some(
+          (i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed') || reads[i]!.marker.length,
+        )
+      )
+        continue
       idx.sort((a, b) => lines[b]!.y - lines[a]!.y || lines[a]!.x0 - lines[b]!.x0)
-      // (one under the other: two lines on one baseline in one path are two labels, side by side (2608.06701v1 p8))
-      if (idx.some((i, n) => n && Math.abs(lines[i]!.y - lines[idx[n - 1]!]!.y) <= RUN_DY * lines[i]!.size)) continue
       const L = idx.map((i) => lines[i]!)
+      const F = idx.map((i) => proseFacts({ l: lines[i]!, read: reads[i]! }, glyphs, boxes))
       const tol = PARA_ALIGN_TOL * Math.max(...L.map((l) => l.size))
       const spread = (f: (l: Line) => number) => Math.max(...L.map(f)) - Math.min(...L.map(f))
-      const align =
-        spread((l) => (l.x0 + l.x1) / 2) <= tol
-          ? 'c'
-          : spread((l) => l.x0) <= tol
-            ? 'l'
-            : spread((l) => l.x1) <= tol
-              ? 'r'
-              : 'c'
+      // (a node's label as its path sets it: its lines one under the other with no blank line between (two lines on one baseline
+      // are two labels, 2608.06701v1 p8's), in one face, size, weight and fill (a title over a subtitle in another is two texts),
+      // no line an item's (a list in a node, 2608.06007v1 p1's "KV Lifecycle - identify - place"), and centred, as a node sets
+      // its label: lines set flush in a path are its rows (a value over a value, 2610.37668v1's PSNR / LPIPS / FPS over each
+      // image; a legend's entries))
+      const stacked = F.every(
+        (f, n) => !n || (F[n - 1]!.y - f.y > 0.5 * f.size && F[n - 1]!.y - f.y - F[n - 1]!.band < F[n - 1]!.band),
+      )
+      if (!stacked || !F.every((f) => sameFace(F[0]!, f)) || spread((l) => (l.x0 + l.x1) / 2) > tol) continue
+      const align = 'c' as const
       const ft: FigureText = {
         ks: idx.flatMap((i) => lines[i]!.ks),
         page: p,

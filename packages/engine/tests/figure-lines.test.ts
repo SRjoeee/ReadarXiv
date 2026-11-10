@@ -325,8 +325,8 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const gapped = (text: string, x: number) => [{ text, font: 'TimesNewRomanPSMT', gaps: true, x }]
     const end = (elsewhere: boolean) => {
       const { page, fig } = pageOf([
-        gapped('test_password', 80),
-        gapped('_lookup.py', 85),
+        gapped('test_password', 79.5),
+        gapped('_lookup.py', 91),
         [],
         [],
         elsewhere ? gapped('run test_password_lookup.py now', 300) : [],
@@ -338,6 +338,25 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     }
     expect(end(true)).toEqual({ t: 'br', end: 'join' })
     expect(end(false)).toEqual({ t: 'br', end: 'space' })
+  })
+  it('joins a path’s lines as a node’s label alone: centred, in one face, no item among them (its rows, a title, a list apart)', () => {
+    const T = 'TimesNewRomanPSMT'
+    const holds = (parts: Parameters<typeof pageOf>[0]) => {
+      const { page, fig } = pageOf(parts)
+      fig.holds = [{ p: 1, b: 0, ks: parts.map((_, k) => k), shape: rect(60, 600, 200, 712) }]
+      return figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)
+    }
+    // (rows set flush left over an image, a value over a value: 2610.37668v1's PSNR / LPIPS / FPS)
+    expect(holds([[{ text: 'PSNR 17.03 dB', font: T, x: 72 }], [{ text: 'LPIPS 0.481', font: T, x: 72 }]])).toEqual([])
+    // (a title over a subtitle in another face, centred: two texts)
+    expect(
+      holds([
+        [{ text: 'Subtask B', font: 'TimesNewRomanPS-BoldMT', x: 100 }],
+        [{ text: 'dependent', font: T, x: 100 }],
+      ]),
+    ).toEqual([])
+    // (a list in a node: its items' own)
+    expect(holds([[{ text: '- identify', font: T, x: 100 }], [{ text: '- place', font: T, x: 106 }]])).toEqual([])
   })
   it('joins no two lines a path holds on one baseline: two labels side by side (2608.06701v1 p8’s "Prefix Phase", "Full Phase")', () => {
     const { page, fig } = pageOf([
