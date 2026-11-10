@@ -8,6 +8,7 @@
 // 2026-11-08: 2611.07042v1's pages 1 to 3, an inkheads unit on each).
 import type { Part } from '@readarxiv/format'
 import type { Rows } from '../types.ts'
+import { namedWaits } from './named.ts'
 
 /** the ids of the rows page `part` waits for, each once, in the part's stream order; empty where it can be laid. A member of a
  *  kind in `leave` (the reader's: shown untranslated) waits for nothing */
@@ -29,6 +30,8 @@ export function waitOf(
       // (a member that stays the original's whatever the rows (the prepare's why) waits for nothing)
       if (m.why || typeof m.text !== 'string' || leave.has(m.kind)) continue
       need(m.text)
+      // (a unit naming a person of the block elsewhere, with the names shown: its variant's row and the block's, named.ts)
+      for (const id of namedWaits(part, m.text, leave)) need(id)
     }
   return out
 }

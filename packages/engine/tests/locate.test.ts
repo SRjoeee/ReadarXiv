@@ -3542,3 +3542,68 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
     expect(new Map(m.spans).get('13')?.style).toBeUndefined()
   })
 })
+
+describe('a block name a unit holds elsewhere (docs/PDF-READER.md §19.15)', () => {
+  const objects = (ins: Instrument, L: ReturnType<typeof locate>) => [
+    ...bundle({
+      ins,
+      located: L,
+      addOn: addOnOf(L, 1),
+      original: new Uint8Array(10),
+      paper: { id: '2501.00001', version: 1, pages: 1 },
+      made: 'test',
+    }),
+  ]
+  it('writes the unit’s variant right after it, keeps the unit as it was, and states the names on its part', () => {
+    // (a correspondence footnote naming the block's author, 2610.22214v1's "Corresponding author: Shisheng Xiong.")
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'Corresponding author: Shisheng Xiong.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('footnote', 'Corresponding author: Shisheng Xiong.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    const all = o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : []))
+    expect(all.map((u) => u.kind)).toEqual(['heading', 'author', 'footnote', 'named'])
+    expect(all[2]!.id).toBe(units[2]!.id)
+    expect(all[3]!.content).toEqual([
+      text('Corresponding author: '),
+      { t: 'el', id: 'n0', kind: 'person', src: 'Shisheng Xiong' },
+      text('.'),
+    ])
+    const part = o.find((x) => x.kind === 'part')!
+    const paper = read('part', part.bytes, part.digest).paper
+    expect(paper.named).toEqual([[units[2]!.id, all[3]!.id, [['n0', 0, 14, 22]]]])
+    expect(paper.persons).toEqual([[units[1]!.id, 'author', 0]])
+    expect(paper.splits).toEqual([[units[1]!.id, [], [], [0]]])
+  })
+  it('makes no variant of a unit no part holds (its member unlocated, no line of it on any page)', () => {
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('para', 'A paragraph.'),
+      unitOf('footnote', 'Corresponding author: Shisheng Xiong.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    expect(
+      o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).map((u) => u.kind),
+    ).toEqual(['heading', 'author', 'para', 'footnote'])
+  })
+  it('states nothing where no unit holds a block name elsewhere', () => {
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('para', 'A paragraph.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    const part = o.find((x) => x.kind === 'part')!
+    const paper = read('part', part.bytes, part.digest).paper
+    expect([paper.named, paper.persons, paper.splits]).toEqual([undefined, undefined, undefined])
+    expect(o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).length).toBe(3)
+  })
+})

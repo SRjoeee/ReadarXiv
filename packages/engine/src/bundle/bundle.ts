@@ -5,7 +5,9 @@
 //
 // A part holds, as whole flows (§1.3): (a) every flow with a line on its page; (b) for each earlier page on which a member of
 // (a) has its first line, every flow with a line there; (c) every flow holding a member of a tie that also holds a member of
-// (a) or (b). Its rows are every `text` id of its members and the paper's names. Nothing else.
+// (a) or (b). Its rows are every `text` id of its members and the paper's names, and where a member's unit names a person of the
+// author block elsewhere (names.ts, docs/PDF-READER.md §19.15) its variant's and the block's units' that translate the names.
+// Nothing else.
 import {
   BOUNDS,
   chunkDigests,
@@ -23,6 +25,7 @@ import {
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
 import type { Located, Member } from '../locate/locate.ts'
 import { bySentence } from '../locate/words.ts'
+import { namesOf, partNames } from './names.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
 export type BundleObject =
@@ -240,15 +243,30 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       content: b.content,
       ...(bySentence(b.kind) ? { sentences: true as const } : {}),
     })
+  // (the block's names its units hold elsewhere, docs/PDF-READER.md §19.15: each unit's variant right after it, so that a
+  // translator is asked for both together)
+  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
+  const classes = new Map(all.map((u) => [u.id, new Map(u.classes ?? [])]))
+  const names = namesOf(
+    units,
+    (u, p) => classes.get(u)?.get(p),
+    // (the members a part holds: one with no line on any page is drawn nowhere)
+    placed.flatMap((x) =>
+      typeof x.text === 'string' && x.lines.length ? [{ ord: x.ord, unit: x.text, kind: x.kind }] : [],
+    ),
+  )
+  const written = units.flatMap((u) => {
+    const v = names.variants.get(u.id)
+    return v ? [u, v] : [u]
+  })
   const unitDigests: string[] = []
-  for (const w of unitWindows(units)) {
+  for (const w of unitWindows(written)) {
     const { bytes, digest } = write('units', { format: 1, units: w })
     unitDigests.push(digest)
     yield { kind: 'units', bytes, digest, count: w.length }
   }
 
   // ---- parts
-  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
   const flowOf = new Map<number, number>()
   located.flows.forEach((f, i) => {
     for (const o of f) flowOf.set(o, i)
@@ -261,7 +279,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   })
   const tieOrds = located.ties.map((t) => (t.rule === 'cells' ? t.cells.flat() : t.ords))
   const faces = facesOf(members)
-  const names: [string, string][] = ins.units
+  const babel: [string, string][] = ins.units
     .filter((u) => u.kind === 'name' && u.name === undefined)
     .map((u) => [textOf(u.content), u.id])
   const partDigests: (string | null)[] = []
@@ -308,13 +326,20 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
             for (const l of located.links.get(q) ?? []) if (l.owner?.[0] === o) across.push({ ...l, page: q })
       }
     const links = [...own, ...across]
+    const named = partNames(
+      names,
+      take.flatMap((i) =>
+        located.flows[i]!.flatMap((o) => (typeof placed[o]!.text === 'string' ? [placed[o]!.text] : [])),
+      ),
+    )
     const part: Part = {
       format: 1,
       page: p,
       paper: {
         faces,
         ...(ins.tex.lineskip ? { lineskip: ins.tex.lineskip } : {}),
-        ...(names.length ? { names } : {}),
+        ...(babel.length ? { names: babel } : {}),
+        ...(named ?? {}),
       },
       // (a member's words where it has ink on the page, a line, an element's or its label's: one carried for another page's sake,
       // in a flow or a tie it shares, lights there, not here)
