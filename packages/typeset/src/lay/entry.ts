@@ -40,6 +40,7 @@ import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } 
 import { tokenBand } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
+import { namedRows } from './named.ts'
 import { waitOf } from './wait.ts'
 
 /** what a caller may ask of a lay besides its Page. A head's names are no option: the target's are the rules' (Rules.heads),
@@ -255,12 +256,16 @@ export function nameOf(
 }
 
 /** layPage (design-a §1.2): page `part.page` laid from its part and the target's rows */
-export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
+export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
   const members = part.flows.flat()
   // (the kinds the reader leaves the original's: its "what to translate", design-a's Choices.leave)
   const leave = new Set(rules.leave)
-  const waiting = waitOf(part, rows, leave)
+  // (a unit naming a person of the author block elsewhere laid with the block's translation of the name where the names
+  // toggle shows the block: one person, one translation, docs/PDF-READER.md §19.15, named.ts)
+  const rows = namedRows(part, given, leave)
+  // (what the page waits for read off the rows as they came: a named unit's own row in, its variant's and the block's not)
+  const waiting = waitOf(part, given, leave)
   const waitAll = (faces: [string, string][]): Page => ({
     page,
     wait: { rows: waiting, faces },

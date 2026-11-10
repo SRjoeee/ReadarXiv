@@ -6365,3 +6365,82 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   those units), and no source unit's text group moves; 216 of 216 local sources keep every unit's hash.
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
+
+### 19.15 One person, one translation (the block's names elsewhere)
+
+The owner's ruling of 2026-11-10: one person, one translation per paper. With the names toggle on, a name of the author block
+that the paper prints elsewhere is drawn with the block's translation of that name. "Elsewhere" covers an ACM reference format,
+a correspondence line, an acknowledgement, an author's biography and a self-citation. With the toggle off, that other text is
+ordinary text, translated and drawn as before: the same unit, the same wire and the same row, with nothing keyed by the toggle.
+The toggle still governs the block under the title alone (§19.13, the ruling of 2026-11-09).
+
+- **Why.** A name is translated again wherever it stands. Today's stored rows (the sweep cache, Microsoft) compare a name
+  translated alone with the same name in other units: outside references 12 differ, 5 agree and 4 stay English; in references
+  11 differ and 22 agree.
+  - 2610.22065v1's block line has 周文勇, its reference format 文永周 and its footnote 周文勇.
+  - 2604.14228v3's block has 申志强; its correspondence line came back 沈志强（ in one run and 申志强（ in another.
+- **A stretch.** A stretch is a unit's text between two of its pieces that set something, or its edges.
+  - A piece that sets something is an element that is not a tie, states no glue, is no forced break and is not silent, or a
+    nested unit's mark.
+  - A tie reads as a space, and an element that sets nothing reads as nothing.
+  - A group's edges are no cut: Microsoft returns a group that travelled on no wire hollow, with its words outside it. Of
+    today's stored replies, names cut at the group edges failed 73 of 293 times; cut at the elements alone, 0 of 242.
+- **A name.** A name is a stretch of the source's author declaration (a unit of kind `author`). It is trimmed of Unicode
+  punctuation, white space, symbols and controls at both ends, and holds two words or more: a given name and a surname as the
+  block writes them.
+  - A single word is not a person's name. 2609.36054v2 writes its places inside `\author` through its own `\formataffil`, and
+    its "Institute for Law \& AI" gives "AI", which stands in 99 of its paragraphs.
+- **The anchor.** A name's anchor is the first member of the block, by ord, one of whose stretches is the name. The block is
+  the names toggle's member kinds: author, affiliation and inknames.
+  - The anchor's row, cut at the same elements, gives the name's translation.
+  - A block that lists names with nothing between them has no anchor and changes nothing (IEEEtran's
+    `\IEEEauthorblockN{A, B and C}`).
+- **An occurrence.** An occurrence is the name's text inside one text piece of any other unit that is not kept.
+  - Any white space may stand between its words; no letter or digit may stand beside it.
+  - The longest name is taken first, and the anchor's own stretch is not an occurrence.
+  - A unit whose every occurrence is a whole stretch is resolved in its own row: its stretch's letters become the block's and
+    its own punctuation stays. These are 2610.22065v1's reference format names, each its own unit, and 2604.14228v3's
+    "Zhiqiang Shen (", which becomes 申志强（.
+  - Any other unit has a **variant**, a unit of kind `named` written right after it in Units. The variant is the unit with each
+    occurrence an element of kind `person`, whose `src` is the name as the unit writes it.
+  - The variant has its own id and wire, and so its own row and store key. The server translates it as any unit.
+- **The part** (Part.paper):
+  - `named`: each unit of the page's members that names a person elsewhere, its variant or '', and each name. A name is
+    stated as its element and its length and offset, for the sentences, or as its stretch.
+  - `persons`: each person's anchor, the anchor's member kind and its stretch.
+  - `splits`: how the anchors' rows, and the rows resolved in place, are cut.
+- **The lay** (packages/typeset `lay/named.ts`, one view of the rows at layPage's top; every caller lays the page alike). With
+  the names shown (the anchor's kind not left):
+  - **The variant's row:** each `person` element becomes the block's translation. Its `src` sentences map back onto the unit's
+    projection and its `tr` sentences onto the text as drawn, so that both panes light by sentence (§17).
+  - **A whole-stretch unit's own row:** its stretch's letters become the block's translation.
+  - **Cutting the block's row:** each cut must come back once and in order, and the row's stretches must hold a letter exactly
+    where the source's do. A row cut otherwise gives no name. The tags wire's element moved across a name would give the
+    neighbour's name between the same two elements, and the letters' places tell it.
+  - **Fallbacks:**
+    - where a name has no translation, a variant's member takes its own row as it came (its names cannot be told apart in
+      it);
+    - a whole-stretch unit keeps its own translation of that name.
+  - **Waiting:** a page waits for the variant's row and the anchors' rows besides the unit's own, while rows may come. Nothing
+    committed is laid again; a toggle lays every page again.
+- **Measured** (r9 bundles of the 88, plus 2604.14228v3):
+  - 332 names, 319 of them with an anchor (81 papers).
+  - 117 placed units in 29 papers hold one elsewhere:
+    - 95 references (self-citations);
+    - 9 reference format units;
+    - 6 correspondence lines;
+    - 2 acknowledgements;
+    - 4 biographies or end matter;
+    - 1 IEEE affiliation footnote.
+  - 11 of the 22 that are no references are resolved in their own rows. 103 units have a variant: 23.1K characters, 0.38 % of
+    the corpus's, at most 2.8 % of one paper.
+  - On page 1, 5 variants (483 characters) over 9 papers.
+- **The block's translation wins.** The block's translation is the person's, whatever it is. 2610.22195v1's block translates
+  each ICML name alone (延辰邓) where its acknowledgement, in a sentence, had 邓彦晨: the acknowledgement now reads the block's.
+  The block's own quality (names translated one by one rather than in a list) is a separate matter.
+- **Not covered.**
+  - Forms the block does not write: initials (152 references in 27 papers), surname first (42 in 12), running heads in
+    initials or in capitals (18 units in 7 papers), and a name across a tie outside the block (4 in references).
+  - A shorter name inside another person's longer one ("Jun Yang" in "Jun Yang Li") where the longer is no block name.
+  - The anchors' cuts are measured on Microsoft's replies alone. The tags wire's readings (Google, Chrome's built-in
+    translator) are tested on shaped replies (packages/translate `tests/names-wire.test.ts`).
