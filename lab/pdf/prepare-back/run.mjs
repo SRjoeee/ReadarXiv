@@ -193,7 +193,9 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), text: textOfPieces(pieces), pieces }
+  // (a kept block of e-mail addresses alone, the engine's `address`: `keptBy: 'address'`, which the parity reads, join.mjs
+  // candidateAddress)
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.address ? { keptBy: 'address' } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)

@@ -582,6 +582,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const onV2 = (l) =>
     v2Lines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
   const todayRaw = new Map(rec.today.units.map((u) => [`t${u.id}`, u.lines]))
+  // (the members v2's prepare keeps as a line of e-mail addresses, v2.mjs's `address` by member ord (the candidate's dump's
+  // `keptBy: 'address'`): the original's text, no translation missing, ADDRESS_RULING. Today's unit joined to one, or, joined to
+  // none (the block is a unit of its own, its id not today's), every line of it on one of a marked member's lines: on its
+  // baseline within half the size, the two overlapping across)
+  const address = new Set(v2.address ?? [])
+  const addressLines = [...address].flatMap((o) => (facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(o).style?.size ?? 0 })))
+  const onAddress = (l) =>
+    addressLines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
@@ -598,9 +606,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
     // (a member of the author block's, under the default toggles: the names toggle, off, keeps the block the original's whole,
     // whatever today translated of it, the ruling's: NAMES_RULING)
-    const ruled = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    const named = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    const mail = o?.part !== null && o?.part !== undefined ? address.has(o.part) : !!o?.lines?.length && o.lines.every(onAddress)
+    const ruled = named || mail
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = NAMES_RULING
+    if (ruled) out.diffs.at(-1).ruling = mail ? ADDRESS_RULING : NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -947,6 +957,9 @@ function headRuling(p, { v2, n, facts, orig }) {
   }
 }
 
+/** what a unit v2's prepare keeps as a line of e-mail addresses rests on (`shown`) */
+const ADDRESS_RULING =
+  "the coordinator's ruling of 2026-11-10 on the owner's principle (translating or keeping are both fine, a garbled translation never; PDF-READER §19.13): an e-mail address is a literal, never sent, and a line of addresses alone the prepare keeps whole is the original's text: no translation missing"
 /** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"

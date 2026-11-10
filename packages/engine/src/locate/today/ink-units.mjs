@@ -37,7 +37,7 @@
 //      over a line's break one only where no script stands at the break; a word that is a web address is one in whatever face,
 //      and so is an e-mail address in a word, the word's characters around it the text's, and a group of local parts before
 //      their one domain, every glyph of it whatever its face, over its words and the break of lines TeX set one after the other
-//      (a note of addresses alone is then no unit);
+//      (a note of addresses alone is then no unit, a kept block that says so, `address`);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -704,8 +704,23 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
   return blocks.map((b, j) => {
     const id = from + j, kind = INK_KIND[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
     const rows = rowsOf(id, kind, b.cls, b.lines, [], 0, pages)
-    return { id, kind, cls: b.cls, echo: null, kept: true, pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
+    return { id, kind, cls: b.cls, echo: null, kept: true, ...(addressesAlone(pages, b.lines) ? { address: true } : {}), pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
   })
+}
+
+/** CHANGED (with groupedAddresses): whether a kept block's lines are e-mail addresses and their separators alone — its text (a
+ *  word's gap a space, a line's break white space) holding one address at least, plain (EMAIL_ADDRESS) or a group (ADDRESS_GROUP),
+ *  and no letter or digit outside them —, stated on the block (`address`) for the lab, which reads such a block as the original's
+ *  text where today translated it (the coordinator's ruling of 2026-11-10); nothing the bundle carries */
+const ADDRESS_ALONE = new RegExp(`${ADDRESS_GROUP.source}|${EMAIL_ADDRESS.source}`, 'g')
+function addressesAlone(pages, lines) {
+  let s = ''
+  for (const l of lines) {
+    const G = pages[l.page - 1]?.glyphs ?? []
+    l.words.forEach((w, wi) => { s += (wi > 0 ? (gapBefore(G, l.words[wi - 1], w) ? ' ' : '') : s ? '\n' : '') + w.text })
+  }
+  const rest = s.replace(ADDRESS_ALONE, '\u0000')
+  return rest.includes('\u0000') && !/[\p{L}\p{N}]/u.test(rest)
 }
 
 /** a box an image placed (layout/ink.mjs `paths`: -3) */

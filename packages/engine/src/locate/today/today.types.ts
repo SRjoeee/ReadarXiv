@@ -30,6 +30,8 @@ export interface TodayInkUnit {
   cls: string
   echo: number | null
   kept?: true
+  /** a kept block of e-mail addresses and their separators alone (keptUnitsOf's, addressesAlone) */
+  address?: true
   pieces: TodayPiece[]
   /** its text's glyphs, its placeholders' (`ph`), each kept run's by its placeholder's index among the pieces (`runs`,
    *  inkUnitsOf's; none for a kept block), and, of its text's, its label's where it has one (`label`: inkUnitsOf's,

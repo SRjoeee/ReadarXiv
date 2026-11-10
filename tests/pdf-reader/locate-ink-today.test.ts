@@ -414,6 +414,32 @@ describe('today’s ink makers in the engine package', () => {
     expect(T.ADDRESS_GROUP.source).toBe(ADDRESS_GROUP.source)
     expect(T.ADDRESS_GROUP.flags).toBe(ADDRESS_GROUP.flags)
   })
+  it('mark a kept block of e-mail addresses alone so (`address`), which the lab reads; no other kept block', () => {
+    // (the coordinator's ruling of 2026-11-10: the parity reads a unit the prepare keeps as a line of addresses as the original's
+    // text, by the prepare's own mark; a listing or a page number kept is no such block)
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: '{delta, eps,', y: 640 },
+      { s: 'zeta}@example.net, eta@example.com', y: 628 },
+      { s: 'int main() {', y: 500, font: 'ABCDEF+CMTT10' },
+    ], { points: [['bs1', 16], ['be1', 31 + 46 + 12]] })
+    const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+    const made = (I: Impl) => {
+      const o = { glyphs: own.glyphs.map((r) => [...r]), boxes: [[]] }
+      const ledger = I.ledgerOf([pg], o, { units: units.slice(0, 1) })
+      const ink = I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 })
+      I.claimInk(o, ink, [pg])
+      return (I.keptUnitsOf([pg], ledger, (p: number, g: number) => o.glyphs[p - 1]?.[g] ?? null, { from: 1 + ink.length }) as { address?: true; glyphs: { text: [number, number][] } }[]).map((u) => [
+        u.glyphs.text.map(([, g]) => pg.glyphs[g]!.u).join(''),
+        u.address ?? false,
+      ])
+    }
+    expect(made(T as unknown as Impl)).toEqual([
+      ['{delta, eps,zeta}@example.net, eta@example.com', true],
+      ['int main() {', false],
+    ])
+  })
   it('write each TeX special of an ink unit’s math run by the command that sets it in a formula, where today’s strips it: a brace alone no display', () => {
     // (2610.21377v1 p42's `$J_0\in\{0,\dots,J-1\}$`, its closing brace a run of its own between the upright digits, and 2608.06007v1
     // p17's bibliography titles `$\{$Intra-Operator$\}$`: the glyph `{` in the symbol font's math face. Today's strips `$ \ { }`

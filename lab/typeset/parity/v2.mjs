@@ -24,7 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { candidateAddress, candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
@@ -192,7 +192,10 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
+  // (the members the candidate's prepare keeps as a line of e-mail addresses, by ord: the verdict's `shown` reads them as the
+  // original's, the coordinator's ruling of 2026-11-10)
+  const address = candidateAddress(paperOf(pair))
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, ...(address.length ? { address } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)

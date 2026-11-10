@@ -791,3 +791,33 @@ describe("shown: a unit of the author block v2 leaves the original's with the na
     expect(shown(page('inkorphan'))).toEqual([[true, 'today']])
   })
 })
+
+describe("shown: a unit the prepare keeps as a line of e-mail addresses is the original's text (the coordinator's ruling of 2026-11-10)", () => {
+  // (1512.03385v1 p1's `{ada, alan}@example.org` row, every toggle on: today sent its local parts and drew the reply; v2's prepare
+  // keeps the line whole, a kept block its dump marks `keptBy: 'address'`, v2.mjs's `address` by member ord. An address is a
+  // literal, never sent: the original's text, no translation missing. Today's unit is joined to the block or not (the block is a
+  // new unit, ids apart): unjoined, it is the block's where every line of it lies on a line of the marked member's)
+  type D = { flag: string; worse: boolean; nearer: string; ruling?: string }
+  const shown = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'shown').map((d) => [d.worse, d.nearer])
+  const block = { ord: 371, kind: 'inknotes', align: 'c', style: { size: 10 }, lines: [factLine(195.49, 399.73, 599.46)] }
+  const prepT = (x0: number, x1: number, y: number) => ({ ord: 321, kind: 'affiliation', lines: [{ page: N, x0, x1, baseline: y, top: y + 8, bottom: y - 2, size: 10 }] })
+  const page = (o: { address?: number[]; joined?: boolean; y?: number; off?: boolean } = {}) => {
+    const v2 = {
+      ...v2Of({ members: [{ ord: 371, state: 'kept', lines: [] }], facts: [block], today: o.joined ? { 371: { today: 321 } } : {} }),
+      ...(o.address ? { address: o.address } : {}),
+      ...(o.off ? {} : { toggles: 'on' as const }),
+    }
+    return measure(v2, rec({ today: { units: [{ id: 321, lines: [drawnLine(195.49, 399.73, o.y ?? 599.46, 'wxyz')] }] } }), [prepT(195.49, 399.73, o.y ?? 599.46)])
+  }
+  it("is the ruling's, not worse, unjoined on the marked block's line or joined to it, whatever the toggles", () => {
+    expect(shown(page({ address: [371] }))).toEqual([[false, 'ruling']])
+    expect((page({ address: [371] }).diffs as D[]).find((d) => d.flag === 'shown')?.ruling).toMatch(/e-mail address/)
+    expect(shown(page({ address: [371], joined: true }))).toEqual([[false, 'ruling']])
+    expect(shown(page({ address: [371], off: true }))).toEqual([[false, 'ruling']])
+  })
+  it('stays worse with no mark, another member marked, or today\'s line not on the marked one', () => {
+    expect(shown(page())).toEqual([[true, 'today']])
+    expect(shown(page({ address: [372] }))).toEqual([[true, 'today']])
+    expect(shown(page({ address: [371], y: 560 }))).toEqual([[true, 'today']])
+  })
+})
