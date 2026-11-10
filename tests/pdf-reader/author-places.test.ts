@@ -82,8 +82,11 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     // (a note that is an escaped address alone is no unit: no word of it is prose)
     const q = open('\\maketitle\nWords.', '\\author{Chao Tang\\thanks{\\href{mailto:tang\\_chao@xtu.edu.cn}{tang\\_chao@xtu.edu.cn}.}}')
     expect(units(q).map(textOf).join('|')).not.toMatch(/tang/)
-    // (a `\_` in a word that is no address stays as it is: its words are text)
-    expect(units(open('Words of snake\\_case here.')).map(textOf).join('|')).toMatch(/snake/)
+    // (a `\_` in a word that is no address joins an identifier, one placeholder of its own, never sent: keepIdentifiers, lane
+    // literal-fixes)
+    const r = units(open('Words of snake\\_case here.'))
+    expect(r.map(textOf).join('|')).not.toMatch(/snake|case/)
+    expect(r.flatMap(u => u.pieces).filter(x => x.t === 'ph').map(x => x.src)).toEqual(['snake\\_case'])
   })
   it('authblk: \\author[n] names, a row of them begun by \\authorcr, \\affil[n] places, a row each', () => {
     const p = open('\\maketitle\nWords.', '\\usepackage{authblk}\n\\author[1]{Alice Smith}\n\\author[2]{Bob Jones \\authorcr Carol White}\n\\affil[1]{University of Somewhere}\n\\affil[2]{Institute of Elsewhere \\\\ A City}')

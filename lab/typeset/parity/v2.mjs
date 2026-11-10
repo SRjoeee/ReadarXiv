@@ -24,7 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { candidateAddress, candidatePitch, candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { candidateKept, candidateKeptToday, candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
@@ -109,7 +109,16 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
-  globalThis.__parityLay = (part, rows) => lay(part, readAsChain(rows, units))
+  // (and each member the pair's fixed rows hold no row of, nor keep: its text a rule changed (an identifier now an element), so
+  // that today's stored replies cannot say it; v2 leaves it the original's for want of one, which the verdict reads as
+  // unmeasured, never worse, the coordinator's ruling of 2026-11-10. A member the prepare states a reason for has none to read)
+  const noRow = new Set()
+  globalThis.__parityLay = (part, rows) => {
+    if (rows)
+      for (const flow of part.flows)
+        for (const m of flow) if (typeof m.text === 'string' && !m.why && !rows.kept?.(m.text) && !rows.get(m.text)) noRow.add(m.ord)
+    return lay(part, readAsChain(rows, units))
+  }
   // (first without option (i): each pass's target and each member's line count on each page alone)
   const before = {},
     offTargets = {}
@@ -216,12 +225,14 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  // (the members the candidate's prepare keeps for their text set wholly in a face of one pitch, Rule 1, by ord: the verdict's
-  // `shown` and `figures` read them as the original's, the owner's ruling of 2026-11-10)
-  const pitch = candidatePitch(paperOf(pair))
-  // (the members the candidate's prepare keeps as a line of e-mail addresses, by ord: the verdict's `shown` reads them as the
-  // original's, the coordinator's ruling of 2026-11-10)
-  const address = candidateAddress(paperOf(pair))
+  // (the members the candidate's prepare keeps by a rule's mark, by ord: text set wholly in a face of one pitch (Rule 1, the
+  // owner's ruling of 2026-11-10), a line of e-mail addresses, a figure text kept for an identifier (the coordinator's rulings of
+  // 2026-11-10); and today's units its prepare states kept by a mark, by today's ord (a cell of identifiers alone, no unit of
+  // v2's): the verdict's `shown`, `figures` and `groups` read them as the original's)
+  const pitch = candidateKept(paperOf(pair), 'pitch')
+  const address = candidateKept(paperOf(pair), 'address')
+  const identifier = candidateKept(paperOf(pair), 'identifier')
+  const keptToday = candidateKeptToday(paperOf(pair))
   // (I10, the sentence cover over the pair's Pages as the reader lays them, the entry's: each piece drawn of a member lit in
   // exactly one of its sentences on each pane, the panes' sentences the same; packages/typeset/tests/replay/cover.ts)
   const c = got.entry?.cover
@@ -230,7 +241,28 @@ for (const pair of pairs) {
     I10.pieces += cover.pieces
     for (const [k, n] of c.faults) I10.faults.set(k, (I10.faults.get(k) ?? 0) + n)
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), ...(pitch.length ? { pitch } : {}), ...(address.length ? { address } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length, cover }
+  const out = {
+    pair,
+    paper: paperOf(pair),
+    toggles: TOGGLES,
+    pages,
+    today,
+    facts,
+    fills,
+    before,
+    spaced,
+    unjoined,
+    ...(missing ? { notes: [missing] } : {}),
+    ...(pitch.length ? { pitch } : {}),
+    ...(address.length ? { address } : {}),
+    ...(identifier.length ? { identifier } : {}),
+    ...(keptToday.length ? { keptToday } : {}),
+    ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),
+    held: heldRows,
+    threw: got.threw,
+    laidPages: Object.keys(pages).length,
+    cover,
+  }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   const faults = cover ? Object.values(cover.faults).reduce((a, b) => a + b, 0) : 0

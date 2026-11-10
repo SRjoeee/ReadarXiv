@@ -1476,46 +1476,124 @@ function escapedLocals(pieces) {
  *  `\thinspace`, `\enspace`, `\quad`, `\qquad`, `\space` */
 const TEX_SPACE = /^(?:~|\\[ ,:;]|\\(?:thinspace|enspace|quad|qquad|space)(?![A-Za-z@]))$/
 const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
-/** each group of local parts before their one domain (ADDRESS_GROUP) one placeholder, written as the paper writes it, read
- *  over a unit's pieces as TeX sets them: a text piece its characters, a space of TeX's (TEX_SPACE) white space, a text symbol
- *  its one character (`\{`, `\}`, `\_`: symbolText), anything else (a command, a group, an accent's letter) no character of an
- *  address. Read from one text between `\{` and `\}` alone, a tie or a thin space between the local parts
- *  (`\{kahe,~v-xiangz\}@…`, 1512.03385v1; `\{mph,\,lmb\}@…`, 2610.17024v1) parted the group into words sent one by one, and a
- *  group in brackets (`[first name]@…`, 2610.21085v1) was text */
-function keepGroups(pieces) {
-  if (!pieces.some(p => p.t === 'text' && p.src === undefined && p.s.includes('@'))) return pieces
+/** a control word: its name letters, after which TeX skips the spaces the source writes */
+const CONTROL_WORD = /\\[A-Za-z@]+$/
+/** each range `find` gives of the reading ([start, end), in order, apart) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets
+ *  them: a text piece its characters (the spaces that open it after a control word none: TeX skips them), a space of TeX's
+ *  (TEX_SPACE) white space, a text symbol its one character (`\{`, `\}`, `\_`, `\textunderscore`: symbolText), anything else
+ *  (a command, a group, an accent's letter, a bare `_`: TeX's subscript, a formula's the walker left in text) no character of a
+ *  match. A match starts and ends on a character of its own; what TeX skipped inside it is written with it */
+function keepRead(pieces, find) {
   let flat = ''
-  const from = []
-  for (const p of pieces) {
-    from.push(flat.length)
-    flat += p.t === 'text' ? (p.src === undefined ? p.s : '\u0000') : p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
+  // (each character read: its piece, and its offset in the piece's text, 0 for a placeholder's one)
+  const at = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'text' && p.src === undefined) {
+      const skip = k > 0 && pieces[k - 1].t === 'ph' && CONTROL_WORD.test(pieces[k - 1].src ?? '') ? /^[ \t]*(?:\r?\n)?[ \t]*/.exec(p.s)[0].length : 0
+      for (let o = skip; o < p.s.length; o++) { flat += p.s[o]; at.push([k, o]) }
+    } else {
+      flat += p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
+      at.push([k, 0])
+    }
   }
-  from.push(flat.length)
-  const pieceAt = o => { let k = 0; while (from[k + 1] <= o) k++; return k }
   const out = []
   // (a text piece's part from s to e, as sliceSkips cuts one; the whole piece where that is all of it)
   const part = (k, s, e) => { const p = pieces[k]; if (p.t !== 'text' || (s === 0 && e === p.s.length)) out.push(p); else if (e > s) out.push(sliceSkips(p, { ...p, s: p.s.slice(s, e) }, s, e)) }
-  // (k the first piece not yet written, `off` how much of it a group took)
+  // (k the first piece not yet written, `off` how much of it a match took)
   let k = 0, off = 0
-  for (const m of flat.matchAll(GROUPS)) {
-    const a = m.index, b = a + m[0].length, ka = pieceAt(a), kb = pieceAt(b - 1)
+  for (const [x, y] of find(flat)) {
+    const [ka, oa] = at[x], [kb, ob] = at[y - 1], b = ob + 1
     for (; k < ka; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
-    if (pieces[ka].t === 'text') part(ka, off, a - from[ka])
+    if (pieces[ka].t === 'text') part(ka, off, oa)
     let src = ''
-    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' ? pieces[j].s.slice(j === ka ? a - from[j] : 0, j === kb ? b - from[j] : undefined) : pieces[j].src
+    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' ? pieces[j].s.slice(j === ka ? oa : 0, j === kb ? b : undefined) : pieces[j].src
     out.push({ t: 'ph', src })
-    if (pieces[kb].t === 'text' && b - from[kb] < pieces[kb].s.length) { k = kb; off = b - from[kb] } else { k = kb + 1; off = 0 }
+    if (pieces[kb].t === 'text' && b < pieces[kb].s.length) { k = kb; off = b } else { k = kb + 1; off = 0 }
   }
   for (; k < pieces.length; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
   return out
 }
+/** each group of local parts before their one domain (ADDRESS_GROUP) one placeholder, read over a unit's pieces as TeX sets
+ *  them (keepRead). Read from one text between `\{` and `\}` alone, a tie or a thin space between the local parts
+ *  (`\{kahe,~v-xiangz\}@…`, 1512.03385v1; `\{mph,\,lmb\}@…`, 2610.17024v1) parted the group into words sent one by one, and a
+ *  group in brackets (`[first name]@…`, 2610.21085v1) was text */
+const keepGroups = pieces => (pieces.some(p => p.t === 'text' && p.src === undefined && p.s.includes('@')) ? keepRead(pieces, flat => [...flat.matchAll(GROUPS)].map(m => [m.index, m.index + m[0].length])) : pieces)
+/** an identifier's mark: two letters or digits (`\w`'s, EMAIL_ADDRESS's, but the underscore) joined by underscores (snake_case:
+ *  `llm_equal_human`, `conv5_x`, `x86_64`, `foo__bar`; not `__init__` nor `_x`, no part of letters or digits before an underscore) */
+const SNAKE = /[^\W_]_+[^\W_]/
+/** an opening and a closing bracket of a pair a token may hold (`host_label(result)`, `[sentence_1]`, `{root_question}`) */
+const PAIRS = { '(': ')', '[': ']', '{': '}' }
+/** Each identifier of a text (a reading of a unit's pieces, or an ink word's characters), its [start, end) code units: a token, a
+ *  run of characters with no white space (nor U+0000, which stands for what no character of a text is: a command, a group's
+ *  edge), that holds an identifier's mark (SNAKE), the whole token: `CallbackBase.host_label(result)`, `test_parser.py`,
+ *  `--view_range`, `response_equal_human_example`. Its leading and trailing sentence punctuation is none of it: from its end a
+ *  stop, a comma, a semicolon, a colon, an exclamation or a question mark and a quote (`'` `"` `` ` `` and every closing one,
+ *  Pf), from its start a quote (every opening one, Pi); and a bracket at either edge that no bracket of its pair inside the token
+ *  answers (`(see conv5_x)` the `)` of a parenthesis the sentence opened; `[sentence_1]` and `host_label(result)` keep theirs),
+ *  another opening or closing bracket at its edge too (Ps, Pe). Its syntax alone: no word list, no camelCase, nothing dotted
+ *  without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
+ *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
+ *  tests/pdf-reader/locate-ink-today.test.ts */
+export function identifiersIn(s) {
+  const out = []
+  const answered = (t, at, step) => {
+    // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
+    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
+    if (!close) return false
+    let depth = 0
+    for (let i = at; i >= 0 && i < t.length; i += step) {
+      if (t[i] === (step > 0 ? open : close)) depth++
+      else if (t[i] === (step > 0 ? close : open) && --depth === 0) return true
+    }
+    return false
+  }
+  // (the tokens: runs of characters that are no white space and no U+0000)
+  const tokens = []
+  for (let i = 0; i < s.length; ) {
+    while (i < s.length && (s[i] === '\u0000' || /\s/u.test(s[i]))) i++
+    const at = i
+    while (i < s.length && s[i] !== '\u0000' && !/\s/u.test(s[i])) i++
+    if (i > at) tokens.push([at, i])
+  }
+  for (const [a0, b0] of tokens) {
+    if (!SNAKE.test(s.slice(a0, b0))) continue
+    let a = a0, b = b0
+    for (;;) {
+      const t = s.slice(a, b), last = t.at(-1), first = t[0]
+      if (/[.,;:!?'"`\p{Pf}]/u.test(last) || (/\p{Pe}/u.test(last) && !answered(t, t.length - 1, -1))) b--
+      else if (/['"`\p{Pi}]/u.test(first) || (/\p{Ps}/u.test(first) && !answered(t, 0, 1))) a++
+      else break
+    }
+    if (SNAKE.test(s.slice(a, b))) out.push([a, b])
+  }
+  return out
+}
+/** whether a placeholder's source is an identifier keepIdentifiers keeps: no command, no address, read as TeX sets it (a text
+ *  symbol its character, symbolText) one identifier whole. Text TeX sets as written: a unit's first word where it opens one
+ *  (startOf, marks.mjs headEnd), a code mark with both its marks (marks.mjs classOf) */
+export const identifierSource = src => {
+  if (typeof src !== 'string' || /^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return false
+  // (TeX's math shift, a `$` no backslash escapes: a formula's subscript, `$s_i$`, is no identifier)
+  if (src.replace(/\\(?:[A-Za-z@]+|[^A-Za-z@])/g, '').includes('$')) return false
+  const t = src.replace(/\\(?:[A-Za-z@]+(?:\{\})?[ \t]*|[^A-Za-z@])/g, cs => symbolText(cs.trim()) ?? '\u0000')
+  const at = identifiersIn(t)
+  return at.length === 1 && at[0][0] === 0 && at[0][1] === t.length
+}
+/** each identifier (identifiersIn) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets them
+ *  (keepRead: `llm\_equal\_human`, `run\textunderscore id`, `\{root\_question\}`). It is no prose: sent, its words came back
+ *  translated inside it (2608.25210v2's `llm\_equal\_human`, its last part drawn as the Chinese word for "human"); kept, it is an
+ *  element every reply brings back, its ink the original's. After the addresses, so that an address holding an underscore stays
+ *  one address. A bare `_` is TeX's subscript (2610.21377v1's formulas the walker read as text, `H_0`, `e_k`), no underscore:
+ *  none of the 88 makes `_` print as one (the underscore package, a catcode of the paper's) */
+const keepIdentifiers = pieces => (pieces.some(p => (p.t === 'ph' && symbolText(p.src) === '_') || (p.t === 'text' && p.src === undefined && p.s.includes('_'))) ? keepRead(pieces, identifiersIn) : pieces)
 /** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
  *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a group of local
  *  parts before their domain ({sl225, samand2, reyhaneh}@illinois.edu, keepGroups), each become a placeholder, kept as the
  *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
- *  with the ideographic comma */
+ *  with the ideographic comma. So does an identifier, after them (keepIdentifiers) */
 function keepAddresses(pieces) {
-  return keepGroups(escapedLocals(pieces)).flatMap(p => {
+  return keepIdentifiers(keepGroups(escapedLocals(pieces)).flatMap(p => {
     if (p.t !== 'text' || !HAS_EMAIL.test(p.s)) return [p]
     const out = []
     let at = 0
@@ -1526,7 +1604,7 @@ function keepAddresses(pieces) {
     }
     if (at < p.s.length) out.push(sliceSkips(p, { ...p, s: p.s.slice(at) }, at))
     return out
-  })
+  }))
 }
 
 /**
@@ -3493,7 +3571,8 @@ export function startOf(pieces) {
       if (pieces[q]?.t === 'text') { k = q - 1; continue }
       break
     }
-    if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
+    // (an inline formula or citation, and an identifier, text TeX sets as written (identifierSource): the first word)
+    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src))) { startAt = k; startCut = -1; break }
     if (p.t !== 'ph') break
   }
   return [startAt, startCut]

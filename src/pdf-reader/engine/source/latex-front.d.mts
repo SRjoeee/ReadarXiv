@@ -31,6 +31,12 @@ export declare const BACKREF_LIST: string
 export declare const EMAIL_ADDRESS: RegExp
 /** several addresses at one domain written once, a group of their local parts in braces, parentheses or brackets before it, separated by commas and/or white space (`{jyeoj251, bmw5779}@gmail.com`): the source's (keepGroups) and an ink unit's lines' (the engine package's copy of ink-units.mjs) */
 export declare const ADDRESS_GROUP: RegExp
+/** each identifier of a text, [start, end) code units: a token with no white space that holds two letters or digits joined by underscores (`llm_equal_human`, `CallbackBase.host_label(result)`), the whole token but its leading and trailing sentence punctuation: the source's (keepIdentifiers), an ink unit's word's and a figure text's (the engine package's copies) */
+export declare function identifiersIn(s: string): [number, number][]
+/** whether a placeholder's source is an identifier keepIdentifiers keeps (no command, no address, one identifier whole as TeX sets it) */
+export declare function identifierSource(src: string | undefined): boolean
+/** where a unit's start mark goes among its pieces, as patch writes it: [the piece, its cut], or [-1, 0] for none */
+export declare function startOf(pieces: readonly unknown[]): [number, number]
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean; call?: string; callAt?: number } | null

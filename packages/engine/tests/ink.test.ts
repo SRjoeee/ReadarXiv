@@ -367,6 +367,42 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
+  it('keeps a figure text holding an identifier as the original, whatever its face: a figure text holds no element (2608.06701v1)', () => {
+    // (a token of word characters joined by underscores, `str_replace`, `w/o sol_pool_freq`, in a proportional face: sent, its words
+    // came back translated inside it, as 2608.25210v2's `llm_equal_human` did in a unit. A figure text is drawn whole, its text
+    // and no element: one that holds an identifier stays the original's. A figure text of words alone, a camelCase name, a lone
+    // underscore, is translated)
+    const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
+    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
+    const A = docOf([
+      {
+        lines: [
+          body('Body text of the paper set here'),
+          body('and more body text in that face'),
+          { text: '`CallbackBase.host_label(result)` in', y: 660, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'str_replace', y: 640, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'w/o sol_pool_freq', y: 620, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'Loss of camelCase', y: 600, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'the _ mark', y: 580, form: true, font: 'ABCDEF+CMR10' },
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
+    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.fixed])).toEqual([
+      ['`CallbackBase.host_label(result)` in', true],
+      ['str_replace', true],
+      ['w/o sol_pool_freq', true],
+      ['Loss of camelCase', false],
+      ['the _ mark', false],
+    ])
+    const why = new Map(figs.map((m) => [m.plain, L.units[m.unit]!.why]))
+    expect([why.get('str_replace'), why.get('w/o sol_pool_freq')]).toEqual(['figure: identifier', 'figure: identifier'])
+    // (no face of one pitch keeps it: it is no artefact of Rule 1's)
+    expect(figs.map((m) => !!L.units[m.unit]!.pitch)).toEqual([false, false, false, false, false])
+  })
+
   it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {
     // (2411.13093v4 p18, Figure 8: a prompt set as a justified paragraph in an included figure, its entries' first lines indented
     // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
@@ -704,8 +740,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['/tmp/f_a.py', true, true],
       ['(scope cut)', false, false],
     ])
-    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before)
-    expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, false, false]])
+    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before; the line holds an
+    // identifier, `f_a`, which keeps a figure text whole as the original's whatever its face, and not by Rule 1)
+    expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, true, false]])
   })
 
   it('reads a figure’s word by its spacing, not its sizes: a heading in faked small capitals one figure text, no script and no other label joined', () => {

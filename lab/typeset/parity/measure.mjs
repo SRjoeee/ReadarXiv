@@ -20,7 +20,7 @@ import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
 import { pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, verdictOf } from './verdict.mjs'
+import { coverageOf, FLAGS, measurePage, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
@@ -179,6 +179,9 @@ const result = {
   pagesWorse: verdict.worse,
   // (the pages where both sides depart from the original alike, a defect the verdict of v2 against today cannot see: blind.mjs)
   pagesBoth: pages.filter((p) => p.both?.length).length,
+  // (the units no row of the pair's fixed rows serves, not measured: each page with them and their count, the coordinator's
+  // ruling of 2026-11-10; never worse, nothing hidden)
+  unmeasured: unmeasuredOf(pages),
   facts,
   errors: pages.filter((p) => p.error).map((p) => `${p.pair} p${p.page}: ${p.error}`),
   notes,
@@ -190,6 +193,8 @@ writeFileSync(join(OUT, 'parity.json'), `${JSON.stringify(result)}\n`)
 writeFileSync(join(OUT, 'index.html'), sheet(result))
 console.log(`parity: ${pages.length} pages of ${pairs.length} pairs; ${result.pagesWorse} worse than today; missing ${missing.map((m) => m.pair).join(', ') || 'none'}`)
 for (const x of notes) console.log(x)
+console.log(`unmeasured: ${result.unmeasured.units} units on ${result.unmeasured.pages.length} pages (no row of the pair's serves them)`)
+for (const u of result.unmeasured.pages) console.log(`  ${u.pair} p${u.page}: ${u.units.length} (${u.units.join(', ')})${u.judgements > u.units.length ? `; ${u.judgements - u.units.length} judgements beside them` : ''}`)
 console.log(`incomplete: ${incomplete.length}${incomplete.length ? ` (${incomplete.slice(0, 5).join('; ')}${incomplete.length > 5 ? '; …' : ''})` : ''}`)
 for (const f of FLAGS) {
   const x = summary[f]
@@ -212,6 +217,10 @@ function sheet(r) {
   const inc = r.incomplete.length
     ? `<article class="card flagged"><h2>Not judged whole: the gate fails</h2><ul>${r.incomplete.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>`
     : ''
+  const um = r.unmeasured ?? { units: 0, pages: [] }
+  const unmeasured = um.pages.length
+    ? `<article class="card"><h2>Unmeasured: ${um.units} units on ${um.pages.length} pages</h2><p>Units no row of the pair's fixed rows serves (a rule changed their text: today's stored replies cannot say them), which v2 leaves the original's here: never worse, not measured.</p><ul>${um.pages.map((u) => `<li><a href="#${esc(`${u.pair}-p${u.page}`)}">${esc(u.pair)} p${u.page}</a>: ${u.units.length} (${esc(u.units.join(', '))})${u.judgements > u.units.length ? `; ${u.judgements - u.units.length} judgements beside them` : ''}</li>`).join('')}</ul></article>`
+    : ''
   const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
   const side = (x) => `${x.value === null || x.value === undefined ? '' : `${esc(x.value)} `}${x.off === null || x.off === undefined ? '' : `<span class="off">off ${esc(x.off)}</span>`}`
   const cards = r.pages
@@ -219,7 +228,7 @@ function sheet(r) {
       const id = `${p.pair}-p${p.page}`
       const diffs = p.diffs.length
         ? `<table class="diffs"><thead><tr><th>measure</th><th>unit</th><th>what</th><th>original</th><th>today</th><th>v2</th><th>nearer</th></tr></thead><tbody>${p.diffs
-            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
+            .map((d) => `<tr class="${d.worse ? 'worse' : 'better'}"><td><b>${d.flag}</b></td><td>${esc(d.unit ?? 'page')}</td><td>${esc(d.what)}</td><td>${esc(d.original)}</td><td>${side(d.today)}</td><td>${side(d.v2)}</td><td class="n">${d.nearer === 'v2' ? 'v2' : d.nearer === 'unexercised' ? 'not exercised' : d.nearer === 'unmeasured' ? 'unmeasured' : d.nearer === 'ruling' ? `<span title="${esc(d.ruling ?? '')}">the ruling's</span>` : 'today'}</td></tr>`)
             .join('')}</tbody></table>`
         : '<p class="ok">no difference past a noise floor</p>'
       const shared = p.both?.length
@@ -283,9 +292,9 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 </head>
 <body>
 <h1>Display ≥ today: v2 against today's output, judged against arXiv's page</h1>
-<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. On ${r.pagesBoth} pages both sides depart from the original alike (scripts drawn flat, a unit the toggles keep drawn translated): listed apart on each page, no verdict. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
+<p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. ${(r.unmeasured?.units ?? 0) ? `${r.unmeasured.units} units on ${r.unmeasured.pages.length} pages are unmeasured: no row of the pair's serves them (listed below). ` : ''}On ${r.pagesBoth} pages both sides depart from the original alike (scripts drawn flat, a unit the toggles keep drawn translated): listed apart on each page, no verdict. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
 <table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>both depart (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
-${inc}${said}
+${inc}${said}${unmeasured}
 ${miss}
 ${cards}
 </body>

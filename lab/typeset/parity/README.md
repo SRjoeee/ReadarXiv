@@ -256,6 +256,20 @@ the ones the candidate's dump marks `keptBy: 'pitch'` (`lab/pdf/prepare-back/run
 their ords by the run's `located/<paper>.json` `dumpOrds` (`join.mjs` candidatePitch; `v2.mjs` writes them, `pitch`); any
 other unit v2 leaves the original's is judged as before.
 
+The coordinator's rulings of 2026-11-10 (lane literal-fixes), so that no page is ruled one by one. First, every unit the
+candidate's prepare keeps by a rule's mark is the original's text, never a translation missing: the dump's `keptBy` 'pitch',
+'address' or 'identifier' (an identifier, a token holding an underscore between two word characters, is never sent,
+PDF-READER §18.25: a figure text kept for one), joined to member ords as above (`join.mjs` candidateKept; `v2.mjs` writes
+`pitch`, `address`, `identifier`), and today's units its prepare states kept by a mark (a cell of identifiers alone, no unit
+of v2's: a statement carrying `keptBy`, `join.mjs` candidateKeptToday, `v2.mjs`'s `keptToday` by today's ord). Such a unit's
+`shown` difference and a `figures` count fewer by no more than such figure texts are the ruling's (`nearer` "ruling"), and a
+table's grid group is judged on its other cells (`groups`). Second, a unit no row of the pair's fixed rows serves (its text
+changed by a rule, an identifier now an element, so that today's stored replies cannot say it: `v2.mjs` records the members
+whose rows hold none, nor keep them, `noRow`), which v2 then leaves the original's (`none`), is unmeasured: its `shown`
+difference, a run-in's `gap` beside it and its cell's place in a grid group are listed as such (`nearer` "unmeasured"), never
+worse; the sheet lists every page with its unmeasured units and their count, and its summary states the whole count
+(`verdict.mjs` unmeasuredOf, the result's `unmeasured`).
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the

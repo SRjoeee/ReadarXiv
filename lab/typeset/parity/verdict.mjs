@@ -204,6 +204,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const facts = new Map((v2.facts[n]?.members ?? []).map((m) => [m.ord, m]))
   const laidV2 = new Map((v2.pages[n]?.members ?? []).filter((m) => m.state === 'laid').map((m) => [m.ord, m]))
   const stateOf = new Map((v2.pages[n]?.members ?? []).map((m) => [m.ord, m.state]))
+  // (the members no row of the pair's fixed rows serves, v2.mjs's `noRow`: a unit whose text a rule changed (an identifier now an
+  // element), which today's stored replies cannot say, left the original's by v2 for want of one (`none`). Not measured: listed
+  // on the page with what it would be judged by, never worse, the coordinator's ruling of 2026-11-10; the summary counts them)
+  const noRow = new Set(v2.noRow ?? [])
+  const unmeasured = (o) => o !== null && o !== undefined && noRow.has(o) && stateOf.get(o) === 'none'
   // (each side's drawn lines by its unit, keyed by today's ord where the unit has one, else the part's ord)
   const keyOfPart = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
   // (a line's extent is its drawn characters' and its crops': a crop standing on the line (a formula's ink, drawn by the
@@ -530,7 +535,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (u?.sides[side]) u.sides[side].gap = { original: r2(sep), drawn: r2(g[side]) }
       if (g[side] - sep > BOUNDS.gap * sz) fault(side, 'gap', `${fk} ${f.kind} after ${hk} ${h.kind}: starts ${r2(g[side])} pt after its head's end, the original ${r2(sep)}`)
     }
-    if (g.today !== undefined && g.v2 !== undefined)
+    if (g.today === undefined || g.v2 === undefined) continue
+    // (a head or follower no row serves, left the original's: the separation v2 draws is not v2's to be judged by, unmeasured)
+    if (unmeasured(h.part) || unmeasured(f.part))
+      diff('gap', `${fk} ${f.kind} after ${hk} ${h.kind}`, "the follower's start after its head's end: one of the two no row of the pair's serves", r2(sep), { value: r2(g.today), off: null }, { value: r2(g.v2), off: null }, false, 'unmeasured')
+    else
       judge('gap', `${fk} ${f.kind} after ${hk} ${h.kind}`, "the follower's start after its head's end, off the original's separation", sep, { value: r2(g.today), d: Math.abs(g.today - sep) }, { value: r2(g.v2), d: Math.abs(g.v2 - sep) }, Math.max(NEAR.positionMin, NEAR.position * sz))
   }
 
@@ -622,6 +631,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const addressLines = [...address].flatMap((o) => (facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(o).style?.size ?? 0 })))
   const onAddress = (l) =>
     addressLines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
+  // (the members v2's prepare keeps for an identifier, v2.mjs's `identifier` by member ord (a figure text kept for one, the
+  // candidate's dump's `keptBy: 'identifier'`), and today's units its prepare states kept by a mark, `keptToday` by today's ord (a
+  // cell of identifiers alone, no unit of v2's): the original's text, no translation missing, the coordinator's ruling of
+  // 2026-11-10, IDENTIFIER_RULING (or the mark's own ruling))
+  const identifier = new Set(v2.identifier ?? [])
+  const keptToday = new Map(v2.keptToday ?? [])
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
@@ -641,9 +656,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const named = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
     const kept = o?.part !== null && o?.part !== undefined && pitch.has(o.part)
     const mail = o?.part !== null && o?.part !== undefined ? address.has(o.part) : !!o?.lines?.length && o.lines.every(onAddress)
-    const ruled = named || kept || mail
+    const mark = kept ? 'pitch' : mail ? 'address' : o?.part !== null && o?.part !== undefined && identifier.has(o.part) ? 'identifier' : (keptToday.get(Number(key.slice(1))) ?? null)
+    const ruled = named || !!mark
+    if (!ruled && unmeasured(o?.part)) {
+      diff('shown', `${key} ${o?.kind ?? ''}`.trim(), "translated by today, left the original's by v2: no row of the pair's serves its text", null, { value: 'translated', off: null }, { value: 'no row', off: null }, false, 'unmeasured')
+      continue
+    }
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = kept ? PITCH_RULING : mail ? ADDRESS_RULING : NAMES_RULING
+    if (ruled) out.diffs.at(-1).ruling = mark ? RULING_OF[mark] : NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -672,11 +692,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (today's figure texts v2's prepare keeps for their text set wholly in a face of one pitch: each of today's drawn groups whose
   // unit is joined to one of v2's figure members `pitch` names, figuresMatched's join by the original's box. Fewer than today's
   // by no more than those is the ruling's, PITCH_RULING; a group the join does not pair stays counted)
-  const figPitch = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o)).length
+  // (and those it keeps for an identifier they hold, `identifier`, the coordinator's ruling of 2026-11-10: IDENTIFIER_RULING)
+  const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o) || identifier.has(o))
+  const figPitch = figKept.filter((o) => pitch.has(o)).length
   if (figV < figT) {
-    const ruled = figV >= figT - figPitch
+    const ruled = figV >= figT - figKept.length
     diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, !ruled, ruled ? 'ruling' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = PITCH_RULING
+    if (ruled) out.diffs.at(-1).ruling = [...new Set(figKept.map((o) => (pitch.has(o) ? PITCH_RULING : IDENTIFIER_RULING)))].join(' / ')
   }
 
   // ------------------------------------------------ against arXiv's page and the original's facts (fidelity.mjs), and the
@@ -697,6 +719,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     frame: frame ?? null,
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
+    // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)
+    apart: new Set([...keptToday.keys(), ...[...todayOf].filter(([o]) => pitch.has(o) || address.has(o) || identifier.has(o) || unmeasured(o)).map(([, t]) => t)]),
     folios: new Set([...(folios ?? [])].filter((o) => facts.has(o))),
     figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
     judge,
@@ -908,7 +932,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],
@@ -1006,6 +1030,11 @@ const PITCH_RULING =
 const ADDRESS_RULING =
   "the coordinator's ruling of 2026-11-10 on the owner's principle (translating or keeping are both fine, a garbled translation never; PDF-READER §19.13): an e-mail address is a literal, never sent, and a line of addresses alone the prepare keeps whole is the original's text: no translation missing"
 /** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
+/** what a unit v2's prepare keeps for an identifier rests on (`shown`, `figures`) */
+const IDENTIFIER_RULING =
+  "the coordinator's ruling of 2026-11-10 on the owner's principle (translating or keeping are both fine, a garbled translation never; PDF-READER §18.25): an identifier, a token holding an underscore between two word characters, is no prose, never sent, and what the prepare keeps whole for one (a figure text, a cell of identifiers alone) is the original's text: no translation missing"
+/** the ruling of each mark the candidate's prepare writes (`keptBy`) */
+const RULING_OF = { pitch: PITCH_RULING, address: ADDRESS_RULING, identifier: IDENTIFIER_RULING }
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
 /** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
@@ -1418,6 +1447,20 @@ export function verdictOf(incomplete, pages) {
 }
 
 /** each measure's count of pages (worse, nearer, each side's faults) and the ten worst pages */
+/**
+ * What the run did not measure (the coordinator's ruling of 2026-11-10): the units no row of the pair's fixed rows serves, each
+ * `shown` difference so judged (`nearer: 'unmeasured'`), by page with every judgement left so on it (a run-in's gap beside one),
+ * and their whole count: never worse, nothing hidden
+ */
+export function unmeasuredOf(pages) {
+  const out = []
+  for (const p of pages) {
+    const ds = (p.diffs ?? []).filter((d) => d.nearer === 'unmeasured')
+    if (ds.length) out.push({ pair: p.pair, page: p.page, units: ds.filter((d) => d.flag === 'shown').map((d) => d.unit), judgements: ds.length })
+  }
+  return { units: out.reduce((k, p) => k + p.units.length, 0), pages: out }
+}
+
 export function summaryOf(pages) {
   const summary = {}
   for (const f of FLAGS) {

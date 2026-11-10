@@ -421,10 +421,11 @@ const SPECS: readonly RuleSpec[] = [
     reads: ['fit.cjkJust', 'fit.spaceMax', 'fit.spaceMin', 'breaking.*', 'lineskip'],
     file: 'breaker/break.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a CJK line's squeeze, and the stretch that tells whether it squeezes, count no gap inside a word (gapsOf: an item that continues its word, `brk` or `cont`): TeX sets no glue inside a word, and its url package breaks a URL at a penalty with no glue (\\Urlmuskip 0mu); today's counted every gap between a line's items (lane literal-fixes, 2608.25210v2 p17's URL)",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164; the lines' ends of 7 rounds whose tokens hold a word's break point read to a millionth of a point, tests/replay/tap.ts wordGlued) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rule)",
+      cases: 164,
     },
   },
   {
@@ -437,10 +438,11 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'breaker/place.mjs',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a line not set as Latin text spreads its slack, and its squeeze, over the gaps between its items but those inside a word (break.mjs gapsOf: an item that continues its word, `brk` or `cont`): TeX sets no glue inside a word, and its url package none at a URL's break points; today's spread it over every gap, so a URL whose line ends are joins (lane url-join), cut at its break points, was letter-spaced to the measure (lane literal-fixes, 2608.25210v2 p17: 1.9-2.7 pt after each `/`)",
       replay:
-        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589, the one a crop's box the tap does not record)",
-      cases: 32588,
+        "the walk whole at F2 (layoutCut): F2's slot on every laid round of the sampled units (164; the lines' ends of 7 rounds whose tokens hold a word's break point read to a millionth of a point, tests/replay/tap.ts wordGlued: the rule moves a line's slack between its gaps, never its end) and of the corpus (lab/typeset/replay-fit.mjs: 32,588 of 32,589 before the rule); tests/unit/placement.test.ts",
+      cases: 164,
     },
   },
   {
