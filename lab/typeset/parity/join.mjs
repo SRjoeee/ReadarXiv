@@ -64,6 +64,27 @@ export function candidateKept(paper, by, dumps = L1_DUMPS) {
   const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => !u.replaced && u.keptBy === by).map((u) => u.ord))
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
 }
+/**
+ * The ink of the elements the candidate's prepare keeps as the original's, by member (the coordinator's ruling 1 on F0,
+ * 2026-11-10): a figure text's element its dump marks `keptBy` 'pitch' (its run of one pitch, F0) or 'decoration' (a stretch a
+ * frame, an underline or a tone holds, (n)). `[member ord, [page, x0, y0, x1, y1][]]`, each element's segments, by the member
+ * its unit is joined to (`dumpOrds`); none where lab-data holds no dump or located file of it
+ */
+export function candidateKeptElements(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const KEPT = new Set(['pitch', 'decoration'])
+  const ink = new Map()
+  for (const u of JSON.parse(readFileSync(f, 'utf8')).units) {
+    if (u.replaced) continue
+    const boxes = (u.elements ?? [])
+      .filter((e) => KEPT.has(e.keptBy))
+      .flatMap((e) => (e.segs ?? []).map((k) => [k.page, k.x0, Math.min(k.top, k.bottom), k.x1, Math.max(k.top, k.bottom)]))
+    if (boxes.length) ink.set(u.ord, boxes)
+  }
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ink.has(d)).map(([d, m]) => [m, ink.get(d)])
+}
 /** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
 export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
 /** the members the candidate's prepare keeps as a line of e-mail addresses (candidateKept's 'address') */

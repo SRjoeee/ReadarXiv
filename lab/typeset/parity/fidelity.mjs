@@ -53,10 +53,13 @@ export function runsIn(runs, boxes) {
  * A text's original style and size, read off arXiv's glyphs in its lines' boxes (`runs` render.mjs's, `fonts` their PDF font
  * names): the share of its characters (white space and math fonts' aside) set in a bold and in a slanted face, and its size,
  * the size TeX was asked for: its largest cased letter's (faked small capitals set the capitals at it and the rest smaller;
- * a script is smaller, never larger), else the median character's. null where no glyph stands there
+ * a script is smaller, never larger), else the median character's. `except`: boxes whose glyphs are no characters of the
+ * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). null where no glyph
+ * stands there
  */
-export function originalOf(runs, fonts, boxes) {
-  const rs = runsIn(runs, boxes)
+export function originalOf(runs, fonts, boxes, except = []) {
+  const out = new Set(runsIn(runs, except))
+  const rs = runsIn(runs, boxes).filter((r) => !out.has(r))
   let chars = 0,
     bold = 0,
     italic = 0,

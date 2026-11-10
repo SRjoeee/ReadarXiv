@@ -24,7 +24,7 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { candidateKept, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
+const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
@@ -241,6 +241,9 @@ for (const pair of pairs) {
   const address = candidateKept(paperOf(pair), 'address')
   const identifier = candidateKept(paperOf(pair), 'identifier')
   const keptToday = candidateKeptToday(paperOf(pair))
+  // (the ink of the elements its prepare keeps as the original's, by member: F0's run of one pitch, a stretch a decoration holds;
+  // the verdict reads the original's style without it, the coordinator's ruling 1 on F0)
+  const keptEls = candidateKeptElements(paperOf(pair))
   // (I10, the sentence cover over the pair's Pages as the reader lays them, the entry's: each piece drawn of a member lit in
   // exactly one of its sentences on each pane, the panes' sentences the same; packages/typeset/tests/replay/cover.ts)
   const c = got.entry?.cover
@@ -265,6 +268,7 @@ for (const pair of pairs) {
     ...(address.length ? { address } : {}),
     ...(identifier.length ? { identifier } : {}),
     ...(keptToday.length ? { keptToday } : {}),
+    ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),
     ...(joinedAll.size ? { joined: Object.fromEntries(joinedAll) } : {}),
     held: heldRows,
