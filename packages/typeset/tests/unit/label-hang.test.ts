@@ -71,6 +71,23 @@ describe('a label TeX hung beside its text, drawn anew', () => {
     // (every later line on the text's edge, never under the label)
     for (const l of rest) expect(l.items[0]![1]).toBeCloseTo(95.61, 1)
   })
+  it('starts the first line’s text right after a label drawn wider than the hang, the lines after it on the text’s edge', () => {
+    // (German "Abbildung 1." needs more room than TeX's hang for "Figure 1.": the text follows it, as a label in the flow is
+    // followed; TeX would widen the hang to the new label for every line, and the original's lines keep theirs)
+    const de: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: 'Die Ergebnisse der Modelle '.repeat(3) }] }
+    const [laid] = layPage(
+      part(caption(95.61)),
+      { get: (k) => (k === id ? de : undefined), done: true },
+      rulesFor('de'),
+      metrics(),
+    ).members
+    const lines = laid!.lines.map(([, , , items]) => items.map((it) => ('face' in it ? [it.s, it.x] : ['', 0])))
+    expect(lines[0]![0]![0]).toMatch(/^Abbildung/)
+    expect(lines[0]![0]![1]).toBeCloseTo(47, 1)
+    const text = lines[0]!.find(([s]) => (s as string).startsWith('Die'))!
+    expect(text[1] as number).toBeGreaterThan(95.61)
+    for (const l of lines.slice(1)) expect(l[0]![1]).toBeCloseTo(95.61, 1)
+  })
   it('keeps a label TeX set at the start of its first line, the lines after it at the measure, the first line’s', () => {
     // (a caption's label in its first line's text, its second line back at the measure's start: no hang, the label begins the
     // first line, as before)
