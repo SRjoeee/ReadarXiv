@@ -652,6 +652,61 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(fig.plain).toBe('Page: site.io')
   })
 
+  it('ends TeX’s line in a picture where it goes into or out of a face of one pitch: a title’s path its own figure text, kept (Rule 1)', () => {
+    // (2610.19159v1's transcript box titles, pgf's: "Agent Action: Write" in a proportional face, the path written in typewriter,
+    // then "(Self-directed scope reduction)": TeX's line went on over the faces and made one figure text of them, a title,
+    // translated with its path inside. The owner's ruling of 2026-11-10 keeps text set in a face of one pitch: the line goes on
+    // over faces and colours, but not into or out of a face of one pitch, read off the glyphs as Rule 1 reads it)
+    const line = 'Action: Write /tmp/f_a.py (scope cut)'
+    const at = 'a paragraph whose word'.length
+    const path = [line.indexOf('/'), line.indexOf('py') + 2]
+    const docWith = (marks: boolean, body: string): Doc => {
+      const d = docOf([
+        {
+          lines: [
+            { text: 'a paragraph whose word', font: body },
+            { text: line, y: 640 },
+            { text: 'continues on its last line', y: 600, font: body },
+          ],
+        },
+      ])
+      const pg = d.pages[0]!
+      pg.glyphs.slice(at, at + line.length).forEach((g, j) => {
+        const f = j >= path[0]! && j < path[1]! ? 'LMMono10-Regular' : 'LMSans10-Bold'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f })
+      })
+      // (a proportional face's characters each their own advance; the typewriter's one)
+      for (const g of pg.glyphs)
+        if (!g.font.endsWith('Mono10-Regular') && !g.font.endsWith('CMTT10') && !g.blank)
+          g.x1 = g.x0 + (0.55 + (g.u.codePointAt(0)! % 3) * 0.05) * g.size
+      if (marks)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: at, box: 0 },
+            { name: 'ze', glyph: at + line.length, box: 0 },
+          ],
+        }
+      return d
+    }
+    const figuresOf = (body: string) => {
+      const B = docWith(true, body)
+      const A = docWith(false, body)
+      const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed, !!L.units[m.unit]!.pitch])
+    }
+    expect(figuresOf('ABCDEF+CMR10')).toEqual([
+      ['Action: Write', false, false],
+      ['/tmp/f_a.py', true, true],
+      ['(scope cut)', false, false],
+    ])
+    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before)
+    expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, false, false]])
+  })
+
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])

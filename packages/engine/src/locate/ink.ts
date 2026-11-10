@@ -81,6 +81,9 @@ export interface InkInput {
   /** the source unit a glyph of A (global) is, -1 none: where it is given, the author block under the title is read
    *  (author-block.ts) */
   ownerOf?: ((a: number) => number) | undefined
+  /** the faces the document sets at one pitch (facts.ts fixedFacesOf), where Rule 1 keeps such text: a figure's run goes into
+   *  or out of none of them (figure-text.mjs figureUnitsOf `fixed`, PDF-READER §18.22) */
+  fixed?: ReadonlySet<string> | null | undefined
 }
 
 export interface InkStats {
@@ -200,7 +203,7 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
         framed?.page === i ? row.map((x, g) => x ?? (framed.has(g) ? 'b' : null)) : row,
       ),
     },
-    { done: shapesRead },
+    { done: shapesRead, fixed: o.fixed ?? null },
   )
   const ledgerOwn = own.glyphs.map((row, i) => {
     const f = fig.glyphs[i]

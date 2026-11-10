@@ -913,6 +913,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       classesOf: o.classesOf,
       ownerOf,
       artefact: figureArtefact,
+      fixed: artefacts ? fixedFaces : null,
     })
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
     // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the

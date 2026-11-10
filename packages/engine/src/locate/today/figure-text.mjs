@@ -1,6 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
 // marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
-// justified paragraph set from its start (setsOf): run by locate over arXiv's page (../ink.ts), held equal to today's by
+// justified paragraph set from its start (setsOf) and a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
+// fact): run by locate over arXiv's page (../ink.ts), held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
@@ -176,7 +177,7 @@ function inFrame(f, b) {
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
  */
-export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null } = {}) {
+export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null, fixed = null } = {}) {
   const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
@@ -191,6 +192,11 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // their own (CMMI10 against CMR10) and stay apart)
   const familyOf = name => faceOf(name).replace(/-.*$/u, '')
   const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // (CHANGED: a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
+  // sets at one pitch (facts.ts fixedFacesOf, read off the glyphs' advances, per font program), which locate gives where Rule 1
+  // keeps such text (PDF-READER §18.22). 2610.19159v1's transcript box titles, TeX's lines in pgf's pictures, set a path in
+  // typewriter between a title's words: one figure text, the path translated inside the title; its own figure text now, kept)
+  const pitchOf = name => !!fixed && fixed.has(faceOf(name))
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x, run) => run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
   const units = [], glyphMaps = [], turnedMaps = []
@@ -213,7 +219,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
         const tex = texLine(x, run)
-        const joins = (oneLine(x.font, run.font) || tex) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const joins = (oneLine(x.font, run.font) || tex) && pitchOf(x.font) === pitchOf(run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
