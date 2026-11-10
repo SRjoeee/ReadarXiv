@@ -1,4 +1,4 @@
-// A figure's texts as its printed lines tell them (the owner's ruling of 2026-11-10, PDF-READER §18.23): the runs today's figure
+// A figure's texts as its printed lines tell them (the owner's ruling of 2026-11-10, PDF-READER §18.25): the runs today's figure
 // reading cuts (figure-text.mjs figureUnitsOf, its atoms, read as they are) gathered into the lines they stand on, a line that
 // holds a run set in a face of one pitch and words of another one figure text whose runs of one pitch are its elements (F0:
 // "Project Page:" and its address, a title and its path), a line whose every word stands between glyphs of one pitch kept whole

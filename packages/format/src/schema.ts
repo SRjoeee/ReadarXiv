@@ -25,10 +25,11 @@ export const PrepWhy = z.enum(['unlocated', 'unwrapped', 'page'])
 // ---------------------------------------------------------------- what a translator reads
 /** a unit's kind: an open string, today's documented set (FORMAT.md §2): para heading caption footnote cell abstract theorem
  *  figure author affiliation reference; name (babel's names); inkheads inkcontents inknotes inkorphan inknames inkreferences
- *  (text our compile set that no source unit owns); inkfigures (text inside a figure) */
+ *  (text our compile set that no source unit owns); inkfigures (text inside a figure); named (a unit's form with the author
+ *  block's names it holds sent as elements, Part.paper.named: no member's) */
 export const Kind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 /** an element's kind, as the source reader typed it: an open string (math display cite ref eqref footnote macro url code
- *  number other, today's; break, symbol) */
+ *  number other, today's; break, symbol; person, a block name in a `named` unit, its `src` the name's text) */
 export const ElKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 /** a span's style: an open string (bold italic mono sc link colour other …) */
 export const SpanKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
@@ -44,6 +45,8 @@ export type Piece =
       stop?: string | undefined
       silent?: 1 | undefined
       after?: string | undefined
+      name?: string | undefined
+      nameLang?: string | undefined
     }
   | {
       t: 'span'
@@ -89,6 +92,17 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // \newblock's glue before it), and the white space that stands for that gap: no translator is given it, and it comes back
       // after the translation, this white space before it
       after: z.string().optional(),
+      // a reference's: the full name the paper gives the type of the item it refers to, as its marked compile states it (the
+      // label's type, its anchor's, else cleveref's; the first of cleveref's, hyperref's and LaTeX's names for that type that
+      // is plain words and no abbreviation: "Figure", "Equation", hyperref's "section"). Not
+      // in the unit's id: it is read from `src` and the paper's TeX. A translator is sent it for a word tied to the reference
+      // that abbreviates it ("Fig."), packages/translate names.ts; the unit and its original keep the word
+      name: z.string().optional(),
+      // the BCP 47 tag of the language the paper's names are set up for (babel's tag of its main language: `en`, `pt-BR`);
+      // `und` where babel declares one but knows no tag of it; absent where none is declared (no babel). A translator is sent
+      // the name only where this is the language it translates
+      // from, or none is declared
+      nameLang: z.string().optional(),
     }),
     z.object({
       t: z.literal('span'),
@@ -356,6 +370,26 @@ export const Link = z.object({
 /** the paper's fonts as A names them (base names, subset tag off), with the glyphs of located units set in each, most first:
  *  what the reader picks its served faces by (typeset-inputs A3, A4) */
 export const Faces = z.object({ fonts: z.array(z.tuple([z.string(), int])) })
+/** how a unit's row is cut into its stretches (docs/PDF-READER.md §19.15): `cuts` the ids of its pieces that set something (an
+ *  element no tie, no glue, no forced break and not silent sets nothing of; a nested unit's mark), in order, each stretch the
+ *  text before, between and after them; `spaces` the ids of its ties (an element that reads as a space); every other element of
+ *  it reads as nothing; `lettered` the stretches that hold a letter in its source. A row is cut exactly where each cut comes
+ *  back once, in order, no other element of the unit stands where it would end a stretch, and its stretches hold a letter
+ *  exactly where the source's do (a translator that moved an element across a name has none) */
+export const Split = z.tuple([Id, z.array(z.string()), z.array(z.string()), z.array(int)])
+/** a person of the author block that the page's text names elsewhere: the block's unit whose row is the name's translation, its
+ *  member kind there (the names toggle's: the name is drawn so where that kind is shown) and its stretch that is the name */
+export const Person = z.tuple([Id, Kind, int])
+/** a unit of the page that names a person of the block elsewhere (§19.15): the unit, the unit that is its form with the names
+ *  sent as elements (kind `named`; '' none: each name is a whole stretch of the unit, resolved in its own row), and each name:
+ *  in a variant, the element's id there, its person (an index into `persons`), its text's length in the unit's source
+ *  projection and the element's offset in the variant's (Row.sentences.src counts in them: text pieces joined, each element one
+ *  character, a group's edges none); else the unit's stretch (an index into its split's) and its person */
+export const Named = z.tuple([
+  Id,
+  z.union([Id, z.literal('')]),
+  z.array(z.union([z.tuple([z.string(), int, int, int]), z.tuple([int, int])])),
+])
 export const Part = z.object({
   format,
   page,
@@ -363,6 +397,11 @@ export const Part = z.object({
     faces: Faces,
     lineskip: z.tuple([num, num]).optional(),
     names: z.array(z.tuple([z.string(), Id])).optional(),
+    // (one person, one translation per paper: the owner's ruling of 2026-11-10, docs/PDF-READER.md §19.15. Where the names
+    // toggle shows the block, a block name the page's text holds elsewhere is drawn with the block's translation of it)
+    named: z.array(Named).optional(),
+    persons: z.array(Person).optional(),
+    splits: z.array(Split).optional(),
   }),
   flows: z.array(z.array(Placed)),
   ties: z.array(Tie).optional(),
@@ -449,6 +488,9 @@ export type Link = z.infer<typeof Link>
 export type LinkTo = z.infer<typeof LinkTo>
 export type LinkBorder = z.infer<typeof LinkBorder>
 export type Faces = z.infer<typeof Faces>
+export type Split = z.infer<typeof Split>
+export type Person = z.infer<typeof Person>
+export type Named = z.infer<typeof Named>
 export type Part = z.infer<typeof Part>
 export type Original = z.infer<typeof Original>
 export type Head = z.infer<typeof Head>

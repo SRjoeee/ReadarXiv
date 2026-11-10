@@ -58,7 +58,9 @@ const FULL: FormatUnit = {
         { t: 'text', s: 'all of them' },
       ],
     },
-    { t: 'text', s: ' as stated.' },
+    { t: 'text', s: ' as stated in Fig.' },
+    { t: 'el', id: 'f', kind: 'ref', src: '\\ref{fig:a}', name: 'Figure', nameLang: 'en' },
+    { t: 'text', s: '.' },
     { t: 'el', id: 'r', kind: 'other', src: '\\BR@backref{1}', after: ' ' },
   ],
 }
@@ -87,7 +89,9 @@ const EXPECTED: UnitIn = {
         { t: 'text', s: 'all of them' },
       ],
     },
-    { t: 'text', s: ' as stated.' },
+    { t: 'text', s: ' as stated in Fig.' },
+    { t: 'el', id: 'f', kind: 'ref', name: 'Figure', nameLang: 'en' },
+    { t: 'text', s: '.' },
     { t: 'el', id: 'r', kind: 'other', after: ' ' },
   ],
 }

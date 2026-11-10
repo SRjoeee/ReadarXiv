@@ -5,7 +5,7 @@
 // takes no request's signal (one request's timeout would reject the session every other request waits on); the model
 // joins sentences with a space after CJK punctuation, which is taken off. It keeps tags (the tags path).
 import { realClock } from '../chain.ts'
-import { type Clock, Fault, type Lang, type Limits, type Signal, type Translator } from '../contract.ts'
+import { type Clock, Fault, type Lang, type Limits, type Signal, SOURCE, type Translator } from '../contract.ts'
 import { sha256Hex } from '../sha256.ts'
 import { planTags } from '../wire/tags.ts'
 import { readTagged } from './google.ts'
@@ -59,7 +59,7 @@ export interface ChromeOptions {
 export function chrome(o: ChromeOptions): Translator {
   const clock = o.clock ?? realClock()
   const sessions = new Map<string, Promise<ChromeSession>>()
-  const pair = (target: Lang) => ({ sourceLanguage: 'en', targetLanguage: chromeTarget(target) })
+  const pair = (target: Lang) => ({ sourceLanguage: SOURCE, targetLanguage: chromeTarget(target) })
   /** one session per target, shared, made under its own controller and bound, dropped where it fails */
   const sessionOf = (target: Lang): Promise<ChromeSession> => {
     const key = chromeTarget(target)

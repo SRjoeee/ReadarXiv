@@ -212,6 +212,9 @@ const LABEL_KIND: Record<string, Label['kind']> = {
   heading: 'head',
   theorem: 'head',
   footnote: 'mark',
+  // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own.mjs MR 6c),
+  // a heading's number as a section's is: 2610.20967v1's "9. REFERENCES")
+  name: 'head',
 }
 
 /** a unit's pieces by id, spans opened */
@@ -960,7 +963,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return any
   }
   // (a figure's word set in another face inside a line of code is that line's: figure-lines.ts reads a line every word of which
-  // stands between glyphs of one pitch as code, kept whole (Rule 1's inside-a-line read on the line, PDF-READER §18.23:
+  // stands between glyphs of one pitch as code, kept whole (Rule 1's inside-a-line read on the line, PDF-READER §18.25:
   // 2411.13093v4 p19's "attractions" in Georgia inside its Consolas line); a figure text is kept here where it is set wholly in
   // such a face)
   const figureArtefact = (text: readonly number[], turned: readonly [number, number][]): boolean =>

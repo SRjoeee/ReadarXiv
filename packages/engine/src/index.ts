@@ -34,7 +34,15 @@ export {
   type TexFrame,
 } from './instrument.ts'
 export { linkTargetOf } from './locate/ink.ts'
-export { boxedAlignOf, framesOf, readAlign, readBoxAlign, readSkips } from './marks/channels.ts'
+export {
+  boxedAlignOf,
+  framesOf,
+  type RefName,
+  readAlign,
+  readBoxAlign,
+  readRefNames,
+  readSkips,
+} from './marks/channels.ts'
 export { cutLines } from './locate/lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
 export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'

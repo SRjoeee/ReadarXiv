@@ -13,3 +13,6 @@ export declare const COUNTER_GAP: number
 /** the counter TeX set after a babel name on its line where it leads no unit: how many of `next` (the glyphs after the name on
  *  its line, in reading order) it is, 0 for none */
 export declare function counterAfter(x1: number, size: number, next: readonly { u?: string; x0: number; x1: number; size?: number }[]): number
+/** the number TeX set right before a babel name at its line's start (a heading its class numbers itself): how many of `before`
+ *  (every glyph before the name on its line, in reading order) it is, all of them or 0 for none */
+export declare function counterBefore(x0: number, size: number, before: readonly { u?: string; x0: number; x1: number; size?: number }[]): number

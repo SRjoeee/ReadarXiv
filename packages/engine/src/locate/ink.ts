@@ -214,7 +214,7 @@ export function inkOf(o: InkInput): {
   )
   const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
   // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
-  // §18.23. A run of none stays as today's reading made it)
+  // §18.25. A run of none stays as today's reading made it)
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
   // figure text of their own. Of two runs each the other's copy, the first's text stands, the second's is its copy)

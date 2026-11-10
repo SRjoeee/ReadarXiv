@@ -907,6 +907,54 @@ describe('a babel name’s counter', () => {
     expect(name.plain).toBe('APPENDIX')
     expect(name.text).toEqual({ name: 'appendix', counter: ['A', [1, 126, 698, 132, 707, 700]] })
   })
+  it('states the number TeX set right before a name as its label, a heading’s, and reads the line whole: centred', () => {
+    // (spconf.sty's thebibliography: \section{References} centred, "9." and 0.6 em before the word, 2610.20967v1 p5; the wrap
+    // gives the number the name's label group, own.mjs MR 6c. Read off the word alone, the line was justified: its middle 9 pt
+    // off the column's, the number a stay, Room.side from its end)
+    const B = docOf([
+      {
+        lines: [
+          { text: '9.', x: 138, y: 700 },
+          { text: 'REFERENCES', x: 156, y: 700 },
+          { text: 'x'.repeat(40), x: 54, y: 676 },
+        ],
+        points: [
+          ['n1.ref.s', 2],
+          ['n1.ref.e', 12],
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'x'.repeat(40)), { ...unitOf('name', 'ref'), name: 'ref', kept: true as const }]
+    const ins = {
+      ...instrumentOf(B, units, [[1, 1, 0]], [[ROLE.label, ROLE.name, ROLE.text]]),
+      tex: { frames: [{ block: [54, 300] as [number, number], columns: [[54, 300] as [number, number]] }] },
+    }
+    const L = locate(ins, B, align(B, B))
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const name = read('part', o.bytes, o.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'name')!
+    expect(name.plain).toBe('REFERENCES')
+    expect(name.label).toMatchObject({
+      kind: 'head',
+      ink: [1, 138, 698, 150, 707, 700],
+      num: ['9', [1, 138, 698, 144, 707, 700]],
+      punct: ['.', [1, 144, 698, 150, 707, 700]],
+      line: 0,
+    })
+    expect(name.align).toBe('c')
+    expect(name.room.stays).toBeUndefined()
+    expect(name.room.side?.[0]).toBe(54)
+  })
 })
 
 describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', () => {
@@ -3540,5 +3588,70 @@ describe('locate: the face TeX set a unit’s own text in, outside its groups (S
     const m = partOf(instrumentOf(B, [u], [[0, 0]]), B, A)
     expect(m.style.slant).toBeUndefined()
     expect(new Map(m.spans).get('13')?.style).toBeUndefined()
+  })
+})
+
+describe('a block name a unit holds elsewhere (docs/PDF-READER.md §19.15)', () => {
+  const objects = (ins: Instrument, L: ReturnType<typeof locate>) => [
+    ...bundle({
+      ins,
+      located: L,
+      addOn: addOnOf(L, 1),
+      original: new Uint8Array(10),
+      paper: { id: '2501.00001', version: 1, pages: 1 },
+      made: 'test',
+    }),
+  ]
+  it('writes the unit’s variant right after it, keeps the unit as it was, and states the names on its part', () => {
+    // (a correspondence footnote naming the block's author, 2610.22214v1's "Corresponding author: Shisheng Xiong.")
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'Corresponding author: Shisheng Xiong.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('footnote', 'Corresponding author: Shisheng Xiong.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    const all = o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : []))
+    expect(all.map((u) => u.kind)).toEqual(['heading', 'author', 'footnote', 'named'])
+    expect(all[2]!.id).toBe(units[2]!.id)
+    expect(all[3]!.content).toEqual([
+      text('Corresponding author: '),
+      { t: 'el', id: 'n0', kind: 'person', src: 'Shisheng Xiong' },
+      text('.'),
+    ])
+    const part = o.find((x) => x.kind === 'part')!
+    const paper = read('part', part.bytes, part.digest).paper
+    expect(paper.named).toEqual([[units[2]!.id, all[3]!.id, [['n0', 0, 14, 22]]]])
+    expect(paper.persons).toEqual([[units[1]!.id, 'author', 0]])
+    expect(paper.splits).toEqual([[units[1]!.id, [], [], [0]]])
+  })
+  it('makes no variant of a unit no part holds (its member unlocated, no line of it on any page)', () => {
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('para', 'A paragraph.'),
+      unitOf('footnote', 'Corresponding author: Shisheng Xiong.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    expect(
+      o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).map((u) => u.kind),
+    ).toEqual(['heading', 'author', 'para', 'footnote'])
+  })
+  it('states nothing where no unit holds a block name elsewhere', () => {
+    const B = docOf([{ lines: ['A Title', 'Shisheng Xiong', 'A paragraph.'] }])
+    const units = [
+      { ...unitOf('heading', 'A Title'), title: true as const, front: true as const },
+      { ...unitOf('author', 'Shisheng Xiong'), front: true as const },
+      unitOf('para', 'A paragraph.'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2]])
+    const o = objects(ins, locate(ins, B, align(B, B)))
+    const part = o.find((x) => x.kind === 'part')!
+    const paper = read('part', part.bytes, part.digest).paper
+    expect([paper.named, paper.persons, paper.splits]).toEqual([undefined, undefined, undefined])
+    expect(o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).length).toBe(3)
   })
 })

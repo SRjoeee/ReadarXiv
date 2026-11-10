@@ -4,9 +4,9 @@ import type { Instrument, Owners, PieceClass, SpanClass } from '@readarxiv/engin
 /** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode */
 export declare function unicodeOf(s: unknown): string
 /** today's flat pieces as nested ones, its run-in labels `must` */
-export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null }): unknown[]
+export declare function contentOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
 /** today's flat pieces as nested ones, its elements' wire facts; no run-in label read yet (marksOf) */
-export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null }): unknown[]
+export declare function piecesOf(pieces: unknown[], o?: { kindOf?: (p: unknown) => string; idOfNested?: (u: unknown) => string | null; nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined }): unknown[]
 /** each source unit's text glyphs on B (the owners' ROLE.text of it), in B's stream order, by unit index */
 export declare function textGlyphsOf<G>(doc: { pages: readonly { glyphs: readonly G[] }[] }, owners: readonly (Owners | undefined)[]): Map<number, G[]>
 /** what TeX set for a source unit's groups that their source does not say (marks/faces.ts over its text glyphs on B): a face
@@ -115,6 +115,9 @@ export declare function glyphPiecesOf(
 ): Int32Array
 /** the texts the marking's probe showed the paper's macros set, by source (null where none is given) */
 export declare function textsOf(texts: unknown): ReadonlyMap<string, string> | null
+/** a babel name's group as the wrap names it: its occurrence `n<occ>` (the name's word, ROLE.name) or its label `n<occ>.l` (the
+ *  number TeX set right before it, ROLE.label); null for any other group */
+export declare function nameGroupOf(g: string | null | undefined): { occurrence: string; role: number } | null
 /** each unit's facts from the front end's beside it, by index: a caption's float type, a unit kept as it is (its names, an
  *  algorithm float's body) */
 export declare function unitFactsOf(paper: import('./live.mjs').Paper): { float: Map<number, string>; kept: Set<number> }

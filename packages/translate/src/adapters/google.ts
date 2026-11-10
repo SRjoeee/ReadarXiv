@@ -11,6 +11,7 @@ import {
   type Limits,
   type OutPiece,
   type Sentences,
+  SOURCE,
   type Translator,
   type UnitIn,
 } from '../contract.ts'
@@ -83,7 +84,7 @@ export function google(o: GoogleOptions): Translator {
         const reply = await o.fetch(GOOGLE_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json+protobuf', 'X-Goog-API-Key': PUBLIC_KEY },
-          body: JSON.stringify([[wires, 'en', googleTarget(call.target)], CLIENT]),
+          body: JSON.stringify([[wires, SOURCE, googleTarget(call.target)], CLIENT]),
           signal,
         })
         if (!reply.ok) throw await faultOfReply('google', reply)

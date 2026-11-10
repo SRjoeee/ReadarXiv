@@ -1,4 +1,4 @@
-// A figure text that holds an element (F0, PDF-READER §18.23: "Project Page:" and its address, a title and its path) states no
+// A figure text that holds an element (F0, PDF-READER §18.25: "Project Page:" and its address, a title and its path) states no
 // own text (Placed.plain) and is laid by the paragraph path: its translation on its line, its element drawn as a crop of its ink
 // right after it, its element group off, no hole where the original's longer label stood (2611.03178v1 p1). A figure text a
 // closed shape holds whole (the owner's reformulation of 2026-11-10: its container) is laid inside it: S.figures keeps its
