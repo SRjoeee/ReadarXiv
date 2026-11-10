@@ -52,7 +52,7 @@ import {
 } from './facts.ts'
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
-import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
+import { groupLettersOf, groupStyleOf, hasScopes, namesFace } from './group-style.ts'
 import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
@@ -93,6 +93,9 @@ export interface Member {
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
    *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
   asInk?: Set<string>
+  /** its elements made of a group set wholly in a face of one pitch on lines of their own (Rule 1 by group, PDF-READER §18.22):
+   *  TeX's vertical box, its rows kept where TeX set them as a display's are, by piece id */
+  ownRows?: Set<string>
   labelAt?: Label
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
@@ -184,7 +187,7 @@ export interface Located {
     /** the units made on A by today's rule (ink.ts), where A's pages were given */
     made?: InkStats
     /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
-    artefacts?: { units: number; bodyFixed: boolean }
+    artefacts?: { units: number; bodyFixed: boolean; groups?: number }
   }
 }
 
@@ -227,6 +230,18 @@ function piecesOf(content: readonly Piece[], out = new Map<string, Piece>()): Ma
       piecesOf(p.content, out)
     }
   }
+  return out
+}
+
+/** a group's TeX as its unit writes it: each piece's source in order (a text's characters, an element's source, a group's open,
+ *  content and close, a nested unit's source around it) */
+function texOf(list: readonly Piece[]): string {
+  let out = ''
+  for (const p of list)
+    if (p.t === 'text') out += p.s
+    else if (p.t === 'el') out += p.src
+    else if (p.t === 'span') out += (p.open ?? '') + texOf(p.content) + (p.close ?? '')
+    else out += p.pre + p.post
   return out
 }
 
@@ -977,6 +992,171 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.fixed = true
     stats.artefacts.units++
   }
+  // (and read by group, as F0 reads a figure's line (figure-lines.ts): a group of a unit's that holds text of its own and whose
+  // every glyph is set in a face of one pitch is one element `code`, the original's ink, never sent, the rest of its unit
+  // translated. 2608.25210v2's `\mypython{…}` prompt box was kept on p2, a unit of its own after a blank line, and translated on
+  // p3, where its source sets it right after its lead line in one paragraph: one rule for the box, wherever its source's blank
+  // lines fall. The outermost such group, one element, never one inside another. Its glyphs: its letters as the unit's groups'
+  // are matched to A's glyphs (group-style.ts), the text between them, the marks at its ends its own text writes, and its
+  // elements' ink. TeX set it on lines of its own (a vertical box: no other ink of the unit's shares a line with it), its rows
+  // stay where TeX set them, in their own measure and frame, as a display's do (`ownRows`, class `display`); else it stands on
+  // its line, drawn as its ink, F0's class (`other`, literal, its copy its glyphs' text). A unit placed more than once (a babel
+  // name's occurrences) is read so nowhere: one content serves every placement)
+  /** the groups of a unit (placed once, by `mem`) Rule 1 makes elements of: the outermost that hold text of their own whose every
+   *  glyph is set in a face of one pitch, each with its text glyphs on A (global) and the ids of the elements inside it */
+  const pitchGroupsOf = (
+    unit: InstrumentUnit,
+    mem: Member,
+  ): { span: Extract<Piece, { t: 'span' }>; text: number[]; nested: string[] }[] => {
+    const classOf = new Map(unit.classes ?? [])
+    const textGs = [...mem.text].sort((x, y) => x - y)
+    const { groups: letters, all: matched } = groupLettersOf(
+      unit.content,
+      textGs.map(gA),
+      (el) => classOf.get(el.id)?.text,
+    )
+    const lettered = new Set(matched.map((q) => textGs[q] as number))
+    // (the member's stream: its text glyphs and its elements' (by piece id), in order)
+    const elOf = new Map<number, string>()
+    for (const [id, l] of mem.els) for (const a of l) elOf.set(a, id)
+    const stream = [...textGs, ...elOf.keys()].sort((x, y) => x - y)
+    const at = new Map(stream.map((a, q) => [a, q]))
+    const elsIn = (list: readonly Piece[]): string[] =>
+      list.flatMap((p) => (p.t === 'el' ? [p.id] : p.t === 'span' ? elsIn(p.content) : []))
+    const holdsUnit = (list: readonly Piece[]): boolean =>
+      list.some((p) => p.t === 'unit' || (p.t === 'span' && holdsUnit(p.content)))
+    // (the marks its own text writes before its first letter or inked element and after its last: white space aside)
+    const edgesOf = (list: readonly Piece[]): { head: string; tail: string } => {
+      const seq: (string | null)[] = []
+      const walk = (ps: readonly Piece[]) => {
+        for (const p of ps)
+          if (p.t === 'span') walk(p.content)
+          else if (p.t === 'text') for (const ch of p.s) seq.push(/[\p{L}\p{N}]/u.test(ch) ? null : ch)
+          else if (p.t === 'el' && ((mem.els.get(p.id)?.length ?? 0) > 0 || classOf.get(p.id)?.text)) seq.push(null)
+      }
+      walk(list)
+      const first = seq.indexOf(null),
+        last = seq.lastIndexOf(null)
+      const marks = (xs: (string | null)[]) => xs.filter((c): c is string => c !== null && /\S/u.test(c)).join('')
+      return first < 0 ? { head: '', tail: '' } : { head: marks(seq.slice(0, first)), tail: marks(seq.slice(last + 1)) }
+    }
+    const spells = (a: number, ch: string) => gA(a).u.normalize('NFKC') === ch.normalize('NFKC')
+    const judge = (span: Extract<Piece, { t: 'span' }>) => {
+      const L = letters.get(span.id)
+      if (!L?.length || holdsUnit(span.content)) return null
+      const nested = elsIn(span.content)
+      const mine = new Set(nested)
+      const nestedGs = nested.flatMap((id) => mem.els.get(id) ?? [])
+      let lo = Math.min(textGs[L[0] as number] as number, ...nestedGs)
+      let hi = Math.max(textGs[L.at(-1) as number] as number, ...nestedGs)
+      // (its end marks: the text glyphs beside its extent that spell them, none another element's or a matched letter)
+      const { head, tail } = edgesOf(span.content)
+      const grow = (from: number, step: 1 | -1, marks: string) => {
+        let k = step > 0 ? 0 : marks.length - 1
+        let q = (at.get(from) as number) + step
+        let end = from
+        while (k >= 0 && k < marks.length && q >= 0 && q < stream.length) {
+          const a = stream[q] as number
+          const g = gA(a)
+          if (elOf.has(a) || lettered.has(a)) break
+          if (isInk(g) && /\S/u.test(g.u)) {
+            if (!spells(a, marks[k] as string)) break
+            k += step
+            end = a
+          }
+          q += step
+        }
+        return end
+      }
+      lo = grow(lo, -1, head)
+      hi = grow(hi, 1, tail)
+      // (no other element's ink inside it)
+      for (let q = at.get(lo) as number; q <= (at.get(hi) as number); q++) {
+        const id = elOf.get(stream[q] as number)
+        if (id !== undefined && !mine.has(id)) return null
+      }
+      const text = textGs.filter((a) => a >= lo && a <= hi)
+      for (const a of [...text, ...nestedGs]) {
+        const g = gA(a)
+        if (isInk(g) && /\S/u.test(g.u) && !fixedFace(g.font)) return null
+      }
+      return { span, text, nested }
+    }
+    const out: { span: Extract<Piece, { t: 'span' }>; text: number[]; nested: string[] }[] = []
+    const visit = (list: readonly Piece[]) => {
+      for (const p of list) {
+        if (p.t !== 'span') continue
+        const x = judge(p)
+        if (x) out.push(x)
+        else visit(p.content)
+      }
+    }
+    visit(unit.content)
+    return out
+  }
+  if (artefacts) {
+    const placements = new Map<number, number>()
+    for (const mem of members) if (mem.unit >= 0) placements.set(mem.unit, (placements.get(mem.unit) ?? 0) + 1)
+    for (const mem of members) {
+      if (!mem.located || mem.fixed || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
+      if (placements.get(mem.unit) !== 1) continue
+      const unit = units[mem.unit]!
+      if (unit.kept || unit.fixed || !unit.content.some((p) => p.t === 'span')) continue
+      const made = pitchGroupsOf(unit, mem)
+      if (!made.length) continue
+      const at = new Map(made.map((x) => [x.span.id, x]))
+      const swap = (list: readonly Piece[]): Piece[] =>
+        list.map((p): Piece => {
+          if (p.t !== 'span') return p
+          return at.has(p.id) ? { t: 'el', id: p.id, kind: 'code', src: texOf([p]) } : { ...p, content: swap(p.content) }
+        })
+      const content = swap(unit.content)
+      const gone = new Set(made.flatMap((x) => x.nested))
+      const taken = new Set(made.flatMap((x) => x.text))
+      mem.text = mem.text.filter((a) => !taken.has(a))
+      // (TeX's vertical box: no other ink of the unit's, its text or its other elements' (a display's aside, a block of its own),
+      // shares a line with it)
+      const others = [...mem.text, ...[...mem.els].flatMap(([id, l]) => (gone.has(id) ? [] : l))]
+      const classes = (unit.classes ?? []).filter(([id]) => !gone.has(id))
+      for (const x of made) {
+        const own = [...x.text, ...x.nested.flatMap((id) => mem.els.get(id) ?? [])].sort((a, b) => a - b)
+        const boxes = x.nested.flatMap((id) => mem.elBoxes.get(id) ?? [])
+        const boxesB = x.nested.flatMap((id) => mem.elBoxesB.get(id) ?? [])
+        for (const id of x.nested) {
+          mem.els.delete(id)
+          mem.elBoxes.delete(id)
+          mem.elBoxesB.delete(id)
+        }
+        mem.els.set(x.span.id, own)
+        if (boxes.length) {
+          mem.elBoxes.set(x.span.id, boxes)
+          mem.elBoxesB.set(x.span.id, boxesB)
+        }
+        const mine = new Set(own)
+        const shares = cutLines(
+          [...others.filter((a) => !mine.has(a)), ...own].sort((a, b) => a - b),
+          atA,
+        ).some((l) => l.gs.some((a) => mine.has(a)) && l.gs.some((a) => !mine.has(a)))
+        const copy = textOf(own.map(gA))
+        if (!shares) {
+          mem.ownRows ??= new Set()
+          mem.ownRows.add(x.span.id)
+          classes.push([x.span.id, { cls: 'display', copy }])
+        } else classes.push([x.span.id, { cls: 'other', literal: true, copy }])
+      }
+      const { classes: _was, ...rest } = unit
+      void _was
+      units[mem.unit] = {
+        ...rest,
+        id: unitId(unit.kind, content),
+        content,
+        ...(classes.length ? { classes } : {}),
+        keptEls: [...(unit.keptEls ?? []), ...made.map((x): [string, 'pitch'] => [x.span.id, 'pitch'])],
+      }
+      mem.id = units[mem.unit]!.id
+      stats.artefacts.groups = (stats.artefacts.groups ?? 0) + made.length
+    }
+  }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
@@ -1112,6 +1292,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const unit = mem.unit >= 0 ? units[mem.unit]! : null
     const pieces = unit ? piecesOf(unit.content) : new Map<string, Piece>()
     const kindOf = (id: string) => (pieces.get(id) as { kind?: string } | undefined)?.kind ?? 'other'
+    // (an element whose rows stay where TeX set them: a display, and a group of one pitch TeX set on lines of its own)
+    const rowsKept = (id: string) => kindOf(id) === 'display' || !!mem.ownRows?.has(id)
     const classOf = new Map(unit?.classes ?? [])
     // (an element whose ink stands apart from the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
     // and no line of the unit's)
@@ -1123,7 +1305,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     if (textCut.length)
       for (const [id, l] of mem.els)
         if (
-          kindOf(id) !== 'display' &&
+          !rowsKept(id) &&
           l.length &&
           // (beside its text lines: within two sizes over their first and under their last on a page, a line of formulas alone at
           // its end or a script between two of them; outside, only ink apart from all of them: a mark set in a margin, a float)
@@ -1139,7 +1321,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         )
           outside.add(id)
     const inline: number[] = [...mem.text]
-    for (const [id, l] of mem.els) if (kindOf(id) !== 'display' && !outside.has(id)) inline.push(...l)
+    for (const [id, l] of mem.els) if (!rowsKept(id) && !outside.has(id)) inline.push(...l)
     inline.sort((x, y) => x - y)
     const cut = cutLines(inline, atA)
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
@@ -1150,7 +1332,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const kept: CutLine[] = []
     const displayRows = new Map<string, CutLine[]>()
     for (const [id, l] of mem.els)
-      if (kindOf(id) === 'display') {
+      if (rowsKept(id)) {
         const rows = rowsOf(l, atA, boxesOf_(mem.elBoxes.get(id) ?? []))
         displayRows.set(id, rows)
         kept.push(...rows)
@@ -1408,7 +1590,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
           base,
         ]
       }
-      if (p.kind === 'display')
+      if (rowsKept(id))
         for (const l of displayRows.get(id) ?? []) {
           groups.push(l.gs)
           ink.push([l.page, r2(l.x0), r2(l.bottom), r2(l.x1), r2(l.top), l.base])
@@ -1457,7 +1639,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         const cx = (x0 + x1) / 2
         const cy = (y0 + y1) / 2
         let k = -1
-        if (p.kind === 'display') k = ink.findIndex((r) => r[0] === ap && cy >= r[2] && cy <= r[4])
+        if (rowsKept(id)) k = ink.findIndex((r) => r[0] === ap && cy >= r[2] && cy <= r[4])
         else {
           const [pb, xb] = bxB[q] ?? [-1, -1]
           const on = onB.get(pb) ?? []
@@ -1503,7 +1685,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       })
       const el: El = { kind: p.kind, ink }
-      if (p.kind === 'display' || outside.has(id)) el.keep = 1
+      if (rowsKept(id) || outside.has(id)) el.keep = 1
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
       // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a

@@ -245,3 +245,55 @@ export function groupStyleOf(
     },
   }
 }
+
+/**
+ * The glyphs of each group's letters on A, as groupStyleOf matches them (the longest common subsequence of the source's letters
+ * and the glyphs', folded): by its open piece's id, the positions in `glyphs` (the unit's text glyphs in stream order) of the
+ * letters its own text and the groups inside it set, in order (`groups`; a group none of whose letters is matched is absent),
+ * and those of every letter matched (`all`). `textOf` as groupStyleOf's
+ */
+export function groupLettersOf(
+  content: readonly Piece[],
+  glyphs: readonly StyleGlyph[],
+  textOf: (el: El) => string | undefined = () => undefined,
+): { groups: Map<string, number[]>; all: number[] } {
+  const P: number[] = []
+  const chainOf: (readonly string[])[] = []
+  const walk = (list: readonly Piece[], chain: readonly string[]) => {
+    for (const p of list) {
+      if (p.t === 'span') {
+        walk(p.content, [...chain, p.id])
+        continue
+      }
+      const shown = p.t === 'text' ? p.s : p.t === 'el' ? textOf(p) : undefined
+      if (shown === undefined) continue
+      for (const ch of shown)
+        for (const c of fold(ch)) {
+          P.push(c)
+          chainOf.push(chain)
+        }
+    }
+  }
+  walk(content, [])
+  const G: number[] = []
+  const gOf: number[] = []
+  glyphs.forEach((g, q) => {
+    for (const c of fold(g.u)) {
+      G.push(c)
+      gOf.push(q)
+    }
+  })
+  const groups = new Map<string, number[]>()
+  const all: number[] = []
+  if (!P.length || !G.length) return { groups, all }
+  const { pairs } = lcs(Int32Array.from(P), Int32Array.from(G), WORK_PER_LETTER * (P.length + G.length))
+  for (let k = 0; k < pairs.length; k += 2) {
+    const q = gOf[pairs[k + 1] as number] as number
+    if (all.at(-1) !== q) all.push(q)
+    for (const id of chainOf[pairs[k] as number] as readonly string[]) {
+      const l = groups.get(id) ?? groups.set(id, []).get(id)!
+      if (l.at(-1) !== q) l.push(q)
+    }
+  }
+  return { groups, all }
+}
