@@ -1385,6 +1385,29 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // (the whole of each name's `off`, as the review's reproduction states it: its text off, and its label's group off where
     // its comma went to the name before; the last name's was 1 before)
     expect(laid.map((m) => m.off)).toEqual([1, 5, 5, 5])
+    // (one owner on both panes, the label's: each comma, drawn at the end of the name before, is lit with its owner's first
+    // sentence on the right as on A, in no box of the name before's; the cover reads it as its owner's piece and finds it in one
+    // sentence on each pane; and its crop is cut by its owner's label ink, not the name before's (lay/clips.ts). The
+    // coordinator's ruling of 2026-11-11 on round 8 B6's merge of sent-cover's follow-up)
+    const page4 = layPage({ ...part(a), flows: [[a, b, c, d]] }, rows4, rules, inked)
+    const cv = newCover()
+    coverOf(cv, page4, { ...part(a), flows: [[a, b, c, d]] }, inked)
+    coverDone(cv)
+    expect([...cv.faults]).toEqual([])
+    const owners = [b, c, d]
+    for (let k = 1; k < 4; k++) {
+      const at = page4.members[k - 1]!.lines[0]!
+      const crop = at[3].at(-1)! as Extract<Item, { src: unknown }>
+      const mid = [crop.x + ((crop.src[3] - crop.src[1]) * (crop.k || 1)) / 2, at[0]] as const
+      const holds = (boxes: number[][][]) =>
+        boxes.flat().some((q) => q[0]! <= mid[0] && mid[0] <= q[2]! && q[1]! <= mid[1] && mid[1] <= q[3]!)
+      expect([holds(page4.members[k]!.lit.right), holds(page4.members[k - 1]!.lit.right)]).toEqual([true, false])
+      const own = owners[k - 1]!.label!.ink
+      expect(crop.ink).toEqual([
+        [own[1], own[2], own[3], own[4]],
+        [own[1], own[2], own[3], own[4]],
+      ])
+    }
     // (the run centred on the paragraph's middle, 300)
     expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
     // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line

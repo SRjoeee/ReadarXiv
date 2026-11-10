@@ -3272,9 +3272,11 @@ which holds no space, is never cut between its characters where a line holds it.
 breaker's own rule (`noLineStart`: UAX 14's line-start marks and the target's, IJCAI's comma), is laid at the end of the member
 before, glued to it (its crop from that one's ink end on A, TeX's separation before it kept), so that the breaker keeps it with
 that name and, where the line no longer holds both, carries both to the next (staging's round 8 B3: the second line of
-2611.00342v1's names opened with a bare comma). The label stays its owner's: the crop names it (`of`), and its group is off on
+2611.00342v1's names opened with a bare comma). The label stays its owner's: the crop names it (`of`, carried to the laid item), and its group is off on
 its page as where the owner draws it, so the comma is drawn once (the original's stood where it was as well, and the name before
-read the crop as its own label: Codex on #634, round 8 B5). A member's first word is never cut by its characters at the end of a
+read the crop as its own label: Codex on #634, round 8 B5); it is lit with its owner's first sentence on the right as on A, in
+no box of the name before's, and cut by its owner's label ink (`lay/clips.ts`): one owner on both panes, the label's (the
+coordinator's ruling of 2026-11-11; the sentence cover counts it as its owner's piece). A member's first word is never cut by its characters at the end of a
 line the members before it hold. Each line's extent is read off that lay, and the
 run laid again with each line moved to stand centred on TeX's line, or ending at its end; each line keeps its width, so the second
 lay is the first one moved, line by line. A paragraph of several lines must be the run's whole: nothing of the page before its

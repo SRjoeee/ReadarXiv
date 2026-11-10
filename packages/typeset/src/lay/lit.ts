@@ -36,7 +36,7 @@
 import type { Box, Ink, Placed } from '@readarxiv/format'
 import { plainTracker, shown, type TextPiece } from '../breaker/text.ts'
 import { type GroupEl, groupsOff, type Shown } from '../emit/groups.ts'
-import { lineBoxes, onDisplay, tokenBox } from '../emit/sentences.ts'
+import { carriedOf, lineBoxes, onDisplay, tokenBox } from '../emit/sentences.ts'
 import type { Layout } from '../fit/types.ts'
 import type { Laid } from '../types.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -364,11 +364,15 @@ function tokensOn(
   page: number,
   pieceAt: readonly number[],
   elOf: (k: number) => string | undefined,
+  self: number,
 ): Placed_[] {
   const out: Placed_[] = []
   L.lines.forEach((line, j) => {
     if (line.page !== page) return
     for (const it of line.items) {
+      // (another member's label carried to this member's line: its owner's, lit with it)
+      const of = carriedOf(it)
+      if (of !== undefined && of !== self) continue
       const t = it.t as { space?: boolean; at?: number; k?: number; crop?: { k?: number | null } }
       if (t.space) continue
       const b = tokenBox(it, line, L)
@@ -504,7 +508,9 @@ export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
  * A laid member's boxes on page `page`. `L` its layout; `off` its groups turned off on the page as the entry decides them (its
  * elements: 2, the ink it keeps shown follows it; a label drawn anew: 4); `kept` its elements kept where they stand by its
  * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it; `by` its row's sentences and the
- * pieces its reading laid (rowPieces), where its row has sentences
+ * pieces its reading laid (rowPieces), where its row has sentences; `carried` its label as drawn at the end of the name before
+ * (a label no line opens with, lay/flow.ts), on another member's line: lit with its first sentence on the right as on A, the
+ * label's owner one on both panes (the coordinator's ruling of 2026-11-11)
  */
 export function litLaid(
   m: Placed,
@@ -515,6 +521,7 @@ export function litLaid(
     kept: ReadonlySet<string>
     lead: Placed | null
     by?: { sentences?: Sentences | undefined; pieces: readonly V0Piece[] } | undefined
+    carried?: readonly Ink[]
   },
 ): Lit {
   const els: GroupEl[] = (m.els ?? []).map(([id, e]) => ({
@@ -542,7 +549,8 @@ export function litLaid(
     ...(relabelled && m.label ? [m.label.ink] : []),
     ...(o.lead?.lines[0] ? [inkOfLine(o.lead.lines[0])] : []),
   ]
-  const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown) : null
+  const carried = o.carried ?? []
+  const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown, carried) : null
   if (by) return by
   const held = mine.filter((l) => l[9] & KEPT).map(boxOfLine)
   // (the ink it keeps but its displays, on the row it stands on: a piece, a label, a character)
@@ -550,7 +558,7 @@ export function litLaid(
   const left = [widened(mine.map(boxOfLine), [...extra, ...kept], page)]
   // (every element's ink on A, whether drawn elsewhere or kept: one TeX set past its line's text stands in no line's box)
   elementsOnA(m, page, sentenceMap(m, [], []), left)
-  const right = widened([...(L ? lineBoxes(L, page) : []), ...held], kept, page)
+  const right = widened([...(L ? lineBoxes(L, page, m.ord) : []), ...held], [...kept, ...carried], page)
   const own = ownOf(displays)
   return left[0]!.length || right.length ? { left, right: [right], own } : { left: [], right: [], own }
 }
@@ -622,6 +630,7 @@ function bySentence(
   keep: (l: Line) => boolean,
   extra: readonly Ink[],
   shown: readonly Shown[],
+  carried: readonly Ink[],
 ): Lit | null {
   const src = by.sentences?.src ?? [],
     tr = by.sentences?.tr ?? []
@@ -659,7 +668,7 @@ function bySentence(
     return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : undefined
   }
   // (each token in the sentence its start falls in: a text token's place, an element's own sentence on A, a label's the first)
-  const tokens = tokensOn(L, page, places.piece, elOf).map((t) => ({
+  const tokens = tokensOn(L, page, places.piece, elOf, m.ord).map((t) => ({
     ...t,
     s: t.label ? 0 : ((t.el !== undefined ? map.ofElement(t.el) : null) ?? map.ofPlace(t.place)),
   }))
@@ -677,6 +686,8 @@ function bySentence(
     widen(left[at]!, k)
     widen(right[at]!, k)
   }
+  // (its label carried to the end of the name before: lit with its first sentence, as on A)
+  for (const k of carried) widen(right[0]!, k)
   return { left, right, own: ownOf(shown) }
 }
 

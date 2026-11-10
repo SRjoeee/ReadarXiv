@@ -83,10 +83,25 @@ function piecesOnA(m: Placed, page: number, displays: readonly Box[]): Piece[] {
   return out
 }
 
+/** a crop's piece as drawn on a line at `y`: its middle, its source's scaled */
+const cropAt = (it: Extract<Laid['lines'][number][3][number], { src: unknown }>, y: number): [number, number] => {
+  const [, x0, b0, x1, t0, base] = it.src
+  const k = it.k || 1
+  return [it.x + ((x1 - x0) * k) / 2, y + ((b0 + t0) / 2 - base) * k]
+}
+
 /** a laid member's pieces as drawn on page `page`: each character of its lines' text, each crop, and the ink it keeps where it
  *  stands (the original's, its elements' group on or the element kept by TeX outside its text, El.keep; its label where not
- *  drawn anew; its held lines) */
-function piecesDrawn(x: Laid, m: Placed, page: number, metrics: Metrics, displays: readonly Box[]): Piece[] {
+ *  drawn anew; its held lines). A label carried to another member's line (its crop's `of`, lay/flow.ts) is its owner's piece,
+ *  on that line: `carried`, the owner's own as drawn there; another's carried to this member's lines is not this one's */
+function piecesDrawn(
+  x: Laid,
+  m: Placed,
+  page: number,
+  metrics: Metrics,
+  displays: readonly Box[],
+  carried: readonly Piece[] = [],
+): Piece[] {
   // (a crop's element: the one whose ink on A its source was cut from holds, a crop's `piece` being its piece's index in the
   // rows the page was laid from, which the cover is not told)
   const elOf = (src: readonly number[]) => {
@@ -101,18 +116,13 @@ function piecesDrawn(x: Laid, m: Placed, page: number, metrics: Metrics, display
         return id
     return undefined
   }
-  const out: Piece[] = []
+  const out: Piece[] = [...carried]
   for (const [y, , , items] of x.lines) {
     for (const it of items) {
       if ('src' in it) {
-        const [, x0, b0, x1, t0, base] = it.src
-        const k = it.k || 1
+        if (it.of !== undefined && it.of !== x.ord) continue
         const id = it.piece === 'label' ? 'label' : elOf(it.src)
-        out.push({
-          kind: it.piece === 'label' ? 'label' : 'crop',
-          at: [it.x + ((x1 - x0) * k) / 2, y + ((b0 + t0) / 2 - base) * k],
-          ...(id ? { id } : {}),
-        })
+        out.push({ kind: it.piece === 'label' ? 'label' : 'crop', at: cropAt(it, y), ...(id ? { id } : {}) })
         continue
       }
       if (it.dir) continue
@@ -151,6 +161,13 @@ function piecesDrawn(x: Laid, m: Placed, page: number, metrics: Metrics, display
 export function coverOf(c: Cover, page: Page, part: Part, metrics: Metrics, tag = ''): void {
   if (page.wait.rows.length || page.wait.faces.length) return
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
+  // (each label carried to another member's line, by its owner: a piece of its owner's as drawn there)
+  const carried = new Map<number, Piece[]>()
+  for (const x of page.members)
+    for (const [y, , , items] of x.lines)
+      for (const it of items)
+        if ('src' in it && it.of !== undefined && it.of !== x.ord)
+          carried.set(it.of, [...(carried.get(it.of) ?? []), { kind: 'label', at: cropAt(it, y), id: 'label' }])
   for (const x of page.members) {
     const m = byOrd.get(x.ord)
     if (!m || x.lit.dir || (!x.lit.left.length && !x.lit.right.length)) continue
@@ -172,7 +189,9 @@ export function coverOf(c: Cover, page: Page, part: Part, metrics: Metrics, tag 
       [
         'right',
         x.lit.right,
-        x.state === 'laid' ? piecesDrawn(x, m, page.page, metrics, displays) : piecesOnA(m, page.page, displays),
+        x.state === 'laid'
+          ? piecesDrawn(x, m, page.page, metrics, displays, carried.get(x.ord))
+          : piecesOnA(m, page.page, displays),
       ],
     ] as const
     if (process.env.AXT_COVER_DBG === `${tag} ${x.ord}`)

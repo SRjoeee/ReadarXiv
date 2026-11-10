@@ -19,7 +19,7 @@
 // theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
 // name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
 // citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
-import { LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
+import { type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
@@ -37,7 +37,7 @@ import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
 import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { layPagePrepared } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
-import { tokenBand } from '../emit/sentences.ts'
+import { carriedOf, tokenBand, tokenBox } from '../emit/sentences.ts'
 import { CJK, cjkClassRe } from '../breaker/script.ts'
 import { measured, paperOf, readMember, rowPieces, tstyleOf } from './read.ts'
 import { namedRows } from './named.ts'
@@ -568,6 +568,20 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   for (const x of laid.members)
     for (const c of cutsOf(x.lay?.layout))
       if (c.of !== undefined) carriedLabels.set(c.of, (carriedLabels.get(c.of) ?? new Set()).add(c.page))
+  // (each label carried to the end of the name before (a label no line opens with, flow.ts), by its owner: its drawn box on this
+  // page, on the holder's line, as ink (its line's baseline), lit with its owner on the right (litLaid's `carried`))
+  const carriedTo = new Map<number, Ink[]>()
+  for (const x of laid.members) {
+    const L = x.lay?.layout
+    for (const line of L?.lines ?? []) {
+      if (line.page !== page) continue
+      for (const it of line.items) {
+        const of = carriedOf(it)
+        const b = of !== undefined && of !== x.ord ? tokenBox(it, line, L!) : null
+        if (b) carriedTo.set(of!, [...(carriedTo.get(of!) ?? []), [page, b.l, b.bottom, b.r, b.top, line.baseline]])
+      }
+    }
+  }
   // (each name drawn as a lead, by the member it leads: its ink on A lit with that member's)
   const leadOf = new Map<number, Placed>()
   for (const m of members) {
@@ -686,6 +700,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
               kept,
               lead: leadOf.get(m.ord) ?? null,
               by: pieces ? { sentences, pieces } : undefined,
+              carried: carriedTo.get(m.ord) ?? [],
             })
           : litOfA(m, page, sentences?.src),
     }

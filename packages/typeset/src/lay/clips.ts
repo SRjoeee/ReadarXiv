@@ -55,7 +55,9 @@ export function cropInks(members: Laid[], part: Part): { members: Laid[]; inks: 
         const page = it.src[0]
         pages.add(page)
         if (it.ink || it.piece !== 'label') return it
-        const own = all.filter((s) => s.ink[0] === page && s.ord === m.ord && s.piece === 'label')
+        // (its owner's label: a label carried to the end of the name before is still its own member's, `of`)
+        const owner = it.of ?? m.ord
+        const own = all.filter((s) => s.ink[0] === page && s.ord === owner && s.piece === 'label')
         return own.length ? { ...it, ink: own.map((s) => box(s.ink)) } : it
       }),
     ])
