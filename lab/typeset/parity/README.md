@@ -300,7 +300,10 @@ On the sheet a fresh unit is tinted on v2's pane and listed on its page with v2'
 and the run lists every page with its fresh units and, apart, what v2 sends that today never had. Its measures, the
 coordinator's ruling of 2026-11-11: today and v2 draw two translations there, so a measure whose two distances follow from the
 length of the text drawn (`line-count`; `size`, a unit's, a size tie holding one, a figure text's or a name's; `stretch`; the
-highlight's sentence granularity: `verdict.mjs` FRESH_UNJUDGED) is listed `fresh`, never worse nor nearer; every other measure
+highlight's sentence granularity: `verdict.mjs` FRESH_UNJUDGED) is listed `fresh`, never worse nor nearer, and so are the size
+and line count of a unit the part lays at one size with a fresh one (its size tie: a figure's set, a run-in head and its
+paragraph), whose size the fit set from the fresh text's length (1706.03762v7 p13: a figure's 60 labels set at 86 % for
+"<pad>" translated into a wider word); every other measure
 (anchor, align, gap, cross, turn, over, frame, block, elements, erased, pixels, weight, links, borders, ink, folio, lead,
 scripts, toggles, shown, labels, figures, groups, the highlight's coverage, and `style`, each side's share against the
 original's own) is judged as anywhere, and each difference that touches a fresh unit is tagged (`fresh`, its words saying the

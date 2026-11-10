@@ -348,8 +348,13 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
     diff(flag, unit, what, typeof origV === 'number' ? fmt(origV) : origV, { value: t.value, off: fmt(t.d) }, { value: v.value, off: fmt(v.d) }, false, 'fresh')
   }
-  /** the judge of a text-dependent measure of the unit `key` */
-  const judgeText = (key) => (freshKeys.has(key) ? judgeFresh : judge)
+  // (and the units the part lays at one size with a fresh one, its size ties (a figure's set, a run-in head and its paragraph):
+  // the fit set the tie's size from the fresh text's length, so their size and line count follow from it too)
+  const freshTied = new Set()
+  for (const ords of v2.facts[n]?.ties ?? []) if (ords.some((o) => freshKeys.has(keyOfPart(o)))) for (const o of ords) freshTied.add(keyOfPart(o))
+  /** the judge of a text-dependent measure of the unit `key`; `tied`, a measure its size tie's fresh text moves too */
+  const judgeTied = (flag, unit, what, ...rest) => judgeFresh(flag, unit, `${what} (laid at one size with a unit laid with a fresh row)`, ...rest)
+  const judgeText = (key, tied = false) => (freshKeys.has(key) ? judgeFresh : tied && freshTied.has(key) ? judgeTied : judge)
 
   // (v2's size ties on the page, the part's (one paragraph's text is even, the owner's ruling: a run-in head with its
   // paragraph, a paragraph a display splits, laid at one scale): each tie of two members or more both sides draw here is
@@ -481,10 +486,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       if (os) {
         t.share = t.size / os
         v.share = v.size / os
-        if (!tieOf.has(key)) judgeText(key)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
+        if (!tieOf.has(key)) judgeText(key, true)('size', name, 'size off the original\'s (share of it)', r2(os), { value: r2(t.size), d: Math.abs(1 - t.share) }, { value: r2(v.size), d: Math.abs(1 - v.share) }, NEAR.size)
       }
       if (t.olines !== undefined && v.olines !== undefined)
-        judgeText(key)('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
+        judgeText(key, true)('line-count', name, 'lines off the original\'s count on the page', t.olines, { value: t.lines, d: Math.abs(t.lines - t.olines) }, { value: v.lines, d: Math.abs(v.lines - v.olines) }, 0.5)
       // style: against the original's, its share of characters set in a bold and in a slanted face on arXiv's page (the part's
       // font state where no glyph of arXiv's is read)
       const ao = aOrig.get(key)
@@ -513,7 +518,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (t.length !== keys.length || v.length !== keys.length) continue
     const st = Math.min(...t),
       sv = Math.min(...v)
-    const jt = keys.some((k) => freshKeys.has(k)) ? judgeFresh : judge
+    const jt = keys.some((k) => freshKeys.has(k)) ? judgeFresh : keys.some((k) => freshTied.has(k)) ? judgeTied : judge
     jt('size', `tie ${keys.join(', ')}`, "a tie (one paragraph) at its smallest member's size, off the original's (share of it)", 1, { value: r2(st), d: Math.abs(1 - st) }, { value: r2(sv), d: Math.abs(1 - sv) }, NEAR.size)
   }
 
@@ -781,7 +786,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
     judge,
     // (the judge of a text-dependent measure of part member `ord`: fresh where v2 is laid with a fresh row of it)
-    ...(freshKeys.size ? { textJudge: (ord) => judgeText(keyOfPart(ord)), freshKeys } : {}),
+    ...(freshKeys.size ? { textJudge: (ord) => judgeText(keyOfPart(ord), true), freshKeys } : {}),
     diff,
     fault,
     inkOf,

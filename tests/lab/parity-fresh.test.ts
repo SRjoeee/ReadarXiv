@@ -189,6 +189,27 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
     expect(said('style', 'p41 figure')).toEqual([[true, 'today', null]])
     expect(p.worse).toBe(2)
   })
+  it("a unit laid at one size with a fresh unit (the part's size tie: a figure's set, a run-in head and its paragraph): its size and line count read `fresh` too", () => {
+    // (t7 (part 11) not fresh, tied by size to part 12, which is: the fit set the two at one size from the fresh text's length)
+    const tied = measurePage(
+      'p-zh',
+      {
+        pages: { [N]: { members: [{ ord: 11, state: 'laid', lines: [] }], links: [] } },
+        facts: { [N]: { members: [{ ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(400), factLine(388)] }], links: 0, ties: [[11, 12]] } },
+        today: { 11: { today: 7 } },
+        fresh: [12],
+      },
+      {
+        page: N,
+        original: { links: 0 },
+        today: { units: [{ id: 7, lines: [drawn(400), drawn(388)] }], figures: [], names: [], crops: [], links: 0, linksDrawn: 0, lit: [], litBoxes: {} },
+        v2: { committed: true, units: [{ id: 11, lines: [8.5, 8.5, 8.5].map((size, i) => ({ ...drawn(400 - 10 * i), size })) }], crops: [], links: 0, linksDrawn: 0, lit: [] },
+        px: {},
+      },
+      { prepByOrd: new Map(), todayOf: new Map([[11, 7]]), turned: new Set(), led: new Map(), top: new Set() },
+    )
+    expect(of(tied)).toMatchObject({ 'line-count': [false, 'fresh'], size: [false, 'fresh'] })
+  })
   it('the run lists every page with its fresh units by cause, and the units v2 sends that today never had, drawn or not', () => {
     const v2 = { fresh: [11, 12, 30], freshCause: { 11: 'no-row', 12: 'unit', 30: 'no-row' }, freshNew: [30, 31], today: { 11: { today: 7 }, 12: { today: 8 } }, pages: { 3: { members: [{ ord: 11 }, { ord: 12 }] }, 4: { members: [{ ord: 30 }, { ord: 31 }] } }, facts: { 3: { members: [{ ord: 11, kind: 'para' }, { ord: 12, kind: 'figure' }] }, 4: { members: [{ ord: 30, kind: 'figure' }] } } }
     expect(freshOf('p-zh', v2)).toEqual({
