@@ -2266,7 +2266,8 @@ within noise.
   at its first glyph, each character as drawn, each crop, each element's ink, its label, its held lines) is in exactly one of
   its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other
   (a full-width mark's ink read in its own em: one at a line's head, its blank half cut, is drawn half an em left of the line's
-  start with its ink at it; the runner lays a row the chain's acceptance refuses as no row, as the chain makes none).
+  start with its ink at it; the corpus runner gives the entry no row of a stored reply that says nothing, the chain's `empty`,
+  as the chain makes none: given it, the entry hid a cell's text and drew nothing, three cells of two pack pairs).
   A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
   macro: "\method{} trains this model …") begins at it on both panes: moved on to the first letter past it, as both panes did
   until 2026-11-10, the element lit with the sentence before (2611.03953v2 p5, the owner's report: "Three details of Equation

@@ -453,8 +453,9 @@ export function gateL1Pair(
      *  joined to): ord -> today's ord, its row then laid in the member's unit (the parity's: stage 1a's statement of the unit
      *  the member's holds whole, the two of one content, lab/typeset/parity/join.mjs heldJoin) */
     held?: (members: readonly L1Placed[], today: readonly number[]) => ReadonlyMap<number, number>
-    /** the chain's acceptance of a reading (the translate package's `accept`, which this package may not import: its runners
-     *  pass it): an entry row it refuses is no row, as the chain makes none of a reply it refuses, stored or fresh */
+    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
+     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
+     *  that says nothing */
     accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {

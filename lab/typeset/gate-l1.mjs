@@ -37,13 +37,22 @@ const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filt
 // (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
 const ENTRY = args.includes('--entry')
 const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
-/** the chain's acceptance of a reading, as every stored or fresh reply is read: an entry row it refuses is laid as no row (the
- *  chain asks the next translator; the door holds no other reply), counted by why. The parity lays today's rows as they are */
-const refused = new Map()
+/** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
+ *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
+ *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
+ *  original's (given it, the entry hid the unit's text and drew nothing: three table cells of two pack pairs, I10's "right
+ *  missing sentence"). The rule's other clauses hold a reply to v2's wire (its ids, its spans) and to v2's unit (its length),
+ *  which a door row, today's reading of today's unit, is not made for (238 of the 123 pairs' rows empty a span v2 marks `must`,
+ *  8 name a span by today's id): counted by why, given as they are, the parity placing their groups (parity/rows.mjs) */
+const judged = new Map(), unsaid = []
+let judging = ''
 const accept = (unit, content) => {
   const r = acceptReading(unitInOf(unit), content)
-  if (!r.ok) refused.set(r.why, (refused.get(r.why) ?? 0) + 1)
-  return r.ok
+  if (r.ok) return true
+  judged.set(r.why, (judged.get(r.why) ?? 0) + 1)
+  if (r.why !== 'empty') return true
+  unsaid.push(`${judging} ${unit.kind} ${unit.id.slice(0, 8)}`)
+  return false
 }
 /** I10's counts (cover.ts) over the pairs: each fault's count by key, its examples, each pair's faults */
 const addCover = (pair, c) => {
@@ -90,6 +99,7 @@ for (const pair of pairs) {
   count.pairs++
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
+  judging = pair
   try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST, entry: ENTRY, accept }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
@@ -219,7 +229,7 @@ if (ENTRY) {
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
   const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
-  console.log(`the entry's rows the chain refuses (accept.ts), laid as no row: ${[...refused].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
+  console.log(`the entry's rows that say nothing (the chain's 'empty', accept.ts), given as no row: ${unsaid.length}${unsaid.length ? `: ${unsaid.join(' | ')}` : ''}; held to its other clauses, given as they are: ${[...judged].filter(([k]) => k !== 'empty').map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
