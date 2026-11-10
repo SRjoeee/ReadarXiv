@@ -216,7 +216,16 @@ export function inkOf(o: InkInput): {
   const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
   // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
   // §18.26. A run of none stays as today's reading made it)
-  const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null)
+  // (F1: the faces the source units set their text in, a letter of theirs: no formula's own upright face)
+  const textFaces = new Set<string>()
+  own.glyphs.forEach((row, i) => {
+    const G = (pages[i]?.glyphs ?? []) as { u: string; font: string }[]
+    row.forEach((w, j) => {
+      const g = G[j]
+      if (w === 'u' && g && /\p{L}/u.test(g.u)) textFaces.add(String(g.font ?? '').replace(/^[A-Z]{6}\+/, ''))
+    })
+  })
+  const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
   // figure text of their own. Of two runs each the other's copy, the first's text stands, the second's is its copy)
   const textAt = new Map<number, FigureText>()
@@ -435,7 +444,11 @@ export function inkOf(o: InkInput): {
         figure: { set: f.set ?? f.k, ...(dir ? { dir } : {}), ...room },
         ...(f.anchor ? { align: ALIGN_OF[f.anchor as keyof typeof ALIGN_OF] } : {}),
         ...((t ? t.why : f.why)
-          ? { why: `figure: ${t ? t.why : f.why}`, fixed: true as const }
+          ? {
+              why: `figure: ${t ? t.why : f.why}`,
+              fixed: true as const,
+              ...(t?.why === 'formula' ? { formula: true as const } : {}),
+            }
           : o.artefact?.(text, turned)
             ? { why: 'figure: code', fixed: true as const, pitch: true as const }
             : identifiersIn((f.text ?? '').normalize('NFKC')).length
@@ -600,18 +613,25 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'decoration'] => [
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration'] => [
               id,
               (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
                 ? 'pitch'
-                : 'decoration',
+                : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
+                  ? 'formula'
+                  : 'decoration',
             ]),
           }
         : {}),
       figure: { set: -1 - t.ks[0]!, ...room },
       ...(f0.anchor ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] } : {}),
       ...(t.why
-        ? { why: `figure: ${t.why}`, fixed: true as const, ...(t.why === 'code' ? { pitch: true as const } : {}) }
+        ? {
+            why: `figure: ${t.why}`,
+            fixed: true as const,
+            ...(t.why === 'code' ? { pitch: true as const } : {}),
+            ...(t.why === 'formula' ? { formula: true as const } : {}),
+          }
         : {}),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),

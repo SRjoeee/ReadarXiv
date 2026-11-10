@@ -809,6 +809,8 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     // ((k): the candidate's own unit's cause, no statement's; and an identifier's, the candidate's own or stated with its mark)
     expect(accepted(CAUSE.pitch)).toBe(true)
+    // ((n), the coordinator's ruling of 2026-11-10 to lane fig-text: a stretch a decoration holds, kept with it)
+    expect(accepted(CAUSE.decoration)).toBe(true)
     expect(accepted(CAUSE.identifier)).toBe(true)
     expect(accepted('unwrapped')).toBe(false)
     expect(accepted('laid')).toBe(false)
@@ -863,5 +865,35 @@ describe("(f) over (g): a stand-in that holds today's text whole, in order, a ru
       [344, CAUSE.pitch],
     ])
     expect(stated.map((s: { holder?: string }) => s.holder)).toEqual([id('b'), id('b')])
+  })
+})
+
+describe("(m) a unit of today's inside a formula of a figure, kept as the original (F1)", () => {
+  // (2609.19644v1 p37: today's "Mah" and "(OOD) =", runs of KaTeX's upright face beside its math italic; F1's one line, a formula
+  // with no word outside it, kept whole: `keptBy: 'formula'`)
+  const mah = on(unit(id('a'), 1619, 'inkfigures', [text('Mah')]), box(268, 280, 480, 484, 478))
+  const ood = on(unit(id('c'), 1618, 'inkfigures', [text('(OOD) =')]), box(280, 300, 481, 486, 479))
+  const line = {
+    ...on(unit(id('b'), 1618, 'inkfigures', [text('PMah(OOD) = 0.5')]), box(262, 330, 481, 487, 478)),
+    state: 'laid',
+    keptBy: 'formula',
+    why: CAUSE.formula,
+  }
+  it('states each kept inside the formula, the line its holder; the line itself states the same cause', () => {
+    const stated = statedOf([mah, ood], [line])
+    expect(said(stated)).toEqual([
+      [1619, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.formula}`],
+      [1618, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.formula}`],
+    ])
+    expect(keptWhyOf({ keptBy: 'formula' })).toBe(CAUSE.formula)
+  })
+  it('states a run now wholly a formula element of a line with words kept as the original inside a formula', () => {
+    const x = on(unit(id('a'), 7, 'inkfigures', [text('Lflow')]), box(100, 120, 300, 306, 298))
+    const text1 = {
+      ...on(unit(id('b'), 7, 'inkfigures', [ph('Lflow'), text(' for the loss')]), box(100, 200, 300, 306, 298)),
+      state: 'drawn',
+      elements: [{ k: 0, kind: 'math', keptBy: 'formula', segs: [box(100, 120, 300, 306, 298)] }],
+    }
+    expect(said(statedOf([x], [text1]))).toEqual([[7, CAUSE.formula]])
   })
 })

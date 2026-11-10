@@ -21,19 +21,19 @@ type Glyph = {
 }
 /** a line's glyphs from x at size 10 on baseline y, each its own advance (a proportional face: 5 to 7 pt; one of one pitch: 6;
  *  a space 3, a word's) */
-function glyphsOf(text: string, x: number, y: number, font: string): Glyph[] {
+function glyphsOf(text: string, x: number, y: number, font: string, size = 10): Glyph[] {
   const out: Glyph[] = []
   for (const u of text) {
-    const w = u === ' ' ? 3 : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)
+    const w = ((u === ' ' ? 3 : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)) * size) / 10
     out.push({
       u,
       font,
-      size: 10,
+      size,
       x0: x,
       x1: x + w,
       y,
-      top: y + 7,
-      bottom: y - 2,
+      top: y + 0.7 * size,
+      bottom: y - 0.2 * size,
       ix0: x,
       ix1: x + w,
       form: true,
@@ -45,7 +45,10 @@ function glyphsOf(text: string, x: number, y: number, font: string): Glyph[] {
   return out
 }
 /** a page of glyph lines, each line's runs (its glyphs' ranges) figure units by k; `boxes` [x0, y0, x1, y1] each */
-function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }[][], boxes: number[][] = []) {
+function pageOf(
+  parts: { text: string; font: string; run?: boolean; x?: number; size?: number; dy?: number }[][],
+  boxes: number[][] = [],
+) {
   const glyphs: Glyph[] = []
   const units: TodayFigures['units'] = []
   const map = new Map<number, number>()
@@ -53,7 +56,7 @@ function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }
     let x = 72
     const y = 700 - 14 * li
     for (const p of line) {
-      const gs = glyphsOf(p.text, p.x ?? x, y, p.font)
+      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size)
       const k = units.length
       if (p.run !== false) {
         units.push({
@@ -61,7 +64,7 @@ function pageOf(parts: { text: string; font: string; run?: boolean; x?: number }
           text: p.text.trim(),
           why: null,
           x: gs[0]!.x0,
-          y,
+          y: y + (p.dy ?? 0),
           length: gs.at(-1)!.x1 - gs[0]!.x0,
           anchor: 'start',
           before: 20,
@@ -440,5 +443,194 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(t!.why).toBeNull()
     expect(t!.els[0]).toMatchObject({ kind: 'code', boxes: [0] })
     expect(t!.els[1]).toMatchObject({ kind: 'cite', boxes: [1] })
+  })
+})
+
+describe('figure-lines: F1, a formula in a figure is an element, never sent (the owner’s ruling of 2026-11-10)', () => {
+  it('keeps a line that is a formula whole, its upright face one the document sets no word of apart from a formula (2609.19644v1 p37)', () => {
+    // ("P" in KaTeX's math italic, no run of today's; "Mah" its subscript in KaTeX_Main, smaller and lower; " = 0.5" after it)
+    const { page, fig } = pageOf([
+      [
+        { text: 'P', font: 'KaTeX_Math-Italic', run: false },
+        { text: 'Mah', font: 'KaTeX_Main-Regular', size: 7, dy: -1.5 },
+        { text: ' = 0.5', font: 'KaTeX_Main-Regular' },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.why).toBe('formula')
+  })
+  it('makes each formula of a line with words an element `math`: "x and y" in the body face, a letter in a math face', () => {
+    const { page, fig } = pageOf([
+      [
+        { text: 'x', font: 'CMMI10', run: false },
+        { text: ' and ', font: 'CMR10' },
+        { text: 'y', font: 'CMMI10', run: false },
+      ],
+    ])
+    // (CMR10 the face the paper's source units set their text in: no formula's own face)
+    const [t] = figureLinesOf([page], fig, () => false, null, new Set(['CMR10']))
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['el', 'text', 'el'])
+    expect(t!.els.map((e) => e.kind)).toEqual(['math', 'math'])
+  })
+  it('takes a script word that touches its base into the formula, an operator and a number a word space after it too', () => {
+    // ("x" math italic, "base" its \\text subscript in the roman face, then " = 3 for the loss")
+    const { page, fig } = pageOf([
+      [
+        { text: 'x', font: 'CMMI10', run: false },
+        { text: 'base', font: 'CMR7', size: 7, dy: -1.5 },
+        { text: ' = 3 for the loss', font: 'CMR10' },
+      ],
+    ])
+    const [t] = figureLinesOf([page], fig, () => false, null, new Set(['CMR10']))
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.els).toHaveLength(1)
+    const G = page.glyphs as Glyph[]
+    expect(t!.els[0]!.glyphs.map((g) => G[g]!.u).join('')).toBe('xbase=3')
+  })
+  it('keeps a label’s words text where its face sets no letter inside a formula: "jury, α = 8", the face’s only line (2610.21085v1)', () => {
+    // (a face is a formula's own only where a letter of it stands in a formula's cluster, no word space from a formula's glyph:
+    // a label's face beside a formula is the label's, though the document sets no other word in it)
+    const { page, fig } = pageOf([
+      [
+        { text: 'jury, ', font: 'Helvetica' },
+        { text: 'α', font: 'CMMI10', run: false },
+        { text: ' = 8', font: 'Helvetica' },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
+    const G = page.glyphs as Glyph[]
+    expect(t!.els[0]!.glyphs.map((g) => G[g]!.u).join('')).toBe('α=8')
+  })
+  it('takes a phrase in a formula’s own face that touches a formula into it: "log det" between two formulas (2609.19644v1 p37)', () => {
+    // ("Tr(" abuts the math italic x: KaTeX_Main sets letters inside a formula's cluster; "log det" a word space from the formulas
+    // either side, every letter of it in that face: the formula's, the line a formula whole)
+    const { page, fig } = pageOf([
+      [
+        { text: 'Tr(', font: 'KaTeX_Main-Regular' },
+        { text: 'x', font: 'KaTeX_Math-Italic', run: false },
+        { text: ') log det ', font: 'KaTeX_Main-Regular' },
+        { text: 'y', font: 'KaTeX_Math-Italic', run: false },
+      ],
+    ])
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.why).toBe('formula')
+  })
+  it('reads a number’s sign and ASCII marks in a text face as no formula: "−1.04", "<task-root>/"', () => {
+    for (const text of ['gain −1.04 on it', 'open <task-root>/ now']) {
+      const { page, fig } = pageOf([[{ text, font: 'Helvetica' }]])
+      expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+  })
+  it('reads a sum with its limits as one formula of its line, its lower limit spanning the gap past the run gap (2609.19644v1 p60)', () => {
+    // ("analogue sub-bands are y_knn^band = Σ_{i=1}^k w_i y_i^band, and the …": the main line's math glyphs no run holds, its
+    // scripts runs of their own, the sum's lower limit "i=1" under the baseline the only ink across the 8 pt from "k" to "w")
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'analogue sub-bands are', font: T },
+        { text: 'y', font: 'CMMI10', run: false, x: 150 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 154.5 },
+        { text: '=', font: 'CMR10', run: false, x: 175 },
+        { text: 'P', font: 'CMEX10', run: false, x: 182, dy: 5.7 },
+        { text: 'k', font: 'CMMI7', size: 7, run: false, x: 190, dy: 3.8 },
+        { text: 'i', font: 'CMMI7', size: 7, run: false, x: 190, dy: -2.3 },
+        { text: '=1', font: 'CMR7', size: 7, run: false, x: 192, dy: -2.3 },
+        { text: 'w', font: 'CMMI10', run: false, x: 203 },
+        { text: 'y', font: 'CMMI10', run: false, x: 210 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 214.5 },
+        { text: ', and the rest', font: T, x: 232 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.ks).toEqual([0, 1, 2, 3])
+    const inEls = new Set(t!.els.flatMap((e) => e.glyphs))
+    const limit = G.flatMap((g, i) => (g.y < 699 && /[i=1]/.test(g.u) ? [i] : []))
+    expect(limit).toHaveLength(3)
+    expect(limit.every((g) => inEls.has(g))).toBe(true)
+  })
+  it('keeps a line its scripts join at its own size and baseline: a display whose superscript runs outnumber its text (2609.19644v1 p59)', () => {
+    // ("ŷ^final = ŷ^base + β · scale_q · (g_low(x)": the superscripts "final" and "base" and the subscript "low" runs of their
+    // own, "scale" a run of the body face, every math glyph no run's; the subscript q right after "scale", on the subscripts'
+    // baseline: the runs outnumber the text's, and a line voted by its runs alone stood on a script's baseline)
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'y', font: 'CMMI10', run: false, x: 196 },
+        { text: 'final', font: T, size: 7, dy: 4.05, x: 202.9 },
+        { text: '=', font: 'CMR10', run: false, x: 225 },
+        { text: 'y', font: 'CMMI10', run: false, x: 232 },
+        { text: 'base', font: T, size: 7, dy: 4.05, x: 237 },
+        { text: '+', font: 'CMR10', run: false, x: 258 },
+        { text: 'β', font: 'CMMI10', run: false, x: 265 },
+        { text: '·', font: 'CMSY10', run: false, x: 272 },
+        { text: 'scale', font: T, x: 278 },
+        { text: 'q', font: 'CMMI7', size: 7, run: false, x: 307, dy: -1.57 },
+        { text: '·', font: 'CMSY10', run: false, x: 314.8 },
+        { text: '(', font: 'CMR10', run: false, x: 320 },
+        { text: 'g', font: 'CMMI10', run: false, x: 326 },
+        { text: 'low', font: T, size: 7, dy: -1.57, x: 332 },
+        { text: '(', font: 'CMR10', run: false, x: 345 },
+        { text: 'x', font: 'CMMI10', run: false, x: 349 },
+        { text: ')', font: 'CMR10', run: false, x: 355 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.why).toBe('formula')
+    const all = new Set(t!.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? t!.els[o.i]!.glyphs : [])))
+    expect(G.every((g, i) => g.blank || all.has(i))).toBe(true)
+  })
+  it('keeps a text the original’s where ink no line holds stands under its formula: the element would move, that ink stay', () => {
+    // (a sum set with its limits under it, 0.7 of the size below the baseline: past half the size, no line takes them; the
+    // words before it translated would carry the sum away from its limits)
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'the weights are', font: T },
+        { text: 'P', font: 'CMEX10', run: false, x: 160, dy: 3 },
+        { text: 'i=1', font: 'CMMI7', size: 7, run: false, x: 159, dy: -7 },
+        { text: 'w', font: 'CMMI10', run: false, x: 168 },
+        { text: 'for each band', font: T, x: 178 },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(rest).toEqual([])
+    expect(t!.els.map((e) => e.kind)).toEqual(['math'])
+    expect(t!.why).toBe('crowded')
+  })
+  it('reads a mark set between two words, no space either side and no math face, as the words’: "Near−monopoly" (2610.11256v1 p17)', () => {
+    // (a plot's labels set with the minus sign for their hyphen: each one text, translated; between two letters of a formula
+    // it is the formula's: "x−y" kept)
+    for (const text of ['Near−monopoly', 'Over−priced', 'input→output']) {
+      const { page, fig } = pageOf([[{ text, font: 'Helvetica' }]])
+      expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+    const { page, fig } = pageOf([[{ text: 'x−y', font: 'Helvetica' }]])
+    expect(figureLinesOf([page], fig, () => false, null).map((t) => t.why)).toEqual(['formula'])
+  })
+  it('reads an upright face the document sets a word of apart from any formula as text: its words translated', () => {
+    // (KaTeX_Main also sets a label of its own, no formula on its line: a text face; "arg min" a word before the formula)
+    const { page, fig } = pageOf([
+      [
+        { text: 'arg min ', font: 'KaTeX_Main-Regular' },
+        { text: 'x', font: 'KaTeX_Math-Italic', run: false },
+      ],
+      [{ text: 'Legend', font: 'KaTeX_Main-Regular' }],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.why).toBeNull()
+    expect(t!.order.map((o) => o.t)).toEqual(['text', 'el'])
   })
 })

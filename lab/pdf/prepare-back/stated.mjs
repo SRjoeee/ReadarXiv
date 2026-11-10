@@ -90,6 +90,10 @@ export const CAUSE = Object.freeze({
   // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
   // text: accepted, the coordinator's ruling of 2026-11-10 on F0)
   decoration: 'kept as the original: a stretch a decoration holds, carried with it',
+  // ((m), F1 (rebuild/fig-text): today's unit inside a formula of a figure, kept as the original: wholly a formula element of a
+  // figure text (`keptBy: 'formula'` on the element), or held whole by a figure's line no word of which stands outside its
+  // formulas, kept whole (`keptBy: 'formula'` on the unit, whose own cause it is too); not accepted until the coordinator rules)
+  formula: 'kept as the original: inside a formula of a figure',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -107,9 +111,17 @@ const UNMARKED = 'unlocated: marks'
  *  paragraph: acmart's reference format one ink unit), which (i) reads too (the coordinator's ruling of 2026-11-10, round 8 B3) */
 const RESET = 'unlocated: set in a paragraph that sets a unit again'
 /** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, or
- *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too),
- *  else null: a unit kept otherwise (a code environment's kept block, a crowded figure text) states none */
-export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : u?.keptBy === 'identifier' ? CAUSE.identifier : null)
+ *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too);
+ *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1); else null: a unit kept otherwise (a code
+ *  environment's kept block, a crowded figure text) states none */
+export const keptWhyOf = (u) =>
+  u?.keptBy === 'pitch'
+    ? CAUSE.pitch
+    : u?.keptBy === 'identifier'
+      ? CAUSE.identifier
+      : u?.keptBy === 'formula'
+        ? CAUSE.formula
+        : null
 
 /** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
  *  an en dash, the curly double and single quotes */
@@ -475,7 +487,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       for (const e of n.elements ?? []) {
         if (!e.keptBy || !u.lines.every((l) => e.segs.some((k) => inside(l, k)))) continue
         const p = (n.pieces ?? []).find((q) => q.k === e.k && q.kind === 'ph')
-        if (p && (p.src ?? '').replace(/\s+/g, '') === t) return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : CAUSE.decoration }
+        if (p && (p.src ?? '').replace(/\s+/g, '') === t)
+          return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : e.keptBy === 'formula' ? CAUSE.formula : CAUSE.decoration }
       }
     }
     return null
@@ -654,13 +667,16 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
                   : null
     if (kept) out.push({ u, why: "kept on arXiv's page as the original's, no text of it sent", cause: 'keptAt' })
     else if (!said && part) out.push({ u, why: CAUSE.displayPart, cause: 'displayPart' })
-    else if (said)
+    else if (said) {
+      // ((m): held whole by a figure's line kept whole for its formulas: inside a formula, kept as the original)
+      if (said.cause === CAUSE.held && said.by?.keptBy === 'formula') said.cause = CAUSE.formula
       out.push({
         u,
         why: `made on arXiv's page as ${said.by.id.slice(0, 12)}: ${said.cause}`,
         cause: keyOf(said.cause),
         ...(said.holder ? { holder: said.holder.id } : {}),
       })
+    }
   }
   return out
 }
