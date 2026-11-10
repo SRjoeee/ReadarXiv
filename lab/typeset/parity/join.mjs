@@ -33,8 +33,9 @@ function ownIdOf(m, units) {
 
 /** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by (stated.mjs's keys); `order` where
  *  the statement names its holder: a names unit's stand-in of its ledger class, today's characters in another order (its kind
- *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
-const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
+ *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b); `pitchGroup`, today's unit written as the holder with a group
+ *  of it an element kept for its pitch (lane b5-fixes, PDF-READER §18.22): its id moved with its content */
+const HOLDS = new Set(['held', 'names', 'heldBlock', 'order', 'pitchGroup'])
 /** the causes the joined join reads besides: today's unit now wholly an element of the holder that keeps it as the original's ink,
  *  (k) on elements and (n) (stated.mjs's `pitch` and `decoration` with a holder, lane fig-text): one of the units the holder
  *  holds in order, its text the element's */

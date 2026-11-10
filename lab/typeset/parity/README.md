@@ -123,9 +123,10 @@ are its own, set on the same lines of A (as many, each on its page at the same b
 (`l1.ts` `keptJoin`, over today's prepare dump; gate-l1.ts joins by it too). A member neither joins is joined, last, to the unit
 of today's that stage 1a states its unit holds whole (`join.mjs` `heldJoin`: the candidate's prepare dump, `AXT_L1_DUMPS`,
 default the `prepare` folder beside the bundles; the statement's causes held whole (f), by the author block (b′) and by the
-block's units on its line (f′), each naming the holder, `lab/pdf/prepare-back/stated.mjs`): an ink unit whose kind moved, its
-id with it (rebuild/author-toggle's AND, today's inkorphan, v2's inknames), one of today's for one member, several of one id
-by their order. The lay is given today's row of it where the two units' contents are one (gate-l1's `held`), so that with
+block's units on its line (f′), and a source unit written as the holder with a group of it an element kept for its pitch (k by
+group, PDF-READER §18.22), each naming the holder, `lab/pdf/prepare-back/stated.mjs`): an ink unit whose kind moved, its id
+with it (rebuild/author-toggle's AND, today's inkorphan, v2's inknames), a unit whose content moved with a group (1810.04805v2's
+`{\tt [CLS]}`), one of today's for one member, several of one id by their order. The lay is given today's row of it where the two units' contents are one (gate-l1's `held`), so that with
 every toggle on it is drawn translated as today's was, not the original's for want of a row under its new id (the
 coordinator's ruling of 2026-11-10); v2.mjs's file counts them (`held`: joined, given today's row).
 
