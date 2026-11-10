@@ -9,11 +9,17 @@
 // begun on it, those running on to it, the rules)`, which v2.mjs reads to record each pass's target; and in
 // packages/typeset/src/breaker/slots.mjs option (i)'s line (floorOver: the gap under a borrowing paragraph measured from the
 // borrow's limit) is skipped while `globalThis.__parityNoOptionI` is set, which v2.mjs sets alone, around a first lay of the
-// pair whose pages it does not keep: each page's target before (i). Nothing else of any module is touched; a gate-l1.ts that
-// no longer holds the call once, or a fill-pass.ts or slots.mjs its anchor, throws.
+// pair whose pages it does not keep: each page's target before (i). And in packages/typeset/src/breaker/tokens.ts the line that
+// sets no space beside a full-width mark's blank side (B.tokens, lane cjk-space) is skipped while `globalThis.__parityMarkSpaces`
+// is set, which v2.mjs sets alone, around another lay of the pair whose pages it does not keep: each member's line count with those
+// spaces put back, the counterfactual the verdict's markSpaceRuling reads (the coordinator's ruling of 2026-11-10). Nothing else of
+// any module is touched; a gate-l1.ts that no longer holds the call once, a fill-pass.ts or slots.mjs its anchor, or a tokens.ts
+// its line once, throws.
 const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
 const FILL = '  const { units, ...told } = fillUnitsOf(\n'
 const OPTION_I = '  if (b.B.at(-1) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)\n'
+
+const MARK_SPACES = '    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false\n'
 
 export async function load(url, context, nextLoad) {
   const r = await nextLoad(url, context)
@@ -32,6 +38,17 @@ export async function load(url, context, nextLoad) {
     const source = String(r.source)
     once(source, OPTION_I, 'slots.mjs')
     return { ...r, source: source.replace(OPTION_I, `  if (!globalThis.__parityNoOptionI) ${OPTION_I.trimStart()}`) }
+  }
+  if (url.endsWith('/packages/typeset/src/breaker/tokens.ts')) {
+    const source = String(r.source)
+    if (source.split(MARK_SPACES).length !== 2) throw new Error('parity hook: tokens.ts no longer holds its mark-space line once')
+    return {
+      ...r,
+      source: source.replace(
+        MARK_SPACES,
+        '    if (!(globalThis as any).__parityMarkSpaces && (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace))) return false\n',
+      ),
+    }
   }
   if (!url.endsWith('/packages/typeset/tests/replay/gate-l1.ts')) return r
   const source = String(r.source)

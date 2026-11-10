@@ -323,10 +323,14 @@ const SPECS: readonly RuleSpec[] = [
     ],
     file: 'breaker/tokens.ts',
     how: 'ported',
+    ruling:
+      "2026-11-10 no space beside a full-width mark's blank side (xeCJK's rule; the owner's staging case 2611.03953v2-zh)",
     reads: ['breaking.*', 'fit.autospace', 'fit.compressMax', 'words'],
     state: {
-      is: 'ported',
-      replay: "samples/B.tokens.json.gz with lanes/L3/replay/B.tokens.json.gz, its faces B.faces' port's",
+      is: 'changed',
+      why: "a space after a full-width closing mark or before an opening mark (a mark of the CJK blocks, or a curly quote the target sets in its CJK face) is not set, whatever stands on the mark's other side: the mark carries its white, and a translator's space beside it doubled it (2611.03953v2-zh's references, every name followed by U+FF0C and a space: about 1 em of white where the original's comma and space held 0.3 em). Today's set it unless a CJK character stood on both sides. The replays read today's tokens through the ruling (tests/replay/tap.ts markSpaced): 1 of the 42 sampled rounds, 3 spaces; U.marks' 2 of 50, 4. And a mark's class (`punct`) is set only where the mark is full-width by that definition: a curly quote an alphabet's target sets in its Latin face, proportional, gets none, and no blank half of it hangs past a line's end (today's hung it half an em past the measure: 1810.04805v2-es p8 t155); tap.ts quotesUnmarked: 3 rounds, 10 quotes",
+      replay:
+        "samples/B.tokens.json.gz with lanes/L3/replay/B.tokens.json.gz, its faces B.faces' port's, today's tokens read through markSpaced; tests/unit/mark-space.test.ts",
       cases: 42,
     },
   },

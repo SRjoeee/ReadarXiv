@@ -221,6 +221,14 @@ The gate judges by them where they and today's output differ.
    each pass's target and each member's line count of that lay, `before`, beside this lay's targets, `fills`, through a call
    `hook.mjs` puts in `fill-pass.ts`), 2610.20484v1-zh p8 t85.
 
+The coordinator's ruling of 2026-11-10 (lane cjk-space): B.tokens sets no space beside a full-width mark's blank side (xeCJK's
+rule, PDF-READER §18.18); where that saves a unit a line, the line it saves held a lone fragment (one character on
+2610.30034v1-zh p3 t36 and on 2610.10069v1-zh p27 t227, a lone year in 2608.04322v1-zh p12's references), and the line count is
+an instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those
+spaces put back sets today's count on the page: `v2.mjs` lays each pair first with B.tokens' mark-space line skipped (`hook.mjs`,
+a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
+markSpaceRuling. A count those spaces do not explain is judged as any.
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the

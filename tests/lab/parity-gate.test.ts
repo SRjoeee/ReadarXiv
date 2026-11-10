@@ -22,12 +22,20 @@ const rec = (o: { today?: object; v2?: object; original?: object; px?: object } 
   px: { ...o.px },
 })
 const v2Of = (
-  o: { members?: object[]; facts?: object[]; today?: Record<number, { today: number }>; more?: Record<number, object[]>; fills?: object } = {},
+  o: {
+    members?: object[]
+    facts?: object[]
+    today?: Record<number, { today: number }>
+    more?: Record<number, object[]>
+    fills?: object
+    spaced?: Record<number, number>
+  } = {},
 ) => ({
   pages: { [N]: { members: o.members ?? [], links: [] }, ...Object.fromEntries(Object.entries(o.more ?? {}).map(([pg, ms]) => [pg, { members: ms, links: [] }])) },
   facts: { [N]: { members: o.facts ?? [], links: 0 } },
   today: o.today ?? {},
   ...(o.fills ? { fills: o.fills } : {}),
+  ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
 type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number> }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
@@ -586,5 +594,33 @@ describe("line-count: the owner's ruling of 2026-11-10 (option (i), the frames' 
     expect(counts(band({ lead: 1.4 }))).toEqual([['t85 para', true, 'today']])
     // (its line count the same without (i): the count not the band's (2610.40645v1-ja p32 t271, 5 lines at 1.19 and at 1.23))
     expect(counts(band({ offLines: 12 }))).toEqual([['t85 para', true, 'today']])
+  })
+})
+
+describe("line-count: a unit a line shorter by the spaces beside a full-width mark (the coordinator's ruling of 2026-11-10)", () => {
+  // (2610.30034v1-zh p3 t36: B.tokens sets no space beside a full-width mark's blank side, xeCJK's rule, and the paragraph's text
+  // takes a line fewer than today's, the line it saves a lone character; the coordinator: "the parity's line-count measure is only
+  // an instrument, so I accept them". A count is the ruling's only where the pair laid with those spaces put back, v2.mjs's first
+  // lay, `spaced`, sets today's count on the page)
+  const ys = [700, 688, 676, 664]
+  const facts = [{ ord: 36, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)) }]
+  const laidAt = (ord: number, k: number) => ({ ord, state: 'laid', lines: ys.slice(0, k).map((y) => [y, 72, 300, []]), lit: { left: [], right: [], own: [] } })
+  const drawn = (k: number) => ys.slice(0, k).map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
+  /** the original's 4 lines, today's 3, v2's 2; `spaced`: v2's count with the spaces put back, none where not recorded */
+  const page = (spaced?: number) =>
+    measure(
+      v2Of({ members: [laidAt(36, 2)], facts, today: { 36: { today: 36 } }, ...(spaced === undefined ? {} : { spaced: { 36: spaced } }) }),
+      rec({ today: { units: [{ id: 36, lines: drawn(3) }] }, v2: { units: [{ id: 36, lines: drawn(2) }] } }),
+    )
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const counts = (p: ReturnType<typeof page>) => (of('line-count')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
+  it("v2's count other than today's where the spaces put back give today's: the ruling's, not worse", () => {
+    expect(counts(page(3))).toEqual([['t36 para', false, 'ruling']])
+  })
+  it("the spaces put back giving v2's own count (the rule not its cause): worse", () => {
+    expect(counts(page(2))).toEqual([['t36 para', true, 'today']])
+  })
+  it('no lay with the spaces put back recorded: worse', () => {
+    expect(counts(page())).toEqual([['t36 para', true, 'today']])
   })
 })
