@@ -742,6 +742,23 @@ describe('V6: overlays', () => {
     expect(leftViewer().log.filter(l => l === 'updateScale 0')).toHaveLength(2)
   })
 
+  it('a wheel with ⌘ held is the reader\'s scroll, as one without: it commits a pinch under way and makes its pane the driver; only a wheel with Ctrl is the pinch\'s own (macOS\'s screenshot keys hold ⌘ while a scroll runs, the owner\'s report of 2026-11-10)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    const wheel = (pane: HTMLElement, keys: { ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean }) => pane.dispatchEvent(Object.assign(new Event('wheel'), keys))
+    s.panes.left.dispatchEvent(new Event('wheel'))
+    for (let i = 0; i < 2; i++) s.view.pinch('left', 1.1, [300, 300])
+    // a Ctrl-wheel, ⌘ held beside it or not, is the pinch's: the preview stays, and the driver
+    wheel(s.panes.right, { ctrlKey: true })
+    wheel(s.panes.right, { ctrlKey: true, metaKey: true })
+    const pinch = { pinching: s.view.probe().pinching !== null, driver: s.view.probe().driver }
+    // ⌘⇧ held, then ⌘ alone, each over the other pane
+    wheel(s.panes.right, { metaKey: true, shiftKey: true })
+    const meta = { pinching: s.view.probe().pinching !== null, driver: s.view.probe().driver }
+    wheel(s.panes.left, { metaKey: true })
+    expect([pinch, meta, s.view.probe().driver]).toEqual([{ pinching: true, driver: 'left' }, { pinching: false, driver: 'right' }, 'left'])
+  })
+
   it('the pointer during a pinch\'s preview finds what shows under it: the point its transform shows there', async () => {
     const s = setup()
     await opened(s, 3)

@@ -476,11 +476,14 @@ export function createPanes(o: PanesOptions): Panes {
       },
       opts,
     )
+    // (a wheel with Ctrl is a zoom, never a scroll: the pinch's step makes its pane the driver, and binds nothing; a wheel with
+    // ⌘ held is a scroll, as the chrome's pinch has it, §6.8)
+    // (any other input ends a pinch under way: it is committed first)
     for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown'])
       c.addEventListener(
         type,
         (e) => {
-          if (type !== 'wheel' || !((e as WheelEvent).ctrlKey || (e as WheelEvent).metaKey)) {
+          if (type !== 'wheel' || !(e as WheelEvent).ctrlKey) {
             settle()
             follower.input(s, type)
           }

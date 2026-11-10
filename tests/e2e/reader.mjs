@@ -787,7 +787,7 @@ try {
       const frames = []
       window.__handleFrames = frames
       window.__firstZoomWheel = null
-      document.addEventListener('wheel', e => { if ((e.ctrlKey || e.metaKey) && window.__firstZoomWheel === null) window.__firstZoomWheel = performance.now() }, { capture: true, passive: true })
+      document.addEventListener('wheel', e => { if (e.ctrlKey && window.__firstZoomWheel === null) window.__firstZoomWheel = performance.now() }, { capture: true, passive: true })
       const sentinel = Object.assign(document.createElement('div'), { style: 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none' })
       document.body.append(sentinel)
       let n = 0
@@ -818,6 +818,37 @@ try {
     const back = after.find(f => f.panes[1].opacity > 0)
     check('the handles through a zoom: unseen in every frame of a pinch from its first wheel, the zoom\'s own scrolls included; the reader\'s next wheel shows the right one, at the length its frame asks', shownBefore > 0 && during.length > 5 && seen.length === 0 && !!back && !back.panes[1].zoom && Math.abs(back.panes[1].length - back.panes[1].wants) <= 0.6 && after.at(-1).panes[1].opacity === 1,
       JSON.stringify({ shownBefore, frames: during.length, seen: seen.length, firstSeen: seen[0]?.panes ?? null, back: back?.panes[1] ?? null, settled: after.at(-1)?.panes[1].opacity ?? null }))
+    await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
+    await page.waitForTimeout(600)
+
+    // a wheel with ⌘ held is a scroll, never a zoom (§6.8): macOS's screenshot keys (⌘⇧4, ⌘⇧5) hold ⌘ while a scroll or its
+    // momentum runs, and the page zoomed under them (the owner's report of 2026-11-10). Over the right, wheels as Chromium
+    // sends them with ⌘ (modifiers 4), then with ⌘⇧ (12): none taken, the scale kept, the pane scrolled by the first; then
+    // the control, Ctrl-wheels (2), which zoom
+    await page.evaluate(() => {
+      window.__wheels = []
+      window.addEventListener('wheel', e => window.__wheels?.push({ ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, taken: e.defaultPrevented }), { passive: true })
+    })
+    const cdp3 = await context.newCDPSession(page)
+    const metaAt = [R0.x + R0.width / 2, R0.y + R0.height / 2]
+    const metaWheels = async (modifiers, deltaY) => {
+      for (let i = 0; i < 6; i++) {
+        await cdp3.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: metaAt[0], y: metaAt[1], deltaX: 0, deltaY, modifiers })
+        await page.waitForTimeout(16)
+      }
+      await page.waitForTimeout(500)
+      return page.evaluate(() => ({ scale: window.__reader.view.probe().scale, top: document.getElementById('right').scrollTop }))
+    }
+    const atRest = await page.evaluate(() => ({ scale: window.__reader.view.probe().scale, top: document.getElementById('right').scrollTop }))
+    const byMeta = await metaWheels(4, 60), byMetaShift = await metaWheels(12, 60)
+    const metaSeen = await page.evaluate(() => window.__wheels.splice(0))
+    const byCtrl = await metaWheels(2, -5)
+    await cdp3.detach()
+    const ctrlSeen = await page.evaluate(() => { const w = window.__wheels; window.__wheels = null; return w })
+    check('a wheel with ⌘ held, or ⌘⇧ as a screenshot\'s keys hold it, scrolls the pane and never zooms; a wheel with Ctrl zooms',
+      metaSeen.length === 12 && metaSeen.every(w => w.meta && !w.ctrl && !w.taken) && byMeta.scale === atRest.scale && byMetaShift.scale === atRest.scale && byMeta.top > atRest.top + 100 &&
+        ctrlSeen.length === 6 && ctrlSeen.every(w => w.ctrl && w.taken) && byCtrl.scale > atRest.scale * 1.05,
+      JSON.stringify({ atRest, byMeta, byMetaShift, byCtrl, metaTaken: metaSeen.filter(w => w.taken).length, metaSeen: metaSeen.length, ctrlTaken: ctrlSeen.filter(w => w.taken).length }))
     await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
     await page.waitForTimeout(600)
 

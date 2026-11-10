@@ -40,10 +40,10 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
     if (stack) observer.observe(stack)
     return () => observer.disconnect()
   }, [])
-  // Hidden through a zoom (the owner's decision of 2026-11-01, §6.5): from the zoom's first Ctrl or ⌘ wheel over the pages,
+  // Hidden through a zoom (the owner's decision of 2026-11-01, §6.5): from the zoom's first Ctrl-wheel over the pages,
   // or its first change of scale, whatever asked it (a pinch, a key, the menu, a fit), at once and with no fade, until the
   // reader next scrolls. A scroll is the reader's when the reader's own input has come since the zoom's last change of scale:
-  // a wheel without Ctrl or ⌘, a key other than the zoom's, a touch, a press anywhere (a link, the contents, the page pill).
+  // a wheel without Ctrl (pinch.ts), a key other than the zoom's, a touch, a press anywhere (a link, the contents, the page pill).
   // The zoom's own scrolls come with none — each step's anchoring, a commit's, and the panes' level once it settles (sync.mjs
   // zoomed: 150 ms on, at a glide's end) — and leave it hidden. The reader's shows it again, from its first
   // frame, at its length and place (both are kept through the zoom); a press on it shows it too: its drag always works
@@ -61,7 +61,7 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
     const input = () => { own = true }
     const onWheel = (e: WheelEvent) => {
       if (!(e.target as Element | null)?.closest?.('.pane')) return
-      if (e.ctrlKey || e.metaKey) hide()
+      if (e.ctrlKey) hide()
       else input()
     }
     // (the zoom's keys, Ctrl or ⌘ with =, +, − or 0, are the zoom's; Ctrl or ⌘ with F, the browser's find, is the reader's)
