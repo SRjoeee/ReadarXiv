@@ -215,7 +215,7 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   // (a unit kept for its text set wholly in a face of one pitch, the engine's `pitch`: `keptBy: 'pitch'`; a kept block of e-mail
   // addresses alone, the engine's `address`: `keptBy: 'address'`; the parity reads both, join.mjs candidatePitch and
   // candidateAddress. Never both: `pitch` marks source units and figure texts, `address` kept blocks)
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), ...(u.address ? { keptBy: 'address' } : {}), text: textOfPieces(pieces), pieces }
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), ...(u.address ? { keptBy: 'address' } : {}), ...(u.formula ? { keptBy: 'formula' } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)

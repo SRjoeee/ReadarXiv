@@ -36,9 +36,9 @@ function ownIdOf(m, units) {
  *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
 const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
 /** the causes the joined join reads besides: today's unit now wholly an element of the holder that keeps it as the original's ink,
- *  (k) on elements and (n) (stated.mjs's `pitch` and `decoration` with a holder, lane fig-text): one of the units the holder
- *  holds in order, its text the element's */
-const JOINS = new Set([...HOLDS, 'pitch', 'decoration'])
+ *  (k) on elements, (n) and (m) (stated.mjs's `pitch`, `decoration` and `formula` with a holder, lane fig-text): one of the units
+ *  the holder holds in order, its text the element's */
+const JOINS = new Set([...HOLDS, 'pitch', 'decoration', 'formula'])
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
