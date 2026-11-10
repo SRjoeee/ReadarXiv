@@ -119,6 +119,25 @@ describe('mergesIn', () => {
     // a shell given no string runs its here-document, quoted or not
     expect(merge("bash <<'EOF'\ngh pr merge 411 --merge\nEOF")).toMatchObject({ ref: '411', plain: false })
     expect(merge('sh -s <<EOF\ncd ../release && gh pr merge\nEOF')).toMatchObject({ ref: null, dirs: ['../release'] })
+    // a shell's options as the shell reads them: `c` anywhere in a cluster, an option that takes a word, a long one
+    // (#635, Codex: `bash -ce`); the string is the first word that is no option
+    for (const text of [
+      `bash -ce 'gh pr merge 411 --merge'`,
+      `bash -euxo pipefail -c 'gh pr merge 411'`,
+      `bash -c -e 'gh pr merge 411'`,
+      `zsh -o errexit -c 'gh pr merge 411'`,
+      `bash --norc -ec 'gh pr merge 411' arg0`,
+      `bash -c -- 'gh pr merge 411'`,
+      "bash -s -- one <<'EOF'\ngh pr merge 411\nEOF",
+      "bash -e <<'EOF'\ngh pr merge 411\nEOF",
+    ]) {
+      expect(merges(text).map(m => m.ref), text).toEqual(['411'])
+    }
+    // a shell given a script file runs the file, which is not the line's to read; its here-document is the file's input
+    expect(merges("bash release.sh <<'EOF'\ngh pr merge 411\nEOF")).toEqual([])
+    // (words handed to a program are not its script, but a wrapper may run them: read as a merge behind one, and asked about)
+    expect(merge('bash -e release.sh gh pr merge 411')).toMatchObject({ ref: '411', unreadable: true })
+    expect(merges('bash -e release.sh 411')).toEqual([])
   })
 
   it('follows a literal cd to the directory a merge runs in, and calls unreadable a merge whose directory or branch it lost (#635, Codex)', () => {
@@ -467,6 +486,7 @@ describe('against the shell itself', () => {
     'for n in 603 411; do gh pr merge $n || break; done',
     'n=603\ngh pr merge $n\n',
     'for n in 603 411\ndo\n  gh pr merge $n --merge\ndone',
+    'bash -ce "gh pr merge 5 -R o/r"; bash -euo pipefail -c "cd a && gh pr merge 6 -R o/r"',
   ]
   /** The pull request a recorded `gh` call merged, or undefined when it was no merge */
   const merged = (args: string) => {

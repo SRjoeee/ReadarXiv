@@ -442,17 +442,40 @@ const REPOINTS = /^(?:GH|GIT)_\w*=/
 const SEQUENCE = /^(?:&&\n*|[;\n]+)$/
 const CHAINED = /^&&\n*$/
 
+/** How a shell whose name is the word at `at` is told what to run, read the way the shell reads its own options:
+ *  `c` anywhere in a cluster of short options means the first word that is no option is the command string
+ *  (`bash -ce '…'`, `bash -euo pipefail -c '…'`); `s`, or no such word at all, means the commands come on the
+ *  standard input; otherwise that word is a script file. `-o` and `-O` take the next word, as do the two long
+ *  options that name a file. */
+function shellInput(words, at) {
+  let string = false
+  let stdin = false
+  for (let k = at + 1; k < words.length; k++) {
+    const word = words[k]
+    if (word === '--') return { string, stdin, first: words[k + 1] }
+    if (word.startsWith('--')) {
+      if (word === '--rcfile' || word === '--init-file') k++
+    } else if (/^[-+]./.test(word)) {
+      if (word[0] === '-' && word.includes('c')) string = true
+      if (word[0] === '-' && word.includes('s')) stdin = true
+      if (/[oO]$/.test(word)) k++
+    } else return { string, stdin, first: word }
+  }
+  return { string, stdin, first: undefined }
+}
+
 /** The command lines a command hands to a shell: the string after `bash -c`, the arguments of `eval`, and the
- *  here-documents of a shell that is given no string (`bash <<'EOF'`: quoted or not, that body runs); with `at`, the
- *  index of the word that is the shell */
+ *  here-documents of a shell that reads its commands from the standard input (`bash <<'EOF'`, `bash -s`: quoted or
+ *  not, that body runs); with `at`, the index of the word that is the shell. A shell given a script file runs the
+ *  file, which is not the line's to read. */
 function shellStrings({ words, bodies }, start) {
   for (let j = start; j < words.length; j++) {
     const name = words[j].slice(words[j].lastIndexOf('/') + 1)
     if (name === 'eval') return { at: j, scripts: [words.slice(j + 1).join(' ')] }
     if (!SHELLS.has(name)) continue
-    const flag = words.findIndex((w, k) => k > j && /^-[A-Za-z]*c$/.test(w))
-    if (flag < 0) return { at: j, scripts: bodies }
-    return { at: j, scripts: words[flag + 1] === undefined ? [] : [words[flag + 1]] }
+    const { string, stdin, first } = shellInput(words, j)
+    if (string) return { at: j, scripts: first === undefined ? [] : [first] }
+    return { at: j, scripts: stdin || first === undefined ? bodies : [] }
   }
   return { at: start, scripts: [] }
 }
