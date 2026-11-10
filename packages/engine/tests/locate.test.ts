@@ -789,6 +789,32 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.flows).toContainEqual([1, 2])
     expect(L.members[1]!.align).toBe('j')
   })
+  it('states a caption’s label that stands on a line of its own with no line and that line’s own alignment (IEEEtran’s TABLE I)', () => {
+    // (IEEEtran sets a table's \\fnum@table centred on a line of its own above its caption's text, the marked compile's label
+    // point telling it the caption's (own.mjs MR 5). The part states it on none of the caption's lines (no `line`) and how its
+    // own line is set against its measure, read as any line's alignment is (Label.align): the typesetter lays its relabel there)
+    const lines = [
+      { text: 'TABLE I', x: 285, y: 700 },
+      { text: 'Accuracy by probe', x: 255, y: 688 },
+      { text: 'z'.repeat(78), x: 72, y: 600 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('caption', 'Accuracy by probe', { align: 'c' }), unitOf('para', 'z'.repeat(78))]
+    const ins = instrumentOf(B, units, [[0, 0, 1]], [[ROLE.label, ROLE.text, ROLE.text]])
+    const L = locate(ins, B, align(B, B))
+    const lb = L.members[0]!.labelAt!
+    expect(lb.ink[5]).toBe(700)
+    expect(lb.line).toBeUndefined()
+    expect(lb.align).toBe('c')
+    // (a label set flush left over its text: its own line's, not the unit's)
+    const left = docOf([{ lines: [{ text: 'TABLE I', x: 72, y: 700 }, lines[1]!, lines[2]!] }])
+    const L2 = locate(
+      instrumentOf(left, units, [[0, 0, 1]], [[ROLE.label, ROLE.text, ROLE.text]]),
+      left,
+      align(left, left),
+    )
+    expect(L2.members[0]!.labelAt!.align).toBe('l')
+  })
   it('keeps a line its block centres where it stands alone on its row', () => {
     // (an author block's name, place and e-mail, each centred under the one over it: 2303.11366v4 p1)
     const lines = [

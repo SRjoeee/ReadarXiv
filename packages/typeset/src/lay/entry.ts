@@ -23,7 +23,7 @@ import { type Ink, LINE_FLAG, type OutPiece, type Part, type Placed } from '@rea
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
 import { fitMeasure, fontString } from '../breaker/measure.ts'
-import { type NameRow, setNameOf } from '../shared/names.ts'
+import { type NameRow, nameScriptRuns, runsWidth, setNameOf } from '../shared/names.ts'
 import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
@@ -266,6 +266,43 @@ export function nameOf(
   return { laid: [[d.baseline, x0, x, items]] }
 }
 
+/** a label on a line of its own (Label with no `line`: IEEEtran's "TABLE I" above its caption): its relabel `row.text` laid as a
+ *  row of its own on the label's baseline, at its size, in its runs by script (a name's: nameScriptRuns), set as TeX set that
+ *  line against its measure (Label.align): centred on the label's middle, from its start, or to its end. Nothing else of its
+ *  member moves: no line of the member's leads with it */
+export function labelRowOf(
+  lb: NonNullable<Placed['label']>,
+  row: { text: string; st: Parameters<typeof faceOf>[1] },
+  faceFor: (st: Parameters<typeof faceOf>[1], cls: 'cjk' | 'latin') => ReturnType<typeof faceOf>,
+  to: string,
+  R: Rules['set'],
+  metrics: Metrics,
+): { line: Laid['lines'][number] | null } | { wait: [string, string][] } {
+  const drawn = nameScriptRuns(
+    row.text,
+    (cls) => faceFor(row.st, cls),
+    to,
+    !!(R as { cjkQuotes?: boolean }).cjkQuotes,
+    ownSmallCaps,
+  )
+  const c = cover(drawn.runs.map((q) => ({ s: q.s, face: q.face })) as never, metrics)
+  if ('wait' in c) return { wait: c.wait }
+  if (!c.ok) return { line: null }
+  const size = lb.style.size
+  const w = runsWidth(drawn, metrics) * size
+  const x0 = lb.align === 'r' ? lb.ink[3] - w : lb.align === 'c' ? (lb.ink[1] + lb.ink[3]) / 2 - w / 2 : lb.ink[1]
+  const fill = typeof row.st.color === 'string' ? Number.parseInt(row.st.color.slice(1), 16) : undefined
+  const items: Item[] = []
+  let x = x0
+  for (const r of drawn.runs) {
+    const f = r.face ?? drawn.face
+    const face = fontString(f, 100)
+    items.push({ s: r.s, x, face, size: size * r.k, ...(fill !== undefined ? { fill } : {}) })
+    x += (metrics.advance(face, 100, r.s) / 100) * r.k * size
+  }
+  return { line: [lb.ink[5], x0, x, items] }
+}
+
 /** layPage (design-a §1.2): page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
@@ -323,6 +360,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     number,
     { rd: ReturnType<typeof readMember>; pieces: ReturnType<typeof rowPieces>; tokens: Tokens }
   >()
+  // (each laid member's label on a line of its own: its relabel's row, labelRowOf)
+  const labelRows = new Map<number, Laid['lines'][number]>()
   // (a babel name's: S.names over the part, nameOf)
   const names = new Map<number, Laid['lines']>()
   // (a name the part binds to the member after it (Placed.bound): that member's lead where its word is drawn with it (lay/lead.ts
@@ -436,6 +475,22 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         if (e instanceof RangeError) throw e
         state.set(m.ord, 'error')
         continue
+      }
+      // (its label on a line of its own: its relabel laid as a row of its own, its faces waited for as the tokens' are)
+      if (rd.labelRow && mm.label) {
+        const row = labelRowOf(
+          mm.label,
+          rd.labelRow,
+          (st, cls) => faceOf(paper.roles, st, cls),
+          rules.target,
+          R,
+          metrics,
+        )
+        if ('wait' in row) {
+          faces.push(...row.wait)
+          continue
+        }
+        if (row.line) labelRows.set(m.ord, row.line)
       }
       read.set(m.ord, { rd, pieces, tokens })
     }
@@ -646,9 +701,11 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     }
     const x = byOrd.get(m.ord)
     const st = x?.state ?? state.get(m.ord) ?? 'none'
-    const lines = inked(
-      (x?.lines ?? []).map(([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number]),
-    )
+    const ownRow = st === 'laid' && m.label?.ink[0] === page ? labelRows.get(m.ord) : undefined
+    const lines = inked([
+      ...(ownRow ? [ownRow] : []),
+      ...(x?.lines ?? []).map(([y, x0, x1, items]) => [y, x0, x1, items as unknown as Item[]] as Laid['lines'][number]),
+    ])
     // (its groups turned off, each only where it has it on a page (groupsOn): its text where laid, its elements where one with
     // ink there is drawn otherwise than kept where it stands (a crop cut from that page, on a line of either page, or text in the
     // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what

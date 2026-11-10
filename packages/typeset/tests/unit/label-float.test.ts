@@ -84,3 +84,56 @@ describe('a caption’s label drawn by its float’s type (Label.float)', () => 
     expect(drawn(caption(['Table', 'A1', ':']))).not.toMatch(/Tabelle/)
   })
 })
+
+describe('a caption’s label on a line of its own (Label with no line: IEEEtran’s TABLE I above its text)', () => {
+  // (the marked compile tells the caption's label by TeX's call wherever it stands (own.mjs MR 5); the part states it on none of
+  // the caption's lines and that line's own alignment (Label.align). Its relabel is laid as a row of its own on its own baseline,
+  // at its place, aligned as TeX set that line, in the label's size; the caption's first line stays where TeX put it)
+  /** IEEEtran's table caption: "TABLE I" centred at 697..731 on baseline 712, its text on the line under it */
+  const own = (align: 'l' | 'c' | 'r'): Placed => {
+    const m = caption(['Accuracy'], 'table')
+    const name: [string, Ink] = ['TABLE', [1, 697, 710, 722, 719, 712]]
+    const num: [string, Ink] = ['I', [1, 725, 710, 731, 719, 712]]
+    return {
+      ...m,
+      align: 'c',
+      label: {
+        kind: 'float',
+        ink: [1, 697, 710, 731, 719, 712],
+        style: m.label!.style,
+        name,
+        num,
+        float: 'table',
+        align,
+      },
+    }
+  }
+  const laidLines = (m: Placed) => {
+    const [laid] = layPage(part(m), rows, rules, metrics()).members
+    expect(laid!.state).toBe('laid')
+    return laid!.lines.map(([y, x0, x1, items]) => ({
+      y,
+      x0,
+      x1,
+      s: items.map((it) => ('face' in it ? it.s : '')).join(''),
+    }))
+  }
+  it('lays its relabel on its own baseline, centred where TeX centred it, and no label before the text', () => {
+    const lines = laidLines(own('c'))
+    const label = lines.find((l) => l.y === 712)
+    expect(label?.s).toBe('TABELLE I')
+    // (centred on the original label's middle, 714, as TeX centred that line)
+    expect(Math.abs((label!.x0 + label!.x1) / 2 - 714)).toBeLessThan(0.01)
+    // (the caption's own line: its text alone, where TeX set it)
+    const text = lines
+      .filter((l) => l.y === 700)
+      .map((l) => l.s)
+      .join('')
+    expect(text).not.toMatch(/TABELLE/)
+    expect(text).toMatch(/^Die Ergebnisse/)
+  })
+  it('sets the row flush left or flush right as its own line was, never as its unit', () => {
+    expect(laidLines(own('l')).find((l) => l.y === 712)!.x0).toBe(697)
+    expect(laidLines(own('r')).find((l) => l.y === 712)!.x1).toBe(731)
+  })
+})

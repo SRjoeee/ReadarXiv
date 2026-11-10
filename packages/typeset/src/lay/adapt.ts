@@ -336,7 +336,9 @@ export function adapt(i: AdaptInput): Adapted {
   const fixed = m.fixed ?? 0
   const labelKept = !!m.label && !!(fixed & 4)
   const relabels = !!m.label && !labelKept
-  const label = labelOf(m, i.reading.labelDrawn)
+  // (a label on a line of its own is laid as a row of its own (entry.ts labelRowOf): no line of the member's starts at it)
+  const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined
+  const label = ownRow ? null : labelOf(m, i.reading.labelDrawn)
   // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041)
   if (label?.drawn) {
     const r0 = rects[0]!,
