@@ -247,6 +247,50 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(b[0]).toBeGreaterThan(x0)
     expect(b[2] - b[0]).toBeGreaterThan(0)
   })
+  it('lays the annotations of one target over a word TeX set as written over two lines as one link over its whole drawing', () => {
+    // (a DOI TeX broke over two lines: one link, an annotation a line, each over its line's part (Link.text), the first with the
+    // "doi:" before the mark. The engine reads the mark as one word (its copy holds no white space: lane url-join) and the
+    // translation draws it whole on one line, one run: the second line's part stood deep in that run, past where a browser's
+    // advances may part from the layout's (DRIFT_BOUND), and the first's text is not the mark's alone: the link was dropped
+    // (2610.40645v1-ja p38's "doi:10.1007/s11511-013-" and "0096-8")
+    const doi = '10.1007/s10489-022-03676-0'
+    const m = member({
+      els: [
+        [
+          '7',
+          {
+            kind: 'other',
+            literal: 1,
+            copy: doi,
+            text: doi,
+            ink: [
+              [1, 230, 698, 300, 707, 700],
+              [1, 72, 686, 110, 695, 688],
+            ],
+          },
+        ],
+      ],
+    })
+    const r7 = row([
+      { t: 'text', s: 'Siehe doi:' },
+      { t: 'el', id: '7' },
+      { t: 'text', s: ' bitte.' },
+    ])
+    const to = { url: `https://doi.org/${doi}` }
+    const a: Link = { box: [210, 697, 300, 708], to, owner: [0, '7'], text: 'doi:10.1007/s10489-022-' }
+    const b: Link = { box: [72, 685, 110, 696], to, owner: [0, '7'], text: '03676-0' }
+    const wide = { ...m, lines: [m.lines[0]!, [1, 0, 72, 600, 688, 695, 686, 72, 600, 0, 10]] as Placed['lines'] }
+    const p = layPage(part(wide, [a, b]), rowsOf([r7]), rules, metrics())
+    const [box, target] = only(p)
+    expect(target).toEqual(to)
+    // (over the whole drawn DOI, on one line, in its run after "doi:" (four characters of half a size each): from its first
+    // character past its last)
+    const runs = p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it && it.s.includes(doi))
+    expect(runs).toHaveLength(1)
+    const f = p.members[0]!.fit!.size
+    expect(box[0]).toBeCloseTo(runs[0]!.x + (4 * f) / 2, 6)
+    expect(box[2]).toBeGreaterThanOrEqual(runs[0]!.x + ((4 + doi.length) * f) / 2 - 1e-6)
+  })
   it('lays each target of a piece drawn as text over its own characters where the part states them (Link.text)', () => {
     // (an author-year citation of two works drawn as the page's text: today's placeText finds each annotation's characters, its
     // overlaidText, among the drawn ones; a part made before states none, and the two are not told apart)
