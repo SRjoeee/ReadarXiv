@@ -494,6 +494,18 @@ describe('what the parity reads of a statement: the unit of v2\'s that holds tod
     )
     expect(trailed.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['trail', undefined]])
   })
+  it("names a names unit's stand-in of its ledger class as its holder where its characters are today's: its kind moved (2610.30034v1 t309-t311)", () => {
+    // (the coordinator's ruling of 2026-11-10, round 8 B2b: today's run-in lead of a names line, v2's orphan line at its place,
+    // made on arXiv's page with its characters in another order; the parity joins the two by the holder, as it did while (f)
+    // stated them. One whose text is not today's holds no whole: none named)
+    const moved = statedOf([unit(id('a'), 309, 'inknames', [text('ab c')])], [unit(id('b'), 12, 'inkorphan', [text('c ab')])])
+    expect(moved.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['order', id('b')]])
+    const refused = statedOf([unit(id('a'), 587, 'inknames', [text('(. Chung)')])], [{ ...unit(id('c'), 12, 'inknotes', [text('(M. Chung)')]), why: 'content difference: aonly' }])
+    expect(refused.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['content', undefined]])
+    // (a stand-in of today's own kind names none: no kind moved, the parity's joins by id and glyphs are its)
+    const own = statedOf([unit(id('a'), 309, 'inknames', [text('ab c')])], [unit(id('b'), 12, 'inknames', [text('c ab')])])
+    expect(own.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['order', undefined]])
+  })
 })
 
 describe('a unit the candidate does not make whose lines lie inside a display the engine states (rebuild/display-marks)', () => {

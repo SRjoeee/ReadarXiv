@@ -103,7 +103,8 @@ export const trailsOf = (els) =>
  * top, baseline]`):
  * each baseline unit the candidate does not make, in the baseline's order, `{ u, why, cause, holder }` (`cause` CAUSE's key, or
  * `content` for a content difference, `keptAt` for a kept block at its place; `holder` the id of the candidate's unit holding
- * it whole, held (f), by the block (b') or by the block's units (f'), the one whose glyph text is today's); one it has no
+ * it whole, held (f), by the block (b') or by the block's units (f'), the one whose glyph text is today's, or a names unit's
+ * stand-in of its ledger class with today's characters in another order); one it has no
  * statement for (absent from the candidate) is left out
  */
 export function statedOf(base, units, { trails = [], labels = new Map(), glyphs = () => null, displays: shown = [] } = {}) {
@@ -401,10 +402,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
+    // (a names unit's stand-in of its ledger class, its characters today's in another order: its kind moved, the candidate's
+    // unit holding today's whole, named as the holder so that the parity joins the two (heldJoin), as while (f) stated them: the
+    // coordinator's ruling of 2026-11-10, round 8 B2b, 2610.30034v1 t309-t311)
+    const moved = c && c.kind !== u.kind && how === CAUSE.order
     const said = c
       ? standIn
         ? { by: c, cause: CAUSE.held, holder: c }
-        : { by: c, cause: how }
+        : { by: c, cause: how, ...(moved ? { holder: c } : {}) }
       : kept
         ? null
         : names

@@ -218,6 +218,9 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     for (const c of ['held', 'names', 'heldBlock'])
       expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(c)])[107]).toEqual({ today: 98 })
   })
+  it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
+  })
   it('joins none where the holder holds two of today\'s units, the cause is another, or today\'s unit is joined already', () => {
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }, { ord: 99, id: R }], prepared, [stated('held'), stated('held', P, 99)])[107]).toBeUndefined()
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('trail')])[107]).toBeUndefined()
