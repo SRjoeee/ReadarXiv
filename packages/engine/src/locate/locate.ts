@@ -1108,7 +1108,9 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const swap = (list: readonly Piece[]): Piece[] =>
         list.map((p): Piece => {
           if (p.t !== 'span') return p
-          return at.has(p.id) ? { t: 'el', id: p.id, kind: 'code', src: texOf([p]) } : { ...p, content: swap(p.content) }
+          return at.has(p.id)
+            ? { t: 'el', id: p.id, kind: 'code', src: texOf([p]) }
+            : { ...p, content: swap(p.content) }
         })
       const content = swap(unit.content)
       const gone = new Set(made.flatMap((x) => x.nested))
@@ -1728,7 +1730,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const level =
         !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
         (!bx.length &&
-          groups.every((gs) => new Set(asRead(gs, gA).filter((g) => /\S/.test(g.u)).map((g) => r2(g.y))).size <= 1) &&
+          groups.every(
+            (gs) =>
+              new Set(
+                asRead(gs, gA)
+                  .filter((g) => /\S/.test(g.u))
+                  .map((g) => r2(g.y)),
+              ).size <= 1,
+          ) &&
           (!!classOf.get(id)?.mark || standsAsDrawn(groups, ink, false, gA)))
       // (a symbol, drawn as its reading's character (El.sym) on the line's baseline, or raised where its reading raises it: only
       // where TeX's ink is that symbol so drawn, no Latin letter or digit among its glyphs (a symbol's reading holds none, its

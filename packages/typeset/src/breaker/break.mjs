@@ -384,7 +384,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       // (the line's first text after a label TeX hung beside its text block (the slot's `tab`, B.slots): it starts where the hang
       // ends, the room up to it the label's, or right after the label where the label drawn needs more; `tabbed`)
       const hung = line.tab !== undefined && !t.label ? line.items.concat(items) : null
-      const tab = hung && hung.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space) ? Math.max(0, line.tab - line.x0 - (line.x + w + asp)) : 0
+      const tab = hung?.some(it => it.t.label) && hung.every(it => it.t.label || it.t.space) ? Math.max(0, line.tab - line.x0 - (line.x + w + asp)) : 0
       // (`cut`: the mark has lost its blank half, which a squeezed line does not take from it again, placeItems)
       items.push({ t, w: tw, shift, asp: asp + tab, ...(tab ? { tabbed: true } : {}), ...(kern ? { kern } : {}), ...(shift ? { cut: true } : {}) })
       w += tw + asp + tab + kern

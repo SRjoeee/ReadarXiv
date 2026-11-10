@@ -46,7 +46,8 @@ const part = (m: Placed): Part => ({
   paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] } },
   flows: [[m]],
 })
-const zh = '政策制定者应当紧急地提高对爆发的认识'
+const zh =
+  '\u653f\u7b56\u5236\u5b9a\u8005\u5e94\u5f53\u7d27\u6025\u5730\u63d0\u9ad8\u5bf9\u7206\u53d1\u7684\u8ba4\u8bc6'
 const row: Row = { id, ok: true, by: 'test', content: [{ t: 'text', s: zh.repeat(3) }] }
 const rows: Rows = { get: (k) => (k === id ? row : undefined), done: true }
 /** each laid line's start and its items' text and place */
@@ -62,10 +63,10 @@ describe('a label TeX hung beside its text, drawn anew', () => {
     expect(lines.length).toBeGreaterThan(1)
     const [first, ...rest] = lines
     // (the label at its own place, in the margin)
-    expect(first!.items[0]![0]).toMatch(/^图/)
+    expect(first!.items[0]![0]).toMatch(/^\u56fe/)
     expect(first!.items[0]![1]).toBeCloseTo(47, 1)
     // (the text's first character at the hang's end, the room between the label's)
-    const text = first!.items.find(([s]) => (s as string).includes('政'))!
+    const text = first!.items.find(([s]) => (s as string).includes('\u653f'))!
     expect(text[1]).toBeCloseTo(95.61, 1)
     // (every later line on the text's edge, never under the label)
     for (const l of rest) expect(l.items[0]![1]).toBeCloseTo(95.61, 1)

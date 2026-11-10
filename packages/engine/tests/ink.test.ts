@@ -429,7 +429,14 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     for (const D of [A, B])
       for (const g of D.pages[0]!.glyphs)
         if (g.font === R && !g.blank) g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
-    const tt = (id: string, content: Piece[]): Piece => ({ t: 'span', id, style: 'mono', open: '\\texttt{', close: '}', content })
+    const tt = (id: string, content: Piece[]): Piece => ({
+      t: 'span',
+      id,
+      style: 'mono',
+      open: '\\texttt{',
+      close: '}',
+      content,
+    })
     const code = (id: string, src: string): Piece => ({ t: 'el', id, kind: 'code', src })
     const content: Piece[] = [
       text('run '),
@@ -461,7 +468,13 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     })
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const u = L.units[1]!
-    expect(u.content).toEqual([text('run '), code('1', '\\texttt{call f\\_x now.}'), text(' then'), content[3], text('.')])
+    expect(u.content).toEqual([
+      text('run '),
+      code('1', '\\texttt{call f\\_x now.}'),
+      text(' then'),
+      content[3],
+      text('.'),
+    ])
     expect(u.keptEls).toEqual([['1', 'pitch']])
     expect(new Map(u.classes)).toEqual(
       new Map([
