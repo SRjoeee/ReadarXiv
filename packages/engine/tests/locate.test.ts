@@ -2460,23 +2460,32 @@ describe('an element’s ink is what TeX set for it', () => {
           { text: 'SYS', x: 147, y: 700 },
           { text: ' and ', x: 165, y: 700 },
           { text: 'BERT', x: 195, y: 700 },
-          { text: ' work', x: 219, y: 700 },
+          { text: ' work ', x: 219, y: 700 },
+          { text: '(HR)', x: 255, y: 700 },
         ],
       },
     ])
     // (I, V, E, L, A, N of "LIVEPLAN" and Y, S of "SYS" set at 8 pt, the rest at 10; the two words a word space apart, no
-    // glyph between them, as TeX sets a space)
+    // glyph between them, as TeX sets a space. A formula's capital set smaller is its script, `$(H_R)$`'s R: no small capital; its text, read for its brackets, as it is)
     const page = B.pages[0]!
-    for (const k of [5, 6, 7, 9, 10, 11, 13, 14]) page.glyphs[k]!.size = 8
+    for (const k of [5, 6, 7, 9, 10, 11, 13, 14, 32]) page.glyphs[k]!.size = 8
     page.glyphs = pageGlyphsOf(page.glyphs)
     const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
-    const content = [text('see '), macro('1', '\\approach'), text(' and '), macro('3', '\\bert'), text(' work')]
+    const content = [
+      text('see '),
+      macro('1', '\\approach'),
+      text(' and '),
+      macro('3', '\\bert'),
+      text(' work '),
+      { t: 'el' as const, id: '5', kind: 'math', src: '$(H_R)$' },
+    ]
     const ins = ownedBy(
       B,
       [
         paraOf(content, [
           ['1', { cls: 'umacro' }],
           ['3', { cls: 'umacro' }],
+          ['5', { cls: 'other' }],
         ]),
       ],
       [
@@ -2487,6 +2496,7 @@ describe('an element’s ink is what TeX set for it', () => {
           [0, T, -1],
           [0, E, 3],
           [0, T, -1],
+          [0, E, 5],
         ],
       ],
     )
@@ -2495,6 +2505,8 @@ describe('an element’s ink is what TeX set for it', () => {
     expect([live.text, live.style?.sc, live.style?.upper]).toEqual(['LivePlan Sys', 0.8, undefined])
     const bert = elementOf(L, '3')
     expect([bert.text, bert.style?.sc, bert.style?.upper]).toEqual(['BERT', undefined, 1])
+    const formula = elementOf(L, '5')
+    expect([formula.text, formula.style?.sc]).toEqual(['(HR)', undefined])
   })
 
   it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {

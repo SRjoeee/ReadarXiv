@@ -15,7 +15,6 @@ import {
   CENTRE,
   cellCentred,
   centredByBlock,
-  elementCase,
   FORCED_BREAK,
   fillOfGlyphs,
   INSET,
@@ -244,9 +243,10 @@ export function factsOf({
       const gs = (mem.els.get(id) ?? []).map(gA)
       const fill = fillOfGlyphs(gs)
       // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
-      // that text is in TeX's case for its faked small capitals (locate's, facts.ts elementCase), their share, and no case change)
+      // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
+      // case change)
       if (fill !== undefined || el.text !== undefined) {
-        const sc = el.text !== undefined ? elementCase(gs).ratio : undefined
+        const sc = mem.smallCaps?.get(id)
         const { upper, ...read } = styleOf(gs)
         el.style = {
           ...read,
