@@ -33,8 +33,8 @@ export const SCRIPT_SIZE = 0.85
 export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
 export const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
-/** a cased letter (Unicode: it has another case) */
-const cased = (ch) => ch.toLowerCase() !== ch.toUpperCase()
+/** a letter of any script, cased or not (Unicode L) */
+const LETTER = /^\p{L}$/u
 /** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
 export const bare = (s) => String(s ?? '').normalize('NFC').replace(/[^\p{L}\p{N}]+/gu, '').toLowerCase()
 
@@ -52,8 +52,8 @@ export function runsIn(runs, boxes) {
 /**
  * A text's original style and size, read off arXiv's glyphs in its lines' boxes (`runs` render.mjs's, `fonts` their PDF font
  * names): the share of its characters (white space and math fonts' aside) set in a bold and in a slanted face, and its size,
- * the size TeX was asked for: its largest cased letter's (faked small capitals set the capitals at it and the rest smaller;
- * a script is smaller, never larger), else the median character's. `except`: boxes whose glyphs are no characters of the
+ * the size TeX was asked for: its largest letter's (faked small capitals set the capitals at it and the rest smaller; a script
+ * is smaller, never larger; measure-dom.mjs reads a drawn line by the same definition), else the median character's. `except`: boxes whose glyphs are no characters of the
  * text's (an element it keeps as the original's ink, which the drawn text's share leaves uncounted alike). null where no glyph
  * stands there
  */
@@ -73,7 +73,7 @@ export function originalOf(runs, fonts, boxes, except = []) {
     if (c.bold) bold += n
     if (c.italic) italic += n
     for (let i = 0; i < n; i++) sizes.push(r[5])
-    if ([...r[7]].some(cased)) big = Math.max(big, r[5])
+    if ([...r[7]].some((ch) => LETTER.test(ch))) big = Math.max(big, r[5])
   }
   if (!chars) return null
   sizes.sort((a, b) => a - b)

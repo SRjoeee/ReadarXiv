@@ -67,7 +67,7 @@ describe("a drawn line's size read as the original's is: the size it was set at,
   // (2608.06701v1 p4 t59, the merged el-facts tree: a line of the caption's translation holding two of the paper's macros in
   // faked small capitals, "GRAPHECTORY" and "LANGUTORY", 18 small capitals at 7.97 pt of 35 characters, read at their median
   // 7.97 where the original is read at its largest cased letter's 9.96 (fidelity.mjs originalOf): a size judged off by a fifth
-  // that each side set at 9.96. One definition for every side: its largest cased letter's, else its median character's)
+  // that each side set at 9.96. One definition for every side: its largest letter's, else its median character's)
   type Sized = Run & { size: number }
   const sizedLine = (runs: Sized[]) => {
     const svg = svgOf(runs)
@@ -94,10 +94,21 @@ describe("a drawn line's size read as the original's is: the size it was set at,
     ])
     expect(l.size).toBe(9.96)
   })
-  it('a line of no cased letter is read at its median character', () => {
+  it('a CJK line holding a word wholly in small capitals is read at its CJK letters, set at the line\'s size', () => {
+    // (2610.17024v1 p17 t366: "NONE/SUMZERO" in small capitals at 7.17 pt in a line of 8.97: its largest cased letter is a
+    // small capital; a CJK character is a letter of the line's size, an uncased one)
     const l = sizedLine([
-      { s: '\u56fe\u56fe\u56fe', x: 72, size: 9.96 },
-      { s: '\u548c', x: 120, size: 7.97 },
+      { s: '\u5728', x: 72, size: 8.97 },
+      { s: 'NONE/SUMZERO', x: 84, size: 7.17 },
+      { s: '\u6700\u5927', x: 160, size: 8.97 },
+    ])
+    expect(l.size).toBe(8.97)
+  })
+  it('a line of no letter is read at its median character', () => {
+    const l = sizedLine([
+      { s: '1.0', x: 72, size: 9.96 },
+      { s: '2', x: 100, size: 9.96 },
+      { s: '(3)', x: 120, size: 7.97 },
     ])
     expect(l.size).toBe(9.96)
   })
