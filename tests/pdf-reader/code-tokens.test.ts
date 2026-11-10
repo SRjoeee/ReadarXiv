@@ -54,6 +54,16 @@ describe('code-like tokens keep their source (mt.mjs isCode, codeTextsOf)', () =
     expect([...nameCells(units as never)].map(u => (u as { pieces: { s: string }[] }).pieces[0]!.s)).toEqual(['<pad>', 'HellaSwag'])
   })
 
+  it('a name after "&" in the prose is a proper noun there: 2610.37818v1\'s "Tanks & Temples", whose `\\&` is text since 2026-11-11', () => {
+    // (a placeholder, the `\\&` stood in no text of the prose, and "Temples" followed "Tanks": capitalised mid-sentence; as its
+    // character, "& Temples" is the evidence, a conjunction no sentence begins after)
+    const prose = 'GOFish leads rendering on Tanks & Temples and on FIORD.'
+    expect(isName('Tanks & Temples', prose)).toBe(true)
+    expect(isName('Temples', prose)).toBe(true)
+    // (a word that begins a sentence is no evidence)
+    expect(isName('Temples', 'Rendering is hard. Temples are harder.')).toBe(false)
+  })
+
   it('a figure\'s label keeps its source where it is a markup token or code the paper sets (page-pass.mjs figureUnits)', () => {
     const unit = (text: string) => ({ page: 1, group: 'f0', text, font: 'ArialMT', size: 8, fill: 0, angle: 0, x: 10, y: 10, ux: 1, uy: 0, length: 40, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true })
     const bundle: unknown[][] = [['para', 0, null, null, null, [[0, 'Text.']]]]

@@ -1069,7 +1069,9 @@ export function isName(text, prose) {
   const words = text.replace(/\s+/g, ' ').trim().split(' ')
   if (words.length > 3) return false
   const quote = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const proper = w => new RegExp(`[a-z,;:)\\]] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
+  // (after a lower-case letter, a clause's punctuation or `&`, a conjunction no sentence begins after: 2610.37818v1's "Tanks &
+  // Temples", whose `\\&` is a character of the text since 2026-11-11, and which as a placeholder stood in no text of the prose)
+  const proper = w => new RegExp(`[a-z,;:)\\]&] ${quote(w)}(?![a-z])`).test(prose) || new RegExp(`(^|[^A-Za-z])${quote(w)}[A-Z]`).test(prose)
   const common = w => new RegExp(`(^|[^A-Za-z])${quote(w.toLowerCase())}($|[^A-Za-z])`).test(prose)
   const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
   return words.every(nameWord)
