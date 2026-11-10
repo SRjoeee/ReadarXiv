@@ -14,7 +14,7 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
+import { isMemoryError, prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { statedOf, trailsOf } from './stated.mjs'
@@ -87,7 +87,9 @@ const paperOut = {
 const finalPdf = made.base?.pdf instanceof Uint8Array ? made.base.pdf : null
 const refusal = made.refused ? `marked: ${made.refused}` : !finalPdf ? `final: ${made.base?.refused ? `refused: ${made.base.why ?? ''}`.slice(0, 200) : 'none'}` : null
 const deflate = b => new Uint8Array(deflateSync(b))
-const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
+// (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
+// failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
+const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
 
 // ---- the back half
 const bundleDir = join(OUT, 'bundles', id)

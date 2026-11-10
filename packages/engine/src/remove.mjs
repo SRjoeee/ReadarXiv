@@ -11,7 +11,10 @@
 // Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF, and ours made from its source, are
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
-// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time.
+// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
+// allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
+import { isMemoryError } from './memory.mjs'
+
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
 const DL = new Uint8Array(256)
@@ -292,7 +295,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try { out = readAtMost(decodePDFRawStream(st), limit) } catch (e) {
-        if (e instanceof DecodeLimit) throw e
+        // (a failed allocation is no stream the object layer refuses: the paper's, memory.mjs)
+        if (e instanceof DecodeLimit || isMemoryError(e)) throw e
         // a stream the object layer's inflater refuses (a damaged zlib header, a stream cut short) that PDF.js reads:
         // inflated tolerantly, as PDF.js does, where the filter is Flate alone
         const f = st.dict.get(PDFName.of('Filter'))?.toString()
@@ -467,7 +471,11 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         const ops = lex(b, heldMax - held, WALK_OPS)
         held += ops.bytes
         got = { ops }
-      } catch (e) { got = e instanceof LexLimit ? { refused: HELD } : e instanceof DecodeLimit ? { refused: DECODED } : { failed: true } }
+      } catch (e) {
+        // (a stream past its bounds, or one that does not decode, refuses the page; a failed allocation is the paper's)
+        if (isMemoryError(e)) throw e
+        got = e instanceof LexLimit ? { refused: HELD } : e instanceof DecodeLimit ? { refused: DECODED } : { failed: true }
+      }
       if (got.refused && !problems.includes(got.refused)) problems.push(got.refused)
       lexed.set(st, got)
       return got

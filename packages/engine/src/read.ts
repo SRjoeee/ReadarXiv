@@ -16,6 +16,7 @@
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
+import { isMemoryError } from './memory.types.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
 export interface PdfJs {
@@ -99,7 +100,8 @@ export async function readPdf<X = never>(
   let info: Record<string, unknown> | null = null
   try {
     const pdf = await task.promise
-    info = ((await pdf.getMetadata?.().catch(() => null)) ?? null)?.info ?? null
+    // (the document's metadata where PDF.js reads it, else none; a failed allocation is the paper's: memory.mjs)
+    info = ((await pdf.getMetadata?.().catch(orNone(null))) ?? null)?.info ?? null
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p)
       const ops = await page.getOperatorList()
@@ -129,16 +131,28 @@ export async function readPdf<X = never>(
         boxesMax: BOXES_PAGE,
         names,
       })
-      const annotations = o.annotations ? ((await page.getAnnotations?.().catch(() => [])) ?? []) : null
+      // (annotations PDF.js cannot read are none of the page's links; a failed allocation is the paper's, never a page without
+      // its links)
+      const annotations = o.annotations ? ((await page.getAnnotations?.().catch(orNone([]))) ?? []) : null
       const view = [...page.view] as [number, number, number, number]
       pages.push({ ...docPageOf(ink, view, page.rotate ?? 0, bases), extra, annotations })
       page.cleanup()
     }
   } finally {
+    // (the document let go: a failure of its teardown loses nothing read, and a failure of the reading stands)
     await task.destroy().catch(() => {})
   }
   return { doc: { pages: pages.map((p) => p.page) }, pages, info }
 }
+
+/** a rejection's stand-in, `none`, for what a reading may lack (a page's links, the document's metadata); a failed allocation
+ *  (memory.mjs isMemoryError) thrown as it came, the paper's and never the reading's */
+const orNone =
+  <T>(none: T) =>
+  (e: unknown): T => {
+    if (isMemoryError(e)) throw e
+    return none
+  }
 
 /** each glyph of the operator list's shows given its code and font character, through its Unicode; with `mapOf` (a font's
  *  map by its id), whether its Unicode is no reading of it, the font the shows are in followed through the graphics state

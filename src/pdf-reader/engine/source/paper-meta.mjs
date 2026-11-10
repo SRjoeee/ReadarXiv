@@ -3,6 +3,7 @@
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
+import { isMemoryError } from '@readarxiv/engine'
 import { jobName, normalizePath, texText } from './latex-front.mjs'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
@@ -32,7 +33,11 @@ export function analyze(fsys) {
       // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
       meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler
       meta.tlVersion = r.texlive_version ?? null
-    } catch { meta.readme = 'json-unreadable' }
+    } catch (e) {
+      // (a file that does not read as JSON is none of arXiv's instructions; a failed allocation reading it is the paper's)
+      if (isMemoryError(e)) throw e
+      meta.readme = 'json-unreadable'
+    }
   } else if (files.find(f => /^00README(\.XXX)?$/i.test(f))) {
     meta.readme = 'legacy'
     const r = utf8(fsys.read(files.find(f => /^00README(\.XXX)?$/i.test(f))))
