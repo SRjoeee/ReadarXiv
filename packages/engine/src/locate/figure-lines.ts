@@ -663,8 +663,9 @@ function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
 
 /**
  * F3: an item's marker is one of a list: another line of its figure opens with a marker of its form at its left edge
- * (PARA_ALIGN_TOL of the size), the next one or the one before ("A." and "B.", "(a)" and "(b)", "1." and "2.", "ii." and "iii.";
- * a bullet or a dash the same). A letter that is a roman numeral too ("i.", "v)") is read both ways. Where no line does, the line
+ * (PARA_ALIGN_TOL of the size), a column, or on its baseline (RUN_DY), a row, the next one or the one before ("A." and "B.",
+ * "(a)" and "(b)", "1." and "2.", "ii." and "iii."; a bullet or a dash the same): options set as a grid, A and B a row, C and D
+ * under them (2411.13093v4 p19). A letter that is a roman numeral too ("i.", "v)") is read both ways. Where no line does, the line
  * opens with no marker and its mark goes with its text: a name's initial opening a reference's wrapped line ("S. Smith",
  * 2609.19644v1 p66), a bracket's end a line before opened ("64)", p70), and a figure's one enumerated line alike
  */
@@ -696,7 +697,7 @@ function listed(lines: readonly Line[], reads: Read[], glyphs: readonly G[]): vo
         !!b &&
         b !== a &&
         lines[b.i]!.fig === l.fig &&
-        Math.abs(b.x - a.x) <= PARA_ALIGN_TOL * l.size &&
+        (Math.abs(b.x - a.x) <= PARA_ALIGN_TOL * l.size || Math.abs(lines[b.i]!.y - l.y) <= RUN_DY * l.size) &&
         a.forms.some((fa) =>
           b.forms.some(
             (fb) => fb.form === fa.form && (fa.v === null || (fb.v !== null && Math.abs(fb.v - fa.v) === 1)),

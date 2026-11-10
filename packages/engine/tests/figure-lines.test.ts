@@ -797,6 +797,26 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('reads options set as a grid as a list: the next marker one apart on one baseline or at one left edge (2411.13093v4 p19)', () => {
+    // (A. B. / C. D.: two options a row, A over C and B over D, at two left edges)
+    const { page, fig } = pageOf([
+      [
+        { text: 'A. 12:30 PM in the car.', font: 'NimbusRomNo9L-Regu' },
+        { text: 'B. 12:30 PM in the canteen.', font: 'NimbusRomNo9L-Regu', x: 260 },
+      ],
+      [
+        { text: 'C. 12:30 PM in the classroom.', font: 'NimbusRomNo9L-Regu' },
+        { text: 'D. 12:00 PM in the classroom.', font: 'NimbusRomNo9L-Regu', x: 260 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(texts.map((t) => t.label.map((g) => G[g]!.u).join('')).sort()).toEqual(['A.', 'B.', 'C.', 'D.'])
+    for (const t of texts)
+      expect(t.order.every((o) => o.t !== 'text' || !/^[A-D]\./u.test(o.glyphs.map((g) => G[g]!.u).join('')))).toBe(
+        true,
+      )
+  })
   it('reads the enumerators LaTeX’s list counters print: roman numerals, a number of any length, letters, bullets and dashes', () => {
     // (\roman and \Roman's "ii." and "IV)", "(iii)"; \arabic's past 999; "i." an \alph's or a \roman's, either list)
     for (const [marker, next] of [
