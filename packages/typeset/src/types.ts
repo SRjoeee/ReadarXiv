@@ -167,7 +167,13 @@ export type Laid = {
    *  s1, t1] along `dir` and across it (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text; `band` a figure
    *  text's (Placed kind 'figure'): lit on its own lines' band alone, no pad beside nor half the page's leading over and under
    *  (that leading is the page's body text's: a 4.67 pt label padded by it reached the label behind, docs/PDF-READER.md §17.9) */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][]; dir?: [ux: number, uy: number]; band?: true }
+  lit: {
+    left: Box[][]
+    right: Box[][]
+    own: [piece: string, boxes: Box[]][]
+    dir?: [ux: number, uy: number]
+    band?: true
+  }
 }
 
 /** a page, laid or waiting (design-a §1.2); `ledger` where the call asked for a trace (design-b §1.7) */

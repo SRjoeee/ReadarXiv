@@ -719,7 +719,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         y1 = Math.min(b[3], top)
       return y1 > y0 ? [b[0], y0, b[2], y1] : b
     }
-    const cut = (per: Box[][]) => (Number.isFinite(top) || Number.isFinite(bottom) ? per.map((bs) => bs.map(inside)) : per)
+    const cut = (per: Box[][]) =>
+      Number.isFinite(top) || Number.isFinite(bottom) ? per.map((bs) => bs.map(inside)) : per
     out[i] = { ...o, lit: { ...o.lit, left: cut(o.lit.left), right: cut(o.lit.right), band: true } }
   })
   // (each crop's own ink and the page's every piece's, the reader's to cut by)

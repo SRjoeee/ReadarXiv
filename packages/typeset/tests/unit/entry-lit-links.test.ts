@@ -1101,7 +1101,8 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     expect(kept.state).not.toBe('laid')
     expect(kept.lit.band).toBe(true)
     // (a paragraph's never)
-    const para = layPage(part(member({ ord: 1, text: idG })), rowsOf([rowF('ein Satz', idG)]), rules, metrics()).members[0]!
+    const para = layPage(part(member({ ord: 1, text: idG })), rowsOf([rowF('ein Satz', idG)]), rules, metrics())
+      .members[0]!
     expect(para.lit.band).toBeUndefined()
     // (and inside its container where the part states one: a closed shape 4 over its baseline (400), a stroke 1 under it; its
     // line's band 398-406 on A, its drawn band about the same baseline, each cut to 399-404 on both panes)

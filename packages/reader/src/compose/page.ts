@@ -63,7 +63,13 @@ export interface Laid {
    *  set along a direction (a turned figure text): its boxes in its run's frame, [s0, t0, s1, t1] along `dir` and across it
    *  (the page's point s·(ux, uy) + t·(−uy, ux)), lit turned with its text; `band` a figure text: lit on its lines' band alone
    *  (no pad beside, no half leading over and under) */
-  lit: { left: Box[][]; right: Box[][]; own: [piece: string, boxes: Box[]][]; dir?: [ux: number, uy: number]; band?: true }
+  lit: {
+    left: Box[][]
+    right: Box[][]
+    own: [piece: string, boxes: Box[]][]
+    dir?: [ux: number, uy: number]
+    band?: true
+  }
 }
 
 export interface Page {

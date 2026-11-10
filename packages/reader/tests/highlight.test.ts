@@ -471,7 +471,14 @@ describe('the highlight of a figure text is its own line band', () => {
     links: [],
     members: [
       { ord: 3, page: 1, state: 'laid', off: 1, lines: [], lit: { left: body, right: body, own: [] } },
-      { ord: 9, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [[label]], right: [[label]], own: [], band: true } },
+      {
+        ord: 9,
+        page: 1,
+        state: 'laid',
+        off: 1,
+        lines: [],
+        lit: { left: [[label]], right: [[label]], own: [], band: true },
+      },
     ],
   }
   const box = (el: HTMLElement) => [el.style.left, el.style.top, el.style.width, el.style.height]
