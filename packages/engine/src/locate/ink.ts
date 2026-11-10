@@ -94,7 +94,12 @@ export interface InkStats {
  *  display, not in its text mode): [page, x0, bottom, x1, top, baseline] — what the lab's stage reads a display's ink by */
 export type DisplayLine = [number, number, number, number, number, number]
 
-export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: AuthorBlock | null; displays: DisplayLine[] } {
+export function inkOf(o: InkInput): {
+  made: Made[]
+  stats: InkStats
+  block: AuthorBlock | null
+  displays: DisplayLine[]
+} {
   const { ins, inkA, m } = o
   const base = ins.units.length
   const carried = carry(ins.ink, inkA, m, o.pageA)
