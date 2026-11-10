@@ -1137,7 +1137,7 @@ describe('an element’s text with each accent TeX set over its letter joined to
   })
 })
 
-describe('a face of one pitch (rebuild/mono-blocks, Rule 1)', () => {
+describe('a face of one pitch (Rule 1)', () => {
   it('reads one advance per font program of a face, within its unit, a thousandth of the size, its subsets each their own', () => {
     // (2411.13093v4's Consolas: the subsets of p4's figure set 549 thousandths of their size, p9's and p19's 550; read as one
     // advance for the face, its code boxes on p19 were translated while its bold's, all at 550, were kept)

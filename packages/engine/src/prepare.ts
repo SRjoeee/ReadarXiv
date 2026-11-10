@@ -26,8 +26,6 @@ export interface PrepareDeps {
   /** what the front half reads of an ink unit's pieces (its elements' classes: the instrument adapter's classesOf), for the units
    *  locate makes on A; none: their elements carry the kinds alone */
   classesOf?: LocateOptions['classesOf']
-  /** keep the artefacts (LocateOptions.artefacts: a prototype the owner rules on, off unless asked) */
-  artefacts?: boolean
   /** keep what is read (the lab's proofs and reviews): A's pages in the tally's `pagesA`, and the instrument's ink. Not kept (the
    *  box), each is let go once located: A's raw pages as locate's ink step reads them, A's Doc and B's (the instrument's `ink`,
    *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them (lane mem-back) */
@@ -150,7 +148,6 @@ async function placedOf(
     pages: raws,
     take: !keep,
     classesOf: deps.classesOf,
-    ...(deps.artefacts ? { artefacts: true } : {}),
   })
   const t3 = now()
   // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)

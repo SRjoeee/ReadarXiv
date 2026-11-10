@@ -274,18 +274,18 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(unit.id).toBe(unitId('inkorphan', unit.content))
   })
 
-  it('keeps a unit and a figure text TeX set wholly in a face of one pitch, where the paper’s body face is not one (mono-blocks, Rule 1)', () => {
+  it('keeps a unit and a figure text TeX set wholly in a face of one pitch, where the paper’s body face is not one, always (Rule 1)', () => {
     // (2411.13093v4 p18-19: an LLM prompt, JSON and OCR samples set in Consolas, inside included figures, and 2608.25210v2's prompt
     // boxes in a typewriter face: translated, their keys and values came back garbled. What TeX or the figure's maker set wholly
     // in a typewriter face is an artefact the paper shows exactly: kept as the original, as a code environment is. A line of
-    // prose holding a typewriter word is no artefact)
+    // prose holding a typewriter word is no artefact. The owner's ruling of 2026-11-10: the rule always applies, with no switch)
     const lines = (body: string) => [
       { text: 'Body text of the paper set here', font: body },
       { text: 'and more body text in that face', font: body },
       { text: '{ "ASR": null, "DET": [] }', font: 'ABCDEF+CMTT10' },
       { text: 'call the model now', font: 'ABCDEF+CMR10' },
     ]
-    const make = (body: string, artefacts = true) => {
+    const make = (body: string) => {
       const B = docOf([{ lines: lines(body) }])
       const A = docOf([
         {
@@ -307,7 +307,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         unitOf('para', '{ "ASR": null, "DET": [] }'),
         unitOf('para', 'call the model now'),
       ]
-      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A), artefacts })
+      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A) })
     }
     const L = make('ABCDEF+CMR10')
     expect(L.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, true, false])
@@ -322,13 +322,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const T = make('ABCDEF+CMTT10')
     expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
     expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
-    // (a prototype the owner rules on: off unless asked)
-    const off = make('ABCDEF+CMR10', false)
-    expect(off.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
-    expect(off.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
   })
 
-  it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line (mono-blocks, Rule 1)', () => {
+  it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line, always (Rule 1)', () => {
     // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
     // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A word whose
     // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
@@ -352,7 +348,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         if (g.font.endsWith('CMR10') && !g.blank && !g.form)
           g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
     const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
-    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A), artefacts: true })
+    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
     const fixed = new Map(L.members.filter((m) => m.figure).map((m) => [m.plain, m.fixed]))
     expect(fixed.get('"key": "count all the')).toBe(true)
     expect(fixed.get('harbours')).toBe(true)

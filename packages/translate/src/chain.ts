@@ -861,7 +861,7 @@ export function chainOf(ports: Ports = {}): Chain {
       return { id: u.id, ok: false, why: ms > 0 ? { kind: 'unavailable', retryAfterMs: ms } : { kind: 'unavailable' } }
     }
     // (every stretch asked or none: a stretch every translator refused would keep its English between translated ones, a unit
-    // half translated, drawn as a translation (rebuild/mono-blocks, Rule 3: translating or keeping is fine, garbling never);
+    // half translated, drawn as a translation (PDF-READER §18.21: translating or keeping is fine, garbling never);
     // refused, the unit stays the original's)
     if (outs.some((r) => !r.ok)) return null
     const tr: (string | null)[] = parts.map(() => null)

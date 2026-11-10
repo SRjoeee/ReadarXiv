@@ -110,7 +110,7 @@ if (ins) {
   // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
   // and the review; the proofs read A's pages again, as the back half read them)
   const keep = process.argv.includes('--claims') || process.argv.includes('--review')
-  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep, ...(process.env.AXT_ARTEFACTS === '1' ? { artefacts: true } : {}) })) {
+  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })

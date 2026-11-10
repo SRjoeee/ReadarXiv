@@ -12,7 +12,7 @@ import { isInk, r2 } from './lines.ts'
 // back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
 import * as accents from './today/accents.mjs'
 
-// ---------------------------------------------------------------- a face of one pitch (rebuild/mono-blocks, Rule 1: a prototype)
+// ---------------------------------------------------------------- a face of one pitch (Rule 1, PDF-READER §18.21)
 /**
  * The faces a document sets at one pitch, a typewriter's (their PostScript names, the subset tag aside): every font program of
  * the face (an embedded subset) sets every character one advance at its size, within the face's own unit of it, a thousandth

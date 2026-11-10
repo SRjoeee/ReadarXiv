@@ -179,7 +179,7 @@ export interface Located {
     bornGlyphs: number
     /** the units made on A by today's rule (ink.ts), where A's pages were given */
     made?: InkStats
-    /** the source units kept as artefacts (rebuild/mono-blocks, Rule 1), and whether the paper's body face is one of one pitch */
+    /** the source units kept as artefacts (Rule 1, PDF-READER §18.21), and whether the paper's body face is one of one pitch */
     artefacts?: { units: number; bodyFixed: boolean }
   }
 }
@@ -284,9 +284,6 @@ export interface LocateOptions {
   take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
-  /** keep the artefacts, units and figure texts set wholly in a face of one pitch (rebuild/mono-blocks, Rule 1): a prototype the
-   *  owner rules on, off unless asked */
-  artefacts?: boolean
 }
 
 export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions = {}): Located {
@@ -807,7 +804,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.els.set(TRAIL, trail)
   }
 
-  // ---- artefacts (rebuild/mono-blocks, Rule 1, a prototype the owner rules on): a unit whose text is set wholly in a face of one
+  // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.21): a unit whose text is set wholly in a face of one
   // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
   // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member
   // fixed); a figure text so set too (ink.ts). Unless the paper's own body face, the face most of its source units' text glyphs
@@ -836,7 +833,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return best
   })()
   const bodyFixed = fixedFaces.has(bodyFace)
-  const artefacts = !!o.artefacts && !bodyFixed
+  const artefacts = !bodyFixed
   const fixedFace = (font: string) => fixedFaces.has(font.replace(/^[A-Z]{6}\+/, ''))
   const artefact = (text: readonly number[], turned: readonly [number, number][] = []): boolean => {
     if (!artefacts) return false
