@@ -267,6 +267,10 @@ export const Room = z.object({
   // today's paperTo; a part made before states none, every side a glyph's)
   wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   under: num.optional(),
+  // (a figure text's container's edge over its baseline, PDF units up from it: a closed shape round all of its glyphs, inside
+  // which its translation is laid (the owner's reformulation of 2026-11-10); S.figures keeps a translation's band under it as it
+  // keeps its depth over `under`. A typesetter of before reads none and lays the band as before)
+  over: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
   sep: num.optional(),
   // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a

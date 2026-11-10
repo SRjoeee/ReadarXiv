@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { candidateAddress, candidateKept, candidateKeptToday, candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidateKept, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -312,5 +312,56 @@ describe("what the candidate's prepare keeps by a rule's mark: its members, and 
     } finally {
       rmSync(run, { recursive: true, force: true })
     }
+  })
+})
+
+describe('joinedPlan: several of today’s units saying one of v2’s, by the exact text (lane fig-text)', () => {
+  it('pairs a word joined across a size change: today’s two pieces, v2’s one text (2608.06701v1 p1)', () => {
+    expect(joinedPlan(['and retry viewing th', 'e file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('pairs a label and its address, the address v2’s element (F0, 2611.03178v1 p1)', () => {
+    const content = [{ t: 'text', s: 'Project Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Project Page:', 'site.io'], content)).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'el', id: '1' },
+    ])
+  })
+  it('joins a word TeX broke at a line’s end, today’s hyphen left out', () => {
+    expect(joinedPlan(['the foun-', 'dation models'], [{ t: 'text', s: 'the foundation models' }])).toEqual([
+      { t: 'today', i: 0 },
+      { t: 'today', i: 1 },
+    ])
+  })
+  it('none where the texts are not one, or a piece of today’s straddles an element’s edge', () => {
+    expect(joinedPlan(['and retry', 'the file.'], [{ t: 'text', s: 'and retry viewing the file.' }])).toBeNull()
+    const content = [{ t: 'text', s: 'Page: ' }, { t: 'el', id: '1', kind: 'code', src: 'site.io' }]
+    expect(joinedPlan(['Page: site', '.io'], content)).toBeNull()
+  })
+})
+
+describe('joinedJoin: today’s run of one pitch stage 1a states kept as an element of v2’s line, (k) on elements (lane fig-text)', () => {
+  // (2608.06701v1 p1's "Action:" and its typewriter command, today's two units; F0's one figure text, the command its element:
+  // stage 1a states "Action:" held whole and the command kept for its pitch, each naming the text as its holder)
+  const content = [
+    { t: 'text', s: 'Action: ' },
+    { t: 'el', id: '1', kind: 'code', src: 'view x.py' },
+  ]
+  const part = bundle({ 1: [member(107, 'figure', P)] }, [{ id: P, kind: 'inkfigures', content: content as unknown as Content }])
+  const prepared = new Map([
+    [98, { ord: 98, id: Q, kind: 'inkfigures', text: 'Action:', pieces: [{ kind: 'text', s: 'Action:' }], lines: [] }],
+    [99, { ord: 99, id: R, kind: 'inkfigures', text: 'view x.py', pieces: [{ kind: 'text', s: 'view x.py' }], lines: [] }],
+  ])
+  const stated = (cause: string, ord: number) => ({ id: Q, kind: 'inkfigures', replaced: true, stated: { ord, cause, holder: P } })
+  it('joins both to the line by the holder named, the command the element', () => {
+    const free = [...(part.parts.get(1)?.flows[0] ?? [])]
+    expect([...joinedJoin(free, part.units, [stated('held', 98), stated('pitch', 99)], [98, 99], prepared)]).toEqual([
+      [107, { todays: [98, 99], plan: [{ t: 'today', i: 0 }, { t: 'el', id: '1' }] }],
+    ])
+    // (kept as an element of a decoration's, (n), alike; another cause none)
+    expect(joinedJoin(free, part.units, [stated('held', 98), stated('decoration', 99)], [98, 99], prepared).size).toBe(1)
+    expect(joinedJoin(free, part.units, [stated('held', 98), stated('trail', 99)], [98, 99], prepared).size).toBe(0)
   })
 })

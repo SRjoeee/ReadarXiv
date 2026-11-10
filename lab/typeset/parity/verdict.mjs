@@ -695,9 +695,17 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (and those it keeps for an identifier they hold, `identifier`, the coordinator's ruling of 2026-11-10: IDENTIFIER_RULING)
   const figKept = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => pitch.has(o) || identifier.has(o))
   const figPitch = figKept.filter((o) => pitch.has(o)).length
-  if (figV < figT) {
-    const ruled = figV >= figT - figKept.length
-    diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figV, off: null }, !ruled, ruled ? 'ruling' : 'today')
+  // (a figure member v2 draws that holds two or more of today's units whole, its text theirs in order (v2.mjs `joined`,
+  // join.mjs joinedJoin's exact text: F0's line, a figure paragraph, a word joined across a size change, 2608.06701v1 p1's
+  // "…th" | "e…"): one translation for what today drew in pieces, each of them drawn)
+  const joinedV2 = v2.joined ?? {}
+  const figJoined = rec.v2.units
+    .filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0) && (joinedV2[u.id]?.length ?? 0) > 1)
+    .reduce((a, u) => a + joinedV2[u.id].length - 1, 0)
+  const figVJ = figV + figJoined
+  if (figVJ < figT) {
+    const ruled = figVJ >= figT - figKept.length
+    diff('figures', null, 'figure texts drawn translated', null, { value: figT, off: null }, { value: figVJ, off: null }, !ruled, ruled ? 'ruling' : 'today')
     if (ruled) out.diffs.at(-1).ruling = [...new Set(figKept.map((o) => (pitch.has(o) ? PITCH_RULING : IDENTIFIER_RULING)))].join(' / ')
   }
 
@@ -932,7 +940,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     laid: { today: T.size, v2: V.size, gained },
     echoed,
     within,
-    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}) },
+    figures: { today: figT, v2: figV, v2Laid: figLaid, ...(figPitch ? { pitch: figPitch } : {}), ...(figKept.length > figPitch ? { identifier: figKept.length - figPitch } : {}), ...(figJoined ? { joined: figJoined } : {}) },
   }
   for (const f of FLAGS) {
     const a = faults.today[f] ?? [],

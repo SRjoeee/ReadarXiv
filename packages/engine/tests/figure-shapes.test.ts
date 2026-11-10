@@ -57,3 +57,35 @@ describe("figureUnitsOf reads a page's shapes with its own figure texts alone", 
     expect(kept.units[0].after).not.toBe(kept.units[1].after)
   })
 })
+
+describe('figureUnitsOf records a tone under part of a text for the relation reading (figure-lines.ts)', () => {
+  /** "static method" at (100, 100), a fill painted before it under `from`..`to` along its line */
+  const toned = (from: number, to: number) => {
+    const p = page('static method', 0)
+    const box = [from, 97, to, 109]
+    p.boxes = box
+    p.shapes = new Map([
+      [
+        0,
+        {
+          segs: Float32Array.from([from, 97, to, 97, to, 97, to, 109, to, 109, from, 109, from, 109, from, 97]),
+          stroke: false,
+          fill: true,
+          hw: 0,
+        },
+      ],
+    ])
+    return p
+  }
+  it('keeps a highlight under a word of it a ground that crowds nothing, and records it (2608.06701v1 p1’s blue bars)', () => {
+    // ("static" from 100 to 130, its fill 99 to 131.5: an edge of it inside the text's extent)
+    const { units, met } = figureUnitsOf([toned(99, 131.5)], null)
+    expect(units[0].why).toBeNull()
+    expect(met.get(0)?.items).toEqual([expect.objectContaining({ b: 0, ground: true })])
+  })
+  it('records no fill the text stands on whole', () => {
+    const { units, met } = figureUnitsOf([toned(95, 175)], null)
+    expect(units[0].why).toBeNull()
+    expect(met.get(0)).toBeUndefined()
+  })
+})

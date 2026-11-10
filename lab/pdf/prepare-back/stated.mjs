@@ -86,6 +86,10 @@ export const CAUSE = Object.freeze({
   // makes no unit of (a cell: the front end's identifiersIn holds its whole text) or holds in a kept block alone (a line of ink),
   // stated with the same mark: accepted)
   identifier: 'kept as the original: an identifier is never sent',
+  // ((n), F0 (rebuild/fig-text): today's unit now wholly a stretch of a figure text a decoration holds (a frame, an underline or
+  // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
+  // text: accepted, the coordinator's ruling of 2026-11-10 on F0)
+  decoration: 'kept as the original: a stretch a decoration holds, carried with it',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -250,7 +254,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return CAUSE.another
   }
   // ((g): made on A and laid (its text arXiv's glyph text by its making), on today's lines one for one, today's glyph text a
-  // subsequence of its)
+  // subsequence of its; not a contiguous part of it, which is today's characters every one, held whole by a stand-in (f): F0's
+  // line holding today's words and its run of one pitch, 2608.06701v1 p1's "Action:")
   const onLines = (u, c, n) => n <= (c.lines?.length ?? 0) && u.lines.length === n && u.lines.every((l, i) => meets(l, c.lines[i]))
   const subsequence = (t, h) => {
     let i = 0
@@ -262,7 +267,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if (!onLines(u, c, c.lines?.length ?? 0)) return false
     const t = glyphTextOf(u),
       h = glyphTextOf(c)
-    return !!t && t !== h && subsequence(t, h)
+    return !!t && t !== h && !h.includes(t) && subsequence(t, h)
   }
   // ((h): today's lines its first ones, each line past them held by its elements alone, and its glyph text without those
   // elements today's)
@@ -313,9 +318,19 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   // one with no ink of its own as nothing))
   const glyphTextOf = (x) => {
     const inked = new Set((x.elements ?? []).filter((e) => e.segs?.length).map((e) => e.k))
+    // (an element the unit keeps as the original's ink (`keptBy`, F0's: a run of one pitch, a stretch a decoration holds) reads
+    // as its source, the characters it shows)
+    const kept = new Set((x.elements ?? []).filter((e) => e.keptBy).map((e) => e.k))
     let s = ''
     for (const p of x.pieces ?? [])
-      s += p.kind === 'text' ? p.s : p.kind === 'ph' ? (symbolText(p.src ?? '') ?? (inked.has(p.k) ? (readingOf(p.src ?? '') ?? '\ufffc') : '')) : ''
+      s +=
+        p.kind === 'text'
+          ? p.s
+          : p.kind === 'ph'
+            ? kept.has(p.k)
+              ? (p.src ?? '')
+              : (symbolText(p.src ?? '') ?? (inked.has(p.k) ? (readingOf(p.src ?? '') ?? '\ufffc') : ''))
+            : ''
     return s.replace(/\s+/g, '')
   }
   const heldBy = (u) => {
@@ -449,6 +464,22 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const whole = [...all].filter((n) => glyphTextOf(n) === mine)
     return { holder: whole.length === 1 ? whole[0] : null }
   }
+  // ((k) on elements and (n), F0 (rebuild/fig-text): today's unit now wholly an element one unit of the candidate's keeps as the
+  // original's ink (`keptBy`): every line of it inside one box of that element, its glyph text the element's source's, white
+  // space aside (2608.06701v1 p1's "The path", today's run of one pitch, F0's element of "Observation: …")
+  const keptElementOf = (u) => {
+    const t = u.lines?.length ? glyphTextOf(u) : ''
+    if (!t) return null
+    for (const n of units) {
+      if (n.replaced) continue
+      for (const e of n.elements ?? []) {
+        if (!e.keptBy || !u.lines.every((l) => e.segs.some((k) => inside(l, k)))) continue
+        const p = (n.pieces ?? []).find((q) => q.k === e.k && q.kind === 'ph')
+        if (p && (p.src ?? '').replace(/\s+/g, '') === t) return { n, cause: e.keptBy === 'pitch' ? CAUSE.pitch : CAUSE.decoration }
+      }
+    }
+    return null
+  }
   // ((f), its stand-in of today's kind at its place, 2026-11-10: every line of today's meets a box of it and its glyph text holds
   // today's whole, in order (rebuild/run-on-kept's figure text not cut at a face or colour change, standing for one of today's
   // pieces))
@@ -549,6 +580,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const named = identifiersOnly(typedOf(u))
     if (named && u.lines?.length && u.lines.every((l) => units.every((n) => n.replaced || !n.pieces?.length || !boxesOf(n).some((k) => across(k, l))))) {
       out.push({ u, why: CAUSE.identifier, cause: 'identifier', keptBy: 'identifier' })
+      continue
+    }
+    // ((k) on elements and (n) before a stand-in: the element's unit stands for the words beside it as well)
+    const keptEl = /^ink/.test(u.kind) ? keptElementOf(u) : null
+    if (keptEl) {
+      out.push({ u, why: keptEl.cause, cause: keyOf(keptEl.cause), holder: keptEl.n.id })
       continue
     }
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)
