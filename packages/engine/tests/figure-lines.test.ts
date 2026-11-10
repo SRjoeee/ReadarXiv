@@ -220,26 +220,23 @@ describe('figure-lines: F0, a figure’s line of words and a run of one pitch', 
     const banded = figureLinesOf([band.page], band.fig, () => false, MONO)
     expect(banded.map((t) => t.ks)).toEqual([[1, 2]])
   })
-  it('makes runs in two faces that abut, no word space between them, one text (2608.06701v1 p1’s bold "Thought" and its colon)', () => {
-    const { page, fig } = pageOf([
+  it('joins no runs in no face of one pitch: a bold label and its colon, a doubled copy, a script, F3’s or as they were (f0e)', () => {
+    // (2608.06701v1 p1's "Thought" and ": The user…" abut; so do 2610.21924v1's doubled "PARAMETER" (each glyph twice, 0.4 pt
+    // apart) and 2610.20507v1's "log" and its "10": F0 joins a run of one pitch to its line alone)
+    const label = pageOf([
       [
         { text: 'Thought', font: 'Arial-BoldMT' },
         { text: ': The user wants to implement the', font: 'ArialMT' },
       ],
     ])
-    const [t, ...rest] = figureLinesOf([page], fig, () => false, MONO)
-    expect(rest).toEqual([])
-    expect(t!.ks).toEqual([0, 1])
-    expect(t!.els).toEqual([])
-    expect(t!.why).toBeNull()
-    // (two labels a word space apart or more, in no face of one pitch: each its own, as today's reading made them)
-    const two = pageOf([
+    expect(figureLinesOf([label.page], label.fig, () => false, MONO)).toEqual([])
+    const twice = pageOf([
       [
-        { text: 'Forward', font: 'Arial-BoldMT' },
-        { text: 'Backward', font: 'ArialMT', x: 116 },
+        { text: 'PARAMETER', font: 'Copperplate' },
+        { text: 'PARAMETER', font: 'Copperplate', x: 72.4 },
       ],
     ])
-    expect(figureLinesOf([two.page], two.fig, () => false, MONO)).toEqual([])
+    expect(figureLinesOf([twice.page], twice.fig, () => false, MONO)).toEqual([])
   })
 })
 
@@ -346,6 +343,57 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
       under: null,
     })
     expect(figureLinesOf([cut.page], cut.fig, () => false, null)).toEqual([])
+  })
+  it('reads tone pieces under consecutive stretches as one tone, a word space between them or not, their heights the words’ (2411.13093v4 p19)', () => {
+    // ("D. It is hidden": a box under each word, as tall as the word's own ink and a point round it, a word space between boxes)
+    const { page, fig } = pageOf([[{ text: 'D. It is hidden', font: 'Georgia' }]])
+    const g = page.glyphs as Glyph[]
+    const words: [number, number][] = [
+      [0, 1],
+      [3, 4],
+      [6, 7],
+      [9, 14],
+    ]
+    fig.met.set(0, {
+      items: words.map(([a, b], i) => ({
+        ...boxMet(
+          i,
+          rect(g[a]!.x0 - 1, 697 - (i === 3 ? 1 : 0), g[b]!.x1 + 1, 708, { stroke: false, fill: true, hw: 0 }),
+        ),
+        ground: true,
+      })),
+      under: null,
+    })
+    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+  })
+  it('makes no element of a stretch a plot’s shading holds, a tone taller than the line (2610.21547v1 p14 "bound m = 1")', () => {
+    const { page, fig } = pageOf([[{ text: 'bound m = 1', font: 'Times' }]])
+    const g = page.glyphs as Glyph[]
+    // (the shaded column from the axis to the plot's top, under "m = 1")
+    fig.met.set(0, {
+      items: [
+        {
+          ...boxMet(0, rect(g[6]!.x0 - 2, 560, g.at(-1)!.x1 + 4, 760, { stroke: false, fill: true, hw: 0 })),
+          ground: true,
+        },
+      ],
+      under: null,
+    })
+    expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+  })
+  it('leaves a run kept whole for its pitch as it was, a tone under a stretch of it (2608.06701v1 p1’s path line)', () => {
+    const { page, fig } = pageOf([[{ text: 'lib/callback.py is', font: 'LMMono10-Regular' }]])
+    const g = page.glyphs as Glyph[]
+    fig.met.set(0, {
+      items: [
+        {
+          ...boxMet(0, rect(g[0]!.x0 - 1, 697, g[14]!.x1 + 1, 709, { stroke: false, fill: true, hw: 0 })),
+          ground: true,
+        },
+      ],
+      under: null,
+    })
+    expect(figureLinesOf([page], fig, () => false, MONO)).toEqual([])
   })
   it('reads a diamond’s room at the text’s ends, where its slanted sides come nearest', () => {
     const { page, fig } = pageOf([[{ text: 'detected?', font: 'DejaVuSans' }]])

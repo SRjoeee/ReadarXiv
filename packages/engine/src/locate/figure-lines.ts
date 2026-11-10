@@ -181,8 +181,11 @@ export function figureLinesOf(
     }
     // ---- each line read: its glyphs' roles, F (a face of one pitch) or T, in its order; its text F0's or code's
     for (const l of lines) {
-      const ft = readLine(l, glyphs, pitch, (g) => map.get(g))
-      const items = l.ks.flatMap((k) => fig.met.get(k)?.items ?? [])
+      const ft = readLine(l, glyphs, pitch)
+      // (a tone under a text kept whole, a line of code or a run wholly of one pitch (Rule 1), is nothing to it: the text is the
+      // original's, its tones with it)
+      const tones = (keep: boolean) => (it: TodayMet) => !(keep && 'ground' in it && it.ground)
+      const items = l.ks.flatMap((k) => fig.met.get(k)?.items ?? []).filter(tones(ft?.why === 'code'))
       const crowded = l.ks.some((k) => fig.units[k]!.why === 'crowded')
       const under = l.ks.reduce<number | null>((u, k) => {
         const x = fig.met.get(k)?.under ?? fig.units[k]!.under ?? null
@@ -201,6 +204,8 @@ export function figureLinesOf(
         const m = fig.met.get(k)
         if (!m) continue
         const gs = runOf.get(k)!.filter((g) => real(glyphs[g]))
+        const its = m.items.filter(tones(gs.every((g) => pitch(glyphs[g]!))))
+        if (!its.length) continue
         const one: FigureText = {
           ks: [k],
           page: p,
@@ -213,7 +218,7 @@ export function figureLinesOf(
           container: null,
           under: m.under,
         }
-        judge(one, m.items, glyphs)
+        judge(one, its, glyphs)
         if (one.els.length || (fig.units[k]!.why === 'crowded' && one.why !== 'crowded')) out.push(one)
       }
     }
@@ -248,12 +253,7 @@ function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly
  * Consolas line); else each stretch of F an element `code`. The glyphs no run holds before its first run's (an icon TeX set
  * before the first word) are none of it, as today's reading leaves them
  */
-function readLine(
-  l: Line,
-  glyphs: readonly G[],
-  pitch: (g: G) => boolean,
-  runAt: (g: number) => number | undefined,
-): FigureText | null {
+function readLine(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean): FigureText | null {
   if (l.ks.length < 2 && !l.free.size) {
     // (one run alone: F0 has nothing to join)
     return null
@@ -270,32 +270,7 @@ function readLine(
   }
   const gs = l.gs.slice(first)
   const role = gs.map((g) => (pitch(glyphs[g]!) ? 'F' : 'T'))
-  if (!role.includes('F')) {
-    // (no face of one pitch: runs that abut, no word space between any two of them, are one text, a bold label and its colon in
-    // the face after it (2608.06701v1 p1's "Thought" and ": The user wants…"); runs a word space apart or more stand as today's
-    // reading made them)
-    if (l.ks.length < 2) return null
-    for (let i = 1; i < gs.length; i++) {
-      const a = glyphs[gs[i - 1]!]!,
-        b = glyphs[gs[i]!]!
-      const ka = runAt(gs[i - 1]!),
-        kb = runAt(gs[i]!)
-      if (ka !== undefined && kb !== undefined && ka !== kb && b.x0 - a.x1 >= SPACE_GAP * Math.min(a.size, b.size))
-        return null
-    }
-    return {
-      ks: [...l.ks],
-      page: 0,
-      order: [{ t: 'text', glyphs: gs }],
-      els: [],
-      claimed: gs.filter((g) => l.free.has(g)),
-      copies: [],
-      textBoxes: [],
-      why: null,
-      container: null,
-      under: null,
-    }
-  }
+  if (!role.includes('F')) return null
   const stretches: { r: string; gs: number[] }[] = []
   gs.forEach((g, i) => {
     const s = stretches.at(-1)
@@ -371,7 +346,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
   const own = new Set(textGs)
   const at = new Map(textGs.map((g, i) => [g, i]))
   let unrelated = false
-  for (const it of fillsJoined(items, own, glyphs, glyphs[textGs[0]!]!.size)) {
+  for (const it of fillsJoined(items, textGs, glyphs)) {
     if ('g' in it) {
       if (own.has(it.g)) continue
       const x = glyphs[it.g]!
@@ -421,12 +396,15 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     const idx = held.map((g) => at.get(g)!).sort((a, b) => a - b)
     const contiguous = idx.length > 0 && idx.at(-1)! - idx[0]! + 1 === idx.length
     // (a decoration holds whole words: its stretch's ink inside it, and the stretch from a word's start to a word's end, a word
-    // space or a mark that is no letter or digit beside it, its line's end; never a letter of a word, a plot's marker over it)
+    // space or a mark that is no letter or digit beside it, its line's end; never a letter of a word, a plot's marker over it. A
+    // tone under the stretch is a line tall at most (as a chip's fill, BAND_EM twice), a highlight's: a plot's shaded column
+    // under a label's end is the plot's (2610.21547v1 p14's "bound m = 1"))
     if (
       held.length &&
       !others &&
       contiguous &&
       held.length < own.size &&
+      (!it.ground || y1 - y0 <= 2 * BAND_EM * glyphs[held[0]!]!.size) &&
       held.every((j) => inside(glyphs[j]!, x0, y0, x1, y1)) &&
       wordBounded(textGs, idx, glyphs)
     ) {
@@ -481,12 +459,23 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
 type Met =
   | { g: number }
   | { bs: number[]; box: number[]; shape: TodayShape | null; kind: number | undefined; ground: boolean }
-/** a crowded text's met ink with the pieces of one fill as one: a highlight a package sets word by word (2610.40576v1 p17) is
- *  boxes of fill alone, each holding a glyph of the text, on one band and touching (their tops, bottoms and facing edges within
- *  RUN_DY of the text's size), and it is judged whole, the text's ground, not each word's decoration */
-function fillsJoined(items: readonly TodayMet[], own: ReadonlySet<number>, glyphs: readonly G[], size: number): Met[] {
+/** a text's met ink with the pieces of one fill as one: boxes of fill alone (no stroke) each holding a stretch of the text's
+ *  glyphs, the stretches consecutive in its order, no glyph of it between them, are one tone under the stretches joined, judged
+ *  whole: a highlight a package sets word by word, the pieces touching (2610.40576v1 p17) or a word space apart and each as
+ *  tall as its word (2411.13093v4 p19's option D), is the text's ground, not each word's decoration. Pieces joined are of one
+ *  kind, a tone under the text (`ground`) or ink over it */
+function fillsJoined(items: readonly TodayMet[], textGs: readonly number[], glyphs: readonly G[]): Met[] {
+  const at = new Map(textGs.map((g, i) => [g, i]))
   const out: Met[] = []
-  const pieces: { bs: number[]; box: number[]; shape: TodayShape; kind: number | undefined; ground: boolean }[] = []
+  const pieces: {
+    bs: number[]
+    box: number[]
+    shape: TodayShape
+    kind: number | undefined
+    ground: boolean
+    lo: number
+    hi: number
+  }[] = []
   for (const it of items) {
     if ('g' in it) {
       out.push(it)
@@ -498,36 +487,31 @@ function fillsJoined(items: readonly TodayMet[], own: ReadonlySet<number>, glyph
       Math.max(it.box[0]!, it.box[2]!),
       Math.max(it.box[1]!, it.box[3]!),
     ]
-    const holds =
-      it.shape?.fill &&
-      !it.shape.stroke &&
-      [...own].some((j) => {
+    const ground = !!it.ground
+    // (the places in the text's order of the glyphs whose ink centre it holds: a stretch where they are consecutive)
+    const idx: number[] = []
+    if (it.shape?.fill && !it.shape.stroke)
+      for (const [j, i] of at) {
         const g = glyphs[j]!
         const cx = ((g.ix0 ?? g.x0) + (g.ix1 ?? g.x1)) / 2,
           cy = (g.top + g.bottom) / 2
-        return cx > box[0]! && cx < box[2]! && cy > box[1]! && cy < box[3]!
-      })
-    const ground = !!it.ground
-    if (holds) pieces.push({ bs: [it.b], box, shape: it.shape!, kind: it.kind, ground })
+        if (cx > box[0]! && cx < box[2]! && cy > box[1]! && cy < box[3]!) idx.push(i)
+      }
+    idx.sort((x, y) => x - y)
+    if (idx.length && idx.at(-1)! - idx[0]! + 1 === idx.length)
+      pieces.push({ bs: [it.b], box, shape: it.shape!, kind: it.kind, ground, lo: idx[0]!, hi: idx.at(-1)! })
     else out.push({ bs: [it.b], box, shape: it.shape, kind: it.kind, ground })
   }
-  const tol = RUN_DY * size
-  pieces.sort((a, b) => a.box[0]! - b.box[0]!)
+  pieces.sort((x, y) => x.lo - y.lo || x.hi - y.hi)
   const joined: typeof pieces = []
   for (const p of pieces) {
-    const q = joined.find(
-      (j) =>
-        j.ground === p.ground &&
-        Math.abs(j.box[1]! - p.box[1]!) <= tol &&
-        Math.abs(j.box[3]! - p.box[3]!) <= tol &&
-        p.box[0]! - j.box[2]! <= tol &&
-        j.box[0]! - p.box[2]! <= tol,
-    )
+    const q = joined.find((j) => j.ground === p.ground && j.hi + 1 === p.lo)
     if (!q) {
       joined.push({ ...p, shape: { ...p.shape, segs: Array.from(p.shape.segs) } })
       continue
     }
     q.bs.push(...p.bs)
+    q.hi = p.hi
     q.box = [
       Math.min(q.box[0]!, p.box[0]!),
       Math.min(q.box[1]!, p.box[1]!),
@@ -540,7 +524,7 @@ function fillsJoined(items: readonly TodayMet[], own: ReadonlySet<number>, glyph
       hw: Math.max(q.shape.hw, p.shape.hw),
     }
   }
-  return [...out, ...joined]
+  return [...out, ...joined.map(({ lo: _lo, hi: _hi, ...m }) => m)]
 }
 
 /** whether a stretch of a text's glyphs (`idx`, contiguous places in `gs`, its line order) is words whole: it holds a letter or
