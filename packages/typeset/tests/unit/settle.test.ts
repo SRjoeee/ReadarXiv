@@ -60,6 +60,16 @@ describe('S.overFollower', () => {
     expect(overFollower({ ...base, follower: { ...base.follower!, open: false } }, cut)).toBeNull()
     expect(overFollower({ ...base, follower: null }, cut)).toBeNull()
   })
+  it('is taken where its fit shrank it and over its row it is set larger: the row before the size (2611.03178v1-zh p16)', () => {
+    const shrunk = { ...layout, clipped: false, scale: 0.85 } as unknown as Layout
+    const at = (scale: number) => () => ({
+      layout: { clipped: false, lines: [], scale } as unknown as Layout,
+      tokens: [] as Tokens,
+    })
+    expect(overFollower({ ...base, layout: shrunk }, at(1))?.blocks[0]?.x1).toBe(520)
+    expect(overFollower({ ...base, layout: shrunk }, at(0.85))).toBeNull()
+    expect(overFollower({ ...base, layout: { ...shrunk, scale: 1 } as unknown as Layout }, at(1))).toBeNull()
+  })
   it('is not taken off the row’s page, over two pages, past a block of two lines, centred, or short of its end', () => {
     expect(overFollower({ ...base, follower: { ...base.follower!, first: { page: 2, x1: 520 } } }, cut)).toBeNull()
     expect(overFollower({ ...base, pages: [1, 2] }, cut)).toBeNull()

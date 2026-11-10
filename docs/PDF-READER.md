@@ -5300,9 +5300,15 @@ than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "
 needs 34 em of Japanese on a row of 170.6 pt, past what `floorMin` 0.6 reaches, and stayed English beside its Japanese paragraph
 (`unfit`). Where a head's fit in its row is clipped at its floor, its last block now runs on to the end of the paragraph's first
 line (`run.mjs` `overFollower`), taken where it fits there at the floor or above; the paragraph is laid from where the head's
-translation ends, its first line shorter, or given way to its next row. A head its row holds at the floor or above keeps its
-row: taken wherever a head fitted smaller, its paragraph paid for a head already within its floor (1810.04805v2's Russian p4, a
-head from 0.85 to 1 and its paragraph, below its floor, from 0.73 to 0.70).
+translation ends, its first line shorter, or given way to its next row. A head its row holds only by shrinking takes the rest
+of its line too, where it is set larger there (the owner's report of 2026-11-10 on round 8's staging, 2611.03178v1 page 16 in
+Chinese: "ML Coding." in seven characters shrunk to 0.85 of the body in its own 62 pt, and the size tie of the 2026-11-08 ruling,
+one paragraph's text at one scale, set its whole paragraph at 0.85 among paragraphs at full size, a hole under it; laid over its
+row the head is at full size, 73 pt, and so is its paragraph, its first line from the head's end). Before the tie a head that
+fitted its row at the floor or above kept it, since its paragraph paid for the room (1810.04805v2's Russian p4, a paragraph from
+0.73 to 0.70 for a head from 0.85 to 1); under the tie the head's shrink is its paragraph's, and over the corpus's 90 pairs with
+stored rows (part A's bundles) 29 heads in 14 pairs take their row (34 in 18 with every toggle on), from 0.80-0.975 to 1 (two to
+0.9 and 0.975), 68 units on 24 of 2,564 pages move (77 on 27), and no paragraph comes out smaller: 27 larger, 2 the same.
 The two are decided together (`settleLeadOf`, `relay`): where the paragraph is left the original's, is not laid from the head's
 end (`ledBy`), or fits from there only below its own floor, the head is laid again in its row alone, as before, and the
 paragraph again from where the head then ends; no unit goes under its floor to lift another. This runs as the paragraph's lay
