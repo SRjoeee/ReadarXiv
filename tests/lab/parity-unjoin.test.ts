@@ -3,9 +3,11 @@
 // elements of the candidate's parts the engine reads as one word as written (literal, a copy with no white space), each given
 // back the text a run without that rule read off the same glyphs, a space at each line end, where the two differ by white
 // space alone; nothing else. Synthetic parts only.
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { withUnjoined, wordsUnjoined } from '../../lab/typeset/parity/unjoin.mjs'
+import { UNJOINED, UNJOINED_MISSING, unjoinedOf, withUnjoined, wordsUnjoined } from '../../lab/typeset/parity/unjoin.mjs'
+import { LAB } from '../../packages/typeset/tests/replay/tap.ts'
 
 type El = { kind: string; literal?: number; copy?: string; text?: string; fills?: [string, number][]; ink?: number[][] }
 const partOf = (members: { ord: number; els: [string, El][] }[]) => ({ flows: [members.map((m) => ({ ...m, kind: 'para' }))] })
@@ -57,5 +59,21 @@ describe("the parity's lay with a URL's line ends read as spaces again (lane url
       }),
     ).toThrow('lay')
     expect(el.text).toBe('https://a.io/lo/ng')
+  })
+  // (a run without AXT_PARITY_UNJOINED reads round 8 B1's bundles in lab-data, as tap.ts reads LAB; where none is there for a paper
+  // that holds a word the rule joined, the ruling is not applied and the run says so: the coordinator's of 2026-11-10)
+  it("defaults the unjoined bundles to round 8 B1's in lab-data", () => {
+    if (!process.env.AXT_PARITY_UNJOINED) expect(UNJOINED).toBe(join(LAB, 'refactor-2026-11', 'lanes', 'converge-7', 'r8b', 'bundles'))
+  })
+  it('says the ruling is not applied where no unjoined bundle stands for a paper holding a word over lines, and only there', () => {
+    const over = url('https://a.io/lo/ng', { ink: [[3, 200, 700, 300, 708, 700], [3, 72, 688, 110, 696, 688]] })
+    const one = url('https://a.io/lo/ng', { ink: [[3, 72, 700, 190, 708, 700]] })
+    const now = (el: El) => new Map([[3, partOf([{ ord: 7, els: [['2', el]] }])]])
+    expect(UNJOINED_MISSING).toBe('url-join ruling not applied: no unjoined bundles')
+    expect(unjoinedOf(now(over), null)).toEqual({ words: [], missing: 'url-join ruling not applied: no unjoined bundles' })
+    expect(unjoinedOf(now(one), null)).toEqual({ words: [], missing: null })
+    const was = new Map([[3, partOf([{ ord: 7, els: [['2', url('https://a.io/ lo/ng')]] }])]])
+    expect(unjoinedOf(now(over), was).missing).toBe(null)
+    expect(unjoinedOf(now(over), was).words.map((w: { text: string }) => w.text)).toEqual(['https://a.io/ lo/ng'])
   })
 })

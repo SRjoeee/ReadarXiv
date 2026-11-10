@@ -225,8 +225,10 @@ literal mark whose copy holds no white space; PDF-READER §18.19); where that se
 instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those line
 ends read as spaces again sets today's count on the page: `v2.mjs` lays each pair once more with each such element's text (and
 its runs) as a stage 1a run without the rule read it, where the two differ by white space alone (`unjoin.mjs`; that run's
-bundles `AXT_PARITY_UNJOINED`, round 8 B1's; unset, no such lay), and records the line count on each page of each member that
-holds one (`unjoined`); `verdict.mjs` urlJoinRuling. A count those joins do not explain is judged as any.
+bundles `AXT_PARITY_UNJOINED`, by default round 8 B1's in lab-data, `lanes/converge-7/r8b/bundles`), and records the line count
+on each page of each member that holds one (`unjoined`); `verdict.mjs` urlJoinRuling. A count those joins do not explain is
+judged as any. Where no unjoined bundle stands for a paper that holds such a word over lines, the ruling is not applied, and
+the log and the sheet say "url-join ruling not applied: no unjoined bundles" (v2.mjs's `notes`, the sheet's `notes`).
 
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a

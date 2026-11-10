@@ -53,8 +53,11 @@ const pages = []
 // (each paper's facts of the classes the toggles keep, read off the original (blind.mjs): what arXiv's metadata and hyperref's
 // anchors name, and the units of each reader they fall in)
 const facts = {}
+// (what v2.mjs says of a pair's lay it could not do as the verdict reads it: `notes`, url-join's ruling not applied (unjoin.mjs))
+const notes = []
 for (const [pair, raw] of drawn) {
   const v2 = json(join(WORK, 'v2', `${pair}.json`))
+  for (const x of v2.notes ?? []) notes.push(`${pair}: ${x}`)
   const prep = json(join(PREPARE, `${raw.paper}.prepare.json`))
   const prepByOrd = new Map(prep.units.map((u) => [u.ord, u]))
   // (part ord -> today's ord)
@@ -178,6 +181,7 @@ const result = {
   pagesBoth: pages.filter((p) => p.both?.length).length,
   facts,
   errors: pages.filter((p) => p.error).map((p) => `${p.pair} p${p.page}: ${p.error}`),
+  notes,
   summary,
   worst,
   pages: order,
@@ -185,6 +189,7 @@ const result = {
 writeFileSync(join(OUT, 'parity.json'), `${JSON.stringify(result)}\n`)
 writeFileSync(join(OUT, 'index.html'), sheet(result))
 console.log(`parity: ${pages.length} pages of ${pairs.length} pairs; ${result.pagesWorse} worse than today; missing ${missing.map((m) => m.pair).join(', ') || 'none'}`)
+for (const x of notes) console.log(x)
 console.log(`incomplete: ${incomplete.length}${incomplete.length ? ` (${incomplete.slice(0, 5).join('; ')}${incomplete.length > 5 ? '; …' : ''})` : ''}`)
 for (const f of FLAGS) {
   const x = summary[f]
@@ -207,6 +212,7 @@ function sheet(r) {
   const inc = r.incomplete.length
     ? `<article class="card flagged"><h2>Not judged whole: the gate fails</h2><ul>${r.incomplete.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>`
     : ''
+  const said = r.notes?.length ? `<article class="card flagged"><h2>Not applied</h2><ul>${r.notes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></article>` : ''
   const side = (x) => `${x.value === null || x.value === undefined ? '' : `${esc(x.value)} `}${x.off === null || x.off === undefined ? '' : `<span class="off">off ${esc(x.off)}</span>`}`
   const cards = r.pages
     .map((p) => {
@@ -279,7 +285,7 @@ td.bad, .v.bad { color: var(--bad); font-weight: 600; } td.good, .v.good { color
 <h1>Display ≥ today: v2 against today's output, judged against arXiv's page</h1>
 <p>${r.pagesDrawn} pages of ${r.pairs.length} pairs drawn offline${r.run?.toggles === 'on' ? ', every switch of "What to translate" on (figure and table text, headers and footers, references, the author block) on both sides' : ', under the default toggles'}, with the same rows on both sides (today: the door over the release's bundle; v2: the reader drawing the entry's Page). A difference between the two passes only where v2 is nearer the original; <b>${r.pagesWorse} pages are worse than today's</b>${r.incomplete.length ? `, and the run is not judged whole (${r.incomplete.length})` : ''}: the gate ${r.pass ? 'passes' : 'fails'}. On ${r.pagesBoth} pages both sides depart from the original alike (scripts drawn flat, a unit the toggles keep drawn translated): listed apart on each page, no verdict. Each difference below shows the original's value, both sides' and their distance from it (“off”), and which is nearer. Measures, noise floors and bounds: lab/typeset/parity/README.md.</p>
 <table class="summary"><thead><tr><th>measure</th><th>pages worse</th><th>differences worse</th><th>pages v2 nearer</th><th>v2 faults (pages)</th><th>today faults (pages)</th><th>both depart (pages)</th><th>distance from the original</th></tr></thead><tbody>${rows}</tbody></table>
-${inc}
+${inc}${said}
 ${miss}
 ${cards}
 </body>
