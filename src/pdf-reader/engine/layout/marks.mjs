@@ -1656,7 +1656,10 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX. `opens`: the mark that opens the
       // piece after it, which patch writes after the unit's start mark where that mark goes before this piece)
-      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}`, opens: true }
+      // (an identifier's \axthpk: it begins with a character, so in vertical mode, where a box's paragraph opens with it, the mark
+      // begins the paragraph before that character as TeX would and sets its point there, where \axtpma waits for the next mark
+      // (its closing one: 2608.25210v2 p3's \mypython box, the element empty); in horizontal mode \axtpma's)
+      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : identifierPiece(p.src) ? 'axthpk' : 'axtpma'}{${name}a}`, opens: true }
       if (said === '3') { movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }); return [open, piece] }
       if (cls === 'macro') opened.add(p)
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at

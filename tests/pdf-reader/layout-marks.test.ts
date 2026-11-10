@@ -270,7 +270,10 @@ describe('layoutMarking', () => {
     // after it told none, its glyphs were read as the unit's text and the unit was left unlocated, "text past its source". It
     // reads nothing after it; one that ends in a text symbol, `\}`, after which TeX skips no space, keeps its closing mark too)
     const { units: marked } = layoutMarking([unit('para', [text('A\n'), ph('\\{root\\_question\\}'), ph('\\\\[4pt]'), text('\n'), ph('llm\\_equal\\_human'), text(': Are '), ph('[sentence\\_1]'), ph('$x$')])], MARK_CLASSES, { lines: false })
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\{root\\_question\\}', 'ph \\axtpm{p0.1b}', 'ph \\\\[4pt]', 'text', 'ph \\axtpma{p0.4a}', 'ph llm\\_equal\\_human', 'ph \\axtpm{p0.4b}', 'text', 'ph \\axtpma{p0.6a}', 'ph [sentence\\_1]', 'ph \\axtpm{p0.6b}', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}'])
+    // (its opening mark \axthpk's: in vertical mode, where a box's paragraph opens with it (2608.25210v2 p3's \mypython box,
+    // \small\ttfamily then `llm\_equal\_human`), \axtpma waits for the next mark, its closing one, and the element was empty;
+    // \axthpk begins the paragraph before a character as TeX would, and sets its point there)
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axthpk{p0.1a}', 'ph \\{root\\_question\\}', 'ph \\axtpm{p0.1b}', 'ph \\\\[4pt]', 'text', 'ph \\axthpk{p0.4a}', 'ph llm\\_equal\\_human', 'ph \\axtpm{p0.4b}', 'text', 'ph \\axthpk{p0.6a}', 'ph [sentence\\_1]', 'ph \\axtpm{p0.6b}', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}'])
   })
   it('an identifier opening a unit is its first word: the unit\'s start mark before it, no head passed over past it', () => {
     expect(startOf([ph('\\noindent'), ph('llm\\_equal\\_human'), text(': Are')] as never)).toEqual([1, -1])
