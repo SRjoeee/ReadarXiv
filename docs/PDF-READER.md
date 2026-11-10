@@ -3244,7 +3244,12 @@ middle or ending at its end), the first line from the one before's ink end at Te
 was laid at, at TeX's pitch (a fit's own leading, a CJK target's 1.3, put the next member on no line of the paragraph); each
 member breaks only at its own spaces, after the label it carries (the separator TeX set before it, which then closes the line
 before), so a name the line no longer holds goes on whole to the next, as TeX breaks the paragraph between words, and a CJK name,
-which holds no space, is never cut between its characters where a line holds it. Each line's extent is read off that lay, and the
+which holds no space, is never cut between its characters where a line holds it. A member's label that no line may open with, by the
+breaker's own rule (`noLineStart`: UAX 14's line-start marks and the target's, IJCAI's comma), is laid at the end of the member
+before, glued to it (its crop from that one's ink end on A, TeX's separation before it kept), so that the breaker keeps it with
+that name and, where the line no longer holds both, carries both to the next (staging's round 8 B3: the second line of
+2611.00342v1's names opened with a bare comma); a member's first word is never cut by its characters at the end of a line the
+members before it hold. Each line's extent is read off that lay, and the
 run laid again with each line moved to stand centred on TeX's line, or ending at its end; each line keeps its width, so the second
 lay is the first one moved, line by line. A paragraph of several lines must be the run's whole: nothing of the page before its
 first member on its first line nor after its last one on its last line (their `Room.side` reaching their column's edge), since
