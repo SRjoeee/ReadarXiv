@@ -1129,11 +1129,17 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
       Math.max(it.box[1]!, it.box[3]!),
     ]
     const hw = it.shape?.hw ?? 0
-    // (a rule inside an element's extent: the element's)
+    // (a rule inside an element's extent: the element's; across it and on its line, the band its glyphs and DRAW_BAND about their
+    // baseline span: a paragraph's frame on another line is no rule of an element its x extent falls in (2609.19644v1 p58, the
+    // same author cited on four lines, every frame taken as the first citation's: its crops drawn empty in the translation))
     const el = ft.els.find((e) => {
       const ex0 = Math.min(...e.glyphs.map((g) => glyphs[g]!.x0)),
         ex1 = Math.max(...e.glyphs.map((g) => glyphs[g]!.x1))
-      return x0 >= ex0 - hw && x1 <= ex1 + hw
+      const ey0 = Math.min(
+          ...e.glyphs.map((g) => Math.min(glyphs[g]!.bottom, glyphs[g]!.y + DRAW_BAND[0] * glyphs[g]!.size)),
+        ),
+        ey1 = Math.max(...e.glyphs.map((g) => Math.max(glyphs[g]!.top, glyphs[g]!.y + DRAW_BAND[1] * glyphs[g]!.size)))
+      return x0 >= ex0 - hw && x1 <= ex1 + hw && y1 >= ey0 - hw && y0 <= ey1 + hw
     })
     if (el) {
       el.boxes.push(...it.bs)

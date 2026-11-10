@@ -1014,6 +1014,34 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
+  it('gives a frame on another line its own element, never one an element of this line spans across (2609.19644v1 p58)', () => {
+    // (two citations on two lines of a paragraph, one frame under the other: each line's frame its own citation's)
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'the quick', font: T, x: 72 },
+        { text: 'Garza et al.', font: T, x: 128 },
+        { text: 'jumps over the foun-', font: T, x: 199 },
+      ],
+      [
+        { text: 'dation of a', font: T, x: 76 },
+        { text: 'Woo', font: T, x: 137 },
+        { text: 'while run', font: T, x: 155 },
+      ],
+    ])
+    // (the second line's frame, round "Woo", inside the first line's citation's extent across)
+    fig.units[1]!.why = 'crowded'
+    fig.met.set(1, { items: [boxMet(0, rect(127, 697, 197, 709))], under: null })
+    fig.units[4]!.why = 'crowded'
+    fig.met.set(4, { items: [boxMet(1, rect(136, 683, 153, 695))], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.ks).toEqual([0, 1, 2, 3, 4, 5])
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([
+      ['cite', [0]],
+      ['cite', [1]],
+    ])
+  })
   it('reads a paragraph’s line break as a word’s end: a framed stretch ending one line or starting the next is an element', () => {
     const { page, fig } = pageOf(
       justified(['the quick brown fox jumps over the', 'lazy dogs while the others run', 'away from it']),
