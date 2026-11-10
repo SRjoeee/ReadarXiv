@@ -3,7 +3,8 @@
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
-// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit): run
+// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
+// a paragraph TeX ended between two lines parts them): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -471,7 +472,12 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && drop > 0 && near && s.x0 < prev.x1 && s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
-    const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
+    // (CHANGED: a paragraph TeX ended between the two lines parts them, a start of TeX's after the end marked or not (ink.mjs
+    // `paraEnds`): a class's paragraph begun with no point of its own read as the one before. 2610.22065v1 p1, acmart's reference
+    // format: its "ACM Reference Format:" line, a paragraph of its own, and the paragraph of the paper's front matter set again
+    // under it, which no unit owns there, one unit)
+    const ended = !!prev && prev.page === s.page && (pages[s.page - 1]?.paraEnds ?? []).some(e => e.glyph > Math.max(...prev.gs) && e.glyph <= Math.min(...s.gs))
+    const joins = follows && !ended && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
     // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, a running head or
     // foot between its parts its own unit — every entry its own)
     if (s.cls === 'references') { const g = entryGroups.get(s.entry); if (g) g.push(s); else { groups.push([s]); entryGroups.set(s.entry, groups.at(-1)) } continue }

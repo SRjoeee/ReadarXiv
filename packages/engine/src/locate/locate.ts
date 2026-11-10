@@ -744,11 +744,54 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return mem
   }
 
+  // ---- an author block's unit TeX set inside a paragraph that sets another unit again: a template's paragraph, made of the
+  // paper's own front matter (ACM's reference format: the authors, the year, the title a second time), whose text is the page's,
+  // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
+  // the paper, its \author units set in the reference format alone, each name a member: the paragraph laid on the original's
+  // rows, never reflowing (its first line ended at x 190, TeX's at 294). A paragraph sets a unit again where a start point of
+  // the unit's stands in it after an end point of the unit's in B's stream (its setting begun again: the copy, own.mjs MR 3's
+  // first occurrence the unit's own); the paragraph from the last end TeX states before the unit's first glyph to the first
+  // after its last (Instrument.tex.paragraphEnds). Where TeX states no paragraph ends, nothing is read. Not a name's own setting:
+  // a block whose units TeX set twice has them its first setting's, the block's (2402.10294v1's ACM names)
+  const released = new Set<number>()
+  {
+    const paraEnds: number[] = []
+    ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+      for (const g of l) paraEnds.push((m.offB[p] as number) + g)
+    })
+    paraEnds.sort((x, y) => x - y)
+    const ended = new Set<string>()
+    const again: number[] = []
+    B.pages.forEach((pg, p) => {
+      for (const x of pg.points ?? []) {
+        const k = MARK_KEY.exec(x.name)
+        if (!k) continue
+        if (k[2] === 'e') ended.add(k[1]!)
+        else if (ended.has(k[1]!)) again.push((m.offB[p] as number) + x.glyph)
+      }
+    })
+    if (again.length && paraEnds.length)
+      for (let u = 0; u < ins.units.length; u++) {
+        const list = glyphsOf.get(u)
+        if (!AUTHOR_KINDS.has(ins.units[u]!.kind) || ins.units[u]!.name !== undefined || !list?.length) continue
+        let from = Number.NEGATIVE_INFINITY
+        for (const e of paraEnds) if (e <= (list[0] as number)) from = e
+        const to = paraEnds.find((e) => e > (list.at(-1) as number)) ?? Number.POSITIVE_INFINITY
+        if (again.some((g) => g >= from && g < to)) released.add(u)
+      }
+  }
+
   // ---- the instrument's units, a name's every occurrence its own member
   for (let u = 0; u < ins.units.length; u++) {
     const unit = ins.units[u]!
     const list = glyphsOf.get(u) ?? []
     const boxes = boxesOf.get(u) ?? []
+    if (released.has(u)) {
+      const mem = empty(u, unit.kind, unit.id)
+      mem.cause = 'set in a paragraph that sets a unit again'
+      members.push(mem)
+      continue
+    }
     if (unit.name === undefined) {
       members.push(place(u, list, boxes, undefined, turnedOf.get(u) ?? []))
       continue
@@ -953,7 +996,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const owned = (a: number) => {
       const c = claimedA[a] as number
       const b = m.aToB[a] as number
-      return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
+      return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0 && !released.has(unitB[b] as number))
     }
     // (the source unit a glyph of A is: its member's claim, else its partner's owner on B)
     const ownerOf = (a: number) => {
@@ -1790,6 +1833,45 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
     standing.add(x.ord)
   }
+  // (B's body and float brackets, LAYOUT_TEX's `bs<n>`, `be<n>`, `fs<n>`, `fe<n>`, each at the glyph after it: a column's body is
+  // bracketed each, a float's set apart)
+  const brackets: number[] = []
+  B.pages.forEach((pg, p) => {
+    for (const x of pg.points ?? []) if (BRACKET.test(x.name)) brackets.push((m.offB[p] as number) + x.glyph)
+  })
+  const bracketBetween = (lo: number, hi: number) => brackets.some((g) => g > lo && g <= hi)
+  // (a member of the instrument's whose first glyph TeX set right after another's last, on that one's last row, stands after it,
+  // whatever their order among the units: the front end numbers the units it cut out of what was one unit after every other
+  // unit of the source (latex-front.mjs `later`: no unit's number moves), an author block's names after an \and among them.
+  // 2611.00342v1 p1, IJCAI: the second name's unit came after the body's, the body was taken for the member before it, and the
+  // first name kept a flow of its own, laid centred on its original's middle, a hole before the next. The member before on B:
+  // the one whose last glyph is the last an instrument unit owns before its first (what stands between is no unit's, or made on
+  // A: a connector), on that one's last line after its end, in one column or in none TeX set apart (no body's or float's
+  // bracket between: a row of names over the page's middle). It moves where that member is not the one before it among the
+  // units, or moved itself: the rest of a run TeX set one after the other goes with it. Never an insert's, nor to one; nor a
+  // babel name's or to one, whose place in a flow is its binding's (below: `leads`), its unit's place among the units none)
+  for (const x of members) {
+    if (madeOnA(x) || x.bFirst < 0 || insert(x) || x.name !== undefined || standing.has(x.ord)) continue
+    let b = x.bFirst - 1
+    while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0) b--
+    const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
+    const lead = o === undefined ? undefined : members[o]
+    if (
+      !lead ||
+      lead === x ||
+      insert(lead) ||
+      lead.name !== undefined ||
+      (members[x.ord - 1] === lead && !standing.has(lead.ord))
+    )
+      continue
+    const a = lead.lines.at(-1),
+      l = x.lines[0]
+    if (!a || !l || a[0] !== l[0] || l[2] < a[3] - 0.5) continue
+    if (a[1] !== l[1] && bracketBetween(lead.bLast, x.bFirst)) continue
+    if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
+    ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
+    standing.add(x.ord)
+  }
   for (const x of members) {
     if (!madeOnA(x) || x.bLast < 0 || standing.has(x.ord)) continue
     let b = x.bLast + 1
@@ -1808,13 +1890,6 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
-  // (B's body and float brackets, LAYOUT_TEX's `bs<n>`, `be<n>`, `fs<n>`, `fe<n>`, each at the glyph after it: a column's body is
-  // bracketed each, a float's set apart)
-  const brackets: number[] = []
-  B.pages.forEach((pg, p) => {
-    for (const x of pg.points ?? []) if (BRACKET.test(x.name)) brackets.push((m.offB[p] as number) + x.glyph)
-  })
-  const bracketBetween = (lo: number, hi: number) => brackets.some((g) => g > lo && g <= hi)
   let body: number | null = null
   // (a footnote's text is set in the footnote insert, TeX's \footins, the page's notes one after the other there: the member
   // before a footnote is the footnote before it, the body between them in the stream passed over (footmisc's para sets the
@@ -2240,6 +2315,8 @@ const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
 const CALL = /^\d+c$/
 /** a unit's start or end mark: `<i>s`, `<i>e`, a heading's `h<i>…`, a cell's `t<i>…` */
 const UNIT_MARK = /^[ht]?\d+[se]$/
+/** the same, its unit's key and whether it starts or ends a setting */
+const MARK_KEY = /^([ht]?\d+)([se])$/
 /** a body's or a float's bracket in B's stream (LAYOUT_TEX) */
 const BRACKET = /^[bf][se]\d+$/
 

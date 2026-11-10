@@ -4,6 +4,7 @@
 // drawn on a laid line off with it.
 import type { El, OutPiece, Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
+import { rowLinesOf } from '../../src/lay/adapt.ts'
 import { layPage } from '../../src/lay/entry.ts'
 import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
@@ -1318,6 +1319,91 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const [fa, , fc] = ends(filled)
     expect(filled.slice(0, 3).map((m) => m.fit?.track)).toEqual([0, 0, 0])
     expect((fa![0] + fc![1]) / 2).toBeCloseTo((230 + 376) / 2, 5)
+  })
+  it('lays the names of a centred paragraph over several lines as one run, each line centred as TeX centred it (2611.00342v1)', () => {
+    // (IJCAI's \author: its names one centred paragraph TeX broke over three lines, each \and's comma the next name's stated
+    // label, a name over two lines. Laid each by itself, each name stood centred on its own original's middle with its comma
+    // before it (a hole before each comma), a name over two lines broken over both, and a name's marks alone on the last line.
+    // TeX set the paragraph as a whole: its names, commas and marks run on, each line centred on the paragraph's middle)
+    const ids = ['b', 'c', 'd'].map((c) => c.repeat(64))
+    const ln = (x0: number, x1: number, y = 700) =>
+      [1, 0, x0, x1, y, y + 7, y - 2, 72, 540, 0, 10] as Placed['lines'][number]
+    const comma = (x: number, y = 700): Placed['label'] => ({
+      kind: 'number',
+      ink: [1, x, y - 1, x + 2, y + 2, y],
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+      punct: [',', [1, x, y - 1, x + 2, y + 2, y]],
+      line: 0,
+    })
+    const name = (o: Partial<Placed>) => member({ kind: 'author', align: 'c', room: { below: 20 }, ...o })
+    // (row 1: Aa Aa, its comma, Bb Bb, its comma and Cc's first word; row 2: Cc's second word, the comma, Dd Dd: centred on 300)
+    const a = name({ ord: 0, lines: [ln(190, 250)], room: { below: 20, side: [72, 252] } })
+    const b = name({
+      ord: 1,
+      text: ids[0],
+      join: [8, 1],
+      label: comma(252),
+      lines: [ln(258, 318)],
+      room: { below: 20, side: [250, 320] },
+    })
+    const c = name({ ord: 2, text: ids[1], join: [8, 1], label: comma(320), lines: [ln(326, 410), ln(250, 290, 688)] })
+    const d = name({
+      ord: 3,
+      text: ids[2],
+      join: [8, 1],
+      label: comma(292, 688),
+      lines: [ln(298, 350, 688)],
+      room: { below: 20, side: [290, 540] },
+    })
+    const rows4 = rowsOf(
+      [
+        row([{ t: 'text', s: 'Aa' }]),
+        { ...row([{ t: 'text', s: 'Bb' }]), id: ids[0]! },
+        { ...row([{ t: 'text', s: 'Cc' }]), id: ids[1]! },
+        { ...row([{ t: 'text', s: 'Dd' }]), id: ids[2]! },
+      ],
+      true,
+    )
+    const inked: Metrics = { ...metrics(), ink: (_f, size, t) => [0.7, 0.2, (size * [...t].length) / 2] }
+    const laid = layPage({ ...part(a), flows: [[a, b, c, d]] }, rows4, rules, inked).members
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
+    // (the four short translations on the paragraph's first line, each name one line, none left on the second)
+    expect(laid.map((m) => m.lines.map((l) => l[0]))).toEqual([[700], [700], [700], [700]])
+    // (each from the one before's end, its comma before it at TeX's separation (2 pt): no hole)
+    const spans = laid.map((m) => [Math.min(...m.lines[0]![3].map((it) => it.x)), m.lines[0]![2]] as const)
+    for (let k = 1; k < 4; k++) expect(spans[k]![0]).toBeCloseTo(spans[k - 1]![1] + 2, 5)
+    // (the run centred on the paragraph's middle, 300)
+    expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
+    // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line
+    // before as TeX's \and set it, never cut between its characters; each line centred on the middle)
+    const zh = rulesFor('zh')
+    const long = (c: string) => [{ t: 'text' as const, s: c.repeat(25) }]
+    const rowsZh = rowsOf(
+      [
+        row(long('\u7532')),
+        { ...row(long('\u4e59')), id: ids[0]! },
+        { ...row(long('\u4e19')), id: ids[1]! },
+        { ...row(long('\u4e01')), id: ids[2]! },
+      ],
+      true,
+    )
+    const wide = layPage({ ...part(a), flows: [[a, b, c, d]] }, rowsZh, zh, inked).members
+    expect(wide.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
+    const [y1, y2] = [wide[0]!.lines[0]![0], wide[3]!.lines.at(-1)![0]]
+    expect(y2).toBeLessThan(y1)
+    const textOn = (m: (typeof wide)[number], y: number) =>
+      m.lines.filter((l) => l[0] === y).flatMap((l) => l[3].flatMap((it) => ('src' in it ? [] : [it.s])))
+    expect(textOn(wide[3]!, y1)).toEqual([])
+    expect(textOn(wide[3]!, y2).join('')).toBe('\u4e01'.repeat(25))
+    // (its comma on the first line, after the third name)
+    expect(wide[3]!.lines.find((l) => l[0] === y1)?.[3].some((it) => 'src' in it)).toBe(true)
+    const line2 = wide[3]!.lines.find((l) => l[0] === y2)!
+    expect((line2[1] + line2[2]) / 2).toBeCloseTo(300, 0)
+    // (a paragraph its run does not hold whole — ink of the page after its last member on its last line, which Room.side
+    // states: 2608.16117v1 p1's places, another flow's places after them on that line — is no run: its lines would take
+    // and lose its members' text beside what stays there; laid member by member, as before)
+    expect(rowLinesOf([[a, b, c, d]]).size).toBe(4)
+    expect(rowLinesOf([[a, b, c, { ...d, room: { below: 20, side: [290, 400] } }]]).size).toBe(0)
   })
   it('sets a babel name drawn on its own in the target’s word (S.names over the part); one that leads a unit is that unit’s', () => {
     // ("Abstract" centred over its column: the target's word at its size, its centre kept, its text group off)

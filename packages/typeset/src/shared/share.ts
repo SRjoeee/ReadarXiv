@@ -35,7 +35,7 @@ const onShare = (share: Share, l: LaidLine) =>
  * and no text: 2010.11929v2 p4's "Inductive bias." in Chinese ends in an ideographic full stop (U+3002) whose ink ends 0.34 em
  * into its em in Source Han Serif. `L` the layout, whose size and state a line of a run laid apart holds itself (`seg`)
  */
-function inkEndOf(line: LaidLine, L: Layout, m: FitMeasure): number {
+export function inkEndOf(line: LaidLine, L: Layout, m: FitMeasure): number {
   const end = line.x0 + line.used!
   const it = line.items?.findLast((q) => q.t.crop || (q.t.s && !q.t.space && q.t.face))
   if (!it) return end

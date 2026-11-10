@@ -459,7 +459,21 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // ------------------------------------------------ a line of several members (lineOf): its run's middle against TeX's line's
   // (its first glyph's start to its last one's end, as rowLinesOf states it), or its end where TeX set it flush right; each
   // member's drawn line on the row by its ink (its crops and raised marks with it), a member a side leaves the original's where
-  // TeX set it; tolerated and judged as a line's alignment is
+  // TeX set it; tolerated and judged as a line's alignment is. A paragraph of several lines (rowLinesOf's `rows`: IJCAI's
+  // names, 2611.00342v1): each line a side draws of its members (their lines on one baseline, by their ink) against TeX's line
+  // nearest it (the members' original lines on one baseline), the farthest off
+  /** lines on one baseline (half the size apart at most) as one: its extent and its baseline */
+  const rowsOfLines = (ls, size) => {
+    const out = []
+    for (const l of [...ls].sort((a, b) => a.y - b.y)) {
+      const r = out.find((q) => Math.abs(q.y - l.y) <= 0.5 * size)
+      if (r) {
+        r.x0 = Math.min(r.x0, l.x0)
+        r.x1 = Math.max(r.x1, l.x1)
+      } else out.push({ y: l.y, x0: l.x0, x1: l.x1 })
+    }
+    return out
+  }
   for (const line of new Set(lineOf.values())) {
     const keys = line.ords.map(keyOfPart)
     const o0 = orig.get(keys[0])?.lines[0]
@@ -469,16 +483,31 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = `line ${keys.join(', ')}`
     const how = line.align === 'r' ? "a line of several members, right: its run's end" : "a line of several members, centred: its run's midpoint"
     const at = {}
+    const tex = rowsOfLines(
+      keys.flatMap((k) => orig.get(k).lines),
+      os,
+    )
+    const off = (d, o) => (line.align === 'r' ? Math.abs(d.x1 - o.x1) : Math.abs((d.x0 + d.x1) / 2 - (o.x0 + o.x1) / 2))
     for (const [side, M] of [['today', T], ['v2', V]]) {
-      const ends = keys.map((k) => {
-        const ls = (M.get(k) ?? []).filter((l) => !l.rot)
-        if (!ls.length) return [orig.get(k).lines[0].x0, orig.get(k).lines[0].x1]
-        const l = inkOf(ls.reduce((a, b) => (Math.abs(b.y - o0.y) < Math.abs(a.y - o0.y) ? b : a)))
-        return [l.x0, l.x1]
-      })
-      const x0 = Math.min(...ends.map((e) => e[0])),
-        x1 = Math.max(...ends.map((e) => e[1]))
-      at[side] = line.align === 'r' ? Math.abs(x1 - line.x1) : Math.abs((x0 + x1) / 2 - (line.x0 + line.x1) / 2)
+      if (line.rows.length > 1) {
+        const drawn = rowsOfLines(
+          keys.flatMap((k) => {
+            const ls = (M.get(k) ?? []).filter((l) => !l.rot)
+            return ls.length ? ls.map(inkOf) : orig.get(k).lines
+          }),
+          os,
+        )
+        at[side] = Math.max(...drawn.map((d) => off(d, tex.reduce((a, b) => (Math.abs(b.y - d.y) < Math.abs(a.y - d.y) ? b : a)))))
+      } else {
+        const ends = keys.map((k) => {
+          const ls = (M.get(k) ?? []).filter((l) => !l.rot)
+          if (!ls.length) return [orig.get(k).lines[0].x0, orig.get(k).lines[0].x1]
+          const l = inkOf(ls.reduce((a, b) => (Math.abs(b.y - o0.y) < Math.abs(a.y - o0.y) ? b : a)))
+          return [l.x0, l.x1]
+        })
+        const row = line.rows[0]
+        at[side] = off({ x0: Math.min(...ends.map((e) => e[0])), x1: Math.max(...ends.map((e) => e[1])) }, row)
+      }
       if (at[side] > tol) fault(side, 'align', `${name} ${how} ${r2(at[side])} pt from TeX's line's`)
     }
     if (!keys.some((k) => T.has(k)) || !keys.some((k) => V.has(k))) continue

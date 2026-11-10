@@ -131,6 +131,105 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 2], [1]])
     expect(L.members[2]!.join).toEqual([2])
   })
+  it('chains a member to the one TeX set right before it on its row, whatever their order among the units', () => {
+    // (2611.00342v1 p1, IJCAI: one \author's names, each after an \and; the front end numbers the units cut from what was one
+    // unit after every other unit of the source (latex-front.mjs `later`), so the second name's unit came after the body's in
+    // the units' order, and taken for the member before it, the body kept the first name a flow of its own, laid centred on
+    // its original's middle, a hole before the next name. B's stream sets the second right after the first, on its row)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Ann Lee,', x: 100, y: 700 },
+          { text: 'Bo Chen,', x: 152, y: 700 },
+          { text: 'Cy Wu', x: 204, y: 700 },
+          { text: 'A body paragraph.', x: 72, y: 600 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Ann Lee,'),
+      unitOf('para', 'A body paragraph.'),
+      unitOf('author', 'Bo Chen,'),
+      unitOf('author', 'Cy Wu'),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 2, 3, 1]]), B2, align(B2, B2))
+    expect(L.flows).toEqual([[0, 2, 3], [1]])
+    expect(L.members[2]!.join).toEqual([4])
+    expect(L.members[3]!.join).toEqual([4])
+  })
+  it('leaves a babel name’s place in a flow to its binding, whatever TeX set after it (2610.21085v1 p7’s "Proof.")', () => {
+    // (a name binds the unit TeX set right after it where that unit's first glyph stands on its baseline (`leads`); a proof that
+    // opens with a formula raised off it is bound to none, and the stream's order, which no name's unit has among the units, is
+    // not read for it: the name and its proof stay as the binding left them)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Proof', x: 72, y: 700 },
+          { text: '.', x: 102, y: 700 },
+          { text: 'X', x: 110, y: 703 },
+          { text: ' holds here', x: 116, y: 700 },
+          { text: 'Body text', x: 72, y: 600 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('para', 'Body text'),
+      unitOf('theorem', 'X holds here'),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+    ]
+    const ins2 = instrumentOf(B2, units2, [[2, -1, 1, 1, 0]], [[ROLE.name, ROLE.text, ROLE.text, ROLE.text, ROLE.text]])
+    const L = locate(ins2, B2, align(B2, B2))
+    const name = L.members.find((m) => m.kind === 'name')!
+    const proof = L.members.find((m) => m.kind === 'theorem')!
+    expect(name.leads).toBeUndefined()
+    expect(L.flows.find((f) => f.includes(proof.ord))).toEqual([proof.ord])
+  })
+  it('leaves an author’s unit no member where TeX sets it in a paragraph that sets another unit again, its text the page’s', () => {
+    // (2610.22065v1 p1: acmart's reference format, one paragraph of the paper's front matter set again — the authors, the year,
+    // the title a second time —, and the author units set there alone, the block under the title written out by the paper. Each
+    // name a member, the paragraph was cut by them and laid on the original's rows, never reflowing: its first line ended at
+    // x 190 against TeX's 294. A paragraph that sets a unit again (a start point after one of its settings ended) is a
+    // template's, made of the paper's own text: an author's unit set inside it is none of its own there, its glyphs free, the
+    // paragraph's text the page's, as an ink unit's)
+    const lines = [
+      { text: 'A Title', x: 200, y: 720 },
+      { text: 'Ann Lee, Bo Chen. 2027. A Title. In Proc.', x: 72, y: 700 },
+    ]
+    const units2 = [unitOf('heading', 'A Title'), unitOf('author', 'Ann Lee'), unitOf('author', 'Bo Chen')]
+    // (the title's glyphs its first setting's; the names'; the rest of the paragraph no unit's)
+    const own = (B2: ReturnType<typeof docOf>) => {
+      const ins2 = instrumentOf(B2, units2, [[0, -1]])
+      const O = ins2.glyphs[0]!
+      for (let j = 7; j < 7 + 7; j++) O.unit[j] = 1
+      for (let j = 7 + 9; j < 7 + 16; j++) O.unit[j] = 2
+      return ins2
+    }
+    const at = 7 + 24
+    const points: [string, number][] = [
+      ['h0s', 0],
+      ['h0e', 7],
+      ['1s', 7],
+      ['1e', 14],
+      ['2s', 16],
+      ['2e', 23],
+      ['h0s', at],
+      ['h0e', at + 7],
+    ]
+    const B2 = docOf([{ lines, points }])
+    const ins2 = own(B2)
+    ins2.tex = { paragraphEnds: [[7, 7 + 41]] }
+    const L = locate(ins2, B2, align(B2, B2))
+    expect(L.members.slice(1, 3).map((m) => [m.located, m.cause])).toEqual([
+      [false, 'set in a paragraph that sets a unit again'],
+      [false, 'set in a paragraph that sets a unit again'],
+    ])
+    expect(L.groups[0]!.glyphs.slice(7, 23).every((g) => g === null)).toBe(true)
+    // (where the paragraph sets nothing again — IJCAI's names and the separators its \and sets — each name is a member, as before)
+    const ins3 = own(docOf([{ lines, points: points.slice(0, 6) }]))
+    ins3.tex = { paragraphEnds: [[7, 7 + 41]] }
+    const L3 = locate(ins3, ins3.ink, align(ins3.ink, ins3.ink))
+    expect(L3.members.slice(1, 3).map((m) => m.located)).toEqual([true, true])
+  })
   it('gives a member the ink TeX set glued after it on its row that no unit owns, its trail, which travels with its text', () => {
     // (2604.14228v3's names: the class sets each \author's text, then `$^{1,*}$` and ", " of its own; left where TeX set them,
     // they held each next name where it stood ("kept" between), every translated name laid at its original's start, a hole

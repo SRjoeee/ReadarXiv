@@ -117,6 +117,32 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const none = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
     expect(groupsOf(ownOf(none, { units: authors }), none)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '12' })
   })
+  it('takes a mark TeX set as a script glued to a unit\'s first word, apart from what stands before it, as its label (2604.14228v3)', () => {
+    // (Meta FAIR's \contributionformat sets `$^{\dagger}$Corresponding author` after ", ": no call stated (the class's
+    // \addtolist builds the list whole in the preamble), the walk back from the start reached the "†", no label's form, and left
+    // it the original's ink where it stood: the note's translation laid on from the one before, the † stood 33 pt after it. TeX
+    // set the mark as a script glued to the word (\scriptspace, no word's gap) and a word's space after the comma: the word's
+    // lead. A mark glued to the word before, a space before the next (a \thanks mark after a name), is none of the next's)
+    const notes = [{ kind: 'affiliation', src: 'These' }, { kind: 'affiliation', src: 'Corr' }]
+    const mark = (u: string, x: number, small = true) => ({ n: 0, k: 0, u, x0: x, x1: x + 3, y: small ? 704 : 700, size: small ? 6 : 10, top: 709, bottom: 702 })
+    const pageOf = (dagger: number) => {
+      const pg = page([{ pt: '0s' }, 'These', { pt: '0e' }, ',', { dx: 4 }, '#', { pt: '1s' }, 'Corr', { pt: '1e' }])
+      // (the "#" made the † a script: raised, smaller, at `dagger`)
+      const i = pg.glyphs.findIndex((g) => g.u === '#')
+      pg.glyphs[i] = { ...mark('†', dagger), n: i }
+      return pg
+    }
+    // (glued: the word's first glyph at x 49, the † ends 0.5 before it, 5.5 after the comma)
+    const glued = [pageOf(45.5)]
+    const g = ownOf(glued, { units: notes })
+    expect(groupsOf(g, glued)).toEqual({ u0: 'These,', u1: 'Corr', 'u1.l': '†' })
+    expect(g.units.get(1)?.labelKept).toBe(false)
+    // (glued to the comma before it, a word's space between it and the word: left the original's, as before)
+    const apart = [pageOf(41)]
+    const a = ownOf(apart, { units: notes })
+    expect(groupsOf(a, apart)).toEqual({ u0: 'These,', u1: 'Corr' })
+    expect(a.units.get(1)?.labelKept).toBe(true)
+  })
   it('leaves a label that is no label\'s form the original\'s ink where it stands apart (labelKept)', () => {
     const pages = [page([{ pt: '3e' }, '211', { pt: '0s' }, 'cell', { pt: '0e' }])]
     const r = ownOf(pages, { units: units('cell') })

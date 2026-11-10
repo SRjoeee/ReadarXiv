@@ -34,36 +34,43 @@ export type RowStart = {
   onLeadOf: { start: number; startY: number | undefined } | null
 }
 
+/** one of TeX's lines a run of members fills: its page, its baseline and its extent as TeX set it (its first glyph's start, the
+ *  leading member's label's where it stands first on it, to its last glyph's end) */
+export type RunRow = { page: number; baseline: number; x0: number; x1: number }
 /**
- * A line of TeX's several members of a flow share whole (each its one line, joined on it: Placed.join, nothing kept between),
- * which TeX set centred or flush right (Placed.align, as its members' own marks state it: a member made on A, an ink unit,
- * states no alignment of TeX's, nor one read off the page): its members in order, its alignment, its extent as TeX set it
- * (its first glyph's start, the leader's label's where it stands on the line, to its last glyph's end), and the room a
- * member's line may take beside it (Room.side, its column, as U.decor's widen reads it): the run's left is its first member's,
- * its right its last one's
+ * A paragraph of TeX's that several members of a flow fill whole, one after the other (each joined to the one before on the line
+ * that one ends: Placed.join, nothing of the page between them but the member's own label, which goes with it), which TeX set
+ * centred or flush right (Placed.align, as its members' own marks state it: a member made on A, an ink unit, states no
+ * alignment of TeX's, nor one read off the page): its members in order, its alignment, its lines as TeX set them (`rows`, top
+ * down: one where it is a single line), and the room a member's line may take beside it (Room.side, its column, as U.decor's
+ * widen reads it): the run's left the least of its members', its right the greatest
  */
 export type RowLine = {
   ords: readonly number[]
   align: 'c' | 'r'
-  x0: number
-  x1: number
+  rows: readonly RunRow[]
   left: number
   right: number
 }
 
-/** the room a line's run is laid in: centred, as far to either side of the line's middle as its room allows on both (U.decor's
+/** the room a line of a run is laid in: centred, as far to either side of the line's middle as its room allows on both (U.decor's
  *  widen of a centred line), never narrower than TeX's line; flush right, from its room's left to the line's end */
-export function lineRoom(line: Pick<RowLine, 'align' | 'x0' | 'x1'>, left: number, right: number): [number, number] {
-  if (line.align === 'r') return [Math.min(left, line.x0), line.x1]
+export function lineRoom(
+  align: RowLine['align'],
+  line: Pick<RunRow, 'x0' | 'x1'>,
+  left: number,
+  right: number,
+): [number, number] {
+  if (align === 'r') return [Math.min(left, line.x0), line.x1]
   const mid = (line.x0 + line.x1) / 2,
     half = Math.max((line.x1 - line.x0) / 2, Math.min(right - mid, mid - left))
   return [mid - half, mid + half]
 }
 
-/** how far a line's run laid over [lo, hi] (its first member's start to its last one's end) moves to stand as TeX set the
+/** how far a line of a run laid over [lo, hi] (its first glyph's start to its last one's end) moves to stand as TeX set the
  *  line: centred on the line's middle, or ending at its end */
-export const lineShift = (line: Pick<RowLine, 'align' | 'x0' | 'x1'>, lo: number, hi: number): number =>
-  line.align === 'r' ? line.x1 - hi : (line.x0 + line.x1) / 2 - (lo + hi) / 2
+export const lineShift = (align: RowLine['align'], line: Pick<RunRow, 'x0' | 'x1'>, lo: number, hi: number): number =>
+  align === 'r' ? line.x1 - hi : (line.x0 + line.x1) / 2 - (lo + hi) / 2
 
 /** S.rowStart: sets the first block's start, startY, onLead and flowX where the unit is laid from the row (RUN:2152) */
 export function rowStart(i: RowStartInput): RowStart {

@@ -134,6 +134,24 @@ describe('today’s ink makers in the engine package', () => {
     expect([...copy.glyph]).toEqual([...today.glyph])
     expect([...today.glyph].map((r) => r % 2)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 0])
   })
+  it('part two lines a paragraph end of TeX’s stands between, where no start of TeX’s is marked after it (2610.22065v1’s reference format)', () => {
+    // (acmart's "ACM Reference Format:" is a paragraph of its own, and the reference under it another, begun with no point of
+    // TeX's: today's read the two as one paragraph by the starts alone, the heading's line and the reference one unit)
+    const lines = [
+      { s: 'Body owned text', y: 700 },
+      { s: 'Reference Format:', y: 676 },
+      { s: 'Ann Lee and Bo Chen. 2027. On tests.', y: 664 },
+    ]
+    const end = 15 + 17
+    const pg = pageOf(lines, { points: [['bs1', 0], ['be1', end + 36]], paras: [['q1', 0]], paraEnds: [['qe2j', end, 2, 1]] })
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).map((u) => u.pieces.map((p) => (p.t === 'text' ? (p as unknown as { s: string }).s : '')).join(''))
+    }
+    expect(one(TODAY)).toEqual(['Reference Format: Ann Lee and Bo Chen. 2027. On tests.'])
+    expect(one(T as unknown as Impl)).toEqual(['Reference Format:', 'Ann Lee and Bo Chen. 2027. On tests.'])
+  })
   it('read a stack’s glyphs at one x in the stream’s order, where today’s read the float noise of their x (the one difference)', () => {
     // (2307.16209v1 p14's "s = −1/2" in a list of figures: the fraction's 1 and 2 stand at one x, 451.282, which PDF.js composes
     // as 451.28200000000004 and 451.282 on our compile's page and 451.28199999999993 and 451.282 on arXiv's; today's word order
