@@ -33,7 +33,20 @@ globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () =
 const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs')
 const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs')
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
-const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
+// (--warnings: PDF.js's warnings, the channel its recover branches tell on (a page's list ended early, a font read as none, …),
+// kept by the step whose documents were being read: arXiv's PDF for the front half (`front`), the compiles' PDFs the front half
+// reads (`compiles`), our final pass (`B`), arXiv's PDF for the back half (`A`); in <out>/warnings/<id>.json. Nothing else moves)
+const WARNINGS = process.argv.includes('--warnings')
+const warned = [], step = { now: 'front' }
+if (WARNINGS) {
+  const warn = console.warn
+  console.warn = (...a) => {
+    const s = a.map(String).join(' ')
+    if (s.startsWith('Warning: ')) warned.push([step.now, s.slice(9)])
+    else warn(...a)
+  }
+}
+const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: WARNINGS ? 1 : 0, useSystemFonts: false }
 const tasks = []
 const open = (bytes, o = LITE) => { const t = getDocument({ data: bytes.slice(), ...o, ...docOpts }); tasks.push(t); return t.promise }
 const sha = b => createHash('sha256').update(b).digest('hex')
@@ -73,7 +86,7 @@ if (typeof paperM.bibliographyKept === 'function' && paperM.bibliographyKept(pap
   if ('paper' in r) paper = r.paper
 }
 const day = await baseM.creationEpochOf(arxivDoc0)
-const textOf = async pdf => { const d = await open(pdf); return baseM.textOfPdf(d) }
+const textOf = async pdf => { const was = step.now; step.now = 'compiles'; try { const d = await open(pdf); return await baseM.textOfPdf(d) } finally { step.now = was } }
 const made = await paperM.markedOfPaper(paper, { compile, compileBudgetMs: null, engines: HOST_ENGINES, pages: async () => arxivDoc0.numPages, ...(day ? { sourceDate: day } : {}), textOf })
 const tFront = performance.now()
 const meta = await arxivDoc0.getMetadata().catch(() => null)
@@ -99,6 +112,7 @@ const parts = []
 let unitsBytes = 0
 const tIns0 = performance.now()
 if (!refusal) {
+  step.now = 'B'
   const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
   paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
   if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
@@ -112,6 +126,7 @@ if (ins) {
   // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
   // and the review; the proofs read A's pages again, as the back half read them)
   const keep = process.argv.includes('--claims') || process.argv.includes('--review')
+  step.now = 'A'
   for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
@@ -121,6 +136,8 @@ if (ins) {
   }
 }
 const tBack = performance.now()
+step.now = 'after'
+if (WARNINGS) { mkdirSync(join(OUT, 'warnings'), { recursive: true }); writeFileSync(join(OUT, 'warnings', `${id}.json`), `${JSON.stringify(warned)}\n`) }
 // ---- (--claims) the A glyphs a unit holds with no partner on B, classed (claims.mjs)
 if (tally && process.argv.includes('--claims')) {
   const { claimsOf } = await import('./claims.mjs')
