@@ -12,8 +12,7 @@
 // bundles, and so by the parity's lay of its pairs (lab/typeset/parity/v2.mjs), with no network. AXT_COVER_EX=<n>: examples
 // kept a fault (4); AXT_COVER_DBG='<tag> <ord>': that member's lit, row, words, elements, lines and pieces, a JSON line a page.
 import type { Box, Part, Placed } from '@readarxiv/format'
-import { rowPieces } from '../../src/lay/read.ts'
-import type { Laid, Metrics, Page, Rows } from '../../src/types.ts'
+import type { Laid, Metrics, Page } from '../../src/types.ts'
 
 type Line = Placed['lines'][number]
 const KEPT = 1
@@ -87,22 +86,28 @@ function piecesOnA(m: Placed, page: number, displays: readonly Box[]): Piece[] {
 /** a laid member's pieces as drawn on page `page`: each character of its lines' text, each crop, and the ink it keeps where it
  *  stands (the original's, its elements' group on or the element kept by TeX outside its text, El.keep; its label where not
  *  drawn anew; its held lines) */
-function piecesDrawn(
-  x: Laid,
-  m: Placed,
-  page: number,
-  metrics: Metrics,
-  displays: readonly Box[],
-  elOf: (piece: string) => string | undefined,
-): Piece[] {
+function piecesDrawn(x: Laid, m: Placed, page: number, metrics: Metrics, displays: readonly Box[]): Piece[] {
+  // (a crop's element: the one whose ink on A its source was cut from holds, a crop's `piece` being its piece's index in the
+  // rows the page was laid from, which the cover is not told)
+  const elOf = (src: readonly number[]) => {
+    const [x, y] = mid(src.slice(1))
+    for (const [id, e] of m.els ?? [])
+      if (
+        e.kind !== 'display' &&
+        e.ink.some(
+          (k) => k[0] === src[0] && k[1]! - 0.5 <= x && x <= k[3]! + 0.5 && k[2]! - 0.5 <= y && y <= k[4]! + 0.5,
+        )
+      )
+        return id
+    return undefined
+  }
   const out: Piece[] = []
   for (const [y, , , items] of x.lines) {
     for (const it of items) {
       if ('src' in it) {
         const [, x0, b0, x1, t0, base] = it.src
         const k = it.k || 1
-        // (a crop's `piece` is its piece's index in the row's pieces, or 'label')
-        const id = it.piece === 'label' ? 'label' : elOf(it.piece)
+        const id = it.piece === 'label' ? 'label' : elOf(it.src)
         out.push({
           kind: it.piece === 'label' ? 'label' : 'crop',
           at: [it.x + ((x1 - x0) * k) / 2, y + ((b0 + t0) / 2 - base) * k],
@@ -140,7 +145,7 @@ function piecesDrawn(
 }
 
 /** one laid page into the cover: each member lit, each of its pieces on both panes */
-export function coverOf(c: Cover, page: Page, part: Part, rows: Rows, metrics: Metrics, tag = ''): void {
+export function coverOf(c: Cover, page: Page, part: Part, metrics: Metrics, tag = ''): void {
   if (page.wait.rows.length || page.wait.faces.length) return
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
   for (const x of page.members) {
@@ -159,18 +164,12 @@ export function coverOf(c: Cover, page: Page, part: Part, rows: Rows, metrics: M
       drawn: [new Set<number>(), new Set<number>()],
     }
     c.seen.set(x.ord, seen)
-    const row = typeof m.text === 'string' ? rows.get(m.text) : undefined
-    const pieces = row?.ok ? rowPieces(m, row.content) : []
-    const elOf = (k: string) => {
-      const p = pieces[Number(k)]
-      return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : undefined
-    }
     const panes = [
       ['left', x.lit.left, piecesOnA(m, page.page, displays)],
       [
         'right',
         x.lit.right,
-        x.state === 'laid' ? piecesDrawn(x, m, page.page, metrics, displays, elOf) : piecesOnA(m, page.page, displays),
+        x.state === 'laid' ? piecesDrawn(x, m, page.page, metrics, displays) : piecesOnA(m, page.page, displays),
       ],
     ] as const
     if (process.env.AXT_COVER_DBG === `${tag} ${x.ord}`)
@@ -179,7 +178,6 @@ export function coverOf(c: Cover, page: Page, part: Part, rows: Rows, metrics: M
         JSON.stringify({
           page: page.page,
           lit: x.lit,
-          row: row?.ok ? { content: row.content, sentences: row.sentences } : null,
           words: m.words,
           els: m.els,
           lines: x.lines.map((l) => [

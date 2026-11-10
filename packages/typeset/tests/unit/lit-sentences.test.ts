@@ -213,7 +213,7 @@ describe('Laid.lit by sentence', () => {
     expect(laid.lit.left.map((bs) => holds(bs, 207, 702))).toEqual([false, true, false])
     expect(laid.lit.right.map((bs) => holds(bs, crop.x + 1, y))).toEqual([false, true, false])
     const c = newCover()
-    coverOf(c, p, part(m), rowsOf([r]), metrics, 'cut')
+    coverOf(c, p, part(m), metrics, 'cut')
     coverDone(c, 'cut')
     expect([...c.faults]).toEqual([])
   })
@@ -236,7 +236,7 @@ describe('Laid.lit by sentence', () => {
     const page = layPage(part(m), rowsOf([r]), rules, metrics)
     const faultsOf = (lit: Laid['lit']) => {
       const c = newCover()
-      coverOf(c, { ...page, members: [{ ...page.members[0]!, lit }] }, part(m), rowsOf([r]), metrics)
+      coverOf(c, { ...page, members: [{ ...page.members[0]!, lit }] }, part(m), metrics)
       coverDone(c)
       return [...c.faults.keys()].sort()
     }
@@ -305,7 +305,7 @@ describe('Laid.lit by sentence', () => {
     expect(laid.lit.right.map((bs) => holds(bs, crop.x + 1))).toEqual([false, true, false])
     expect(laid.lit.right.map((bs) => holds(bs, zx))).toEqual([true, false, false])
     const c = newCover()
-    coverOf(c, p, part(m), rowsOf([r]), metrics, 'island')
+    coverOf(c, p, part(m), metrics, 'island')
     coverDone(c, 'island')
     expect([...c.faults]).toEqual([])
   })

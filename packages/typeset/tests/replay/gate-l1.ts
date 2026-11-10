@@ -901,7 +901,7 @@ export function gateL1Pair(
         { linkFates },
       )
       out.entry.ms.push(performance.now() - t1)
-      coverOf(out.entry.cover, page, part as Part, entryRows, metrics, pair)
+      coverOf(out.entry.cover, page, part as Part, metrics, pair)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
