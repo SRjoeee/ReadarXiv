@@ -217,8 +217,12 @@ export function simpleCommands(text) {
     const c = text[i]
     if (quote !== null) {
       if (c === quote) quote = null
-      else if (quote === '"' && c === '\\' && i + 1 < text.length) word += text[++i]
-      else if (quote === '"' && c === '$' && text[i + 1] === '(') {
+      else if (quote === '"' && c === '\\' && i + 1 < text.length) {
+        // inside double quotes a backslash quotes `$`, a backquote, `"` and itself, is a line continuation before a
+        // newline, and before anything else is a backslash
+        const next = text[++i]
+        if (next !== '\n') word += '$`"\\'.includes(next) ? next : `\\${next}`
+      } else if (quote === '"' && c === '$' && text[i + 1] === '(') {
         const end = closing(text, i + 2)
         word += text.slice(i, end + 1)
         substitute(text.slice(i + 2, end))
@@ -394,7 +398,11 @@ function graphqlArguments(words, dynamic, first) {
     if (name === '--input') {
       if (dynamic[at] || value === '-') unseen = true
       else files.push(value)
-    } else if ((name === '--raw-field' || name === '--field') && value.startsWith('query=')) {
+    } else if (name === '--raw-field' || name === '--field') {
+      // (a field whose key the shell composes may be the query: `-f "$FIELD"`)
+      const eq = value.indexOf('=')
+      if (dynamic[at] && (eq < 0 || /[$`]/.test(value.slice(0, eq)))) unseen = true
+      if (!value.startsWith('query=')) continue
       const query = value.slice('query='.length)
       const typed = name === '--field'
       if (dynamic[at] || (typed && query === '@-')) unseen = true

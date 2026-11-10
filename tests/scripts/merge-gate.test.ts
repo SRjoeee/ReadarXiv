@@ -59,6 +59,9 @@ describe('simpleCommands', () => {
     expect(compound).toBe(true)
     expect(commandsOf('echo "a $(gh pr merge 5) b" `date`')[0]?.scripts).toEqual(['gh pr merge 5', 'date'])
     expect(commandsOf(`echo '$x' "$x"`)[0]?.dynamic).toEqual([false, false, true])
+    // inside double quotes a backslash quotes only what the shell says it does, and with a newline it is a line
+    // continuation that leaves nothing (#635, Codex)
+    expect(commandsOf('echo "a\\\nb" "c\\nd" "\\$x" "q\\"q"')[0]).toMatchObject({ words: ['echo', 'ab', 'c\\nd', '$x', 'q"q'], dynamic: [false, false, false, false, false] })
     // a process substitution is a word the shell decides, and a script (#635, Codex)
     expect(commandsOf('diff <(gh pr merge 5) >(cat) file')[0]).toMatchObject({ words: ['diff', '$(…)', '$(…)', 'file'], dynamic: [false, true, true, false], scripts: ['gh pr merge 5', 'cat'] })
   })
@@ -135,6 +138,7 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).map(m => m.ref), text).toEqual(['411'])
     }
+    expect(merge('bash -c "gh pr mer\\\nge 411 \\\n  --merge"')).toMatchObject({ ref: '411', unreadable: false })
     // the other ways a line hands a shell its commands on the standard input: a here-string (#635, Codex), a pipe
     for (const text of [
       `bash <<< 'gh pr merge 411 --merge'`,
@@ -420,6 +424,10 @@ describe('mergesIn', () => {
     expect(merges(`gh api graphql -f query='query($id: ID!) { node(id: $id) { id } }' -F id="$ID"`)).toEqual([])
     expect(merges('gh api graphql -f query=@literal')).toEqual([])
     // a query the line does not show, and a body file the line does not name, are a request nobody can read
+    // (a field the shell composes whole hides its key too: #635, Codex; one whose key is in sight and is not `query` hides nothing)
+    expect(merges(`FIELD='query=mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql -f "$FIELD"`).at(-1)).toMatchObject({ unreadable: true })
+    expect(merge('gh api graphql --raw-field "$FIELD"').unreadable).toBe(true)
+    expect(merges(`gh api graphql -f query='query { viewer { login } }' -F "n=$N" -f after="$CURSOR"`)).toEqual([])
     for (const text of ['gh api graphql -f query="$Q"', 'Q=$(cat merge.graphql); gh api graphql -f query="$Q"', 'gh api graphql --input "$FILE"', 'gh api graphql -F query=@$f', "gh api graphql --input - <<'EOF'\n{}\nEOF", 'gh api graphql --input <(cat mutation.json)']) {
       expect(merges(text).at(-1), text).toMatchObject({ unreadable: true })
     }
@@ -593,6 +601,7 @@ describe('against the shell itself', () => {
     'bash <<< "gh pr merge 5 -R o/r"; echo "gh pr merge 6 -R o/r" | bash',
     'cat <(echo x) > /dev/null; gh pr merge 7 -R o/r',
     "bash <<'EOF' | cat\ngh pr merge 4 -R o/r\nEOF",
+    'bash -c "gh pr mer\\\nge 3 -R o/r"',
     '(true; cd a; true); gh pr merge 5',
     '(cd a && gh pr merge 6); gh pr merge 7',
     'cd a && (cd b; gh pr merge 8) && gh pr merge 9',
