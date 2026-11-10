@@ -660,6 +660,24 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.why).toBeNull()
     expect(t!.els.map((e) => [e.kind, e.boxes])).toEqual([['cite', [0]]])
   })
+  it('makes a framed citation an element where its brackets’ and commas’ ink crosses the frame (2609.19644v1 p58)', () => {
+    // (Preview's link frame round "(Garza et al.," is tight on the words: the bracket's ink 0.7 pt left of it, the comma's
+    // 0.4 pt right; the letters' ink inside)
+    const { page, fig } = pageOf([
+      body('the quick brown fox jumps over'),
+      body('lazy dogs (Garza et al., 2021) run'),
+      body('away from it'),
+    ])
+    const G = page.glyphs as Glyph[]
+    const a = G.findIndex((g) => g.u === '(')
+    const c = G.findIndex((g, i) => g.u === ',' && i > a)
+    const frame = rect(G[a]!.x0 + 0.7, 683, G[c]!.x1 - 0.4, 695)
+    fig.units[1]!.why = 'crowded'
+    fig.met.set(1, { items: [boxMet(0, frame)], under: null })
+    const [t] = figureLinesOf([page], fig, () => false, null)
+    expect(t!.why).toBeNull()
+    expect(t!.els.map((e) => [e.kind, e.glyphs.map((g) => G[g]!.u).join('')])).toEqual([['cite', '(Garzaetal.,']])
+  })
   it('reads a frame its paragraph’s runs each met once: its box on its element once', () => {
     const { page, fig } = pageOf([
       body('the quick brown fox jumps over'),

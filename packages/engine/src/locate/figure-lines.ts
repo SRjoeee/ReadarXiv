@@ -885,17 +885,18 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
     }
     const idx = held.map((g) => at.get(g)!).sort((a, b) => a - b)
     const contiguous = idx.length > 0 && idx.at(-1)! - idx[0]! + 1 === idx.length
-    // (a decoration holds whole words: its stretch's ink inside it, and the stretch from a word's start to a word's end, a word
-    // space or a mark that is no letter or digit beside it, its line's end; never a letter of a word, a plot's marker over it. A
-    // tone under the stretch is a line tall at most (as a chip's fill, BAND_EM twice), a highlight's: a plot's shaded column
-    // under a label's end is the plot's (2610.21547v1 p14's "bound m = 1"))
+    // (a decoration holds whole words: its stretch's letters' and digits' ink inside it (a bracket or a comma at its edge may
+    // cross it by its side bearing: Preview's link frames are tight on the words, 2609.19644v1 p58), and the stretch from a word's
+    // start to a word's end, a word space or a mark that is no letter or digit beside it, its line's end; never a letter of a
+    // word, a plot's marker over it. A tone under the stretch is a line tall at most (as a chip's fill, BAND_EM twice), a
+    // highlight's: a plot's shaded column under a label's end is the plot's (2610.21547v1 p14's "bound m = 1"))
     if (
       held.length &&
       !others &&
       contiguous &&
       held.length < textGs.length &&
       (!it.ground || y1 - y0 <= 2 * BAND_EM * glyphs[held[0]!]!.size) &&
-      held.every((j) => inside(glyphs[j]!, x0, y0, x1, y1)) &&
+      held.every((j) => !/[\p{L}\p{N}]/u.test(glyphs[j]!.u) || inside(glyphs[j]!, x0, y0, x1, y1)) &&
       wordBounded(textGs, idx, glyphs)
     ) {
       decorate(
