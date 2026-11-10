@@ -437,6 +437,36 @@ describe("a unit's size today bought past TeX's room on one page is today's faul
   })
 })
 
+describe("line-count: a unit a line shorter where a URL's line ends are joins (the coordinator's ruling of 2026-11-10, url-join)", () => {
+  // (1810.04805v2-zh p14 t237: a paragraph holding two URLs TeX broke over lines; the engine reads each line end inside one as a
+  // join, and the paragraph's translation takes a line fewer than today's, 5 for 6, the original's 7. A count is the ruling's
+  // only where the pair laid with those line ends read as spaces again, v2.mjs's lay over unjoin.mjs, `unjoined`, sets today's
+  // count on the page)
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const counts = (p: { diffs: { flag: string }[] }) => (of('line-count')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
+  const ys = Array.from({ length: 7 }, (_, i) => 700 - 12 * i)
+  const facts = [{ ord: 237, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)) }]
+  const laidK = (k: number) => ({ ord: 237, state: 'laid', lines: ys.slice(0, k).map((y) => [y, 72, 300, []]), lit: { left: [], right: [], own: [] } })
+  const drawn = (k: number) => ys.slice(0, k).map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
+  /** the original's 7 lines, today's 6, v2's 5; `unjoined`: v2's count with the URLs' line ends read as spaces, none unrecorded */
+  const page = (unjoined?: number) => {
+    const v2 = Object.assign(
+      v2Of({ members: [laidK(5)], facts, today: { 237: { today: 237 } } }),
+      unjoined === undefined ? {} : { unjoined: { [N]: { 237: unjoined } } },
+    )
+    return measure(v2, sides(237, drawn(6), drawn(5)))
+  }
+  it("v2's count other than today's where the line ends read as spaces give today's: the ruling's, not worse", () => {
+    expect(counts(page(6))).toEqual([['t237 para', false, 'ruling']])
+  })
+  it("the line ends read as spaces giving v2's own count (the joins not its cause): worse", () => {
+    expect(counts(page(5))).toEqual([['t237 para', true, 'today']])
+  })
+  it('no lay with the line ends read as spaces recorded: worse', () => {
+    expect(counts(page())).toEqual([['t237 para', true, 'today']])
+  })
+})
+
 describe("lead: a paragraph set tighter than the original's leading while its block has room (1810.04805 p8, 2010.11929 p5)", () => {
   // (a paragraph of 4 lines on A at 10 pt, 12 pt apart; each side lays 3 lines at 10 pt: today 12 apart, v2 10 apart, its last
   // line 16 pt over the original's last, a line and more of room left)

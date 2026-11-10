@@ -12,7 +12,7 @@ import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.types.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
-import type { Row, RowLine } from '../shared/row-start.ts'
+import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
 import { blocks as blocksOf, type LineInfo } from '../unit/blocks.ts'
 import type { Breaks } from '../unit/breaks.ts'
@@ -189,14 +189,18 @@ export function sharedPaper(flows: readonly (readonly Placed[])[], page: number)
 }
 
 /**
- * The lines of TeX's that several members of a flow share whole, set centred or flush right (RowLine), by ord: each member of
- * one on its one line, joined to the one before on it (Placed.join on its baseline), nothing of the page kept between them (no
- * join kept: what stays there would stay inside the run), no name among them (S.names sets a babel name on its own, or as the
- * lead of the member it binds), no cell nor figure text (set in boxes of their own). Its alignment is TeX's: the one its
- * members' own marks state (Placed.align where `read` holds no 'align'), all alike; a member made on A (an ink unit: text TeX
- * set that no unit owns, amsart's "AND" between two names) states none of TeX's for the line and takes the line's. A line
- * TeX set justified or flush left needs nothing: its members run on from its first one's start already (S.rowStart). Its
- * extent is TeX's: its first glyph's start (the first member's label's, where it stands on the line) to its last one's end
+ * The paragraphs of TeX's that several members of a flow fill whole, set centred or flush right (RowLine), by ord: each member
+ * after the first on the line the one before ends (Placed.join on its baseline), its lines TeX's next lines of the paragraph,
+ * one under the other; nothing of the page between two of them there but the second's own label, which goes with it (what
+ * stays there would stay inside the run: a join kept by other ink, the one's Room.side not reaching the other); no name among
+ * them (S.names sets a babel name on its own, or as the lead of the member it binds), no cell nor figure text (set in boxes of
+ * their own). Its alignment is TeX's: the one its members' own marks state (Placed.align where `read` holds no 'align'), all
+ * alike; a member made on A (an ink unit: text TeX set that no unit owns, amsart's "AND" between two names) states none of
+ * TeX's for the line and takes the line's. A line TeX set justified or flush left needs nothing: its members run on from its
+ * first one's start already (S.rowStart). Its rows are TeX's lines, each from its first glyph's start (a member's label's,
+ * where it stands first on it) to its last one's end: IJCAI's names, one centred paragraph over three lines, each \and's comma
+ * the next name's label, a name over two lines (2611.00342v1 p1). A paragraph of several lines is the run's whole, nothing of
+ * the page before its first member nor after its last on their lines
  */
 export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, Omit<RowLine, 'left' | 'right'>> {
   const out = new Map<number, Omit<RowLine, 'left' | 'right'>>()
@@ -204,6 +208,23 @@ export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, O
     const l = a.lines.at(-1),
       f = b.lines[0]
     return !!b.join && !!l && !!f && l[0] === f[0] && Math.abs(l[4] - f[4]) < 0.05
+  }
+  // (its label standing on its first line, before its text)
+  const labelFirst = (m: Placed): number[] | null => {
+    const lb = m.label,
+      l = m.lines[0]
+    if (!lb || !l) return null
+    const on = lb.line !== undefined ? lb.line === 0 : lb.ink[0] === l[0] && Math.abs(lb.ink[5] - l[4]) < 0.05
+    return on ? lb.ink : null
+  }
+  // (a join kept by something of the page other than the member's own label: the ink beside the one before stops short of the
+  // label, and the ink beside the member short of the one before's end, both as Room.side states them, to the part's hundredth)
+  const keptOther = (a: Placed, b: Placed) => {
+    if (!b.join?.[1]) return false
+    const lb = labelFirst(b),
+      end = a.lines.at(-1)?.[3]
+    if (!lb || end === undefined) return true
+    return !((b.room.side && b.room.side[0] >= end - 0.01) || (a.room.side && a.room.side[1] <= lb[1]! + 0.01))
   }
   const ink = new Set(INK_UNIT_KINDS)
   for (const flow of flows)
@@ -216,27 +237,52 @@ export function rowLinesOf(flows: readonly (readonly Placed[])[]): Map<number, O
       if (
         row.some(
           (m, q) =>
-            m.lines.length !== 1 ||
             m.why ||
             m.kind === 'name' ||
             m.kind === 'cell' ||
             m.kind === 'figure' ||
-            (q > 0 && m.join?.[1]),
+            (q > 0 && keptOther(row[q - 1]!, m)),
         )
       )
         continue
       const told = row.filter((m) => !ink.has(m.kind) && !(m.read ?? []).includes('align')).map((m) => m.align)
       const align = told[0]
       if ((align !== 'c' && align !== 'r') || told.some((a) => a !== align)) continue
-      const l0 = row[0]!.lines[0]!,
-        lb = row[0]!.label?.ink
-      const onLine = !!lb && lb[0] === l0[0] && (row[0]!.label!.line === 0 || Math.abs(lb[5] - l0[4]) < 0.05)
-      const line = {
-        ords: row.map((m) => m.ord),
-        align,
-        x0: onLine ? Math.min(l0[2], lb![1]) : l0[2],
-        x1: row.at(-1)!.lines[0]![3],
-      } as const
+      // (its rows: the first member's lines, then each member's lines after its first, each TeX's next line under the one before)
+      const rows: RunRow[] = []
+      let lines = true
+      for (const [q, m] of row.entries())
+        m.lines.forEach((l, i) => {
+          const at = q > 0 && i === 0 ? rows.at(-1)! : undefined
+          if (!at) {
+            const up = rows.at(-1)
+            if (up && (l[0] !== up.page || l[4] > up.baseline - 0.05)) lines = false
+            rows.push({ page: l[0], baseline: l[4], x0: l[2], x1: l[3] })
+          } else {
+            at.x0 = Math.min(at.x0, l[2])
+            at.x1 = Math.max(at.x1, l[3])
+          }
+          const lb = i === 0 ? labelFirst(m) : null
+          if (lb) rows.at(-1)!.x0 = Math.min(rows.at(-1)!.x0, lb[1]!)
+        })
+      if (!lines) continue
+      // (a paragraph of several lines is the run's whole: nothing of the page before its first member on its first line nor after
+      // its last one on its last line, as their Room.side states it, to their column's edge. Its lines are laid anew, its members'
+      // text moving from one to another: beside ink that stays there it would take or lose text under it. 2608.16117v1 p1's
+      // places, another flow's after them on their last line. One line keeps its members on it, its middle TeX's: as before)
+      const a = row[0]!,
+        z = row.at(-1)!
+      if (
+        rows.length > 1 &&
+        !(
+          a.room.side &&
+          a.room.side[0] <= a.lines[0]![7] + 0.01 &&
+          z.room.side &&
+          z.room.side[1] >= z.lines.at(-1)![8] - 0.01
+        )
+      )
+        continue
+      const line = { ords: row.map((m) => m.ord), align, rows } as const
       for (const m of row) out.set(m.ord, line)
     }
   return out

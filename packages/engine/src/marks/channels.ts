@@ -62,6 +62,74 @@ export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
   }
   return new Map([...out].sort((a, b) => a[0] - b[0]))
 }
+/**
+ * The alignment the skips in force state of each unit TeX set only in boxes (its every AXT-ALIGN record an \hbox's, `h`: ICML's
+ * \icmlauthor sets each name in \mbox{\bf #1}), where they stretch on a side: c, l or r (alignCode, as a paragraph's). The box is
+ * no paragraph, and readAlign takes it for nothing: what the skips say of the line it stands in, boxedAlignOf holds against the
+ * paragraph's end. None where the skips stretch on neither side (an \hbox in a justified paragraph, a box in vertical mode with
+ * no skips: nothing stated), nor where two of its records state two, nor for a unit set in a table's cell (AXT-CELL: the cell's
+ * line, which readAlign reads by its column's class)
+ */
+export function readBoxAlign(log: string): Map<number, 'l' | 'c' | 'r'> {
+  const seen = new Map<number, 'j' | 'l' | 'c' | 'r' | false>()
+  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  for (const m of text.matchAll(
+    /^AXT-ALIGN [ht]?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm,
+  )) {
+    const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number) as [number, number, number, number, number, number]
+    if (!v.every(Number.isFinite)) continue
+    const id = Number(m[1])
+    const code = m[2] === 'h' ? alignCode(...v) : false
+    seen.set(id, seen.has(id) && seen.get(id) !== code ? false : code)
+  }
+  for (const m of text.matchAll(/^AXT-CELL (\d{1,9}) [0-5] *$/gm)) seen.set(Number(m[1]), false)
+  const out = new Map<number, 'l' | 'c' | 'r'>()
+  for (const [id, c] of [...seen].sort((a, b) => a[0] - b[0])) if (c && c !== 'j') out.set(id, c)
+  return out
+}
+/** a page of B as the adapter holds it: its points in stream order, its paragraphs' starts (`q<n>`) and ends (`qe<n><code>`,
+ *  each with the count of the page's points before it) */
+export type ParaPage = {
+  points: readonly { name: string; glyph: number }[]
+  paras?: readonly { name: string; glyph: number }[]
+  paraEnds?: readonly { name: string; glyph: number; point: number }[]
+}
+/** a body's or a float's bracket (LAYOUT_TEX's `bs<n>`, `be<n>`, `fs<n>`, `fe<n>`), a cell's start or end mark */
+const NO_LINE = /^(?:[bf][se]\d+|t\d+[se])$/
+/**
+ * The alignments readBoxAlign reads that the paragraph the box stands in states too: the first paragraph end on the unit's end
+ * mark's page after it (`qe<n><code>`, its code TeX's alignment of the paragraph), with nothing between but units' marks and
+ * glyphs (no paragraph begun, no body's or float's bracket, no cell's mark: else the box stands in no line of that paragraph,
+ * a box in vertical mode, a table's cell), stating the same code. By unit index, the unit's end mark `<i>e` (a heading's
+ * `h<i>e`). The two are TeX's own statements of the line: the skips in force where the box was set and the paragraph's alignment
+ * where TeX ended it
+ */
+export function boxedAlignOf(
+  boxed: ReadonlyMap<number, 'l' | 'c' | 'r'>,
+  pages: readonly ParaPage[],
+): Map<number, 'l' | 'c' | 'r'> {
+  const out = new Map<number, 'l' | 'c' | 'r'>()
+  if (!boxed.size) return out
+  const at = new Map<string, [number, number]>()
+  pages.forEach((pg, p) => {
+    pg.points.forEach((x, k) => {
+      if (/^h?\d+e$/.test(x.name) && !at.has(x.name)) at.set(x.name, [p, k])
+    })
+  })
+  for (const [id, code] of boxed) {
+    const where = at.get(`${id}e`) ?? at.get(`h${id}e`)
+    if (!where) continue
+    const [p, k] = where
+    const pg = pages[p]!
+    const from = pg.points[k]!.glyph
+    const end = [...(pg.paraEnds ?? [])].filter((e) => e.point > k).sort((a, b) => a.point - b.point)[0]
+    if (!end) continue
+    if (pg.points.slice(k + 1, end.point).some((x) => NO_LINE.test(x.name))) continue
+    if ((pg.paras ?? []).some((q) => q.glyph > from && q.glyph < end.glyph)) continue
+    if (/^qe\d+([cjlr])$/.exec(end.name)?.[1] === code) out.set(id, code)
+  }
+  return out
+}
 const TEX_PT = /^(-?\d+(?:\.\d+)?)pt$/
 const BP_PER_PT = 72 / 72.27
 /** the paper's \lineskip and \lineskiplimit in PDF units from the probe's row (marks.mjs readSkipProbe) */

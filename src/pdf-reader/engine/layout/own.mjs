@@ -295,6 +295,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     return 0
   }
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
+  // (a unit whose call the marked compile states, an author's (latex-front.mjs \axtcall: the point `<i>c` before the command or
+  // the \and that opens its block): its lead is what TeX set between that point and its start, its label whatever its form but a
+  // word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark before, ICML's
+  // marks after a name were the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
+  const stated = new Set()
   for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
     // unmarked cell's)
@@ -315,6 +320,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
       if (END.test(X.name)) break
+      if (X.name === `${id}c`) { stated.add(id); break }
       // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
       // or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) { if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p'); lead.glyphs = []; continue }
@@ -603,6 +609,24 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     }
     return false
   }
+  /** whether a unit's lead is a mark TeX set right before its first word: a script (each glyph smaller than the word's first and
+   *  off its baseline) of no letter, glued to that glyph (no word's gap between: a fifth of an em, the label's word end above)
+   *  and a word's gap or more after what stands before it on its line. TeX set it as the word's, whatever its symbol: Meta FAIR's
+   *  \\contributionformat sets `$^{\\dagger}$Corresponding author` after the list's ", " (2604.14228v3 p1), the "†" no label's
+   *  form, left the original's ink 33 pt after the note's translation. A mark glued to the word before, a space before this one
+   *  (a \\thanks mark after a name), is none of this one's */
+  function gluedMark(lead, id) {
+    const t = textOf.get(id)
+    if (!t?.s) return false
+    const [p] = t.s, pg = pages[p - 1], F = pg.glyphs[pt(t.s).glyph]
+    if (!F || lead.some(([q]) => q !== p)) return false
+    const G = lead.map(([, i]) => pg.glyphs[i])
+    if (/\p{L}/u.test(labelText(G.map(g => g.u ?? '').join(''))) || !G.every(g => g.size < F.size && Math.abs(g.y - F.y) > 0.01)) return false
+    const gap = (a, b) => b.x0 - a.x1 >= 0.2 * Math.max(a.size, b.size)
+    if (gap(G.at(-1), F)) return false
+    const before = lead[0][1] > 0 ? pg.glyphs[lead[0][1] - 1] : null
+    return !before || !/\S/.test(before.u ?? '') || Math.abs(before.y - F.y) >= 0.5 * Math.max(before.size, F.size) || gap(before, G[0])
+  }
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
@@ -615,7 +639,10 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
       // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
       // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
-      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
+      // (a lead a call states, set after the author's call, is the author's label whatever its form — a "†" before the name —, but
+      // a word the class sets there, no label's form, llncs' and IJCAI's " and " before the last author: left the original's ink
+      // where it stands and so to the ink units, translated as before, never the author's label, which kept it English)
+      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars))) && !(stated.has(id) && !/\p{L}/u.test(labelText(chars))) && !gluedMark(lead, id)) {
         if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
         for (const [p, i] of lead) gOwn[p - 1][i] = null
         u.groups.delete(`u${id}.l`)

@@ -131,6 +131,105 @@ describe('locate', () => {
     expect(L.flows).toEqual([[0, 2], [1]])
     expect(L.members[2]!.join).toEqual([2])
   })
+  it('chains a member to the one TeX set right before it on its row, whatever their order among the units', () => {
+    // (2611.00342v1 p1, IJCAI: one \author's names, each after an \and; the front end numbers the units cut from what was one
+    // unit after every other unit of the source (latex-front.mjs `later`), so the second name's unit came after the body's in
+    // the units' order, and taken for the member before it, the body kept the first name a flow of its own, laid centred on
+    // its original's middle, a hole before the next name. B's stream sets the second right after the first, on its row)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Ann Lee,', x: 100, y: 700 },
+          { text: 'Bo Chen,', x: 152, y: 700 },
+          { text: 'Cy Wu', x: 204, y: 700 },
+          { text: 'A body paragraph.', x: 72, y: 600 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('author', 'Ann Lee,'),
+      unitOf('para', 'A body paragraph.'),
+      unitOf('author', 'Bo Chen,'),
+      unitOf('author', 'Cy Wu'),
+    ]
+    const L = locate(instrumentOf(B2, units2, [[0, 2, 3, 1]]), B2, align(B2, B2))
+    expect(L.flows).toEqual([[0, 2, 3], [1]])
+    expect(L.members[2]!.join).toEqual([4])
+    expect(L.members[3]!.join).toEqual([4])
+  })
+  it('leaves a babel name’s place in a flow to its binding, whatever TeX set after it (2610.21085v1 p7’s "Proof.")', () => {
+    // (a name binds the unit TeX set right after it where that unit's first glyph stands on its baseline (`leads`); a proof that
+    // opens with a formula raised off it is bound to none, and the stream's order, which no name's unit has among the units, is
+    // not read for it: the name and its proof stay as the binding left them)
+    const B2 = docOf([
+      {
+        lines: [
+          { text: 'Proof', x: 72, y: 700 },
+          { text: '.', x: 102, y: 700 },
+          { text: 'X', x: 110, y: 703 },
+          { text: ' holds here', x: 116, y: 700 },
+          { text: 'Body text', x: 72, y: 600 },
+        ],
+      },
+    ])
+    const units2 = [
+      unitOf('para', 'Body text'),
+      unitOf('theorem', 'X holds here'),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+    ]
+    const ins2 = instrumentOf(B2, units2, [[2, -1, 1, 1, 0]], [[ROLE.name, ROLE.text, ROLE.text, ROLE.text, ROLE.text]])
+    const L = locate(ins2, B2, align(B2, B2))
+    const name = L.members.find((m) => m.kind === 'name')!
+    const proof = L.members.find((m) => m.kind === 'theorem')!
+    expect(name.leads).toBeUndefined()
+    expect(L.flows.find((f) => f.includes(proof.ord))).toEqual([proof.ord])
+  })
+  it('leaves an author’s unit no member where TeX sets it in a paragraph that sets another unit again, its text the page’s', () => {
+    // (2610.22065v1 p1: acmart's reference format, one paragraph of the paper's front matter set again — the authors, the year,
+    // the title a second time —, and the author units set there alone, the block under the title written out by the paper. Each
+    // name a member, the paragraph was cut by them and laid on the original's rows, never reflowing: its first line ended at
+    // x 190 against TeX's 294. A paragraph that sets a unit again (a start point after one of its settings ended) is a
+    // template's, made of the paper's own text: an author's unit set inside it is none of its own there, its glyphs free, the
+    // paragraph's text the page's, as an ink unit's)
+    const lines = [
+      { text: 'A Title', x: 200, y: 720 },
+      { text: 'Ann Lee, Bo Chen. 2027. A Title. In Proc.', x: 72, y: 700 },
+    ]
+    const units2 = [unitOf('heading', 'A Title'), unitOf('author', 'Ann Lee'), unitOf('author', 'Bo Chen')]
+    // (the title's glyphs its first setting's; the names'; the rest of the paragraph no unit's)
+    const own = (B2: ReturnType<typeof docOf>) => {
+      const ins2 = instrumentOf(B2, units2, [[0, -1]])
+      const O = ins2.glyphs[0]!
+      for (let j = 7; j < 7 + 7; j++) O.unit[j] = 1
+      for (let j = 7 + 9; j < 7 + 16; j++) O.unit[j] = 2
+      return ins2
+    }
+    const at = 7 + 24
+    const points: [string, number][] = [
+      ['h0s', 0],
+      ['h0e', 7],
+      ['1s', 7],
+      ['1e', 14],
+      ['2s', 16],
+      ['2e', 23],
+      ['h0s', at],
+      ['h0e', at + 7],
+    ]
+    const B2 = docOf([{ lines, points }])
+    const ins2 = own(B2)
+    ins2.tex = { paragraphEnds: [[7, 7 + 41]] }
+    const L = locate(ins2, B2, align(B2, B2))
+    expect(L.members.slice(1, 3).map((m) => [m.located, m.cause])).toEqual([
+      [false, 'set in a paragraph that sets a unit again'],
+      [false, 'set in a paragraph that sets a unit again'],
+    ])
+    expect(L.groups[0]!.glyphs.slice(7, 23).every((g) => g === null)).toBe(true)
+    // (where the paragraph sets nothing again — IJCAI's names and the separators its \and sets — each name is a member, as before)
+    const ins3 = own(docOf([{ lines, points: points.slice(0, 6) }]))
+    ins3.tex = { paragraphEnds: [[7, 7 + 41]] }
+    const L3 = locate(ins3, ins3.ink, align(ins3.ink, ins3.ink))
+    expect(L3.members.slice(1, 3).map((m) => m.located)).toEqual([true, true])
+  })
   it('gives a member the ink TeX set glued after it on its row that no unit owns, its trail, which travels with its text', () => {
     // (2604.14228v3's names: the class sets each \author's text, then `$^{1,*}$` and ", " of its own; left where TeX set them,
     // they held each next name where it stood ("kept" between), every translated name laid at its original's start, a hole
@@ -166,6 +265,195 @@ describe('locate', () => {
     // (the QED box past the proof's skip stays: no trail, in no group)
     expect(proof.elements).toEqual([])
     expect(L.groups[0]!.glyphs.at(-1)).toBeNull()
+  })
+  it('gives an author’s member the ink TeX set between its end and the next author call, whatever the gap', () => {
+    // (2611.03953v2 p1, ICML: \icmlauthor sets each name, then \, and its marks \textsuperscript{1\,}…: the thin space before
+    // and between the marks, 1.66 pt, is past a word's gap (WORD_GAP, 0.12 em), and the marks were no one's, left behind the
+    // name's translation. The marked compile states where each author's call begins (latex-front.mjs \axtcall, the point
+    // `<i>c` before the call's command or the \and that opens its block): what stands before it is the author before's)
+    const lines = [
+      { text: 'Siyuan Wang', x: 72, y: 700 },
+      { text: '1', x: 72 + 66 + 1.66, y: 703.6, size: 7 },
+      { text: '2', x: 72 + 66 + 1.66 + 4.2 + 1.66, y: 703.6, size: 7 },
+      { text: '3', x: 72 + 66 + 2 * (1.66 + 4.2) + 1.66, y: 703.6, size: 7 },
+      { text: 'Jiacheng Lu', x: 72 + 66 + 3 * (1.66 + 4.2) + 6.64, y: 700 },
+    ]
+    const units2 = [unitOf('author', 'Siyuan Wang'), unitOf('author', 'Jiacheng Lu')]
+    const at = (points: [string, number][]) => {
+      const B2 = docOf([{ lines, points }])
+      return locate(instrumentOf(B2, units2, [[0, -1, -1, -1, 1]]), B2, align(B2, B2))
+    }
+    const trail = (L: ReturnType<typeof locate>) => L.members[0]!.elements.map(([k, e]) => [k, e.copy, e.trail])
+    // (the call before the third mark: the two marks before it the first author's, the third the next author's lead)
+    expect(
+      trail(
+        at([
+          ['0e', 11],
+          ['1c', 13],
+          ['1s', 14],
+        ]),
+      ),
+    ).toEqual([['~', '12', 1]])
+    // (the call right before the next name: every mark the first author's)
+    expect(
+      trail(
+        at([
+          ['0e', 11],
+          ['1c', 14],
+          ['1s', 14],
+        ]),
+      ),
+    ).toEqual([['~', '123', 1]])
+    // (no call stated: the word's gap rule, as before; and a call point past the next unit's start is none of this run)
+    expect(
+      trail(
+        at([
+          ['0e', 11],
+          ['1s', 14],
+        ]),
+      ),
+    ).toEqual([])
+    expect(
+      trail(
+        at([
+          ['0e', 11],
+          ['1s', 14],
+          ['2c', 25],
+        ]),
+      ),
+    ).toEqual([])
+  })
+  it('leaves a row of another line before the next call no trail of the member before it (1706.03762v7’s e-mails)', () => {
+    // (NeurIPS' block: a name, its place, its e-mail on a row of its own, then \And; the e-mail, no unit's, stood between the
+    // place's end mark and the next call, and taken as the place's trail it was laid after the place's translation, the place
+    // two lines at 8.97 pt where TeX set one at 9.96. What TeX set on the member's last line is its trail, no other row)
+    const lines = [
+      { text: 'University of Toronto', x: 72, y: 700 },
+      { text: '1', x: 72 + 126 + 1.66, y: 703.6, size: 7 },
+      { text: 'a@b.org', x: 72, y: 688 },
+      { text: 'Lukasz Kaiser', x: 300, y: 712 },
+    ]
+    const units2 = [unitOf('affiliation', 'University of Toronto'), unitOf('author', 'Lukasz Kaiser')]
+    const B2 = docOf([
+      {
+        lines,
+        points: [
+          ['0e', 21],
+          ['1c', 29],
+          ['1s', 29],
+        ],
+      },
+    ])
+    const L = locate(instrumentOf(B2, units2, [[0, -1, -1, 1]]), B2, align(B2, B2))
+    expect(L.members[0]!.elements.map(([k, e]) => [k, e.copy, e.trail])).toEqual([['~', '1', 1]])
+  })
+  it('gives the last author of stated calls the ink TeX set on its line before its paragraph’s end, whatever the gap', () => {
+    // (2611.03953v2 p1: the last \icmlauthor's marks, "2 †", a thin space after "Zuo Bai", no call after them: the paragraph TeX
+    // ends there (`qe3c`) is where its run ends, as the next call is where any other author's does)
+    const lines = [
+      { text: 'Zuo Bai', x: 72, y: 700 },
+      { text: '2', x: 72 + 42 + 1.66, y: 703.6, size: 7 },
+      { text: 'Body text.', x: 72, y: 676 },
+    ]
+    const units2 = [unitOf('author', 'Zuo Bai'), unitOf('para', 'Body text.')]
+    const at = (points: [string, number][], ends: number[], marks = lines) => {
+      const B2 = docOf([{ lines: marks, points }])
+      const ins = instrumentOf(B2, units2, [[0, -1, 1]])
+      ins.tex = { ...ins.tex, paragraphEnds: [ends] }
+      return locate(ins, B2, align(B2, B2))
+    }
+    const trail = (L: ReturnType<typeof locate>) => L.members[0]!.elements.map(([k, e]) => [k, e.copy, e.trail])
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [8],
+        ),
+      ),
+    ).toEqual([['~', '2', 1]])
+    // (no call of its own stated, or the paragraph's end past the next unit's start: the word's gap rule, as before)
+    expect(
+      trail(
+        at(
+          [
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [8],
+        ),
+      ),
+    ).toEqual([])
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 8],
+          ],
+          [12],
+        ),
+      ),
+    ).toEqual([])
+    // (what stands on another line before the paragraph's end, an e-mail row a class sets under the last name in its tabular, is
+    // no trail of its: none, the word's gap rule)
+    const below = [lines[0]!, { text: 'a@b.org', x: 72, y: 688 }, lines[2]!]
+    expect(
+      trail(
+        at(
+          [
+            ['0c', 0],
+            ['0s', 0],
+            ['0e', 7],
+            ['1s', 14],
+          ],
+          [14],
+          below,
+        ),
+      ),
+    ).toEqual([])
+  })
+  it('runs on a row the members TeX set in one paragraph across the page middle, no body’s or float’s bracket between', () => {
+    // (2611.03953v2 p1, ICML: the names of a line of \icmlauthor in one centred paragraph over the two columns' middle, read
+    // as three flows by the columns a line's x tells, the line never laid as one. B's stream brackets each column's body
+    // (LAYOUT_TEX `bs<n>`, `be<n>`) and each float (`fs<n>`, `fe<n>`): none between two members, they are no two columns')
+    const cells = ['WSJ only', 'semi', 'multi'].flatMap((t, k) => [
+      { text: t, x: 120, y: 600 - 12 * k },
+      { text: t, x: 400, y: 600 - 12 * k },
+    ])
+    const lines = [
+      { text: 'Siyuan Wang', x: 200, y: 700 },
+      { text: 'Jiacheng Lu', x: 272.6, y: 700 },
+      { text: 'Zeyu Zhang', x: 345.2, y: 700 },
+      ...cells,
+    ]
+    const units2 = [
+      unitOf('author', 'Siyuan Wang'),
+      unitOf('author', 'Jiacheng Lu'),
+      unitOf('author', 'Zeyu Zhang'),
+      ...cells.map((c, k) => unitOf('cell', `${c.text} ${k}`)),
+    ]
+    const own = [0, 1, 2, ...cells.map((_, k) => 3 + k)]
+    const at = (points: [string, number][]) => {
+      const B2 = docOf([{ lines, points }])
+      return locate(instrumentOf(B2, units2, [own]), B2, align(B2, B2))
+    }
+    expect(at([]).flows[0]).toEqual([0, 1, 2])
+    // (a body's bracket between the second and the third: two bodies, the row TeX set is two)
+    const third = 22
+    expect(
+      at([
+        ['be1', third],
+        ['bs2', third],
+      ]).flows.slice(0, 2),
+    ).toEqual([[0, 1], [2]])
   })
   it('chains a run-in head to its paragraph whose first line crosses the page middle, the head short at its left', () => {
     // (1706.03762v7 p10's "Acknowledgements We are grateful to …": a table's cells on both halves make the page read as two

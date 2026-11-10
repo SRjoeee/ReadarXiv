@@ -10,8 +10,9 @@
 // a kept block fixed) with its ink on A.
 import { type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
-import type { Doc, DocPoint } from '../doc.ts'
-import type { PageInk } from '../ink.types.ts'
+import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
+import { glyphWith } from '../glyph.ts'
+import { displayTextMask, type PageInk, regionMask } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
@@ -99,7 +100,16 @@ export interface InkStats {
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
  *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
-export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: AuthorBlock | null } {
+/** a line on A the engine reads as a display's formula (a ledger line of the class math at least half of whose glyphs TeX set in a
+ *  display, not in its text mode): [page, x0, bottom, x1, top, baseline] — what the lab's stage reads a display's ink by */
+export type DisplayLine = [number, number, number, number, number, number]
+
+export function inkOf(o: InkInput): {
+  made: Made[]
+  stats: InkStats
+  block: AuthorBlock | null
+  displays: DisplayLine[]
+} {
   const { ins, inkA, m } = o
   const base = ins.units.length
   const carried = carry(ins.ink, inkA, m, o.pageA)
@@ -133,8 +143,9 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
     const g = B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
     return { form: g.form, fid: g.fid }
   }
+  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go, lane mem-front)
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
-    pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
+    pageOf(pg.view, o.raws[i] ?? null, pg.glyphs, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
   // (taken: a raw page is held from here by its today's page alone, which this step lets go at its end; and each page's shapes,
   // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them, lane mem-back)
@@ -347,7 +358,14 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
   for (const u of kept) {
     const content: Piece[] = []
     const x: Made = {
-      unit: { id: unitId(u.kind, content), kind: u.kind, content, kept: true, fixed: true },
+      unit: {
+        id: unitId(u.kind, content),
+        kind: u.kind,
+        content,
+        kept: true,
+        fixed: true,
+        ...(u.address ? { address: true as const } : {}),
+      },
       text: [],
       ph: [],
       phId: null,
@@ -427,7 +445,28 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: Auth
     })
   }
   for (const x of made) x.text.sort((a, b) => a - b)
+  // (the lines the ledger read as a display's formula: its glyphs in a display, not in the display's text mode, at least half)
+  const displays: DisplayLine[] = []
+  const masks = carried.map((c, i) => {
+    const n = inkA.pages[i]!.glyphs.length
+    return [regionMask(c.regions, n, 'display'), displayTextMask(c.regions, n)] as const
+  })
+  for (const L of ledger.lines as { page: number; cls: string; gs: number[]; x0: number; x1: number; y: number }[]) {
+    if (L.cls !== 'math' || !L.gs.length) continue
+    const [d, t] = masks[L.page - 1]!
+    const G = inkA.pages[L.page - 1]!.glyphs
+    let k = 0,
+      bottom = Infinity,
+      top = -Infinity
+    for (const g of L.gs) {
+      if (d[g] && !t[g]) k++
+      bottom = Math.min(bottom, G[g]!.bottom)
+      top = Math.max(top, G[g]!.top)
+    }
+    if (k > 0 && k >= 0.5 * L.gs.length) displays.push([L.page, L.x0, bottom, L.x1, top, L.y])
+  }
   return {
+    displays,
     made,
     stats: {
       ink: ink.length,
@@ -852,6 +891,7 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
 function pageOf(
   view: number[],
   raw: PageInk | null,
+  docGlyphs: readonly DocGlyph[],
   c: Carried,
   turnedOwners: (string | null)[],
   formOf: (j: number) => { form: boolean; fid: number | undefined } | null,
@@ -879,11 +919,11 @@ function pageOf(
       unseen: new Set(),
       cut: new Map(),
     }
-  let glyphs: unknown[] = raw.glyphs.map((g, j) => {
+  // (a glyph with its figure changed made by glyphWith, which keeps a page glyph's coordinates, never a spread)
+  let glyphs: unknown[] = docGlyphs.map((g, j) => {
     const f = formOf(j)
-    if (!f || (!!g.form === f.form && (g as { fid?: number }).fid === f.fid)) return g
-    const { fid: _, ...rest } = g as typeof g & { fid?: number }
-    return { ...rest, form: f.form, ...(f.fid !== undefined ? { fid: f.fid } : {}) }
+    if (!f || (!!g.form === f.form && g.fid === f.fid)) return g
+    return glyphWith(g, { form: f.form, fid: f.fid })
   })
   let turned: unknown[] = (raw.turned ?? []).map((t, j) => {
     const f = turnedForm[j]
@@ -898,10 +938,9 @@ function pageOf(
       else if (x.name === 'ze') stack.pop()
     }
     let q = 0
-    glyphs = (glyphs as typeof raw.glyphs).map((g, i) => {
+    glyphs = (glyphs as DocGlyph[]).map((g, i) => {
       while (q < P.length && (P[q] as DocPoint).glyph <= i) apply(P[q++] as DocPoint)
-      const { pid: _, ...rest } = g as typeof g & { pid?: number }
-      return stack.length ? { ...rest, pid: stack.at(-1) } : rest
+      return glyphWith(g, { pid: stack.length ? stack.at(-1) : undefined })
     })
     turned = (turned as NonNullable<typeof raw.turned>).map((t) => {
       seq = 0

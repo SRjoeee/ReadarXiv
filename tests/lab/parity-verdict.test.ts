@@ -681,7 +681,7 @@ describe('a line of several members TeX centred (rowLinesOf) is judged by the li
   ]
   it('qualifies the line from the part, as the lay does', () => {
     expect([...amsart.rows.keys()]).toEqual([1, 107, 3])
-    expect(amsart.rows.get(1)).toMatchObject({ ords: [1, 107, 3], align: 'c', x0: 230.72, x1: 375.66 })
+    expect(amsart.rows.get(1)).toMatchObject({ ords: [1, 107, 3], align: 'c', rows: [{ baseline: 640.16, x0: 230.72, x1: 375.66 }] })
   })
   it('2610.21106v1 p1: judged member by member, its names are each off their own middles, worse than today', () => {
     expect(aligns(measure(amsart.f, amsartPage(run), [], amsart.led))).toEqual([
@@ -724,6 +724,42 @@ describe('a line of several members TeX centred (rowLinesOf) is judged by the li
   })
   it('2610.10069v1 p1: judged by the line, nearer TeX’s middle than today’s', () => {
     expect(aligns(measure(article.f, articlePage, [], article.led, [], article.rows))).toEqual([['line t2, t4, t6', false, 'v2']])
+  })
+  it('a paragraph of several lines is judged line by line, each drawn line against TeX’s nearest it (2611.00342v1)', () => {
+    // (IJCAI's names: TeX's two lines, 200-400 at 600 and 250-350 at 588, both centred on 300. Today's names each at their own
+    // original's start, shorter: its lines 25 pt left of the middle; v2's run on one line, centred)
+    const ms = [
+      { ord: 2, at: [200, 300] as [number, number], y: 600 },
+      { ord: 4, at: [304, 400] as [number, number], y: 600 },
+      { ord: 6, at: [250, 350] as [number, number], y: 588 },
+    ]
+    const f = v2Of({
+      members: laid(ms.map((m) => m.ord)),
+      facts: ms.map((m) => ({ ord: m.ord, kind: 'author', align: 'c', style: { size: 10 }, lines: [factLine(m.at[0], m.at[1], m.y, 10)] })),
+      today: Object.fromEntries(ms.map((m) => [m.ord, { today: m.ord }])),
+    })
+    const led = { 4: 2, 6: 4 }
+    const line = {
+      ords: [2, 4, 6],
+      align: 'c' as const,
+      rows: [
+        { page: N, baseline: 600, x0: 200, x1: 400 },
+        { page: N, baseline: 588, x0: 250, x1: 350 },
+      ],
+    }
+    const rows = new Map(ms.map((m) => [m.ord, line]))
+    const pg = rec({
+      today: { units: [...units([2, 4], [[200, 260], [304, 350]], 600, 10), ...units([6], [[250, 300]], 588, 10)] },
+      v2: { units: units([2, 4, 6], [[210, 270], [274, 330], [334, 390]], 600, 10) },
+    })
+    expect(aligns(measure(f, pg, [], led, [], rows))).toEqual([['line t2, t4, t6', false, 'v2']])
+    // (a second line drawn off TeX's middle is the paragraph's fault, though the run's ends over both lines stand about it: v2's
+    // first line centred, its second 30 pt right of the middle, today's 25 left)
+    const off = rec({
+      today: { units: [...units([2, 4], [[200, 260], [304, 350]], 600, 10), ...units([6], [[250, 300]], 588, 10)] },
+      v2: { units: [...units([2, 4], [[220, 298], [302, 380]], 600, 10), ...units([6], [[300, 360]], 588, 10)] },
+    })
+    expect(aligns(measure(f, off, [], led, [], rows))).toEqual([['line t2, t4, t6', true, 'today']])
   })
   it('a line TeX set flush right is judged by its end', () => {
     const right = lineOf(
@@ -790,6 +826,36 @@ describe("shown: a unit of the author block v2 leaves the original's with the na
     expect(shown(page('inknames', 'on'))).toEqual([[true, 'today']])
     expect(shown(page('textnames'))).toEqual([[true, 'today']])
     expect(shown(page('inkorphan'))).toEqual([[true, 'today']])
+  })
+})
+
+describe("shown: a unit the prepare keeps as a line of e-mail addresses is the original's text (the coordinator's ruling of 2026-11-10)", () => {
+  // (1512.03385v1 p1's `{ada, alan}@example.org` row, every toggle on: today sent its local parts and drew the reply; v2's prepare
+  // keeps the line whole, a kept block its dump marks `keptBy: 'address'`, v2.mjs's `address` by member ord. An address is a
+  // literal, never sent: the original's text, no translation missing. Today's unit is joined to the block or not (the block is a
+  // new unit, ids apart): unjoined, it is the block's where every line of it lies on a line of the marked member's)
+  type D = { flag: string; worse: boolean; nearer: string; ruling?: string }
+  const shown = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'shown').map((d) => [d.worse, d.nearer])
+  const block = { ord: 371, kind: 'inknotes', align: 'c', style: { size: 10 }, lines: [factLine(195.49, 399.73, 599.46)] }
+  const prepT = (x0: number, x1: number, y: number) => ({ ord: 321, kind: 'affiliation', lines: [{ page: N, x0, x1, baseline: y, top: y + 8, bottom: y - 2, size: 10 }] })
+  const page = (o: { address?: number[]; joined?: boolean; y?: number; off?: boolean } = {}) => {
+    const v2 = {
+      ...v2Of({ members: [{ ord: 371, state: 'kept', lines: [] }], facts: [block], today: o.joined ? { 371: { today: 321 } } : {} }),
+      ...(o.address ? { address: o.address } : {}),
+      ...(o.off ? {} : { toggles: 'on' as const }),
+    }
+    return measure(v2, rec({ today: { units: [{ id: 321, lines: [drawnLine(195.49, 399.73, o.y ?? 599.46, 'wxyz')] }] } }), [prepT(195.49, 399.73, o.y ?? 599.46)])
+  }
+  it("is the ruling's, not worse, unjoined on the marked block's line or joined to it, whatever the toggles", () => {
+    expect(shown(page({ address: [371] }))).toEqual([[false, 'ruling']])
+    expect((page({ address: [371] }).diffs as D[]).find((d) => d.flag === 'shown')?.ruling).toMatch(/e-mail address/)
+    expect(shown(page({ address: [371], joined: true }))).toEqual([[false, 'ruling']])
+    expect(shown(page({ address: [371], off: true }))).toEqual([[false, 'ruling']])
+  })
+  it('stays worse with no mark, another member marked, or today\'s line not on the marked one', () => {
+    expect(shown(page())).toEqual([[true, 'today']])
+    expect(shown(page({ address: [372] }))).toEqual([[true, 'today']])
+    expect(shown(page({ address: [371], y: 560 }))).toEqual([[true, 'today']])
   })
 })
 

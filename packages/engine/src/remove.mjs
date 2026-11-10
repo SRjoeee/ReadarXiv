@@ -11,7 +11,10 @@
 // Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF, and ours made from its source, are
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
-// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time.
+// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
+// allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.mjs).
+import { isMemoryError } from './memory.mjs'
+
 const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
 const DL = new Uint8Array(256)
@@ -292,7 +295,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try { out = readAtMost(decodePDFRawStream(st), limit) } catch (e) {
-        if (e instanceof DecodeLimit) throw e
+        // (a failed allocation is no stream the object layer refuses: the paper's, memory.mjs)
+        if (e instanceof DecodeLimit || isMemoryError(e)) throw e
         // a stream the object layer's inflater refuses (a damaged zlib header, a stream cut short) that PDF.js reads:
         // inflated tolerantly, as PDF.js does, where the filter is Flate alone
         const f = st.dict.get(PDFName.of('Filter'))?.toString()
@@ -467,7 +471,11 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         const ops = lex(b, heldMax - held, WALK_OPS)
         held += ops.bytes
         got = { ops }
-      } catch (e) { got = e instanceof LexLimit ? { refused: HELD } : e instanceof DecodeLimit ? { refused: DECODED } : { failed: true } }
+      } catch (e) {
+        // (a stream past its bounds, or one that does not decode, refuses the page; a failed allocation is the paper's)
+        if (isMemoryError(e)) throw e
+        got = e instanceof LexLimit ? { refused: HELD } : e instanceof DecodeLimit ? { refused: DECODED } : { failed: true }
+      }
       if (got.refused && !problems.includes(got.refused)) problems.push(got.refused)
       lexed.set(st, got)
       return got
@@ -610,37 +618,47 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
 export function alignOf(OPS, opList) {
-  const { fnArray, argsArray } = opList
+  const reader = alignReader(OPS)
+  reader.read(opList.fnArray, opList.argsArray)
+  return reader.end()
+}
+
+/** alignOf as a reader of the list in pieces (`read(fnArray, argsArray)`, each after the one before, then `end()`: alignOf's facts),
+ *  so that no reader holds a page's whole list (ink.mjs inkReader, opstream.ts readOps): its count and its state (an annotation's
+ *  appearance, a soft mask's group) run on from one piece to the next */
+export function alignReader(OPS) {
   const codes = []
   let paths = 0, images = 0, inAnnot = 0, inMask = 0
   const ONE = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintSolidColorImageMask])
   // (a soft mask's group: PDF.js lists the content of an ExtGState's /SMask in a group of its own, which no content stream
   // the walk reads paints: not the page's, as an annotation's appearance is not; 2610.19159v1 p3)
   const groups = []
-  for (let j = 0; j < fnArray.length; j++) {
-    const fn = fnArray[j]
-    if (fn === OPS.beginAnnotation) inAnnot++
-    else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
-    else if (fn === OPS.beginGroup) { const m = !!argsArray[j]?.[0]?.smask; groups.push(m); if (m) inMask++ }
-    else if (fn === OPS.endGroup) { if (groups.pop()) inMask-- }
-    else if (inAnnot || inMask) continue
-    else if (fn === OPS.showText || fn === OPS.showSpacedText) {
-      const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
-      const row = new Array(gl.length)
-      for (let k = 0; k < gl.length; k++) {
-        const c = gl[k].originalCharCode
-        // (a code is a whole number below 2^32, as the walk splits a string; anything else is compared and never equal)
-        row[k] = c === undefined ? null : Number.isInteger(c) && c >= 0 && c < CODE_LIMIT ? c : -1
-      }
-      codes.push(row)
-    } else if (fn === OPS.constructPath) paths++
-    else if (ONE.has(fn)) images++
-    else if (fn === OPS.paintImageXObjectRepeat) images += Math.floor((argsArray[j]?.[3]?.length ?? 0) / 2)
-    else if (fn === OPS.paintImageMaskXObjectRepeat) images += Math.floor((argsArray[j]?.[5]?.length ?? 0) / 2)
-    else if (fn === OPS.paintImageMaskXObjectGroup) images += Array.isArray(argsArray[j]?.[0]) ? argsArray[j][0].length : 0
-    else if (fn === OPS.paintInlineImageXObjectGroup) images += Array.isArray(argsArray[j]?.[1]) ? argsArray[j][1].length : 0
+  function read(fnArray, argsArray) {
+    for (let j = 0; j < fnArray.length; j++) {
+      const fn = fnArray[j]
+      if (fn === OPS.beginAnnotation) inAnnot++
+      else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
+      else if (fn === OPS.beginGroup) { const m = !!argsArray[j]?.[0]?.smask; groups.push(m); if (m) inMask++ }
+      else if (fn === OPS.endGroup) { if (groups.pop()) inMask-- }
+      else if (inAnnot || inMask) continue
+      else if (fn === OPS.showText || fn === OPS.showSpacedText) {
+        const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
+        const row = new Array(gl.length)
+        for (let k = 0; k < gl.length; k++) {
+          const c = gl[k].originalCharCode
+          // (a code is a whole number below 2^32, as the walk splits a string; anything else is compared and never equal)
+          row[k] = c === undefined ? null : Number.isInteger(c) && c >= 0 && c < CODE_LIMIT ? c : -1
+        }
+        codes.push(row)
+      } else if (fn === OPS.constructPath) paths++
+      else if (ONE.has(fn)) images++
+      else if (fn === OPS.paintImageXObjectRepeat) images += Math.floor((argsArray[j]?.[3]?.length ?? 0) / 2)
+      else if (fn === OPS.paintImageMaskXObjectRepeat) images += Math.floor((argsArray[j]?.[5]?.length ?? 0) / 2)
+      else if (fn === OPS.paintImageMaskXObjectGroup) images += Array.isArray(argsArray[j]?.[0]) ? argsArray[j][0].length : 0
+      else if (fn === OPS.paintInlineImageXObjectGroup) images += Array.isArray(argsArray[j]?.[1]) ? argsArray[j][1].length : 0
+    }
   }
-  return { codes, paths, images }
+  return { read, end: () => ({ codes, paths, images }) }
 }
 /** a character code is below this (four bytes at most, as codesOf reads one) */
 const CODE_LIMIT = 2 ** 32

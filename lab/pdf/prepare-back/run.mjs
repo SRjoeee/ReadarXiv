@@ -14,7 +14,7 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
+import { isMemoryError, prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
@@ -33,7 +33,20 @@ globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () =
 const live = await im('pipeline/live.mjs'), tar = await im('source/tar.mjs'), paperM = await im('layout/paper.mjs')
 const guard = await im('layout/guard.mjs'), baseM = await im('layout/base.mjs')
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
-const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
+// (--warnings: PDF.js's warnings, the channel its recover branches tell on (a page's list ended early, a font read as none, …),
+// kept by the step whose documents were being read: arXiv's PDF for the front half (`front`), the compiles' PDFs the front half
+// reads (`compiles`), our final pass (`B`), arXiv's PDF for the back half (`A`); in <out>/warnings/<id>.json. Nothing else moves)
+const WARNINGS = process.argv.includes('--warnings')
+const warned = [], step = { now: 'front' }
+if (WARNINGS) {
+  const warn = console.warn
+  console.warn = (...a) => {
+    const s = a.map(String).join(' ')
+    if (s.startsWith('Warning: ')) warned.push([step.now, s.slice(9)])
+    else warn(...a)
+  }
+}
+const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: WARNINGS ? 1 : 0, useSystemFonts: false }
 const tasks = []
 const open = (bytes, o = LITE) => { const t = getDocument({ data: bytes.slice(), ...o, ...docOpts }); tasks.push(t); return t.promise }
 const sha = b => createHash('sha256').update(b).digest('hex')
@@ -73,7 +86,7 @@ if (typeof paperM.bibliographyKept === 'function' && paperM.bibliographyKept(pap
   if ('paper' in r) paper = r.paper
 }
 const day = await baseM.creationEpochOf(arxivDoc0)
-const textOf = async pdf => { const d = await open(pdf); return baseM.textOfPdf(d) }
+const textOf = async pdf => { const was = step.now; step.now = 'compiles'; try { const d = await open(pdf); return await baseM.textOfPdf(d) } finally { step.now = was } }
 const made = await paperM.markedOfPaper(paper, { compile, compileBudgetMs: null, engines: HOST_ENGINES, pages: async () => arxivDoc0.numPages, ...(day ? { sourceDate: day } : {}), textOf })
 const tFront = performance.now()
 const meta = await arxivDoc0.getMetadata().catch(() => null)
@@ -87,7 +100,9 @@ const paperOut = {
 const finalPdf = made.base?.pdf instanceof Uint8Array ? made.base.pdf : null
 const refusal = made.refused ? `marked: ${made.refused}` : !finalPdf ? `final: ${made.base?.refused ? `refused: ${made.base.why ?? ''}`.slice(0, 200) : 'none'}` : null
 const deflate = b => new Uint8Array(deflateSync(b))
-const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
+// (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
+// failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
+const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
 
 // ---- the back half
 const bundleDir = join(OUT, 'bundles', id)
@@ -97,6 +112,7 @@ const parts = []
 let unitsBytes = 0
 const tIns0 = performance.now()
 if (!refusal) {
+  step.now = 'B'
   const fi = (await (await open(finalPdf)).getMetadata().catch(() => null))?.info ?? {}
   paperOut.ours = { producer: fi.Producer ?? null, creator: fi.Creator ?? null }
   if (process.argv.includes('--keep-b')) writeFileSync(join(bundleDir, 'B.pdf'), finalPdf)
@@ -110,6 +126,7 @@ if (ins) {
   // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
   // and the review; the proofs read A's pages again, as the back half read them)
   const keep = process.argv.includes('--claims') || process.argv.includes('--review')
+  step.now = 'A'
   for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
@@ -119,6 +136,8 @@ if (ins) {
   }
 }
 const tBack = performance.now()
+step.now = 'after'
+if (WARNINGS) { mkdirSync(join(OUT, 'warnings'), { recursive: true }); writeFileSync(join(OUT, 'warnings', `${id}.json`), `${JSON.stringify(warned)}\n`) }
 // ---- (--claims) the A glyphs a unit holds with no partner on B, classed (claims.mjs)
 if (tally && process.argv.includes('--claims')) {
   const { claimsOf } = await import('./claims.mjs')
@@ -193,7 +212,10 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const pieces = flat(u.content)
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), text: textOfPieces(pieces), pieces }
+  // (a unit kept for its text set wholly in a face of one pitch, the engine's `pitch`: `keptBy: 'pitch'`; a kept block of e-mail
+  // addresses alone, the engine's `address`: `keptBy: 'address'`; the parity reads both, join.mjs candidatePitch and
+  // candidateAddress. Never both: `pitch` marks source units and figure texts, `address` kept blocks)
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), ...(u.address ? { keptBy: 'address' } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)
@@ -227,7 +249,9 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const pagesA = ins ? await pagesAOf() : null
   const glyphs = (p) => pagesA?.[p - 1]?.page?.glyphs ?? null
   // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
-  for (const { u, why, cause, holder } of statedOf(base, units, { trails, labels, glyphs })) {
+  // (a statement of a unit the candidate makes, (i): on that unit, its own reason kept in `stated.was`)
+  for (const { u, why, cause, holder, own } of statedOf(base, units, { trails, labels, glyphs, displays: located?.displays ?? [] })) {
+    if (own) { own.stated = { ord: u.ord, cause, ...(holder ? { holder } : {}), was: own.why }; own.why = why; continue }
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
     states.unlaid++
   }
@@ -243,7 +267,8 @@ for (let p = 1; p <= N; p++) {
 const counts = { units: units.length, ...states, byKind: {}, pages: N, pagesDrawn: pages.filter(p => p.drawn).length }
 for (const u of units) { const k = (counts.byKind[u.kind] ??= { drawn: 0, laid: 0, unlaid: 0 }); k[u.state]++ }
 mkdirSync(join(OUT, 'prepare'), { recursive: true })
-writeFileSync(join(OUT, 'prepare', `${id}.prepare.json`), `${JSON.stringify({ format: 'readarxiv-baseline/prepare 1', engine: 'rebuild/prepare (stage 1a)', paper: paperOut, refused: refusal, pages, counts, units })}\n`)
+// (the lines the candidate reads as a display's formula, locate's `displays`, which restate.mjs states a unit by as run.mjs does)
+writeFileSync(join(OUT, 'prepare', `${id}.prepare.json`), `${JSON.stringify({ format: 'readarxiv-baseline/prepare 1', engine: 'rebuild/prepare (stage 1a)', paper: paperOut, refused: refusal, pages, counts, units, ...(located?.displays?.length ? { displays: located.displays.map((d) => d.map(r2)) } : {}) })}\n`)
 // what the gate reads beside the dump
 const placeOf = {}
 if (located) for (const mem of located.members) if (mem.unit >= 0 && mem.name === undefined) placeOf[allUnits[mem.unit].id] = (placeOf[allUnits[mem.unit].id] ?? []).concat([[mem.ord, mem.located ? mem.place : null, mem.cause ?? null, mem.lines.length]])

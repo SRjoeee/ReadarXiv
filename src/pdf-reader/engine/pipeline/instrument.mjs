@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { regionsOf, WANT } from '../layout/stream.mjs'
@@ -940,12 +940,17 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const units = paper.units
   const bundle = bundleUnitsOf(paper)
   const inkBase = bundle.length
-  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true })
+  // (B read once, its raw glyphs let go page by page as the Doc's are made: the ownership reads the Doc's glyphs, which carry every
+  // field it reads (their character, place, ink box, size, font, fill, show and place in it, blank, form, clip, figure) and which it
+  // never writes. It read a copy of each glyph of its own made from pageInk's, so that B's glyphs were held three times at once:
+  // lane mem-front, after L9 §3 6)
+  // (and with no figure path's lines, which no step reads of B: its figures' extents and glyphs are read as they were)
+  const read = await readPdf(pdfjs, finalPdf, { options: documentOptions, turned: true, rawGlyphs: false, shapes: false })
   const lower = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
   // (each page as wrapFinal hands it to the ownership: layout/wrap-final.mjs)
   const pages = read.pages.map(({ raw, page }) => {
     if (!raw) return { glyphs: [], turned: [], shapes: new Map(), pictures: [], figures: new Map(), boxes: [], paths: [], points: [], boxAt: [], regions: [], view: [...page.view] }
-    return { regions: raw.regions, glyphs: raw.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.unseen ? { unseen: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: raw.turned, shapes: raw.shapes, pictures: raw.pictures, figures: raw.figures, unseen: raw.unseen, cut: raw.cut, boxes: raw.boxes, paths: raw.paths, points: raw.points.map(lower), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], boxAt: raw.boxAt, view: [...page.view] }
+    return { regions: raw.regions, glyphs: page.glyphs, turned: raw.turned, shapes: raw.shapes, pictures: raw.pictures, figures: raw.figures, unseen: raw.unseen, cut: raw.cut, boxes: raw.boxes, paths: raw.paths, points: raw.points.map(lower), paras: raw.paras ?? [], paraEnds: raw.paraEnds ?? [], boxAt: raw.boxAt, view: [...page.view] }
   })
   const texts = options.texts, inkless = options.inkless ?? null
   const shown = textsOf(texts)
@@ -957,6 +962,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's; a cell's, its own
   // paragraph's, else the class LaTeX built its column's template from: marks/channels.ts)
   const align = readAlign(lastTexLog(log))
+  // (a unit TeX set only in a box inside a paragraph, ICML's \icmlauthor names in their \mbox: its line's alignment where the
+  // skips in force at its end mark and the paragraph TeX ends after it state the same, its two statements of the line)
+  const boxed = boxedAlignOf(readBoxAlign(lastTexLog(log)), pages)
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -973,7 +981,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
@@ -1059,7 +1067,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (the pieces TeX set before their unit's start point (outsidePieces): whatever they set is no text of the unit's)
   const outside = outsidePieces(pages, units, { glyphs })
   return {
-    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), ...(outside.length ? { outside } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}), ...(skips.length ? { skips } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
+    instrument: { ink: read.doc, units: out, glyphs, boxes, turned: turnedOwners, places, ...(empty.length ? { empty } : {}), ...(outside.length ? { outside } : {}), ...(read.recovered.length ? { recovered: read.recovered } : {}), tex: { ...(lineskip ? { lineskip } : {}), paragraphEnds, ...(frames.some(Boolean) ? { frames } : {}), ...(skips.length ? { skips } : {}) }, made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' } },
     today: { own, inkBase },
   }
 }

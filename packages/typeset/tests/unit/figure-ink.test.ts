@@ -78,4 +78,14 @@ describe('a figure text set by its ink, as a cell’s line is', () => {
       expect((a + z) / 2).toBeCloseTo(275, 6)
     }
   })
+  it('ends a right-aligned figure text’s ink where its original ends in an alphabet’s target, its curly quote proportional', () => {
+    // (Codex on #634, 4520557062: a Latin target's rules class curly quotes with the CJK marks (cjkQuotes), but its faces set
+    // them in its Latin face, proportional, no blank half: hung as a full-width mark's, the label ended half an em, 5 pt at 10,
+    // past its original's end)
+    const figure = original(0, 'figure', 400, { plain: 'Masked LM' })
+    const page = layPage(part([figure]), rowsOf({ 1: 'Maskiertes „LM”' }), rulesFor('de'), metrics)
+    const f = page.members.find((m) => m.ord === 0)!
+    expect(f.state).toBe('laid')
+    expect(inkOf(f)[1]).toBeCloseTo(300, 6)
+  })
 })

@@ -21,6 +21,9 @@ export declare function preambleUnits(log: string | null | undefined, count: num
 export declare const tellsTwice: (log: string | null | undefined) => boolean
 /** auxUnits' units judged by what TeX did with each: none where the compile is otherwise the paper's and its log tells twice */
 export declare const copiesOutOfPlace: (units: Set<number>, o: { clean: boolean; log: string | null | undefined }) => Set<number>
+/** the units whose TeX of ours a class's verbatim copy of our source (a file the compile wrote) lost: a line of it begun inside a
+ *  mark of ours (cas-common's abstract) */
+export declare function cutCopyUnits(c: Pick<Compiled, 'files'> | null | undefined, files: ReadonlyMap<string, Uint8Array> | null | undefined, count: number): Set<number>
 /** the TeX errors of a compile's last pass */
 export declare const errorCount: (log: string | null | undefined) => number
 /** the pages the last pass wrote, as TeX says, else null */

@@ -34,9 +34,11 @@ export {
   type TexFrame,
 } from './instrument.ts'
 export { linkTargetOf } from './locate/ink.ts'
-export { framesOf, readAlign, readSkips } from './marks/channels.ts'
+export { boxedAlignOf, framesOf, readAlign, readBoxAlign, readSkips } from './marks/channels.ts'
 export { cutLines } from './locate/lines.ts'
 export { type Located, locate, type Member, type Place } from './locate/locate.ts'
 export { type PrepareDeps, prepareBack, readArxiv, type Tally } from './prepare.ts'
-export { type PdfJs, type ReadPage, readPdf } from './read.ts'
+export { OPS_PDFJS, type OpsPage, type OpsReader, readOps } from './opstream.ts'
+export { type PdfJs, type ReadPage, type Recovered, readPdf } from './read.ts'
+export { RECOVER_SITES, reasonOf, siteOf } from './warnings.ts'
 export { type AddOn, textGroupOf, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'

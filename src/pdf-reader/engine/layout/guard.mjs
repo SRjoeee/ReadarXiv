@@ -15,6 +15,7 @@ import { isMemoryError } from '@readarxiv/engine'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'
+import { duplicatesIn } from './marks.mjs'
 
 const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
 /** the environments TeX reads verbatim, whose braces are no group: their text is the paper's either way, skipped alike */
@@ -245,6 +246,61 @@ export function auxUnits(c, count, job) {
   return out
 }
 
+/** a compile's own outputs and records, which TeX never reads back as source: no copy of ours (the log quotes our lines cut) */
+const RECORD_FILE = /\.(?:pdf|dvi|xdv|log|blg|ilg|glg|synctex(?:\.gz)?|fls|fdb_latexmk)$/i
+/** a mark of ours as our source writes it, no space after its control word: in a file TeX wrote, a copy of our characters
+ *  (\write writes a space after every control word, `\axtmark {2s}`) */
+const SOURCE_MARK = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\{[^{}\s]*\}`, 'g')
+const SOURCE_MARK_ONE = new RegExp(SOURCE_MARK.source)
+/** our TeX on a line of our source: each mark, a start mark with the \leavevmode before it */
+const OURS_ON_LINE = new RegExp(String.raw`(?:\\leavevmode)?\\(?:${[...MARK_CS].join('|')})\{([^{}\s]*)\}`, 'g')
+/**
+ * The units whose TeX of ours a class's verbatim copy of our source lost (`c.files`, the files the compile wrote, where the host
+ * gives them; `files`, the marked files it was asked with), ids below `count`: a line of a file TeX wrote that holds a mark as our
+ * source writes it (SOURCE_MARK) is a copy of a line of ours, and where its head, before that mark, is our line's text before it
+ * cut short inside our TeX (OURS_ON_LINE), the copy lost the start of it. cas-common's abstract (cas-sc, cas-dc) is one:
+ * `\RenewDocumentEnvironment{abstract}{o}{…\verbatimwrite{\jobname.abs}}{\endverbatimwrite}`, read back by `\file_input:n`.
+ * The look-ahead for its optional argument reads the body's first token before moreverb's \verbatimwrite makes every character
+ * other, and the copy loses it where it is a control word: our line probe's name, its argument left as text, "4Scientific…" on
+ * our page, the unit refused for that content of ours (2610.21084v1). The paper's own first word is a letter there, kept. A copy
+ * of whole lines (comment.sty's, acmart's acks) loses none, and its marks stand; one that begins inside the paper's own text loses
+ * the paper's on arXiv's page too. In the 88: cas-common's abstract alone; acmart's acks copied whole (2608.25210v2, 2610.22065v1)
+ */
+export function cutCopyUnits(c, files, count) {
+  const out = new Set()
+  if (!c?.files || !files) return out
+  /** our lines that hold each mark, by its text */
+  let lines = null
+  const linesWith = mark => {
+    if (!lines) {
+      lines = new Map()
+      for (const [, bytes] of files) for (const line of latin1(bytes ?? new Uint8Array(0)).split(/\r?\n/)) for (const m of line.matchAll(SOURCE_MARK)) lines.set(m[0], [...(lines.get(m[0]) ?? []), line])
+    }
+    return lines.get(mark) ?? []
+  }
+  for (const [path, bytes] of c.files) {
+    if (RECORD_FILE.test(path) || !bytes?.length) continue
+    const text = latin1(bytes)
+    if (!SOURCE_MARK_ONE.test(text)) continue
+    for (const line of text.split(/\r?\n/)) {
+      const m = SOURCE_MARK_ONE.exec(line)
+      if (!m) continue
+      const head = line.slice(0, m.index)
+      for (const ours of linesWith(m[0])) {
+        const at = ours.indexOf(m[0])
+        if (!ours.slice(0, at).endsWith(head)) continue
+        const k = at - head.length
+        for (const o of ours.matchAll(OURS_ON_LINE)) {
+          if (!(o.index < k && k < o.index + o[0].length)) continue
+          const u = unitOfMark(o[1])
+          if (u !== null && u < count) out.add(u)
+        }
+      }
+    }
+  }
+  return out
+}
+
 /** a log as TeX wrote it, its lines of 79 characters joined again (live.mjs unwrapped) */
 const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
 /** whether a compile's last pass wrote its PDF itself (pdfTeX's or LuaTeX's "Output written on <job>.pdf"): its log then names
@@ -257,14 +313,22 @@ export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.te
  * there — a host that reads none, or failed to, shows nothing — and no TeX error)
  * and its log names every destination set twice (tellsTwice). TeX then read each such mark back where the paper's own TeX sets
  * its unit's text, once (an endnote package prints each note from the aux: 2609.36054v2's enotez, `\enotez@note{…}{text}`), or
- * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there; or it set it twice (a
- * class that sets an author's name again in the e-mail footnote: elsarticle's `\emailauthor`, 2610.21084v1), and the reading drops
- * every destination the log names (marks.mjs readMarked `dropped`), the unit the original's as an unmarked one is. A mark read
- * back where no text is set — in a `\csname`, a number, a key — raises an error, and every unit stays out of place as before
- * (2610.21201v1's etoc depth tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and
- * nameref's title are never out of place (marksOutOfPlace)
+ * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there. One TeX set twice, a
+ * unit's own start or end mark the log names (a class that sets an author's name again from what it stored, in the e-mail
+ * footnote: elsarticle's and cas-common's `\emailauthor`), stays out of place: the reading would drop every destination the log
+ * names (marks.mjs readMarked `dropped`) and leave the unit the original's anyway, and the class may take the stored argument
+ * apart as data, our marks among its words — cas-common's `\parsename` splits the name at its spaces and takes each given name's
+ * head for its initial, our `\leavevmode`, so that its footnote read "(. Chung)" where arXiv's reads "(M. Chung)" and the unit
+ * made of it was refused (2610.21084v1) —: unmarked, the class's copy is the paper's own. A mark read back where no text is set —
+ * in a `\csname`, a number, a key — raises an error, and every unit stays out of place as before (2610.21201v1's etoc depth
+ * tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and nameref's title are never
+ * out of place (marksOutOfPlace)
  */
-export const copiesOutOfPlace = (units, { clean, log }) => (clean && tellsTwice(log) ? new Set() : units)
+export const copiesOutOfPlace = (units, { clean, log }) => {
+  if (!(clean && tellsTwice(log))) return units
+  const twice = new Set(duplicatesIn(log).flatMap(n => { const m = /^(\d+)[se]$/.exec(n); return m ? [Number(m[1])] : [] }))
+  return new Set([...units].filter(u => twice.has(u)))
+}
 /** the TeX errors of a compile's last pass: its `! ` lines */
 export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).length
 /** the pages TeX says the last pass wrote ("Output written on main.pdf (36 pages, …)", the .xdv's under XeTeX), else null */

@@ -685,7 +685,7 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/row-start.ts',
     state: {
       is: 'changed',
-      why: "a line of TeX's that several members share whole and TeX set centred or flush right (RowLine: their own marks' alignment, a member made on A taking the line's) is laid as one run, its members run on and the run placed as TeX placed the line (lay/flow.ts layLine), where today's left a centred member where TeX set it (RUN:2152 `!b.centred`) and each translation, shorter, left a hole before the next: 2610.21106v1 p1's amsart \"A AND B\", 36.11 pt where TeX set 3.32",
+      why: "a line of TeX's that several members share whole and TeX set centred or flush right (RowLine: their own marks' alignment, a member made on A taking the line's) is laid as one run, its members run on and the run placed as TeX placed the line (lay/flow.ts layLine), where today's left a centred member where TeX set it (RUN:2152 `!b.centred`) and each translation, shorter, left a hole before the next: 2610.21106v1 p1's amsart \"A AND B\", 36.11 pt where TeX set 3.32; and a paragraph of several such lines (RowLine's rows: IJCAI's eleven names over three lines, each \\and's comma the next name's label, 2611.00342v1 p1) laid as one run over its lines, each line then placed as TeX placed it, where each name stood centred on its own original's middle, a hole before each comma",
       replay:
         "every F1 slot of the corpus (ledgers/*.ledger.json.gz): keptBetween, a page fact, taken from the slot's verdict where it decides; the lines it lays as one run, synthetic (tests/unit/entry.test.ts) and the 23 such lines of the 88 papers' parts (lanes/author-line)",
       cases: 1349,
@@ -914,9 +914,10 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'emit/links.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a mark TeX set as written whose copy holds no white space (a URL, a DOI: the engine joins its lines, lane url-join, 2026-11-10) and whose annotations name one target is one link over its whole drawing (Target.word): TeX's line break split it into an annotation a line, and the translation draws the word whole, where the second line's part stood past DRIFT_BOUND in its run and was dropped (2610.40645v1-ja p38, p39; 2608.06701v1-zh p12). Today's split the word at the space its text held, and placed each part on its own run",
       replay:
-        "placeUnit against today's on every laid unit of the corpus (lab/typeset/replay-emit.mjs): 70,174 records over 14,359 units; matchUnit's tiers and pairs on hand-made cases (the baseline records no links)",
+        "placeUnit against today's on every laid unit of the corpus (lab/typeset/replay-emit.mjs): 70,174 records over 14,359 units; matchUnit's tiers and pairs on hand-made cases (the baseline records no links); tests/unit/entry-lit-links.test.ts",
       cases: 70174,
     },
   },

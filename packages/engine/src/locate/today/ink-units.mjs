@@ -1,9 +1,11 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but seven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but eight changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
-// placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed; a formula's TeX specials written as TeX sets
+// placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed, and a group of local parts before their
+// domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
-// leading raised scripts, no run over a line's break at a script, scriptsOf): run
+// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
+// a paragraph TeX ended between two lines parts them): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -34,8 +36,11 @@
 //      its source the run's characters; so is a run of scripts in whatever face, each glyph TeX set smaller than its line's text
 //      and off its baseline (a formula's digit in a text face, an affiliation's or a note's mark), a formula's (`math`), a run
 //      over a line's break one only where no script stands at the break; a word that is a web address is one in whatever face,
-//      and so is an e-mail address in a word, the word's characters around it the text's (a note of an address alone is then no
-//      unit);
+//      and so is an e-mail address in a word, the word's characters around it the text's, and a group of local parts before
+//      their one domain, every glyph of it whatever its face, over its words and the break of lines TeX set one after the other
+//      (a note of addresses alone is then no unit, a kept block that says so, `address`; a line of no text word, an address or a
+//      URL TeX broke onto a line of its own, is the next line of the unit its line before belongs to in one of TeX's paragraphs as
+//      the compile marked them, and starts none: CHANGED);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -67,7 +72,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
 import { accentTexts } from './accents.mjs'
-import { classifyFont, classOf, EMAIL_ADDRESS, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
+import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
@@ -179,10 +184,19 @@ const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
  *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
  *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
  *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
-const phSource = (fam, text, sign = 0) => {
-  if (fam !== 'math') return sourceView(`\\url{${text.replace(/[\\{}]/g, '')}}`)
+const phSource = (fam, text, sign = 0, group = false) => {
+  // (CHANGED: a run that holds a group of addresses, groupedAddresses, keeps the group's braces, balanced by its syntax, as
+  // `\url{…}` holds balanced braces: its source the characters the page sets, `{ada,alan}@example.org`, where the stripped
+  // `ada,alan@example.org` read as one address of another local part)
+  if (fam !== 'math') return sourceView(`\\url{${group && balanced(text) ? text.replace(/\\/g, '') : text.replace(/[\\{}]/g, '')}}`)
   const t = text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])
   return sourceView(sign > 0 ? `$^{${t}}$` : sign < 0 ? `$_{${t}}$` : `$${t}$`)
+}
+/** whether a text's braces pair, each closing one after its opening one */
+const balanced = text => {
+  let depth = 0
+  for (const c of text) if ((depth += c === '{' ? 1 : c === '}' ? -1 : 0) < 0) return false
+  return depth === 0
 }
 /** a word's scripts' one sign (scriptsOf): raised (1) or lowered (-1) where every glyph of it is a script of that sign, else 0 */
 const signOf = w => (w.sc?.every(v => v === w.sc[0]) ? w.sc[0] : 0)
@@ -260,6 +274,51 @@ function addressed(w) {
   }
   part(from, w.gs.length, 'text')
   return out
+}
+
+/** CHANGED: each group of local parts written once before their one domain (`{jyeoj251, bmw5779}@gmail.com`: the front end's
+ *  pattern, latex-front.mjs ADDRESS_GROUP, as keepGroups keeps one in a source unit's text) a kept run (fam `mono`, rule 4), every
+ *  glyph of it whatever its face, as an address in a word is (addressed). Read over the words of a run of lines TeX set one
+ *  right after the other (each line's first glyph the one after the last of the line before in TeX's stream, in one region: a
+ *  group TeX broke after a comma), a word's gap a space and a line's break white space. Today's read its local parts as the
+ *  text's words, sent: 2611.00342v1 p1's two groups, braces in the symbol font's math face and the first broken over two lines,
+ *  came back capitalised, the commas full-width ("{Jyeoj251, BMW5779, …", under the names toggle). Each line's words
+ *  (`lineWords`) cut where a group begins or ends inside one, each of its words `group` (phSource keeps its braces) */
+const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
+function groupedAddresses(pages, lines, lineWords) {
+  for (let i = 0; i < lines.length; ) {
+    let j = i + 1
+    while (j < lines.length && lines[j].page === lines[j - 1].page && lines[j].region === lines[j - 1].region && lines[j].gs[0] === lines[j - 1].gs.at(-1) + 1) j++
+    const run = lines.slice(i, j)
+    i = j
+    // (the run's characters, each the glyph it is of, `line|word|glyph`, and null for a space or a break)
+    let s = ''
+    const at = []
+    run.forEach((L, li) => {
+      const G = pages[L.page - 1]?.glyphs ?? [], words = lineWords.get(L)
+      words.forEach((w, wi) => {
+        const sep = wi > 0 ? (gapBefore(G, words[wi - 1], w) ? ' ' : '') : s ? '\n' : ''
+        s += sep
+        for (let c = 0; c < sep.length; c++) at.push(null)
+        w.ts.forEach((t, gi) => { s += t; for (let c = 0; c < t.length; c++) at.push(`${li}|${wi}|${gi}`) })
+      })
+    })
+    if (!s.includes('@')) continue
+    const taken = new Set()
+    for (const m of s.matchAll(GROUPS)) for (let c = m.index; c < m.index + m[0].length; c++) if (at[c] !== null) taken.add(at[c])
+    if (!taken.size) continue
+    run.forEach((L, li) => lineWords.set(L, lineWords.get(L).flatMap((w, wi) => {
+      const out = []
+      for (let gi = 0; gi < w.gs.length; ) {
+        const inside = taken.has(`${li}|${wi}|${gi}`)
+        let e = gi + 1
+        while (e < w.gs.length && taken.has(`${li}|${wi}|${e}`) === inside) e++
+        out.push({ gs: w.gs.slice(gi, e), ts: w.ts.slice(gi, e), text: w.ts.slice(gi, e).join(''), fam: inside ? 'mono' : w.fam, ...(inside ? { group: true } : {}), ...(w.sc ? { sc: w.sc.slice(gi, e) } : {}) })
+        gi = e
+      }
+      return out.length === 1 && out[0].fam === w.fam && !out[0].group ? [w] : out
+    })))
+  }
 }
 
 /**
@@ -407,14 +466,16 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (at === undefined || (ECHO_ORDER[u.kind] ?? 9) < (ECHO_ORDER[units[at].kind] ?? 9)) echoOf.set(key, i)
   })
   // each line of a class made units, its words trimmed (rule 2)
-  const lineWords = new Map()
+  // (CHANGED: every line's words read first, a group of addresses over lines TeX set one after the other one kept run,
+  // groupedAddresses)
+  const lineWords = new Map((ledger.lines ?? []).map(L => [L, wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams)]))
+  groupedAddresses(pages, ledger.lines ?? [], lineWords)
   // (a running head's folio: a number at its line's end or start where the line's other words recur on another page with
   // another number there; a number the same wherever they recur, a conference's year, is the head's)
   const numbersAt = new Map()
   for (const L of ledger.lines ?? []) {
     if (L.cls !== 'heads') continue
-    const words = wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams)
-    lineWords.set(L, words)
+    const words = lineWords.get(L)
     if (words.length < 2) continue
     for (const [side, w] of [['b', words.at(-1)], ['a', words[0]]]) {
       if (!PAGE_NUMBER.test(w.text)) continue
@@ -432,14 +493,17 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (L.cls === 'references' && (L.entry === null || L.entry === undefined)) continue
     const G = pages[L.page - 1]?.glyphs ?? []
     // (an entry's first line from its point on: its label, which the list's \item set before it, the original's ink)
-    const all = lineWords.get(L) ?? wordsOf(G, L.gs, fams)
+    const all = lineWords.get(L)
     const from = L.cls === 'references' && Number.isInteger(L.entryFrom) ? all.filter(w => w.gs.some(g => g >= L.entryFrom)) : all
     const [words, ended] = trimmed(G, from, L.cls, folios)
     // (an entry's line its unit's whatever it holds: a URL alone in a typewriter face, as \url breaks it, or numbers alone — TeX
     // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
-    if (L.cls === 'references' ? !words.length : !words.some(textual)) continue
+    if (!words.length) continue
+    // (a line of no text word — an address, a URL, a formula, a script — is no unit's line but the next of one of TeX's paragraphs
+    // whose line before it a unit holds (below). CHANGED: today's left every such line out)
+    const bare = L.cls !== 'references' && !words.some(textual)
     // (a list's line whose page number the ledger cut as a line of its own ends its entry as well: ledger.mjs listedOf)
-    segs.push({ ...L, words, ended: ended || (L.cls === 'contents' && L.listed === true) })
+    segs.push({ ...L, words, ended: ended || (L.cls === 'contents' && L.listed === true), ...(bare ? { bare: true } : {}) })
   }
   // units of lines (rule 3)
   const groups = [], entryGroups = new Map()
@@ -467,11 +531,23 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && drop > 0 && near && s.x0 < prev.x1 && s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
-    const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
+    // (CHANGED: a paragraph TeX ended between the two lines parts them, a start of TeX's after the end marked or not (ink.mjs
+    // `paraEnds`): a class's paragraph begun with no point of its own read as the one before. 2610.22065v1 p1, acmart's reference
+    // format: its "ACM Reference Format:" line, a paragraph of its own, and the paragraph of the paper's front matter set again
+    // under it, which no unit owns there, one unit)
+    const ended = !!prev && prev.page === s.page && (pages[s.page - 1]?.paraEnds ?? []).some(e => e.glyph > Math.max(...prev.gs) && e.glyph <= Math.min(...s.gs))
+    const joins = follows && !ended && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
     // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, a running head or
     // foot between its parts its own unit — every entry its own)
     if (s.cls === 'references') { const g = entryGroups.get(s.entry); if (g) g.push(s); else { groups.push([s]); entryGroups.set(s.entry, groups.at(-1)) } continue }
     if (prev?.cls === 'references') { groups.push([s]); continue }
+    // (a line of no text word joins the unit its line before belongs to, in one of TeX's paragraphs as the compile marked them —
+    // never by the lines' places alone — and starts none: left out, it is a kept block's (rule 10) as before. JCAP's e-mail line
+    // broken before its last address, 2609.20976v1; ACM's permission note before its DOI. CHANGED, with the line's filter above)
+    if (s.bare) {
+      if (joins && paras && prev.para === s.para) last.push(s)
+      continue
+    }
     if (joins) last.push(s)
     else groups.push([s])
   }
@@ -550,14 +626,15 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
           if (lastPh && lastPh.open && lastPh.fam === w.fam && !broken) {
             lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; lastPh.tail = w.sc?.at(-1) ?? 0
             if (lastPh.sign !== signOf(w)) lastPh.sign = 0
-            pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src, lastPh.sign)
+            if (w.group) lastPh.group = true
+            pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src, lastPh.sign, lastPh.group)
             return
           }
           if (space) text += ' '
           flushText()
-          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0, sign: signOf(w) }
+          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0, sign: signOf(w), group: !!w.group }
           phs.push(ph)
-          pieces.push({ t: 'ph', src: phSource(w.fam, w.text, ph.sign) })
+          pieces.push({ t: 'ph', src: phSource(w.fam, w.text, ph.sign, ph.group) })
           return
         }
         for (const p of phs) p.open = false
@@ -645,8 +722,23 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
   return blocks.map((b, j) => {
     const id = from + j, kind = INK_KIND[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
     const rows = rowsOf(id, kind, b.cls, b.lines, [], 0, pages)
-    return { id, kind, cls: b.cls, echo: null, kept: true, pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
+    return { id, kind, cls: b.cls, echo: null, kept: true, ...(addressesAlone(pages, b.lines) ? { address: true } : {}), pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
   })
+}
+
+/** CHANGED (with groupedAddresses): whether a kept block's lines are e-mail addresses and their separators alone — its text (a
+ *  word's gap a space, a line's break white space) holding one address at least, plain (EMAIL_ADDRESS) or a group (ADDRESS_GROUP),
+ *  and no letter or digit outside them —, stated on the block (`address`) for the lab, which reads such a block as the original's
+ *  text where today translated it (the coordinator's ruling of 2026-11-10); nothing the bundle carries */
+const ADDRESS_ALONE = new RegExp(`${ADDRESS_GROUP.source}|${EMAIL_ADDRESS.source}`, 'g')
+function addressesAlone(pages, lines) {
+  let s = ''
+  for (const l of lines) {
+    const G = pages[l.page - 1]?.glyphs ?? []
+    l.words.forEach((w, wi) => { s += (wi > 0 ? (gapBefore(G, l.words[wi - 1], w) ? ' ' : '') : s ? '\n' : '') + w.text })
+  }
+  const rest = s.replace(ADDRESS_ALONE, '\u0000')
+  return rest.includes('\u0000') && !/[\p{L}\p{N}]/u.test(rest)
 }
 
 /** a box an image placed (layout/ink.mjs `paths`: -3) */

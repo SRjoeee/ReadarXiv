@@ -232,6 +232,31 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
   })
 
+  it('a group of local parts before one domain is one address, whatever spaces TeX writes between them and whichever brackets hold them: no word of it sent', () => {
+    // (a tie or a thin space between the local parts, `\{kahe,~v-xiangz\}@…` and `\{mph,\,lmb\}@…`, parted the list into text
+    // pieces sent one by one; a group in parentheses or brackets, `[first name]@…`, was text)
+    const row = 'Somewhere, \\{alpha,~beta-x,\\,gamma\\}@example.org, (delta, eps)@example.net, or [first name]@example.com.'
+    const units = project(IEEE.replace('Somewhere\\\\ Elsewhere', row)).units as Unit[]
+    const text = units.map(textOf).join(' | ')
+    expect(text).not.toMatch(/alpha|beta|gamma|delta|eps|first|name|example/)
+    expect(text).toMatch(/Somewhere, .*, or .*\./)
+    const kept = units.flatMap(u => u.pieces.filter(p => p.t === 'ph').map(p => (p as { src?: string }).src))
+    expect(kept).toEqual(expect.arrayContaining(['\\{alpha,~beta-x,\\,gamma\\}@example.org', '(delta, eps)@example.net', '[first name]@example.com']))
+    expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', row))).toContain('\\{alpha,~beta-x,\\,gamma\\}@example.org')
+  })
+
+  it('a paragraph of grouped addresses alone is no unit: nothing of it is prose', () => {
+    const units = project('\\documentclass{article}\\begin{document}\nWords here.\n\n\\{alpha,~beta\\}@example.org, gamma@example.net\n\\end{document}').units as Unit[]
+    expect(units.filter(u => u.pieces.some(p => /alpha|beta|gamma/.test((p as { s?: string }).s ?? (p as { src?: string }).src ?? '')))).toEqual([])
+    expect(units.map(u => textOf(u).trim())).toEqual(['Words here.'])
+  })
+
+  it('nothing broader than the group: a bracket after a word, a space before the @, a bracket that is no list of local parts stay text', () => {
+    const row = 'Somewhere: mAP@[.5, .95] at f(a, b)@example.org and (a, b) @example.org and [see 2]@'
+    const text = (project(IEEE.replace('Somewhere\\\\ Elsewhere', row)).units as Unit[]).map(textOf).join(' | ')
+    expect(text).toContain('mAP@[.5, .95] at f(a, b)@example.org and (a, b) @example.org and [see 2]@')
+  })
+
   it('\\and is no unit\'s: article ends a table there, which cannot be set inside a box (2608.21180), so each author\'s block is its own', () => {
     const tex = marked('\\documentclass{article}\\author{Alice Example \\and Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')
     expect(tex).toMatch(/\\author\{\\axtwide\{<T\d+>\}\s*\\and\s*\\axtwide\{<T\d+>\}\}/)

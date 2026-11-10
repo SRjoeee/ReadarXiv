@@ -92,6 +92,57 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const r = ownOf(pages, { units: units('Intro') })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Intro', 'u0.l': '2.1', 'u9.p': '*' })
   })
+  it('takes as an author\'s lead only what TeX set after its call, the marks before it no lead of its (2611.03953v2)', () => {
+    // (ICML: \icmlauthor sets each name, then its marks; the next author's call (latex-front.mjs \axtcall, the point `<i>c` before
+    // the call's command or the \and that opens its block) comes after them. Walked back to the end mark before, the marks "12"
+    // were the next name's label; what stands before the call is the author before's, its trail (locate))
+    const authors = [{ kind: 'author', src: 'Ada' }, { kind: 'author', src: 'Bob' }]
+    const pages = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1c' }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const r = ownOf(pages, { units: authors })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    // (what TeX set after the call, before the start, is the author's lead, its label whatever its form: a † no label's form
+    // holds, glued to the name, left its unit the original's)
+    const led = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { dx: 6 }, { pt: '1c' }, '†', { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const l = ownOf(led, { units: authors })
+    expect(groupsOf(l, led)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '†' })
+    expect([l.units.get(1)?.unhidden, l.units.get(1)?.labelKept]).toEqual([null, false])
+    // (a word a class sets after the call — llncs' and IJCAI's \\and set " and " before the last author:
+    // 2610.19860v1, 2610.21491v1 —: no label's form, its ink the original's where it stands, left to the ink units as before, so
+    // that the connector is translated; never the author's label, which kept it English)
+    const word = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { pt: '1c' }, { dx: 3 }, 'and', { dx: 3 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const w = ownOf(word, { units: authors })
+    expect(groupsOf(w, word)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    expect([w.units.get(1)?.unhidden, w.units.get(1)?.labelKept]).toEqual([null, true])
+    // (no call stated: walked back to the end mark before, as before)
+    const none = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    expect(groupsOf(ownOf(none, { units: authors }), none)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '12' })
+  })
+  it('takes a mark TeX set as a script glued to a unit\'s first word, apart from what stands before it, as its label (2604.14228v3)', () => {
+    // (Meta FAIR's \contributionformat sets `$^{\dagger}$Corresponding author` after ", ": no call stated (the class's
+    // \addtolist builds the list whole in the preamble), the walk back from the start reached the "†", no label's form, and left
+    // it the original's ink where it stood: the note's translation laid on from the one before, the † stood 33 pt after it. TeX
+    // set the mark as a script glued to the word (\scriptspace, no word's gap) and a word's space after the comma: the word's
+    // lead. A mark glued to the word before, a space before the next (a \thanks mark after a name), is none of the next's)
+    const notes = [{ kind: 'affiliation', src: 'These' }, { kind: 'affiliation', src: 'Corr' }]
+    const mark = (u: string, x: number, small = true) => ({ n: 0, k: 0, u, x0: x, x1: x + 3, y: small ? 704 : 700, size: small ? 6 : 10, top: 709, bottom: 702 })
+    const pageOf = (dagger: number) => {
+      const pg = page([{ pt: '0s' }, 'These', { pt: '0e' }, ',', { dx: 4 }, '#', { pt: '1s' }, 'Corr', { pt: '1e' }])
+      // (the "#" made the † a script: raised, smaller, at `dagger`)
+      const i = pg.glyphs.findIndex((g) => g.u === '#')
+      pg.glyphs[i] = { ...mark('†', dagger), n: i }
+      return pg
+    }
+    // (glued: the word's first glyph at x 49, the † ends 0.5 before it, 5.5 after the comma)
+    const glued = [pageOf(45.5)]
+    const g = ownOf(glued, { units: notes })
+    expect(groupsOf(g, glued)).toEqual({ u0: 'These,', u1: 'Corr', 'u1.l': '†' })
+    expect(g.units.get(1)?.labelKept).toBe(false)
+    // (glued to the comma before it, a word's space between it and the word: left the original's, as before)
+    const apart = [pageOf(41)]
+    const a = ownOf(apart, { units: notes })
+    expect(groupsOf(a, apart)).toEqual({ u0: 'These,', u1: 'Corr' })
+    expect(a.units.get(1)?.labelKept).toBe(true)
+  })
   it('leaves a label that is no label\'s form the original\'s ink where it stands apart (labelKept)', () => {
     const pages = [page([{ pt: '3e' }, '211', { pt: '0s' }, 'cell', { pt: '0e' }])]
     const r = ownOf(pages, { units: units('cell') })

@@ -43,6 +43,12 @@ export const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3
  *  marks in one half of the em (not `centredPunct`) */
 export const punctOf = (s: string): 'open' | 'close' | null =>
   PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
+/** a mark's class where it is full-width, its blank half its own: a mark of the CJK blocks (CJK: the full-width and wide forms,
+ *  East Asian Width F or W) wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target sets it in its
+ *  CJK face (`cjkFace`), an em wide, never where an alphabet's target sets it in its Latin face, proportional (lane cjk-space,
+ *  B.tokens; the figure edge's blank halves, S.figures blanksOf). None for any other character */
+export const fullWidthPunctOf = (s: string, cjkFace: boolean): 'open' | 'close' | null =>
+  CJK.test(s) || cjkFace ? punctOf(s) : null
 
 /** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 (no-start.mjs NO_START) */
 const NO_START: [number, number][] = (

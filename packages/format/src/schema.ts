@@ -389,6 +389,10 @@ export const Head = z.object({
   parts: z.array(Digest.nullable()),
   refused: z.array(z.tuple([page, PrepWhy])).optional(),
   outline: z.array(z.tuple([int, page, Id])).optional(),
+  // what PDF.js recovered from inside its worker while the prepare read our final pass (B) and arXiv's PDF (A), each
+  // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
+  // answered it. None where nothing was (the corpus's every paper)
+  recovered: z.array(z.tuple([z.enum(['A', 'B']), z.string().max(32), int.min(1), z.string().max(200)])).optional(),
 })
 
 // ---------------------------------------------------------------- a translation (packages/translate's Result, by unit id)

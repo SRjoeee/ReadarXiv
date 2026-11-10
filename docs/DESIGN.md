@@ -1032,14 +1032,30 @@ only how it meets the rest of the extension.
   `done`); the wrap reads each page's glyphs' (n, k) and facts (`wrapPageOf`) and keeps the section alone, A and it never
   composed nor the whole hashed (wrapOf's `compose: false`); and read, align and locate run in a frame of their own
   (`placedOf`), so that A's Doc is let go there and, unless `keep` (the lab's claims and review), B's, the instrument's
-  ink emptied. Measured natively on Linux (arm64, the box child's flags, its data limit as arm64 counts it: 1,024 MiB
-  and V8's 256 MiB code range, 1,280), the lowest data limit each paper prepared under three times of three:
-  2609.19644v1 (71 pages, a 26 MB source and PDF), which died under 1,280 as on staging, 1,120; 2610.40394v1 1,200;
-  2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,240; 2610.42112v1 960 and 2610.37668v1 800 or less
-  (once each). Under a lower limit each dies first where the back half no longer holds anything of a document whole:
-  2609.19644v1 in the front half's adapter (instrumentOf, its own copies of B's glyphs), 2610.40394v1 reading A,
-  2610.19159v1 in locate. Every object of the 88 corpus papers and of 2609.19644v1 is the same (stage 1a and I6). What
-  the box itself holds through the back half (the source, its files, B's bytes) is the box's to let go.
+  ink emptied. The front half's adapter reads B as the back half reads A: each page's raw glyphs let go once its Doc
+  page is made (readPdf's `rawGlyphs: false`), the ownership reading the Doc's glyphs, which carry every field it reads
+  (it made a copy of its own of each, so that B's glyphs were held three times at once), and no figure path's lines
+  (`shapes: false`), which no step reads of B (215 MiB made for nothing on 2610.40394v1); locate and the wrap read A's
+  glyphs off its Doc too, A's raw glyphs let go the same way. And no page's operator list is held whole: PDF.js's
+  getOperatorList answers one as a single object (2610.40394v1's 23rd page, of A and of B alike: 510,506 operators,
+  93 MiB held, the heap at 372 MiB within that one call), which no order of the pages removes. readPdf reads each in
+  the pieces PDF.js's worker sends it, 1,000 operators each (`opstream.ts` `readOps`: getOperatorList asked as ever,
+  and for that call the page proxy's `_renderPageChunk`, the one PDF.js internal the engine reaches, hands each piece
+  on and PDF.js an empty one; a piece waits for the fonts it sets, as PDF.js's canvas waits on a dependency), and
+  every reader of the list reads the pieces in turn, its state running on from one to the next (`ink.mjs`
+  `inkReader`, `remove.mjs` `alignReader`, read.ts's glyph tags; pageInk and alignOf are each a reader fed the whole
+  list). The densest page reads some 2 % slower (1,609 ms against 1,583, inside the runs' spread). Measured natively
+  on Linux (arm64, the box child's flags, its data limit as arm64 counts it: 1,024 MiB and V8's 256 MiB code range,
+  1,280), the lowest data limit each paper prepared under three times of three: 2609.19644v1 (71 pages, a 26 MB
+  source and PDF), which died under 1,280 as on staging, 1,080; 2610.40394v1 960 (1,160 with its lists whole), dying
+  under it reading A or B; 2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,200 (1,120 where the box
+  lets go of the source, its files and B's bytes once the front half is done), 1,080 with its lists in pieces;
+  2610.42112v1 960 and 2610.37668v1 800 or less (once each, before the lists were read in pieces). Under 1,080
+  2610.19159v1 dies in locate (two runs of three at 1,040), A's Doc (190 MiB of its 469,663 glyphs) and B's held
+  whole through align and locate: what a back half that reads page by page would no longer hold. Every object of the 88 corpus papers
+  and of 2609.19644v1 is the same (stage 1a and I6; for the lists in pieces, 87 of the 88, the 88th's compile held
+  only in an archive the check did not read). What the box itself holds through the back half (the source, its
+  files, B's bytes) is the box's to let go.
 - **One set of settings** (§9). The service, the language, the prompt and the highlight are the extension's.
   `pdfReader` (v19) holds the reader's own; its appearance became the extension's `theme` at v20, and what it translates
   (`classes`, "What to translate") joined it at v21, in the place of the image switch, which is the HTML page's alone since. The

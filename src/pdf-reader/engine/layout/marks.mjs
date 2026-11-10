@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { BACKREF_LIST, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { BACKREF_LIST, calledAt, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
@@ -827,8 +827,16 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   places were laid from their starts, centred only where the ink happened to read so) — states the same: its start mark's
  *   index carried out by \aftergroup through ordinary groups alone (a brace group, \begingroup: \axt@agplain, as the
  *   paragraph's end is followed), never past a box, a \noalign, math or a note, where the unit is no line of the cell's or the
- *   token would land where TeX reads none (longtable's caption in its \noalign); the template's end writes it where it is the
- *   cell's one unit, none where two units or a cell's unit share the cell's line, which the class then places, not either.
+ *   token would land where TeX reads none (longtable's caption in its \noalign) — but a box the column's template sets around
+ *   the content: colortbl's \setbox\z@\hbox, which it \unhbox-es into the cell (xcolor's `table`, 2411.13093v4: no unit of its
+ *   author block stated a class), whose content is the cell's line all the same. \axt@cl, before each column's content (array's
+ *   \insert@column wrapped while \@classz builds the column; \protected, a preamble expanded again keeps it), notes the
+ *   content's level, and a box group at or above it is the template's (\axt@agtbox); a box below it is the paper's, and the
+ *   template's end forgets the level, so that after a table set in the cell none is passed; the template's end writes it for each unit
+ *   that reaches it (\axt@tel: several units share the cell's line, 2411.13093v4's names apart by \quad and a \thanks between
+ *   two), the class placing that line, which the lay runs as one where its members state it alike (rowLinesOf); none where a
+ *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
+ *   given the class, would have been set on its own middle.
  *   Assignments, \aftergroup and \message: no node
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
@@ -999,6 +1007,55 @@ export const POINTS_TEX = [
   '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
   '\\def\\axt@peat{\\ifcase\\numexpr\\lastnodetype+1\\relax 0\\or1\\or0\\or0\\or1\\or1\\or1\\or0\\or1\\or0\\or0\\or1\\else0\\fi}',
   '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
+  // (each display TeX sets, wherever it stands and whatever opened it, an environment's or \\[ … \\]'s: its ink between `dps<n>`
+  // and `dpe<n>` (layout/ink.mjs REGION_POINT, the region `display`), n the display's number in the pass, so that every reader
+  // keeps that ink as the paper's whatever its face and wherever it stands (2608.08481v1 p7: displays (7) and (8) in REVTeX's
+  // widetext, under the footnote rule, no source unit's, set in a text face by \\mathrm, cut into ink units of the page's foot
+  // and translated). TeX enters display math for each, and \\everydisplay is the one place every display passes: appended once
+  // the document began (begindocument/end), after every package's own. A display's math list then holds nothing yet, and TeX
+  // refuses an \\halign in a display whose list holds anything ("Improper \\halign inside $$'s": an align's, a gather's, an
+  // eqnarray's, $$\\halign …$$): what a display will be is known from the pass before, which wrote each display's number, its
+  // environment and its line to the aux at once (\\axt@dpseen) and those an \\halign opened (\\axt@dpaligned), the aux read back at
+  // \\begin{document}. A display known as no alignment, of the same environment and line, gets its first point at its list's start.
+  // Its last is set inside its formula too, the last thing before its number: TeX gives a display's end no hook, and what is set
+  // after its box (a \\vadjust's) is in the page's list, where a column's \\lastbox reads it: REVTeX's balance takes each column's
+  // last box off to leave its depth out (revtex4.cls, \\setbox\\z@\\lastbox), and a point after a display at a column's foot moved
+  // the columns over 2608.08481v1 p7's widetext by up to 2.55 pt. So the end is set where the source ends the display while TeX is
+  // in it: at its environment's end, by a hook on the environment it began in, added the first time a display begins there
+  // (env/<name>/end, read before \\end<name>: equation, equation*, displaymath, a class's own), and at \\]. In math, inner too
+  // (amsmath sets the rest of an equation holding a split in a cell its end closes), and only in the environment the display
+  // began in, once. A display the source ends with $$ has no such place and gets no end: its start alone states no region (the
+  // reader leaves it as before). One not known (a first pass, a display the pass before did not set there) gets none. An
+  // alignment's are set by its \\halign, which in display math (no inner math: an align's measuring pass sets its rows in a box)
+  // adds to \\everycr after the class's own (\\ialign and eqnarray empty it first): after the preamble's \\cr a \\noalign of the
+  // start point, after each row's \\cr one of the end point, at the alignment's own level (an inner alignment that keeps
+  // \\everycr sets none); nothing before the \\noalign, which TeX would read as a row's start. These points are in the page's
+  // list, and a point makes the glue after it a place to break: amsmath ends each row with a \\noalign of
+  // \\interdisplaylinepenalty, 10000, and a point after it let TeX break 2010.11929v2's align over pages 3 and 4. So each is set
+  // by what ends the list (\\axt@dpat, e-TeX's \\lastnodetype): after a penalty, a glue or nothing, the point and a \\penalty10000,
+  // so that the glue after it still follows a penalty; after a row's box, the point and the row's depth given back under it
+  // (\\axt@dpdp: a kern of minus the depth, an empty box that deep, no interline glue), so that a column ending there ends with a
+  // box of the row's depth, as \\lastbox reads it, and every height and glue is as it was; after a kern, none (a glue after it
+  // makes the kern a place to break, which a point would take away); after anything else (a whatsit, a mark), the point alone,
+  // the glue after it a place to break as it was. The display's
+  // number, its knowledge and its level are macros, no register; nothing typeset moves: every glyph where it was, on documents of
+  // every display form (equation, equation*, \\[ \\], displaymath, align, align* with \\intertext, gather, multline, eqnarray,
+  // flalign, alignat, split, aligned, a minipage's, a theorem's, an item's, $$\\halign$$), each display's ink between its points
+  // and nothing else, the $$ ones without an end)
+  '\\gdef\\axt@dpn{0}\\gdef\\axt@dpcl{}\\def\\axt@dpseen#1#2{\\expandafter\\xdef\\csname axt@dps@#1\\endcsname{\\detokenize{#2}}}\\def\\axt@dpaligned#1{\\expandafter\\gdef\\csname axt@dpa@#1\\endcsname{}}',
+  '\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}\\edef\\axt@dpk{\\@currenvir @\\the\\inputlineno}\\edef\\axt@dpk{\\detokenize\\expandafter{\\axt@dpk}}\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}\\fi\\ifaxt@off\\else\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname\\expandafter\\let\\expandafter\\axt@dpw\\csname axt@dps@\\axt@dpn\\endcsname\\ifx\\axt@dpw\\axt@dpk\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend\\fi\\fi\\fi\\fi}',
+  '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
+  '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
+  '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
+  '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
+  '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
+  '\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}',
+  '\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}',
+  '\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}',
+  '\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}',
+  '\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}',
+  '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
+  '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
 ].join('')
 
 /**
@@ -1170,11 +1227,13 @@ export const LAYOUT_TEX = [
   '\\def\\axt@align#1{\\axt@ift#1\\relax{\\axt@tcs#1s\\@nil}{\\axt@ifh#1\\relax{}{\\axt@ucs#1s\\@nil}}\\axt@alg#1e\\@nil}\\def\\axt@tcs t#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@cs{#1}\\fi}',
   '\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else\\ifnum\\currentgrouplevel>\\z@\\expandafter\\gdef\\csname axt@cu@#1\\endcsname{\\axt@cs{#1}}\\expandafter\\aftergroup\\csname axt@cu@#1\\endcsname\\fi\\fi}',
   '\\def\\axt@ifh#1#2\\relax{\\if h#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}\\def\\axt@ucs#1s#2\\@nil{\\ifx\\relax#2\\relax\\else\\axt@us{#1}\\fi}',
-  '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}{}\\fi\\fi}',
-  '\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\let\\axt@uc\\@undefined\\else\\edef\\axt@uc{#1 \\the\\currentgrouplevel}\\edef\\axt@ulv{\\the\\currentgrouplevel}\\fi\\fi}\\def\\axt@clv{\\ifdefined\\axt@cc\\expandafter\\axt@lvl\\axt@cc\\@nil\\else-1\\fi}\\def\\axt@lvl#1 #2\\@nil{#2}\\def\\axt@ulv{-1}',
-  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tec\\axt@uc\\@nil{#1}\\fi}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\axt@usg{#1}}{\\axt@agtbox{\\axt@usg{#1}}}\\fi\\fi}\\def\\axt@usg#1{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}',
+  '\\def\\axt@agtbox#1{\\ifnum\\currentgrouptype=2 \\ifnum\\currentgrouplevel>\\axt@clvl\\relax\\else#1\\fi\\fi}\\protected\\def\\axt@cl{\\xdef\\axt@clvl{\\the\\currentgrouplevel}}\\gdef\\axt@clvl{-1}',
+  '\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else\\edef\\axt@uc{#1 \\the\\currentgrouplevel}\\edef\\axt@ulv{\\the\\currentgrouplevel}\\fi\\fi}\\def\\axt@uls#1 #2\\@nil{#1}\\def\\axt@clv{\\ifdefined\\axt@cc\\expandafter\\axt@lvl\\axt@cc\\@nil\\else-1\\fi}\\def\\axt@lvl#1 #2\\@nil{#2}\\def\\axt@ulv{-1}',
+  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}',
   '\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}',
-  '\\def\\axt@czw{\\axt@cz\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
+  '\\def\\axt@czw{\\let\\axt@icol\\insert@column\\def\\insert@column{\\noexpand\\axt@cl\\axt@icol}\\axt@cz\\let\\insert@column\\axt@icol\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
   '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\let\\axt@mkp\\@mkpream\\def\\@mkpream#1{\\ifx\\@classz\\axt@czw\\expandafter\\axt@mkp\\else\\expandafter\\axt@mkw\\fi{#1}}}\\fi',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',
   '\\protected\\def\\/{\\ifnum\\lastnodetype=6 \\ifdim\\axt@icv=\\z@\\axt@icr\\else\\kern\\axt@icv\\relax\\fi\\else\\axt@icr\\fi}\\let\\@@italiccorr\\/',
@@ -1234,6 +1293,22 @@ export const DVI_POINTS_TEX = '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{
  * After LAYOUT_TEX, for such a paper alone (live.mjs originalFiles, probeFiles): every other engine's files are byte for byte
  * as before. One line, no comment
  */
+/**
+ * \axtcall{i}, before an author's call (latex-front.mjs CALLED_AT, layoutMarking: the command of an author block right after
+ * another's, an \and inside one): the point `<i>c`, unit i the first after it, where TeX is in horizontal mode alone, set as a
+ * closing mark is (\axt@set: every glue, kern and penalty that ends the list taken off, the point set against what came before,
+ * each put back), never on an empty list. Measured on the 31 papers that state a call (2026-11-10), where it first set an end
+ * mark's way: one glue taken off of two (a macro's space and the source's line end after ICML's marks) left the point between
+ * them, TeX broke the centred line at the second and kept the first, the line a space wider (2611.03953v2's first line 1.245 pt
+ * to the left); and, being \protected, it began a row of its own where a block ends in `\\` before NeurIPS' \And (TeX's look for
+ * \noalign after a row's \cr expands every macro and stops at any other token): an empty row, its strut 10.9 pt (1706.03762v7's
+ * second line of names). So it is expandable where LaTeX typesets (\protect its \@typeset@protect, as \axtpma's), to nothing
+ * outside horizontal mode — between two rows of an alignment, in vertical mode, in the preamble —, and kept as it is where LaTeX
+ * stores text robustly; gobbled in a PDF string (hyperref's pdfauthor from \@author). In the marked compile's head only where the
+ * source states a call (live.mjs originalFiles): every other paper's bytes as before. After LAYOUT_TEX, whose \axt@set it uses.
+ * One line
+ */
+export const CALL_TEX = '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
 export const DVI_LAYOUT_TEX = `\\makeatletter\\let\\axt@pdfdo\\axt@destonly\\def\\axt@destonly#1{\\ifnum\\pdfoutput>0 \\axt@pdfdo{#1}\\else\\axt@dvidest{#1}\\fi}${DVI_POINTS_TEX}\\makeatother`
 
 /** a unit's alignment as the marks file holds it (readAlign): centred, flush left, flush right, justified */
@@ -1494,8 +1569,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // class sets it again (own.mjs MR 3). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
     if (u.kind === 'heading') return { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
+    // (and an author's call the source states before it, latex-front.mjs CALLED_AT: its point `<i>c`, CALL_TEX)
     const f = front(u)
-    if (f) return f
+    if (f) { const at = calledAt(u); return at === undefined ? f : { ...f, call: `\\axtcall{${i}}`, callAt: at } }
     const m = base(u)
     return m && lines ? { ...m, before: `\\axtlines{${i}}` } : m
   }
@@ -1805,7 +1881,7 @@ const r2 = v => Math.round(v * 100) / 100
 
 /** the names a log reports set twice: pdfTeX's and LuaTeX's warnings, dvipdfmx's, in every pass a log holds (a line TeX
  *  cut at 79 characters joined to the next) */
-const duplicatesIn = log => {
+export const duplicatesIn = log => {
   const text = (log ?? '').replace(/^(.{79})\n/gm, '$1'), out = new Set()
   for (const m of text.matchAll(/destination with the same identifier \(name\{axt-([^}\s]+)\}\)|duplicate destination with the name 'axt-([^'\s]+)'|Object @axt-(\S+?) already defined/g)) out.add(m[1] ?? m[2] ?? m[3])
   return [...out].filter(n => MARK_NAME.test(n))

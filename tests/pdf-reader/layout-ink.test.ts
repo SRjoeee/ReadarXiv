@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
+import { BOXES_PAGE, displayTextMask, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
 import { figureUnitsOf } from '@/pdf-reader/engine/layout/figure-text.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
@@ -414,6 +414,34 @@ describe('pageInk', () => {
     // (a second end of one region, which TeX may set where a group gives a paragraph's state back, closes nothing)
     expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'cds9', glyph: 4 }, { name: 'cde9', glyph: 6 }, { name: 'cde9', glyph: 6 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 4, to: 6 }])
     expect([...regionMask([{ kind: 'code', from: 1, to: 3 }, { kind: 'other', from: 0, to: 5 }], 5, 'code')]).toEqual([0, 1, 1, 0, 0])
+    // (a display's points (marks.mjs POINTS_TEX): one before its first ink and one after its last, a non-alignment display's; an
+    // alignment's after each of its rows, the region running to the last of them; one TeX broke over a page or a column from its
+    // column body's start to the last end there)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps3', glyph: 2 }, { name: 'dpe3', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 2, to: 5 }])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps4', glyph: 2 }, { name: 'dpe4', glyph: 4 }, { name: 'dpe4', glyph: 7 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 2, to: 7 }])
+    expect(regionsOfPoints([{ name: 'bs2', glyph: 1 }, { name: 'dpe4', glyph: 3 }, { name: 'dpe4', glyph: 6 }, { name: 'be2', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 1, to: 6 }])
+    // (an alignment whose first row paints nothing, `\notag\\` before its formula: that row's end at its start, the region
+    // from the start to the rows' last end all the same (Codex on #634, a365d61d7))
+    expect(regionsOfPoints([{ name: 'dps1', glyph: 2 }, { name: 'dpe1', glyph: 2 }, { name: 'dpe1', glyph: 8 }], 11)).toEqual([{ kind: 'display', from: 2, to: 8 }])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps6', glyph: 3 }, { name: 'dpe6', glyph: 3 }, { name: 'dpe6', glyph: 3 }, { name: 'dpe6', glyph: 7 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'display', from: 3, to: 7 }])
+    // (one whose every row paints nothing states none)
+    expect(regionsOfPoints([{ name: 'dps2', glyph: 4 }, { name: 'dpe2', glyph: 4 }, { name: 'dpe2', glyph: 4 }], 11)).toEqual([])
+    expect([...regionMask([{ kind: 'display', from: 1, to: 3 }], 5, 'display')]).toEqual([0, 1, 1, 0, 0])
+    // (a display's start with no end before its column body's end is a display the source ended with $$, which TeX gives no
+    // place to mark: no region, never the rest of the column; a code paragraph's start still runs to it. 2610.19159v1 p35's
+    // $$ displays in mdframed boxes took the page's box titles to its foot)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'cds2', glyph: 1 }, { name: 'dps5', glyph: 3 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 1, to: 9 }])
+    // (a display's text, TeX's text mode inside its math: `dts<n>` first in an \\hbox, `dte<n>` after it; math opened again in
+    // it, `dms<n>`/`dme<n>`: each paired, a start before its end, never from or to a column body's bracket — a box a pass set
+    // and placed elsewhere, or set again, states nothing; marks.mjs POINTS_TEX)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dps1', glyph: 1 }, { name: 'dts2', glyph: 3 }, { name: 'dms3', glyph: 5 }, { name: 'dme3', glyph: 6 }, { name: 'dte2', glyph: 8 }, { name: 'dpe1', glyph: 9 }, { name: 'be1', glyph: 10 }], 11)).toEqual([{ kind: 'display', from: 1, to: 9 }, { kind: 'dtext', from: 3, to: 8 }, { kind: 'dmath', from: 5, to: 6 }])
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dte4', glyph: 2 }, { name: 'dts4', glyph: 3 }, { name: 'dts5', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([])
+    // (a glyph's mode its innermost region's: the text's, the math in it, the text in that)
+    expect([...displayTextMask([{ kind: 'display', from: 0, to: 10 }, { kind: 'dtext', from: 2, to: 9 }, { kind: 'dmath', from: 4, to: 8 }, { kind: 'dtext', from: 5, to: 6 }], 11)]).toEqual([0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0])
+    // (a box whose text is one formula, \\boxed's: its math's points at its own ends, the math closed first and so stated first —
+    // the inner of two regions on the same glyphs; 2608.25210v2 p10's framed bounds read as text)
+    expect([...displayTextMask(regionsOfPoints([{ name: 'bs1', glyph: 0 }, { name: 'dts7', glyph: 2 }, { name: 'dms8', glyph: 2 }, { name: 'dme8', glyph: 5 }, { name: 'dte7', glyph: 5 }, { name: 'be1', glyph: 6 }], 6), 6)]).toEqual([0, 0, 0, 0, 0, 0])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {
@@ -595,6 +623,19 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(r.unseen!.has(1)).toBe(true)
     expect(r.cut!.has(2) || r.unseen!.has(2)).toBe(false)
     expect(only(r.glyphs, 'A')).toMatchObject({ clipped: true, unseen: true })
+  })
+  it('makes no figure path\'s lines where its reader asks none (`shapes: false`, the front half\'s read of B), every other reading as it was', () => {
+    // (B's shapes are read by no step of the front half nor of the back half, which reads A's: the lines of every path of B's figures
+    // were made and held for nothing, 215 MiB made on 2610.40394v1's 35 pages; lane mem-front)
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const ops = list(form(rect(10, 10, 20, 20), ...text('f1', 10, [1, 0, 0, 1, 30, 20], show(g('A', 600))), rect(30, 10, 40, 20)))
+    const on = pageInk(OPS, ops, commonObjs, { rotate: 0, turned: true, indices: true })
+    const off = pageInk(OPS, ops, commonObjs, { rotate: 0, turned: true, indices: true, shapes: false })
+    expect(on.shapes!.size).toBe(2)
+    expect(off.shapes!.size).toBe(0)
+    const { shapes: _a, ...restOn } = on
+    const { shapes: _b, ...restOff } = off
+    expect(restOff).toEqual(restOn)
   })
   it('a fill of a tiling pattern is marked as one, a shading pattern\'s and a colour\'s are not (#560)', () => {
     // (a rectangle's path as PDF.js gives it: moveTo, lineTo three times, closePath)

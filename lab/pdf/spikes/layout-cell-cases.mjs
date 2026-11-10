@@ -105,8 +105,9 @@ const CASES = {
     ].join('\n'), cls), { [i]: 'l', [i + 1]: 'c', [i + 2]: 'r', [i + 3]: 'c', [i + 4]: 'r' }]]
   })),
   // (an author block's units, no cell's: NeurIPS's \And, each author a tabular[t]{c} of their own, and LaTeX's \author with
-  // \and under \maketitle, each name and place its cell's line, in a brace group of its own or not: their column's class. Not
-  // where the cell's line is more than the unit: two units in one cell, a unit in a box inside the cell. A unit that is a
+  // \and under \maketitle, each name and place its cell's line, in a brace group of its own or not: their column's class, each of
+  // two units that share one cell's line too (the class places their line, which the lay runs as one). Not a unit in a box
+  // inside the cell, whose line the box's is. A unit that is a
   // paragraph (a p column's) its paragraph's; a body's paragraph in a list and one holding a tabular theirs; longtable's
   // caption, in a \noalign, set as before)
   authors: [doc('\\usepackage{longtable}\n\\title{A}\n\\author{' + U(10, 'Alice Smith') + ' \\\\ ' + U(11, 'Some University') + ' \\and ' + U(12, 'Bob Jones') + '}', [
@@ -123,7 +124,18 @@ const CASES = {
     `${U(28, 'a paragraph holding a tabular \\begin{tabular}{c} x \\end{tabular} and more words')}`,
     '',
     `\\begin{longtable}{c} \\caption{${U(29, 'A caption')}}\\\\ x \\\\ ${LONG} \\\\ \\end{longtable}`,
-  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: 'c', 10: 'c', 11: 'c', 12: 'c', 20: 'l', 21: '-', 22: '-', 23: '-', 24: 'c', 26: 'j', 27: 'j', 28: 'j' }],
+  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: 'c', 10: 'c', 11: 'c', 12: 'c', 20: 'l', 21: 'c', 22: 'c', 23: '-', 24: 'c', 26: 'j', 27: 'j', 28: 'j' }],
+  // (the same under colortbl (xcolor's `table`, 2411.13093v4's NeurIPS author block), whose template sets the cell's content in an
+  // \hbox it \unhbox-es into the cell: the content is the cell's line all the same, its units' class carried past the template's
+  // own box (the content's level, \axt@cl before each column's content); never past a box of the paper's own, nor after a table
+  // set in the cell, where the content's level is no longer known)
+  authorsColortbl: [doc('\\usepackage{colortbl}', [
+    `\\begin{tabular}[t]{c}\\bf\\rule{0pt}{24pt}${U(1, 'Yongdong Luo')}$^{1}$ \\quad ${U(2, 'Xiawu Zheng')}$^{1}$\\footnotemark[1] \\quad ${U(3, 'Guilin Li')} \\\\ \\textbf{${U(4, 'Chaoyou Fu')}} \\\\ \\mbox{${U(5)}} \\end{tabular}`,
+    '',
+    `\\begin{tabular}{c} \\begin{tabular}{c} x \\end{tabular} ${U(6, 'after a table')} \\\\ ${LONG} \\end{tabular}`,
+    '',
+    `\\begin{tabular}{lr} ${C(7)} & ${C(8)} \\\\ ${LONG} & ${LONG} \\end{tabular}`,
+  ].join('\n')), { 1: 'c', 2: 'c', 3: 'c', 4: 'c', 5: '-', 6: '-', 7: 'l', 8: 'r' }],
   // (tabularray's tblr measures a cell in an \hbox, then sets it as a paragraph, \raggedright, \centering or \raggedleft: its
   // paragraph's; nicematrix's NiceTabular builds its preamble with LaTeX's; a plain \halign, no template of LaTeX's: nothing)
   others: [doc('\\usepackage{tabularray,nicematrix}', [

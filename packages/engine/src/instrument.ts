@@ -4,6 +4,7 @@
 // instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
 import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
+import type { Recovered } from './read.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
  *  text, or stays: a display), its label (the class's mark before it), a babel name's own word */
@@ -31,6 +32,9 @@ export interface InstrumentUnit {
   /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
+  /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
+   *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
+  address?: true
   /** an ink unit drawn with another unit's row: that unit's index */
   echo?: number
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */
@@ -156,6 +160,8 @@ export interface Instrument {
      *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; a unit TeX set no paragraph for states none */
     skips?: { unit: number; baselineskip: number; parskip: number }[]
   }
+  /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
+  recovered?: Recovered
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
   made: { compiler: string; tree: string; front: string }
 }

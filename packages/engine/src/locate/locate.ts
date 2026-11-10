@@ -52,7 +52,7 @@ import {
 import { bornOf } from './born.ts'
 import { factsOf } from './facts-pass.ts'
 import { groupStyleOf, hasScopes, namesFace } from './group-style.ts'
-import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } from './ink.ts'
+import { groupStyleOf as commandStyleOf, type DisplayLine, type InkInput, type InkStats, inkOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
@@ -170,6 +170,9 @@ export interface Located {
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
   figureGroups: Set<string>
+  /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
+   *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
+  displays: DisplayLine[]
   stats: {
     units: number
     located: number
@@ -395,6 +398,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   const members: Member[] = []
   // (each unit's \baselineskip where its paragraph ends, LINES_TEX's AXT-LINES: its members' lead)
   const texSkip = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k.baselineskip]))
+  const displays: DisplayLine[] = []
   const stats: Located['stats'] = {
     units: ins.units.length,
     located: 0,
@@ -740,11 +744,54 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return mem
   }
 
+  // ---- an author block's unit TeX set inside a paragraph that sets another unit again: a template's paragraph, made of the
+  // paper's own front matter (ACM's reference format: the authors, the year, the title a second time), whose text is the page's,
+  // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
+  // the paper, its \author units set in the reference format alone, each name a member: the paragraph laid on the original's
+  // rows, never reflowing (its first line ended at x 190, TeX's at 294). A paragraph sets a unit again where a start point of
+  // the unit's stands in it after an end point of the unit's in B's stream (its setting begun again: the copy, own.mjs MR 3's
+  // first occurrence the unit's own); the paragraph from the last end TeX states before the unit's first glyph to the first
+  // after its last (Instrument.tex.paragraphEnds). Where TeX states no paragraph ends, nothing is read. Not a name's own setting:
+  // a block whose units TeX set twice has them its first setting's, the block's (2402.10294v1's ACM names)
+  const released = new Set<number>()
+  {
+    const paraEnds: number[] = []
+    ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+      for (const g of l) paraEnds.push((m.offB[p] as number) + g)
+    })
+    paraEnds.sort((x, y) => x - y)
+    const ended = new Set<string>()
+    const again: number[] = []
+    B.pages.forEach((pg, p) => {
+      for (const x of pg.points ?? []) {
+        const k = MARK_KEY.exec(x.name)
+        if (!k) continue
+        if (k[2] === 'e') ended.add(k[1]!)
+        else if (ended.has(k[1]!)) again.push((m.offB[p] as number) + x.glyph)
+      }
+    })
+    if (again.length && paraEnds.length)
+      for (let u = 0; u < ins.units.length; u++) {
+        const list = glyphsOf.get(u)
+        if (!AUTHOR_KINDS.has(ins.units[u]!.kind) || ins.units[u]!.name !== undefined || !list?.length) continue
+        let from = Number.NEGATIVE_INFINITY
+        for (const e of paraEnds) if (e <= (list[0] as number)) from = e
+        const to = paraEnds.find((e) => e > (list.at(-1) as number)) ?? Number.POSITIVE_INFINITY
+        if (again.some((g) => g >= from && g < to)) released.add(u)
+      }
+  }
+
   // ---- the instrument's units, a name's every occurrence its own member
   for (let u = 0; u < ins.units.length; u++) {
     const unit = ins.units[u]!
     const list = glyphsOf.get(u) ?? []
     const boxes = boxesOf.get(u) ?? []
+    if (released.has(u)) {
+      const mem = empty(u, unit.kind, unit.id)
+      mem.cause = 'set in a paragraph that sets a unit again'
+      members.push(mem)
+      continue
+    }
     if (unit.name === undefined) {
       members.push(place(u, list, boxes, undefined, turnedOf.get(u) ?? []))
       continue
@@ -782,6 +829,44 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
   // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
   // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  // A run TeX states (latex-front.mjs \axtcall: the point `<i>c` the marked compile sets before each author's call, the command
+  // or the \and that opens unit i's block, where TeX sets it on a line): an author's member owns what stands on its last line
+  // between its end mark and the next author's call, before any unit's mark or bracket, whatever the gap (ICML's \, before its
+  // marks, 0.17 em, past WORD_GAP: the marks were left behind its name's translation), and nothing past it, which the next
+  // author's lead is (own.mjs MR 5); a row of another line there (1706.03762v7's e-mails, under each place before NeurIPS'
+  // \And) is none of it, the original's where TeX set it as before (taken, the place was laid on two lines at 8.97 pt). The last of such calls, an author whose own call is stated with no call after it, owns what
+  // stands on its last line before the paragraph TeX ends after it (Instrument.tex.paragraphEnds), no unit's mark between: the
+  // end of the list its calls make (ICML's last name, "Zuo Bai 2 †"); a row of another line before that end (an e-mail a class
+  // sets under the last name in its tabular) is none of it, and the glue rule below reads the run. Where no call is stated (a
+  // class that stores its list and sets it whole, 2604.14228v3's \addtolist), the glue rule below, as before
+  const paraEndsB: number[] = []
+  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+    for (const g of l) paraEndsB.push((m.offB[p] as number) + g)
+  })
+  paraEndsB.sort((x, y) => x - y)
+  const calledOwn = new Set<string>()
+  for (const pg of B.pages) for (const x of pg.points ?? []) if (CALL.test(x.name)) calledOwn.add(x.name.slice(0, -1))
+  const runEndOf = (mem: Member): { at: number; line: boolean } | null => {
+    if (!AUTHOR_KINDS.has(mem.kind)) return null
+    const p = (pageB[mem.bLast] as number) - 1
+    const o = m.offB[p] as number
+    const pts = B.pages[p]?.points ?? []
+    const k = pts.findIndex((x) => x.name === `${mem.unit}e`)
+    if (k < 0) return null
+    let next = Number.POSITIVE_INFINITY
+    for (let j = k + 1; j < pts.length; j++) {
+      const x = pts[j]!
+      if (CALL.test(x.name)) return { at: o + x.glyph, line: false }
+      if (UNIT_MARK.test(x.name) || BRACKET.test(x.name)) {
+        next = o + x.glyph
+        break
+      }
+    }
+    if (!calledOwn.has(String(mem.unit))) return null
+    const from = o + pts[k]!.glyph
+    const end = paraEndsB.find((e) => e >= from)
+    return end === undefined || end > next || pageB[end - 1] !== pageB[mem.bLast] ? null : { at: end, line: true }
+  }
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
       continue
@@ -790,7 +875,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const last = gA(end)
     let prev = last
     const trail: number[] = []
+    const run = runEndOf(mem)
+    let call = run ? run.at : -1
+    // (the list's end: every free ink glyph before it on the member's last line, else the glue rule)
+    if (run?.line)
+      for (let b = mem.bLast + 1; b < run.at && b < NB && (unitB[b] as number) < 0; b++) {
+        const a = m.bToA[b] as number
+        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        const g = gA(a)
+        if (isInk(g) && (g.top <= last.bottom || g.bottom >= last.top)) {
+          call = -1
+          break
+        }
+      }
     for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
+      if (call >= 0) {
+        if (b >= call) break
+        const a = m.bToA[b] as number
+        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        const g = gA(a)
+        // (on the member's last line alone: another row before the call, an e-mail a block sets under its place, is no trail)
+        if (isInk(g) && g.top > last.bottom && g.bottom < last.top) trail.push(a)
+        continue
+      }
       const a = m.bToA[b] as number
       if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
       const g = gA(a)
@@ -874,7 +981,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const owned = (a: number) => {
       const c = claimedA[a] as number
       const b = m.aToB[a] as number
-      return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
+      return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0 && !released.has(unitB[b] as number))
     }
     // (the source unit a glyph of A is: its member's claim, else its partner's owner on B)
     const ownerOf = (a: number) => {
@@ -887,6 +994,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       made,
       stats: st,
       block,
+      displays: dl,
     } = inkOf({
       ins,
       inkA,
@@ -900,6 +1008,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       artefact: figureArtefact,
       fixed: artefacts ? fixedFaces : null,
     })
+    displays.push(...dl)
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
     // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
     // block keeps its kind; where no title is located, none is told apart)
@@ -1401,9 +1510,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
       // (a URL: a \url's, or a piece the instrument states sets one, PieceClass.url: a \urldef'd control sequence a macro shows)
       const isUrl = p.kind === 'url' || !!classOf.get(id)?.url
+      const literal = !!classOf.get(id)?.literal || isUrl || p.kind === 'code'
+      const copy0 = classOf.get(id)?.copy ?? ''
       const lineEnds = {
-        literal: !!classOf.get(id)?.literal || isUrl || p.kind === 'code',
-        source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
+        literal,
+        // (one word as written, its line's ends joins as its copy reads them (facts.ts LineEndOptions.oneWord, lane url-join): a
+        // URL (urlCopyOf), or a literal mark whose copy, the source's reading, holds no white space)
+        oneWord: isUrl || (literal && copy0 !== '' && !/\s/u.test(copy0)),
+        source: [p0.t === 'el' ? p0.src : '', copy0, unitText].join('\n'),
       }
       const asText =
         TEXT_KINDS.has(p.kind) ||
@@ -1705,6 +1819,45 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
     standing.add(x.ord)
   }
+  // (B's body and float brackets, LAYOUT_TEX's `bs<n>`, `be<n>`, `fs<n>`, `fe<n>`, each at the glyph after it: a column's body is
+  // bracketed each, a float's set apart)
+  const brackets: number[] = []
+  B.pages.forEach((pg, p) => {
+    for (const x of pg.points ?? []) if (BRACKET.test(x.name)) brackets.push((m.offB[p] as number) + x.glyph)
+  })
+  const bracketBetween = (lo: number, hi: number) => brackets.some((g) => g > lo && g <= hi)
+  // (a member of the instrument's whose first glyph TeX set right after another's last, on that one's last row, stands after it,
+  // whatever their order among the units: the front end numbers the units it cut out of what was one unit after every other
+  // unit of the source (latex-front.mjs `later`: no unit's number moves), an author block's names after an \and among them.
+  // 2611.00342v1 p1, IJCAI: the second name's unit came after the body's, the body was taken for the member before it, and the
+  // first name kept a flow of its own, laid centred on its original's middle, a hole before the next. The member before on B:
+  // the one whose last glyph is the last an instrument unit owns before its first (what stands between is no unit's, or made on
+  // A: a connector), on that one's last line after its end, in one column or in none TeX set apart (no body's or float's
+  // bracket between: a row of names over the page's middle). It moves where that member is not the one before it among the
+  // units, or moved itself: the rest of a run TeX set one after the other goes with it. Never an insert's, nor to one; nor a
+  // babel name's or to one, whose place in a flow is its binding's (below: `leads`), its unit's place among the units none)
+  for (const x of members) {
+    if (madeOnA(x) || x.bFirst < 0 || insert(x) || x.name !== undefined || standing.has(x.ord)) continue
+    let b = x.bFirst - 1
+    while (b >= 0 && pageB[b] === pageB[x.bFirst] && (unitB[b] as number) < 0) b--
+    const o = b >= 0 && pageB[b] === pageB[x.bFirst] ? lastAt.get(b) : undefined
+    const lead = o === undefined ? undefined : members[o]
+    if (
+      !lead ||
+      lead === x ||
+      insert(lead) ||
+      lead.name !== undefined ||
+      (members[x.ord - 1] === lead && !standing.has(lead.ord))
+    )
+      continue
+    const a = lead.lines.at(-1),
+      l = x.lines[0]
+    if (!a || !l || a[0] !== l[0] || l[2] < a[3] - 0.5) continue
+    if (a[1] !== l[1] && bracketBetween(lead.bLast, x.bFirst)) continue
+    if (Math.abs(a[4] - l[4]) >= 0.5 * Math.min(lead.style.size, x.style.size)) continue
+    ;(standsAfter.get(lead.ord) ?? standsAfter.set(lead.ord, []).get(lead.ord)!).push(x.ord)
+    standing.add(x.ord)
+  }
   for (const x of members) {
     if (!madeOnA(x) || x.bLast < 0 || standing.has(x.ord)) continue
     let b = x.bLast + 1
@@ -1762,7 +1915,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
-      (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
+      // (one column by the line's x, or none TeX set apart: no body's or float's bracket between the two in B's stream, ICML's
+      // centred names over the page's middle, which its x read as three columns' and laid as three lines)
+      (a[1] === b[1] ||
+        (prev.kind === 'heading' && sameColumn(a[1], b[1])) ||
+        (prev.bLast >= 0 && mem.bFirst >= 0 && !bracketBetween(prev.bLast, mem.bFirst))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
       sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
@@ -2023,7 +2180,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       if (mem.place) stats.places[mem.place]++
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
-  return { units, members, born, flows, ties, links, groups, figureGroups, stats }
+  return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays }
 }
 
 /** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the
@@ -2147,6 +2304,14 @@ export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, numbe
  *  paragraph's first line, after it on its row, spans both. Members a tabular row sets side by side (an author block's names,
  *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
 const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
+/** an author's call the marked compile states: the point `<i>c` before the command or the \and that opens unit i's block */
+const CALL = /^\d+c$/
+/** a unit's start or end mark: `<i>s`, `<i>e`, a heading's `h<i>…`, a cell's `t<i>…` */
+const UNIT_MARK = /^[ht]?\d+[se]$/
+/** the same, its unit's key and whether it starts or ends a setting */
+const MARK_KEY = /^([ht]?\d+)([se])$/
+/** a body's or a float's bracket in B's stream (LAYOUT_TEX) */
+const BRACKET = /^[bf][se]\d+$/
 
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */

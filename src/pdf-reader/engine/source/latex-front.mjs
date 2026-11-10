@@ -7,8 +7,9 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
+import { isMemoryError } from '@readarxiv/engine'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
-import { TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
+import { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 import { selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
@@ -37,8 +38,9 @@ export const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i
 const utf8Bytes = s => new TextEncoder().encode(s)
 const bytesOf = (s, enc) => (enc === 'utf8' ? utf8Bytes(s) : latin1Bytes(s))
 const UTF8 = new TextDecoder('utf-8', { fatal: true }), UTF8_LAX = new TextDecoder()
-/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 */
-const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch { return false } }
+/** whether a source's text (its bytes read latin1) is UTF-8: a file that is never decodes as UTF-8 (a failed allocation of its
+ *  bytes is the paper's, never a file in another encoding) */
+const isUtf8Text = t => { try { UTF8.decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
 /**
  * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
  * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
@@ -1003,14 +1005,14 @@ function ownLater(name, b, before, ctx) {
 }
 /** a call of such a command: its argument of text the block's (frontBlock, its role ownAuthorsOf's), its other arguments as they
  *  are (a mark's key, a label); the call's end, or -1 where the argument is not there */
-function ownAuthorCall(s, end, name, to, b, ctx) {
+function ownAuthorCall(s, at, end, name, to, b, ctx) {
   const { role, param } = ctx.ownAuthors.get(name), macro = ctx.macros.get(name)
   const { args, end: e } = frontArgs(s, end, name, ctx, to)
   const reqs = args.filter(a => a.kind === 'req'), opt = args.find(a => a.kind === 'opt')
   const arg = macro?.opt && param === 1 ? opt : reqs[param - 1 - (macro?.opt ? 1 : 0)]
   if (!arg) return -1
   const before = b.units.length
-  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role)
+  frontBlock(s, arg.start + 1, arg.end - 1, b, ctx, role, at === null ? null : { at, end: e })
   ownLater(name, b, before, ctx)
   return e
 }
@@ -1422,12 +1424,18 @@ const joinLetters = pieces => {
   return out
 }
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
-// (0000-0002-1825-0097), and the domain after a list of names in braces
+// (0000-0002-1825-0097), and a group of local parts before their one domain
 /** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (packages/engine's copy of
  *  ink-units.mjs, rule 4: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
 export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
-const EMAIL = new RegExp(String.raw`${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
-const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
+/** several addresses at one domain written once, a group of their local parts before it (`{jyeoj251, bmw5779}@gmail.com`,
+ *  2611.00342v1; `[first name]@distributed.inc`, 2610.21085v1): an opening brace, parenthesis or bracket with no local part's
+ *  character right before it, EMAIL_ADDRESS's local parts separated by commas and/or white space, the matching closing one,
+ *  and directly after it `@` and EMAIL_ADDRESS's domain. Its syntax alone, every character of it, as the paper sets it: the
+ *  source's (keepGroups, its spaces and braces read as TeX sets them) and an ink unit's lines' (packages/engine's copy of
+ *  ink-units.mjs, groupedAddresses: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
+const EMAIL = new RegExp(String.raw`${ADDRESS_GROUP.source}|${EMAIL_ADDRESS.source}|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b`, 'g'), HAS_EMAIL = new RegExp(EMAIL.source)
 /** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
  *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the
  *  translator). The words before the address that its `\_` join, the `\_` and the address are one placeholder, as the paper
@@ -1455,24 +1463,50 @@ function escapedLocals(pieces) {
   }
   return out
 }
+/** TeX's spaces as a source writes them between two words: a tie, a control space, the kernel's `\,`, `\:`, `\;`, and
+ *  `\thinspace`, `\enspace`, `\quad`, `\qquad`, `\space` */
+const TEX_SPACE = /^(?:~|\\[ ,:;]|\\(?:thinspace|enspace|quad|qquad|space)(?![A-Za-z@]))$/
+const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
+/** each group of local parts before their one domain (ADDRESS_GROUP) one placeholder, written as the paper writes it, read
+ *  over a unit's pieces as TeX sets them: a text piece its characters, a space of TeX's (TEX_SPACE) white space, a text symbol
+ *  its one character (`\{`, `\}`, `\_`: symbolText), anything else (a command, a group, an accent's letter) no character of an
+ *  address. Read from one text between `\{` and `\}` alone, a tie or a thin space between the local parts
+ *  (`\{kahe,~v-xiangz\}@…`, 1512.03385v1; `\{mph,\,lmb\}@…`, 2610.17024v1) parted the group into words sent one by one, and a
+ *  group in brackets (`[first name]@…`, 2610.21085v1) was text */
+function keepGroups(pieces) {
+  if (!pieces.some(p => p.t === 'text' && p.src === undefined && p.s.includes('@'))) return pieces
+  let flat = ''
+  const from = []
+  for (const p of pieces) {
+    from.push(flat.length)
+    flat += p.t === 'text' ? (p.src === undefined ? p.s : '\u0000') : p.t === 'ph' ? (TEX_SPACE.test(p.src ?? '') ? ' ' : symbolText(p.src) ?? '\u0000') : '\u0000'
+  }
+  from.push(flat.length)
+  const pieceAt = o => { let k = 0; while (from[k + 1] <= o) k++; return k }
+  const out = []
+  // (a text piece's part from s to e, as sliceSkips cuts one; the whole piece where that is all of it)
+  const part = (k, s, e) => { const p = pieces[k]; if (p.t !== 'text' || (s === 0 && e === p.s.length)) out.push(p); else if (e > s) out.push(sliceSkips(p, { ...p, s: p.s.slice(s, e) }, s, e)) }
+  // (k the first piece not yet written, `off` how much of it a group took)
+  let k = 0, off = 0
+  for (const m of flat.matchAll(GROUPS)) {
+    const a = m.index, b = a + m[0].length, ka = pieceAt(a), kb = pieceAt(b - 1)
+    for (; k < ka; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+    if (pieces[ka].t === 'text') part(ka, off, a - from[ka])
+    let src = ''
+    for (let j = ka; j <= kb; j++) src += pieces[j].t === 'text' ? pieces[j].s.slice(j === ka ? a - from[j] : 0, j === kb ? b - from[j] : undefined) : pieces[j].src
+    out.push({ t: 'ph', src })
+    if (pieces[kb].t === 'text' && b - from[kb] < pieces[kb].s.length) { k = kb; off = b - from[kb] } else { k = kb + 1; off = 0 }
+  }
+  for (; k < pieces.length; k++, off = 0) part(k, off, pieces[k].s?.length ?? 0)
+  return out
+}
 /** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
- *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
- *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
+ *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a group of local
+ *  parts before their domain ({sl225, samand2, reyhaneh}@illinois.edu, keepGroups), each become a placeholder, kept as the
  *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
  *  with the ideographic comma */
 function keepAddresses(pieces) {
-  pieces = escapedLocals(pieces)
-  const lists = []
-  for (let k = 0; k < pieces.length; k++) {
-    const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
-    const domain = after?.t === 'text' && AT_DOMAIN.exec(after.s)?.[0]
-    if (p.t === 'ph' && p.src === '\\{' && names?.t === 'text' && shut?.t === 'ph' && shut.src === '\\}' && domain) {
-      lists.push({ t: 'ph', src: p.src + names.s + shut.src + domain })
-      if (after.s.length > domain.length) lists.push(sliceSkips(after, { ...after, s: after.s.slice(domain.length) }, domain.length))
-      k += 3
-    } else lists.push(p)
-  }
-  return lists.flatMap(p => {
+  return keepGroups(escapedLocals(pieces)).flatMap(p => {
     if (p.t !== 'text' || !HAS_EMAIL.test(p.s)) return [p]
     const out = []
     let at = 0
@@ -1819,7 +1853,8 @@ function frontEnds(s, from, to, ifs = new Set(), rowEnds = null) {
  * its own (frontValues). An e-mail or a web address in any of them, an ORCID, a mark, stays as it is (keepAddresses, the
  * placeholders)
  */
-function frontBlock(s, from, to, b, ctx, role = 'names') {
+function frontBlock(s, from, to, b, ctx, role = 'names', call = null) {
+  const callAt = call ? calledAfter(s, call, ctx) : undefined
   if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
   // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level
   const notes = []
@@ -1878,6 +1913,40 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
   // that no unit's pieces, nor a unit that nests it, carry it: sourceHash)
   const block = { text: s.slice(from, to) }
   for (const u of made) BLOCK_OF.set(u, block)
+  // (the calls the marked compile states, each on the first unit after it: the call's own command where another author's call
+  // ended right before it, and each author's \\and inside the block — layoutMarking's \\axtcall, CALLED_AT)
+  const top = topUnits(made)
+  const states = (at, after) => { const u = top.find(v => v.start >= after); if (u && !CALLED_AT.has(u)) CALLED_AT.set(u, at) }
+  if (callAt !== undefined) states(callAt, from)
+  for (const e of ends) if (e.and) states(e.at, e.end)
+  // (and the end of each note's call that marks text before it in its row, a \\thanks between two names: the mark the note set
+  // is that text's, the unit after it the next one's. Not a note that opens its row: its mark, set before the name, is the
+  // name's lead)
+  const rows = blocks.flat()
+  for (const n of notes) {
+    const row = rows.find(([x, y]) => n.at >= x && n.at < y)
+    if (row && top.some(v => v.start >= row[0] && v.start < n.at)) states(n.end, n.end)
+  }
+}
+/**
+ * Where the marked compile states an author's call (layout/marks.mjs CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in
+ * horizontal mode alone), by the first unit after it: an author block's command in the document (\\icmlauthor, an \\author of a
+ * class that sets it where it stands) right after another's, white space and comments alone between — ICML's names, each a call
+ * of its own in one paragraph, its marks set after its name —, and each \\and that opens an author's block inside one (LaTeX's
+ * \\author, NeurIPS' \\And). Each a source offset, in the unit's file. What TeX sets between an author's end mark and the next
+ * author's call is the author's (its trail: the engine's locate), what after it the next author's (its lead: own.mjs MR 5): no
+ * gap tells them apart, a thin space or a word space (2611.03953v2's names, 2610.10069v1's \\thanks mark before its \\and). A call
+ * in the preamble states none (frontMatter: TeX sets nothing there, and a class stores what it sets later and whole, its
+ * separators its own — 2604.14228v3's \\addtolist), the \\and inside its argument still
+ */
+const CALLED_AT = new WeakMap()
+export const calledAt = u => CALLED_AT.get(u)
+/** the offset of an author block's call (`call`: its command's start and its arguments' end) where another author call ended
+ *  right before it in the same text, white space and comments alone between; this call noted for the next */
+function calledAfter(s, call, ctx) {
+  const last = ctx.frontCall
+  ctx.frontCall = { s, end: call.end }
+  return last?.s === s && last.end <= call.at && /^(?:\s|%[^\n]*(?:\n|$))*$/.test(s.slice(last.end, call.at)) ? call.at : undefined
 }
 /** an author block's unit's block (frontBlock): its command's whole argument, by unit */
 const BLOCK_OF = new WeakMap()
@@ -1989,7 +2058,7 @@ function envArgs(s, at, to, env, ctx) {
  * arguments as they are. Where the table knows its parameters the hook's is found by its index, else it is its n-th
  * required argument or its last. Its end, or -1 where it has no such argument
  */
-function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
+function frontCommand(s, at, end, name, to, b, ctx, { front = false } = {}) {
   const [role, n] = FRONT_ROLES[name]
   const call = commandArgs(s, end, name, to)
   const reqs = call.args.filter(a => a.kind === 'req' && s[a.start] === '{')
@@ -1997,7 +2066,7 @@ function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
   if (!arg) return -1
   b.flush()
   const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
-  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name))
+  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name), at === null ? null : { at, end: call.end })
   else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
   else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
   if (front) for (const u of b.units.slice(before)) u.front = true
@@ -2315,11 +2384,12 @@ function walk(s, from, to, b, ctx) {
         i = content.end; continue
       }
     }
-    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (ctx.ownAuthors?.has(name)) { endText(); b.flush(); const e = ownAuthorCall(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
+      const first = args.find(a => a.kind === 'req')
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name), a === first ? { at: i, end: e } : null); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
     if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
@@ -2365,7 +2435,7 @@ function walk(s, from, to, b, ctx) {
     // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
     // paragraph's unit must not run over the call, whose source no piece of it holds — written back, the call was gone
     // (the re-review's N1, \note{…} mid-paragraph)
-    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
+    if (call && !macro.prose && FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx, { front: true }); if (e > 0) { i = e; continue } }
     if (call && macro.prose) {
       const arg = call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)]
       if (arg?.group && macro.stores) {
@@ -2381,11 +2451,12 @@ function walk(s, from, to, b, ctx) {
       // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
       if (arg && !macro.then && setsWords(macro)) {
         // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
-        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder)
+        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder; a failed
+        // allocation is the paper's)
         const expanding = ctx.expanding ?? new Set()
         let text = null
         if (!macro.opt && !expanding.has(name) && expanding.size < EXPANSION_DEPTH) {
-          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch { text = null }
+          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch (e) { if (isMemoryError(e)) throw e; text = null }
         }
         // (the pair's id spent as the pair's was: the pairs after it keep theirs, and their units their hashes)
         endText(); b.pairId++
@@ -2438,7 +2509,7 @@ function walk(s, from, to, b, ctx) {
     if (name === '\\') { const { args, end: e } = argsAfter(s, end, 1); const stop = args[0]?.kind === 'opt' ? e : end; endText(); if (b.cellMode) { b.flush(); i = stop; continue } b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // the front matter's commands the role table knows by their hook (FRONT_ROLES: AAAI's \affiliations, amsart's
     // \dedicatory, a \date): their text a unit of what it is, the text before them ended first (above)
-    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
+    if (FRONT_ROLES[name]?.[1]) { endText(); const e = frontCommand(s, i, end, name, to, b, ctx); if (e > 0) { i = e; continue } }
     // a running head, kept as it is with its arguments (2608.04322's \markboth{…}%\n{…}, whose second argument was walked
     // as text only while a comment kept it from the command)
     if (RUNNING_HEADS.has(name)) { const call = commandArgs(s, end, name, to); endText(); b.ph(s.slice(i, call.end), i, call.end); i = call.end; continue }
@@ -2982,7 +3053,7 @@ function frontMatter(s, from, to, b, ctx) {
       continue
     }
     if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
-    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
+    if (ctx.ownAuthors?.has(c.name)) { const e = ownAuthorCall(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
@@ -3001,7 +3072,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (m) { ctx.visitFront?.((m[1] ?? m[2]).trim(), ctx.dirs); past = c.end + m[0].length }
       continue
     }
-    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, c.end, c.name, to, b, ctx); if (e > 0) past = e }
+    if (FRONT_ROLES[c.name]?.[1]) { const e = frontCommand(s, null, c.end, c.name, to, b, ctx); if (e > 0) past = e }
   }
   b.flush()
 }
@@ -3285,7 +3356,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
-  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
+  const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch (e) { if (isMemoryError(e)) throw e; return false } }
   const transcode = enc ? new Set([...files].filter(([, t]) => !isUtf8(t)).map(([f]) => f)) : new Set()
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
@@ -3560,7 +3631,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // the line and the original (FIT_DEF)
     const fits = (project.fits ?? []).filter(f => f.file === file && us.some(u => u.start >= f.start && u.end <= f.end && translated.has(u)))
     // (a tabular* between \\axtstar and \\axtstarbody, which measure its body at its columns' width)
-    const inserts = fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]).sort((a, b) => a[0] - b[0])
+    // (and an author's call the marked compile states, its unit's mark's `call` at `callAt`, in the text between two units: CALLED_AT)
+    const called = mark ? us.flatMap(u => { const m = mark(u); return m?.call && Number.isInteger(m.callAt) ? [[m.callAt, [utf8Bytes(m.call)]]] : [] }) : []
+    const inserts = [...fits.flatMap(f => [[f.start, [utf8Bytes(f.star ? '\\axtfit{\\axtstar' : '\\axtfit{')]], ...(f.star ? [[f.star, [utf8Bytes('\\axtstarbody')]]] : []), [f.end, [utf8Bytes('}{'), bytesOf(text.slice(f.start, f.end), enc), utf8Bytes('}')]]]), ...called].sort((a, b) => a[0] - b[0])
     // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written, and each
     // unit nested in one, inside its range, with the top-level unit it is written in (`outer`), which a compile's error
     // is located by (tex-errors.mjs)
@@ -3574,6 +3647,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     for (const u of us) {
       if (u.start < at) continue
       copy(at, u.start)
+      // (a call stated right where the unit begins — a note's call ended against it, `\\thanks{…}\\,$^{1}$`, 2610.17108v1 —, which
+      // the copy before it, up to the unit's start alone, does not reach: written before the unit's bytes)
+      for (const [pos, bytes] of called) if (pos === u.start) add(...bytes)
       const inner = spans && [], b = render(u, inner)
       // a unit written back inside an optional argument's brackets (a theorem's title): a ] its translation holds outside
       // any group would end them early (a translated "Convergence [see the appendix]"), so the unit goes in a group of its own

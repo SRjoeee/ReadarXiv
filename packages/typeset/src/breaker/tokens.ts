@@ -20,7 +20,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { CJK, cjkClassRe, kinsokuOf, keptPair, noStart, punctOf, SPACELESS } from './script.ts'
+import { cjkClassRe, fullWidthPunctOf, kinsokuOf, keptPair, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -346,7 +346,7 @@ const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boo
   if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
   const cps = [...t.s],
     ch = end ? cps.at(-1)! : cps[0]!
-  return punctOf(ch) === (end ? 'close' : 'open') && (CJK.test(ch) || cjkFace(t))
+  return fullWidthPunctOf(ch, cjkFace(t)) === (end ? 'close' : 'open')
 }
 
 /** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
@@ -567,7 +567,7 @@ export function tokens(i: TokensInput): Tokens {
             // (a mark's class where it is full-width (markBlankEdge's definition: of the CJK blocks, or set in the target's CJK
             // face); none where an alphabet's target sets a curly quote in its Latin face, proportional, no blank half to hang or take)
             if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0)
-              t.punct = CJK.test(s) || face.id !== faceOf(st, 'latin').id ? punctOf(s) : null
+              t.punct = fullWidthPunctOf(s, face.id !== faceOf(st, 'latin').id)
             if (
               !runs &&
               !all &&

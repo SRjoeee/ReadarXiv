@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -221,6 +221,9 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     for (const c of ['held', 'names', 'heldBlock'])
       expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated(c)])[107]).toEqual({ today: 98 })
   })
+  it("joins it by the holder a names unit's stand-in of its ledger class names, its characters today's in another order (2610.30034v1)", () => {
+    expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('order')])[107]).toEqual({ today: 98 })
+  })
   it('joins none where the holder holds two of today\'s units, the cause is another, or today\'s unit is joined already', () => {
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }, { ord: 99, id: R }], prepared, [stated('held'), stated('held', P, 99)])[107]).toBeUndefined()
     expect(todayJoin(pages, part, [{ ord: 98, id: Q }], prepared, [stated('trail')])[107]).toBeUndefined()
@@ -232,6 +235,31 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     expect([...heldJoin(free, part.units, [stated('held')], [98], prepared)]).toEqual([[107, { today: 98, same: true }]])
     const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
     expect([...heldJoin(free, part.units, [stated('held')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+})
+
+describe("the members the candidate's prepare keeps as a line of e-mail addresses (the coordinator's ruling of 2026-11-10)", () => {
+  // (stage 1a's run: its dump marks a kept block of addresses alone `keptBy: 'address'` (dump ords), and its located file joins
+  // each dump ord to its member's ord, `dumpOrds`; the parity reads the members by them, nothing else)
+  it("are the dump's units so marked, by their members' ords; none where the run holds no located file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-address-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'affiliation', text: 'Institute of Things' },
+        { ord: 1, kind: 'inknotes', kept: true, keptBy: 'address', text: '' },
+        { ord: 2, kind: 'inkorphan', kept: true, text: '' },
+        { ord: 3, kind: 'inknotes', kept: true, keptBy: 'pitch', text: '' },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12], [3, 13]] }))
+      expect(candidateAddress('p1', join(run, 'prepare'))).toEqual([11])
+      writeFileSync(join(run, 'prepare', 'p2.prepare.json'), JSON.stringify({ units }))
+      expect(candidateAddress('p2', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
   })
 })
 

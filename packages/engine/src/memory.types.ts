@@ -10,3 +10,6 @@ export const ALLOCATION_FAILED = memory_js.ALLOCATION_FAILED as 'Array buffer al
  *  array may have, a stack overflow, ERR_STRING_TOO_LONG or ERR_BUFFER_TOO_LARGE. The web's container/src/run/memory.ts
  *  isMemoryError, word for word */
 export const isMemoryError = memory_js.isMemoryError as (e: unknown) => boolean
+/** whether a failure's reason as text is a failed allocation: exactly V8's (`RangeError: Array buffer allocation failed`, the
+ *  words isMemoryError takes in PDF.js's wrapping of one); no text of Node's own (its code tells it), nor the words in another's */
+export const isMemoryText = memory_js.isMemoryText as (reason: unknown) => boolean

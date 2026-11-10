@@ -459,7 +459,21 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // ------------------------------------------------ a line of several members (lineOf): its run's middle against TeX's line's
   // (its first glyph's start to its last one's end, as rowLinesOf states it), or its end where TeX set it flush right; each
   // member's drawn line on the row by its ink (its crops and raised marks with it), a member a side leaves the original's where
-  // TeX set it; tolerated and judged as a line's alignment is
+  // TeX set it; tolerated and judged as a line's alignment is. A paragraph of several lines (rowLinesOf's `rows`: IJCAI's
+  // names, 2611.00342v1): each line a side draws of its members (their lines on one baseline, by their ink) against TeX's line
+  // nearest it (the members' original lines on one baseline), the farthest off
+  /** lines on one baseline (half the size apart at most) as one: its extent and its baseline */
+  const rowsOfLines = (ls, size) => {
+    const out = []
+    for (const l of [...ls].sort((a, b) => a.y - b.y)) {
+      const r = out.find((q) => Math.abs(q.y - l.y) <= 0.5 * size)
+      if (r) {
+        r.x0 = Math.min(r.x0, l.x0)
+        r.x1 = Math.max(r.x1, l.x1)
+      } else out.push({ y: l.y, x0: l.x0, x1: l.x1 })
+    }
+    return out
+  }
   for (const line of new Set(lineOf.values())) {
     const keys = line.ords.map(keyOfPart)
     const o0 = orig.get(keys[0])?.lines[0]
@@ -469,16 +483,31 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = `line ${keys.join(', ')}`
     const how = line.align === 'r' ? "a line of several members, right: its run's end" : "a line of several members, centred: its run's midpoint"
     const at = {}
+    const tex = rowsOfLines(
+      keys.flatMap((k) => orig.get(k).lines),
+      os,
+    )
+    const off = (d, o) => (line.align === 'r' ? Math.abs(d.x1 - o.x1) : Math.abs((d.x0 + d.x1) / 2 - (o.x0 + o.x1) / 2))
     for (const [side, M] of [['today', T], ['v2', V]]) {
-      const ends = keys.map((k) => {
-        const ls = (M.get(k) ?? []).filter((l) => !l.rot)
-        if (!ls.length) return [orig.get(k).lines[0].x0, orig.get(k).lines[0].x1]
-        const l = inkOf(ls.reduce((a, b) => (Math.abs(b.y - o0.y) < Math.abs(a.y - o0.y) ? b : a)))
-        return [l.x0, l.x1]
-      })
-      const x0 = Math.min(...ends.map((e) => e[0])),
-        x1 = Math.max(...ends.map((e) => e[1]))
-      at[side] = line.align === 'r' ? Math.abs(x1 - line.x1) : Math.abs((x0 + x1) / 2 - (line.x0 + line.x1) / 2)
+      if (line.rows.length > 1) {
+        const drawn = rowsOfLines(
+          keys.flatMap((k) => {
+            const ls = (M.get(k) ?? []).filter((l) => !l.rot)
+            return ls.length ? ls.map(inkOf) : orig.get(k).lines
+          }),
+          os,
+        )
+        at[side] = Math.max(...drawn.map((d) => off(d, tex.reduce((a, b) => (Math.abs(b.y - d.y) < Math.abs(a.y - d.y) ? b : a)))))
+      } else {
+        const ends = keys.map((k) => {
+          const ls = (M.get(k) ?? []).filter((l) => !l.rot)
+          if (!ls.length) return [orig.get(k).lines[0].x0, orig.get(k).lines[0].x1]
+          const l = inkOf(ls.reduce((a, b) => (Math.abs(b.y - o0.y) < Math.abs(a.y - o0.y) ? b : a)))
+          return [l.x0, l.x1]
+        })
+        const row = line.rows[0]
+        at[side] = off({ x0: Math.min(...ends.map((e) => e[0])), x1: Math.max(...ends.map((e) => e[1])) }, row)
+      }
       if (at[side] > tol) fault(side, 'align', `${name} ${how} ${r2(at[side])} pt from TeX's line's`)
     }
     if (!keys.some((k) => T.has(k)) || !keys.some((k) => V.has(k))) continue
@@ -585,6 +614,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // (the members v2's prepare keeps for their text set wholly in a face of one pitch, Rule 1: the original's text, no translation
   // missing, the owner's ruling of 2026-11-10 (PITCH_RULING); v2.mjs's `pitch`, the candidate's dump's marks, by member ord)
   const pitch = new Set(v2.pitch ?? [])
+  // (the members v2's prepare keeps as a line of e-mail addresses, v2.mjs's `address` by member ord (the candidate's dump's
+  // `keptBy: 'address'`): the original's text, no translation missing, ADDRESS_RULING. Today's unit joined to one, or, joined to
+  // none (the block is a unit of its own, its id not today's), every line of it on one of a marked member's lines: on its
+  // baseline within half the size, the two overlapping across)
+  const address = new Set(v2.address ?? [])
+  const addressLines = [...address].flatMap((o) => (facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(o).style?.size ?? 0 })))
+  const onAddress = (l) =>
+    addressLines.some((L) => Math.abs(L.y - l.y) <= 0.5 * Math.max(L.size ?? 0, l.size ?? 0, 1) && l.x0 < L.x1 && l.x1 > L.x0)
   for (const key of T.keys()) {
     if (V.has(key)) continue
     const o = orig.get(key)
@@ -603,9 +640,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     // whatever today translated of it, the ruling's: NAMES_RULING)
     const named = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
     const kept = o?.part !== null && o?.part !== undefined && pitch.has(o.part)
-    const ruled = named || kept
+    const mail = o?.part !== null && o?.part !== undefined ? address.has(o.part) : !!o?.lines?.length && o.lines.every(onAddress)
+    const ruled = named || kept || mail
     diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
-    if (ruled) out.diffs.at(-1).ruling = kept ? PITCH_RULING : NAMES_RULING
+    if (ruled) out.diffs.at(-1).ruling = kept ? PITCH_RULING : mail ? ADDRESS_RULING : NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -882,6 +920,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const pastOf = (side) => [...borrowed[side]].filter(([, k]) => k > 0).map(([key]) => key)
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
+  urlJoinRuling(out, { v2, n, orig })
   headRuling(out, { v2, n, facts, orig })
   leadRuling(out, { v2, n, facts, orig })
   markSpaceRuling(out, { v2, n, orig })
@@ -963,6 +1002,9 @@ function headRuling(p, { v2, n, facts, orig }) {
 /** what a unit or a figure text v2's prepare keeps for its text set wholly in a face of one pitch rests on (`shown`, `figures`) */
 const PITCH_RULING =
   "the owner's ruling of 2026-11-10 (option C, PDF-READER §18.22): text set wholly in a face of one pitch (code, a prompt, JSON, an OCR card) is kept as the original's; translating or keeping are both fine, a garbled translation never: no translation missing"
+/** what a unit v2's prepare keeps as a line of e-mail addresses rests on (`shown`) */
+const ADDRESS_RULING =
+  "the coordinator's ruling of 2026-11-10 on the owner's principle (translating or keeping are both fine, a garbled translation never; PDF-READER §19.13): an e-mail address is a literal, never sent, and a line of addresses alone the prepare keeps whole is the original's text: no translation missing"
 /** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
@@ -1117,6 +1159,28 @@ export function pastRoomPass(pages, recount) {
   for (const p of pages) {
     budgetPastRoom(p, today, v2)
     recount(p)
+  }
+}
+
+/**
+ * A unit's line count v2 sets other than today's because the engine reads a line's end inside one word TeX set as written as a
+ * join (lane url-join, PDF-READER §18.20: a URL, or a literal mark whose copy text holds no white space; the coordinator's ruling
+ * of 2026-11-10 on 1810.04805v2-zh p14 t237, two broken URLs drawn whole and the paragraph a line shorter, 5 for today's 6, the
+ * original's 7, the line-count measure an instrument): the difference is the ruling's, not worse, only where the pair laid with
+ * those line ends read as spaces again (v2.mjs's lay over unjoin.mjs: `unjoined`, each line count on each page of a member holding
+ * such a word) sets today's count on the page. A count those joins do not explain, or a pair laid without that lay, is judged as
+ * any
+ */
+function urlJoinRuling(p, { v2, n, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const part = orig.get(d.unit.split(' ')[0])?.part
+    const unjoined = part === null || part === undefined ? undefined : v2.unjoined?.[n]?.[part]
+    if (unjoined === undefined || unjoined !== d.today?.value) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the coordinator's ruling of 2026-11-10 (lane url-join): a line's end inside a URL TeX broke is a join; the unit laid with those line ends read as spaces sets today's count"
   }
 }
 

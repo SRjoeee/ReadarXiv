@@ -12,8 +12,8 @@
 // (its addresses, today's text; an ink unit's scripts in a text face, today's text or text and a placeholder) joins no id of
 // today's: it is joined, after the ids, to today's unit of its glyphs, the same reading set on the same lines of A (l1.ts
 // keptJoin, over today's prepare dump). A member neither joins is joined, last, to today's unit stage 1a states its unit holds
-// whole (lab/pdf/prepare-back/stated.mjs: held whole (f), by the author block (b'), by the block's units on its line (f'), the
-// statement naming the holder): a unit whose kind moved, its id with it (an ink unit's id names its kind: rebuild/author-toggle's
+// whole (lab/pdf/prepare-back/stated.mjs: held whole (f), by the author block (b'), by the block's units on its line (f'), a names
+// unit's stand-in of its ledger class with today's characters, the statement naming the holder): a unit whose kind moved, its id with it (an ink unit's id names its kind: rebuild/author-toggle's
 // AND, today's inkorphan, v2's inknames), the coordinator's ruling of 2026-11-10, heldJoin.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -31,8 +31,10 @@ function ownIdOf(m, units) {
   return named ? todayUnitOf(named).id : m.text
 }
 
-/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by (stated.mjs's keys) */
-const HOLDS = new Set(['held', 'names', 'heldBlock'])
+/** the causes stage 1a states a unit of today's held whole by one unit of the candidate's by (stated.mjs's keys); `order` where
+ *  the statement names its holder: a names unit's stand-in of its ledger class, today's characters in another order (its kind
+ *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
+const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
@@ -54,6 +56,19 @@ export function candidatePitch(paper, dumps = L1_DUMPS) {
     g = join(dumps, '..', 'located', `${paper}.json`)
   if (!existsSync(f) || !existsSync(g)) return []
   const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.keptBy === 'pitch').map((u) => u.ord))
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
+}
+/**
+ * The members the candidate's prepare keeps as a line of e-mail addresses (the coordinator's ruling of 2026-11-10): its dump's
+ * units marked `keptBy: 'address'` (lab/pdf/prepare-back/run.mjs, the engine's InstrumentUnit `address`: a kept block of
+ * addresses and their separators alone), by the member ords the run's located file joins their dump ords to (`dumpOrds`); none
+ * where lab-data holds no dump or located file of it. The verdict reads no other unit v2 leaves the original's as kept so
+ */
+export function candidateAddress(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.keptBy === 'address').map((u) => u.ord))
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
 }
 /**

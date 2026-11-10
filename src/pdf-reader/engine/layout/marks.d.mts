@@ -117,6 +117,9 @@ export declare function classOf(piece: { t: string; src?: string }): MarkClass |
 export declare function backrefPiece(piece: { t?: string; src?: string } | null | undefined): boolean
 /** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the names, the points last */
 export declare const LAYOUT_TEX: string
+/** \\axtcall{i}: the point `<i>c` before an author's call where TeX is in horizontal mode (latex-front.mjs CALLED_AT); in the
+ *  marked compile's head only where the source states a call */
+export declare const CALL_TEX: string
 /** the control sequences \\axt@unmark takes out of a title's copy with their arguments: the regex's alternation and the
  *  prefilter that keeps it from running on a list holding none of them are both built from this list */
 export declare const UNMARK_CS: readonly string[]

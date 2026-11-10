@@ -623,14 +623,17 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // four messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
-    // cell's column class at its template's end (AXT-CELL, the engine's readAlign) and a colour piece's fill (AXT-COLOUR,
-    // readColours), and one write to the log at the shipout, each bracketed body's frame (AXT-BODY, readBodies): each a line of
-    // its own, which no reader of the log but theirs reads, and nothing typeset changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(4)
-    expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(1)
+    // five messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
+    // cell's column class at its template's end (AXT-CELL, the engine's readAlign), for a cell's own unit and for each unit on the
+    // cell's line, and a colour piece's fill (AXT-COLOUR, readColours), and one write to the log at the shipout, each bracketed
+    // body's frame (AXT-BODY, readBodies): each a line of its own, which no reader of the log but theirs reads, and nothing
+    // typeset changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(5)
+    // (and two to the aux at once, what the displays POINTS_TEX states were, read back by the next pass)
+    expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(3)
+    expect(LAYOUT_TEX.match(/\\immediate\\write\\@auxout/g)).toHaveLength(2)
     expect(LAYOUT_TEX).toContain('\\write-1{AXT-BODY ')
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')
@@ -736,6 +739,85 @@ describe('LAYOUT_TEX', () => {
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))
     expect(LAYOUT_TEX.endsWith(`${POINTS_TEX}\\makeatother`)).toBe(true)
     for (const word of ['\\newcount', '\\newbox', '\\newdimen', '\\typeout', '\n', '%']) expect(POINTS_TEX).not.toContain(word)
+  })
+})
+
+describe('the displays (POINTS_TEX): every display TeX sets stated, wherever it stands', () => {
+  // (2608.08481v1 p7: displays (7) and (8) in REVTeX's widetext, no source unit's, were cut into ink units and their text-face parts
+  // translated. TeX enters display math for each, an equation's, an align's, \\[ \\]'s or $$'s alike: the start is set from
+  // there, by TeX's own state, never by an environment's name; the end where the source ends the display, $$ aside)
+  it('opens each display with a point at its math list’s start and closes it inside its formula, at its environment’s end or \\]', () => {
+    expect(POINTS_TEX).toContain('\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}')
+    expect(POINTS_TEX).toContain('\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend')
+    // (no node after its box: whatever TeX sets there is in the page's list, where a column's \lastbox reads it. REVTeX's
+    // balance takes each column's last box to leave its depth out, revtex4.cls's \setbox\z@\lastbox: a point after a display
+    // at a column's foot moved the columns above 2608.08481v1 p7's widetext by up to 2.55 pt. Its end is set in the formula's
+    // own list, the last thing before its number, by its environment's end, which TeX reads while the display is open: a hook
+    // on the environment it began in, added the first time a display begins there, and \]. A display with neither, `$$ $$`,
+    // gets no end, and no region)
+    expect(POINTS_TEX).not.toContain('\\vadjust')
+    expect(POINTS_TEX).toContain('\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}')
+    // (in math, inner too: amsmath's split in an equation sets the rest of the equation in a cell its end closes; and only in the
+    // environment the display began in)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}')
+    // (appended to \everydisplay once the document began, after every package's own)
+    expect(POINTS_TEX).toContain('\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}')
+    expect(POINTS_TEX).toContain('\\AddToHook{begindocument/end}{\\axt@dpgo}')
+  })
+  it('sets no node in a display TeX sets as an alignment, which must open with its \\halign: points between its rows instead', () => {
+    // (TeX refuses an \\halign in a display whose list holds anything, "Improper \\halign inside $$'s": a display's kind is known
+    // from the pass before, by its number, its environment and its line (the aux), and none is set where it is not known)
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi')
+    expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}')
+    expect(POINTS_TEX).toContain('\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}')
+    expect(POINTS_TEX).toContain('\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname')
+    // (each of its rows closed after its \\cr, by \\everycr's \\noalign, its first point after the preamble's; nothing before
+    // the \\noalign that TeX would read as a row's start)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}')
+    // (a point between rows is in the page's list, and makes the glue after it a place to break: amsmath's rows end with a
+    // \\noalign of \\interdisplaylinepenalty, 10000, and the glue under it follows a penalty; a point after that penalty let TeX
+    // break 2010.11929v2's align over pages 3 and 4. So each point is set by what ends the list: after a penalty, a glue or
+    // nothing, the point and a \\penalty10000, so the glue after it still follows a penalty; after a row's box, the point and the
+    // row's depth given back under it, a kern of minus the depth and an empty box that deep, so that a column ending there ends
+    // with a box of the row's depth, as \\lastbox reads it; after a kern, none, which a glue after makes a place to break; after
+    // anything else (a whatsit, a mark), the point alone)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}')
+  })
+  it('states the text a display sets in text mode, bracketed inside the box each text command makes, and the math it opens again', () => {
+    // (the coordinator's ruling of 2026-11-09: words TeX sets in text mode inside a display are text, translated as before;
+    // 2610.22299v1's display (1), a sentence in \text, and 2608.25210v2 p10's labels under a brace. TeX's text mode inside math
+    // is an \hbox. \everyhbox, which every \hbox passes, was tried first and is unsafe: amsmath sets boxes in math of its own
+    // (\resetMathstrut@ after a font change, \boldsymbol's \endgroup), \setbox'd and never placed, and a point after one fell
+    // between a nucleus and its script (2608.16117v1's \boldsymbol{\mathcal{J}}^{trans} moved 0.26 pt); \leaders read the point
+    // for its glue (2610.21377v1's \xrightarrow). So the text is bracketed inside the box, `dts<n>` first and `dte<n>` last, by
+    // the commands that make a text box in math: amstext's \textdef@ (\text, and \textrm, \textbf… through \nfss@text), \mbox
+    // (core LaTeX's \nfss@text), \fbox (\boxed). Math opened again in a restricted list of a display's (such a box, an
+    // alignment's cell, a box in a \vcenter: \everymath) gets `dms<n>` first in it and `dme<n>` after it in that list, so that
+    // rows a box takes again keep their math's points; a glyph's mode is its innermost point's. Math in a \vbox's paragraph gets
+    // none (a point after it would be a paragraph's). A display not known from the pass before as no alignment states no text
+    // in its own list. Every point in a math list or a restricted list)
+    expect(POINTS_TEX).not.toContain('\\everyhbox')
+    expect(POINTS_TEX).toContain('\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}')
+    // (the math's end after its group, by a stack: a local definition is gone once the group ends)
+    expect(POINTS_TEX).toContain('\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}')
+    expect(POINTS_TEX).toContain('\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}')
+    // (the three text commands wrapped once the document began, each command's own definition kept; inside \\axt@dpgo's body,
+    // so their parameters doubled; as robust as each was, the points \\protected: a moving argument (a \\subsection's,
+    // 2608.04322v1) writes them as they are, and a fragile \\fbox there fails as it failed)
+    expect(POINTS_TEX).toContain('\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi')
+    expect(POINTS_TEX).toContain('\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}')
+    expect(POINTS_TEX).toContain('\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}')
+    // (a display's own math only where its start is set, a display alignment's cells, an alignment's in a \vbox; never under
+    // the gate)
+    expect(POINTS_TEX).toContain('\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}')
+    expect(POINTS_TEX).toContain('\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}')
+    expect(POINTS_TEX).toContain('\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}')
+    expect(POINTS_TEX).toContain('\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}')
   })
 })
 
