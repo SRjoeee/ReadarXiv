@@ -88,7 +88,7 @@ describe('figure-paras: TeX’s interline rule', () => {
   // (lines at size 10, \baselineskip 12: a line's ink 7 over its baseline and 2 under, 3 clear of the next; a line with a tall
   // formula, 10 over and 4 under, which TeX sets \lineskip 1 under the line above and over the line below)
   const tall = (y: number) => line(100, 296, y, { top: y + 10, bottom: y - 4 })
-  it('keeps a block whose lines TeX pushed apart for a tall one: each larger gap \lineskip clear, as clear as the closest', () => {
+  it('keeps a block whose lines TeX pushed apart for a tall one: its lines would touch at the pitch, \lineskip clear', () => {
     // (700 to 687: 13, clear 698 - 697 = 1; 687 to 675: 12, the baselineskip, clear 683 - 682 = 1; 675 to 663: 12, clear 3)
     const ls = [line(100, 290, 700), tall(687), line(100, 296, 675), line(100, 160, 663)]
     expect(joined(ls, drop)).toEqual([
@@ -97,9 +97,13 @@ describe('figure-paras: TeX’s interline rule', () => {
         ['hyphen-drop', 'hyphen-drop', 'hyphen-drop'],
       ],
     ])
+    // (an unpushed gap less clear than \lineskip, as TeX allows down to \lineskiplimit: 700 to 688, 12, clear 698 - 697.9 = 0.1
+    // under a line with a tall glyph; 688 to 675 pushed, 13, clear 1; 675 to 663, 12, clear 1: 2609.19644v1 p59's 0.37 beside 0.76)
+    const close = [line(100, 290, 700), line(100, 296, 688, { top: 697.9 }), tall(675), line(100, 160, 663)]
+    expect(joined(close, drop).map(([l]) => l)).toEqual([[0, 1, 2, 3]])
   })
-  it('ends a block at a larger gap whose clearance is not \lineskip’s: a paragraph’s skip, or two pushed gaps unlike', () => {
-    // (700 to 688: 12, clear 3; 688 to 672: 16, clear 7, wider than the lines' own clearance: a \parskip)
+  it('ends a block at a larger gap TeX did not push: a paragraph’s skip, or two pushed gaps unlike', () => {
+    // (700 to 688: 12, clear 3; 688 to 672: 16, clear 7: at the pitch, 12, the two lines 3 clear, no push: a \parskip)
     expect(joined([line(100, 290, 700), line(100, 296, 688), line(100, 160, 672)], drop)).toEqual([
       [[0, 1], ['hyphen-drop']],
     ])

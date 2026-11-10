@@ -61,20 +61,18 @@ const sameFace = (a: ParaLine, b: ParaLine) =>
 type Gap = { pitch: number; clear: number }
 /**
  * Whether a block's gaps are TeX's interline rule: each its \baselineskip (the block's one pitch, the smallest, within the
- * tolerance) or, where the upper line's depth and the lower one's height would not fit in that, larger, the two lines then
- * \lineskip apart: every such gap's ink clearance one value, and no larger than an unpushed gap's (a paragraph's \parskip is
- * no \lineskip). Read off the lines' own ink; the pitch's tolerance alone
+ * tolerance) or larger where TeX pushed two lines apart: set at the pitch they would come closer than \lineskiplimit (their
+ * ink clearance less the gap's excess over the pitch under the tolerance: they would touch), it set them \lineskip apart,
+ * one clearance on every such gap. A paragraph's \parskip is no push: its lines at the pitch keep their clearance. Read off
+ * the lines' own ink; the pitch's tolerance alone
  */
 function oneLead(gaps: readonly Gap[], tol: number): boolean {
   const p0 = Math.min(...gaps.map((g) => g.pitch))
   const pushed = gaps.filter((g) => g.pitch > p0 + tol)
   if (!pushed.length) return true
-  const normal = gaps.filter((g) => g.pitch <= p0 + tol)
+  if (pushed.some((g) => g.clear - (g.pitch - p0) >= tol)) return false
   const c = pushed.map((g) => g.clear)
-  return (
-    Math.max(...c) - Math.min(...c) <= tol &&
-    (!normal.length || Math.max(...c) <= Math.min(...normal.map((g) => g.clear)) + tol)
-  )
+  return Math.max(...c) - Math.min(...c) <= tol
 }
 
 /** two lines one under the other in one block: one face, no blank line between (the gap under the upper's band less than a
