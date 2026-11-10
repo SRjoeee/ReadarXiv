@@ -219,6 +219,15 @@ The gate judges by them where they and today's output differ.
    each pass's target and each member's line count of that lay, `before`, beside this lay's targets, `fills`, through a call
    `hook.mjs` puts in `fill-pass.ts`), 2610.20484v1-zh p8 t85.
 
+The coordinator's ruling of 2026-11-10 (lane url-join): a line's end inside one word TeX set as written is a join (a URL, or a
+literal mark whose copy holds no white space; PDF-READER §18.19); where that sets a unit in fewer lines than today's
+(1810.04805v2-zh p14 t237, two broken URLs drawn whole: 5 lines for today's 6, the original's 7), the line count is an
+instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those line
+ends read as spaces again sets today's count on the page: `v2.mjs` lays each pair once more with each such element's text (and
+its runs) as a stage 1a run without the rule read it, where the two differ by white space alone (`unjoin.mjs`; that run's
+bundles `AXT_PARITY_UNJOINED`, round 8 B1's; unset, no such lay), and records the line count on each page of each member that
+holds one (`unjoined`); `verdict.mjs` urlJoinRuling. A count those joins do not explain is judged as any.
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the
