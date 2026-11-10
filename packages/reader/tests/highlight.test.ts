@@ -80,6 +80,16 @@ describe('the highlight of a figure text set turned', () => {
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
+  it('paints a turned figure text\u2019s band unpadded where Laid.lit states its band alone', () => {
+    const banded: Page = { ...page, members: [{ ...page.members[0]!, lit: { ...page.members[0]!.lit, band: true } }] }
+    const { els, hl } = setUp(banded)
+    hl.light({ id: 7, s: -1 })
+    const band = els.right.querySelector<HTMLElement>('.axt-hl')!
+    expect([band.style.width, band.style.height]).toEqual(['20px', '8px'])
+    expect(band.style.transform).toBe('translate(148px, 410px) rotate(-90deg) translate(-10px, -4px)')
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
   it('is hit where it is painted: over its turned band, not beside it', () => {
     const { els, hl } = setUp(page)
     const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.right)
@@ -438,6 +448,54 @@ describe('the highlight never fills a display nor bridges two rows across anothe
         expect(outlines.some((o) => inside([86, middleOf(d)[1]], o))).toBe(false)
       }
     }
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
+
+describe('the highlight of a figure text is its own line band', () => {
+  // (2610.21313v1-zh p3 t179, the fresh rows' sheet: a 4.67 pt label "SAMA" of a stack of cards 2.33 pt apart, padded by the page's
+  // half leading (2.71 pt, its body text's) and 3 px beside: its shape held the middle of the card behind's label. A figure text's
+  // shape is its line band alone (Laid.lit's `band`), on both panes; a body member's keeps the page's pad. Here a body member's
+  // two rows 12 pt apart (gaps of 3: half leading 1.5) and a figure text's band of 5 on its own)
+  const body: Box[][] = [
+    [
+      [72, 700, 300, 709],
+      [72, 688, 300, 697],
+    ],
+  ]
+  const label: Box = [400, 600, 420, 605]
+  const page: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [
+      { ord: 3, page: 1, state: 'laid', off: 1, lines: [], lit: { left: body, right: body, own: [] } },
+      { ord: 9, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [[label]], right: [[label]], own: [], band: true } },
+    ],
+  }
+  const box = (el: HTMLElement) => [el.style.left, el.style.top, el.style.width, el.style.height]
+  it('paints a figure text on its band alone, on both panes, and hits it there alone', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 9, s: -1 })
+    for (const side of ['left', 'right'] as const) {
+      const shapes = [...els[side].querySelectorAll<HTMLElement>('.axt-hl')]
+      expect(shapes.map(box)).toEqual([['400px', `${H - 605}px`, '20px', '5px']])
+    }
+    const spy = vi.spyOn(document, 'elementFromPoint').mockReturnValue(els.right)
+    expect(hl.at('right', 410, H - 602)).toEqual({ id: 9, s: -1 })
+    // (a point beside it by the pad, or over it by the page's half leading, is none of it)
+    expect(hl.at('right', 421.5, H - 602)).toBeNull()
+    expect(hl.at('right', 410, H - 606)).toBeNull()
+    spy.mockRestore()
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('keeps a body member’s shape padded as before: the pad beside, half the page’s leading over and under', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 3, s: -1 })
+    const shape = els.right.querySelector<HTMLElement>('.axt-hl')!
+    expect([shape.style.left, shape.style.top]).toEqual([`${72 - PAD}px`, `${H - 709 - 1.5}px`])
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
