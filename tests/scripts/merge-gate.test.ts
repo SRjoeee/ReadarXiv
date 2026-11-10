@@ -415,12 +415,19 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).at(-1), text).toMatchObject({ unreadable: true, plain: false })
     }
+    // a word beside the endpoint that the shell decides may be an option whole, `-X PUT` among them (#635, Codex)
+    expect(merge('gh api "$EXTRA" repos/o/r/pulls/5/merge')).toMatchObject({ ref: '5', repo: 'o/r', unreadable: false })
+    expect(merge('gh api $ENDPOINT $EXTRA').unreadable).toBe(true)
     // where the words say it is none: the path ends otherwise, the word is an option's value, the request is no PUT
     for (const text of [
       'gh api -X PUT "$BASE/pulls/$n/update-branch"',
       'gh api -X PUT repos/o/r/labels/bug -f name="$NAME" -H "X: $TOKEN"',
       'gh api "$ENDPOINT"',
       'gh api -X POST "$ENDPOINT"',
+      'gh api repos/o/r/labels "$EXTRA"',
+      // (a line of these sessions: the path is in sight, the shell decides only the query after it)
+      'for since in 2026-10-01..2026-10-31; do gh api "/repos/o/r/actions/runs?created=$since&per_page=100" --jq "$FILTER" "$MORE"; done',
+      'gh api $R/123/replies -f body="$NOTE"',
       'R=repos/o/r/pulls/8/comments && gh api $R/4179074820/replies -f body="checked $n"',
     ]) {
       expect(merges(text), text).toEqual([])
@@ -440,6 +447,15 @@ describe('mergesIn', () => {
     expect(merges(`gh api graphql -f query='query($id: ID!) { node(id: $id) { id } }' -F id="$ID"`)).toEqual([])
     expect(merges('gh api graphql -f query=@literal')).toEqual([])
     // a query the line does not show, and a body file the line does not name, are a request nobody can read
+    // the endpoint as the CLI takes it: bare, or the URL of one (#635, Codex); and a merge mutation in sight is one
+    // whatever endpoint the shell composes for it
+    expect(merge(`gh api https://api.github.com/graphql -f 'query=mutation { mergePullRequest(input: {}) { clientMutationId } }'`).unreadable).toBe(true)
+    expect(merge('gh api https://ghe.example.com/api/graphql -F query=@q.graphql').files).toEqual(['q.graphql'])
+    expect(merge(`gh api "$ENDPOINT" -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'`).unreadable).toBe(true)
+    expect(merges(`gh api https://api.github.com/graphql -f query='query { viewer { login } }'`)).toEqual([])
+    // an option the shell composes whole, beside the endpoint, may be the query (#635, Codex)
+    expect(merges(`FIELD='-fquery=mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql "$FIELD"`).at(-1)).toMatchObject({ unreadable: true })
+    expect(merge('gh api graphql $ARGS').unreadable).toBe(true)
     // (a field the shell composes whole hides its key too: #635, Codex; one whose key is in sight and is not `query` hides nothing)
     expect(merges(`FIELD='query=mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql -f "$FIELD"`).at(-1)).toMatchObject({ unreadable: true })
     expect(merge('gh api graphql --raw-field "$FIELD"').unreadable).toBe(true)

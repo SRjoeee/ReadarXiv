@@ -387,15 +387,14 @@ function apiOptions(words, first) {
   return options
 }
 
-/** What a `gh api graphql` whose arguments start at `first` sends as its query: `literal`, an argument that holds a
- *  merge mutation; `unseen`, a query the arguments do not hold (an expansion, the standard input, a file named by an
- *  expansion); `files`, the files a query or the whole body is read from. Null when every query is in sight and none
- *  merges. */
-function graphqlArguments(words, dynamic, first) {
+/** What the options of a `gh api` send as a GraphQL query: `literal`, an argument that holds a merge mutation;
+ *  `unseen`, a query the arguments do not hold (an expansion, the standard input, a file named by an expansion);
+ *  `files`, the files a query or the whole body is read from. */
+function graphqlQuery(options, dynamic) {
   let literal = false
   let unseen = false
   const files = []
-  for (const { name, value, at } of apiOptions(words, first)) {
+  for (const { name, value, at } of options) {
     if (value === undefined) continue
     if (name === '--input') {
       if (dynamic[at] || value === '-') unseen = true
@@ -412,29 +411,47 @@ function graphqlArguments(words, dynamic, first) {
       else if (GRAPHQL_MERGE.test(query)) literal = true
     }
   }
-  return literal || unseen || files.length > 0 ? { kind: 'graphql', literal, unseen, files } : null
+  return { kind: 'graphql', literal, unseen, files }
 }
 
+/** The GraphQL endpoint as `gh api` takes it: the bare word, or the URL of one (`https://host/graphql`, `…/api/graphql`) */
+const GRAPHQL_ENDPOINT = /(?:^|\/)graphql\/?$/
+
 /** What follows `gh api` from the word at `first`, when it is the REST or the GraphQL way to merge a pull request;
- *  null otherwise. A request to the merge endpoint is a merge only as a PUT (a GET asks whether the pull request is
- *  merged); a method the shell decides may be one. */
+ *  null otherwise. The words are first told apart as the CLI tells them: an option's value, the endpoint, and any
+ *  other word, which only an expansion puts there and which may then be an option whole (`"$FIELD"` holding
+ *  `-fquery=…`, or `-X PUT`). A request to the merge endpoint is a merge only as a PUT (a GET asks whether the pull
+ *  request is merged); a method the shell decides, or may have brought in such a word, may be one. */
 function apiArguments(words, dynamic, first) {
-  if (words.indexOf('graphql', first) >= 0) return graphqlArguments(words, dynamic, first)
   const options = apiOptions(words, first)
+  const values = new Set(options.map(option => option.at))
+  const bare = []
+  for (let k = first; k < words.length; k++) if (!words[k].startsWith('-') && !values.has(k)) bare.push(k)
+  const query = graphqlQuery(options, dynamic)
+  const graphql = bare.find(k => !dynamic[k] && GRAPHQL_ENDPOINT.test(pathOf(words[k])))
+  if (graphql !== undefined) {
+    if (bare.some(k => k !== graphql && dynamic[k])) query.unseen = true
+    return query.literal || query.unseen || query.files.length > 0 ? query : null
+  }
+  // (a merge mutation in sight is one, whatever endpoint the shell composes for it)
+  if (query.literal) return query
   const method = options.findLast(option => option.name === '--method')
-  if (method === undefined || !(dynamic[method.at] || (method.value ?? '').toUpperCase() === 'PUT')) return null
+  const put = method !== undefined && (dynamic[method.at] || (method.value ?? '').toUpperCase() === 'PUT')
   const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(pathOf(word)))
   if (at >= 0) {
+    if (!put && !bare.some(k => k !== at && dynamic[k])) return null
     const [, owner, name, number] = MERGE_ENDPOINT.exec(pathOf(words[at]))
     const blanks = [PLACEHOLDER.test(owner), PLACEHOLDER.test(name)]
     // (`{owner}/{repo}` is the directory's repository; a repository named by half is nobody's to put together)
     return { kind: 'api', ref: number, repo: blanks[0] || blanks[1] ? null : `${owner}/${name}`, refAt: at, repoAt: at, ...(blanks[0] !== blanks[1] ? { composed: true } : {}) }
   }
-  // no endpoint in sight, but one the shell composes (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can
-  // read, unless the words after its last expansion end the path some other way. An option's value is no endpoint.
-  const values = new Set(options.map(option => option.at))
-  const composed = words.findIndex((word, k) => k >= first && dynamic[k] && !word.startsWith('-') && !values.has(k) && mayEndInMerge(word))
-  return composed < 0 ? null : { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
+  // no merge endpoint in sight, but the endpoint, the first of the bare words, is one the shell composes
+  // (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can read, unless the words after its last expansion
+  // end the path some other way. An endpoint whose path is in sight is that path, whatever else the line holds.
+  const composed = bare[0]
+  if (composed === undefined || !dynamic[composed] || !mayEndInMerge(words[composed])) return null
+  if (!put && !bare.slice(1).some(k => dynamic[k])) return null
+  return { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
 }
 
 /** An endpoint without the query or the fragment that may follow its path */
@@ -446,7 +463,9 @@ function mayEndInMerge(whole) {
   const word = pathOf(whole)
   const expansions = [...word.matchAll(/\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*|`[^`]*`/g)]
   const last = expansions.at(-1)
-  const tail = last === undefined ? '' : word.slice(last.index + last[0].length)
+  // (a path with no expansion in it is what it reads as: what the shell decides is then in the query after it)
+  if (last === undefined) return false
+  const tail = word.slice(last.index + last[0].length)
   return tail.length >= '/merge'.length ? tail.endsWith('/merge') : '/merge'.endsWith(tail)
 }
 
