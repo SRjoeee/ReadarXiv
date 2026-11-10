@@ -179,8 +179,8 @@ const VERBATIM_CMD = /^\\(?:url|path|verb|lstinline)(?![A-Za-z@])/
 /**
  * An element's copy text: its source as texToText2 reads it, a character TeX sets as written read as itself, never as a
  * script's mark. texToText2 reads `_x` as the subscript "ₓ", after reading `\_` as "_": an identifier's copy, what a reader
- * selects on its crop, was "conv3ₓ" for `conv3\_x`, "verify_boundaryₗaw" for `verify\_boundary\_law` (175 elements of the 88's
- * code marks and identifiers), and 2610.20808v1's `\path{data/current_soda_protocol.json}` "data/currentₛodaₚrotocol.json".
+ * selects on its crop, was "conv3ₓ" for `conv3\_x`, "verify_boundaryₗaw" for `verify\_boundary\_law`, and 2610.20808v1's
+ * `\path{data/current_soda_protocol.json}` "data/currentₛodaₚrotocol.json" (213 elements of 29 of the 88 papers, stage 1a).
  * LaTeX's `\_` and `\textunderscore` set the underscore and `\textasciicircum` the caret, in text and in math (`\nfss@text`), the
  * spaces after a control word TeX's to skip; a verbatim argument (\url, \path, \verb, \lstinline: a text piece's, textPieceOf)
  * sets its `_` and `^` as written. A bare `_` or `^` anywhere else is TeX's script
