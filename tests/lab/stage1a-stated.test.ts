@@ -11,7 +11,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { CAUSE, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
-import { scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
+import { RAW_ADDRESSES, readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
+import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type DumpPiece = { kind: string; s?: string; src?: string }
 type Line = { page: number; x0: number; x1: number; baseline: number; top: number; bottom: number }
@@ -342,6 +343,41 @@ describe('(F) a line of e-mail addresses held whole by a kept block', () => {
   it('states one with any other word as held by a kept block, not accepted', () => {
     for (const s of ['Email: ada@example.org', 'ada at example.org', '1 ada@example.org'])
       expect(said(statedOf(lineOf(s), [kept]))).toEqual([[405, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`]])
+  })
+})
+
+describe("(F) and (f) for an address's placeholders: the replay reads a brace's text symbol, a tie and an address as the source writes it", () => {
+  // (the coordinator's ruling of 2026-11-10 on rebuild/mail-group: 1512.03385v1 t321, an affiliation of `\{kahe,~v-xiangz\}@…`
+  // today held as text pieces between ties, now a kept block; 2610.21085v1 t2, a footnote's `[first name]@…` now one element;
+  // 2610.17024v1 t504, a note of a group now a kept block of its kind, which stood for it and read it otherwise)
+  it('reads `\\{`, `\\}` and a tie as their characters, and a placeholder that is an address as the source writes it', () => {
+    expect([readingOf('\\{'), readingOf('\\}'), readingOf('~')]).toEqual(['{', '}', ' '])
+    expect(readingOf('[first name]@example.com')).toBe('[first name]@example.com')
+    expect(readingOf('ada@example.org')).toBe('ada@example.org')
+    expect(readingOf('\\{ada,~alan\\}@example.org')).toBe('{ada, alan}@example.org')
+    for (const src of ['\\textbf', '\\{ada', 'see ada@example.org', '\\,', '[see 2]@']) expect(readingOf(src)).toBe(null)
+    // (one pattern for the replay and the front end)
+    expect(RAW_ADDRESSES.map((r: RegExp) => r.source)).toEqual([`^(?:${EMAIL_ADDRESS.source})$`, `^(?:${ADDRESS_GROUP.source})$`])
+  })
+  const at = box(195.49, 399.73, 599.46, 606.93, 596.97)
+  const keptOf = (kind: string, b = at) => ({ ...on(unit(id('b'), 371, kind, []), b), kept: true as const })
+  it("states a source unit of a group between ties, now a kept block's line, a line of addresses kept whole (F)", () => {
+    const today = on(unit(id('a'), 321, 'affiliation', [ph('\\normalsize'), text('\n'), ph('\\{'), text('ada,'), ph('~'), text('alan'), ph('\\}'), text('@example.org\n')]), at)
+    expect(said(statedOf([today], [keptOf('inknotes')]))).toEqual([[321, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.addresses}`]])
+  })
+  it('states a footnote whose bracket group is now one element of it held whole (f)', () => {
+    const line = box(80.3, 282.73, 87.44, 94, 85)
+    const today = on(unit(id('a'), 2, 'footnote', [text('Correspondence: [first name]@example.com.')]), line)
+    const mine = { ...on(unit(id('b'), 2, 'footnote', [text('Correspondence: '), ph('[first name]@example.com'), text('.')]), line), elements: [{ k: 1, kind: 'other', segs: [box(150, 280, 87.44, 94, 85)] }] }
+    expect(said(statedOf([today], [mine]))).toEqual([[2, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+  it("states a note of addresses alone a kept block of its kind holds as (F), before that block stands for it, its lines today's or not", () => {
+    const today = on(unit(id('a'), 504, 'inknotes', [text('{ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
+    for (const b of [box(211.38, 383.83, 675.49, 681.6, 673.9), box(211.38, 383.89, 675.49, 681.6, 673.9)])
+      expect(said(statedOf([today], [keptOf('inknotes', b)]))).toEqual([[504, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.addresses}`]])
+    // (a note with a word besides: as before, the stand-in's)
+    const other = on(unit(id('a'), 504, 'inknotes', [text('Contact: {ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
+    expect(said(statedOf([other], [keptOf('inknotes', box(211.38, 383.89, 675.49, 681.6, 673.9))]))).toEqual([[504, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`]])
   })
 })
 

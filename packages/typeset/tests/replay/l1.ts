@@ -104,8 +104,20 @@ export function readingOf(src: string): string | null {
   if (a !== undefined) return a
   const m = FORMULA.exec(src)
   const f = m?.[1] ?? m?.[2]
-  return f === undefined ? null : f.replace(/\\backslash |\\([${}])/g, (_, c: string | undefined) => c ?? '\\')
+  if (f !== undefined) return f.replace(/\\backslash |\\([${}])/g, (_, c: string | undefined) => c ?? '\\')
+  // (a brace's text symbol and a tie, which part an address group's text pieces in a source unit (`\{kahe,~v-xiangz\}@…`): their
+  // characters; and a placeholder that is an address as the source writes it, those two read so (`[first name]@…`,
+  // `\{sl225, reyhaneh\}@…`): its characters. The coordinator's ruling of 2026-11-10 on rebuild/mail-group)
+  const t = src.replace(/\\([{}])|~/g, (_, b: string | undefined) => b ?? ' ')
+  return src === '\\{' || src === '\\}' || src === '~' || RAW_ADDRESSES.some((r) => r.test(t)) ? t : null
 }
+/** an e-mail address, and a group of local parts before their one domain, whole, as a source writes them: the front end's
+ *  EMAIL_ADDRESS and ADDRESS_GROUP (src/pdf-reader/engine/source/latex-front.mjs, which a package may not import), held equal to
+ *  them by tests/lab/stage1a-stated.test.ts */
+export const RAW_ADDRESSES: readonly RegExp[] = [
+  /^(?:[\w.+-]+@[\w-]+(?:\.[\w-]+)+)$/,
+  /^(?:(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+)$/,
+]
 
 /** what today's unit holds, in its order: each character of its texts, and each placeholder (`k` its piece's index, the number
  *  its door row cites it by), its groups' opens and closes none: today's source projection, an atom an offset of it */
