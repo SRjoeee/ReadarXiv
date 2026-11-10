@@ -1,6 +1,8 @@
 // A figure's texts as its printed lines tell them (src/locate/figure-lines.ts, PDF-READER §18.26): F0's lines, a line of code,
 // and the relation reading of a crowded text's ink (the owner's reformulation of 2026-11-10 of the no-touch rule).
 import { describe, expect, it } from 'vitest'
+import type { DocGlyph } from '../src/doc.ts'
+import { pageGlyphsOf } from '../src/glyph.ts'
 import { figureLinesOf } from '../src/locate/figure-lines.ts'
 import type { TodayFigures, TodayMet, TodayPage, TodayShape } from '../src/locate/today/today.types.ts'
 
@@ -21,10 +23,14 @@ type Glyph = {
 }
 /** a line's glyphs from x at size 10 on baseline y, each its own advance (a proportional face: 5 to 7 pt; one of one pitch: 6;
  *  a space 3, a word's, or `space` where a justified line stretches it) */
-function glyphsOf(text: string, x: number, y: number, font: string, size = 10, space = 3): Glyph[] {
+function glyphsOf(text: string, x: number, y: number, font: string, size = 10, space = 3, gaps = false): Glyph[] {
   const out: Glyph[] = []
   for (const u of text) {
     const w = ((u === ' ' ? space : font.includes('Mono') ? 6 : 5 + (u.codePointAt(0)! % 3)) * size) / 10
+    if (gaps && u === ' ') {
+      x += w
+      continue
+    }
     out.push({
       u,
       font,
@@ -46,7 +52,16 @@ function glyphsOf(text: string, x: number, y: number, font: string, size = 10, s
 }
 /** a page of glyph lines, each line's runs (its glyphs' ranges) figure units by k; `boxes` [x0, y0, x1, y1] each */
 function pageOf(
-  parts: { text: string; font: string; run?: boolean; x?: number; size?: number; dy?: number; space?: number }[][],
+  parts: {
+    text: string
+    font: string
+    run?: boolean
+    x?: number
+    size?: number
+    dy?: number
+    space?: number
+    gaps?: boolean
+  }[][],
   boxes: number[][] = [],
 ) {
   const glyphs: Glyph[] = []
@@ -56,7 +71,7 @@ function pageOf(
     let x = 72
     const y = 700 - 14 * li
     for (const p of line) {
-      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size, p.space)
+      const gs = glyphsOf(p.text, p.x ?? x, y + (p.dy ?? 0), p.font, p.size, p.space, p.gaps)
       const k = units.length
       if (p.run !== false) {
         units.push({
@@ -716,6 +731,19 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'drop', 'text'])
     const two = pageOf([body('the quick brown fox jumps over'), body('lazy dogs')])
     expect(figureLinesOf([two.page], two.fig, () => false, null)).toEqual([])
+  })
+  it('reads a line’s end off a page’s own glyphs, their coordinates in its array: TeX’s break dropped (2609.19644v1 p60 "con-|text")', () => {
+    // (a page read from a PDF holds its glyphs' coordinates in one array, read by getters: a spread of a glyph copies none of them;
+    // and TeX sets no glyph for a word space, a gap alone: the word's start is a gap, and a number earlier on the line is no part of it)
+    const gapped = (text: string) => [{ text, font: 'NimbusRomNo9L-Regu', gaps: true }]
+    const hyphen = pageOf([gapped('in 2024 the foun-'), gapped('dation models')])
+    const page = {
+      ...hyphen.page,
+      glyphs: pageGlyphsOf(hyphen.page.glyphs as unknown as DocGlyph[]),
+    } as unknown as TodayPage
+    const [t] = figureLinesOf([page], hyphen.fig, () => false, null)
+    expect(t!.ks).toEqual([0, 1])
+    expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'drop', 'text'])
   })
   it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", an item of a list (2411.13093v4 p19)', () => {
     // (each marker with the next item's, one under the other at one left edge: a list)

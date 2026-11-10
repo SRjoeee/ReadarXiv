@@ -18,6 +18,7 @@ import {
   type TodayShape,
 } from './today/today.types.ts'
 import type { DocGlyph } from '../doc.ts'
+import { glyphWith } from '../glyph.ts'
 import { classifyFont, lineEnd } from './facts.ts'
 import { PARA_ALIGN_TOL, type ParaLine, parasOf } from './figure-paras.ts'
 
@@ -824,7 +825,10 @@ function figureParas(
   }
   const live = entries.filter((e) => prose(e.x.read))
   const facts = live.map((e) => proseFacts(e.x, glyphs, boxes))
-  const docGlyph = (g: number) => ({ ...glyphs[g]!, base: bare(glyphs[g]!.font) }) as unknown as DocGlyph
+  // (a page's glyph with its base name, made by glyphWith: a page glyph's coordinates are getters over its page's array, which a
+  // spread does not copy, and lineEnd read every gap as none, no word's start, every TeX break a word's hyphen: "con-text",
+  // 2609.19644v1 p60)
+  const docGlyph = (g: number) => glyphWith(glyphs[g]! as unknown as DocGlyph, { base: bare(glyphs[g]!.font) })
   const end = (a: number, b: number) => {
     const A = live[a]!.x.read.gs,
       B = live[b]!.x.read.gs
