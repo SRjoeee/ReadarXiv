@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
-import { decide, mergesIn, repositoryOf, simpleCommands, withinBudget } from '../../scripts/merge-gate.mjs'
+import { decide, directoryOf, mergesIn, repositoryOf, simpleCommands, withinBudget } from '../../scripts/merge-gate.mjs'
 
 type Merge = { ref: string | null; repo: string | null; dirs: string[]; unreadable: boolean; plain: boolean; files?: string[]; hidden?: boolean }
 type Command = { words: string[]; dynamic: boolean[]; scripts: string[]; bodies: string[]; before: string; after: string }
@@ -276,6 +276,12 @@ describe('mergesIn', () => {
       'pushd x && gh pr merge 603',
       'cd "$DIR" && gh pr merge 603',
       'cd x || true; gh pr merge 603',
+      // where a `cd` to a bare name lands is CDPATH's to say, and where `cd` alone lands is HOME's (#635, Codex)
+      'CDPATH=../release; cd work && gh pr merge 411 --merge',
+      'export CDPATH=/srv; cd x; gh pr merge 603',
+      'cdpath=(../release); cd work; gh pr merge 603',
+      'HOME=/elsewhere; cd; gh pr merge 603',
+      'env CDPATH=../release bash -c "cd work && gh pr merge 603"',
       // a word that runs a builtin in this shell runs `cd` in this shell (#635, Codex)
       'command cd ../release && gh pr merge 411 --merge',
       'builtin cd x; gh pr merge 603',
@@ -801,6 +807,23 @@ describe('withinBudget', () => {
     // within the allowance the answer is the lookup's own
     clock = 0
     expect(decide(text, { lookup: withinBudget((m: Merge) => lookup(m), 20_000, () => clock), read, here: HERE })?.reason).toContain('#411 merges into main')
+  })
+})
+
+describe('directoryOf', () => {
+  it('follows the literal directories from where the command starts', () => {
+    expect(directoryOf([], '/a/b', '/home/u', undefined)).toBe('/a/b')
+    expect(directoryOf(['wt', '../x'], '/a/b', '/home/u', undefined)).toBe('/a/b/x')
+    expect(directoryOf(['~', 'code'], '/a/b', '/home/u', '')).toBe('/home/u/code')
+    expect(directoryOf(['~/code/x'], '/a/b', '/home/u', undefined)).toBe('/home/u/code/x')
+  })
+
+  it('does not say where a bare name leads once the environment names a CDPATH (#635, Codex)', () => {
+    // bash looks under CDPATH before the current directory; a name that begins with `/`, `./` or `../` it does not
+    expect(directoryOf(['wt'], '/a/b', '/home/u', '/srv')).toBeNull()
+    expect(directoryOf(['/abs', 'wt/deep'], '/a/b', '/home/u', '/srv')).toBeNull()
+    expect(directoryOf(['./wt', '../x', '/abs', '~', '~/code', '..', '.'], '/a/b', '/home/u', '/srv')).toBe('/home/u')
+    expect(directoryOf(['./wt', '../x'], '/a/b', '/home/u', '/srv')).toBe('/a/b/x')
   })
 })
 

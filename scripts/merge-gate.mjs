@@ -524,9 +524,10 @@ const EXPANDED = /^(?:\$\w+|\$\{[^}]*\}|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`|\$[@
 const STARTS_GH = /^\s*(?:\S*\/)?gh(?:\s|$)/
 /** A word as shell text again: one the shell expands inside double quotes, any other inside single ones */
 const quoted = (word, expands) => (expands ? JSON.stringify(word) : `'${word.replaceAll("'", "'\\''")}'`)
-/** An assignment that changes which repository `gh` works on: its own variables (`GH_REPO`, `GH_HOST`), and git's
- *  (`GIT_DIR`), whose remotes it reads */
-const REPOINTS = /^(?:GH|GIT)_\w*=/
+/** An assignment that changes where `gh` looks, or where a `cd` lands: `GH_REPO=…`, `GIT_DIR=…`; `CDPATH=…` (zsh's
+ *  `cdpath=(…)`), under which the shells look for a bare name before, or after, the current directory; `HOME=…`,
+ *  where `cd` alone and `cd ~` go */
+const REPOINTS = /^(?:(?:GH|GIT)_\w*|CDPATH|cdpath|HOME)=/
 /** The operators after which the next command runs in the same shell: always (`;`, a newline), or when the one
  *  before succeeded (`&&`) */
 const SEQUENCE = /^(?:&&\n*|[;\n]+)$/
@@ -920,6 +921,21 @@ export function decide(text, { lookup, read, here }) {
   return allowed
 }
 
+/** The directory a merge runs in: where the command starts (`start`), then each literal `cd` before it (`dirs`).
+ *  Null when the environment names a CDPATH (`cdpath`, the hook's own being all it knows of the shell's) and a `cd`
+ *  goes to a bare name: bash looks for that under CDPATH before the current directory, zsh after, and a name that
+ *  begins with `/`, `./` or `../` neither looks up at all. */
+export function directoryOf(dirs, start, home, cdpath) {
+  let dir = start
+  for (const to of dirs) {
+    if (to === '~') dir = home
+    else if (to.startsWith('~/')) dir = join(home, to.slice(2))
+    else if (cdpath && !/^(?:\/|\.\.?(?:\/|$))/.test(to)) return null
+    else dir = resolve(dir, to)
+  }
+  return dir
+}
+
 /** `owner/name` (lower case) of a GitHub URL, a remote's or a pull request's; null when it is not one */
 export function repositoryOf(url) {
   const m = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/pull\/\d+.*)?\/?$/.exec(url.trim())
@@ -954,8 +970,7 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathS
   const input = JSON.parse(readFileSync(0, 'utf8'))
   const text = input.tool_name === 'Bash' && typeof input.tool_input?.command === 'string' ? input.tool_input.command : ''
   const cwd = typeof input.cwd === 'string' ? input.cwd : process.cwd()
-  /** The directory a merge runs in: the command's own, then each literal `cd` before it */
-  const directoryOf = merge => merge.dirs.reduce((dir, to) => resolve(dir, to === '~' ? homedir() : to.startsWith('~/') ? join(homedir(), to.slice(2)) : to), cwd)
+  const where = merge => directoryOf(merge.dirs, cwd, homedir(), process.env.CDPATH)
   let here = null
   try {
     here = repositoryOf(run('git', ['-C', dirname(fileURLToPath(import.meta.url)), 'remote', 'get-url', 'origin']))
@@ -963,7 +978,9 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathS
   const lookup = withinBudget((merge, left) => {
     try {
       const args = ['pr', 'view', ...(merge.ref === null ? [] : [merge.ref]), '--json', 'baseRefName,number,url', ...(merge.repo === null ? [] : ['--repo', merge.repo])]
-      const found = JSON.parse(run('gh', args, directoryOf(merge), Math.min(15_000, left)))
+      const dir = where(merge)
+      if (dir === null) return null
+      const found = JSON.parse(run('gh', args, dir, Math.min(15_000, left)))
       const repo = repositoryOf(found.url)
       return repo === null ? null : { repo, base: found.baseRefName, number: found.number }
     } catch {
@@ -972,7 +989,8 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(realpathS
   }, BUDGET)
   const read = (file, merge) => {
     try {
-      return readFileSync(resolve(directoryOf(merge), file), 'utf8')
+      const dir = where(merge)
+      return dir === null ? null : readFileSync(resolve(dir, file), 'utf8')
     } catch {
       return null
     }
