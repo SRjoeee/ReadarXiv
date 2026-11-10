@@ -66,6 +66,45 @@ describe('a figure text with an element, laid as a paragraph of one line (F0)', 
   })
 })
 
+describe('a figure text with an element, its runs in their own fills (F0, 2610.19159v1 p53)', () => {
+  // ("Agent Action: Write" dark, its path in typewriter, "(Self-directed scope reduction)" red and the most of its glyphs: the
+  // member's own fill the tag's, the title a group whose style states its fill; the paragraph path draws each in its own)
+  const title: Placed = {
+    ord: 0,
+    kind: 'figure',
+    text: idOf(2),
+    lead: 12,
+    style: { role: 'serif', size: 10, bold: 1, fill: 0xa73a3a },
+    align: 'l',
+    lines: [[1, 0, 100, 400, 400, 407.5, 397.5, 90, 500, 0, 10]],
+    spans: [['0', { style: { role: 'serif', size: 10, bold: 1, fill: 0x243447 } }]],
+    els: [['2', { kind: 'other', literal: 1, copy: 'a.py', ink: [[1, 190, 397.5, 220, 407.5, 400]] }]],
+    room: { below: 4, side: [90, 500] },
+  }
+  const row: Row = {
+    id: idOf(2),
+    ok: true,
+    by: 'test',
+    content: [
+      { t: 'span', id: '0', content: [{ t: 'text', s: '操作：写入' }] },
+      { t: 'text', s: ' ' },
+      { t: 'el', id: '2' },
+      { t: 'text', s: '（缩减范围）' },
+    ],
+  }
+  it('draws its group in the fill the group’s style states, the rest in its own', () => {
+    const page = layPage(part([title]), rows([row]), rulesFor('zh'), metrics)
+    const m = page.members.find((x) => x.ord === 0)!
+    expect(m.state).toBe('laid')
+    const text = m.lines
+      .flatMap((l) => l[3] as Item[])
+      .filter((it): it is Extract<Item, { face: unknown }> => 'face' in it)
+    const fillOf = (s: string) => text.find((it) => it.s.includes(s))?.fill
+    expect(fillOf('写入')).toBe(0x243447)
+    expect(fillOf('缩减')).toBe(0xa73a3a)
+  })
+})
+
 describe('a figure text laid inside the closed shape that holds it (the owner’s reformulation of 2026-11-10)', () => {
   // ("Module" at 10 over 100-136 on baseline 400, a box round it whose top edge stands 6 over the baseline: a CJK translation's
   // ink, 7 over at its size, must shrink to 6/7 of it)
