@@ -14,7 +14,7 @@
 // - Its **anchor**: the first member of the block (the names toggle's member kinds, by ord) one of whose stretches is the name;
 //   its row's text there is the block's translation of the name. A name no block member holds so has none and nothing of it is
 //   drawn otherwise than before (a block that lists names with no element between them: IEEEtran's \IEEEauthorblockN{A, B and C}).
-// - An **occurrence**: the name's text inside one text piece of any other unit not kept, white space between its words any, no
+// - An **occurrence**: the name's text inside one text piece of any other unit a member lays and the paper does not keep, white space between its words any, no
 //   letter or digit beside it, the longest name first; the anchor's own stretch is none. A unit whose every occurrence is a whole
 //   stretch of it is resolved in its own row (stretch mode: 2610.22065v1's reference format names, each its own unit; 2604's
 //   "Zhiqiang Shen (", the translator's own bracket kept); any other unit holding one has a **variant**, a unit of kind `named`:
@@ -88,7 +88,7 @@ const splitOf = (id: string, st: Stretches): Split => [
   st.texts.flatMap((t, k) => (LETTER.test(t) ? [k] : [])),
 ]
 
-/** a block member as the names read it: its row's unit (Placed.text), its ord and its member kind */
+/** a member as the names read it: its row's unit (Placed.text), its ord and its member kind */
 export interface BlockMember {
   ord: number
   unit: string
@@ -106,12 +106,13 @@ export interface NamesOut {
 
 /**
  * The names a paper's units hold elsewhere than in the block (the header): `units` the bundle's, in order; `classOf` what the
- * source says of a unit's element (the instrument's PieceClass, by unit id and piece id); `block` the members of the block
+ * source says of a unit's element (the instrument's PieceClass, by unit id and piece id); `members` the paper's members, the
+ * block's among them (a unit no member lays is never drawn: no variant of it is asked for)
  */
 export function namesOf(
   units: readonly Unit[],
   classOf: (unit: string, piece: string) => PieceClass | undefined,
-  block: readonly BlockMember[],
+  members: readonly BlockMember[],
 ): NamesOut {
   const out: NamesOut = { variants: new Map(), named: new Map(), persons: [], splits: new Map() }
   const byId = new Map(units.map((u) => [u.id, u]))
@@ -132,11 +133,12 @@ export function namesOf(
         if (isName(n) && !names.includes(n)) names.push(n)
       }
   if (!names.length) return out
-  const members = [...block].filter((m) => BLOCK_KINDS.has(m.kind)).sort((a, b) => a.ord - b.ord)
+  const block = members.filter((m) => BLOCK_KINDS.has(m.kind)).sort((a, b) => a.ord - b.ord)
+  const laid = new Set(members.map((m) => m.unit))
   const anchor = new Map<string, number>()
   const nameAt: string[] = []
   for (const n of names)
-    for (const m of members) {
+    for (const m of block) {
       const u = byId.get(m.unit)
       if (!u || u.kept) continue
       const k = st(u).texts.findIndex((t) => nameOf(t) === n)
@@ -164,7 +166,7 @@ export function namesOf(
       ] as const,
   )
   for (const u of units) {
-    if (u.kept || u.kind === NAMED_KIND || u.kind === 'name') continue
+    if (u.kept || u.kind === NAMED_KIND || u.kind === 'name' || !laid.has(u.id)) continue
     const s = st(u)
     // (each text piece's occurrences: [start, end, person], the longest first, none overlapping)
     const found = new Map<Piece, [number, number, number][]>()

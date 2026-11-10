@@ -6395,7 +6395,7 @@ The toggle still governs the block under the title alone (§19.13, the ruling of
   - The anchor's row, cut at the same elements, gives the name's translation.
   - A block that lists names with nothing between them has no anchor and changes nothing (IEEEtran's
     `\IEEEauthorblockN{A, B and C}`).
-- **An occurrence.** An occurrence is the name's text inside one text piece of any other unit that is not kept.
+- **An occurrence.** An occurrence is the name's text inside one text piece of any other unit that a member lays and that is not kept. A unit no member lays is never drawn, and no variant is made for it.
   - Any white space may stand between its words; no letter or digit may stand beside it.
   - The longest name is taken first, and the anchor's own stretch is not an occurrence.
   - A unit whose every occurrence is a whole stretch is resolved in its own row: its stretch's letters become the block's and

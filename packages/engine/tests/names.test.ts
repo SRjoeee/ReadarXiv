@@ -19,6 +19,11 @@ const unit = (kind: string, content: Piece[], o: Partial<Unit> = {}): Unit => ({
 const none = () => undefined
 const block = (...xs: [number, Unit, string][]): BlockMember[] =>
   xs.map(([ord, u, kind]) => ({ ord, unit: u.id, kind }))
+/** the members of a part: the block's, and a member laying each of `elsewhere` (none a block's kind) */
+const laid = (b: BlockMember[], ...elsewhere: Unit[]): BlockMember[] => [
+  ...b,
+  ...elsewhere.map((u, i) => ({ ord: 1000 + i, unit: u.id, kind: u.kind === 'author' ? 'textnames' : u.kind })),
+]
 
 // 2610.22065v1: the block is the paper's own names line (an ink unit, the marks between its names), its \author units are set in
 // the ACM reference format, away from the block (`textnames`)
@@ -28,7 +33,7 @@ const line = unit('inknames', [t('Wenshuai Yao'), el('1', '$^{1}$'), t(', Wenyon
 
 describe('the names and their anchors', () => {
   it('takes each name of the author declarations and the first block member whose stretch it is', () => {
-    const got = namesOf([yao, zhou, line], none, block([146, line, 'inknames'], [1, yao, 'textnames']))
+    const got = namesOf([yao, zhou, line], none, laid(block([146, line, 'inknames']), yao, zhou))
     expect(got.persons).toEqual([
       [line.id, 'inknames', 0],
       [line.id, 'inknames', 1],
@@ -36,14 +41,14 @@ describe('the names and their anchors', () => {
     expect(got.splits.get(line.id)).toEqual([line.id, ['1', '3'], [], [0, 1]])
   })
   it('resolves a unit that is a name, whole, in its own row, and makes no variant of it', () => {
-    const got = namesOf([yao, zhou, line], none, block([146, line, 'inknames'], [1, yao, 'textnames']))
+    const got = namesOf([yao, zhou, line], none, laid(block([146, line, 'inknames']), yao, zhou))
     expect(got.named.get(zhou.id)).toEqual([zhou.id, '', [[0, 1]]])
     expect(got.splits.get(zhou.id)).toEqual([zhou.id, [], [], [0]])
     expect(got.variants.size).toBe(0)
   })
   it('makes a variant of a unit that holds a name in its sentence: the name an element, every other piece as it was', () => {
     const note = unit('footnote', [t('Corresponding author: Wenyong Zhou.')], { sentences: true })
-    const got = namesOf([yao, zhou, line, note], none, block([146, line, 'inknames']))
+    const got = namesOf([yao, zhou, line, note], none, laid(block([146, line, 'inknames']), note, zhou))
     const v = got.variants.get(note.id)!
     const content = [t('Corresponding author: '), { ...el('n0', 'Wenyong Zhou', PERSON_KIND) }, t('.')]
     expect(v).toEqual({ id: unitId(NAMED_KIND, content), kind: NAMED_KIND, content, sentences: true })
@@ -52,7 +57,7 @@ describe('the names and their anchors', () => {
   })
   it('makes a variant of a reference format paragraph that is one unit (the author-lines-3 shape), each name its element', () => {
     const acm = unit('inkorphan', [t('ACM Reference Format: Wenshuai Yao and Wenyong Zhou. 2027. A title.')])
-    const got = namesOf([yao, zhou, line, acm], none, block([146, line, 'inknames']))
+    const got = namesOf([yao, zhou, line, acm], none, laid(block([146, line, 'inknames']), acm))
     const v = got.variants.get(acm.id)!
     expect(v.content).toEqual([
       t('ACM Reference Format: '),
@@ -68,14 +73,14 @@ describe('the names and their anchors', () => {
   })
   it('finds a name broken over source lines and inside a group, the element’s source the text as the unit writes it', () => {
     const ref = unit('reference', [span('1', [t('Wenyong\n  Zhou')]), t(', A. Other. 2025. Title.')])
-    const got = namesOf([zhou, line, ref], none, block([146, line, 'inknames']))
+    const got = namesOf([zhou, line, ref], none, laid(block([146, line, 'inknames']), ref))
     expect(got.variants.get(ref.id)!.content[0]).toEqual(span('1', [el('n0', 'Wenyong\n  Zhou', PERSON_KIND)]))
     expect(got.named.get(ref.id)![2]).toEqual([['n0', 0, 14, 0]])
   })
   it('takes a group’s edges as none of the anchor’s cuts (2604.14228v3: the block’s name in a group, the figure text whole)', () => {
     const shen = unit('author', [span('0', [t('Zhiqiang Shen')])])
     const corr = unit('inkfigures', [t('Zhiqiang Shen (')])
-    const got = namesOf([shen, corr], none, block([4, shen, 'author']))
+    const got = namesOf([shen, corr], none, laid(block([4, shen, 'author']), corr))
     expect(got.persons).toEqual([[shen.id, 'author', 0]])
     expect(got.named.get(corr.id)).toEqual([corr.id, '', [[0, 0]]])
   })
@@ -105,7 +110,7 @@ describe('the names and their anchors', () => {
   it('takes no single word for a name (2609.36054v2’s “AI” of \\author{… Institute for Law \\& AI})', () => {
     const a = unit('author', [t('Alan Chan GovAI Institute for Law '), el('1', '\\&', 'macro'), t(' AI')])
     const body = unit('para', [t('The AI governs.')])
-    const got = namesOf([a, body], none, block([1, a, 'author']))
+    const got = namesOf([a, body], none, laid(block([1, a, 'author']), body))
     expect(got.persons).toEqual([[a.id, 'author', 0]])
     expect(got.named.size).toBe(0)
   })
@@ -115,7 +120,7 @@ describe('the names and their anchors', () => {
     const b = unit('inknames', [t('Jun Yang'), el('1', '$^1$'), t(', Jun Yang Li')])
     const ref = unit('reference', [t('Jun Yang Li and Jun Yangfu. 2020.')])
     const kept = unit('para', [t('Thanks to Jun Yang.')], { kept: true })
-    const got = namesOf([jun, junLi, b, ref, kept], none, block([5, b, 'inknames']))
+    const got = namesOf([jun, junLi, b, ref, kept], none, laid(block([5, b, 'inknames']), ref, kept))
     expect(got.named.get(b.id)).toBeUndefined()
     expect(got.variants.get(ref.id)!.content).toEqual([
       el('n0', 'Jun Yang Li', PERSON_KIND),
@@ -126,13 +131,20 @@ describe('the names and their anchors', () => {
   it('names no person a block member does not hold whole (a list with no element between its names: no anchor)', () => {
     const list = unit('author', [t('Ying Wang, Yue Ju and Håkan Hjalmarsson')])
     const note = unit('footnote', [t('Ying Wang is with KTH.')])
-    const got = namesOf([list, note], none, block([1, list, 'author']))
+    const got = namesOf([list, note], none, laid(block([1, list, 'author']), note))
     expect(got.persons.map((p) => p[2])).toEqual([0])
     expect(got.named.size).toBe(0)
   })
+  it('makes nothing of a unit no member lays (2610.22065v1’s \\thanks text, which its own line stands for)', () => {
+    const note = unit('footnote', [t('Wenshuai Yao and Wenyong Zhou contributed equally to this work.')])
+    const got = namesOf([yao, zhou, line, note], none, laid(block([146, line, 'inknames']), zhou))
+    expect(got.variants.has(note.id)).toBe(false)
+    expect(got.named.has(note.id)).toBe(false)
+    expect(got.named.has(zhou.id)).toBe(true)
+  })
   it('gives a variant’s elements ids no piece of the unit has', () => {
     const odd = unit('para', [el('n0', '\\x', 'macro'), t(' We thank Wenyong Zhou.')])
-    const got = namesOf([zhou, line, odd], none, block([146, line, 'inknames']))
+    const got = namesOf([zhou, line, odd], none, laid(block([146, line, 'inknames']), odd))
     expect(got.named.get(odd.id)![2]).toEqual([['nn0', 0, 12, 11]])
   })
 })
@@ -140,7 +152,7 @@ describe('the names and their anchors', () => {
 describe('what a part states of them', () => {
   it('states its members’ units’ names, each person once and numbered in its order, with the splits its rows are cut by', () => {
     const note = unit('footnote', [t('Corresponding author: Wenyong Zhou.')])
-    const got = namesOf([yao, zhou, line, note], none, block([146, line, 'inknames']))
+    const got = namesOf([yao, zhou, line, note], none, laid(block([146, line, 'inknames']), note, zhou))
     const v = got.variants.get(note.id)!.id
     expect(partNames(got, [note.id, zhou.id, 'x'.repeat(64)])).toEqual({
       named: [
