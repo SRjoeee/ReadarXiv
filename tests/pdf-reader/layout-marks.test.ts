@@ -623,16 +623,17 @@ describe('LAYOUT_TEX', () => {
     // MARK_DEF's own mark gated too
     expect(LAYOUT_TEX).toMatch(/\\protected\\def\\axtmark#1\{[^}]*\\ifaxt@off/)
     for (const word of ['\\typeout', '\\wlog', '\\newcount', '\\newdimen', '\\newskip']) expect(LAYOUT_TEX).not.toContain(word)
-    // four messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
-    // cell's column class at its template's end (AXT-CELL, the engine's readAlign) and a colour piece's fill (AXT-COLOUR,
-    // readColours), and one write to the log at the shipout, each bracketed body's frame (AXT-BODY, readBodies): each a line of
-    // its own, which no reader of the log but theirs reads, and nothing typeset changes
-    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(4)
+    // five messages alone, a unit's alignment once its paragraph ended or at its end mark (AXT-ALIGN, layout-align.test.ts), a
+    // cell's column class at its template's end (AXT-CELL, the engine's readAlign), for a cell's own unit and for each unit on the
+    // cell's line, and a colour piece's fill (AXT-COLOUR, readColours), and one write to the log at the shipout, each bracketed
+    // body's frame (AXT-BODY, readBodies): each a line of its own, which no reader of the log but theirs reads, and nothing
+    // typeset changes
+    expect(LAYOUT_TEX.match(/\\message/g)).toHaveLength(5)
     // (and two to the aux at once, what the displays POINTS_TEX states were, read back by the next pass)
     expect(LAYOUT_TEX.match(/\\write/g)).toHaveLength(3)
     expect(LAYOUT_TEX.match(/\\immediate\\write\\@auxout/g)).toHaveLength(2)
     expect(LAYOUT_TEX).toContain('\\write-1{AXT-BODY ')
-    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
+    expect(LAYOUT_TEX.match(/AXT-[A-Z]+/g)).toEqual(['AXT-ALIGN', 'AXT-ALIGN', 'AXT-CELL', 'AXT-CELL', 'AXT-COLOUR', 'AXT-BODY'])
     // one line, no comment: the paper's lines keep their numbers in the log
     expect(LAYOUT_TEX).not.toContain('\n')
     expect(LAYOUT_TEX).not.toContain('%')

@@ -2,7 +2,7 @@
 // pipeline/instrument.mjs): each unit's alignment (AXT-ALIGN), each page's text frame (AXT-BODY at its body's opening point)
 // and each unit's paragraph skips (AXT-LINES).
 import { describe, expect, it } from 'vitest'
-import { framesOf, readAlign, readBodies, readSkips } from '../../src/marks/channels.ts'
+import { boxedAlignOf, framesOf, readAlign, readBodies, readBoxAlign, readSkips } from '../../src/marks/channels.ts'
 
 describe('readAlign: each unit’s alignment as TeX stated it at its end mark', () => {
   it('reads each unit’s alignment as its end mark states it, the first paragraph’s of one TeX set in two', () => {
@@ -74,6 +74,63 @@ describe('readAlign: each unit’s alignment as TeX stated it at its end mark', 
         ),
       ),
     ).toEqual({ 4: 'j', 176: 'c' })
+  })
+})
+
+describe('a unit TeX set in a box inside a paragraph: its line’s alignment as the skips in force and the paragraph’s end state it', () => {
+  // (2611.03953v2 p1, ICML 2026: \icmlauthor sets each name in \mbox{\bf #1} inside its author list's center environment, so
+  // its end mark's record is an \hbox's (`h`), which readAlign takes for nothing: the skips in force are the paragraph's, both
+  // stretching (1fil), and the paragraph TeX ends after the last name states `qe3c`, centred; the names were laid justified)
+  const icml = [
+    'AXT-ALIGN h0 p 1 1.0pt 1 1.0pt 0 0.0pt',
+    'AXT-ALIGN 1 h 1 1.0pt 1 1.0pt 0 0.0pt',
+    'AXT-ALIGN 2 h 1 1.0pt 1 1.0pt 0 0.0pt',
+  ].join('\n')
+  it('reads the skips in force at a unit’s end mark where its every record is an \\hbox’s, and a stretch on a side alone', () => {
+    expect(readAlign(icml).has(1)).toBe(false)
+    expect(Object.fromEntries(readBoxAlign(icml))).toEqual({ 1: 'c', 2: 'c' })
+    // (an \hbox in a justified paragraph, its skips none: nothing stated; a unit set as a paragraph anywhere: its paragraph's,
+    // readAlign's; flush left and right read as a paragraph's skips are)
+    expect(readBoxAlign('AXT-ALIGN 3 h 0 0.0pt 0 0.0pt 1 1.0pt').size).toBe(0)
+    expect(readBoxAlign('AXT-ALIGN 4 h 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 4 p 0 0.0pt 0 0.0pt 1 1.0pt').size).toBe(0)
+    expect(
+      Object.fromEntries(readBoxAlign('AXT-ALIGN 5 h 0 0.0pt 1 1.0pt 1 1.0pt\nAXT-ALIGN 6 h 1 1.0pt 0 0.0pt 1 1.0pt')),
+    ).toEqual({ 5: 'l', 6: 'r' })
+    // (two boxes of the unit under two skips: none; a box in a table's cell, AXT-CELL, the cell's line and no paragraph's: none,
+    // 1706.03762v7's names in \author's tabular, which readAlign reads by their column's class)
+    expect(readBoxAlign('AXT-ALIGN 7 h 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 7 h 0 0.0pt 1 1.0pt 1 1.0pt').size).toBe(0)
+    expect(readBoxAlign('AXT-ALIGN 176 h 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-CELL 176 0').size).toBe(0)
+  })
+  it('takes it where the paragraph the box stands in ends with the same alignment, nothing between but the units’ marks', () => {
+    // (B's page as the stream holds it: each name's start and end marks, its marks' glyphs between, then the paragraph's end
+    // `qe3c` past the last name's, before the body's bracket)
+    const page = {
+      points: [
+        { name: 'h0e', glyph: 72 },
+        { name: '1s', glyph: 72 },
+        { name: '1e', glyph: 81 },
+        { name: '2s', glyph: 83 },
+        { name: '2e', glyph: 93 },
+        { name: 'bs2', glyph: 176 },
+      ],
+      paras: [{ name: 'q9', glyph: 1107 }],
+      paraEnds: [{ name: 'qe3c', glyph: 176, point: 5 }],
+    }
+    expect(Object.fromEntries(boxedAlignOf(readBoxAlign(icml), [page]))).toEqual({ 1: 'c', 2: 'c' })
+    // (the paragraph's end another alignment: none; a body's or a float's bracket, a paragraph begun, or a cell's mark between
+    // the unit's end and it: the box is no line of that paragraph's, none)
+    const at = (o: object) => Object.fromEntries(boxedAlignOf(readBoxAlign(icml), [{ ...page, ...o }]))
+    expect(at({ paraEnds: [{ name: 'qe3j', glyph: 176, point: 5 }] })).toEqual({})
+    expect(at({ paraEnds: [{ name: 'qe3c', glyph: 176, point: 6 }] })).toEqual({})
+    expect(at({ paras: [{ name: 'q4', glyph: 100 }] })).toEqual({})
+    expect(
+      at({
+        points: [...page.points.slice(0, 5), { name: 't9e', glyph: 95 }, page.points[5]!],
+        paraEnds: [{ name: 'qe3c', glyph: 176, point: 6 }],
+      }),
+    ).toEqual({})
+    // (no paragraph's end on the unit's page: none)
+    expect(at({ paraEnds: [] })).toEqual({})
   })
 })
 

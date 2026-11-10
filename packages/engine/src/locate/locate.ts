@@ -783,6 +783,44 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
   // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
   // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
+  // A run TeX states (latex-front.mjs \axtcall: the point `<i>c` the marked compile sets before each author's call, the command
+  // or the \and that opens unit i's block, where TeX sets it on a line): an author's member owns what stands on its last line
+  // between its end mark and the next author's call, before any unit's mark or bracket, whatever the gap (ICML's \, before its
+  // marks, 0.17 em, past WORD_GAP: the marks were left behind its name's translation), and nothing past it, which the next
+  // author's lead is (own.mjs MR 5); a row of another line there (1706.03762v7's e-mails, under each place before NeurIPS'
+  // \And) is none of it, the original's where TeX set it as before (taken, the place was laid on two lines at 8.97 pt). The last of such calls, an author whose own call is stated with no call after it, owns what
+  // stands on its last line before the paragraph TeX ends after it (Instrument.tex.paragraphEnds), no unit's mark between: the
+  // end of the list its calls make (ICML's last name, "Zuo Bai 2 †"); a row of another line before that end (an e-mail a class
+  // sets under the last name in its tabular) is none of it, and the glue rule below reads the run. Where no call is stated (a
+  // class that stores its list and sets it whole, 2604.14228v3's \addtolist), the glue rule below, as before
+  const paraEndsB: number[] = []
+  ;(ins.tex.paragraphEnds ?? []).forEach((l, p) => {
+    for (const g of l) paraEndsB.push((m.offB[p] as number) + g)
+  })
+  paraEndsB.sort((x, y) => x - y)
+  const calledOwn = new Set<string>()
+  for (const pg of B.pages) for (const x of pg.points ?? []) if (CALL.test(x.name)) calledOwn.add(x.name.slice(0, -1))
+  const runEndOf = (mem: Member): { at: number; line: boolean } | null => {
+    if (!AUTHOR_KINDS.has(mem.kind)) return null
+    const p = (pageB[mem.bLast] as number) - 1
+    const o = m.offB[p] as number
+    const pts = B.pages[p]?.points ?? []
+    const k = pts.findIndex((x) => x.name === `${mem.unit}e`)
+    if (k < 0) return null
+    let next = Number.POSITIVE_INFINITY
+    for (let j = k + 1; j < pts.length; j++) {
+      const x = pts[j]!
+      if (CALL.test(x.name)) return { at: o + x.glyph, line: false }
+      if (UNIT_MARK.test(x.name) || BRACKET.test(x.name)) {
+        next = o + x.glyph
+        break
+      }
+    }
+    if (!calledOwn.has(String(mem.unit))) return null
+    const from = o + pts[k]!.glyph
+    const end = paraEndsB.find((e) => e >= from)
+    return end === undefined || end > next || pageB[end - 1] !== pageB[mem.bLast] ? null : { at: end, line: true }
+  }
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.figure || mem.kind === 'cell' || mem.name !== undefined || mem.bLast < 0)
       continue
@@ -791,7 +829,29 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     const last = gA(end)
     let prev = last
     const trail: number[] = []
+    const run = runEndOf(mem)
+    let call = run ? run.at : -1
+    // (the list's end: every free ink glyph before it on the member's last line, else the glue rule)
+    if (run?.line)
+      for (let b = mem.bLast + 1; b < run.at && b < NB && (unitB[b] as number) < 0; b++) {
+        const a = m.bToA[b] as number
+        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        const g = gA(a)
+        if (isInk(g) && (g.top <= last.bottom || g.bottom >= last.top)) {
+          call = -1
+          break
+        }
+      }
     for (let b = mem.bLast + 1; b < NB && pageB[b] === pageB[mem.bLast] && (unitB[b] as number) < 0; b++) {
+      if (call >= 0) {
+        if (b >= call) break
+        const a = m.bToA[b] as number
+        if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) continue
+        const g = gA(a)
+        // (on the member's last line alone: another row before the call, an e-mail a block sets under its place, is no trail)
+        if (isInk(g) && g.top > last.bottom && g.bottom < last.top) trail.push(a)
+        continue
+      }
       const a = m.bToA[b] as number
       if (a < 0 || (claimedA[a] as number) !== FREE || pageA[a] !== pageA[end]) break
       const g = gA(a)
@@ -1655,6 +1715,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   for (const x of members) if (!standing.has(x.ord)) put(x.ord)
   const flowOf = new Map<number, number[]>()
   const flows: number[][] = []
+  // (B's body and float brackets, LAYOUT_TEX's `bs<n>`, `be<n>`, `fs<n>`, `fe<n>`, each at the glyph after it: a column's body is
+  // bracketed each, a float's set apart)
+  const brackets: number[] = []
+  B.pages.forEach((pg, p) => {
+    for (const x of pg.points ?? []) if (BRACKET.test(x.name)) brackets.push((m.offB[p] as number) + x.glyph)
+  })
+  const bracketBetween = (lo: number, hi: number) => brackets.some((g) => g > lo && g <= hi)
   let body: number | null = null
   // (a footnote's text is set in the footnote insert, TeX's \footins, the page's notes one after the other there: the member
   // before a footnote is the footnote before it, the body between them in the stream passed over (footmisc's para sets the
@@ -1694,7 +1761,11 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.unit >= 0 &&
       prev.unit >= 0 &&
       a[0] === b[0] &&
-      (a[1] === b[1] || (prev.kind === 'heading' && sameColumn(a[1], b[1]))) &&
+      // (one column by the line's x, or none TeX set apart: no body's or float's bracket between the two in B's stream, ICML's
+      // centred names over the page's middle, which its x read as three columns' and laid as three lines)
+      (a[1] === b[1] ||
+        (prev.kind === 'heading' && sameColumn(a[1], b[1])) ||
+        (prev.bLast >= 0 && mem.bFirst >= 0 && !bracketBetween(prev.bLast, mem.bFirst))) &&
       Math.abs(a[4] - b[4]) < 0.5 * Math.min(prev.style.size, mem.style.size) &&
       b[2] >= a[3] - 0.5 &&
       sepOf(prev, b) <= SHARED_SEP * (b[10] ?? mem.style.size) &&
@@ -2072,6 +2143,12 @@ export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, numbe
  *  paragraph's first line, after it on its row, spans both. Members a tabular row sets side by side (an author block's names,
  *  the middle one over the page's middle, 1706.03762v7 p1) are no lead and its text: their columns must be the same */
 const sameColumn = (a: number, b: number) => a === b || a === 2 || b === 2
+/** an author's call the marked compile states: the point `<i>c` before the command or the \and that opens unit i's block */
+const CALL = /^\d+c$/
+/** a unit's start or end mark: `<i>s`, `<i>e`, a heading's `h<i>…`, a cell's `t<i>…` */
+const UNIT_MARK = /^[ht]?\d+[se]$/
+/** a body's or a float's bracket in B's stream (LAYOUT_TEX) */
+const BRACKET = /^[bf][se]\d+$/
 
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */

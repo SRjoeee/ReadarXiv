@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { CALL_TEX, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { classesOn, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
@@ -313,5 +313,52 @@ describe('the places\' units: their number, their class, their marks', () => {
   it('marked as the author block\'s names are, in the layout compile: its own start and end marks', () => {
     const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(tex).toMatch(/\\author\{\\leavevmode\\axtmark\{1s\}Alice Smith\\axtend\{1e\} \\\\ \\leavevmode\\axtmark\{4s\}University of Somewhere\\axtend\{4e\}\}/)
+  })
+})
+
+describe('the author calls the marked original states (\\axtcall, CALL_TEX: the point `<i>c` before an author\'s call)', () => {
+  // (what TeX sets between an author's end mark and the next author's call is the author's, what after it the next author's: no
+  // gap tells them apart, ICML's marks after a name a thin space after it, 2611.03953v2; a \thanks mark before an \and)
+  const marked = (p: ReturnType<typeof open>) => new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+  const idOf = (p: ReturnType<typeof open>, name: string) => units(p).findIndex(u => u.kind === 'author' && textOf(u) === name)
+  it('before each \\and that opens an author\'s block inside one, its first unit\'s', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Ashish Vaswani\\thanks{Equal contribution.} \\\\ Google Brain \\And Noam Shazeer \\\\ Google Research}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'Noam Shazeer')}}\\And `)
+    // (and the note's call after the first name, before the place on the next row: two calls stated)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(2)
+    expect(tex).toContain(CALL_TEX)
+  })
+  it('before an author block\'s command right after another\'s, never before the first (ICML\'s \\icmlauthor)', () => {
+    const p = open('\\twocolumn[\\icmltitle{A Title}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n% a comment\n\\icmlauthor{John Roe}{y}\n\\end{icmlauthorlist}\n]\nWords.', '\\usepackage{icml2025}')
+    const tex = marked(p)
+    expect(tex).toContain(`\\axtcall{${idOf(p, 'John Roe')}}\\icmlauthor{`)
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+  })
+  it('after a note\'s call inside an author block, before the unit after it: the mark the note set is the text before\'s', () => {
+    // (2411.13093v4, NeurIPS: one \\author in the preamble, its names apart by \\quad, Xiawu Zheng's \\thanks between two names
+    // of a row: its "∗" was the next unit's label, which kept the row from being laid as one line)
+    const p = open('\\maketitle\nWords.', '\\author{Yongdong Luo$^{1}$ \\quad Xiawu Zheng$^{1}$\\thanks{Corresponding author.} \\quad Guilin Li$^{1}$ \\quad Haojia Lin$^{1}$ \\\\ Chaoyou Fu$^{2}$}')
+    const id = units(p).findIndex(u => u.kind === 'author' && textOf(u).startsWith('Guilin Li'))
+    const tex = marked(p)
+    // (the note's own text between its marks in the layout compile)
+    expect(tex).toMatch(new RegExp(`Corresponding author\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${id}\\}`))
+    expect(tex.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    // (the unit after the note begun right where the note's call ends, `\\thanks{…}\\,$^{1,2}$`: the call written there all the
+    // same, before the unit's bytes; 2610.17108v1's had none, its "∗" the next unit's label)
+    const glued = open('\\maketitle\nWords.', '\\author{\\textbf{Sam Smith}\\,$^{1}$\\quad Vic Vance\\thanks{Corresponding.}\\,\\,$^{1,2}$\\quad \\textbf{Ann Eve}\\,$^{1}$}')
+    const gid = units(glued).findIndex((u, k) => u.kind === 'author' && k > 0 && textOf(u).includes('Ann Eve'))
+    expect(marked(glued)).toMatch(new RegExp(`Corresponding\\.\\\\axtend\\{\\d+e\\}\\}\\\\axtcall\\{${gid}\\}`))
+    // (a note that opens its block marks no text before it: its mark, set before the name, is the name's lead, none stated; a
+    // note before an \\and: the \\and's call alone)
+    expect(marked(open('\\maketitle\nWords.', '\\author{\\thanks{Equal contribution.}Jane Doe \\\\ The University}'))).not.toContain('\\axtcall{')
+    const and = marked(open('\\maketitle\nWords.', '\\author{Jane Doe\\thanks{Equal contribution.} \\and John Roe}'))
+    expect(and.match(/\\axtcall\{\d+\}/g)).toHaveLength(1)
+    expect(and).toMatch(/\\axtcall\{\d+\}\\and /)
+  })
+  it('none for one author\'s block, and no definition in the head: the paper\'s bytes as before', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Jane Doe \\\\ The University}')
+    const tex = marked(p)
+    expect(tex).not.toContain('\\axtcall')
   })
 })

@@ -2964,9 +2964,18 @@ block's units are never cells (PIPELINE 39), yet they are set in tables: LaTeX's
 first author's, justified elsewhere, five of the eight names and their places laid from their originals' starts. A unit's
 start mark now carries its index out the same way, but through ordinary groups alone (a brace group, `\begingroup`, as the
 paragraph's end is followed): never past a box, a `\noalign`, math or a note, where the unit is no line of the cell's or the
-token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class where
-it is the cell's one unit; where two units, or a cell's unit, share the cell's line, the class places the line, not either,
-and none is written. `readAlign` reads it as a cell's: the class where the unit's own paragraph says nothing (a name set again
+token would land where TeX reads none (longtable's caption is set in a `\noalign`). The template's end writes its class for
+each unit that reaches it; where a cell's own unit shares the line, none. Several units sharing a cell's line (2411.13093v4's
+names apart by `\quad`, cut in two by a `\thanks`) wrote none at first: the class places their line, not either, and the lay
+then had no line of several members, so each, given the class, would have been set on its own middle. The lay now has one
+(§18.16, `rowLinesOf`): a line whose members TeX states alike is laid as one run, placed as the class places it, and each of
+them states the class (2026-11-10). Where locate does not make them one line (ink kept between them, a member over two lines),
+each is centred on its own original's middle, where the ink's reading laid it from its start. And the index passes a box the
+column's template sets around the content: colortbl's (xcolor's `table`) sets each cell in an `\hbox` and `\unhbox`-es it into
+the cell, so that no unit of 2411.13093v4's author block stated a class; the content's level is noted before each column's
+content (`\axt@cl`), a box group at or above it is the template's, one below it the paper's (a name in an `\mbox`, whose line is
+the box's), and after a table set in the cell none is passed. `readAlign` reads it as a
+cell's: the class where the unit's own paragraph says nothing (a name set again
 as a paragraph, acmart's reference format, keeps its paragraph's). Nothing of B moves (the same gate, its case `authors`: 96
 documents, each PDF byte for byte the one before). A `\thanks` mark TeX set glued after a name (its `\rlap`) is the name's
 trail (§18.16) and travels with it, so the room beside the name is no longer fenced by it (1706.03762v7's first name, set at
@@ -3227,6 +3236,52 @@ is read as part of it), which the reading took back only beside a stop or a digi
 leading marks likewise. The plan now states the markers it set a space before and after, and the reading takes the reply's white
 space on that side back whatever stands beside it, as the HTML page's rehydrate does: the source set the element glued there.
 A tie is an element of its own, so a tie between two words no longer reads back with our two spaces round it.
+
+**A name TeX set in a box on a centred line is centred** (`marks/channels.ts` `readBoxAlign`, `boxedAlignOf`; the owner's
+staging case 2611.03953v2, ICML 2026, and 2610.22195v1). `\icmlauthor` sets each name in `\mbox{\bf #1}` inside its list's
+`center` environment, so the record of each name's end mark is an `\hbox`'s (`AXT-ALIGN <i> h …`), which `readAlign` takes for
+nothing: the names were read off their ink as justified, each laid from its own start, and the centred line's run (above) never
+applied. The record still carries the skips in force where the box was set (the environment's, 1fil on both sides), and the
+paragraph TeX ends right after the last name states its alignment (`qe3c`): two of TeX's statements of the line. A unit whose
+every record is an `\hbox`'s now takes the alignment its skips state (centred, flush left or flush right; none for justified, for
+two records that disagree, or for a unit TeX set in a table's cell, which its column's class tells) where the first paragraph
+end after its end mark states the same, nothing between but units' marks and glyphs (no paragraph begun, no body's or float's
+bracket, no cell's mark). `readAlign`'s own reading comes first. And the row: locate read a line's column by its x against the
+page's middle, so ICML's first line of eight names, centred over that middle, was three flows, and its second three; two members
+on one baseline now share it also where TeX's stream sets no body's or float's bracket between them (LaTeX's `\@makecol`
+brackets each column's body, a float its own: two columns are never one row).
+
+**What TeX set between two authors is told by their calls** (`latex-front.mjs` `CALLED_AT`, `layout/marks.mjs` `CALL_TEX`,
+§19.7; `locate.ts` the trail, `own.mjs` MR 5). ICML sets each name, then `\,` and each mark `\textsuperscript{1\,}`: the thin
+space before the marks, 1.66 pt at 10 pt type, is past the trail's word gap (0.12 em), so the marks were no trail, and the next
+name's walk back to the end mark before (MR 5) took them as its label: "12" stood before "Jiacheng Lu". No gap tells an author's
+marks from the next author's lead. TeX's gaps there are sums (ICML's 6.64 pt before the next name: `\,` at 7 pt,
+`\scriptspace` and two word spaces; article's `\and`, `\hskip 1em plus .17fil` stretched by a centred line's slack), and neither
+the PDF, whose fonts are the Type 1 programs and not the metrics TeX read, nor the log states a font's `\fontdimen` or a line's
+glue set ratio to sum them from (the coordinator's option of 2026-11-10, measured and dropped). The marked compile states the
+calls instead: a point `<i>c` before each author's call where TeX is in horizontal mode, unit i the first after it, and one
+right after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, kept in the
+stored `\@author` as the calls are: the mark the note set is the text before's (2411.13093v4's "Xiawu Zheng¹∗", whose "∗" was
+the next unit's label and kept the row from being laid as one line); a note that opens its row marks no text before it, and its
+mark stays the name's lead. An author's
+member owns, as its trail, every free glyph TeX set on its last line between its end mark and the next call, before any unit's
+mark or bracket, whatever the gap; a row of another line there stays where TeX set it, as before (1706.03762v7's e-mails, each
+under its place before NeurIPS' `\And`: taken as the place's trail, the place was laid on two lines at 8.97 pt where TeX set one
+at 9.96). The last author of such calls, whose own call is stated, owns what TeX set on its last line before the paragraph TeX
+ends after it (ICML's "Zuo Bai 2 †"). What TeX set after a call and before its author's start is that
+author's lead: its label, whatever its form, but a word the class sets there, no label's form (llncs' and siam's " and " before
+the last author), which is left the original's ink where it stands and so to the ink units, as before: held as the author's
+label, the connector stayed English (2610.19860v1, 2610.21491v1, 2610.20266v1). Where no call is stated, the rules before: the
+trail by the word's gap, the label walked back to the end mark before. A call TeX meets in the preamble, in vertical mode or
+between two rows of an alignment states none: a class that stores its list and sets it whole sets no item's start — REVTeX's
+`\author` and `\affiliation` in the body before `\maketitle`, whose list it sets with each name's mark after it, so that on
+2610.21770v1's line the mark after a name is still the next name's label where both stand on one line (on another line, the
+glue rule gives it to the name). **2604.14228v3's notes are not done**: its
+class appends each `\author`, `\affiliation` and `\contribution` with its separator and its mark to one macro by `\xdef` and
+sets the macro whole (`\authorlist\par`), its calls in the preamble; TeX meets no item's start, and the one place that knows it is
+the class's own `\addtolist`. Its notes' "†" stays the next note's lead by MR 5's walk and, being no label's form, the note the
+original's; † ‡ § are not admitted to the label's form by their symbol, which would give 2610.10069v1's and 2610.29945v1's
+`\thanks` marks to the next name where their `\and` states the call.
 
 ### 18.17 A mark is drawn as TeX set it: as text or as its symbol only where its glyphs stand so (2026-11-09)
 
@@ -4805,6 +4860,32 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     kernel's table does not hold), an image in a macro (2610.21924v1's `\COMPASSicon`, 7 captions), a display macro's
     (`\al{…}`) and a footnote alias's (`\def\foot{\footnote}`) units of 2608.23517v1, a call past the probed one (`\code{…}`) or
     past `INK_SRC_MAX` (`\delete{…}`), an author block's `\orcidID` glued to `\inst{…}`.
+  - *An author's call stated* (rebuild/author-marks-2; the owner's staging case 2611.03953v2, ICML 2026). What TeX sets between
+    an author's end mark and the next author's start (marks, separators, a `\thanks` mark) is told by no gap (§18.16), so the
+    marked original states where each author's call begins: `\axtcall{<i>}` (`CALL_TEX`, latex-front.mjs `CALLED_AT`) before an
+    author block's command right after another author call in the document (ICML's `\icmlauthor`) and before each `\and`, `\And`
+    or `\AND` inside an author block, unit i the first after it; never in the preamble, where TeX sets nothing and a class stores
+    what it sets later. It sets the point `<i>c` in horizontal mode alone, as a closing mark is set (`\axt@set`: every glue, kern
+    and penalty that ends the list taken off, the point set, each put back), and expands to nothing elsewhere — between two rows
+    of an alignment, where a `\protected` command would begin a row of its own. Its definition is in the head only where a call
+    is written, so every other paper's bytes and compiles stay as they were. Measured on the 31 papers of the 90 (the 88, ICML's
+    2611.03953v2, 2604.14228v3) whose source states a call, of every class among them (article under nips, neurips, wacv, icml
+    and authblk, revtex4, 4-1 and 4-2, acmart, elsarticle, llncs, amsart, cas-sc, dcogpaper, IEEEtran, siamonline, alta): each
+    marked compile and final pass glyph for glyph round 7's on every page (to 0.001 pt), each one's TeX errors as before; the
+    points TeX sets: ICML's 10 and 8, llncs's 12 and 4, article's `\and` 1 to 8 a paper, none for a class's `\author` in the
+    body before `\maketitle` (vertical mode) nor for a block that ends in `\\` before NeurIPS' `\And`. Two first versions were
+    measured wrong by the same comparison and are not these: one that took off a single glue left the point between a macro's
+    space and the line end's after ICML's marks, and TeX broke the centred line at the second, its first line a space wider
+    (1.245 pt to the left); one `\protected` began an empty row of 1706.03762v7's author tabular after a `\\` (10.9 pt).
+  - *A note's call and a shared cell line, stated* (rebuild/author-marks-2, the owner's NeurIPS case 2411.13093v4). The same
+    point after each note's call (`\thanks`, `\footnote`) inside an author block that marks text before it in its row, written
+    before the next unit's bytes where that unit begins right at the call's end (2610.17108v1's `\thanks{…}\,$^{1,2}$`); and
+    `AXT-CELL` for each unit on a cell's line, past the box the column's template sets around the content (colortbl's, §18.12).
+    The TeX gate (`layout-cell-cases.mjs`, its new case `authorsColortbl`): 104 of 104 under 2023 and 2025 and four engines, every
+    PDF byte for byte the head's before. Over the 50 papers compiled (the 22 parity papers, every paper with a note in or beside
+    its author block, one paper of each of the 26 document classes of the 91, ICML's two, 2604.14228v3, 2411.13093v4): each marked
+    compile and final pass glyph for glyph round 7's on every page, each one's TeX errors as before; new class statements on
+    three papers (2411.13093v4 6, 2610.17108v1 2, 2610.21376v1 2), none taken away; points after a note on 8.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position

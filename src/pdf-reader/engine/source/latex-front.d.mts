@@ -31,7 +31,7 @@ export declare const BACKREF_LIST: string
 export declare const EMAIL_ADDRESS: RegExp
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
-export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null
+export type UnitMark = { start: string; end: string; before?: string; whole?: boolean; call?: string; callAt?: number } | null
 /** `spans`, where given, gets each top-level unit's byte range in the file as written, and each nested unit's inside it
  *  with the top-level unit it is written in (`outer`) and the length of what closes it there (`post`) */
 export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null; pastBegin?: boolean }): Map<string, Uint8Array>
@@ -40,6 +40,9 @@ export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUn
 /** whether a unit is of an author block: its names (kind author) or its places (kind affiliation) */
 export declare function inAuthorBlock(unit: { kind?: string } | null | undefined): boolean
 export declare function frontMarks(units: readonly SourceUnit[]): (unit: SourceUnit) => UnitMark
+/** where the marked compile states an author's call before a unit (its source offset in the unit's file): the command of an
+ *  author block right after another's in the document, an \\and inside one; undefined where none */
+export declare function calledAt(unit: SourceUnit): number | undefined
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string
 /** a translation's pieces with its own line breaks: room to break in long code and formulas, a heading's forced break

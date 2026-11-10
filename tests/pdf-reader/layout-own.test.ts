@@ -92,6 +92,31 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const r = ownOf(pages, { units: units('Intro') })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Intro', 'u0.l': '2.1', 'u9.p': '*' })
   })
+  it('takes as an author\'s lead only what TeX set after its call, the marks before it no lead of its (2611.03953v2)', () => {
+    // (ICML: \icmlauthor sets each name, then its marks; the next author's call (latex-front.mjs \axtcall, the point `<i>c` before
+    // the call's command or the \and that opens its block) comes after them. Walked back to the end mark before, the marks "12"
+    // were the next name's label; what stands before the call is the author before's, its trail (locate))
+    const authors = [{ kind: 'author', src: 'Ada' }, { kind: 'author', src: 'Bob' }]
+    const pages = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1c' }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const r = ownOf(pages, { units: authors })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    // (what TeX set after the call, before the start, is the author's lead, its label whatever its form: a † no label's form
+    // holds, glued to the name, left its unit the original's)
+    const led = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { dx: 6 }, { pt: '1c' }, '†', { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const l = ownOf(led, { units: authors })
+    expect(groupsOf(l, led)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '†' })
+    expect([l.units.get(1)?.unhidden, l.units.get(1)?.labelKept]).toEqual([null, false])
+    // (a word a class sets after the call — llncs' and IJCAI's \\and set " and " before the last author:
+    // 2610.19860v1, 2610.21491v1 —: no label's form, its ink the original's where it stands, left to the ink units as before, so
+    // that the connector is translated; never the author's label, which kept it English)
+    const word = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, '1', { pt: '1c' }, { dx: 3 }, 'and', { dx: 3 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    const w = ownOf(word, { units: authors })
+    expect(groupsOf(w, word)).toEqual({ u0: 'Ada', u1: 'Bob' })
+    expect([w.units.get(1)?.unhidden, w.units.get(1)?.labelKept]).toEqual([null, true])
+    // (no call stated: walked back to the end mark before, as before)
+    const none = [page([{ pt: '0s' }, 'Ada', { pt: '0e' }, { dx: 2 }, '12', { dx: 6 }, { pt: '1s' }, 'Bob', { pt: '1e' }])]
+    expect(groupsOf(ownOf(none, { units: authors }), none)).toEqual({ u0: 'Ada', u1: 'Bob', 'u1.l': '12' })
+  })
   it('leaves a label that is no label\'s form the original\'s ink where it stands apart (labelKept)', () => {
     const pages = [page([{ pt: '3e' }, '211', { pt: '0s' }, 'cell', { pt: '0e' }])]
     const r = ownOf(pages, { units: units('cell') })

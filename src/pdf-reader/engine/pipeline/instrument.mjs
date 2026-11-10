@@ -14,7 +14,7 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
 import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { regionsOf, WANT } from '../layout/stream.mjs'
@@ -962,6 +962,9 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (the engine's reading of TeX's statement: a unit set again by a template has its first setting's; a cell's, its own
   // paragraph's, else the class LaTeX built its column's template from: marks/channels.ts)
   const align = readAlign(lastTexLog(log))
+  // (a unit TeX set only in a box inside a paragraph, ICML's \icmlauthor names in their \mbox: its line's alignment where the
+  // skips in force at its end mark and the paragraph TeX ends after it state the same, its two statements of the line)
+  const boxed = boxedAlignOf(readBoxAlign(lastTexLog(log)), pages)
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
@@ -978,7 +981,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const unhidden = own.units.get(i)?.unhidden
     const classes = classesOf(u.pieces, colours.get(i) ?? null, shown), spans = spansOf(u.pieces, colours.get(i) ?? null)
     classesBy[i] = new Map(classes)
-    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
+    out.push({ id, kind: u.kind, content, ...(classes.length ? { classes } : {}), ...(spans.length ? { spans } : {}), ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}), ...(u.title ? { title: true } : {}), ...(u.front ? { front: true } : {}), ...(facts.kept.has(i) ? { kept: true } : {}), ...(facts.float.has(i) ? { float: facts.float.get(i) } : {}), ...(u.cell ? { cell: { table: u.cell.table, row: u.cell.row, col: u.cell.col, ...(u.cell.span ? { span: u.cell.span } : {}), ...(u.cell.head ? { head: true } : {}) } } : {}), ...(align.has(i) ? { align: align.get(i) } : boxed.has(i) ? { align: boxed.get(i) } : {}), ...(unhidden === 'marks' ? { why: 'marks' } : {}) })
   })
   for (let i = units.length; i < inkBase; i++) {
     const content = contentOf(bundle[i][5].map(p => ({ t: 'text', s: p[1] })))
