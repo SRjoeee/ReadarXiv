@@ -876,8 +876,8 @@ describe("today's unit the candidate writes with its escaped characters as text"
     expect(said(statedOf([today], [v2]))).toEqual([[263, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
   it("reads a control word's skipped space and a group around one alone as TeX does", () => {
-    const today = unit(id('a'), 5, 'reference', [text('See www.x.org/'), ph('\\textasciitilde'), text(' aeb and '), { kind: 'open', src: '{' }, ph('\\%'), { kind: 'close', src: '}' }, text(' more.')])
-    const v2 = { ...unit(id('b'), 5, 'reference', [text('See www.x.org/~aeb and % more.')]), state: 'drawn' }
+    const today = unit(id('a'), 5, 'reference', [text('See www.x.org/'), ph('\\textasciitilde'), text(' aeb and '), { kind: 'open', src: '{' }, ph('\\%'), { kind: 'close', src: '}' }, text(' more, 2.08 '), ph('\\textgreater{}'), text(' q.')])
+    const v2 = { ...unit(id('b'), 5, 'reference', [text('See www.x.org/~aeb and % more, 2.08 > q.')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[5, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
   it('is no such unit where anything else differs, or where today held none of those placeholders', () => {
@@ -885,5 +885,25 @@ describe("today's unit the candidate writes with its escaped characters as text"
     expect(String(said(statedOf([today], [{ ...unit(id('b'), 7, 'para', [text('Gain of 6% here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
     const plain = unit(id('c'), 8, 'para', [text('Plain words here.')])
     expect(String(said(statedOf([plain], [{ ...unit(id('d'), 8, 'para', [text('Plain words here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
+})
+
+// (C of lane style-wire, 2026-11-11: a group that carries nothing, a pair that sets its argument alone or a bare group with no
+// declaration of its own, is its content in v2's unit, so the unit has a new id: today's unit, written with such groups'
+// opens and closes out, is it)
+describe("today's unit the candidate writes with a group that carries nothing as its content", () => {
+  const open = (src: string): DumpPiece => ({ kind: 'open', src })
+  const close = (src = '}'): DumpPiece => ({ kind: 'close', src })
+  it('is that unit, its other groups and every element and word as today\'s, alone or with an escaped character as text', () => {
+    const today = unit(id('a'), 30, 'reference', [text('A. Author, '), open('\\bibinfo{title}{'), text('A study of '), open('{'), text('GPU'), close(), text(' kernels'), close(), text(', '), open('\\emph{'), text('Nature'), close(), text(' 5'), ph('\\%'), text('.')])
+    const v2 = { ...unit(id('b'), 30, 'reference', [text('A. Author, A study of GPU kernels, '), open('\\emph{'), text('Nature'), close(), text(' 5%.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[30, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is no such unit where the candidate keeps a group today has not, or loses a word', () => {
+    const today = unit(id('a'), 31, 'reference', [open('{'), text('GPU'), close(), text(' kernels.')])
+    const added = { ...unit(id('b'), 31, 'reference', [open('\\emph{'), text('GPU'), close(), text(' kernels.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [added]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+    const lost = { ...unit(id('c'), 31, 'reference', [text('kernels.')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [lost]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
   })
 })

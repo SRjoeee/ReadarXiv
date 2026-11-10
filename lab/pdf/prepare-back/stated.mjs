@@ -17,6 +17,7 @@ import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 import { identifiersIn } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
+import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
@@ -42,11 +43,12 @@ export const CAUSE = Object.freeze({
   // ((f): a unit of today's whose every line one unit of the candidate's holds and no other meets (its lines, its elements' boxes,
   // its label's), of any class, today's glyph text an in-order part of that unit's: accepted)
   held: 'held whole by another unit',
-  // ((o), the coordinator's ruling of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's TeX
-  // with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`, `\#`,
-  // `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character: the same unit, its id
-  // moved with its pieces, wherever either lays it (its holder the candidate's unit))
-  characters: 'the same unit, its escaped characters text',
+  // ((o), the coordinator's rulings of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's
+  // TeX with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`,
+  // `\#`, `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character, and each group
+  // that carries nothing its content (instrument.mjs passThroughOf): the same unit, its id moved with its pieces, wherever either
+  // lays it (its holder the candidate's unit))
+  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -127,6 +129,36 @@ const FORMULA_MARK = '\ufffc'
 const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
+/** how many groups opened after `from` are open at `at` (a piece directly in a group whose content begins at `from`: 0) */
+const depthAt = (ps, from, at) => {
+  let d = 0
+  for (let k = from; k < at; k++) d += ps[k].kind === 'open' ? 1 : ps[k].kind === 'close' ? -1 : 0
+  return d
+}
+/** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text its character (a control word's
+ *  skipped spaces and a group around it alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2
+ *  writes as their content) out, white space as one space; null where no piece is either */
+function writtenAs(ps, drop) {
+  let src = ''
+  let changed = drop.size > 0
+  for (let k = 0; k < ps.length; k++) {
+    const p = ps[k]
+    if (drop.has(k)) continue
+    const sym = p.kind === 'ph' ? characterOf(p.src) : null
+    const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
+    if (group) {
+      src += characterOf(ps[k + 1].src)
+      changed = true
+      k += 2
+    } else if (sym !== null) {
+      src += sym
+      changed = true
+      // (TeX skips the spaces after a control word, not after the empty group that ends one)
+      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') src += ps[++k].s.replace(/^[ \t]+/, '')
+    } else src += p.kind === 'text' ? p.s : (p.src ?? '')
+  }
+  return changed ? src.replace(/\s+/g, ' ').trim() : null
+}
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
 const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
 /** the text symbols that are characters of v2's text (latex-front.mjs TEXT_CHARACTERS) */
@@ -569,31 +601,41 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return units.filter((n) => !n.replaced && n.id === u.id).sort((a, b) => a.ord - b.ord)[k] ?? null
   }
   // ((o): today's TeX of a unit, each text symbol that is a character of v2's text its character (a control word's skipped
-  // spaces and a group around it alone with it, as TeX reads them), white space as one space; the candidate's unit of today's kind,
-  // not one of today's ids, writing it: the one at today's place first)
+  // spaces and a group around it alone with it, as TeX reads them), and the opens and closes of the groups the candidate writes
+  // as their content out (a pair that sets its argument alone, a bare group with no declaration of its own: instrument.mjs
+  // passThroughOf), white space as one space; the candidate's unit of today's kind, not one of today's ids, writing it, its
+  // groups' ends today's in their order, one fewer at least where no character moved: the one at today's place first)
+  /** each group of a unit's pieces, in order: its open's index, its close's (-1 where the unit holds none), its open's source */
+  const groupsIn = (ps) => {
+    const out = [], stack = []
+    ps.forEach((p, k) => {
+      if (p.kind === 'open') { const g = { open: k, close: -1, src: p.src ?? '' }; out.push(g); stack.push(g) }
+      else if (p.kind === 'close' && stack.length) stack.pop().close = k
+    })
+    return out
+  }
   const charactersOf = (u) => {
     const ps = u.pieces ?? []
-    let src = ''
-    let changed = false
-    for (let k = 0; k < ps.length; k++) {
-      const p = ps[k]
-      const sym = p.kind === 'ph' ? characterOf(p.src) : null
-      const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
-      if (group) {
-        src += characterOf(ps[k + 1].src)
-        changed = true
-        k += 2
-      } else if (sym !== null) {
-        src += sym
-        changed = true
-        // (TeX skips the spaces after a control word)
-        if (/^\\[A-Za-z]/.test(p.src) && ps[k + 1]?.kind === 'text') src += ps[++k].s.replace(/^[ \t]+/, '')
-      } else src += p.kind === 'text' ? p.s : (p.src ?? '')
-    }
-    if (!changed) return null
-    const want = src.replace(/\s+/g, ' ').trim()
-    const all = units.filter((n) => !n.replaced && n.kind === u.kind && !baseIds.has(n.id) && texOf(n) === want)
+    // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
+    // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
+    const groups = groupsIn(ps)
+    const bare = (g) => g.src === '{' && g.close >= 0 && !ps.slice(g.open + 1, g.close).some((q, j) => q.kind === 'ph' && isInkless({ t: 'ph', src: q.src }) && depthAt(ps, g.open + 1, g.open + 1 + j) === 0)
     const L = u.lines?.[0]
+    const all = units.filter((n) => {
+      if (n.replaced || n.kind !== u.kind || baseIds.has(n.id)) return false
+      const theirs = groupsIn(n.pieces ?? []).map((g) => g.src)
+      const drop = new Set()
+      let i = 0
+      for (const g of groups) {
+        if (bare(g)) { drop.add(g.open).add(g.close); continue }
+        if (theirs[i] === g.src) { i++; continue }
+        if (g.close < 0) return false
+        drop.add(g.open).add(g.close)
+      }
+      if (i !== theirs.length) return false
+      const src = writtenAs(ps, drop)
+      return src !== null && texOf(n) === src
+    })
     return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
   }
   for (const u of base) {

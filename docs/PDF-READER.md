@@ -3848,6 +3848,29 @@ term, 140 markers fewer.
   around it, and a paper's macro glued to it is read as before a word (its ink ends where the text begins: 2610.21098v1's
   `\HarnessLimitShare{}\%`).
 
+### 18.28 A group that carries nothing is its content (2026-11-11)
+
+Every bare group `{…}` and every command the front end reads as setting its argument alone was a span of style `other`: in the
+bibliography RevTeX's `\bibinfo{field}{…}`, `\bibfield`, `\bibnamefont`, `\bibfnamefont`, a `.bbl`'s `\showarticletitle` and
+`\natexlab`, BibTeX's case braces; in the body a paper's `\newcommand{\techreport}[1]{#1}`. TeX sets their content as it would
+with no group: no face, no fill, no link, no paragraph of their own. Yet the tags wire (Google's, Chrome's, an LLM's) sent each as a
+tag pair, a `must` bare group was a marker pair on Microsoft's, and placement and the references counted them as groups.
+
+- **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
+  content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
+  front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
+  declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
+  its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
+  stays one: `\enquote` (TeX prints its quotes), a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group
+  around a declaration (`{\em …}`).
+- **Measured** over 86 of the 88 papers (2610.30034v1 and 2610.30875v1, whose folders now resolve into the archive image, not
+  read), stage 1a against §18.27's: 23,425 groups written as their content in 2,334 units of 75 papers (`\bibinfo` 10,428,
+  `\bibnamefont` 4,084, `\bibfnamefont` 3,704, bare 3,253, `\bibfield` 1,729, `\showarticletitle` 170, `\techreport` 44,
+  `\natexlab` 12), each unit exactly the one before with those groups' ends out, every other unit, part member and part fact
+  the same with the unit ids carried; drawn units and pages per paper the same. Every fill stated on such a group was also its
+  link's around it. The tags wire: 20,330 tag pairs fewer (34,275 to 13,945), 311,288 characters (4.0 %), in 2,237 units' wires;
+  the markers wire: 264 units' wires change, a `must` bare group's markers gone (1,991 characters).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
