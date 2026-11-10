@@ -1,12 +1,13 @@
 // @vitest-environment node
 // A failed allocation is the paper's, never a page's (lane mem-errors; the bundle 4 contract, M7): near the box child's memory
-// floor an allocation can fail anywhere the back half reads, and a catch that took it for the page's own failure (its links
-// none, its stream undecodable, its wrap refused) made a bundle with that page degraded, which the box then committed as the
-// paper's (2609.19644v1 at 880 and 1,080 MiB, rebuild/box-release). prepareBack throws it instead, as V8 throws it, as PDF.js
-// hands it over from its worker (an UnknownErrorException of its words) and as Node throws its own (ERR_MEMORY_ALLOCATION_FAILED),
-// at each step that reads: arXiv's PDF through PDF.js (a page's operator list, its annotations, the document's metadata), the
-// wrap's reading of the page through the object layer (its content stream decoded, the wrap's own streams read back) and the
-// wrap's attempt with a figure's groups.
+// floor an allocation can fail anywhere the back half reads, and a catch of the engine's that took it for the page's own
+// failure (its links none, its stream undecodable, its wrap refused) made a bundle with that page degraded, which the box would
+// commit as the paper's. prepareBack throws it instead, as V8 throws it, as PDF.js hands it over from its worker (an
+// UnknownErrorException of its words) and as Node throws its own (ERR_MEMORY_ALLOCATION_FAILED), at each step that reads: arXiv's
+// PDF through PDF.js (a page's operator list, its annotations, the document's metadata), the wrap's reading of the page through
+// the object layer (its content stream decoded, the wrap's own streams read back) and the wrap's attempt with a figure's groups.
+// (A failure PDF.js's worker takes inside itself, a font made an ErrorFont or a page's list ended where its parse failed, reaches
+// no catch of the engine's: not held here.)
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
