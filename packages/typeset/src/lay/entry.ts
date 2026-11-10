@@ -68,14 +68,15 @@ function groupsOn(m: Placed, page: number): number {
   )
 }
 
-/** each crop a member's layout draws, on any of its pages: the page its ink is cut from, and whether it is an element's (its
- *  piece) or its label's (D.display's crop: `k` its element, none its label) */
-function cutsOf(L: Layout | undefined): { page: number; el: boolean }[] {
-  const out: { page: number; el: boolean }[] = []
+/** each crop a member's layout draws, on any of its pages: the page its ink is cut from, whether it is an element's (its
+ *  piece) or its label's (D.display's crop: `k` its element, none its label), and the member whose label it is where another
+ *  member's (`of`: a label no line opens with, drawn at the end of the member before, flow.ts) */
+function cutsOf(L: Layout | undefined): { page: number; el: boolean; of?: number }[] {
+  const out: { page: number; el: boolean; of?: number }[] = []
   for (const line of L?.lines ?? [])
     for (const it of line.items) {
-      const c = (it.t as { crop?: { page: number; k?: number } }).crop
-      if (c) out.push({ page: c.page, el: c.k !== undefined })
+      const c = (it.t as { crop?: { page: number; k?: number; of?: number } }).crop
+      if (c) out.push({ page: c.page, el: c.k !== undefined, ...(typeof c.of === 'number' ? { of: c.of } : {}) })
     }
   return out
 }
@@ -562,6 +563,11 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   ]
   const laid = layPagePrepared(page, flows, ties, R)
   const byOrd = new Map(laid.members.map((x) => [x.ord, x]))
+  // (each label drawn in another member's layout, by its owner: the pages its crop is cut from)
+  const carriedLabels = new Map<number, Set<number>>()
+  for (const x of laid.members)
+    for (const c of cutsOf(x.lay?.layout))
+      if (c.of !== undefined) carriedLabels.set(c.of, (carriedLabels.get(c.of) ?? new Set()).add(c.page))
   // (each name drawn as a lead, by the member it leads: its ink on A lit with that member's)
   const leadOf = new Map<number, Placed>()
   for (const m of members) {
@@ -626,7 +632,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what
     // its links of that page read)
     const layout = x?.lay?.layout
-    const allCuts = cutsOf(layout)
+    // (its own crops: another's label drawn at its end is that member's)
+    const allCuts = cutsOf(layout).filter((c) => c.of === undefined || c.of === m.ord)
     const offOn = (q: number) => {
       const cuts = allCuts.filter((c) => c.page === q)
       return (
@@ -634,7 +641,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
           ? 0
           : 1 |
             (movedOn.get(m.ord)?.has(q) || cuts.some((c) => c.el) ? 2 : 0) |
-            (relabelled.has(m.ord) || cuts.some((c) => !c.el) ? LABEL_KEPT : 0)) &
+            (relabelled.has(m.ord) || cuts.some((c) => !c.el) || carriedLabels.get(m.ord)?.has(q) ? LABEL_KEPT : 0)) &
         groupsOn(m, q) &
         ~(m.fixed ?? 0)
       )

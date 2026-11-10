@@ -1377,6 +1377,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       expect('src' in comma && comma.s).toBe(',')
       expect(laid[k]!.lines[0]![3][0]!.x).toBeCloseTo(comma.x + 8, 5)
     }
+    // (each comma drawn once: a name whose comma goes at the end of the name before has its label's group off on its page, as
+    // where it drew the crop itself, so the original's comma is not drawn where it stands as well (Codex on #634, round 8 B5);
+    // the first name has no label)
+    expect(laid.map((m) => m.off & 4)).toEqual([0, 4, 4, 4])
     // (the run centred on the paragraph's middle, 300)
     expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
     // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line
@@ -1425,6 +1429,7 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(tight.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
     const commas = tight.flatMap((m) => m.lines.flatMap((l) => l[3].filter((it) => 'src' in it && it.s === ',')))
     expect(commas.length).toBe(3)
+    expect(tight.map((m) => m.off & 4)).toEqual([0, 4, 4, 4])
     for (const m of tight)
       for (const l of m.lines) {
         const first = l[3].reduce((p, q) => (q.x < p.x ? q : p))
