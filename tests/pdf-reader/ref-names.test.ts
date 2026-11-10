@@ -30,6 +30,8 @@ describe('the references the marked compile asks TeX about', () => {
     // (the language the paper's names are set up for: babel's main language, whatever \selectlanguage the text switches to
     // before the end, 2307.16209v1's English text under a Brazilian Portuguese main language whose hyperref names are "Figura")
     expect(tex).toContain('bbl@tbcp@\\bbl@main@language')
+    // (a main language declared with no tag babel knows: the statement all the same, empty)
+    expect(tex).toContain('\\message{^^JAXT-REFLANG \\ifcsname')
     expect(tex.startsWith('\\makeatletter')).toBe(true)
     expect(tex.endsWith('\\makeatother')).toBe(true)
     expect(refsTex([])).toBe('')

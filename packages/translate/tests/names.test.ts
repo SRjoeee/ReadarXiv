@@ -87,6 +87,8 @@ describe('namedOf: the word tied to a reference, an abbreviation of the item’s
     expect(
       namedOf(unit('x', [t('see Fig.'), tie('1'), { t: 'el', id: '2', kind: 'ref', name: 'Figure', nameLang: 'eng' }])),
     ).toBeNull()
+    // (a language declared and undetermined, BCP 47's `und`: no agreement shown, the text as it is)
+    expect(namedOf(unit('u', [t('see Fig.'), tie('1'), named('und')]))).toBeNull()
   })
 
   it('never changes the unit it is given (the original)', () => {

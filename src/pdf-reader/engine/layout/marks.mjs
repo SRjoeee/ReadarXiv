@@ -1255,8 +1255,9 @@ export function refKeysOf(units) {
  * that is defined, as `AXT-REFNAME <i> <C|c|a|n> <\meaning>` (the engine's readRefNames takes the first full name); first, once,
  * the language the paper's names are set up for, `AXT-REFLANG <\meaning>` of babel's BCP 47 tag of its main language
  * (\bbl@tbcp@<\bbl@main@language>, the locale's identification.tag.bcp47 that \BCPdata{tag.bcp47} reads: `en`, `en-US`,
- * `pt-BR`; none without babel): hyperref sets its names for it at \begin{document}, whatever language the text switches to
- * after (2307.16209v1: main language brazil, its text \selectlanguage{english}, hyperref's figure name "Figura"). Nothing is
+ * `pt-BR`; the statement empty where babel knows no tag of it: 2023's babel has none for "brazil"; none without babel):
+ * hyperref sets its names for it at \begin{document}, whatever language the text switches to after (2307.16209v1: main
+ * language brazil, its text \selectlanguage{english}, hyperref's figure name "Figura"). Nothing is
  * expanded but the label's own definitions, nothing set, nothing written to a file: \meaning reads a name whatever it holds. A
  * label TeX has no definition of, or one with neither form (no hyperref, no cleveref), is passed over. One line, its own
  * \makeatletter; '' for a paper with no reference, whose bytes stay as they were
@@ -1272,7 +1273,7 @@ export function refsTex(keys) {
     '\\def\\axt@rfc#1#2\\@nil{\\axt@rfct#1[]\\@nil}\\def\\axt@rfct#1[#2]#3\\@nil{\\def\\axt@rt{#2}}',
     '\\def\\axt@rfh#1#2#3#4#5\\@nil{\\axt@rfa#4.\\@nil}\\def\\axt@rfa#1.#2\\@nil{\\def\\axt@rt{#1}}',
     '\\def\\axt@rfn#1#2#3{\\ifcsname #3\\endcsname\\message{^^JAXT-REFNAME #1 #2 \\expandafter\\meaning\\csname #3\\endcsname^^J}\\fi}',
-    '\\def\\axt@rflang{\\ifdefined\\bbl@main@language\\ifcsname bbl@tbcp@\\bbl@main@language\\endcsname\\message{^^JAXT-REFLANG \\expandafter\\meaning\\csname bbl@tbcp@\\bbl@main@language\\endcsname^^J}\\fi\\fi}',
+    '\\def\\axt@rflang{\\ifdefined\\bbl@main@language\\message{^^JAXT-REFLANG \\ifcsname bbl@tbcp@\\bbl@main@language\\endcsname\\expandafter\\meaning\\csname bbl@tbcp@\\bbl@main@language\\endcsname\\fi^^J}\\fi}',
     `\\def\\axt@rfall{\\axt@rflang${keys.map((k, i) => `\\axt@rf{${i}}{${k}}`).join('')}}`,
     '\\ifdefined\\AddToHook\\AddToHook{enddocument/afterlastpage}{\\axt@rfall}\\else\\AtEndDocument{\\axt@rfall}\\fi',
     '\\makeatother',

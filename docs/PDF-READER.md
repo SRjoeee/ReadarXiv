@@ -3328,7 +3328,8 @@ word list and no language's table; the original drawn when translation is off ne
   hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
   wrapper, NAMES_TEX); and, once, the language the paper's names are set up for: babel's BCP 47 tag of its main language
   (`\bbl@tbcp@<\bbl@main@language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads; hyperref
-  sets its names for it at `\begin{document}`, whatever the text switches to after), the element's `nameLang`. The first that is plain words with no full stop is the element's
+  sets its names for it at `\begin{document}`, whatever the text switches to after; BCP 47's `und` where babel declares a main
+  language it knows no tag of, as 2023's babel for "brazil", which keeps the text as it is), the element's `nameLang`. The first that is plain words with no full stop is the element's
   `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
   passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
   bytes it did.

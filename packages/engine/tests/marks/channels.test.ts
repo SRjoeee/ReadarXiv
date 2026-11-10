@@ -238,10 +238,17 @@ describe('readRefNames: each reference’s item type and the full name the paper
       [0, { type: 'figure', name: 'Figura', lang: 'pt-BR' }],
       [1, { type: 'section*' }],
     ])
-    // (no language declared: no babel, or a tag babel does not know)
+    // (no language declared: no babel)
     expect(readRefNames('AXT-REF 0 figure\nAXT-REFNAME 0 a macro:->Figure').get(0)).toEqual({
       type: 'figure',
       name: 'Figure',
+    })
+    // (a main language babel declares but knows no tag of: BCP 47's `und`, undetermined; 2307.16209v1's "brazil" on the 2023
+    // tree, whose babel 24.2 has no babel-brazil.tex to read the tag from)
+    expect(readRefNames('AXT-REFLANG \nAXT-REF 0 figure\nAXT-REFNAME 0 a macro:->Figura').get(0)).toEqual({
+      type: 'figure',
+      name: 'Figura',
+      lang: 'und',
     })
   })
   it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {

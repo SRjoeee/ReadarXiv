@@ -98,7 +98,8 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // that abbreviates it ("Fig."), packages/translate names.ts; the unit and its original keep the word
       name: z.string().optional(),
       // the BCP 47 tag of the language the paper's names are set up for (babel's tag of its main language: `en`, `pt-BR`);
-      // absent where none is declared (no babel). A translator is sent the name only where this is the language it translates
+      // `und` where babel declares one but knows no tag of it; absent where none is declared (no babel). A translator is sent
+      // the name only where this is the language it translates
       // from, or none is declared
       nameLang: z.string().optional(),
     }),
