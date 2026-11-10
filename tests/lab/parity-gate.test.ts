@@ -661,7 +661,7 @@ describe("groups: a cell kept by a rule's mark, or one no row can serve, holds n
   const cell = (ord: number, x0: number) => ({ ord, kind: 'cell', text: ['response', 'equal', 'human', 'example'][ord - 70], lines: [{ page: N, x0, x1: x0 + 20, baseline: 653, top: 660, bottom: 651, size: 9.96 }] })
   const prep = [cell(70, 370), cell(71, 405), cell(72, 440), cell(73, 480)]
   const groups = [{ group: '2:1', ids: [70, 71, 72, 73] }]
-  const drawn = (ids: number[]) => ids.map((id, i) => ({ id, lines: [drawnLine(370 + 35 * i, 390 + 35 * i, 653, '训练', 9.96)] }))
+  const drawn = (ids: number[]) => ids.map((id, i) => ({ id, lines: [drawnLine(370 + 35 * i, 390 + 35 * i, 653, '\u8bad\u7ec3', 9.96)] }))
   const page = (marks: object) => {
     // (73 left the original's for want of a row, `none`)
     const members = [...[70, 71, 72].map((o) => laid(o)), { ord: 73, state: 'none', lines: [] }]
