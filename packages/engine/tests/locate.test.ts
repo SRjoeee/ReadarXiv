@@ -819,9 +819,10 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     expect(L.groups[0]!.glyphs[hyphen]).toBe('0.1.t')
     expect(L.born.size).toBe(0)
   })
-  it('leaves an included figure that only A draws between two lines of a unit to the figure, not to the unit', () => {
-    // (a float set "here" inside a paragraph: TeX puts it after the current line, and where B is a draft, its figure's own
-    // glyphs are A's alone)
+  it('leaves ink only A draws between two lines of a unit out of the unit, and no unit born of it on a page B sets', () => {
+    // (a unit claims an A glyph with no partner only where the alignment shows it is its text: a form's glyphs A alone shows
+    // between two of its lines are none of its. On a page our compile sets, a glyph it never printed is arXiv's ink (its margin
+    // stamp, PDF-READER §18.27): no unit is born of it)
     const A = docOf([
       {
         lines: [
@@ -836,7 +837,7 @@ describe('locate: the glyphs of A with no partner on B inside a unit', () => {
     expect(L.members[0]).toMatchObject({ located: true })
     expect(L.members[0]!.text).not.toContain(fig[0])
     expect(L.groups[0]!.glyphs[fig[0]!]).not.toBe('0.1.t')
-    expect([...L.born.values()]).toEqual([{ kind: 'inkfigures', content: [text('Loss')] }])
+    expect(L.born.size).toBe(0)
   })
   it('leaves a unit the original’s where A sets text inside it that our compile does not', () => {
     const A = docOf([{ lines: ['a paragraph whose (X) word', 'continues on its last line'] }])
