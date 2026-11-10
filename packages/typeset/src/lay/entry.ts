@@ -34,7 +34,7 @@ import type { FlowMember } from './flow.ts'
 import { figuresOf } from './figures.ts'
 import { keptBefore, type Lead, ledBy, type NameWord } from './lead.ts'
 import { type LinkFate, type LinkOwner, linksOf } from './links.ts'
-import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA } from './lit.ts'
+import { inFrame, inkOfLine, litLaid, litOfA, pageBoxOf, runBoxOfA, widened } from './lit.ts'
 import { layPagePrepared } from './page.ts'
 import { type CellAnswer, namesGroup, type TableGroup, tableGroups, unchanged } from '../shared/table-groups.ts'
 import { tokenBand } from '../emit/sentences.ts'
@@ -603,7 +603,15 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         state: 'laid',
         off,
         lines: here ? inked(nl) : [],
-        lit: here ? { left: [[boxOfA(m.lines[0]!)]], right: [nl.map(nameBox)], own: [] } : litOfA(m, page),
+        // (its label with it, the first sentence's: on A where TeX set it, as drawn where it stays the original's (its crop drawn
+        // with the word is on the word's line); 2610.20967v1 p5's "9." before its name, in no box on A)
+        lit: here
+          ? {
+              left: [widened([boxOfA(m.lines[0]!)], m.label ? [m.label.ink] : [], page)],
+              right: [widened(nl.map(nameBox), m.label && !(off & LABEL_KEPT) ? [m.label.ink] : [], page)],
+              own: [],
+            }
+          : litOfA(m, page),
       }
     }
     // (a name drawn as its member's lead: its text off where that member is laid, both the original's where it is not; lit with

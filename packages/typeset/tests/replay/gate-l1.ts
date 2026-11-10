@@ -463,6 +463,10 @@ export function gateL1Pair(
       number,
       { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
     >
+    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
+     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
+     *  that says nothing */
+    accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -643,7 +647,7 @@ export function gateL1Pair(
     if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
-    if (!content) return null
+    if (!content || (o.accept && !o.accept(src, content))) return null
     // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
     const sentences = src.sentences ? doorSentences(row, source) : undefined
     return { content, ...(sentences ? { sentences } : {}) }

@@ -10,6 +10,7 @@ import { rowPieces, srcOfEl } from '../../src/lay/read.ts'
 import { rulesFor } from '../../src/rules-for.ts'
 import type { Item, Metrics, Rows } from '../../src/types.ts'
 import { statedBreaks } from '../../src/unit/breaks.ts'
+import { coverDone, coverOf, newCover } from '../replay/cover.ts'
 
 const metrics = (ready: Metrics['ready'] = () => true): Metrics => ({
   ready,
@@ -1583,6 +1584,40 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const [merged] = layPage(part({ ...name, fixed: 4 }), rowsOf([], true), rules, metrics()).members
     expect(merged).toMatchObject({ state: 'laid', off: 1 })
     expect(merged!.lines[0]![3][0]).toMatchObject({ s: '9.', piece: 'label' })
+  })
+  it('lights a name’s label with the name on both panes, the label TeX set before it its first sentence’s', () => {
+    // (2610.20967v1 p5, "9. REFERENCES": the number the name's label since refs-head; its lit on A the name's line alone, the
+    // label in no sentence: I10's "left none label". A label is its unit's first sentence's, on both panes)
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'ref' },
+      plain: 'REFERENCES',
+      align: 'c',
+      style: { role: 'serif', size: 10, bold: 1, upper: 1, design: 'NimbusRomNo9L-Medi' },
+      label: {
+        kind: 'head',
+        ink: [1, 138, 698, 150, 707, 700],
+        style: { role: 'serif', size: 10, bold: 1 },
+        num: ['9', [1, 138, 698, 144, 707, 700]],
+        punct: ['.', [1, 144, 698, 150, 707, 700]],
+        line: 0,
+      },
+      lines: [[1, 0, 156, 216, 700, 707, 698, 54, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [54, 300] },
+    })
+    const holds = (bs: readonly number[][], [x0, y0, x1, y1]: number[]) =>
+      bs.some((b) => b[0]! <= x0! && b[1]! <= y0! && b[2]! >= x1! && b[3]! >= y1!)
+    for (const m of [name, { ...name, fixed: 4 }]) {
+      const page = layPage(part(m), rowsOf([], true), rules, metrics())
+      const [laid] = page.members
+      expect(laid!.lit.left).toHaveLength(1)
+      expect(holds(laid!.lit.left[0]!, [138, 698, 150, 707])).toBe(true)
+      const c = newCover()
+      coverOf(c, page, part(m), metrics())
+      coverDone(c)
+      expect([...c.faults]).toEqual([])
+    }
   })
   it('sets a name in capitals where its style is the text’s capitals (Style.upper), none where they are faked small capitals', () => {
     // (cloud Codex on #623: the bundle states a name's case in Style.upper, the entry read Word.caps alone: "ABSTRACT" laid as

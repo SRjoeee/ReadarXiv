@@ -2253,16 +2253,22 @@ within noise.
   the opening brackets and quotes set against it: "(Vier" begins its sentence at the bracket); an element, one piece in both
   texts, by where its ink begins on A, wherever the translation sets it: its crop or its text as drawn, its ink on A and the
   row it stands on there, widened over its ink (one TeX set past its line's text, an equation's number at the margin, stands in
-  no line's box), all in that sentence; a label in the first. A translator counts a mark at a cut with either sentence:
+  no line's box), all in that sentence; a label in the first (a babel name's too, the number TeX set before it: 2610.20967v1
+  p5's "9." was in no box on A). A sentence's box on a line takes the line's band, whatever it holds there (an element's crop
+  alone took its ink's height, short of the line's: 2602.23285v2-ja p13 t219). A translator counts a mark at a cut with either sentence:
   Microsoft set "…的方向。[P²-MOPD]沿该方向…" with its cut past the element, the source's at it, and the left lit
   "P²-MOPD" with its sentence, the right with the sentence before (2611.03953v2 p2, the owner's report of 2026-11-10); the
   translation's places alone had put 425 elements of the corpus's laid pages in another sentence than A's (today's rows over
   stage 1a's parts at 95529b6f9). Where a translation sets an element inside another sentence than its own on A, the element
   is an island of its own sentence there, a run of its own on its row. **I10, the sentence cover** holds it
-  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry` over a run's parts and by the
-  parity's lay of its pairs, `lab/release-check` I10): on both panes every piece drawn of a lit member (each word of its text on A
+  (`packages/typeset/tests/replay/cover.ts`, counted by `lab/typeset/gate-l1.mjs --entry --reading=part` over a run's parts,
+  the release check's `sentence-cover`, and by the parity's lay of its pairs, its `display`; with today's reading the runner
+  lays no entry): on both panes every piece drawn of a lit member (each word of its text on A
   at its first glyph, each character as drawn, each crop, each element's ink, its label, its held lines) is in exactly one of
-  its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other.
+  its sentences, an element and the label in the same one on both, and every sentence drawn on one pane is drawn on the other
+  (a full-width mark's ink read in its own em: one at a line's head, its blank half cut, is drawn half an em left of the line's
+  start with its ink at it; the corpus runner gives the entry no row of a stored reply that says nothing, the chain's `empty`,
+  as the chain makes none: given it, the entry hid a cell's text and drew nothing, three cells of two pack pairs).
   A sentence that begins with an element (a reference, a citation that is its subject, a paper's name
   macro: "\method{} trains this model …") begins at it on both panes: moved on to the first letter past it, as both panes did
   until 2026-11-10, the element lit with the sentence before (2611.03953v2 p5, the owner's report: "Three details of Equation
