@@ -16,6 +16,8 @@ const SPACE = /\s/u
 /** a character of the CJK scripts (a boundary between one and a Latin letter is a word boundary, not a letter gap) */
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 const OBJ = '￼'
+/** a letter of any script, cased or not (Unicode L) */
+const LETTER = /^\p{L}$/u
 const r2 = (v) => Math.round(v * 100) / 100
 
 /** whether a <text> is slanted by its own transform (a skewX, the readers' oblique run) */
@@ -66,7 +68,10 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
           }
           const ch = s[j] ?? ''
           const pts = [at(ext.x, ext.y), at(ext.x + ext.width, ext.y), at(ext.x, ext.y + ext.height), at(ext.x + ext.width, ext.y + ext.height)]
-          const xs = pts.map((q) => q[0]),
+          // (a level character across: its advance on its baseline, where an oblique run's skew moves nothing; its box's corners
+          // lean with the skew, and a line's width is its advances', TeX's and the lay's, its glyphs' overhang aside, as the
+          // part reads the original's lines by its glyphs' advances. A turned one: its box's corners)
+          const xs = rot ? pts.map((q) => q[0]) : [at(ext.x, start.y)[0], at(ext.x + ext.width, start.y)[0]],
             ys = pts.map((q) => q[1])
           const [, sy] = at(start.x, start.y)
           // (a turned character's band: its advance along, 0.2 of its size under its baseline to 0.8 over, in its own frame)
@@ -105,8 +110,13 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
     const lines = byLine.map(({ y, rot, chars: cs }) => {
       cs.sort((a, b) => a.x0 - b.x0)
       const ink = cs.filter((c) => !c.hidden && !SPACE.test(c.ch) && c.ch)
+      // (its size as the original's is read, fidelity.mjs originalOf: the size it was set at, its largest letter's (faked small
+      // capitals set the capitals at it and the rest smaller; a script is a line of its own; a CJK character is a letter at the
+      // line's size, an uncased one), else its median character's. Read at the median, a line of a translation holding a
+      // paper's macro in small capitals read their size: 2608.06701v1 p4 t59 at 7.97, set at 9.96)
       const sizes = ink.map((c) => c.size).sort((a, b) => a - b)
-      const size = sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
+      const letters = ink.filter((c) => LETTER.test(c.ch)).map((c) => c.size)
+      const size = letters.length ? Math.max(...letters) : sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
       // (the widest gaps: between consecutive drawn characters, a space between them a word space, and so a run placed at its
       // own x (the typesetter's glue before it: a lead's word, its label, the text after them, set apart with no space
       // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all)

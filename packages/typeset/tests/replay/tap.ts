@@ -146,6 +146,20 @@ export function quotesUnmarked<T extends { s?: unknown; cls?: unknown; punct?: u
   })
   return { tokens: out, changed }
 }
+/**
+ * Today's reading of a rendering's own style, as the element ruling of 2026-11-11 replaced it (lane el-facts, B.tokens: a
+ * rendering of the page's own text drawn as text takes its weight, slant and small capitals from its own glyphs, its
+ * resolution's `st`, over the run's; today took the typewriter family alone): each such resolution with its style's family
+ * alone, every other attribute the run's, so that the tokens made of it are today's. A replay counts the rounds whose tokens the
+ * ruling moves and compares nothing of it against today
+ */
+export function ownStyleUnread<R extends { get(k: number): unknown }>(prep: R): R {
+  const get = (k: number) => {
+    const r = prep.get(k) as { mode?: unknown; st?: { fam?: unknown } | null } | undefined
+    return r?.mode === 'orig-text' && r.st ? { ...r, st: { fam: r.st.fam } } : r
+  }
+  return Object.assign({}, prep, { get }) as R
+}
 const flooredOf = new Map<string, { floored: Set<number>; pages: Set<number>; units: Set<number> }>()
 /**
  * What the gap ruling of 2026-11-08 (the gap under a paragraph held to its own leading alone, never the next paragraph's:

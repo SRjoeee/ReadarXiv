@@ -3856,6 +3856,66 @@ production's stored rows, never showed it (no row, the original's).
   drafts-only compile's (DESIGN §16, deleted 2026-11-09): our final pass includes each figure as arXiv's compile does, so a
   figure's text has its partners on B. The engine's tests that set a figure's text on A alone set it on B too.
 
+### 18.28 An element keeps the font state TeX set its glyphs in; its copy is its characters as TeX set them (2026-11-11)
+
+On B5's sheet the owner asked whether 2608.06701v1 p5's "LIVEPLAN", set by the paper's macro in faked small capitals (L and P
+at 9.96 pt, IVE and LAN at 7.97), drawn in full capitals at 9.96, was a bug or a design; "Periodic Advisor", "Monitor" and
+"Advisor", italic by their macros, were drawn upright beside it. Today's reader draws both alike (`layer2.mjs` L2:2801 took an
+element's typewriter family alone, L2:2826 its small capitals only where its unit's style sets them); v2 ported it. The owner's
+principle: a word no translation replaces keeps the original's style, as translated text inherits it. An element is such a
+word: drawn as the page's text so that it flows and breaks, its font state is TeX's for its own glyphs.
+
+- **Weight and slant** (`breaker/tokens.ts`, `lay/read.ts`). A rendering of the page's own text (`orig-text`) takes its weight,
+  its slant and its small capitals from its own style (El.style, read off its glyphs) over the run's, as it took the
+  typewriter face; an attribute its style does not state, and a rendering of no stated style, the run's. A group TeX applied
+  around it is in its glyphs (`\emph{SAGE}` italic either way); one whose glyphs TeX set upright inside an italic run is
+  upright (2608.06701v1's `\textsc` in a caption: Times has no italic small capitals).
+- **Faked small capitals** (`facts.ts` elementCase, `locate.ts`, `facts-pass.ts`). PDF.js reads a faked small capital as the
+  capital it is drawn as, so the part stated the element's text in full capitals and the typesetter had no letter to set small.
+  An ink unit's rule (§18 "A unit's size and its small capitals", `inkSmallCaps`) now reads an element whose text the typesetter
+  draws as text (a class of text, its glyphs on its line's baseline): where every cased glyph is a capital, one at most
+  `SMALL_CAPS_SHARE` of its full letters' size is a faked small capital, its source's letter lowercase. The part states its
+  text in TeX's case and their share (El.style.sc, `upper` dropped: "LivePlan", 0.8); the typesetter's own caps path
+  (`caseRuns`) draws each lowercase letter as a capital at that share. The member-level gate it replaces (triage S6: an
+  element all of whose capitals stood at the small size, in a unit set in small capitals, drawn all small) is gone: its
+  two elements over the 88 are of mixed sizes, and the heading's "LIVEPLAN" is drawn L and P full now, as the page sets it.
+  A formula's text is read for its brackets and never drawn: a capital set smaller there is a script (`\rho_{BDM}`), no small
+  capital.
+- **Copy text** (`pipeline/instrument.mjs` copyOf). An element's copy, what a reader selects on its crop, was its source as
+  texToText2 reads a formula: `\_` as "_" and then `_x` as the subscript "ₓ" ("conv3ₓ" for `conv3\_x`, "verify_boundaryₗaw").
+  A character TeX sets as written is read as itself: LaTeX's `\_`, `\textunderscore` and `\textasciicircum` set their
+  characters in text and in math (`\nfss@text`), and a verbatim argument (\url, \path, \verb, \lstinline) sets its `_`
+  and `^` as written. A bare script mark elsewhere stays TeX's. Not read off the glyphs: OT1's `\_` is a rule TeX draws
+  (1512.03385v1's Times: "conv3 1" on the page's text), and 162 of the 213 elements it reads again are drawn as their crop,
+  no text stated.
+- **Over the 88** (stage 1a e2 against B5's r13). Units, add-ons and dumps byte for byte the same; the parts move in element
+  fields alone. Copy: 213 elements in 29 papers, each a subscript read back as an underscore (code marks and identifiers, 12
+  formulas' `\_`, three displays', an `\eprint`). Small capitals: 131 elements, 2608.06701v1's `\approach` 102, `\lang` 14,
+  `\graph` 14 (two broken over lines, "GRAPHEC-TORY" read "Graphectory" now: TeX's hyphen, the lowercase after it), and
+  2010.11929v2's heading `\oursfull` "Vision Transformer". The typesetter's half, every page of the 88 laid with each unit's
+  own source as its row (lane el-facts' census, before and after, character by character): 177 renderings move, each to its
+  own glyphs' style and no other: a paper's macro its italic 85 times (2608.06701v1 58, 2608.06007v1 13, 1512.03385v1 12,
+  2608.28692v1 2), 2608.06701v1's `\approach` upright once in an italic caption, 2609.20976v1's `\mice` 11 times in a face's
+  own small capitals (cm-super's SFCC1000 on A, drawn in the run's lowercase before), and 81 references and citations their own
+  style: amsmath's `\eqref`, upright in an italic statement, 73 times in 13 papers; a list's numbers regular in a bold run
+  (2610.22214v1, 5); LaTeX's bold "??" of an undefined reference (2610.19282v1, 2); a citation upright (2610.20581v1). Where
+  the row is the source's, a group around an element is the run's style and its glyphs' alike: 1810.04805v2's bold `\bert`
+  moves only where a translator's row loses its group.
+- **The parity** (B6's sheets, 22 pairs; the 12 pairs that move laid and drawn again). Its instrument first, alone on B6's own
+  pages: a drawn line's size is the size it was set at, its largest letter's (it was the median, and a CJK line holding a
+  macro in faked small capitals read their size), its extent its characters' advances on their baseline (an oblique run's
+  skew read a slanted CJK run's lean as a line past its column), and a raised run joins a line of its own column: 47 -> 46
+  worse by default, 57 -> 56 every toggle on, nothing newly worse. Then this rule: 46 -> 50 and 56 -> 59, every page newly
+  worse a paragraph of 2608.06701v1 one line shorter than today's because its elements are as narrow as on A (p4 t63, p5
+  t132, p7 t217, p9 t244, p11 t284; and with the references on, p11's t294, whose borrow ruling read t284's borrow, which
+  t284 no longer needs): accepted, the coordinator's ruling of 2026-11-11 ("an element is drawn at its own glyphs' width, the
+  paragraph ends one line sooner"). One `style` share moves on a page worse before (2610.20484v1 p6 t62: its "(8)", upright
+  on A on p7 of the theorem, is drawn on p6), a known weakness of a per-page share on a unit over a page break.
+- **Not this rule's.** An element drawn as a crop is the original's ink already, and a symbol drawn from its source keeps the
+  math rule; the style of a translation's groups is the translator's side. An element every capital of which is small, no full
+  letter of its own to measure them by, is drawn in capitals at the run's size (none of the 88). "LIVE-|PLAN" broken over two
+  lines keeps its hyphen ("Live-Plan"), as before: a case change across a hyphen is a compound's.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

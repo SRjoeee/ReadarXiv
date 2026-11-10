@@ -59,6 +59,38 @@ describe('the instrument adapter’s element classes', () => {
     expect(got.get('10')).toEqual({ cls: 'symbol', copy: '%', sym: ['%'] })
     expect(new Map((classesOf([ph('\\url{http://a.b/c}')]) as unknown as [string, Record<string, unknown>][]).map(classOnly)).get('0')).toEqual({ cls: 'other', copy: 'http://a.b/c', literal: true })
   })
+  it('reads a character TeX sets as written as itself, never as a script’s mark: `\\_` an underscore, a verbatim argument’s `_`', () => {
+    // (texToText2 reads `_x` as the subscript "ₓ", after reading `\_` as "_": an identifier's copy text, what a reader selects on
+    // its crop, was "conv3ₓ" for `conv3\_x` (1512.03385v1), "verify_boundaryₗaw" for `verify\_boundary\_law`, and a path's
+    // "data/currentₛodaₚrotocol.json" (2610.20808v1's `\path{…}`, which TeX sets character by character). LaTeX's `\_` and
+    // `\textunderscore` set the underscore, in text and in math (`\nfss@text`), and a verbatim argument (\url, \path, \verb,
+    // \lstinline: textPieceOf's) sets its `_` and `^` as written; a bare `_` in a formula stays TeX's subscript)
+    const copies = (srcs: string[]) =>
+      (classesOf(srcs.map(ph)) as unknown as [string, Record<string, unknown>][]).map(([, c]) => c.copy)
+    expect(
+      copies([
+        'conv3\\_x',
+        'verify\\_boundary\\_law',
+        '\\texttt{"video\\_ids"}',
+        '\\{retained\\_evidence\\}',
+        '$warmup\\_steps=4000$',
+        'run\\textunderscore id',
+        '\\path{data/current_soda_protocol.json}',
+        '\\url{http://a.b/x_1^2}',
+        '$s_i$',
+      ]),
+    ).toEqual([
+      'conv3_x',
+      'verify_boundary_law',
+      '"video_ids"',
+      '{retained_evidence}',
+      'warmup_steps=4000',
+      'run_id',
+      'data/current_soda_protocol.json',
+      'http://a.b/x_1^2',
+      'sᵢ',
+    ])
+  })
   it('reads each source as layer2.mjs does (its copy held equal to phClassProven and texToText2)', () => {
     const srcs = ['\\cite{a,b}', '\\citep[p.~3]{a}', '\\ref{x}', '\\eqref{e}', '$x$', '$\\sqrt{\\dmodel}$', '$\\frac{a}{b}$', '$\\sum_{\\alpha}^{\\beta}$', '$\\Sigma$', '\\~{n}', '\\"u', '$\\downarrow$', '\\[ a = b \\]', '\\begin{equation}y=F(x)\\label{eq:1}\\end{equation}', '\\bert{}', '$\\cla$', '\\textbf{x}', '\\hspace{1em}', '\\vspace{-2mm}', '\\&', '\\\\', '$$', '$^{1}$', '\\url{http://a.b}']
     for (const [k, c] of classesOf(srcs.map(ph))) {

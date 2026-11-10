@@ -305,7 +305,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // holds most of its height (its ink's middle nearest the baseline where two hold as much): a formula's ink that dips into the
   // next line's band is its own line's, a raised script's its own line's, never the neighbour's)
   const withCrops = (u, crops) => {
-    const ls = raised(u.lines.filter((l) => l.n > 0).map(inkedLine))
+    const ls = raised(u.lines.filter((l) => l.n > 0).map(inkedLine), frame?.columns ?? null)
     const on = new Map()
     for (const c of crops) {
       if (c[0] !== u.id) continue
@@ -1384,11 +1384,16 @@ function inkedLine(l) {
 }
 
 /** a run set smaller and raised or lowered off its line's baseline (a footnote mark, a superscript: the typesetter's rise)
- *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own */
-function raised(lines) {
+ *  is part of the nearest line it stands within 0.6 of that line's size of, not a line of its own, in that line's column (the
+ *  paper's frame, `columns`: the column its middle stands in; either in none, any). A line of the other column on about the
+ *  same baseline is a line of its own, whatever its size (2608.06701v1 p3 t60: a right-column line read smaller made one line
+ *  across the gutter with the left's, which no sentence box covers) */
+function raised(lines, columns = null) {
   const keep = []
+  const colOf = (l) => (columns ?? []).findIndex((c) => (l.x0 + l.x1) / 2 >= c[0] - 2 && (l.x0 + l.x1) / 2 <= c[1] + 2)
+  const sameColumn = (l, h) => colOf(l) < 0 || colOf(h) < 0 || colOf(l) === colOf(h)
   for (const l of [...lines].sort((a, b) => b.size - a.size || b.n - a.n)) {
-    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size)
+    const host = keep.find((h) => !h.rot && !l.rot && l.size < 0.85 * h.size && Math.abs(l.y - h.y) < 0.6 * h.size && sameColumn(l, h))
     if (!host) {
       keep.push({ ...l })
       continue

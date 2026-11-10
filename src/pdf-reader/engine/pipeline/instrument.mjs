@@ -172,6 +172,27 @@ function texToText2(src) {
   const bare = src.replace(/\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?/g, ' ').replace(/\\(?:label|tag)\*?\{[^}]*\}/g, ' ').replace(/\\(?:nonumber|notag)\b/g, ' ').replace(/\\\\/g, ' ').replace(/(?<!\\)&/g, ' ')
   return bare === src ? texToText(src) : texToText(bare.trim())
 }
+/** what a character TeX sets as written stands for while texToText2 reads the source: none of the characters it reads */
+const AS_WRITTEN = { _: '\uE010', '^': '\uE011' }
+/** the commands whose argument TeX sets a character at a time, as written (textPieceOf's verbatim ones) */
+const VERBATIM_CMD = /^\\(?:url|path|verb|lstinline)(?![A-Za-z@])/
+/**
+ * An element's copy text: its source as texToText2 reads it, a character TeX sets as written read as itself, never as a
+ * script's mark. texToText2 reads `_x` as the subscript "ₓ", after reading `\_` as "_": an identifier's copy, what a reader
+ * selects on its crop, was "conv3ₓ" for `conv3\_x`, "verify_boundaryₗaw" for `verify\_boundary\_law`, and 2610.20808v1's
+ * `\path{data/current_soda_protocol.json}` "data/currentₛodaₚrotocol.json" (213 elements of 29 of the 88 papers, stage 1a).
+ * LaTeX's `\_` and `\textunderscore` set the underscore and `\textasciicircum` the caret, in text and in math (`\nfss@text`), the
+ * spaces after a control word TeX's to skip; a verbatim argument (\url, \path, \verb, \lstinline: a text piece's, textPieceOf)
+ * sets its `_` and `^` as written. A bare `_` or `^` anywhere else is TeX's script
+ */
+function copyOf(src) {
+  let s = textPieceOf(src) && VERBATIM_CMD.test(src) ? src.replace(/[_^]/g, (c) => AS_WRITTEN[c]) : src
+  s = s.replace(/\\(?:([A-Za-z@]+)[ \t]*(?:\r?\n[ \t]*)?(?:\{\})?|([^A-Za-z@]))/g, (m, word, sym) =>
+    sym === '_' || word === 'textunderscore' ? AS_WRITTEN._ : word === 'textasciicircum' ? AS_WRITTEN['^'] : m,
+  )
+  if (s === src) return texToText2(src)
+  return texToText2(s).replace(/\uE010/g, '_').replace(/\uE011/g, '^')
+}
 /**
  * phClass, with the paper's own macros told apart: a command no table knows (\bert, \oursfull{}, $\dmodel$, $\cla$) has
  * no plain text, which iteration 1 called a symbol and drew as nothing, though the page renders it ("BERT",
@@ -345,7 +366,7 @@ export function classesOf(pieces, colours = null, texts = null) {
     const src = unicodeOf(p.src)
     // (the placeholder's class, placeholdersOf L2:1065: phClassProven, a symbol that is no text symbol a formula; its
     // drawing as a symbol, `sym`, where phClass2 reads it as one: the tokens' class, cls2)
-    const c = phClassProven(src), copy = texToText2(src) || ''
+    const c = phClassProven(src), copy = copyOf(src) || ''
     const x = { cls: c.cls, ...(c.unknown ? { unknown: true } : {}), ...(copy ? { copy } : {}) }
     if (phClass2(src).cls === 'symbol') {
       const own = symbolText(src)
@@ -362,7 +383,7 @@ export function classesOf(pieces, colours = null, texts = null) {
     Object.assign(x, sourceFactsOf(src, k, first, colours))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
-      const u = unicodeOf(pieces[shown.get(k)].src), uc = phClassProven(u), copy = texToText2(u) || ''
+      const u = unicodeOf(pieces[shown.get(k)].src), uc = phClassProven(u), copy = copyOf(u) || ''
       for (const f of ['unknown', 'text', 'sym']) delete x[f]
       Object.assign(x, { cls: uc.cls, ...(copy ? { copy } : {}), literal: true, url: true })
     }
