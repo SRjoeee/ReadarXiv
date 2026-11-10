@@ -69,6 +69,12 @@ export const CAUSE = Object.freeze({
   // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
   // cause, keptWhyOf: accepted)
   pitch: 'kept as the original: set wholly in a face of one pitch',
+  // ((l), the coordinator's ruling of 2026-11-10, round 8 B5: today's ink unit whose every line one source unit of v2's holds
+  // (no other meets them), each formula's span one placeholder on both sides (today's formula runs: its placeholders and the
+  // digits its ledger read as text inside or right beside them; v2's math elements, digits beside them alike), the rest of today's
+  // text exactly a contiguous stretch of v2's, white space aside: 2610.21377v1 pp. 34-43, which today's front end read off
+  // arXiv's ink after a `$…\)` and v2's reads as TeX's paragraphs: accepted)
+  formulas: 'held whole by a source unit, its formulas read apart',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -90,6 +96,11 @@ const RESET = 'unlocated: set in a paragraph that sets a unit again'
  *  (a code environment's kept block, a crowded figure text) states none */
 export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : null)
 
+/** (l): the elements of a source unit that are formulas (the dump's element kinds: an inline formula, a display) */
+const MATH_ELEMENTS = new Set(['math', 'display'])
+/** (l): a formula's span as one character, and an element that reads as nothing of today's */
+const FORMULA_MARK = '\ufffc'
+const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
@@ -299,6 +310,26 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       }
     return false
   }
+  // ((l): a unit's text with each formula's span one placeholder, white space aside: today's ink unit's placeholders (each a
+  // formula's piece its ledger read apart), v2's math elements (MATH_ELEMENTS), the digits right beside one or between two of them
+  // the formula's (the upright digits today's ledger reads as text); any other element its reading, else a character that reads as
+  // nothing of today's)
+  const formulasMasked = (n, isFormula) => {
+    const inked = new Set((n.elements ?? []).map((e) => e.k))
+    let s = ''
+    for (const p of n.pieces ?? [])
+      s +=
+        p.kind === 'text' ? p.s : p.kind !== 'ph' ? '' : isFormula(p) ? FORMULA_MARK : inked.has(p.k) ? (readingOf(p.src ?? '') ?? UNREAD) : ''
+    return s
+      .replace(/\s+/g, '')
+      .replace(new RegExp(`\\p{Nd}*${FORMULA_MARK}(?:\\p{Nd}*${FORMULA_MARK})*\\p{Nd}*`, 'gu'), FORMULA_MARK)
+  }
+  const formulasApart = (u, n) => {
+    const kinds = new Map((n.elements ?? []).map((e) => [e.k, e.kind]))
+    const t = formulasMasked(u, (p) => p.kind === 'ph')
+    const v = formulasMasked(n, (p) => MATH_ELEMENTS.has(kinds.get(p.k)))
+    return /\p{L}/u.test(t.replaceAll(FORMULA_MARK, '')) && v.includes(t)
+  }
   const isBlock = (n) => !n.replaced && unitClass(n.kind) === 'names'
   // ((c'): a unit of the author block's, of any kind, standing for today's line after the name before's trail)
   const trailBlock = (u) => {
@@ -455,9 +486,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         : partOf(u, holder)
           ? CAUSE.held
           : null
+    // (none of these: today's ink unit a source unit of v2's holds whole, its formulas read apart (l))
+    const apart =
+      !held && holder && /^ink/.test(u.kind) && !/^ink/.test(holder.kind) && holder.state === 'drawn' && formulasApart(u, holder)
     // (none of these: the author block's units holding its line between them (f'); consecutive units holding its text (j))
-    const block = !c && !kept && !names && !part && !trailed && !held ? heldByBlockUnits(u) : null
-    const split = !c && !kept && !names && !part && !trailed && !held && !block ? splitOf(u) : null
+    const block = !c && !kept && !names && !part && !trailed && !held && !apart ? heldByBlockUnits(u) : null
+    const split = !c && !kept && !names && !part && !trailed && !held && !apart && !block ? splitOf(u) : null
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
@@ -482,7 +516,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
             ? { by: trailed, cause: CAUSE.trail }
             : held
               ? { by: holder, cause: held, ...(held === CAUSE.held ? { holder } : {}) }
-              : block
+              : apart
+                ? { by: holder, cause: CAUSE.formulas, holder }
+                : block
                 ? { by: block.holder ?? [...units].find((n) => !n.replaced && boxesOf(n).some((k) => across(k, u.lines[0]))), cause: CAUSE.heldBlock, ...(block.holder ? { holder: block.holder } : {}) }
                 : split
                   ? { by: split[0], cause: CAUSE.split }
