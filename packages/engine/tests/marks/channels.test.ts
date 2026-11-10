@@ -2,7 +2,15 @@
 // pipeline/instrument.mjs): each unit's alignment (AXT-ALIGN), each page's text frame (AXT-BODY at its body's opening point)
 // and each unit's paragraph skips (AXT-LINES).
 import { describe, expect, it } from 'vitest'
-import { boxedAlignOf, framesOf, readAlign, readBodies, readBoxAlign, readSkips } from '../../src/marks/channels.ts'
+import {
+  boxedAlignOf,
+  framesOf,
+  readAlign,
+  readBodies,
+  readBoxAlign,
+  readRefNames,
+  readSkips,
+} from '../../src/marks/channels.ts'
 
 describe('readAlign: each unit’s alignment as TeX stated it at its end mark', () => {
   it('reads each unit’s alignment as its end mark states it, the first paragraph’s of one TeX set in two', () => {
@@ -222,5 +230,93 @@ describe('readSkips: each unit’s \\baselineskip and \\parskip at its paragraph
     expect(s.get(3)![1]).toBe(0)
     expect(s.get(8)![0]).toBeCloseTo((12 * 72) / 72.27, 6)
     expect(s.get(8)![1]).toBeCloseTo((5.5 * 72) / 72.27, 6)
+  })
+})
+
+describe('readRefNames: each reference’s item type and the full name the paper gives it (AXT-REF, AXT-REFNAME)', () => {
+  it('takes the first of the names TeX wrote that is plain words and no abbreviation, in the order it wrote them', () => {
+    const log = [
+      'AXT-REF 0 figure',
+      // (cleveref's capitalised name, its abbreviated one, hyperref's, LaTeX's: the first full one)
+      'AXT-REFNAME 0 C macro:->Fig.',
+      'AXT-REFNAME 0 c macro:->fig.',
+      'AXT-REFNAME 0 a macro:->Figure',
+      'AXT-REFNAME 0 n macro:->Figure',
+      'AXT-REF 1 section',
+      'AXT-REFNAME 1 a macro:->section',
+      // (a type no name of which TeX knows: stated, no name)
+      'AXT-REF 2 section*',
+      // (a name that is no plain words: a command in it, refused)
+      'AXT-REF 3 table',
+      'AXT-REFNAME 3 n macro:->\\scshape Table',
+      'AXT-REF 4 equation',
+      'AXT-REFNAME 4 a \\long macro:->Equation',
+    ].join('\n')
+    expect([...readRefNames(log)]).toEqual([
+      [0, { type: 'figure', name: 'Figure' }],
+      [1, { type: 'section', name: 'section' }],
+      [2, { type: 'section*' }],
+      [3, { type: 'table' }],
+      [4, { type: 'equation', name: 'Equation' }],
+    ])
+  })
+  it('reads a name TeX wrote as UTF-8 bytes (the log read byte for byte) and one it wrote in ^^ notation', () => {
+    const latin1 = (s: string) => String.fromCharCode(...new TextEncoder().encode(s))
+    const log = [
+      'AXT-REF 0 figure',
+      `AXT-REFNAME 0 n macro:->${latin1('Abbildung')}`,
+      'AXT-REF 1 figure',
+      `AXT-REFNAME 1 n macro:->${latin1('Ilustración')}`,
+      'AXT-REF 2 table',
+      'AXT-REFNAME 2 n macro:->Tabla^^c3^^b3n',
+    ].join('\n')
+    const got = readRefNames(log)
+    expect(got.get(0)?.name).toBe('Abbildung')
+    expect(got.get(1)?.name).toBe('Ilustración')
+    expect(got.get(2)?.name).toBe('Tablaón')
+  })
+  it('reads a name the marked compile’s own babel-name wrapper holds as the text it wraps (NAMES_TEX)', () => {
+    // (the layout compile wraps each babel name macro, \figurename, as \relax\axtnma{key}<its text>\axtnmb{key}: an article
+    // with no hyperref has no other name for a figure; IEEEtran's wrapped text is an abbreviation still)
+    const log = [
+      'AXT-REF 0 figure',
+      'AXT-REFNAME 0 n \\long macro:->\\relax \\axtnma {figure}Figure\\axtnmb {figure}',
+      'AXT-REF 1 figure',
+      'AXT-REFNAME 1 n \\long macro:->\\relax \\axtnma {figure}Fig.\\axtnmb {figure}',
+      'AXT-REF 2 thm',
+      'AXT-REFNAME 2 n \\long macro:#1->#1',
+    ].join('\n')
+    expect([...readRefNames(log)]).toEqual([
+      [0, { type: 'figure', name: 'Figure' }],
+      [1, { type: 'figure' }],
+      [2, { type: 'thm' }],
+    ])
+  })
+  it('states the language TeX declared where it read the names (babel’s BCP 47 tag, AXT-REFLANG) on every name', () => {
+    const log = [
+      'AXT-REFLANG macro:->pt-BR',
+      'AXT-REF 0 figure',
+      'AXT-REFNAME 0 a macro:->Figura',
+      'AXT-REF 1 section*',
+    ].join('\n')
+    expect([...readRefNames(log)]).toEqual([
+      [0, { type: 'figure', name: 'Figura', lang: 'pt-BR' }],
+      [1, { type: 'section*' }],
+    ])
+    // (no language declared: no babel)
+    expect(readRefNames('AXT-REF 0 figure\nAXT-REFNAME 0 a macro:->Figure').get(0)).toEqual({
+      type: 'figure',
+      name: 'Figure',
+    })
+    // (a main language babel declares but knows no tag of: BCP 47's `und`, undetermined; 2307.16209v1's "brazil" on the 2023
+    // tree, whose babel 24.2 has no babel-brazil.tex to read the tag from)
+    expect(readRefNames('AXT-REFLANG \nAXT-REF 0 figure\nAXT-REFNAME 0 a macro:->Figura').get(0)).toEqual({
+      type: 'figure',
+      name: 'Figura',
+      lang: 'und',
+    })
+  })
+  it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {
+    expect(readRefNames('AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt').size).toBe(0)
   })
 })

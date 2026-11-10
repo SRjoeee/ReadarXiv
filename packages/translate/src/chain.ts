@@ -25,6 +25,7 @@ import {
   type Why,
 } from './contract.ts'
 import { placeGroups } from './groups.ts'
+import { namedOf } from './names.ts'
 import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
 
@@ -59,9 +60,9 @@ export const KEY_VERSION = 't1'
  *  of two letters or more, every stretch given or none, `-whole` (d76d6b200: a stretch no translator gives leaves the unit the
  *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
  *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
- *  reply did not bring back placed around its own text where the translation states it: groups.ts): a change to them is a
- *  change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups'
+ *  reply did not bring back placed around its own text where the translation states it: groups.ts; a word tied to a reference
+ *  that abbreviates the item's name sent to every translator as that name: names.ts): a change to them is a change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -676,11 +677,13 @@ export function chainOf(ports: Ports = {}): Chain {
     runs: boolean
   }
 
-  /** one unit through the chain: exactly one emit */
+  /** one unit through the chain: exactly one emit. Every translator is sent it with each word tied to a reference that
+   *  abbreviates the item's name written as that name (names.ts), its row's sentences given back in the unit's projection */
   async function settle(u: UnitIn, i: number, c: Call): Promise<void> {
     let r: Result
     try {
-      r = await outcomeOf(u, i, c)
+      const named = namedOf(u)
+      r = named ? named.back(await outcomeOf(named.unit, i, c)) : await outcomeOf(u, i, c)
     } catch {
       // (a fault of the chain's own: the unit is told unavailable, never a throw to the host, hard rule 3)
       r = { id: u.id, ok: false, why: { kind: 'unavailable' } }

@@ -4,6 +4,9 @@
 
 /** A target language, BCP-47 (`zh-Hans`, `ja`, `sr-Cyrl`). Each adapter maps it to its endpoint's own code */
 export type Lang = string
+/** the language every translator is asked to translate from (each adapter's request names it: Microsoft's `from`, Google's
+ *  source, Chrome's `sourceLanguage`), BCP 47 */
+export const SOURCE: Lang = 'en'
 
 /** An element's kind, as the source reader typed it: an open string (`math`, `display`, `cite`, `ref`, `url`, `code`,
  *  `note-mark`, `other`, …). A wire reads it for three things only: what the element reads as to a sentence cutter where the
@@ -51,6 +54,14 @@ export type Piece =
        *  number and wrote the character for "page" before it) and puts it back after the translation, its white space before
        *  it, on every wire and the runs floor */
       after?: string | undefined
+      /** the full name the paper gives the type of the item a reference refers to (the PDF's source reader, read in its
+       *  marked compile: "Figure", "Equation", "section"), where TeX states one. A word tied to the reference that
+       *  abbreviates it ("Fig.") is sent to every translator as this name (names.ts namedOf); the unit itself keeps the word */
+      name?: string | undefined
+      /** the BCP 47 tag of the language the paper's names are set up for (babel's main language); absent where none is
+       *  declared. The name
+       *  is sent only where this is SOURCE's language, or none is declared */
+      nameLang?: string | undefined
     }
   | {
       t: 'span'

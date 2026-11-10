@@ -14,8 +14,8 @@
 // drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
 // unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
-import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
-import { classOf, followsOf, leadStep, readColours, readSkipProbe } from '../layout/marks.mjs'
+import { boxedAlignOf, framesOf, groupFacts, linkTargetOf, ownersOf, readAlign, readBoxAlign, readPdf, readRefNames, readSkips, ROLE, runIns, unitId } from '@readarxiv/engine'
+import { classOf, followsOf, leadStep, readColours, readSkipProbe, refKeyOf, refKeysOf } from '../layout/marks.mjs'
 import { ownOf } from '../layout/own.mjs'
 import { regionsOf, WANT } from '../layout/stream.mjs'
 import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
@@ -82,15 +82,16 @@ const BACKREF_GAP = '\u2002'
 export const contentOf = (pieces, o = {}) => runIns(piecesOf(pieces, o))
 /** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
- *  element's wire facts (wireFacts) */
-export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null } = {}) {
+ *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
+ *  TeX declared for it (`nameOf` { name, lang }: the engine's readRefNames over marks.mjs refsTex's statements) */
+export function piecesOf(pieces, { kindOf = () => 'other', idOfNested = () => null, nameOf = () => undefined } = {}) {
   let level = []
   const stack = []
   pieces.forEach((p, k) => {
     const id = String(k)
     switch (p.t) {
       case 'text': level.push({ t: 'text', s: unicodeOf(p.s) }); break
-      case 'ph': level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p) }); break
+      case 'ph': { const n = nameOf(p); level.push({ t: 'el', id, kind: kindOf(p) ?? 'other', src: unicodeOf(p.src), ...wireFacts(p), ...(n?.name ? { name: n.name, ...(n.lang ? { nameLang: n.lang } : {}) } : {}) }); break }
       case 'nested': level.push({ t: 'unit', id, unit: idOfNested(p.unit) ?? '0'.repeat(64), pre: unicodeOf(p.pre), post: unicodeOf(p.post) }); break
       case 'open': {
         const style = styleOf(unicodeOf(p.src))
@@ -976,6 +977,11 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)).set(k, rgb)
+  // (each reference's item's full name, as TeX stated it at the document's end for the labels the marked compile asked about:
+  // marks.mjs refsTex, the engine's readRefNames; what a translator is sent for a word tied to it that abbreviates it)
+  const refKeys = new Map(refKeysOf(units).map((k, i) => [k, i]))
+  const refNames = readRefNames(lastTexLog(log))
+  const nameOf = p => { const k = refKeyOf(p); return k === null ? undefined : refNames.get(refKeys.get(k) ?? -1) }
   const ids = []
   const out = []
   const kindOf = elementKindOf
@@ -983,7 +989,7 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
   const facts = unitFactsOf(paper)
   units.forEach((u, i) => {
     // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
-    const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null })
+    const content = piecesOf(u.pieces, { kindOf, idOfNested: x => ids[units.indexOf(x)] ?? null, nameOf })
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden

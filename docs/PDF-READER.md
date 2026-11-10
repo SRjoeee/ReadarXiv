@@ -3592,6 +3592,58 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
   An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
 
+### 18.23 A reference's abbreviated name is sent as the item's full name (2026-11-10)
+
+On staging, 2610.22065v1 p5's "… sweep σinfer in Fig. 7." came back from Microsoft with the figure's word dropped and the number
+alone after a full stop of its own, and "Fig." elsewhere as the fruit: the endpoint cuts a sentence at an abbreviation's full
+stop before a reference's marker (its own sentence lengths hold a sentence of the marker alone). A no-break space and the text
+paired did not help. The owner's ruling (2026-11-10): where the word tied to a cross-reference abbreviates the referenced
+item's own name, the translator is sent the full name; the name is the paper's own TeX's; unknown, the text goes as it is; no
+word list and no language's table; the original drawn when translation is off never changes.
+
+- **The rule** (`packages/translate` `names.ts` `namedOf`): where the word a unit's text ends in right before a reference — a
+  tie, a space or a break alone between; a word of its own, white space or an opening bracket before it (never the "e." of
+  "i.e.") — is a case-insensitive proper prefix of the element's `name`, followed by a full stop
+  ("Fig." of "Figure", "Eq." of "Equation", "Sec." of "Section", "Tab." of "Table"), every translator is sent that name instead,
+  in the word's case (a lower-case word the name in lower case, one in capitals the name in capitals) — where the language TeX
+  declared for the name is the one every translator translates from (`contract.ts` `SOURCE`, `en`, which each adapter's request
+  names), its language subtag compared (RFC 4647's basic filtering: `en-US` is English), or where none is declared (no babel):
+  2307.16209v1's English text under babel's Brazilian Portuguese names ("Figura", `pt-BR`) keeps its "Fig." (the coordinator's
+  ruling of 2026-11-10). The chain applies it to
+  each unit before any translator (`chain.ts` `settle`) and gives a row's sentences back in the unit's own projection (a start
+  inside the name at the word's start). `CHAIN_RULES` gains `names`: every row is read again, the stored replies of unchanged
+  wires hit (the store key is the wire's bytes).
+- **The name is the paper's** (`layout/marks.mjs` `refsTex`, the engine's `readRefNames`, `pipeline/instrument.mjs` `piecesOf`):
+  the marked compile asks TeX, once the last page is out, about each label the paper's reference elements name (`\ref`,
+  `\ref*`, `\eqref`, `\autoref`, `\cref` of one label, `\nameref`; not `\pageref`): its type, the label's anchor's (hyperref's,
+  and LaTeX's own since 2023, `{num}{page}{title}{anchor}{}`: `figure.caption.12`'s `figure`, `appendix.A`'s `appendix`, as
+  hyperref's `\autoref` reads it), else cleveref's `[type]`; then the `\meaning` of cleveref's capitalised and own names,
+  hyperref's `\<type>autorefname` and LaTeX's `\<type>name` (a babel name macro read through the layout compile's own
+  wrapper, NAMES_TEX); and, once, the language the paper's names are set up for: babel's BCP 47 tag of its main language
+  (`\bbl@tbcp@<\bbl@main@language>`, the locale's `identification.tag.bcp47`, what `\BCPdata{tag.bcp47}` reads; hyperref
+  sets its names for it at `\begin{document}`, whatever the text switches to after; BCP 47's `und` where babel declares a main
+  language it knows no tag of, as 2023's babel for "brazil", which keeps the text as it is), the element's `nameLang`. The first that is plain words with no full stop is the element's
+  `name` (format's element piece; not in the unit's id): cleveref's default "Fig." and IEEEtran's `\figurename` "Fig." are
+  passed over for hyperref's "Figure". Nothing is set and nothing written to a file; a paper with no reference compiles the
+  bytes it did.
+- **Measured** (lane `ref-names`, 2026-11-10). Staging's stored Chinese rows of five papers (Microsoft's): "Fig." tied to
+  a reference kept the figure's word right before its number 45 times of 101 (52 a full stop before the number, 10 the fruit),
+  "App." 1 of 11, "Eq." 139 of 141, "Sec." 86 of 90. Live, keyless, 52 such abbreviations of 27 units of the corpus sent as they
+  are and as the name (27 requests): the endpoint cut its source sentence at the abbreviation 10 times, never at the name; the
+  item's word right before the number "Fig." 7 -> 15 of 15, "Tab." 0 -> 3 of 3 (read as a label), "App." 2 -> 5 of 5, "Eq." and
+  "Sec." alike both ways. 2610.22065v1 p5 as the chain sends it now: one sentence, the figure's word before its number. Over
+  the corpus's 88 papers (stage 1a): 6,298 reference elements named in 82 papers; of 1,177 words with a full stop tied to a
+  reference, 793 are sent as the name in 38 papers ("Eq." 315, "Fig." 338, "Sec." 103, "fig." 16, "App." 12, "Sect.", "Prop.",
+  "Tab." 3 each); 182 stay for want of a name and 202 are no abbreviation of it. The prepare's statements move nothing else:
+  every part and add-on the same bytes, the units' ids and the dumps unchanged.
+- **Not this rule's**: a plural ("Figs.", "Eqs.", "Secs.": no prefix of the singular name; garbled alike on staging: "Eqs." 0 of 13);
+  "Sec." to a subsection where hyperref alone names it ("subsection"); RevTeX's sections, whose anchors are `section*` (no
+  name: 2610.10492v1's 64); amsmath's `\tag`ged equations (`AMS`, whose name is `\equationautorefname`, a command); a name pdfTeX
+  writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref);
+  IEEEtran without hyperref ("Fig." its only name); a paper under polyglossia (no babel tag read: the rule as for no language
+  declared).
+  Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
