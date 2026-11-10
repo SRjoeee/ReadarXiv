@@ -3106,9 +3106,29 @@ stream (no glyph TeX printed, none made on A) is now never the member before (no
 over to, nor the last note), and a member made on A whose first glyph TeX set right after a member's last, on that member's
 last row, stands after it (`locate.ts` `standsAfter`; before the member whose first glyph comes next otherwise, as before):
 the reference format's ". 2027. ABNAT: …" after the last name, the title set again, no unit's, had no member after it on its
-page and stood after every member. Each row's names then run on from the one before, at the original's separation from its
-translation's ink. Not done: a row's text does not move up into the room the row before it leaves (each TeX line keeps its
+page and stood after every member. And a member of the instrument's whose first glyph TeX set right after another's last (what
+stands between no unit's, or made on A), on that one's last row, stands after it whatever their order among the units, where
+that one is not the member before it there or moved itself (the rest of a run TeX set one after the other goes with it): the
+front end numbers the units it cuts out of what was one unit after every other unit of the source (`latex-front.mjs` `later`,
+so that no unit's number moves), and 2611.00342v1 p1's ten names after an IJCAI `\and` came after the body's units, the body
+taken for the member before the second name, the first name a flow of its own. Each row's names then run on from the one before, at the original's separation from its
+translation's ink. Not done then: a row's text did not move up into the room the row before it leaves (each TeX line kept its
 members). A centred row of several members, below.
+
+**A paragraph that sets the paper's front matter again is the page's text** (`locate.ts`, the members; staging's round 8 B1 on
+2610.22065v1 p1: the reference format translated with the names toggle on, its first line ending at x 190 where TeX's ends at
+294). The names were each a member, laid on TeX's rows, so the paragraph never reflowed: one row's names could not move up
+into the room the row before left. That paper writes its block under the title out itself (its own `\@mkauthors@iii`), so its
+`\author` units are set in the reference format alone; B's stream there sets the title again (its start point after the
+title's end point under `\maketitle`) in the same paragraph. A paragraph that sets a unit again — a start point of the unit's
+after an end point of the unit's in B's stream, the paragraph from the last paragraph end TeX states before a unit's first
+glyph to the first after its last — is a template's, made of the paper's own front matter; an author's or a place's unit set
+inside it is no member there (`set in a paragraph that sets a unit again`), its glyphs left to the ink side, and the paragraph
+is read as the page's text, one ink unit, translated as a whole and reflowing. A block whose units TeX set twice has them its
+first setting's, the block's (MR 3: 2402.10294v1's acmart names). The ink units read a paragraph by TeX's points: a paragraph
+end of TeX's between two lines now parts them whether or not a start is marked after it (`ink-units.mjs` rule 3; the reference
+format's "ACM Reference Format:" line and the reference under it had been read as one paragraph by the starts alone). Not done:
+the paragraph's part in the next column stays an ink unit of its own (rule 3 cuts at a column), as any ink paragraph does.
 
 **A member's trail travels with it** (`locate.ts`, El.trail, the element `~`; the owner on 2604.14228v3-zh page 1: "the
 translation leaves a great deal of redundant blank space"). Its class sets `$^{1,*}$` and ", " after each `\author`'s text,
@@ -3139,8 +3159,8 @@ at TeX's separation (S.rowStart), ragged; the run's extent is read off that lay,
 end (a closing mark's blank half that hangs aside, as a centred line's placing has it); and the run is laid again from where
 it stands centred on the line's middle (TeX's: its first glyph's start, the first member's label's where it stands on the
 line, to its last glyph's end), or ends at the line's end. Its room is as far either side of the middle as both its ends'
-room allows (the first member's `Room.side` on the left, the last one's on the right, their column), as U.decor widens a
-centred line, so the second lay is the first one moved. The page's fill holds the run's end as it holds a shared row's
+room allows (the least left its members' `Room.side` and columns give, the greatest right: the first member's and the last
+one's on one line), as U.decor widens a centred line, so the second lay is the first one moved. The page's fill holds the run's end as it holds a shared row's
 (`keepsShare`): tracked by the fill, 2610.10069v1's third name ran 5.7 pt past the run, its line 3.2 pt right of TeX's middle.
 Over the 88 papers' parts, 23 lines are so (all of page 1, authors' and places' lines); a line TeX set justified or flush left
 needs nothing, its members run on from its first one's start already. On the 22 parity pairs, every switch on, only three
@@ -3148,12 +3168,28 @@ pages move, and only these lines' members: 2610.21106v1 p1 the second name 3.89 
 line's middle 1.19 pt off TeX's before, 0.00 now; 2610.10069v1 p1 (article's `\and`, each name a `tabular`) its names 29.56 and 29.57
 pt apart, TeX's (31.19 and 20.20 before), its middle 5.49 pt off before, 0.00 now; 2608.16117v1 p1 two lines of
 elsarticle's places, 4.38 and 4.39 pt apart (6.39 and 9.64), their middles 1.18 and 3.04 pt off before, 0.00 now. With the
-author block off nothing moves. Not done: a line one of whose members TeX set over two lines (the line is that member's last
-line or first): a member's lines are laid together and its last line is not moved with the members after it (2608.16117v1's
-"Pennsylvania" line; 4 lines in the 88); a line TeX's stream holds as more than one flow (a paragraph's end between two of its
-members: 2608.16117v1's first line of places, three flows, each centred on its own); a line with ink kept between two members,
-or a member whose label stays where TeX set it, or a member after the first whose label is carried (laid member by member, as
-before: 4 kept in the 88); a run that does not fit on its one line (laid member by member, as before). The separations are the
+author block off nothing moves.
+
+**A paragraph its members fill over several lines is set as TeX set it** (`rowLinesOf`'s `rows`, `layLine`; staging's round 8 B1
+on 2611.00342v1 p1, IJCAI: its eleven names one centred paragraph over three lines, each `\and`'s comma the next name's stated
+label; each name stood centred on its own original's middle with its comma, a hole of 13 to 36 pt before each comma where TeX
+set 6.5 to 7.3, "Woohyeon Kwon" broken over two lines and Lee's marks alone on a third). The run is now the paragraph its
+members fill whole, one after the other: each after the first on the line the one before ends, its lines TeX's next lines of
+the paragraph (a member over two lines among them), nothing of the page between two of them but the member's own label, which
+goes with it (a join kept by the label alone, told by `Room.side`: the follower's side starts at the leader's end, or the
+leader's ends at the follower's label). Its members are laid one after the other over the paragraph's lines, each block TeX's
+lines from the one it starts on, each line its room (as wide as the run's members' lines may take, centred on the line's
+middle or ending at its end), the first line from the one before's ink end at TeX's separation and on the baseline the one before
+was laid at, at TeX's pitch (a fit's own leading, a CJK target's 1.3, put the next member on no line of the paragraph); each
+member breaks only at its own spaces, after the label it carries (the separator TeX set before it, which then closes the line
+before), so a name the line no longer holds goes on whole to the next, as TeX breaks the paragraph between words, and a CJK name,
+which holds no space, is never cut between its characters where a line holds it. Each line's extent is read off that lay, and the
+run laid again with each line moved to stand centred on TeX's line, or ending at its end; each line keeps its width, so the second
+lay is the first one moved, line by line. A run of one line is laid as before. Not done: a line TeX's stream holds as more than
+one flow (a paragraph's end between two of its members: 2608.16117v1's first line of places, three flows, each centred on its
+own); a line with ink kept between two members other than the member's label, or a member whose label stays where TeX set it
+(laid member by member, as before); a run whose members' lay does not keep the lines the first lay set (laid member by member,
+as before). The separations are the
 original's: where TeX stretched them (article's `\and` is `\hskip 1em plus .17fil`, so a centred line's slack stretched
 2610.10069v1's to 29.6 pt at 14.3 pt type), TeX would have stretched a shorter line's further. No line of the 88 is set flush
 right this way: that case is held by a synthetic test alone.
@@ -3219,12 +3255,18 @@ trail by the word's gap, the label walked back to the end mark before. A call Te
 between two rows of an alignment states none: a class that stores its list and sets it whole sets no item's start — REVTeX's
 `\author` and `\affiliation` in the body before `\maketitle`, whose list it sets with each name's mark after it, so that on
 2610.21770v1's line the mark after a name is still the next name's label where both stand on one line (on another line, the
-glue rule gives it to the name). **2604.14228v3's notes are not done**: its
+glue rule gives it to the name). 2604.14228v3's
 class appends each `\author`, `\affiliation` and `\contribution` with its separator and its mark to one macro by `\xdef` and
 sets the macro whole (`\authorlist\par`), its calls in the preamble; TeX meets no item's start, and the one place that knows it is
-the class's own `\addtolist`. Its notes' "†" stays the next note's lead by MR 5's walk and, being no label's form, the note the
-original's; † ‡ § are not admitted to the label's form by their symbol, which would give 2610.10069v1's and 2610.29945v1's
-`\thanks` marks to the next name where their `\and` states the call.
+the class's own `\addtolist`: no call is stated. Its notes' "†" (`$^{\dagger}$Corresponding author` after the list's ", ") was
+the next note's lead by MR 5's walk and, being no label's form, left the original's ink where it stood, 33 pt after the note's
+translation (staging's round 8 B1). TeX's spacing tells it: the dagger is a script (CMSY6 at 5.98 pt, raised 3.81 pt) glued to
+the word after it (0.50 pt, `\scriptspace`) and a word's space after the comma before it (3.32 pt). A lead of no label's form
+is the unit's label where it is a script of no letter (each glyph smaller than the unit's first glyph and off its baseline)
+glued to that glyph (no word's gap: a fifth of an em, the label rule's own word end) and a word's gap or more after what stands
+before it on its line (`own.mjs` MR 5, `gluedMark`): the note's label, laid from the one before's end with it, as a carried
+label is. † ‡ § are still not admitted to the label's form by their symbol: a `\thanks` mark glued to the name before and a
+space before the next (2610.10069v1's, 2610.29945v1's) is no lead of the next by this rule either.
 
 ## 19. The engine's contract
 
