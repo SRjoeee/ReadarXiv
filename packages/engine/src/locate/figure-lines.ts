@@ -866,13 +866,13 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
       c.s += y.u
     } else cl.push({ gs: [g], x0: y.x0, x1: y.x1, text: roleOf.get(g) === 'T', s: y.u })
   }
-  // (its word spaces: between two clusters at least one of which is text, an inline formula's space to the words beside it too
-  // (TeX stretches it as it stretches theirs; the spaces inside a formula are its own), the first ending in no punctuation (TeX
-  // widens a space after one); a line shows justification only where two of them or more are one (TeX stretches a line's
-  // spaces alike), never a tab's gap)
+  // (its word spaces: between two clusters of text, the first ending in no punctuation (TeX widens a space after one); a line
+  // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap. A
+  // formula's space to the words beside it, read as a word space, was tried and withdrawn (2026-11-11): a math cluster beside a
+  // text-role digit or bracket put a math space among them, the line read uneven, and 2609.19644v1 lost 3 joins for none gained)
   const gaps: number[] = []
   for (let i = 1; i < cl.length; i++)
-    if ((cl[i]!.text || cl[i - 1]!.text) && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s))
+    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s))
       gaps.push(cl[i]!.x0 - cl[i - 1]!.x1)
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
   const bottom = Math.min(...main.map((g) => g.bottom)),
