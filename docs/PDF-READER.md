@@ -5486,6 +5486,22 @@ no name's row moves, before the review's fixes and after them (the margin's numb
 19 sub-entries are units (25 drawn with their headings' translations, 3 translated), their numbering, leaders and page numbers the
 original's ink, and the headings "APPENDIX A" to "H" centred whole.
 
+**The number a class sets right before a babel name (the owner's report of 2026-11-10 on 2610.20967v1 p5; the decision
+of the same day: the number is the name's label).** A class that sets a heading itself and numbers it sets the number before the name: ICASSP's `spconf.sty`
+defines thebibliography as `\section{References}`, and its `\@sect` sets `\@svsec` ("9." and `\hskip 0.6em`) and the word,
+centred whole. The number was no unit's: a stay beside the name, the name's alignment read off its word alone (its middle 6 pt off
+the column's: justified), and the target's word set from the word's start after the number, the line left of the column's middle
+where the original's two sections before it were laid centred. The number is now the name's label, as a section's number is its
+heading's (`own.mjs` MR 6c, `names.mjs` `counterBefore`, the mirror of `counterAfter` and narrower: every glyph before the name on
+its line in its column, one word, a counter's form with a digit in it, ending within 1.1 of the name's size before it, no unit's,
+TeX's stream setting nothing between it and the name's first glyph): its group `n<occ>.l` in the wrap, ROLE.label of the name's
+unit in the instrument (`instrument.mjs` `nameGroupOf`), the part's Label of the name (kind `head`, its number and stop), so that
+the alignment is read from the label on, as a section's is; S.names draws its crop before the target's word, the original's
+distance between their starts kept, the whole centred where the name is centred, at its own place where the name keeps its left
+edge, its label group off with the text's (on a page whose labels the add-on folded into the text's group, hidden with the word,
+its crop drawn all the same). Over the 88 corpus papers one name gains a label, this one: its line 152.33-200.30, its middle the
+column's 176.31 (before, 140.12-188.10); every other object of the 88 the same, the prepare dumps the same.
+
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 
 A theorem's head, a proof's name and the names cleveref and `\autoref` generate are TeX's text, not the author's sentences:
