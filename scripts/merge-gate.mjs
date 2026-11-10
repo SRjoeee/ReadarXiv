@@ -310,12 +310,14 @@ const NOT_A_MERGE = new Set(['-h', '--help', '--disable-auto'])
 
 /** What follows `gh pr merge` from the word at `first`: the pull request it names (a number, a URL, a branch; null
  *  for the current branch's) and the repository a flag names, each with the index of the word it was read from (-1
- *  for none); null when the command merges nothing. */
-function pullRequestArguments(words, first) {
+ *  for none); `loose`, a word the shell decides that is no option's value, so may itself be a flag or another pull
+ *  request; null when the command merges nothing. */
+function pullRequestArguments(words, dynamic, first) {
   let ref = null
   let repo = null
   let refAt = -1
   let repoAt = -1
+  let loose = false
   for (let i = first; i < words.length; i++) {
     const arg = words[i]
     if (NOT_A_MERGE.has(arg)) return null
@@ -345,9 +347,9 @@ function pullRequestArguments(words, first) {
     } else if (ref === null) {
       ref = arg
       refAt = i
-    }
+    } else if (dynamic[i]) loose = true
   }
-  return { ref, repo, refAt, repoAt }
+  return { ref, repo, refAt, repoAt, loose }
 }
 
 const MERGE_ENDPOINT = /(?:^|\/)repos\/([^/]+)\/([^/]+)\/pulls\/([^/]+)\/merge\/?$/
@@ -454,8 +456,11 @@ function ghCall(words, dynamic, at) {
   let j = at + 1
   let repo = null
   let repoAt = -1
+  let loose = false
   const flags = () => {
-    for (; j < words.length && words[j].startsWith('-'); j++) {
+    for (; j < words.length && (words[j].startsWith('-') || dynamic[j]); j++) {
+      // (a word the shell decides, before a subcommand: a flag, or the subcommand itself, for all the line says)
+      if (dynamic[j] && !words[j].startsWith('-')) loose = true
       const flag = /^(?:-R|--repo)(?:=?(.+))?$/.exec(words[j])
       if (flag === null) continue
       if (flag[1] === undefined) j++
@@ -469,8 +474,8 @@ function ghCall(words, dynamic, at) {
   j++
   flags()
   if (words[j] !== 'merge') return null
-  const found = pullRequestArguments(words, j + 1)
-  return found === null ? null : { kind: 'pr', ref: found.ref, refAt: found.refAt, repo: found.repo ?? repo, repoAt: found.repo === null ? repoAt : found.repoAt }
+  const found = pullRequestArguments(words, dynamic, j + 1)
+  return found === null ? null : { kind: 'pr', ref: found.ref, refAt: found.refAt, repo: found.repo ?? repo, repoAt: found.repo === null ? repoAt : found.repoAt, loose: loose || found.loose }
 }
 
 /** Words that stand before a command without being it */
@@ -748,8 +753,9 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
         // inside the body of its own loop: that loop's values, unless the body sets the name; anywhere else: the
         // value the line's one setting gave it
         const own = loops.findLast(loop => loop.name === name)
-        if (own !== undefined) return own.sets.has(name) ? null : own.values
-        return line.settings.get(name) === 1 && Object.hasOwn(context.vars, name) ? context.vars[name] : null
+        const values = own !== undefined ? (own.sets.has(name) ? null : own.values) : line.settings.get(name) === 1 && Object.hasOwn(context.vars, name) ? context.vars[name] : null
+        // (a value that reads as a flag is no pull request and no repository)
+        return values?.some(value => value.startsWith('-')) ? null : values
       }
       const refs = said(call.ref, call.refAt)
       const repos = said(call.repo, call.repoAt)
@@ -767,6 +773,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               dynamic[i] ||
               repointed ||
               call.composed === true ||
+              call.loose === true ||
               (viaApi && !/^\d+$/.test(ref ?? '')) ||
               (needsDirectory && lostDirectory) ||
               (needsBranch && (wrapped || !context.branchKnown || context.loops + loops.length > 0)),

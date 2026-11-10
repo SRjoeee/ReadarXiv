@@ -362,6 +362,22 @@ describe('mergesIn', () => {
     expect(merge('time gh pr merge 603').unreadable).toBe(false)
   })
 
+  it('calls unreadable a merge with a word the shell decides that is no option\'s value: it may be the flag that picks the repository (#635, Codex)', () => {
+    for (const text of [
+      'FLAGS=--repo=SRjoeee/ReadarXiv; gh pr merge 411 "$FLAGS" --merge',
+      'gh pr merge 603 $EXTRA',
+      'gh pr merge 603 --merge "$@"',
+      'gh $OPTS pr merge 411',
+      'gh pr $OPTS merge 411',
+      'F=--admin; gh pr merge $F 603',
+      'R=-R; gh pr merge 603 $R o/r',
+    ]) {
+      expect(merges(text).at(-1), text).toMatchObject({ unreadable: true })
+    }
+    // the value of an option that takes one is that option's, whatever the shell makes of it
+    expect(merge('gh pr merge 603 --merge --subject "Merge #$n" --body "$(cat note)" --match-head-commit $H -t "$T"')).toMatchObject({ ref: '603', unreadable: false })
+  })
+
   it('calls unreadable a merge whose pull request the shell decides', () => {
     for (const text of ['gh pr merge $N --merge', 'gh pr merge "$N"', 'gh pr merge $(cat n)', 'gh pr merge `cat n`', 'gh pr merge 603 -R $REPO', 'GH_REPO=o/r gh pr merge 603', 'bash -c "gh pr merge $N"', '$GH pr merge 411', '"$GH" pr merge 411']) {
       expect(merge(text).unreadable, text).toBe(true)
