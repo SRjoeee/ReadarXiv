@@ -92,7 +92,30 @@ describe('the transport: a call', () => {
   })
 })
 
-describe('the transport: what a call logs', () => {
+describe('the transport: what a call waits for, and what it logs', () => {
+  it("a call waits for its two store writes together, not in series: the rows' write goes beside the chain's answers' write, and the call returns once both end", async () => {
+    let release: () => void = () => {}
+    const writes: string[] = []
+    const answers = memory()
+    const held = new Promise<void>(r => { release = r })
+    // the answers' write held until released; the rows' write counted with whether the answers' was still out
+    const slowAnswers: typeof answers = { ...answers, write: async es => { writes.push('answers'); await held; await answers.write(es) } }
+    const rows = memory()
+    const countedRows: typeof rows = { ...rows, write: async es => { writes.push(released ? 'rows after' : 'rows beside'); await rows.write(es) } }
+    let released = false
+    const h = harness({}, { chain: chainOf({ store: slowAnswers }), rows: countedRows })
+    const t = await h.make()
+    let returned = false
+    const call = t.translate({ units: [unit('a'), plain('c', 'Plain words.')], target: 'cmn' }).then(r => { returned = true; return r })
+    for (let i = 0; i < 50 && writes.length < 2; i++) await new Promise(r => setTimeout(r, 0))
+    expect(writes).toEqual(['answers', 'rows beside'])
+    expect(returned).toBe(false)
+    released = true
+    release()
+    expect(ids(await call)).toEqual(['a:microsoft', 'c:microsoft'])
+    expect(rows.entries.size).toBe(2)
+    expect(answers.entries.size).toBe(2)
+  })
   it('a translator passed over for every unit of a call is logged once for the call, with the count: two calls of 60 units, two lines', async () => {
     const lines: string[] = []
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

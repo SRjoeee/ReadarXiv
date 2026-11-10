@@ -279,7 +279,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       }
       const writes: [string, string][] = []
       if (todo.length) {
-        for await (const r of chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })) {
+        const stream = chain.translate(todo, lang, { translators: order, signal: ac.signal, note, ...(context ? { context } : {}) })[Symbol.asyncIterator]()
+        const take = (r: Result) => {
           // the connection test asks whether the endpoint keeps the sample's placeholders (options/connect.ts): what the
           // runs floor rebuilt from its stretches is the chain's, and fails the test as the endpoint's reply alone would
           if (r.ok && own && !order.some(t => t.identity === r.by)) out.set(r.id, { id: r.id, ok: false, why: { kind: 'refused' }, error: errorOf({ kind: 'refused' }) })
@@ -293,8 +294,22 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
             }
           } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
         }
+        try {
+          // every unit's result first (the chain gives exactly one each); then the chain's end, which waits for its own store
+          // write, and the rows' write beside it: the call waits for the two together, not one after the other. Both have
+          // ended (or run out of their time) before it returns, as each did before: an answer returned is an answer stored,
+          // as far as a store that answers can say, and production's call waited for its cache writes too
+          for (let n = 0; n < todo.length; n++) {
+            const step = await stream.next()
+            if (step.done) break
+            take(step.value)
+          }
+          await Promise.all([stream.next(), rows && writes.length ? within(rows.write(writes), 5_000, undefined) : undefined])
+        } finally {
+          // (a throw of ours midway lets the chain's work go as a host that stops reading does; after its end, nothing)
+          void stream.return?.(undefined)
+        }
       }
-      if (rows && writes.length) await within(rows.write(writes), 5_000, undefined)
       const results = call.units.map(u => out.get(u.id) ?? { id: u.id, ok: false as const, why: { kind: 'aborted' as const }, error: errorOf({ kind: 'aborted' }) })
       const failed = results.find(r => !r.ok)
       // what the call cost, for the diagnostics log (issue #237): a call the rows answered whole costs nothing and says nothing
