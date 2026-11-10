@@ -363,11 +363,12 @@ export interface LineEndOptions {
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** what a source says of the word a line's end breaks after `before` and before `after`: `hyphen` where it writes the word
  *  with a hyphen there (`anti-inflammatory`), `joined` where it writes it whole (`TensorCast`; TeX's own discretionary `\-`
- *  is no hyphen of the word's), null where it writes neither, or both */
+ *  is no hyphen of the word's), null where it writes neither, or both; in any case (a plot's capitalized label "Success-|superior"
+ *  whose paper writes "success-superior", 2610.21098v1 p8) */
 function stated(source: string, before: string, after: string): 'hyphen' | 'joined' | null {
   if (!source) return null
   const text = source.replace(/\\-/g, '').replace(/[{}]/g, '')
-  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'u').test(text)
+  const has = (word: string) => new RegExp(`(?<!\\p{L})${escapeRe(word)}(?!\\p{L})`, 'iu').test(text)
   const hyphen = has(`${before}-${after}`)
   const joined = has(before + after)
   return hyphen === joined ? null : hyphen ? 'hyphen' : 'joined'

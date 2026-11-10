@@ -745,6 +745,31 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     expect(t!.ks).toEqual([0, 1])
     expect(t!.order.map((o) => (o.t === 'br' ? o.end : o.t))).toEqual(['text', 'drop', 'text'])
   })
+  it('keeps a line-end hyphen the paper writes in the word elsewhere, in any case: a compound, never TeX’s break (2609.19644v1, 2610.21098v1)', () => {
+    // (a figure's paragraph "per-|timestep" whose paper writes "per-timestep" on another line; a plot's two-line label
+    // "Success-|superior" whose paper writes "success-superior": the source tells the word, as a body unit's does)
+    const gapped = (text: string, x?: number) => [{ text, font: 'NimbusRomNo9L-Regu', gaps: true, ...(x ? { x } : {}) }]
+    const end = (lines: { text: string; font: string; gaps: boolean; x?: number }[][]) => {
+      const { page, fig } = pageOf(lines)
+      const p = { ...page, glyphs: pageGlyphsOf(page.glyphs as unknown as DocGlyph[]) } as unknown as TodayPage
+      const t = figureLinesOf([p], fig, () => false, null).find((x) => x.ks.includes(0))
+      return t?.order.find((o) => o.t === 'br')
+    }
+    expect(
+      end([gapped('in 2024 the per-'), gapped('timestep gate'), [], [], gapped('a per-timestep scale', 300)]),
+    ).toEqual({
+      t: 'br',
+      end: 'join',
+    })
+    expect(
+      end([gapped('in 2024 a Success-'), gapped('superior repair'), [], [], gapped('is success-superior', 300)]),
+    ).toEqual({
+      t: 'br',
+      end: 'join',
+    })
+    // (written nowhere else: TeX's rules, its break)
+    expect(end([gapped('in 2024 the per-'), gapped('timestep gate')])).toEqual({ t: 'br', end: 'drop' })
+  })
   it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", an item of a list (2411.13093v4 p19)', () => {
     // (each marker with the next item's, one under the other at one left edge: a list)
     for (const [marker, next] of [

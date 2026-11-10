@@ -227,7 +227,7 @@ export function inkOf(o: InkInput): {
       if (w === 'u' && g && /\p{L}/u.test(g.u)) textFaces.add(String(g.font ?? '').replace(/^[A-Z]{6}\+/, ''))
     })
   })
-  const work: LinesWork = { rounds: 0, pairs: 0, scripts: 0, votes: 0, faces: 0 }
+  const work: LinesWork = { rounds: 0, pairs: 0, scripts: 0, votes: 0, faces: 0, ends: 0 }
   const texts = figureLinesOf(pages, fig, (p, g) => figOwn[p - 1]?.[g] != null, o.fixed ?? null, textFaces, work)
   // (each text by its first run; the runs it takes after its first, and those wholly a doubled copy of a text's glyphs: no
   // figure text of their own. Of two runs each the other's copy, the first's text stands, the second's is its copy)

@@ -19,7 +19,7 @@ import {
 } from './today/today.types.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
-import { classifyFont, lineEnd } from './facts.ts'
+import { classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
 import { PARA_ALIGN_TOL, type ParaLine, parasOf } from './figure-paras.ts'
 
 /** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
@@ -120,10 +120,11 @@ export function figureLinesOf(
  * The figure reading's work, counted (deterministic: what the input asks, no clock): `rounds` the line reading's passes (a pass
  * ends at a join and starts again), `pairs` the pairs of lines it tests, `scripts` the pairs the script join tests (F1's, inside
  * each pass that joins nothing), `votes` the glyphs a line's size and baseline are voted over, `faces` the glyphs read for a
- * formula's (mathGlyph: a face's name and a character). The speed of the prepare's locate where figures are many: 2609.19644v1's
+ * formula's (mathGlyph: a face's name and a character), `ends` a paragraph's line ends in a hyphen read against the document's
+ * text (F3). The speed of the prepare's locate where figures are many: 2609.19644v1's
  * included pages
  */
-export type LinesWork = { rounds: number; pairs: number; scripts: number; votes: number; faces: number }
+export type LinesWork = { rounds: number; pairs: number; scripts: number; votes: number; faces: number; ends: number }
 let W: LinesWork | null = null
 
 function linesOf(
@@ -240,6 +241,11 @@ function linesOf(
   })
   // ---- F1: the faces that are a formula's own (fact 3)
   const math: Formulas = { faces: formulaFacesOf(built, textFaces, pitch), pitch }
+  // ---- F3: the document's own text, each page's glyphs in their order, a space where two stand apart or a line changes: the
+  // source a paragraph's line-end hyphen is read by, as a body unit's is by its own (facts.ts lineEnd: a word the source writes
+  // with its hyphen keeps it, one it writes whole drops it, TeX's rules where it writes neither)
+  let source: string | null = null
+  const sourceOf = () => (source ??= documentText(pages))
   for (const { p, glyphs, boxes, runOf, lines, loose } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order
     const reads = lines.map((l) => lineRead(l, glyphs, pitch, math))
@@ -264,7 +270,7 @@ function linesOf(
     // ---- F3: the lines of prose that are a paragraph's, one text; a line across a justified line's stretched space read whole
     // where the paragraph takes it
     const taken = new Set<number>()
-    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math)) {
+    for (const para of figureParas(lines, reads, glyphs, boxes, pitch, math, sourceOf)) {
       const ks = para.lines.flatMap((x) => x.l.ks)
       const ft: FigureText = {
         ks,
@@ -754,6 +760,31 @@ interface ProseLine {
  * justified line's stretched space after a sentence) are read as one line where a line of prose right over or under them has ink
  * across the gap, and stand so only where a paragraph takes that line; else they stay the fragments they were
  */
+/** the hyphens a line may end in (facts.ts HYPHENS) */
+const HYPHENS_AT_END = /^[-\u2010\u00ad]$/u
+/** a document's text off its pages' glyphs, in their order: a space where two stand apart (TRACKING_SPACE_FACTOR of the size,
+ *  PDF.js's reading of a space), where a line changes or goes back, and between pages */
+function documentText(pages: readonly TodayPage[]): string {
+  let out = ''
+  for (const pg of pages) {
+    let prev: G | null = null
+    for (const g of (pg.glyphs ?? []) as G[]) {
+      if (!real(g)) continue
+      if (
+        prev &&
+        (Math.abs(g.y - prev.y) > 0.5 * Math.max(g.size, prev.size) ||
+          g.x0 < prev.x0 ||
+          g.x0 - prev.x1 > TRACKING_SPACE_FACTOR * prev.size)
+      )
+        out += ' '
+      out += g.u
+      prev = g
+    }
+    out += ' '
+  }
+  return out
+}
+
 function figureParas(
   lines: readonly Line[],
   reads: readonly Read[],
@@ -761,6 +792,7 @@ function figureParas(
   boxes: readonly number[],
   pitch: (g: G) => boolean,
   math: Formulas,
+  source: () => string,
 ): {
   lines: ProseLine[]
   ends: ('space' | 'join' | 'drop')[]
@@ -832,7 +864,12 @@ function figureParas(
   const end = (a: number, b: number) => {
     const A = live[a]!.x.read.gs,
       B = live[b]!.x.read.gs
-    return lineEnd([...A, ...B].map(docGlyph), A.length, {})
+    if (W && HYPHENS_AT_END.test(glyphs[A.at(-1)!]?.u ?? '')) W.ends++
+    return lineEnd(
+      [...A, ...B].map(docGlyph),
+      A.length,
+      HYPHENS_AT_END.test(glyphs[A.at(-1)!]?.u ?? '') ? { source: source() } : {},
+    )
   }
   return parasOf(facts, end).map((para) => ({
     lines: para.lines.map((k) => live[k]!.x),
