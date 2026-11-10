@@ -37,10 +37,12 @@ export interface Prep {
    *   margins were cleared and have to be computed afresh), and the root's width is watched from here on — the
    *   column follows the window, and the zoom ratios with it. Only a width that really changed counts: scaling a
    *   table makes the watched root report a size change itself, and without that gate the two would oscillate.
-   * - **Leaving**: the queued pass is withdrawn, the watch ends, and what the passes wrote **inline** is taken back —
+   * - **Leaving**: the queued stacking is withdrawn, the watch ends, and what the passes wrote **inline** is taken back —
    *   the alignment margins and the margin-note offsets serve the two columns only, and in the other modes the
    *   site's own margins and the floats' own heights are right. What a pass wrote as a `data-axt-*` mark needs no
-   *   undoing: the style sheet reads those under side alone.
+   *   undoing: the style sheet reads those under side alone. **The queued pass stays**: it runs in the mode left for,
+   *   where it does what every mode needs (the footnotes placed, the stale split copies dropped) and stops before
+   *   side's steps; withdrawn, a footnote that arrived just before the switch stayed unplaced in that mode.
    * - **Either way** the split copies' duplicated media speak only where the original does not (§7.4b, issue #170):
    *   `aria-hidden` is an attribute, and no style sheet can switch it.
    */
@@ -222,7 +224,6 @@ export function createPrep(doc: Document, options: PrepOptions): Prep {
       if (!on) {
         unwatchWidth?.()
         unwatchWidth = null
-        coalescer.cancel()
         restack.cancel()
         clearPairMargins(doc)
         clearMarginNotes(doc)
