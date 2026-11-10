@@ -107,6 +107,9 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
 // ---- source/latex-front.mjs EMAIL_ADDRESS (an e-mail address as a text writes it, keepAddresses'), held equal to it by
 // tests/pdf-reader/locate-ink-today.test.ts
 export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
+// ---- source/latex-front.mjs ADDRESS_GROUP (several addresses at one domain written once, a group of their local parts before
+// it, keepGroups'), held equal to it by tests/pdf-reader/locate-ink-today.test.ts
+export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
 
 // ---- layout/file.mjs:255 (UNIT_FLAG)
 export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })

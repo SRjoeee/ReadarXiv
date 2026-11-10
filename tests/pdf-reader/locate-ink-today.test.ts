@@ -12,7 +12,7 @@ import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
 import { regionsOf } from '../../src/pdf-reader/engine/layout/stream.mjs'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
-import { EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
@@ -384,6 +384,35 @@ describe('today’s ink makers in the engine package', () => {
     // (one pattern for both readers: the front end's)
     expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
     expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
+  })
+  it('keep a group of local parts before one domain one run, over its words, its faces and its line’s break, as the front end keeps one (2611.00342v1)', () => {
+    // (a note "Contact: {…}@…" whose group is several words, and two lines that are addresses alone, a group broken after a
+    // comma, its braces in the symbol font's math face as \{ \} set them in text: today's read the local parts as words, sent,
+    // and they came back capitalised with full-width commas, 2611.00342v1 p1 under the names toggle. Kept, the group is one
+    // element of the note, and the lines of addresses alone no unit, a kept block)
+    const note = 'Contact: {alpha, beta-x, gamma}@example.org'
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: note, y: 688 },
+      { s: '{delta, eps,', y: 640 },
+      { s: 'zeta}@example.net, eta@example.com', y: 628 },
+    ], { points: [['bs1', 16], ['be1', 31 + note.length + 46]] })
+    const brace = (u: string) => pg.glyphs.findIndex((g, k) => k >= 31 + note.length && g.u === u)
+    for (const k of [brace('{'), brace('}')]) (pg.glyphs[k] as G).font = 'ABCDEF+CMSY10'
+    type Made = { kind: string; pieces: { t: string; s?: string; src?: string }[] }
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.kind !== 'inkheads')
+    }
+    const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
+    // (today's: every local part a word of the text)
+    expect(one(TODAY).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
+    expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{alpha,beta-x,gamma@example.org}>']])
+    // (one pattern for both readers: the front end's)
+    expect(T.ADDRESS_GROUP.source).toBe(ADDRESS_GROUP.source)
+    expect(T.ADDRESS_GROUP.flags).toBe(ADDRESS_GROUP.flags)
   })
   it('write each TeX special of an ink unit’s math run by the command that sets it in a formula, where today’s strips it: a brace alone no display', () => {
     // (2610.21377v1 p42's `$J_0\in\{0,\dots,J-1\}$`, its closing brace a run of its own between the upright digits, and 2608.06007v1
