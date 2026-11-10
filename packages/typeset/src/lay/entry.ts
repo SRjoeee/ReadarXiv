@@ -578,12 +578,13 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       owners.set(m.ord, { m, off, drawn: fl.map((l) => (m.dir ? pageBoxOf(nameBox(l), m.dir) : nameBox(l))) })
       return { ord: m.ord, page, state: 'laid', off, lines: inked(fl), lit: litOfFigure(m, page, fl) }
     }
-    // (a name drawn on its own: its word on its line, its text group off; its label's too where its crop is drawn with it)
+    // (a name drawn on its own: its word on its line, its text group off; its label's too where its crop is drawn with it, but
+    // on a page whose labels the add-on folded into the text's (Placed.fixed): hidden with the word, its crop drawn all the same)
     const nl = names.get(m.ord)
     if (nl) {
       const here = m.lines[0]![0] === page
       const moved = nl.some((l) => l[3].some((it) => 'src' in it && it.piece === 'label'))
-      const off = groupsOn(m, page) & (moved ? 1 | LABEL_KEPT : 1)
+      const off = groupsOn(m, page) & (moved ? 1 | LABEL_KEPT : 1) & ~(m.fixed ?? 0)
       owners.set(m.ord, { m, off, drawn: here ? nl.map(nameBox) : [] })
       return {
         ord: m.ord,

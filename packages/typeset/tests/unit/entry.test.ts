@@ -1390,6 +1390,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       ['9.', 138],
       ['LITERATUR', 156],
     ])
+    // (a page whose labels the add-on folded into the text's group (Placed.fixed): the label hidden with the word, its crop drawn)
+    const [merged] = layPage(part({ ...name, fixed: 4 }), rowsOf([], true), rules, metrics()).members
+    expect(merged).toMatchObject({ state: 'laid', off: 1 })
+    expect(merged!.lines[0]![3][0]).toMatchObject({ s: '9.', piece: 'label' })
   })
   it('sets a name in capitals where its style is the text’s capitals (Style.upper), none where they are faked small capitals', () => {
     // (cloud Codex on #623: the bundle states a name's case in Style.upper, the entry read Word.caps alone: "ABSTRACT" laid as
