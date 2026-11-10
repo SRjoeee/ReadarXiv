@@ -14,6 +14,20 @@ export const SIZE_STEP = 0.025
 /** device pixels of a side's text over other ink that a reader sees: three crossings of two strokes at reading size (a stroke
  *  of 10 pt type is 1.6 to 2.7 device px wide at the parity's 2.67 px a point) */
 export const OVER_MIN = 20
+/** a device pixel of the parity's drawing, in points: PDF.js's scale 1 (96/72 CSS px a point) at device scale 2 (render.mjs SCALE,
+ *  DPR); the bound the pixel comparison reads a glyph shown by (analyse.mjs partsOf: its ink there or within a device pixel) */
+export const DEVICE_PT = 72 / 96 / 2
+/**
+ * Whether a crop of a side's drawing stands where its source stands, so that `erased` reads its pixels as the original's in
+ * place: its source on this page and each edge of its drawn box within a device pixel of its source's (DEVICE_PT, the bound the
+ * pixel comparison reads by); else it is moved, and its drawn place is set aside (render.mjs `moved`). A crop is a whole copy of
+ * its source's ink wherever it stands. Within half a point, a crop the translation set 0.43 pt right of its source (2608.25210v2
+ * p3 t56's `[sentence_2]`, 1.15 device px) was in place, and its whole "[" read as the original's shown in part. `c`: [group,
+ * x0, y0, x1, y1 drawn, piece, sx0, sy0, sx1, sy1 its source, source page]
+ */
+export function inPlace(c, n) {
+  return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= DEVICE_PT)
+}
 /** an original glyph shown in part (an erasure's sliver): at least this many device px of it shown, and at least SLIVER_SHARE
  *  of it, at most PART_SHARE (more is the glyph kept, its edge a sub-pixel phase off) */
 export const SLIVER_PX = 6

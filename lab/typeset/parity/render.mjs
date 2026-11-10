@@ -28,6 +28,7 @@ import { L1_BUNDLES } from '../../../packages/typeset/tests/replay/l1.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse } from './analyse.mjs'
+import { DEVICE_PT, inPlace } from './fidelity.mjs'
 import { hyphFileOf, pdfOf, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
@@ -51,6 +52,8 @@ const PDFJS = join(ROOT, 'node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdf
 /** CSS px a point (PDF.js's scale 1) and device px a CSS px */
 export const SCALE = 96 / 72
 export const DPR = 2
+// (the measure's device pixel, fidelity.mjs DEVICE_PT, is this drawing's)
+if (Math.abs(DEVICE_PT - 1 / (SCALE * DPR)) > 1e-9) throw new Error(`DEVICE_PT ${DEVICE_PT} is not this drawing's device pixel`)
 const MIN_FREE_GIB = 12
 mkdirSync(join(WORK, 'raw'), { recursive: true })
 mkdirSync(join(OUT, 'img'), { recursive: true })
@@ -520,10 +523,6 @@ function partBox(l) {
 }
 function prepBox(l) {
   return [l.x0, Math.min(l.top, l.bottom), l.x1, Math.max(l.top, l.bottom)]
-}
-/** whether a crop is drawn where its source stands (its page, its box within half a point) */
-function inPlace(c, n) {
-  return c[10] === n && [1, 2, 3, 4].every((i) => c[i + 5] !== null && Math.abs(c[i] - c[i + 5]) <= 0.5)
 }
 
 /**
