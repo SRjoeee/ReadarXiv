@@ -20,6 +20,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 /** The directories whose files must stay platform-free */
 export const CORE = [/^src\/core\//, /^src\/providers\//, /^src\/cache\//]
@@ -436,7 +437,10 @@ export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf
   .split('\0')
   .filter(f => f && (CODE.test(f) || STYLESHEET.test(f)))
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// (the program's path made a URL by node, as the other scripts do: joined to `file://` by hand it equals this module's
+// address only for a path a URL spells unchanged, and from a checkout under one with a space in it the gate read nothing
+// and passed)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const files = coreFiles()
   const problems = files.flatMap(file => platformImportsOf(file, readFileSync(file, 'utf8')).map(({ spec, why }) => `${file}: imports ${spec} (${why})`))
   if (problems.length > 0) {
