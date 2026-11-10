@@ -3111,7 +3111,9 @@ stands between no unit's, or made on A), on that one's last row, stands after it
 that one is not the member before it there or moved itself (the rest of a run TeX set one after the other goes with it): the
 front end numbers the units it cuts out of what was one unit after every other unit of the source (`latex-front.mjs` `later`,
 so that no unit's number moves), and 2611.00342v1 p1's ten names after an IJCAI `\and` came after the body's units, the body
-taken for the member before the second name, the first name a flow of its own. Each row's names then run on from the one before, at the original's separation from its
+taken for the member before the second name, the first name a flow of its own. A babel name is no member of this rule,
+nor the one before: its place in a flow is its binding's (`leads`), which declines a unit whose first glyph stands off the
+name's baseline (2610.21085v1 pp. 7-8: each "Proof" and a proof that opens with a formula). Each row's names then run on from the one before, at the original's separation from its
 translation's ink. Not done then: a row's text did not move up into the room the row before it leaves (each TeX line kept its
 members). A centred row of several members, below.
 
