@@ -3331,11 +3331,17 @@ word list and no language's table; the original drawn when translation is off ne
   "App." 1 of 11, "Eq." 139 of 141, "Sec." 86 of 90. Live, keyless, 52 such abbreviations of 27 units of the corpus sent as they
   are and as the name (27 requests): the endpoint cut its source sentence at the abbreviation 10 times, never at the name; the
   item's word right before the number "Fig." 7 -> 15 of 15, "Tab." 0 -> 3 of 3 (read as a label), "App." 2 -> 5 of 5, "Eq." and
-  "Sec." alike both ways. 2610.22065v1 p5 as the chain sends it now: one sentence, the figure's word before its number.
+  "Sec." alike both ways. 2610.22065v1 p5 as the chain sends it now: one sentence, the figure's word before its number. Over
+  the corpus's 88 papers (stage 1a): 6,298 reference elements named in 82 papers; of 1,177 words with a full stop tied to a
+  reference, 793 are sent as the name in 38 papers ("Eq." 315, "Fig." 338, "Sec." 103, "fig." 16, "App." 12, "Sect.", "Prop.",
+  "Tab." 3 each); 182 stay for want of a name and 202 are no abbreviation of it. The prepare's statements move nothing else:
+  every part and add-on the same bytes, the units' ids and the dumps unchanged.
 - **Not this rule's**: a plural ("Figs.", "Eqs.", "Secs.": no prefix of the singular name; garbled alike on staging: "Eqs." 0 of 13);
   "Sec." to a subsection where hyperref alone names it ("subsection"); RevTeX's sections, whose anchors are `section*` (no
   name: 2610.10492v1's 64); amsmath's `\tag`ged equations (`AMS`, whose name is `\equationautorefname`, a command); a name pdfTeX
-  writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref).
+  writes with an accent command (`Ecuaci\'on`); a label with no anchor and no cleveref (an older TeX tree without hyperref);
+  IEEEtran without hyperref ("Fig." its only name). A paper whose names are another language's than its text (2307.16209v1's
+  babel Portuguese "Figura") is sent its own name, which Microsoft leaves as it is or transliterates.
   Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
 
 ## 19. The engine's contract
