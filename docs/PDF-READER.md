@@ -3850,7 +3850,12 @@ figure text of its own, translated as a word.
   reads the lines and the glyphs no run holds again after each join (p60's "Σ_{i=1}^k", whose lower limit spans the gap between
   the line's halves, had been read by neither half and left where it was as both moved). And where a formula element has ink no
   line took over or under it (a fraction's other line, a limit past half the size), the element would move and that ink stay:
-  the text stays the original's, the relation reading's fallback.
+  the text stays the original's, the relation reading's fallback. That ink is looked for one band's height over and under the
+  baseline, and no further: a formula's stacked parts (a limit, a denominator, a script) stand in the band directly over or under
+  its line. A glyph standing on another line's baseline is that line's, taken or not (2609.19644v1 p11: a table's number cells
+  under a group header's formula, a caption's last mark past its line's run gap). Reading the line nearest by baseline instead,
+  with no reach, was tried and withdrawn (2026-11-11): a display forms no line, so a display, its equation number or a folio 3
+  to 27 sizes below stood nearest a paragraph's last line (2609.19644v1: 33 of F1's 47 lines drawn against 39).
 - **The wrap's proof reads a show as it draws.** An element cuts a show of the figure's form where its text and its element meet,
   and the split writes each chunk's codes and adjustments. The proof read the show otherwise in two ways, neither of which draws
   anything: a show opening with an empty string, whose codes (none) the split does not write (2610.20967v1 p2), and an adjustment

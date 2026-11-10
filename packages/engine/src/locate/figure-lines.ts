@@ -580,7 +580,11 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
  * the text stays the original's, the fallback of the relation reading (no fact tells the ink is the element's). A glyph that
  * stands on another line's baseline (RUN_DY) is that line's, taken or not: a torn piece stands on no line's (a table's number
  * cells under a group header's formula, no unit, stand on their row's; a caption's last mark past its line's run gap on the
- * caption's: 2609.19644v1 p11)
+ * caption's: 2609.19644v1 p11). The reach is one band's height over and under the baseline, and no further: a formula's stacked
+ * parts (a limit, a denominator, a script) stand in the band directly over or under its line. Tried 2026-11-11 and withdrawn: no
+ * reach, the line nearest by baseline among the lines across the glyph (e32819331). A display forms no line (no unit takes a
+ * formula's run), so a display, its equation number or a folio 3 to 27 sizes below stood nearest a paragraph's last line
+ * (2609.19644v1: 33 of F1's 47 lines drawn there against 39)
  */
 function torn(
   ft: FigureText,
