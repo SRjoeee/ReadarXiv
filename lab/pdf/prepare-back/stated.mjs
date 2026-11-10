@@ -71,7 +71,7 @@ export const CAUSE = Object.freeze({
   pitch: 'kept as the original: set wholly in a face of one pitch',
   // ((n), F0 (rebuild/fig-text): today's unit now wholly a stretch of a figure text a decoration holds (a frame, an underline or
   // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
-  // text; not accepted until the coordinator rules)
+  // text: accepted, the coordinator's ruling of 2026-11-10)
   decoration: 'kept as the original: a stretch a decoration holds, carried with it',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display

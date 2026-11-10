@@ -664,6 +664,8 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     // ((k): the candidate's own unit's cause, no statement's)
     expect(accepted(CAUSE.pitch)).toBe(true)
+    // ((n), the coordinator's ruling of 2026-11-10 to lane fig-text: a stretch a decoration holds, kept with it)
+    expect(accepted(CAUSE.decoration)).toBe(true)
     expect(accepted('unwrapped')).toBe(false)
     expect(accepted('laid')).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)

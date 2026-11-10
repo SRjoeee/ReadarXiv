@@ -3713,7 +3713,7 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   eighteen units "lin2", which the differential pairs in their order (below).
 - **Stage 1a and the parity.** The dump marks each element so kept (`keptBy`: 'pitch', 'decoration'); today's unit now wholly
   such an element is stated (k), kept as the original for its pitch (the accepted entry's words), or (n), carried with its
-  decoration (not accepted until ruled), the holding unit named; a kept element reads as its source in a unit's glyph text, so
+  decoration (accepted, the coordinator's ruling of 2026-11-10), the holding unit named; a kept element reads as its source in a unit's glyph text, so
   the words beside it are held whole (f); today's text a contiguous part of a stand-in's is held whole by it (f), naming it, not
   "another reading, now arXiv's text" (g), which is characters our old compile did not set (restated over f0f: the 52 statements
   of (g) were each such). The parity joins several of today's units to one figure text by the exact text, its row theirs in
@@ -3722,7 +3722,9 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   their tones) have no row the parity can say, today's having translated the stretch now an element (the translator is sent them
   anew), and a figure text's bold share counts the original's command, which v2 keeps as its ink and does not count.
 - **Not this section's.** Highlighted prose is kept as the original's with its tone (2608.06701v1 p1's green "I made a mistake in
-  the path; it should be": a decoration); the backticked names there are in the figure's Helvetica, kept by their tones, not by a
+  the path; it should be": a decoration), accepted for now (kept, never garbled; the coordinator, 2026-11-10); later, after F3: a
+  tone over prose translated, its stretch a group drawn with the tone under its translation (a style group with a fill), names
+  and identifiers on tones elements still; the backticked names there are in the figure's Helvetica, kept by their tones, not by a
   face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
   order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
