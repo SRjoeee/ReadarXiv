@@ -527,6 +527,36 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('reads a sum with its limits as one formula of its line, its lower limit spanning the gap past the run gap (2609.19644v1 p60)', () => {
+    // ("analogue sub-bands are y_knn^band = Σ_{i=1}^k w_i y_i^band, and the …": the main line's math glyphs no run holds, its
+    // scripts runs of their own, the sum's lower limit "i=1" under the baseline the only ink across the 8 pt from "k" to "w")
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'analogue sub-bands are', font: T },
+        { text: 'y', font: 'CMMI10', run: false, x: 150 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 154.5 },
+        { text: '=', font: 'CMR10', run: false, x: 175 },
+        { text: 'P', font: 'CMEX10', run: false, x: 182, dy: 5.7 },
+        { text: 'k', font: 'CMMI7', size: 7, run: false, x: 190, dy: 3.8 },
+        { text: 'i', font: 'CMMI7', size: 7, run: false, x: 190, dy: -2.3 },
+        { text: '=1', font: 'CMR7', size: 7, run: false, x: 192, dy: -2.3 },
+        { text: 'w', font: 'CMMI10', run: false, x: 203 },
+        { text: 'y', font: 'CMMI10', run: false, x: 210 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 214.5 },
+        { text: ', and the rest', font: T, x: 232 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.ks).toEqual([0, 1, 2, 3])
+    const inEls = new Set(t!.els.flatMap((e) => e.glyphs))
+    const limit = G.flatMap((g, i) => (g.y < 699 && /[i=1]/.test(g.u) ? [i] : []))
+    expect(limit).toHaveLength(3)
+    expect(limit.every((g) => inEls.has(g))).toBe(true)
+  })
   it('reads a mark set between two words, no space either side and no math face, as the words’: "Near−monopoly" (2610.11256v1 p17)', () => {
     // (a plot's labels set with the minus sign for their hyphen: each one text, translated; between two letters of a formula
     // it is the formula's: "x−y" kept)

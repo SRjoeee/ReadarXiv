@@ -183,11 +183,14 @@ export function figureLinesOf(
         free.splice(q, 1)
         again = true
       }
+      // (F1: a script set beside a formula's glyph is its formula's line; the lines and the glyphs no run holds read again after
+      // each such join, so that a glyph under the joined line (a sum's lower limit) goes to it and the line closes the gap it
+      // spans: 2609.19644v1 p60, whose main line's math glyphs had gone to its superscript runs)
+      if (!again && scriptsJoined(lines, glyphs)) again = true
     }
     built.push({ p, glyphs, runOf, lines })
   })
-  // ---- F1: a script set beside a formula's glyph is its formula's line; then the faces that are a formula's own (fact 3)
-  for (const b of built) scriptsJoined(b.lines, b.glyphs)
+  // ---- F1: the faces that are a formula's own (fact 3)
   const math: Formulas = { faces: formulaFacesOf(built, textFaces, pitch), pitch }
   for (const { p, glyphs, runOf, lines } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order; its text F0's, code's
@@ -253,8 +256,10 @@ function mathGlyph(g: G): boolean {
 
 /** F1: a line's scripts. A line smaller than another (its size 0.9 of it at most), off its baseline by less than half its size
  *  but more than a baseline's tolerance (RUN_DY), within the run gap of its extent, one of the two holding a formula's glyph by
- *  facts (1) and (2): a script, a subscript word (\text{base}, "Mah" under KaTeX's P), joined to that line */
-function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
+ *  facts (1) and (2): a script, a subscript word (\text{base}, "Mah" under KaTeX's P), joined to that line. Whether it joined
+ *  any */
+function scriptsJoined(lines: Line[], glyphs: readonly G[]): boolean {
+  let joined = false
   for (let again = true; again; ) {
     again = false
     for (let i = 0; i < lines.length && !again; i++)
@@ -271,8 +276,10 @@ function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
         lines[i] = lineOf([...l.ks, ...r.ks], [...a.gs, ...b.gs], new Set([...a.free, ...b.free]), glyphs, a.fig)
         lines.splice(j, 1)
         again = true
+        joined = true
       }
   }
+  return joined
 }
 
 /** what the formula reading reads beside a glyph's own facts: the faces that are a formula's own (3), and a face of one pitch */
