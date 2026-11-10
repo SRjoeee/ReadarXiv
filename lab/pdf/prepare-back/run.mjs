@@ -216,7 +216,9 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   // (arXiv's glyphs on each page, as the engine read A: (f') reads a line's glyphs of ink)
   const glyphs = (p) => tally?.pagesA?.[p - 1]?.page?.glyphs ?? null
   // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
-  for (const { u, why, cause, holder } of statedOf(base, units, { trails, labels, glyphs })) {
+  // (a statement of a unit the candidate makes, (i): on that unit, its own reason kept in `stated.was`)
+  for (const { u, why, cause, holder, own } of statedOf(base, units, { trails, labels, glyphs })) {
+    if (own) { own.stated = { ord: u.ord, cause, ...(holder ? { holder } : {}), was: own.why }; own.why = why; continue }
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
     states.unlaid++
   }

@@ -6,7 +6,9 @@
 // id, at its place (its first line's page and box) or, with no line, at its ord (today's bundle's order, which the dump keeps),
 // with how it reads otherwise (CAUSE); none of its kind, a kept block of its kind at its place; none of either, a unit of the
 // author block's now holding its glyphs, a unit of the block standing for it after the name before's trail, one unit holding it
-// whole, or the block's units holding its line between them. Each cause the coordinator's rulings of 2026-11-09 and 2026-11-10
+// whole, or the block's units holding its line between them. And one the candidate makes and the guard left unmarked, held whole
+// by one drawn unit with its text ((i)): that statement (`own`, the candidate's unit) is written on the candidate's unit itself,
+// its own reason kept (`stated.was`), since the differential pairs today's unit with it. Each cause the coordinator's rulings of 2026-11-09 and 2026-11-10
 // accept is a check of the units (and of the trails the candidate's members carry, and of arXiv's glyphs on the line), never a
 // list of ids. Each statement names the unit of the candidate's that holds today's whole, where one does (`holder`): the parity
 // joins the two by it (lab/typeset/parity/join.mjs heldJoin)
@@ -61,6 +63,9 @@ export const CAUSE = Object.freeze({
 /** the ledger's classes of the blocks rule 8 makes names (ink-units.mjs: notes and orphans), which a names unit outside the author
  *  block is again */
 const LEDGER_OF_NAMES = new Set(['inknotes', 'inkorphan'])
+/** the reason a dump gives a unit the layout guard left unmarked (its marks taken out: locate finds none, run.mjs `unlocated:
+ *  <cause>`), which (i) reads */
+const UNMARKED = 'unlocated: marks'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
@@ -307,9 +312,24 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')
   const keyOf = (why) => Object.keys(CAUSE).find((k) => CAUSE[k] === why) ?? 'content'
+  // ((i), the coordinator's ruling of 2026-11-10, round 8 B2: a unit today drew (a loss, else nothing to state) that the candidate
+  // makes and leaves unlaid with the reason the guard's unmarking gives it (UNMARKED: its marks taken out, the paper compiled again), every line of it held by one drawn unit
+  // of the candidate's whose glyph text is its: held whole by another unit (2610.21084v1 t4, cas-common's abstract, whose lines an
+  // ink unit draws). The candidate's own unit of today's is the one the differential pairs it with: of its id, in ord order)
+  const seen = new Map()
+  const ownOf = (u) => {
+    const k = seen.get(u.id) ?? 0
+    seen.set(u.id, k + 1)
+    return units.filter((n) => !n.replaced && n.id === u.id).sort((a, b) => a.ord - b.ord)[k] ?? null
+  }
   for (const u of base) {
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
+      const own = ownOf(u)
+      const n = u.state === 'drawn' && own?.state === 'unlaid' && own.why === UNMARKED ? heldBy(u) : null
+      const t = n ? glyphTextOf(u) : ''
+      if (n && n !== own && n.state === 'drawn' && t && glyphTextOf(n) === t)
+        out.push({ u, own, why: `made on arXiv's page as ${n.id.slice(0, 12)}: ${CAUSE.held}`, cause: keyOf(CAUSE.held), holder: n.id })
       continue
     }
     // (a unit made on A stands only for one of today's ink units, kept blocks and figure texts)

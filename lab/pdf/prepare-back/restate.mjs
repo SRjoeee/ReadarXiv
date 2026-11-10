@@ -44,7 +44,14 @@ let papers = 0,
   stated = 0
 for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.prepare.json')).sort()) {
   const dump = JSON.parse(readFileSync(join(RUN, 'prepare', f), 'utf8'))
-  const units = dump.units.filter((u) => !u.replaced)
+  // (a unit of the dump's own a statement was written on, (i), its own reason again)
+  const units = dump.units
+    .filter((u) => !u.replaced)
+    .map((u) => {
+      if (u.stated?.was === undefined) return u
+      const { stated, ...rest } = u
+      return { ...rest, why: stated.was }
+    })
   if (existsSync(join(BASELINE, f))) {
     const base = JSON.parse(readFileSync(join(BASELINE, f), 'utf8')).units
     // (the trails the run's parts' members carry, as locate's members carried them to run.mjs)
@@ -65,7 +72,13 @@ for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.pre
     const pdf = pdfOf.get(f.slice(0, -'.prepare.json'.length))
     const pages = read && pdf && existsSync(pdf) ? await read(pdf) : null
     const glyphs = (p) => pages?.[p - 1] ?? null
-    for (const { u, why, cause, holder } of statedOf(base, units, { trails: trailsOf(els), labels, glyphs })) {
+    for (const { u, why, cause, holder, own } of statedOf(base, units, { trails: trailsOf(els), labels, glyphs })) {
+      if (own) {
+        own.stated = { ord: u.ord, cause, ...(holder ? { holder } : {}), was: own.why }
+        own.why = why
+        stated++
+        continue
+      }
       units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
       stated++
     }

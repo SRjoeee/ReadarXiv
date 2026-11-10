@@ -264,6 +264,37 @@ describe("(g) and (h): one that stands for today's unit and reads otherwise (the
   })
 })
 
+describe("(i) a unit the guard left unmarked, held whole by one drawn unit with its text (the coordinator's ruling of 2026-11-10, round 8 B2)", () => {
+  /** today's abstract paragraph on two lines, drawn (or not); v2's own unit of it, unlaid with the reason the dump gives it */
+  const today = (state = 'drawn') => {
+    const u = unit(id('a'), 4, 'abstract', [text('Scientific prediction under '), text('uncertainty needs more.')], [212, 472, 523.6])
+    u.lines.push({ page: 1, x0: 212, x1: 390, baseline: 514.1, top: 522.1, bottom: 512.1 })
+    return { ...u, state }
+  }
+  const own = (why: string) => ({ id: id('a'), ord: 4, kind: 'abstract', text: '', pieces: today().pieces, state: 'unlaid', why })
+  const ink = (s: string, state = 'drawn') => {
+    const n = unit(id('b'), 587, 'inkorphan', [text(s)], [212, 472, 523.6])
+    n.lines.push({ page: 1, x0: 212, x1: 390, baseline: 514.1, top: 522.1, bottom: 512.1 })
+    return { ...n, state }
+  }
+  it("states it held whole by another unit, on its own unit, the guard's reason kept (2610.21084v1 t4: cas-common's abstract)", () => {
+    const stated = statedOf([today()], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.')])
+    expect(said(stated)).toEqual([[4, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    expect(stated[0]).toMatchObject({ cause: 'held', holder: id('b'), own: { ord: 4, why: 'unlocated: marks' } })
+  })
+  it("states none where today did not draw it (no loss to state), the reason is another, the holder is not drawn or holds other text, or two units hold its lines", () => {
+    expect(said(statedOf([today('unlaid')], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: no ink'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('content difference: bonly'), ink('Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: marks'), ink('Scientific prediction under uncertainty needs more.', 'laid')]))).toEqual([])
+    expect(said(statedOf([today()], [own('unlocated: marks'), ink('4Scientific prediction under uncertainty needs more.')]))).toEqual([])
+    const half = ink('Scientific prediction under uncertainty needs more.')
+    half.lines = half.lines.slice(0, 1)
+    const other = { ...unit(id('c'), 588, 'inkorphan', [text('x')], [212, 390, 514.1]), state: 'drawn' }
+    expect(said(statedOf([today()], [own('unlocated: marks'), half, other]))).toEqual([])
+  })
+})
+
 describe("(f) a unit held whole by another unit: one v2 unit holds every line of it, its text a part of that unit's", () => {
   /** v2's reference holding today's two ink notes ("[64] …Mao." and ". Benchmarking …"), a label box before its first line */
   const holder = () => {
