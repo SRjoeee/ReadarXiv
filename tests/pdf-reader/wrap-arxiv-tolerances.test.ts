@@ -73,6 +73,37 @@ describe('wrapOf over arXiv’s producers', () => {
   })
 })
 
+describe('wrapOf: a show two groups share, as its producer wrote it', () => {
+  // (a figure text's element cuts a show of the figure's form where its text and its element meet (F0, F1); the split writes
+  // each chunk's codes and adjustments, and its proof reads the chunks joined against the show. Two shows of arXiv's producers
+  // the proof refused, the page's figures then left the original's: 2610.20967v1 p2 (a show opening with an empty string) and
+  // 2610.21098v1 p8, 2610.42112v1 p29 (an adjustment halfway between two millionths))
+  /** the page wrapped, each glyph in the group `groupOf` gives it by its place on the page */
+  async function splitOf(bytes: Uint8Array, groupOf: (i: number) => string) {
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() })
+    const page = await (await task.promise).getPage(1)
+    const ops = await page.getOperatorList()
+    const facts = alignOf(OPS as unknown as Record<string, number>, ops)
+    const ink = pageInk(OPS as unknown as Record<string, number>, ops, page.commonObjs, { rotate: 0, indices: true, turned: true })
+    await task.destroy()
+    const paths = ink.paths ?? []
+    const plan = planOf(ink.glyphs, ink.glyphs.map((_, i) => groupOf(i)), paths, paths.map(() => null), facts)
+    const made = await wrapOf(bytes, new Map([[1, { facts, ...plan }]]), { PL, deflate, inflate })
+    if ('refused' in made) throw new Error(`${made.refused}: ${made.why}`)
+    return made
+  }
+  it('splits a show that opens with an empty string: it draws nothing, and the proof reads it as nothing (2610.20967v1 p2)', async () => {
+    const made = await splitOf(await pdfOf('BT /F1 10 Tf 72 700 Td [() -334 (ab) 10 (cd)] TJ ET\n'), (i) => (i < 2 ? '0.1.t' : '1.1.t'))
+    expect(made.pages.get(1)).toMatchObject({ ok: true })
+    expect([...made.groups.keys()].sort()).toEqual(['0.1.t', '1.1.t'])
+  })
+  it('splits a show whose adjustment stands halfway between two millionths: read at the precision the split writes it', async () => {
+    const made = await splitOf(await pdfOf('BT /F1 10 Tf 72 700 Td [(ab) -0.5859375 (cd)] TJ ET\n'), (i) => (i < 2 ? '0.1.t' : '1.1.t'))
+    expect(made.pages.get(1)).toMatchObject({ ok: true })
+    expect([...made.groups.keys()].sort()).toEqual(['0.1.t', '1.1.t'])
+  })
+})
+
 describe('wrapOf for the prepare: the section alone', () => {
   // (the back half's wrap keeps the add-on alone: the section appended to A, never A and it composed, nor a digest of the whole,
   // which nothing of the prepare reads. Composing them held a copy of A as long as A, and the digest's job another, at the

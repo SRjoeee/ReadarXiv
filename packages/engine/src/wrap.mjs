@@ -645,16 +645,20 @@ function graphWhy(finalBytes, bytes, { PL, out, groups, forms = [] }) {
 
 /** an operand's text for comparison (a string by its bytes, hex or not) */
 const operand = v => (v?.t === 'str' ? `s${hex(v.b)}` : v?.t === 'name' ? `/${v.v}` : v?.t === 'dict' ? `<<${v.v.map(operand).join(' ')}>>` : Array.isArray(v) ? `[${v.map(operand).join(' ')}]` : v?.t === 'kw' ? v.v : String(v))
-/** a show's elements: its codes as one byte run between numbers, adjacent numbers summed, zeros dropped */
+/** a show's elements: its codes as one byte run between numbers, adjacent numbers summed, zeros dropped. What it draws: an empty
+ *  string is none (it shows no glyph and moves nothing, and a split, which writes codes, writes none of it: 2610.20967v1 p2's
+ *  figure shows open with one), and a number is read as a split writes it (`fmt`, six places: an adjustment halfway between two
+ *  millionths, as 2610.21098v1's -0.5859375, is written -0.585938, which rounding it here to the nearest millionth up read as
+ *  -0.585937) */
 function elementsOf(o) {
   const arr = o.op === 'TJ' ? o.args[0] : [o.args[o.op === '"' ? 2 : 0]]
   const out = []
   for (const el of Array.isArray(arr) ? arr : []) {
     const l = out.at(-1)
     if (typeof el === 'number') { if (typeof l === 'number') out[out.length - 1] = l + el; else out.push(el) }
-    else if (el?.t === 'str') { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
+    else if (el?.t === 'str' && el.b.length) { if (l instanceof Uint8Array) out[out.length - 1] = concat([l, el.b]); else out.push(el.b) }
   }
-  return out.filter(v => v !== 0).map(v => (typeof v === 'number' ? `n${Math.round(v * 1e6) / 1e6}` : `s${hex(v)}`)).join(',')
+  return out.map(v => (typeof v === 'number' ? `n${fmt(v)}` : `s${hex(v)}`)).filter(v => v !== 'n0').join(',')
 }
 function sameOps(a, b) {
   let j = 0
