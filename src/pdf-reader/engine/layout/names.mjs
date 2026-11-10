@@ -35,3 +35,23 @@ export function counterAfter(x1, size, next) {
   const text = next.slice(0, k).map(g => g.u ?? '').join('').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
   return text && COUNTER_FORM.test(text) ? k : 0
 }
+/**
+ * The number TeX set right before a babel name at its line's start, where a class numbers a heading it sets itself (ICASSP's
+ * spconf.sty: thebibliography's \section{References}, its \@svsec "9." and \hskip 0.6em before the word; LaTeX's own
+ * \@seccntformat, the number and a \quad): of `before`, the glyphs that stand before the name on its line in reading order
+ * ({ u, x0, x1, size }), all of them, one word (each within a word's space of the next), its last ending within COUNTER_GAP of
+ * `size` before the name's start `x0`, a counter's form with a digit in it (a section's number as LaTeX prints it: "9", "9.",
+ * "2.3", "A.1"; a letter or a roman numeral alone is no number here). The rule counterAfter's mirror, and narrower: nothing
+ * else on the line before it. The wrap gives those glyphs the name's label group (own.mjs MR 6c), so that the line is laid
+ * whole: the name's word after its number, centred as TeX centred the two. Returns how many of `before` the number is: 0 for
+ * none
+ */
+export function counterBefore(x0, size, before) {
+  const n = before.length
+  if (!n || !(size > 0)) return 0
+  const last = before[n - 1]
+  if (last.x1 > x0 + 0.1 || x0 - last.x1 > COUNTER_GAP * size) return 0
+  for (let k = n - 1; k > 0; k--) if (before[k].x0 - before[k - 1].x1 >= WORD_SPACE * Math.max(before[k].size ?? size, before[k - 1].size ?? size)) return 0
+  const text = before.map(g => g.u ?? '').join('').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+  return text && /\d/u.test(text) && COUNTER_FORM.test(text) ? n : 0
+}

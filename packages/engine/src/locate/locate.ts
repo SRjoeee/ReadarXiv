@@ -212,6 +212,9 @@ const LABEL_KIND: Record<string, Label['kind']> = {
   heading: 'head',
   theorem: 'head',
   footnote: 'mark',
+  // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own.mjs MR 6c),
+  // a heading's number as a section's is: 2610.20967v1's "9. REFERENCES")
+  name: 'head',
 }
 
 /** a unit's pieces by id, spans opened */

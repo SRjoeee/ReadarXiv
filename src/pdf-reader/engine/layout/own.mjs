@@ -27,7 +27,9 @@
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell;
-//   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
+//   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`; 6b. the counter TeX set after it on its line, no unit's, its own;
+//      6c. the number TeX set right before it at its line's start, no unit's, TeX's stream setting nothing between, its label
+//      `n<occ>.l` (names.mjs counterBefore: a heading its class numbers itself);
 //   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.mjs); an image TeX
 //      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
@@ -50,7 +52,7 @@ import { UNHIDDEN } from '@readarxiv/engine'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
 import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
-import { counterAfter } from './names.mjs'
+import { counterAfter, counterBefore } from './names.mjs'
 
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
@@ -786,6 +788,25 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     next.sort((a, b) => G[a].x0 - G[b].x0 || a - b)
     const k = counterAfter(G[last].x1, size, next.map(g => G[g]))
     if (k && next.slice(0, k).every(g => O[g] === null && colOf(G[g].x0, G[g].x1) === col)) for (const g of next.slice(0, k)) O[g] = group
+  }
+  // ---- each name's number (MR 6c): the number TeX set right before it at its line's start (a heading its class numbers itself:
+  // spconf.sty's thebibliography sets \section{References}, "9." and \hskip 0.6em before the word, 2610.20967v1), no unit's, in
+  // the name's column, TeX's stream setting nothing between it and the name's first glyph: the name's label, `n<occ>.l`, so that
+  // it moves with the name's word and the line TeX centred is laid whole (names.mjs counterBefore). Left the page's, the line
+  // was read off the word alone, justified, and its translation set from the word's start after the number that stayed
+  for (const [group, p] of named) {
+    const G = pages[p - 1].glyphs, O = gOwn[p - 1], colOf = columnsAt(pages[p - 1])
+    let first = -1, x1 = -Infinity
+    for (let g = 0; g < G.length; g++) if (O[g] === group) { if (first < 0) first = g; x1 = Math.max(x1, G[g].x1) }
+    if (first < 0) continue
+    const col = colOf(G[first].x0, x1)
+    const y = G[first].y, size = G[first].size, before = []
+    for (let g = 0; g < G.length; g++) if (O[g] !== group && /\S/.test(G[g].u ?? '') && Math.abs(G[g].y - y) < 0.25 * Math.max(G[g].size, size, 5) && (G[g].x0 + G[g].x1) / 2 < G[first].x0 && colOf(G[g].x0, G[g].x1) === col) before.push(g)
+    before.sort((a, b) => G[a].x0 - G[b].x0 || a - b)
+    const k = counterBefore(G[first].x0, size, before.map(g => G[g]))
+    // (TeX set the number right before the name: its glyphs the stream's last before the name's first)
+    const stream = [...before].sort((a, b) => a - b)
+    if (k && stream.every((g, q) => O[g] === null && g === first - stream.length + q)) for (const g of before) O[g] = `${group}.l`
   }
   return { glyphs: gOwn, boxes: bOwn, units: unitOf, leads, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }
