@@ -516,6 +516,78 @@ describe("(j) a unit split: its text one contiguous part of consecutive v2 units
   })
 })
 
+describe("(l) today's ink unit a source unit of v2's now holds, its formulas read apart (the coordinator's ruling of 2026-11-10, round 8 B5)", () => {
+  // (2610.21377v1 pp. 34-43: today's front end lost TeX's math at a `$…\)` and read the pages off arXiv's ink; v2's reads them
+  // as TeX's paragraphs. Today's ink unit splits a formula into placeholders and the upright digits its ledger read as text,
+  // v2's unit holds it as one math element: each formula's span one placeholder on both sides, the rest exactly today's)
+  // (today's placeholders each an element of its ink, as the dumps state an ink unit's formulas)
+  const today = (pieces: DumpPiece[]) => {
+    const u = on(unit(id('a'), 472, 'inkorphan', pieces), box(173.4, 384.7, 607.12, 611.8, 604))
+    u.elements = pieces.flatMap((p, k) => (p.kind === 'ph' ? [{ k, kind: 'math', segs: [] }] : []))
+    return [u]
+  }
+  const source = (pieces: DumpPiece[], math: number[]) => {
+    const n = { ...on(unit(id('b'), 215, 'para', pieces), box(59.53, 537.43, 607.12, 615, 600)), state: 'drawn' }
+    n.elements = math.map((k) => ({ k, kind: 'math', segs: [] }))
+    return n
+  }
+  const v2 = source(
+    [text('Hence '), ph('$\\pi=0$'), text(' on '), ph('$[a,b]$'), text('. By symmetry, also '), ph('$\\pi=0$'), text(' on '), ph('$(0,1)$'), text('. We conclude.')],
+    [1, 3, 5, 7],
+  )
+  const why = `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.seen}`
+  it('states it held, today\'s formula runs and their digits one placeholder, its text a contiguous stretch of v2\'s', () => {
+    const base = today([text('. By symmetry, also '), ph('$π=$'), text(' 0 on '), ph('$($'), text('0'), ph('$,$'), text(' 1'), ph('$)$'), text('.')])
+    expect(said(statedOf(base, [v2]))).toEqual([[472, why]])
+  })
+  it('states nothing where a word differs, today\'s text has a hole v2 fills, or the holder is no source unit', () => {
+    expect(statedOf(today([text('. By symmetry, too '), ph('$π=$'), text(' 0 on')]), [v2])).toEqual([])
+    expect(statedOf(today([text('Hence '), ph('$π=$'), text(' 0 on. By symmetry')]), [v2])).toEqual([])
+    expect(statedOf(today([text('. By symmetry, also '), ph('$π=$'), text(' 0 on')]), [{ ...v2, kind: 'inkfigures' }])).toEqual([])
+  })
+  it('states nothing for a unit of formulas alone: no text of today\'s to read', () => {
+    expect(statedOf(today([ph('$π=$'), text(' 0')]), [v2])).toEqual([])
+  })
+})
+
+describe("(l') what the reader sees: v2's elements and label as their ink prints them, TeX's ligatures, small capitals by their face (round 8 B5)", () => {
+  // (2610.21377v1: "Proposition 2.6" a \cref, "4.7" a heading's label, "state--adjoint", the headings' small capitals: each read
+  // on both sides as arXiv prints it)
+  const ink = (s: string, x: number, y: number, base = 'LinLibertineT') =>
+    [...s].map((u, i) => ({ ...glyph(u, x + 5 * i, x + 5 * i + 5, y, 10), base }))
+  const today = (pieces: DumpPiece[], at: Line) => {
+    const u = on(unit(id('a'), 465, 'inkorphan', pieces), at)
+    u.elements = pieces.flatMap((p, k) => (p.kind === 'ph' ? [{ k, kind: 'math', segs: [] }] : []))
+    return [u]
+  }
+  const source = (kind: string, pieces: DumpPiece[], els: { k: number; kind: string; segs: Line[] }[], at: Line) => {
+    const n = { ...on(unit(id('b'), 215, kind, pieces), at), state: 'drawn' }
+    n.elements = els
+    return n
+  }
+  const why = `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.seen}`
+  it('reads a reference of v2\'s by its ink, the formulas apart', () => {
+    const at = box(60, 400, 600, 608, 598)
+    const v2 = source('para', [text('as in '), ph('\\cref{p}'), text(' we have '), ph('$x$'), text(' here.')], [{ k: 1, kind: 'ref', segs: [box(90, 165, 600, 607, 599)] }, { k: 3, kind: 'math', segs: [] }], at)
+    const glyphs = () => ink('Proposition2.6', 90, 600)
+    expect(said(statedOf(today([text('as in Proposition 2.6 we have '), ph('$x$'), text(' here.')], at), [v2], { glyphs }))).toEqual([[465, why]])
+    expect(statedOf(today([text('as in Lemma 3.1 we have '), ph('$x$'), text(' here.')], at), [v2], { glyphs })).toEqual([])
+  })
+  it("reads v2's label by its ink, and its text through TeX's ligatures", () => {
+    const at = box(60, 400, 600, 608, 598)
+    const head = { ...source('heading', [text("The state--adjoint pair, ``dual'' and Baire's---all")], [], at), label: [{ kind: 'number', ...box(60, 75, 600, 607, 599) }] }
+    const glyphs = () => ink('4.7', 60, 600)
+    expect(said(statedOf(today([text('4.7 The state–adjoint pair, “dual” and Baire’s—all')], at), [head], { glyphs }))).toEqual([[465, why]])
+  })
+  it('compares letters case apart only where today\'s glyphs are in a face of small capitals', () => {
+    const at = box(60, 400, 600, 608, 598)
+    const head = source('heading', [text('Proof of Proposition')], [], at)
+    const set = (base: string) => () => ink('proofofproposition', 60, 600, base)
+    expect(said(statedOf(today([text('proof of proposition')], at), [head], { glyphs: set('CMCSC10') }))).toEqual([[465, why]])
+    expect(statedOf(today([text('proof of proposition')], at), [head], { glyphs: set('CMR10') })).toEqual([])
+  })
+})
+
 describe("a stand-in that reads otherwise and the units after it: (j) from the stand-in, (g) over its parts (the coordinator's rulings of 2026-11-10, round 8 B3)", () => {
   // (rebuild/author-lines-3 parts an ink unit where TeX ended a paragraph: today's one unit over two of TeX's paragraphs, v2's
   // two, the first of today's kind at its place, so a stand-in)
@@ -660,7 +732,7 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       new RegExp(e.match).test(cause),
     )
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split, CAUSE.arxivText, CAUSE.wrapped])
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split, CAUSE.arxivText, CAUSE.wrapped, CAUSE.seen])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     // ((k): the candidate's own unit's cause, no statement's)
     expect(accepted(CAUSE.pitch)).toBe(true)

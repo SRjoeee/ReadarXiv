@@ -802,11 +802,20 @@ function endOfEnv(s, i, name) { // i just after \begin{name}; returns [bodyEnd, 
   }
   return [s.length, s.length]
 }
+// (an inline formula ends at TeX's math shift, whichever of the two opened it: LaTeX's \( is `$` outside math and its \) is `$`
+// inside inline math (latex.ltx), so `$…\)` and `\(…$` are formulas TeX sets whole. Pairing a `$` with the next `$` alone read
+// every formula after a `$…\)` as text and the text between as formulas, to the document's end: 2610.21377v1 p. 35, its
+// appendix one unit TeX's marks never closed)
 function mathEnd(s, i) { // s[i] is '$' or starts \( \[ ; returns index after the closing delimiter
   if (s.startsWith('$$', i)) { const e = s.indexOf('$$', i + 2); return e < 0 ? -1 : e + 2 }
-  if (s[i] === '$') { for (let j = i + 1; j < s.length; j++) { if (s[j] === '\\') { j++; continue } if (s[j] === '$') return j + 1 } return -1 }
-  const close = s[i + 1] === '(' ? '\\)' : '\\]'
-  const e = s.indexOf(close, i + 2)
+  if (s[i] === '$' || s[i + 1] === '(') {
+    for (let j = s[i] === '$' ? i + 1 : i + 2; j < s.length; j++) {
+      if (s[j] === '\\') { if (s[j + 1] === ')') return j + 2; j++; continue }
+      if (s[j] === '$') return j + 1
+    }
+    return -1
+  }
+  const e = s.indexOf('\\]', i + 2)
   return e < 0 ? -1 : e + 2
 }
 
