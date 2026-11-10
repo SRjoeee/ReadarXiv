@@ -177,6 +177,7 @@ describe('mergesIn', () => {
     expect(merge('pushd x && gh pr merge 603 -R SRjoeee/ReadarXiv').unreadable).toBe(false)
     expect(merge('cd x && gh pr merge https://github.com/SRjoeee/ReadarXiv/pull/603').unreadable).toBe(false)
     expect(merge('git fetch && cd wt && gh pr merge 603')).toMatchObject({ dirs: ['wt'], unreadable: false })
+    expect(merge('command -v gh >/dev/null && gh pr merge 603').unreadable).toBe(false)
     expect(merge('git fetch && cd wt && bash -c "gh pr merge 603"')).toMatchObject({ dirs: ['wt'], unreadable: false })
     // what a subshell does to the directory and the variables ends with it (#635, Codex); the branch it leaves is left
     expect(merge('(true; cd ../other; true); gh pr merge 411 --merge')).toMatchObject({ ref: '411', dirs: [], unreadable: false })
@@ -221,6 +222,10 @@ describe('mergesIn', () => {
       'pushd x && gh pr merge 603',
       'cd "$DIR" && gh pr merge 603',
       'cd x || true; gh pr merge 603',
+      // a word that runs a builtin in this shell runs `cd` in this shell (#635, Codex)
+      'command cd ../release && gh pr merge 411 --merge',
+      'builtin cd x; gh pr merge 603',
+      'noglob pushd x && gh pr merge 603',
       'test -d wt && cd wt; gh pr merge 603',
       'cd - && gh pr merge 603',
       'if true; then cd x; fi; gh pr merge 603',
@@ -453,6 +458,15 @@ describe('mergesIn', () => {
     expect(merge('gh api https://ghe.example.com/api/graphql -F query=@q.graphql').files).toEqual(['q.graphql'])
     expect(merge(`gh api "$ENDPOINT" -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'`).unreadable).toBe(true)
     expect(merges(`gh api https://api.github.com/graphql -f query='query { viewer { login } }'`)).toEqual([])
+    // an endpoint the shell composes may be the GraphQL one (#635, Codex): a query the line does not show is then a
+    // request nobody can read, and a body file says what it sends; a path that ends otherwise is no GraphQL endpoint
+    expect(merges('ENDPOINT=graphql; gh api "$ENDPOINT" --input mutation.json').at(-1)).toMatchObject({ files: ['mutation.json'], unreadable: false })
+    expect(merge('gh api "$ENDPOINT" -f query="$QUERY"').unreadable).toBe(true)
+    expect(merge('gh api "$BASE/graphql" --input -').unreadable).toBe(true)
+    expect(merges('gh api $R/123/replies --input body.json')).toEqual([])
+    expect(merges('gh api "$ENDPOINT" -f body="$NOTE"')).toEqual([])
+    expect(merge('gh api -X PUT "$R/merge" --input body.json')).toMatchObject({ unreadable: true })
+    expect(merge('gh api -X PUT "$R/merge" --input body.json').files).toBeUndefined()
     // an option the shell composes whole, beside the endpoint, may be the query (#635, Codex)
     expect(merges(`FIELD='-fquery=mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql "$FIELD"`).at(-1)).toMatchObject({ unreadable: true })
     expect(merge('gh api graphql $ARGS').unreadable).toBe(true)

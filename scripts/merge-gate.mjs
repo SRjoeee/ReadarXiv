@@ -446,27 +446,29 @@ function apiArguments(words, dynamic, first) {
     return { kind: 'api', ref: number, repo: blanks[0] || blanks[1] ? null : `${owner}/${name}`, refAt: at, repoAt: at, ...(blanks[0] !== blanks[1] ? { composed: true } : {}) }
   }
   // no merge endpoint in sight, but the endpoint, the first of the bare words, is one the shell composes
-  // (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can read, unless the words after its last expansion
-  // end the path some other way. An endpoint whose path is in sight is that path, whatever else the line holds.
+  // (`"$ENDPOINT"`, `$R/merge`). An endpoint whose path is in sight is that path, whatever else the line holds.
   const composed = bare[0]
-  if (composed === undefined || !dynamic[composed] || !mayEndInMerge(words[composed])) return null
-  if (!put && !bare.slice(1).some(k => dynamic[k])) return null
-  return { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
+  if (composed === undefined || !dynamic[composed]) return null
+  // a PUT to one that may end in `/merge` is a merge nobody can read
+  if (mayEndWith(words[composed], '/merge') && (put || bare.slice(1).some(k => dynamic[k]))) return { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
+  // and one that may be the GraphQL endpoint makes of a query the line does not show a request nobody can read, and
+  // of a body file what the request sends
+  return mayEndWith(words[composed], 'graphql') && (query.unseen || query.files.length > 0) ? query : null
 }
 
 /** An endpoint without the query or the fragment that may follow its path */
 const pathOf = word => word.split(/[?#]/, 1)[0]
 
-/** Whether a word the shell expands may come out with a path ending in `/merge`: what stands after its last
+/** Whether a word the shell expands may come out with a path that ends in `ending`: what stands after its last
  *  expansion is all the line says of its end */
-function mayEndInMerge(whole) {
+function mayEndWith(whole, ending) {
   const word = pathOf(whole)
   const expansions = [...word.matchAll(/\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*|`[^`]*`/g)]
   const last = expansions.at(-1)
   // (a path with no expansion in it is what it reads as: what the shell decides is then in the query after it)
   if (last === undefined) return false
   const tail = word.slice(last.index + last[0].length)
-  return tail.length >= '/merge'.length ? tail.endsWith('/merge') : '/merge'.endsWith(tail)
+  return tail.length >= ending.length ? tail.endsWith(ending) : ending.endsWith(tail)
 }
 
 /** The merge a `gh` at word `at` makes, or null: `gh pr merge` or `gh api`, past the flags that may stand before
@@ -501,6 +503,8 @@ function ghCall(words, dynamic, at) {
 const RESERVED = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'fi', 'do', 'done', 'while', 'until', 'for', 'case', 'esac', 'time', 'function'])
 /** Commands, besides a plain `cd`, after which the shell may stand in another directory */
 const MOVES = new Set(['pushd', 'popd', 'source', '.', 'eval'])
+/** Words before a builtin that leave it running in this shell */
+const RUNS_BUILTINS = new Set(['command', 'builtin', 'noglob', 'nocorrect', '-'])
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
 /** An assignment that changes which repository `gh` works on: its own variables (`GH_REPO`, `GH_HOST`), and git's
@@ -637,7 +641,7 @@ function lineOf(commands, text) {
     if (heads || at >= words.length) continue
     if (!inert(words, dynamic, at)) opaque = true
     const name = words[at].slice(words[at].lastIndexOf('/') + 1)
-    if (stack.length > 0 && (name === 'cd' || MOVES.has(name))) loopMoves = true
+    if (stack.length > 0 && (name === 'cd' || MOVES.has(name) || RUNS_BUILTINS.has(name))) loopMoves = true
   }
   return { settings, loopsOf, opaque, loopMoves }
 }
@@ -684,7 +688,9 @@ function move(context, { words, dynamic, before, after }, start) {
   } else {
     // (`git remote`, `git config`, `gh repo set-default`: the directory stays, the repository `gh` finds in it may not)
     const rebinds = (head === 'git' && words.slice(start + 1).some(word => word === 'remote' || word === 'config') && words.length > start + 2 && !words.includes('-v')) || (head === 'gh' && words.includes('set-default'))
-    if (MOVES.has(head) || rebinds) context.dirKnown = false
+    // (`command cd x`, `builtin pushd x`, zsh's `noglob cd x`: the builtin runs in this shell all the same)
+    const carried = RUNS_BUILTINS.has(head) && words.slice(start + 1).some(word => word === 'cd' || MOVES.has(word))
+    if (MOVES.has(head) || rebinds || carried) context.dirKnown = false
     context.branchKnown = false
   }
 }
