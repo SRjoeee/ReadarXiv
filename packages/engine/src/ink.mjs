@@ -1021,7 +1021,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
  * alignment's rows each end with one); a display's start with no end is one the source ended with $$, and states no region
  */
 export function regionsOfPoints(points, glyphCount) {
-  const open = new Map(), closed = new Map(), out = []
+  // (`empty`: a display's start whose first end stood on it, an alignment's first row painting nothing (`\\notag\\\\`): its
+  // region from that start, once a later row's end passes it)
+  const open = new Map(), closed = new Map(), empty = new Map(), out = []
   let bodyStart = null
   const push = (kind, from, to) => { if (to > from) { const r = { kind, from, to }; out.push(r); return r } return null }
   for (const p of points) {
@@ -1039,14 +1041,20 @@ export function regionsOfPoints(points, glyphCount) {
     // (an end its region's start closed already: a code paragraph's second one, which TeX set where the paragraph's group gave
     // its state back, closes nothing; a display alignment's next row's, which carries its region on to it)
     if (!open.has(key) && closed.has(key)) {
-      const r = closed.get(key)
-      if (r && TO_LAST_END.has(kind)) r.to = Math.max(r.to, Math.min(p.glyph, glyphCount))
+      const r = closed.get(key), to = Math.min(p.glyph, glyphCount)
+      if (r && TO_LAST_END.has(kind)) r.to = Math.max(r.to, to)
+      else if (!r && empty.has(key)) {
+        const n = push(kind, empty.get(key), to)
+        if (n) { closed.set(key, n); empty.delete(key) }
+      }
       continue
     }
     const from = open.get(key) ?? (PAIRED.has(kind) ? null : bodyStart)
     if (from === null || from === undefined) continue
     open.delete(key)
-    closed.set(key, push(kind, from, Math.min(p.glyph, glyphCount)))
+    const r = push(kind, from, Math.min(p.glyph, glyphCount))
+    if (!r && TO_LAST_END.has(kind)) empty.set(key, from)
+    closed.set(key, r)
   }
   return out.sort((a, b) => a.from - b.from)
 }
