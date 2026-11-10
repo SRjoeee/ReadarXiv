@@ -3848,7 +3848,8 @@ bug? The original sets "Figure 1." at 47 in the margin and every line of its tex
   its first line's measure start (Line x0 and m0, Label.ink; two text lines at least), the label is laid in its hang and the text
   keeps the measure TeX gave it: the block's first slot starts at the label and states the text's start, and the first text after
   the label starts there, or right after the label where the label drawn needs more room than the hang; the label and the room up
-  to the text take no slack, a box as TeX's hang is. Drawing the label anew changes its words, not where TeX set them. A label
+  to the text neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
+  shrinks: the reader gate's I5 found 9 lines past their slot where it had). Drawing the label anew changes its words, not where TeX set them. A label
   kept as ink (a reference's "[12]", a heading's "A.4") kept its hang already: its block's edge is the text's.
 - **Over the 88** (r14's parts, every page laid with identity rows by the typesetter before and after, lane b5-fixes): 55
   captions hang their label, in 4 papers; the 35 of them whose label is drawn anew are laid otherwise (29 figures', 6 tables':
