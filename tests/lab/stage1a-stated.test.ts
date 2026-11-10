@@ -6,11 +6,12 @@
 // keptJoin reads them; (b') a unit whose glyphs a unit of the author block's (the names toggle) now holds; (c) a line whose marks
 // are the name before's trail (rebuild/front-matter); (d) (a) with an element's characters in another order; (e) a unit whose
 // lines v2 keeps whole as the original's inside a display the engine states; (f) a unit one v2 unit holds whole, its text a part
-// of that unit's (a kept block holding it stated apart, not accepted). Synthetic units in the dumps' form.
+// of that unit's (a kept block holding it stated apart, not accepted); (k), 2026-11-10, a unit the prepare keeps for its text set
+// wholly in a face of one pitch, the candidate's own unit's cause. Synthetic units in the dumps' form.
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { CAUSE, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
+import { CAUSE, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
 import { scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
 
 type DumpPiece = { kind: string; s?: string; src?: string }
@@ -405,6 +406,25 @@ describe('what the parity reads of a statement: the unit of v2\'s that holds tod
   })
 })
 
+describe("(k) a unit the prepare keeps for its text set wholly in a face of one pitch (the owner's ruling of 2026-11-10)", () => {
+  // (Rule 1, PDF-READER §18.22: a prompt in `\ttfamily`, a figure's code line, kept as the paper has it. Today translated them,
+  // so the differential read each as a loss: 2608.25210v2's prompts (laid), 2608.06701v1's figure code (unwrapped). The cause is
+  // the candidate's own unit's, by the mark the prepare writes (the dump's `keptBy: 'pitch'`, the engine's `pitch`), the mark the
+  // parity's ruling reads; a unit kept otherwise (a code environment's kept block, a crowded figure text) states none)
+  it("states the cause of a unit marked kept by the rule, and of no other", () => {
+    expect(keptWhyOf({ id: id('a'), kept: true, keptBy: 'pitch', state: 'laid' })).toBe(CAUSE.pitch)
+    expect(keptWhyOf({ id: id('a'), keptBy: 'pitch', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.pitch)
+    expect(keptWhyOf({ id: id('a'), kept: true, state: 'laid' })).toBe(null)
+    expect(keptWhyOf({ id: id('a'), state: 'laid', why: 'unwrapped' })).toBe(null)
+    expect(keptWhyOf({ id: id('a'), state: 'drawn' })).toBe(null)
+  })
+  it('is no statement of a unit the candidate does not make: the candidate makes it, by its id', () => {
+    const base = [unit(id('a'), 7, 'para', [text('{ "key": 1 }')])]
+    const units = [{ ...unit(id('a'), 7, 'para', [text('{ "key": 1 }')]), kept: true as const, keptBy: 'pitch' }]
+    expect(statedOf(base, units)).toEqual([])
+  })
+})
+
 const ACCEPTANCE = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
@@ -414,6 +434,10 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
     for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
+    // ((k): the candidate's own unit's cause, no statement's)
+    expect(accepted(CAUSE.pitch)).toBe(true)
+    expect(accepted('unwrapped')).toBe(false)
+    expect(accepted('laid')).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`)).toBe(false)

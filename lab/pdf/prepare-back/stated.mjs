@@ -49,8 +49,17 @@ export const CAUSE = Object.freeze({
   // ((j), 2026-11-10: a unit whose glyph text is one contiguous part of consecutive units' of the candidate's, in their order,
   // each on today's box (2610.19159v1 t1906: today's orphan line, v2's two figure texts on it): accepted)
   split: 'split across consecutive units, its text theirs in order',
+  // ((k), 2026-11-10: a unit the prepare keeps for its text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22: the
+  // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
+  // cause, keptWhyOf: accepted)
+  pitch: 'kept as the original: set wholly in a face of one pitch',
   another: 'another reading',
 })
+
+/** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, by
+ *  the mark it writes (the dump's `keptBy: 'pitch'`, which the parity's ruling reads too), else null: a unit kept otherwise
+ *  (a code environment's kept block, a crowded figure text) states none */
+export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : null)
 
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05

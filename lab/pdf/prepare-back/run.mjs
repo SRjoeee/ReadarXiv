@@ -17,7 +17,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
-import { statedOf, trailsOf } from './stated.mjs'
+import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const id = argOf('id'), OUT = argOf('out'), DIR = argOf('dir')
@@ -202,7 +202,9 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const lines = mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size }))
   const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
   const label = mem.labelAt ? [{ kind: LABEL_KIND[mem.labelAt.kind] ?? 'number', page: mem.labelAt.ink[0], x0: mem.labelAt.ink[1], x1: mem.labelAt.ink[3], baseline: mem.labelAt.ink[5], top: mem.labelAt.ink[4], bottom: mem.labelAt.ink[2] }] : null
-  units.push({ ...base, state, ...(st.why ? { why: st.why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
+  // (a unit kept for its text set wholly in a face of one pitch states (k), the differential's cause, before the bundle's why)
+  const why = keptWhyOf(base) ?? st.why
+  units.push({ ...base, state, ...(why ? { why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
 })
 if (located) for (const [o, b] of located.born) {
   const mem = located.members[o]
