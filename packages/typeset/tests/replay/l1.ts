@@ -109,8 +109,18 @@ export function readingOf(src: string): string | null {
   // characters; and a placeholder that is an address as the source writes it, those two read so (`[first name]@…`,
   // `\{sl225, reyhaneh\}@…`): its characters. The coordinator's ruling of 2026-11-10 on rebuild/mail-group)
   const t = src.replace(/\\([{}])|~/g, (_, b: string | undefined) => b ?? ' ')
-  return src === '\\{' || src === '\\}' || src === '~' || RAW_ADDRESSES.some((r) => r.test(t)) ? t : null
+  if (src === '\\{' || src === '\\}' || src === '~' || RAW_ADDRESSES.some((r) => r.test(t))) return t
+  // (an underscore's text symbol, which parted today's words of an identifier (`llm\_equal\_human`), its character; and an
+  // identifier's placeholder as the source writes it (latex-front.mjs identifierSource: no command, no address, a token that
+  // holds two letters or digits joined by underscores, IDENTIFIER_MARK), its characters as TeX sets them. Lane literal-fixes)
+  if (src === '\\_' || /^\\textunderscore(?![A-Za-z@])\s*$/.test(src)) return '_'
+  if (/^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return null
+  const r = src.replace(/\\textunderscore(?![A-Za-z@])\s*|\\([_{}])/g, (_, c: string | undefined) => c ?? '_')
+  return !/[\\\s]/.test(r) && IDENTIFIER_MARK.test(r) ? r : null
 }
+/** an identifier's mark, two letters or digits joined by underscores: the front end's (latex-front.mjs SNAKE, which a package may
+ *  not import) */
+export const IDENTIFIER_MARK = /[^\W_]_+[^\W_]/
 /** an e-mail address, and a group of local parts before their one domain, whole, as a source writes them: the front end's
  *  EMAIL_ADDRESS and ADDRESS_GROUP (src/pdf-reader/engine/source/latex-front.mjs, which a package may not import), held equal to
  *  them by tests/lab/stage1a-stated.test.ts */

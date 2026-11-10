@@ -463,6 +463,22 @@ describe("(F) and (f) for an address's placeholders: the replay reads a brace's 
     const mine = { ...on(unit(id('b'), 2, 'footnote', [text('Correspondence: '), ph('[first name]@example.com'), text('.')]), line), elements: [{ k: 1, kind: 'other', segs: [box(150, 280, 87.44, 94, 85)] }] }
     expect(said(statedOf([today], [mine]))).toEqual([[2, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
   })
+  it('reads an identifier placeholder as its characters, and today\'s `\\_` as an underscore (lane literal-fixes)', () => {
+    expect([readingOf('\\_'), readingOf('\\textunderscore')]).toEqual(['_', '_'])
+    expect(readingOf('llm\\_equal\\_human')).toBe('llm_equal_human')
+    expect(readingOf('[sentence\\_1]')).toBe('[sentence_1]')
+    expect(readingOf('\\{root\\_question\\}')).toBe('{root_question}')
+    expect(readingOf('CallbackBase.host\\_label(result)')).toBe('CallbackBase.host_label(result)')
+    for (const src of ['\\code{a\\_b}', '1994.', 'conv1', 'a\\_b c', 'jatin\\_x@']) expect(readingOf(src)).toBe(null)
+  })
+  it('states a unit whose words joined by `\\_` are now one identifier element held whole (f)', () => {
+    // (2608.25210v2 p3's prose: today's text pieces between `\_` placeholders, v2's one element as the source writes it)
+    const line = box(317.9, 559.7, 450, 459.6, 448)
+    // (today's `\_` pieces inked, as its dump states them: each underscore's glyph)
+    const today = { ...on(unit(id('a'), 55, 'para', [text('Ask llm'), ph('\\_'), text('equal'), ph('\\_'), text('human now.')]), line), elements: [1, 3].map((k) => ({ k, kind: 'macro', segs: [box(350 + 10 * k, 354 + 10 * k, 450, 459.6, 448)] })) }
+    const mine = { ...on(unit(id('b'), 55, 'para', [text('Ask '), ph('llm\\_equal\\_human'), text(' now.')]), line), elements: [{ k: 1, kind: 'code', segs: [box(340, 420, 450, 459.6, 448)] }] }
+    expect(said(statedOf([today], [mine]))).toEqual([[55, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
   it("states a note of addresses alone a kept block of its kind holds as (F), before that block stands for it, its lines today's or not", () => {
     const today = on(unit(id('a'), 504, 'inknotes', [text('{ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
     for (const b of [box(211.38, 383.83, 675.49, 681.6, 673.9), box(211.38, 383.89, 675.49, 681.6, 673.9)])
