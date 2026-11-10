@@ -109,7 +109,7 @@ export function figureLinesOf(
 ): FigureText[] {
   const out: FigureText[] = []
   const pitch = (g: G) => !!fixed && fixed.has(bare(g.font))
-  const built: { p: number; glyphs: G[]; boxes: number[]; runOf: Map<number, number[]>; lines: Line[] }[] = []
+  const built: { p: number; glyphs: G[]; boxes: number[]; runOf: Map<number, number[]>; lines: Line[]; loose: number[] }[] = []
   pages.forEach((pg, pi) => {
     const p = pi + 1
     const glyphs = (pg.glyphs ?? []) as G[]
@@ -195,13 +195,17 @@ export function figureLinesOf(
         free.splice(q, 1)
         again = true
       }
+      // (F1: a script set beside a formula's glyph is its formula's line; the lines and the glyphs no run holds read again after
+      // each such join, so that a glyph under the joined line (a sum's lower limit) goes to it and the line closes the gap it
+      // spans: 2609.19644v1 p60, whose main line's math glyphs had gone to its superscript runs)
+      if (!again && scriptsJoined(lines, glyphs)) again = true
     }
-    built.push({ p, glyphs, boxes, runOf, lines })
+    // (the glyphs no line took: a formula's ink the reading leaves where it is, F1's torn formula)
+    built.push({ p, glyphs, boxes, runOf, lines, loose: free })
   })
-  // ---- F1: a script set beside a formula's glyph is its formula's line; then the faces that are a formula's own (fact 3)
-  for (const b of built) scriptsJoined(b.lines, b.glyphs)
+  // ---- F1: the faces that are a formula's own (fact 3)
   const math: Formulas = { faces: formulaFacesOf(built, textFaces, pitch), pitch }
-  for (const { p, glyphs, boxes, runOf, lines } of built) {
+  for (const { p, glyphs, boxes, runOf, lines, loose } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order
     const reads = lines.map((l) => lineRead(l, glyphs, pitch, math))
     // (the ink its runs met, each item once: a frame or a tone two runs of one text met is one, judged once)
@@ -246,6 +250,8 @@ export function figureLinesOf(
       })
       const items = itemsOf(ks)
       if (items.length) judge(ft, items, glyphs)
+      // (a formula of a line of it torn from ink no line took: the paragraph the original's, F1's)
+      if (!ft.why && para.lines.some((x) => torn(ft, x.l, glyphs, loose))) ft.why = 'crowded'
       out.push(ft)
       for (const i of para.of) taken.add(i)
     }
@@ -261,6 +267,7 @@ export function figureLinesOf(
         ft.page = p
         ft.under = underOf(l.ks)
         if (items.length) judge(ft, items, glyphs)
+        if (!ft.why && torn(ft, l, glyphs, loose)) ft.why = 'crowded'
         out.push(ft)
         return
       }
@@ -309,8 +316,10 @@ function mathGlyph(g: G): boolean {
 
 /** F1: a line's scripts. A line smaller than another (its size 0.9 of it at most), off its baseline by less than half its size
  *  but more than a baseline's tolerance (RUN_DY), within the run gap of its extent, one of the two holding a formula's glyph by
- *  facts (1) and (2): a script, a subscript word (\text{base}, "Mah" under KaTeX's P), joined to that line */
-function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
+ *  facts (1) and (2): a script, a subscript word (\text{base}, "Mah" under KaTeX's P), joined to that line. Whether it joined
+ *  any */
+function scriptsJoined(lines: Line[], glyphs: readonly G[]): boolean {
+  let joined = false
   for (let again = true; again; ) {
     again = false
     for (let i = 0; i < lines.length && !again; i++)
@@ -327,8 +336,10 @@ function scriptsJoined(lines: Line[], glyphs: readonly G[]): void {
         lines[i] = lineOf([...l.ks, ...r.ks], [...a.gs, ...b.gs], new Set([...a.free, ...b.free]), glyphs, a.fig)
         lines.splice(j, 1)
         again = true
+        joined = true
       }
   }
+  return joined
 }
 
 /** what the formula reading reads beside a glyph's own facts: the faces that are a formula's own (3), and a face of one pitch */
@@ -500,11 +511,13 @@ function formulaOf(gs: readonly number[], glyphs: readonly G[], f: Formulas): bo
 
 function lineOf(ks: number[], gs0: number[], free: Set<number>, glyphs: readonly G[], fig: string): Line {
   const gs = [...new Set(gs0)].sort((a, b) => glyphs[a]!.x0 - glyphs[b]!.x0 || a - b)
-  // (its size the size most of its run glyphs stand at; its baseline theirs)
+  // (its size the size most of its glyphs stand at, those no run holds too; its baseline theirs: a display's math glyphs are no
+  // run's, and its runs may be its scripts alone, "final", "base", "low" (2609.19644v1 p59), whose size and baseline are not
+  // the line's)
   const n = new Map<number, number>()
-  for (const g of gs) if (!free.has(g)) n.set(glyphs[g]!.size, (n.get(glyphs[g]!.size) ?? 0) + 1)
+  for (const g of gs) n.set(glyphs[g]!.size, (n.get(glyphs[g]!.size) ?? 0) + 1)
   const size = [...n].sort((a, b) => b[1] - a[1])[0]?.[0] ?? glyphs[gs[0]!]!.size
-  const main = gs.filter((g) => !free.has(g) && Math.abs(glyphs[g]!.size - size) <= 0.01 * size)
+  const main = gs.filter((g) => Math.abs(glyphs[g]!.size - size) <= 0.01 * size)
   const ys = main.map((g) => glyphs[g]!.y).sort((a, b) => a - b)
   return {
     ks,
@@ -816,6 +829,27 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
     end = x.x1
   }
   return s.replace(/\s+/gu, ' ').trim()
+}
+
+/**
+ * F1: whether a text's formula element has ink of its own the text does not hold: a glyph no line took standing over or under
+ * the element (its extent across, within its line's band of either side of the baseline: a sum's limits set past half the
+ * size, a fraction's other line). The element moves with the translation and that ink would stay where it is, a torn formula:
+ * the text stays the original's, the fallback of the relation reading (no fact tells the ink is the element's)
+ */
+function torn(ft: FigureText, l: Line, glyphs: readonly G[], loose: readonly number[]): boolean {
+  if (!loose.length) return false
+  const reach = BAND_EM * l.size
+  return ft.els.some((e) => {
+    if (e.kind !== 'math') return false
+    const x0 = Math.min(...e.glyphs.map((g) => glyphs[g]!.ix0 ?? glyphs[g]!.x0)),
+      x1 = Math.max(...e.glyphs.map((g) => glyphs[g]!.ix1 ?? glyphs[g]!.x1))
+    return loose.some((g) => {
+      const x = glyphs[g]!
+      if (!real(x) || (x.ix1 ?? x.x1) <= x0 || (x.ix0 ?? x.x0) >= x1) return false
+      return x.bottom < l.y + reach && x.top > l.y - reach
+    })
+  })
 }
 
 /**

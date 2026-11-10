@@ -532,6 +532,88 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('reads a sum with its limits as one formula of its line, its lower limit spanning the gap past the run gap (2609.19644v1 p60)', () => {
+    // ("analogue sub-bands are y_knn^band = Σ_{i=1}^k w_i y_i^band, and the …": the main line's math glyphs no run holds, its
+    // scripts runs of their own, the sum's lower limit "i=1" under the baseline the only ink across the 8 pt from "k" to "w")
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'analogue sub-bands are', font: T },
+        { text: 'y', font: 'CMMI10', run: false, x: 150 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 154.5 },
+        { text: '=', font: 'CMR10', run: false, x: 175 },
+        { text: 'P', font: 'CMEX10', run: false, x: 182, dy: 5.7 },
+        { text: 'k', font: 'CMMI7', size: 7, run: false, x: 190, dy: 3.8 },
+        { text: 'i', font: 'CMMI7', size: 7, run: false, x: 190, dy: -2.3 },
+        { text: '=1', font: 'CMR7', size: 7, run: false, x: 192, dy: -2.3 },
+        { text: 'w', font: 'CMMI10', run: false, x: 203 },
+        { text: 'y', font: 'CMMI10', run: false, x: 210 },
+        { text: 'band', font: T, size: 7, dy: 2.8, x: 214.5 },
+        { text: ', and the rest', font: T, x: 232 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.ks).toEqual([0, 1, 2, 3])
+    const inEls = new Set(t!.els.flatMap((e) => e.glyphs))
+    const limit = G.flatMap((g, i) => (g.y < 699 && /[i=1]/.test(g.u) ? [i] : []))
+    expect(limit).toHaveLength(3)
+    expect(limit.every((g) => inEls.has(g))).toBe(true)
+  })
+  it('keeps a line its scripts join at its own size and baseline: a display whose superscript runs outnumber its text (2609.19644v1 p59)', () => {
+    // ("ŷ^final = ŷ^base + β · scale_q · (g_low(x)": the superscripts "final" and "base" and the subscript "low" runs of their
+    // own, "scale" a run of the body face, every math glyph no run's; the subscript q right after "scale", on the subscripts'
+    // baseline: the runs outnumber the text's, and a line voted by its runs alone stood on a script's baseline)
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'y', font: 'CMMI10', run: false, x: 196 },
+        { text: 'final', font: T, size: 7, dy: 4.05, x: 202.9 },
+        { text: '=', font: 'CMR10', run: false, x: 225 },
+        { text: 'y', font: 'CMMI10', run: false, x: 232 },
+        { text: 'base', font: T, size: 7, dy: 4.05, x: 237 },
+        { text: '+', font: 'CMR10', run: false, x: 258 },
+        { text: 'β', font: 'CMMI10', run: false, x: 265 },
+        { text: '·', font: 'CMSY10', run: false, x: 272 },
+        { text: 'scale', font: T, x: 278 },
+        { text: 'q', font: 'CMMI7', size: 7, run: false, x: 307, dy: -1.57 },
+        { text: '·', font: 'CMSY10', run: false, x: 314.8 },
+        { text: '(', font: 'CMR10', run: false, x: 320 },
+        { text: 'g', font: 'CMMI10', run: false, x: 326 },
+        { text: 'low', font: T, size: 7, dy: -1.57, x: 332 },
+        { text: '(', font: 'CMR10', run: false, x: 345 },
+        { text: 'x', font: 'CMMI10', run: false, x: 349 },
+        { text: ')', font: 'CMR10', run: false, x: 355 },
+      ],
+    ])
+    const G = page.glyphs as Glyph[]
+    const texts = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(texts).toHaveLength(1)
+    const [t] = texts
+    expect(t!.why).toBe('formula')
+    const all = new Set(t!.order.flatMap((o) => (o.t === 'text' ? o.glyphs : o.t === 'el' ? t!.els[o.i]!.glyphs : [])))
+    expect(G.every((g, i) => g.blank || all.has(i))).toBe(true)
+  })
+  it('keeps a text the original’s where ink no line holds stands under its formula: the element would move, that ink stay', () => {
+    // (a sum set with its limits under it, 0.7 of the size below the baseline: past half the size, no line takes them; the
+    // words before it translated would carry the sum away from its limits)
+    const T = 'NimbusRomNo9L-Regu'
+    const { page, fig } = pageOf([
+      [
+        { text: 'the weights are', font: T },
+        { text: 'P', font: 'CMEX10', run: false, x: 160, dy: 3 },
+        { text: 'i=1', font: 'CMMI7', size: 7, run: false, x: 159, dy: -7 },
+        { text: 'w', font: 'CMMI10', run: false, x: 168 },
+        { text: 'for each band', font: T, x: 178 },
+      ],
+    ])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null, new Set([T]))
+    expect(rest).toEqual([])
+    expect(t!.els.map((e) => e.kind)).toEqual(['math'])
+    expect(t!.why).toBe('crowded')
+  })
   it('reads a mark set between two words, no space either side and no math face, as the words’: "Near−monopoly" (2610.11256v1 p17)', () => {
     // (a plot's labels set with the minus sign for their hyphen: each one text, translated; between two letters of a formula
     // it is the formula's: "x−y" kept)
