@@ -3644,6 +3644,34 @@ word list and no language's table; the original drawn when translation is off ne
   declared).
   Today's wire (`translate/mt.mjs`) keeps the word: `TRANSLATE_VERSION` stays.
 
+### 18.24 A figure's word is told by its spacing, not its sizes (the owner's rule, 2026-11-10)
+
+- **The fault** (2609.19644v1 pp. 56-71, an ICLR 2025 draft included as figures). iclr2025 sets its title and headings in
+  faked small capitals: each word's capital at the line's size and the rest of it smaller, abutting it on its baseline (p59's
+  "3.1 SYSTEM OVERVIEW": 7.66 and 6.13 pt, 0.04 to 0.38 pt between a capital and its rest, 2.29 pt between two words). A
+  figure's run ended at every change of size, so each word lost its capital and its rest was translated alone: "ORECASTING"
+  as ore casting, "ETHODOLOGY" as ethnology, 91 such pieces on the draft's pages.
+- **The rule** (`figure-text.mjs` figureUnitsOf `sized`, the engine's copy; today's untouched). A glyph on the run's baseline
+  standing no word space past the glyph before it (`SPACE_GAP` of their size, the test by which a run spells a word) is of that
+  glyph's word whatever its size, and the run goes on across the change; every size a word of the run holds is the run's
+  then, so the next word goes on with it at either size (the title's "FUSION WITH MULTI-SCALE SAFETY GATING FOR", whose
+  "WITH" and "FOR" are all small capitals). Every other end of a run stays: a gap past `RUN_GAP`, a face of one pitch
+  (§18.22), a math face, a colour where it ends one, and the baseline (`RUN_DY`): a script raised or lowered off it is none
+  of the word. The unit's style reads the joined text as faked small capitals (`facts.ts` fakedCaps): its size the capitals',
+  `caps`, `sc`.
+- **Over the 88, 2411.13093v4 and 2609.19644v1** (stage 1a, lane fig-smallcaps). 2609.19644v1: 65 figure texts are words
+  joined across a change of size, 28 of them the draft's title lines and headings, which held the 91 pieces, the others two
+  more included drafts' headings and prose naming a method in small capitals (pp. 3, 11); its p3, at its page's cap of 400
+  runs, reads 14 more lines past the joined ones. Five papers of the 89 move, 12 figure texts: 2610.20808v1's "NATIVE
+  direction" and "SHADOW direction" (`\textsc` in a label), 2610.22214v1's "STC: (", 2608.06701v1's sentence cut at a glyph
+  set 6 % smaller ("th" | "e file."), 1810.04805v2's "##ing" (its "##" set smaller) and 2608.25210v2's "MP1" to "MP3", an
+  index set smaller on the baseline, raised or lowered by nothing, which by these facts is no script. Every glyph of every
+  joined text stands within 0.003 of its size of the text's baseline, and every size change inside one is a word's.
+- **Not this rule's.** p56's first title line is set with word spaces of 0.74 of its size, past `RUN_GAP`: its four words are
+  four figure texts, each whole now. A line whose first word is all small capitals (a wrapped heading's "of ..." at its start)
+  is cut after that word: the run does not yet hold the capitals' size when the next word's capital comes. A figure's lines
+  are each a unit, the title's three translated apart, and the draft's prose and references are cut as before.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
