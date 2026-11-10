@@ -188,6 +188,16 @@ describe('mergesIn', () => {
       expect(merges(text).at(-1)?.unreadable, text).toBe(true)
     }
     expect(merge('if [ "$c" = SUCCESS ]; then gh pr merge 332 --merge 2>&1 | tail -1; fi')).toMatchObject({ ref: '332', unreadable: false })
+    // a substitution runs before the command it stands in (#635, Codex): what that command leans on may be another by then
+    for (const text of [
+      'gh pr merge --body "$(git checkout -q release)" --merge',
+      'gh pr merge --merge --body "$(cat note)"',
+      'gh api graphql --input request.json --header "$(cp mutation.json request.json)"',
+    ]) {
+      expect(merges(text)[0]?.unreadable, text).toBe(true)
+    }
+    // (a merge that names its pull request leans on neither the branch nor a file)
+    expect(merge('gh pr merge 603 --merge --body "$(cat note)"')).toMatchObject({ ref: '603', unreadable: false, plain: false })
     // an assignment reached through `&&` ends with its chain; the plain `cd` before it does not
     expect(merge('cd /w && R=repos/o/r && gh api $R/comments | cat; gh pr merge 603')).toMatchObject({ dirs: ['/w'], unreadable: false })
     for (const text of [

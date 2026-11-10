@@ -703,6 +703,9 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       context.conditionalDir = false
       context.conditionalVars = false
     }
+    // what a substitution runs is a command that ran, and it runs before the command it stands in: the branch, and
+    // any file, may be another by the time that command reads them
+    if (scripts.length > 0) context.branchKnown = false
     let start = 0
     while (start < words.length && (RESERVED.has(words[start]) || ASSIGNMENT.test(words[start]))) start++
     for (let i = start; i < words.length; i++) {
@@ -781,8 +784,6 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
       for (const script of [...handed.scripts, ...piped]) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
     }
-    // (what a substitution runs is a command that ran: the branch, and any file, may be another after it)
-    if (scripts.length > 0) context.branchKnown = false
     learn(context, command)
     move(context, command, start)
   }
