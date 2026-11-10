@@ -222,6 +222,34 @@ describe('mergesIn', () => {
     expect(merge('cd /w && while sleep 9; do gh pr merge 603 --merge && break; done')).toMatchObject({ dirs: ['/w'], unreadable: false })
   })
 
+  it('reads a merge behind a wrapper only when it names its repository and its pull request (#635, Codex: `env GH_REPO=…`)', () => {
+    // what a wrapper does to the directory, the branch and the environment `gh` runs in is the wrapper's to know
+    for (const text of [
+      'env GH_REPO=SRjoeee/ReadarXiv gh pr merge 411 --merge',
+      'env -i GH_HOST=example.com gh pr merge 5 -R o/r',
+      'GIT_DIR=/other/.git gh pr merge 5',
+      'export GIT_DIR=/other/.git; gh pr merge 5',
+      'env gh pr merge 603',
+      'env -C ../release gh pr merge',
+      'xargs gh pr merge',
+      'command gh pr merge',
+      'nice gh api -X PUT repos/{owner}/{repo}/pulls/5/merge',
+      // and a command before the merge that changes which repository a directory is
+      'git remote set-url origin https://github.com/SRjoeee/ReadarXiv && gh pr merge 411',
+      'git config remote.origin.url https://github.com/o/r; gh pr merge 5',
+      'gh repo set-default o/r && gh pr merge 5',
+    ]) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    expect(merge('command gh pr merge 603 -R o/r')).toMatchObject({ ref: '603', repo: 'o/r', unreadable: false, plain: false })
+    expect(merge('env FOO=1 gh pr merge https://github.com/o/r/pull/5').unreadable).toBe(false)
+    expect(merge('nice gh api -X PUT repos/o/r/pulls/5/merge').unreadable).toBe(false)
+    expect(merge('git remote -v && gh pr merge 5 -R o/r').unreadable).toBe(false)
+    // a word the shell reserves is no wrapper
+    expect(merge('if true; then gh pr merge 603; fi').unreadable).toBe(false)
+    expect(merge('time gh pr merge 603').unreadable).toBe(false)
+  })
+
   it('calls unreadable a merge whose pull request the shell decides', () => {
     for (const text of ['gh pr merge $N --merge', 'gh pr merge "$N"', 'gh pr merge $(cat n)', 'gh pr merge `cat n`', 'gh pr merge 603 -R $REPO', 'GH_REPO=o/r gh pr merge 603', 'bash -c "gh pr merge $N"', '$GH pr merge 411', '"$GH" pr merge 411']) {
       expect(merge(text).unreadable, text).toBe(true)
@@ -317,6 +345,8 @@ describe('decide', () => {
       'gh api graphql -f query="mutation { mergePullRequest(input: {}) { clientMutationId } }"',
       'gh api graphql --input merge.json',
       'gh api graphql --input missing.json',
+      'env gh pr merge 603 --merge',
+      'env GH_REPO=SRjoeee/ReadarXiv gh pr merge 411 --merge',
     ]) {
       expect(answer(text)?.decision, text).toBe('ask')
     }
@@ -332,7 +362,7 @@ describe('decide', () => {
       'cd wt && gh pr merge 603 --merge',
       'cd ../feature && gh pr merge --merge',
       'FOO=1 gh pr merge 603 --merge',
-      'env gh pr merge 603 --merge',
+      'env gh pr merge 603 -R SRjoeee/ReadarXiv --merge',
       'bash -c "gh pr merge 603 --merge"',
       'gh pr merge 603 --merge > log',
       'gh pr merge 603 --merge --body "$(cat note)"',

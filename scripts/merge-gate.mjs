@@ -431,6 +431,9 @@ const RESERVED = new Set(['{', '}', '!', 'if', 'then', 'else', 'elif', 'fi', 'do
 const MOVES = new Set(['pushd', 'popd', 'source', '.', 'eval'])
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
+/** An assignment that changes which repository `gh` works on: its own variables (`GH_REPO`, `GH_HOST`), and git's
+ *  (`GIT_DIR`), whose remotes it reads */
+const REPOINTS = /^(?:GH|GIT)_\w*=/
 /** The operators after which the next command runs in the same shell: always (`;`, a newline), or when the one
  *  before succeeded (`&&`) */
 const SEQUENCE = /^(?:&&\n*|[;\n]+)$/
@@ -538,10 +541,11 @@ function learn(context, { words, dynamic, before, after }) {
 
 /** Where the commands after `command` run, as far as its words say: a plain `cd` to a literal directory, joined to
  *  its neighbours in sequence, is followed; any other change of directory, and an assignment that repoints `gh`,
- *  loses the directory; any other command may have changed the branch. A `cd` reached through `&&` ran only if what
+ *  loses the directory, and so does a command that changes which repository the directory is (`git remote`,
+ *  `git config`, `gh repo set-default`); any other command may have changed the branch. A `cd` reached through `&&` ran only if what
  *  stands before it succeeded, so it is conditional: it holds for the rest of that chain and no further. */
 function move(context, { words, dynamic, before, after }, start) {
-  if (words.some(w => /^(?:export\s+)?GH_\w*=/.test(w))) context.dirKnown = false
+  if (words.some(word => REPOINTS.test(word))) context.dirKnown = false
   const head = words[start]
   if (head === undefined) return
   if (head === 'cd') {
@@ -551,7 +555,9 @@ function move(context, { words, dynamic, before, after }, start) {
       if (CHAINED.test(before)) context.conditionalDir = true
     } else context.dirKnown = false
   } else {
-    if (MOVES.has(head)) context.dirKnown = false
+    // (`git remote`, `git config`, `gh repo set-default`: the directory stays, the repository `gh` finds in it may not)
+    const rebinds = (head === 'git' && words.slice(start + 1).some(word => word === 'remote' || word === 'config') && words.length > start + 2 && !words.includes('-v')) || (head === 'gh' && words.includes('set-default'))
+    if (MOVES.has(head) || rebinds) context.dirKnown = false
     context.branchKnown = false
   }
 }
@@ -560,8 +566,8 @@ function move(context, { words, dynamic, before, after }, start) {
  *  `ref` and `repo` as the command names them (null: the current branch's pull request, the current directory's
  *  repository), a variable whose value the line leaves no doubt about read as that value, one merge for each; `dirs`: the literal `cd`s that
  *  precede it, to resolve from where the line starts; `unreadable`: the line does not say which pull request (an
- *  expansion where it is named, a `GH_…` assignment, a directory or a branch lost on the way or changed by the loop
- *  it stands in, a GraphQL mutation);
+ *  expansion where it is named, a `GH_…` assignment, a directory or a branch lost on the way, changed by the loop it
+ *  stands in or left to a wrapper, a GraphQL mutation);
  *  `plain`: the merge is the whole command line, written
  *  `gh … pr merge …` with nothing for the shell to expand; `files`, on a GraphQL request alone: the files its body is
  *  read from, which say whether it merges. */
@@ -581,10 +587,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       context.conditionalVars = false
     }
     let start = 0
-    while (start < words.length && RESERVED.has(words[start])) start++
-    const assignments = start
-    while (start < words.length && ASSIGNMENT.test(words[start])) start++
-    const assigned = words.slice(assignments, start)
+    while (start < words.length && (RESERVED.has(words[start]) || ASSIGNMENT.test(words[start]))) start++
     for (let i = start; i < words.length; i++) {
       // (a word the shell decides may be `gh` too: `$GH pr merge 5` is a merge nobody can read)
       if (words[i] !== 'gh' && !words[i].endsWith('/gh') && !dynamic[i]) continue
@@ -611,6 +614,10 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       }
       const refs = said(call.ref, call.refAt)
       const repos = said(call.repo, call.repoAt)
+      // behind a wrapper (`env`, `xargs`, `command`), what the directory, the branch and the environment are when `gh`
+      // runs is the wrapper's to know; and an assignment that repoints `gh` counts wherever it stands before it
+      const wrapped = i > start
+      const repointed = words.slice(0, i).some(word => REPOINTS.test(word))
       for (const ref of refs ?? [call.ref]) {
         for (const repo of repos ?? [call.repo]) {
           const needsDirectory = repo === null && !/^https?:\/\//.test(ref ?? '')
@@ -623,10 +630,10 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               refs === null ||
               repos === null ||
               dynamic[i] ||
-              assigned.some(a => a.startsWith('GH_')) ||
+              repointed ||
               (viaApi && !/^\d+$/.test(ref ?? '')) ||
-              (needsDirectory && (!context.dirKnown || line.loopMoves)) ||
-              (needsBranch && (!context.branchKnown || context.loops + loops.length > 0)),
+              (needsDirectory && (wrapped || !context.dirKnown || line.loopMoves)) ||
+              (needsBranch && (wrapped || !context.branchKnown || context.loops + loops.length > 0)),
             plain: !viaApi && depth === 0 && i === 0 && !compound && !redirected && commands.length === 1 && !dynamic.some(Boolean),
           })
         }
