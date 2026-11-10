@@ -899,6 +899,16 @@ describe("today's unit the candidate writes with a group that carries nothing as
     const v2 = { ...unit(id('b'), 30, 'reference', [text('A. Author, A study of GPU kernels, '), open('\\emph{'), text('Nature'), close(), text(' 5%.')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[30, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
+  it('is that unit where a pair v2 writes as nothing stood between two spaces, white space read as one space (2608.25210v2)', () => {
+    const today = unit(id('a'), 31, 'para', [text('The cost of '), open('\\techreport{'), text(' the plan '), close(), text(' is computed.')])
+    const v2 = { ...unit(id('b'), 31, 'para', [text('The cost of the plan is computed.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[31, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is that unit where two such pairs stand a space apart (2610.22065v1\'s entries: `}. \\bibinfo{year}{`)', () => {
+    const today = unit(id('a'), 33, 'reference', [open('\\bibfield{author}{'), open('\\bibinfo{person}{'), text('Samira Abnar'), close(), text('.'), close(), text(' '), open('\\bibinfo{year}{'), text('2020'), close(), text('.')])
+    const v2 = { ...unit(id('b'), 33, 'reference', [text('Samira Abnar. 2020.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[33, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
   it('is that unit where v2 writes a command\'s pair as the quotation marks it prints (\\enquote, 2026-11-11)', () => {
     const today = unit(id('a'), 32, 'reference', [text('A. Allen (2019): '), open('\\enquote{'), text('Hicksian complementarity,'), close(), text(' Econometrica.')])
     const v2 = { ...unit(id('b'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d Econometrica.')]), state: 'drawn' }

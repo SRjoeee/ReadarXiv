@@ -165,10 +165,27 @@ function writtenAs(ps, drop, marked = new Set()) {
     parts[parts.length - 1] += add
   }
   if (!changed) return null
-  if (parts.length === 1) { const t = parts[0].replace(/\s+/g, ' ').trim(); return (x) => x === t }
-  const escape = (t) => t.replace(/\s+/g, ' ').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`^${parts.map((x) => (x === null ? `[\\p{Ps}\\p{Pe}\\p{Pi}\\p{Pf}"'\`]*` : escape(x))).join('').replace(/^ /, '').replace(/ $/, '')}$`, 'u')
-  return (x) => re.test(x)
+  // (no marks: today's TeX with those pairs out, white space as one space over the whole, as texOf reads a unit)
+  const plain = parts.filter((x) => x !== null).join('').replace(/\s+/g, ' ').trim()
+  if (parts.length === 1) return (x) => x === plain
+  // (pairs side by side one place)
+  const t = parts.map((x) => x ?? '\u0001').join('').replace(/\s+/g, ' ').replace(/\u0001+/g, '\u0001').trim()
+  // (or marks, characters no letter, digit or space, at one place or more: a place between two spaces holds its marks before one of
+  // them, or none and one space)
+  const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const M = '[^\\p{L}\\p{N}\\s]'
+  const bits = t.split('\u0001')
+  let src = ''
+  for (let i = 0; i < bits.length; i++) {
+    let left = bits[i]
+    if (i === bits.length - 1) { src += escape(left); break }
+    const right = bits[i + 1]
+    if ((left.endsWith(' ') || i === 0 && left === '') && right.startsWith(' ')) { src += `${escape(left)}(?:${M}+ )?`; bits[i + 1] = right.slice(1); continue }
+    if (left.endsWith(' ') && i + 1 === bits.length - 1 && right === '') { left = left.slice(0, -1); src += `${escape(left)}(?: ${M}+)?`; continue }
+    src += `${escape(left)}${M}*`
+  }
+  const re = new RegExp(`^${src}$`, 'u')
+  return (x) => x === plain || re.test(x)
 }
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
 const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
