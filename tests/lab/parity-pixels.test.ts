@@ -79,7 +79,9 @@ describe("the units' boxes the pixels off arXiv's page are counted outside (anal
   // over the label's place, the unit's own: 2610.21312v1 p5, two theorem heads relabelled by v2, 522 device pixels "off arXiv's
   // page" where the original's label stood)
   const label = { ink: [3, 48.96, 256.26, 113.52, 265.18, 258.3], kind: 'head', name: ['Proposition', [3, 48.96, 256.26, 98.04, 265.18, 258.3]] }
-  const facts = { 3: { members: [{ ord: 21, kind: 'theorem', label, lines: [[3, 0, 113.52, 300, 258.3, 266.3, 256.3, 48, 300, 0, 10]] }] } }
+  const line3 = [3, 0, 113.52, 300, 258.3, 266.3, 256.3, 48, 300, 0, 10]
+  const member = { ord: 21, kind: 'theorem', label, lines: [line3] }
+  const facts = { 3: { members: [member] } }
   it("holds each unit's label's ink beside its lines on A", () => {
     expect(boxesOf({ page: 3 }, { facts }, 3)).toEqual([
       [112.52, 255.3, 301, 267.3],
@@ -88,6 +90,6 @@ describe("the units' boxes the pixels off arXiv's page are counted outside (anal
   })
   it("a label on another page is not this page's", () => {
     const line4 = [4, 0, 72, 300, 700, 708, 698, 48, 300, 0, 10]
-    expect(boxesOf({ page: 4 }, { facts: { 4: { members: [{ ...facts[3].members[0], lines: [facts[3].members[0].lines[0], line4] }] } } }, 4)).toEqual([[71, 697, 301, 709]])
+    expect(boxesOf({ page: 4 }, { facts: { 4: { members: [{ ...member, lines: [line3, line4] }] } } }, 4)).toEqual([[71, 697, 301, 709]])
   })
 })
