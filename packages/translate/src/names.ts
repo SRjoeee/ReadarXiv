@@ -1,10 +1,10 @@
 // A reference's abbreviated name sent as the referenced item's full name (the owner's ruling of 2026-11-10). Microsoft's free
 // endpoint cuts a sentence at an abbreviation's full stop before a reference's marker: 2610.22065v1 p5's "in Fig. 7." came back
-// "…扫除 σinfer ∈ [0.01,0.20]。7。", the word dropped, and "Fig." elsewhere as 无花果 (the fruit); a no-break space or the text
-// paired did not help. Over 52 abbreviations tied to a reference in 27 units of the corpus, sent live as they are and as the
-// item's full name (lane ref-names, 2026-11-10): the endpoint cut its source sentence at the abbreviation 10 times as they are and
-// never as the name; "Fig." kept its word for the figure 7 times of 15, "Tab." 0 of 3 ("标签", a label), "App." 2 of 5, and every
-// one of them as the full name ("Eq.", "Sec." read alike both ways).
+// into Chinese with the figure's word dropped and the number left alone after a full stop of its own, and "Fig." elsewhere as
+// the fruit; a no-break space or the text paired did not help. Over 52 abbreviations tied to a reference in 27 units of the
+// corpus, sent live as they are and as the item's full name (lane ref-names, 2026-11-10): the endpoint cut its source sentence at
+// the abbreviation 10 times as they are and never as the name; "Fig." kept its word for the figure 7 times of 15, "Tab." 0 of 3
+// (read as a label), "App." 2 of 5, and every one of them as the full name ("Eq.", "Sec." read alike both ways).
 //
 // The rule, a definition with no word list and no language's table: where the word a unit's text ends in right before a
 // reference (white space, a tie or a break alone between them) is a case-insensitive proper prefix of the full name the paper
