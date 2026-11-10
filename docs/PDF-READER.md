@@ -3212,9 +3212,14 @@ mark or bracket, whatever the gap; a row of another line there stays where TeX s
 under its place before NeurIPS' `\And`: taken as the place's trail, the place was laid on two lines at 8.97 pt where TeX set one
 at 9.96). The last author of such calls, whose own call is stated, owns what TeX set on its last line before the paragraph TeX
 ends after it (ICML's "Zuo Bai 2 †"). What TeX set after a call and before its author's start is that
-author's lead: its label, whatever its form. Where no call is stated, the rules before: the trail by the word's gap, the label
-walked back to the end mark before. A call TeX meets in the preamble, in vertical mode or between two rows of an alignment
-states none: a class that stores its list and sets it whole sets no item's start. **2604.14228v3's notes are not done**: its
+author's lead: its label, whatever its form, but a word the class sets there, no label's form (llncs' and siam's " and " before
+the last author), which is left the original's ink where it stands and so to the ink units, as before: held as the author's
+label, the connector stayed English (2610.19860v1, 2610.21491v1, 2610.20266v1). Where no call is stated, the rules before: the
+trail by the word's gap, the label walked back to the end mark before. A call TeX meets in the preamble, in vertical mode or
+between two rows of an alignment states none: a class that stores its list and sets it whole sets no item's start — REVTeX's
+`\author` and `\affiliation` in the body before `\maketitle`, whose list it sets with each name's mark after it, so that on
+2610.21770v1's line the mark after a name is still the next name's label where both stand on one line (on another line, the
+glue rule gives it to the name). **2604.14228v3's notes are not done**: its
 class appends each `\author`, `\affiliation` and `\contribution` with its separator and its mark to one macro by `\xdef` and
 sets the macro whole (`\authorlist\par`), its calls in the preamble; TeX meets no item's start, and the one place that knows it is
 the class's own `\addtolist`. Its notes' "†" stays the next note's lead by MR 5's walk and, being no label's form, the note the
