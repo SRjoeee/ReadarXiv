@@ -290,6 +290,10 @@ const drawn = (state: ReaderState) => state.layer.laid > 0
  *  nothing is to be laid: the end held for a page (laying) waits for neither. Not `drawn`: no translation is on such a page, so a
  *  run stopped short over it still shows its card */
 const settled = (layer: ReaderState['layer']) => layer.laid > 0 || (layer.original ?? 0) > 0
+/** the phase once no bilingual version is to be had (the side's refusal, the run's `unavailable`): reading, but a failure stays
+ *  failed and a load stays a load: the run starts beside the original's download, and our server's answer can come before the
+ *  original is on screen, which `opened` alone tells (the design, §8: loading until then) */
+const afterRefusal = (phase: Phase): Phase => (phase === 'failed' || phase === 'loading' ? phase : 'ready')
 /** the original could not be opened: its card stands, whatever the run does meanwhile (its rows wait for the original),
  *  until the original opens */
 const noOriginal = (state: ReaderState) => state.failures.pdf !== null
@@ -415,7 +419,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
             state.unavailable && LASTING.has(state.unavailable.why)
               ? state.unavailable
               : { why: 'unreachable', retryAt: null },
-          phase: state.phase === 'failed' ? 'failed' : 'ready',
+          phase: afterRefusal(state.phase),
         }
       // a page laid where the translation shows, or one shown as arXiv's by the rule: the end held is told
       if (state.laying && settled(layer))
@@ -511,7 +515,7 @@ function reduceRunFree(
         // the paper's own: its translated displays greyed; a language the layer does not set: the language's notice
         available: lasting && event.why !== 'target' ? false : state.available,
         languageSupported: event.why === 'target' ? false : state.languageSupported,
-        phase: state.phase === 'failed' ? 'failed' : 'ready',
+        phase: afterRefusal(state.phase),
       }
     }
   }
