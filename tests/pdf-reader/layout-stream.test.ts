@@ -89,9 +89,12 @@ describe('ownedOf', () => {
     // (the author names' marks set again alike, several earlier units in a row: 1, 3 and the title)
     const names = pageOf([{ at: '9s' }, 'Format: ', { at: 'p9.11a' }, { at: '1s' }, 'Ann Lee', { at: '1e' }, ', and ', { at: '3s' }, 'Bo Li', { at: '3e' }, '. ', { at: 'p9.13a' }, { at: 'h0s' }, 'Title', { at: 'h0e' }, '. PVLDB', { at: '9e' }])
     expect(owned([names], { 'p9.11a': open('.'), 'p9.13a': open('.pvldb') })).toEqual({ 'p9.11a': ['AnnLee,andBoLi', 0], 'p9.13a': ['Title', 0] })
-    // (as before where the text after it is not found past them, and where the next mark is a later unit's start)
+    // (as before where the text after it is not found past them, and where its own ink stands before them: those marks are then
+    // not right after it, and nothing tells that they are its ink's)
     const lost = pageOf([{ at: '9s' }, 'Format: ', { at: 'p9.13a' }, { at: 'h0s' }, 'Title', { at: 'h0e' }, ' other words', { at: '9e' }])
     expect(owned([lost], { 'p9.13a': open('.pvldb,') })).toEqual({ 'p9.13a': ['', 0] })
+    const before = pageOf([{ at: '9s' }, 'Format: ', { at: 'p9.13a' }, 'see ', { at: 'h0s' }, 'Title', { at: 'h0e' }, '. PVLDB', { at: '9e' }])
+    expect(owned([before], { 'p9.13a': open('.pvldb') })).toEqual({ 'p9.13a': 'open, the text after it not found' })
   })
 
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {

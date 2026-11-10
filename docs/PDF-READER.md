@@ -3871,10 +3871,11 @@ sets those units' marks a second time inside the paragraph (MR 3's later occurre
 next point, the title's start mark set again, and owned nothing; the title's glyphs fell to the paragraph's text, more letters
 than its source writes.
 
-- **The rule** (layout/stream.mjs `alone`, `earlierUnit`). An opening point alone whose next points in its region are marks of
-  units numbered before its own (the source sets its units in order, so after a piece of unit `n` such a mark is that unit's
-  text set again, never the next unit's) reads past them, its ink running to where the text after it begins; where that text
-  is not found before the next point of another kind, as before. A piece with no text after it, or blocked by an unmarked piece, is read
+- **The rule** (layout/stream.mjs `alone`, `earlierUnit`). An opening point alone whose next points in its region, right after
+  it with none of its ink before them, are marks of units numbered before its own (the source sets its units in order, so after
+  a piece of unit `n` such a mark is that unit's text set again, never the next unit's) reads past them, its ink running to
+  where the text after it begins; where that text is not found before the next point of another kind, or where its own ink
+  stands before those marks (nothing then tells them its ink's), as before. A piece with no text after it, or blocked by an unmarked piece, is read
   as before.
 - **Not alone**: `\vldbauthors` writes no point today (after `\\` the marks pass it over, marks.mjs `passedOver`), so the
   paragraph stays no unit until its marks are written (the marks lane); its whole proof (located, translated as ACM's block,

@@ -509,11 +509,13 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       // this piece's own ink — MR 3's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
       // paper's macro sets once more: acmart's \shorttitle and \authors where VLDB's Reference Format calls \vldbtitle and
       // \vldbauthors, 2608.25210v2 p1, whose \vldbtitle owned nothing, its next point the title's start mark set again. No bound
-      // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, as before)
-      if (f.want && !f.blocked) {
-        let r = rank.get(`${next[0]}|${next[1]}`)
+      // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, or where
+      // its own ink stands before them (nothing then tells them its ink's), as before)
+      if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1].at[next[1]] === rA) {
+        const lead = takeTo(next)
+        let r = rank.get(`${next[0]}|${next[1]}`) + 1
         while (seq[r] && seq[r][0] === pa && regions[pa - 1].at[seq[r][1]] === rA && earlierUnit(P.points[seq[r][1]].name, Number(m[2]))) r++
-        if (seq[r] !== next && seq[r] && seq[r][0] === pa) {
+        if (!lead.glyphs.length && !lead.boxes.length && seq[r] && seq[r][0] === pa) {
           const { glyphs, boxes } = takeTo(seq[r])
           const end = textAt(pages, glyphs, f.want, erasure)
           if (end > 0 && !jumps(glyphs.slice(0, end))) return cut(HOW['open, to the text after it'], glyphs, boxes, end)
