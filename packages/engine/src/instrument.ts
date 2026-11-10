@@ -28,7 +28,7 @@ export interface InstrumentUnit {
   kept?: true
   /** its ink stays whatever the translation (a kept block): in no group */
   fixed?: true
-  /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.21):
+  /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
   /** an ink unit drawn with another unit's row: that unit's index */

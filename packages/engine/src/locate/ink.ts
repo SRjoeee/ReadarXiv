@@ -76,7 +76,7 @@ export interface InkInput {
   /** what the front half reads of an ink unit's pieces (today's classesOf, the instrument adapter's), where it is given */
   classesOf?: ((pieces: TodayPiece[]) => [string, PieceClass][]) | undefined
   /** whether glyphs (A's, global; a figure text's turned ones by [page, index]) are an artefact: set wholly in a face of one
-   *  pitch where the paper's body face is not one (locate.ts, Rule 1, PDF-READER §18.21); a figure text so set is kept */
+   *  pitch where the paper's body face is not one (locate.ts, Rule 1, PDF-READER §18.22); a figure text so set is kept */
   artefact?: ((text: readonly number[], turned: readonly [number, number][]) => boolean) | undefined
   /** the source unit a glyph of A (global) is, -1 none: where it is given, the author block under the title is read
    *  (author-block.ts) */

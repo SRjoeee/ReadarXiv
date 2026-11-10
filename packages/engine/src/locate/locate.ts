@@ -179,7 +179,7 @@ export interface Located {
     bornGlyphs: number
     /** the units made on A by today's rule (ink.ts), where A's pages were given */
     made?: InkStats
-    /** the source units kept as artefacts (Rule 1, PDF-READER §18.21), and whether the paper's body face is one of one pitch */
+    /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
     artefacts?: { units: number; bodyFixed: boolean }
   }
 }
@@ -804,7 +804,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     mem.els.set(TRAIL, trail)
   }
 
-  // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.21): a unit whose text is set wholly in a face of one
+  // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.22): a unit whose text is set wholly in a face of one
   // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
   // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member
   // fixed); a figure text so set too (ink.ts). Unless the paper's own body face, the face most of its source units' text glyphs
