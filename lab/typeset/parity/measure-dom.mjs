@@ -68,7 +68,10 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
           }
           const ch = s[j] ?? ''
           const pts = [at(ext.x, ext.y), at(ext.x + ext.width, ext.y), at(ext.x, ext.y + ext.height), at(ext.x + ext.width, ext.y + ext.height)]
-          const xs = pts.map((q) => q[0]),
+          // (a level character across: its advance on its baseline, where an oblique run's skew moves nothing; its box's corners
+          // lean with the skew, and a line's width is its advances', TeX's and the lay's, its glyphs' overhang aside, as the
+          // part reads the original's lines by its glyphs' advances. A turned one: its box's corners)
+          const xs = rot ? pts.map((q) => q[0]) : [at(ext.x, start.y)[0], at(ext.x + ext.width, start.y)[0]],
             ys = pts.map((q) => q[1])
           const [, sy] = at(start.x, start.y)
           // (a turned character's band: its advance along, 0.2 of its size under its baseline to 0.8 over, in its own frame)
