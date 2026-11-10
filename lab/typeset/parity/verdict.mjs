@@ -171,18 +171,23 @@ export function judgedChanged(gate, review) {
   }
   return out.sort((a, b) => (a.unit < b.unit ? -1 : a.unit > b.unit ? 1 : a.flag < b.flag ? -1 : a.flag > b.flag ? 1 : 0))
 }
-/** the units of page `p` v2 draws off the original's size or line count by more than the measures' own floors (NEAR.size, half a
- *  line): v2 against the original alone, stated in the review mode where neither is judged against today */
+/** the units of page `p` v2 draws off the original's size by more than the measure's floor (NEAR.size), smaller or larger, or in
+ *  more lines than the original's (half a line): v2 against the original alone, stated in the review mode where neither is
+ *  judged against today, the farthest size first (the coordinator's ruling of 2026-11-11: a unit that only takes fewer lines is
+ *  what a CJK translation does, not listed; no second threshold) */
 export function offOriginalOf(p) {
   const out = []
   for (const u of p?.units ?? []) {
     const v = u.sides?.v2
     if (!v) continue
-    const lines = v.olines !== undefined && Math.abs(v.lines - v.olines) > 0.5
-    const size = v.osize && v.size && Math.abs(1 - v.size / v.osize) > NEAR.size
-    if (lines || size) out.push({ unit: u.key, kind: u.kind ?? null, lines: v.lines, olines: v.olines ?? null, size: r2(v.size), osize: r2(v.osize ?? null) })
+    const share = v.osize && v.size ? v.size / v.osize : 1
+    const off = [
+      ...(1 - share > NEAR.size ? ['smaller'] : share - 1 > NEAR.size ? ['larger'] : []),
+      ...(v.olines !== undefined && v.lines - v.olines > 0.5 ? ['more lines'] : []),
+    ]
+    if (off.length) out.push({ unit: u.key, kind: u.kind ?? null, off, lines: v.lines, olines: v.olines ?? null, size: r2(v.size), osize: r2(v.osize ?? null), far: Math.abs(1 - share) })
   }
-  return out
+  return out.sort((a, b) => b.far - a.far).map(({ far: _far, ...x }) => x)
 }
 /** the measures of a text's words, not its format (tagFresh: the name/code ruling reads only these) */
 const WORDS = new Set(['shown', 'figures', 'groups', 'labels', 'toggles', 'style', 'weight'])

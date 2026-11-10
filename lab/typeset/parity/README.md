@@ -334,7 +334,9 @@ Its fill (`--fresh=fill-all`, about 690 requests over the 22 pairs) sends only u
 (`refactor-2026-11/locks/ms-keyless.lock`, fresh.mjs keylessLock: an atomic mkdir, its owner the lane, the PID and the start; a
 dead owner's taken and said), one request at a time, and stops at the endpoint's first 429 (a rerun resumes from the cache).
 Its sheet tints nothing; FRESH_UNJUDGED are unjudged for every unit; its worse count is information. Each page lists the units
-off the original's size or line count by more than the measures' floors (verdict.mjs offOriginalOf), and, given the gate sheet
+off the original's size by more than the measure's floor, smaller or larger, or taking more lines than the original, the
+farthest size first (verdict.mjs offOriginalOf; a unit that only takes fewer lines is what a CJK translation does and is not
+listed: the coordinator's ruling of 2026-11-11), the totals at the top, and, given the gate sheet
 at the same head (`measure.mjs --gate=<its parity.json>`), the units whose fresh text changed a judged measure (judgedChanged:
 a unit's judged differences on the two sheets, the measures it does not judge aside), with the text each side drew.
 

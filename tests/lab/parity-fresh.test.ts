@@ -257,10 +257,15 @@ describe('the review mode (--fresh=all): every unit v2 sends laid with its own f
       { unit: 't8 para', flag: 'cross', gate: 'nearer', review: 'worse' },
     ])
   })
-  it("the units off the original's size or line count by more than the measure's floor, against the original alone", () => {
+  it("the units off the original's size (either way, past the measure's floor) or taking more lines, the farthest size first", () => {
     const u = (key: string, lines: number, olines: number, size: number, osize: number) => ({ key, kind: 'para', sides: { v2: { lines, olines, size, osize } } })
-    const p = { units: [u('t1', 4, 4, 10, 10), u('t2', 6, 4, 10, 10), u('t3', 4, 4, 9, 10), u('t4', 4, 4, 9.9, 10)] }
-    expect(offOriginalOf(p).map((x: { unit: string }) => x.unit)).toEqual(['t2', 't3'])
+    // (t2 more lines; t3 smaller; t4 within the floor; t5 larger; t6 fewer lines only, what a CJK translation does: not listed)
+    const p = { units: [u('t1', 4, 4, 10, 10), u('t2', 6, 4, 10, 10), u('t3', 4, 4, 9, 10), u('t4', 4, 4, 9.9, 10), u('t5', 4, 4, 10.5, 10), u('t6', 2, 4, 10, 10)] }
+    expect(offOriginalOf(p).map((x: { unit: string; off: string[] }) => [x.unit, x.off])).toEqual([
+      ['t3', ['smaller']],
+      ['t5', ['larger']],
+      ['t2', ['more lines']],
+    ])
   })
 })
 
