@@ -2815,6 +2815,31 @@ describe('the places on A where a sentence may begin (Placed.words, Unit.sentenc
   })
 })
 
+describe('the places on A where a sentence may begin: an element', () => {
+  it('places an element where a sentence may begin with it, at its ink’s first box on A, as a word is placed', () => {
+    // (2611.03953v2's "… recovery. \method{} trains this model …": a row's start falls on the element, which the left pane lit
+    // with the sentence before, the start moved on to "trains"; 556 of 2,148 starts of staging's rows fell on an element)
+    const B = docOf([{ lines: ['They work. BERT trains models.'] }])
+    const content = [
+      text('They work. '),
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\bert' },
+      text(' trains models.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    // (its glyphs, "BERT", the element's ink: the instrument's role and piece for glyphs 11 to 14 of the line)
+    const ins = instrumentOf(B, [u], [[0]])
+    for (let g = 11; g <= 14; g++) {
+      ins.glyphs[0]!.role[g] = ROLE.element
+      ins.glyphs[0]!.piece[g] = 1
+    }
+    const L = locate(ins, B, align(B, B))
+    const words = L.members[0]!.words!
+    // (6 pt a glyph from x 72: "BERT" the 12th glyph; the element one character of the projection, at offset 11)
+    expect(words.find((w) => w[0] === 11)).toEqual([11, 0, 72 + 11 * 6])
+    expect(words.map((w) => w[0])).toEqual([0, 5, 11, 13, 20])
+  })
+})
+
 describe('locate: the glyphs of B with no partner on A inside a unit', () => {
   it('locates a unit whose compile sets characters arXiv’s did not, its ink on A the glyphs A set (1810.04805v2 u325)', () => {
     // (arXiv's 2016 tree read the .bbl's UTF-8 quotes as characters its OT1 font has no glyph for, and TeX set nothing there

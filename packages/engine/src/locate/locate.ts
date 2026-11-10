@@ -55,7 +55,7 @@ import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } f
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
-import { bySentence, type Word, wordsOn } from './words.ts'
+import { bySentence, elementsOf, type Word, wordsOn } from './words.ts'
 
 /** where a located unit stands on A against B */
 export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
@@ -1467,6 +1467,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     })
     const text = [...mem.text].sort((x, y) => x - y)
     const words = wordsOn(content, text.map(gA), (i) => lineOf.get(text[i] as number) ?? -1, sourceText(content))
+    // (an element a sentence may begin with, where a row's start falls on it (its translator set it first in its sentence:
+    // "\method{} trains …", "\citet{x} proposes …"), placed at its ink's first box on A, its line and x0, as a word is; never a
+    // display (a block of its own) nor an element TeX set outside the unit's text (kept where it stands). Words alone, the left
+    // pane lit it with the sentence before, the start moved on past it: 556 of 2,148 starts of staging's rows, 2026-11-10)
+    const els = new Map(mem.elements)
+    for (const [o, id] of elementsOf(content)) {
+      const el = els.get(id)
+      const k = el?.ink[0]
+      if (!el || !k || el.kind === 'display' || el.keep) continue
+      const j = standsOn(mem.lines, k[0], k[2], k[4], k[5])
+      if (j >= 0) words.push([o, j, k[1]])
+    }
+    words.sort((a, b) => a[0] - b[0])
     if (words.length) mem.words = words
   }
   // (each A page's text frame as TeX shipped it, B's carried onto A by its partners)
