@@ -3842,15 +3842,16 @@ The owner on the fresh-rows sheet, 2609.36054v2-zh p3: Figure 1's label and the 
 bug? The original sets "Figure 1." at 47 in the margin and every line of its text at 95.61 beside it (the caption package's
 `hang`, `\hangindent` the label's width); v2, and today's reader, set the second line under the label.
 
-- **The rule** (`lay/adapt.ts` `hang`, `breaker/slots.mjs` `tab`, `breaker/break.mjs` `tabbed` and tabOf). A label drawn anew
-  is its first line's (RUN:2039-2041): its rectangle was widened to the label, so the block's edge was the label's and every line
+- **The rule** (`lay/adapt.ts` `hang`, `breaker/slots.mjs` `tab`, `breaker/break.mjs` `tabbed` and tabOf). A label drawn anew is
+  its first line's (RUN:2039-2041): its rectangle was widened to the label, so the block's edge was the label's and every line
   after the first started there. Where every text line of a member starts at one x past the label's end and the label stands at
-  its first line's measure start (Line x0 and m0, Label.ink; two text lines at least), the label is laid in its hang and the text
-  keeps the measure TeX gave it: the block's first slot starts at the label and states the text's start, and the first text after
-  the label starts there, or right after the label where the label drawn needs more room than the hang; the label and the room up
-  to the text neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
-  shrinks: the reader gate's I5 found 9 lines past their slot where it had). Drawing the label anew changes its words, not where TeX set them. A label
-  kept as ink (a reference's "[12]", a heading's "A.4") kept its hang already: its block's edge is the text's.
+  its first line's measure start (Line x0 and m0, Label.ink; two text lines at least), the label is laid in its hang and the
+  text keeps the measure TeX gave it: the block's first slot starts at the label and states the text's start, and the first text
+  after the label starts there, or right after the label where the label drawn needs more room than the hang; the label and the
+  room up to the text neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
+  shrinks: the reader gate's I5 found 9 lines past their slot where it had). Drawing the label anew changes its words, not where
+  TeX set them. A label kept as ink (a reference's "[12]", a heading's "A.4") kept its hang already: its block's edge is the
+  text's.
 - **Over the 88** (r14's parts, every page laid with identity rows by the typesetter before and after, lane b5-fixes): 55
   captions hang their label, in 4 papers; the 35 of them whose label is drawn anew are laid otherwise (29 figures', 6 tables':
   2307.16209v1 24, 2610.21201v1 5, 2610.21377v1 5, 2609.36054v2 1), and no other of the 63,230 members laid moves.
