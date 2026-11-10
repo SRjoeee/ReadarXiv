@@ -177,7 +177,8 @@ for (const pair of pairs) {
       if (r?.ok) freshAt.cause[ord] = cause
       else if (r?.why.kind === 'unavailable') freshAt.missing.push(ord)
       else freshAt.refused.push(ord)
-      if (!joinedAll0[ord]) freshAt.newer.push(ord)
+      // (today never had it: no unit of today's joined to it, nor several joined as one, B6's joinedJoin)
+      if (!joinedAll0[ord] && !joinedAll.has(ord)) freshAt.newer.push(ord)
     }
     const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
     console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
