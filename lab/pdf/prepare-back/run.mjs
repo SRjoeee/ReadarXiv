@@ -125,7 +125,7 @@ if (ins) {
   const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
   // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
   // and the review; the proofs read A's pages again, as the back half read them)
-  const keep = process.argv.includes('--claims') || process.argv.includes('--review')
+  const keep = process.argv.includes('--claims') || process.argv.includes('--review') || process.argv.includes('--hidden')
   step.now = 'A'
   for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep })) {
     if (x.kind === 'tally') { tally = x; continue }
@@ -149,6 +149,12 @@ if (tally && process.argv.includes('--review')) {
   const { reviewOf } = await import('./review.mjs')
   mkdirSync(join(OUT, 'review'), { recursive: true })
   writeFileSync(join(OUT, 'review', `${id}.json`), `${JSON.stringify(reviewOf(ins, tally))}\n`)
+}
+// ---- (--hidden) the members whose every glyph arXiv's own page paints over (hidden.mjs)
+if (tally && process.argv.includes('--hidden')) {
+  const { hiddenOf } = await import('./hidden.mjs')
+  mkdirSync(join(OUT, 'hidden'), { recursive: true })
+  writeFileSync(join(OUT, 'hidden', `${id}.json`), `${JSON.stringify(hiddenOf(tally))}\n`)
 }
 // (A's pages as the back half read them, where it kept them; else read again once, as it reads them (rebuild/mem-back lets them
 // go once located): the proofs and the --baseline statement read them)
