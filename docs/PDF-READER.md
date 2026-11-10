@@ -3299,7 +3299,7 @@ after it), and sets the mark's blank as glue that may shrink by half an em.
   would take more onto a line (2611.03953v2's first entry through the next name again); it would also replace the squeeze's two
   thresholds. A later step.
 
-### 18.21 A figure's paragraph is set from its start; a half translation is never drawn; artefacts kept, a prototype (2026-11-10)
+### 18.21 A figure's paragraph is set from its start; a half translation is never drawn; artefacts kept (2026-11-10)
 
 On staging (round 8, default toggles) 2411.13093v4 p18's Figure 8, a prompt in an included PDF set in Consolas, came back
 translated one line at a time, its JSON keys too ("DET" as "侦探组"), and each entry's indented first line laid against the box's
@@ -3327,22 +3327,7 @@ translating or keeping are both fine; a garbled translation never is.
   translated ones in a row stated ok (`runs:<id>`), drawn as a translation. The floor now gives every stretch or nothing
   (`chain.ts` runsFloor). In 4,033 rows of 26 staging captures no row came from the floor and no marker or tag is left in
   any text; the parity's 15,079 laid lines of 22 pairs hold none either.
-- **An artefact is kept: a prototype, off unless asked (`LocateOptions.artefacts`; the lab's `AXT_ARTEFACTS=1`).** A unit or a
-  figure text set wholly in a face of one pitch is kept as the paper has it (`kept`, `fixed`; a figure text's why
-  `figure: code`), where the paper's body face is not one. The fact is the glyphs' (facts.ts fixedFacesOf: every font program
-  of the face one advance within a thousandth of its size, one of them two distinct letters), never a face's name, a macro's
-  or the FixedPitch flag (p19's Consolas subsets: one flagged, one not; a CJK subset of one glyph flagged). A block of prose
-  with an inline `\texttt` stays translated, its typewriter an element. A paper set wholly in typewriter keeps nothing.
-  A figure's word in another face inside a line of code (the ink right before and after it, in its page's order, on its
-  baseline in a face of one pitch) is kept with its line: p19's "attractions" and "coin", set in Georgia inside Consolas JSON.
-  The faces it keeps over the 88 and 2411.13093v4 are each a typewriter's (Consolas, DejaVu Sans Mono, Nimbus Mono, Liberation
-  Mono, Inconsolata); no paper's body face is one. Kept over the 88: 40 source units of 5 papers (2608.06007v1's 23 cells of
-  API signatures, the prompts of 2608.25210v2, 2610.11256v1, 2610.21098v1 and 2610.22195v1, set with `\ttfamily` and
-  translated until now while `\texttt` prompts were kept) and 175 figure texts of 8 papers (code, paths, identifiers such as
-  `lin2` and `Kitchen_In`, e-mail addresses); 129 on 2411.13093v4. A reader may want some of them translated: a prompt is
-  prose a model reads. That is the owner's to rule, with a toggle or not. Today's prepare also keeps a figure's label that is a
-  name or code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88); the
-  rebuild keeps none of them for it, and that rule is not ported here.
+- **An artefact is kept**: text set wholly in a face of one pitch, the owner's ruling, §18.22.
 - **No rule draws the original where a lay is not clean.** The lay keeps a translation inside its own region by construction
   and leaves one that cannot fit, shrunk to its floor, the original's (`unfit`); the part holds no page-wide ink, so nothing
   compares a laid line with ink that stays. The parity's facts over its 344 pages (part A's final, round 8): no laid line
@@ -3350,6 +3335,41 @@ translating or keeping are both fine; a garbled translation never is.
   2610.21880v1 p2's header cell), 139 lines past their room or column (`frame`; of the 111 it names, 1.16 to 12.55 pt, the
   median 2.26; today's 145). The p19 garble was neither: it was the translation of fragments, which the artefact rule keeps. A
   rule that drew those 139 as the original would hide readable translations and the defects the parity measures.
+
+### 18.22 Text set in a face of one pitch is kept as the original's (the owner's ruling, 2026-11-10)
+
+On §18.21's prototype the owner ruled 「同意你的建议 我们选 c」: option C, the anchor fix and this rule, always, with no toggle. It
+rests on his line quoted there: a translation may be made or not, never garbled.
+
+- **The rule** (`locate.ts`, `ink.ts`). A source unit or a figure text whose every glyph of ink is set in a face of one pitch is
+  kept as the paper has it, as a code environment's lines are (§19.7): its unit `kept`, its member `fixed`, a figure text's why
+  `figure: code`. That is code, a command, a prompt, JSON, an OCR card, an identifier. A figure's word in another face is kept
+  with its line where the ink right before and after it, in its page's order, stands on its baseline in a face of one pitch
+  (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A paper whose body face is of one pitch
+  keeps nothing for it. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
+  paragraph naming a function in `\texttt`, a figure's title line with a path in it. Titles, captions, questions and answers
+  set in a proportional face are translated.
+- **The facts it rests on** (`facts.ts` fixedFacesOf). A face is of one pitch where each font program of it (an embedded subset)
+  sets every character one advance at its size, within a thousandth (the PDF's widths are whole thousandths), and one of them
+  two distinct letters at least. Each program is read alone: 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and
+  p19. Neither the face's name, a macro's, nor the font's FixedPitch flag is read: producers state the flag wrong (p19's
+  Consolas subsets, 36 characters at 550 each, one flagged and one not; a CJK subset of one glyph and MSAM10 flagged). The body
+  face is the face most of the paper's source units' text glyphs are set in.
+- **Over the 88 and 2411.13093v4** (stage 1a, lane mono-rule). 40 source units are kept on 5 papers: 2608.06007v1's 23 cells
+  of API signatures, and prompts set with `\ttfamily` (2608.25210v2 6, 2610.11256v1 4, 2610.21098v1 1, 2610.22195v1 6), which
+  were translated while `\texttt` prompts were kept. 154 figure texts are kept on 6 papers (code, paths, identifiers such as
+  `lin2` and `Kitchen_In`, e-mail addresses), and 129 on 2411.13093v4. Every face kept is a typewriter's (Consolas, DejaVu Sans
+  Mono, Nimbus Mono, Bera Sans Mono, Liberation Mono, Inconsolata, Computer Modern Typewriter), but for the 3 words inside
+  2411.13093v4's code lines; no paper's body face is one of one pitch. 2610.19159v1's 17 transcript box titles hold a path in
+  typewriter between words in a proportional face, one figure text a line as TeX set it (§19.12): titles, translated, each
+  path a group.
+- **The parity** reads a unit so kept as the original's text, no translation missing (`lab/typeset/parity/README.md`): the
+  prepare marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), and no other unit left the original's is read so.
+- **Not this rule's.** A box whose source unit is one block of a proportional line and a typewriter prompt (2608.25210v2 p3)
+  stays translated, its keys garbled; a cut at the box in the front end would keep it. A figure's name label in a proportional
+  face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
+  code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
+  An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
 
 ## 19. The engine's contract
 
@@ -4299,6 +4319,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   glyphs' ink), and every reader keeps its text as the paper has it: the figures' reading makes no unit of it, its runs counted
   under the caps as any (§19.12), and the ledger classes its line `code` whatever its face (`ledger.mjs` RULES' first), so that
   the ink units keep it (kept blocks), wherever it stands — a box TikZ draws (mdframed's `framemethod=tikz`), a float, a column.
+  Text set wholly in a face of one pitch outside such an environment is kept too, by its glyphs' advances (§18.22).
   It is a fact TeX decided, written once where every reader reads it: the one command model the layout file grows into (the
   architecture audit's §2), not a side channel of the prepare's. Measured against `next` 74d7f6a2: of 244 local sources 14 use a code environment, and the layout
   compile's files of the other 229 are byte for byte as before (their final passes too, 63 of the 77 papers run); over the 14,
