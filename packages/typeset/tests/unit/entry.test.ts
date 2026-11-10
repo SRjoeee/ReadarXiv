@@ -1353,6 +1353,44 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const [laid] = layPage(part(name), rowsOf([], true), rules, metrics()).members
     expect(laid!.lines[0]![3].map((it) => it.s).join('')).toBe('ANHANG A')
   })
+  it('lays a name with the number TeX set before it (its label) as one line, centred whole where TeX centred the two', () => {
+    // (2610.20967v1 p5: spconf.sty's "9. REFERENCES", centred in its column 54-300; the number the name's label (own.mjs MR 6c).
+    // Its crop and the target's word, the original's 18 between their starts, the whole on the line's middle 177: its label
+    // off with its text. Before, the word was set alone and the number stayed: a line left of the column's middle)
+    const name = member({
+      ord: 0,
+      kind: 'name',
+      text: { name: 'ref' },
+      plain: 'REFERENCES',
+      align: 'c',
+      style: { role: 'serif', size: 10, bold: 1, upper: 1, design: 'NimbusRomNo9L-Medi' },
+      label: {
+        kind: 'head',
+        ink: [1, 138, 698, 150, 707, 700],
+        style: { role: 'serif', size: 10, bold: 1 },
+        num: ['9', [1, 138, 698, 144, 707, 700]],
+        punct: ['.', [1, 144, 698, 150, 707, 700]],
+        line: 0,
+      },
+      lines: [[1, 0, 156, 216, 700, 707, 698, 54, 300, 0, 10]],
+      room: { below: 12, next: 20, side: [54, 300] },
+    })
+    const [laid] = layPage(part(name), rowsOf([], true), rules, metrics()).members
+    expect(laid).toMatchObject({ state: 'laid', off: 5 })
+    // ("LITERATUR" 45 wide at the table metrics' half a size a character: the whole 63, from 145.5 to 208.5)
+    const [y, x0, x1, items] = laid!.lines[0]!
+    expect([y, x0, x1]).toEqual([700, 145.5, 208.5])
+    expect(items[0]).toMatchObject({ s: '9.', x: 145.5, src: [1, 138, 698, 150, 707, 700], k: 1, piece: 'label' })
+    expect(items.slice(1).map((it) => [it.s, it.x])).toEqual([['LITERATUR', 163.5]])
+    // (read justified: its left edge kept, the number drawn where it stood, the word at its own start)
+    const [left] = layPage(part({ ...name, align: 'j' }), rowsOf([], true), rules, metrics()).members
+    expect(left).toMatchObject({ state: 'laid', off: 5 })
+    expect(left!.lines[0]!.slice(0, 3)).toEqual([700, 138, 201])
+    expect(left!.lines[0]![3].map((it) => [it.s, it.x])).toEqual([
+      ['9.', 138],
+      ['LITERATUR', 156],
+    ])
+  })
   it('sets a name in capitals where its style is the text’s capitals (Style.upper), none where they are faked small capitals', () => {
     // (cloud Codex on #623: the bundle states a name's case in Style.upper, the entry read Word.caps alone: "ABSTRACT" laid as
     // "Zusammenfassung")

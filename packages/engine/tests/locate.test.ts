@@ -907,6 +907,54 @@ describe('a babel name’s counter', () => {
     expect(name.plain).toBe('APPENDIX')
     expect(name.text).toEqual({ name: 'appendix', counter: ['A', [1, 126, 698, 132, 707, 700]] })
   })
+  it('states the number TeX set right before a name as its label, a heading’s, and reads the line whole: centred', () => {
+    // (spconf.sty's thebibliography: \section{References} centred, "9." and 0.6 em before the word, 2610.20967v1 p5; the wrap
+    // gives the number the name's label group, own.mjs MR 6c. Read off the word alone, the line was justified: its middle 9 pt
+    // off the column's, the number a stay, Room.side from its end)
+    const B = docOf([
+      {
+        lines: [
+          { text: '9.', x: 138, y: 700 },
+          { text: 'REFERENCES', x: 156, y: 700 },
+          { text: 'x'.repeat(40), x: 54, y: 676 },
+        ],
+        points: [
+          ['n1.ref.s', 2],
+          ['n1.ref.e', 12],
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'x'.repeat(40)), { ...unitOf('name', 'ref'), name: 'ref', kept: true as const }]
+    const ins = {
+      ...instrumentOf(B, units, [[1, 1, 0]], [[ROLE.label, ROLE.name, ROLE.text]]),
+      tex: { frames: [{ block: [54, 300] as [number, number], columns: [[54, 300] as [number, number]] }] },
+    }
+    const L = locate(ins, B, align(B, B))
+    const o = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 'test',
+      }),
+    ].find((x) => x.kind === 'part')!
+    const name = read('part', o.bytes, o.digest)
+      .flows.flat()
+      .find((m) => m.kind === 'name')!
+    expect(name.plain).toBe('REFERENCES')
+    expect(name.label).toMatchObject({
+      kind: 'head',
+      ink: [1, 138, 698, 150, 707, 700],
+      num: ['9', [1, 138, 698, 144, 707, 700]],
+      punct: ['.', [1, 144, 698, 150, 707, 700]],
+      line: 0,
+    })
+    expect(name.align).toBe('c')
+    expect(name.room.stays).toBeUndefined()
+    expect(name.room.side?.[0]).toBe(54)
+  })
 })
 
 describe('a babel name that leads a unit (today’s RUN_IN, make.mjs leadAt)', () => {

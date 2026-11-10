@@ -27,7 +27,7 @@ import { type NameRow, setNameOf } from '../shared/names.ts'
 import { ownNamesOf } from '../unit/rename.ts'
 import type { Layout, Tokens } from '../fit/types.ts'
 import type { Item, Laid, Metrics, Page, Rows, Rules, Unlaid } from '../types.ts'
-import { inkLines, type TextItem } from '../emit/display.ts'
+import { inkLines } from '../emit/display.ts'
 import { adapt, rectOf, rowLinesOf, sharedPaper } from './adapt.ts'
 import { cropInks } from './clips.ts'
 import type { FlowMember } from './flow.ts'
@@ -223,6 +223,13 @@ export function nameOf(
   }
   const color = m.style.fill ? `#${m.style.fill.toString(16).padStart(6, '0')}` : undefined
   const st = { ...tstyleOf(m.style, paper.designs), ...(m.style.sc ? { caps: true } : {}), ...(color ? { color } : {}) }
+  // (its label: the number TeX set right before it on its line (own.mjs MR 6c, 2610.20967v1's "9. REFERENCES"), drawn as its crop
+  // before the word, the original's distance between their starts kept: where the name is centred the line is laid whole, as TeX
+  // centred it; kept at its left edge, the number where it stood. Drawn either way, its group off with the text's: a page whose
+  // labels the add-on folded into the text's group hides it with the word)
+  const lb =
+    m.label && m.label.ink[0] === l[0] && (m.label.line ?? 0) === 0 && m.label.ink[3] <= l[2] + 0.1 ? m.label : null
+  const before = lb ? l[2] - lb.ink[1] : 0
   const set = setNameOf({
     nm,
     own: { text: m.plain ?? '', counter: word.counter?.[0] ?? '', size, small: !!m.style.sc, st, chars: [] },
@@ -235,13 +242,16 @@ export function nameOf(
     ownSmallCaps,
     metrics,
     shown: !m.why,
+    before,
   })
   if (set.wait) return { wait: set.wait }
   if (set.lead) return { lead: { text: set.lead.text, st: set.lead.st } }
   const d = set.drawn
   if (!d) return { why: set.rec.why === 'unfit' ? 'unfit' : set.rec.why === 'served' ? ('served' as Unlaid) : 'name' }
-  const items: TextItem[] = []
+  const items: Item[] = []
   let x = d.x
+  const x0 = lb ? d.x - before : d.x
+  if (lb) items.push({ s: `${lb.num?.[0] ?? ''}${lb.punct?.[0] ?? ''}`, x: x0, src: lb.ink, k: 1, piece: 'label' })
   const fill = typeof d.color === 'string' ? Number.parseInt(d.color.slice(1), 16) : undefined
   for (const r of d.runs) {
     const f = r.face ?? d.face
@@ -251,7 +261,7 @@ export function nameOf(
     items.push({ s: r.s, x, face, size: d.size * r.k, ...(fill !== undefined ? { fill } : {}), ...slant })
     x += (metrics.advance(face, 100, r.s) / 100) * r.k * d.size
   }
-  return { laid: [[d.baseline, d.x, x, items]] }
+  return { laid: [[d.baseline, x0, x, items]] }
 }
 
 /** layPage (design-a §1.2): page `part.page` laid from its part and the target's rows */
@@ -568,11 +578,12 @@ export function layPage(part: Part, rows: Rows, rules: Rules, metrics: Metrics, 
       owners.set(m.ord, { m, off, drawn: fl.map((l) => (m.dir ? pageBoxOf(nameBox(l), m.dir) : nameBox(l))) })
       return { ord: m.ord, page, state: 'laid', off, lines: inked(fl), lit: litOfFigure(m, page, fl) }
     }
-    // (a name drawn on its own: its word on its line, its text group off)
+    // (a name drawn on its own: its word on its line, its text group off; its label's too where its crop is drawn with it)
     const nl = names.get(m.ord)
     if (nl) {
       const here = m.lines[0]![0] === page
-      const off = groupsOn(m, page) & 1
+      const moved = nl.some((l) => l[3].some((it) => 'src' in it && it.piece === 'label'))
+      const off = groupsOn(m, page) & (moved ? 1 | LABEL_KEPT : 1)
       owners.set(m.ord, { m, off, drawn: here ? nl.map(nameBox) : [] })
       return {
         ord: m.ord,

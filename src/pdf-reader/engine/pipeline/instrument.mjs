@@ -912,6 +912,14 @@ export function textsOf(texts) {
  * OPS } and `documentOptions` the host's (the same as wrapFinal is given, so that the pages read are its); `made` { compiler,
  * tree, front }. Returns the Instrument, and `today` (the ownership's own records, for the lab's checks)
  */
+/** a babel name's group as the wrap names it (own.mjs MR 6): its occurrence `n<occ>`, whose word's glyphs the name owns
+ *  (ROLE.name), and its label `n<occ>.l`, the number TeX set right before it at its line's start (MR 6c: a heading its class
+ *  numbers itself), the name's label (ROLE.label); null for any other group */
+export function nameGroupOf(g) {
+  const m = /^(n\d+)(\.l)?$/.exec(g ?? '')
+  return m ? { occurrence: m[1], role: m[2] ? ROLE.label : ROLE.name } : null
+}
+
 /**
  * What the instrument states of each of the paper's units from the front end's facts beside them (live.mjs openPaper), by
  * index: `float`, a caption's float type (LaTeX's \\@captype there, `floatTypes`: the part's Label.float, by which its label
@@ -988,10 +996,10 @@ export async function instrumentOf({ paper, finalPdf, options = {}, log = '', pd
     const pieceG = glyphPiecesOf(pg, row, { units, texts: shown, names, open: openG })
     const pieceX = piecesByPoints(pg.points, pg.boxes.length / 4, j => brow[j], 'box', openX)
     const set = (O, j, g, piece) => {
-      let m = /^u(\d+)(\.[pl])?$/.exec(g ?? '')
+      const m = /^u(\d+)(\.[pl])?$/.exec(g ?? '')
       if (m) { O.unit[j] = Number(m[1]); O.role[j] = m[2] === '.p' ? ROLE.element : m[2] === '.l' ? ROLE.label : ROLE.text; if (m[2] === '.p') O.piece[j] = piece[j]; return }
-      m = /^n(\d+)$/.exec(g ?? '')
-      if (m && keyOf.has(g)) { O.unit[j] = babel(keyOf.get(g)); O.role[j] = ROLE.name }
+      const nm = nameGroupOf(g)
+      if (nm && keyOf.has(nm.occurrence)) { O.unit[j] = babel(keyOf.get(nm.occurrence)); O.role[j] = nm.role }
     }
     for (let j = 0; j < pg.glyphs.length; j++) set(G, j, row[j], pieceG)
     for (let j = 0; j < pg.boxes.length / 4; j++) set(X, j, brow[j], pieceX)

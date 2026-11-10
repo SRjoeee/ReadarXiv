@@ -158,6 +158,29 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const two = [page([{ pt: 'c2-1' }, { dx: 245 }, { pt: 'n7.appendix.s' }, 'Appendix', { pt: 'n7.appendix.e' }, { dx: 9 }, 'A'])]
     expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n7: 'Appendix' })
   })
+  it('gives a babel name the number TeX set right before it at its line\'s start, no unit\'s, as its label (spconf\'s "9. REFERENCES", 2610.20967v1)', () => {
+    // (ICASSP's spconf.sty: thebibliography sets \section{References}, its number \@svsec "9." and \hskip 0.6em before the word;
+    // the number is the name's label, `n<k>.l`, which moves with its word: the line TeX centred is laid whole)
+    const pages = [page([
+      '9.', { dx: 5.4 }, { pt: 'n1.ref.s' }, 'REFERENCES', { pt: 'n1.ref.e' }, '\n',
+      { pt: '0s' }, 'Body', { pt: '0e' }, '\n',
+      'A.1', { dx: 10 }, { pt: 'n2.appendix.s' }, 'Appendix', { pt: 'n2.appendix.e' }, '\n',
+    ])]
+    expect(groupsOf(ownOf(pages, { units: units('Body') }), pages)).toEqual({ 'n1.l': '9.', n1: 'REFERENCES', u0: 'Body', 'n2.l': 'A.1', n2: 'Appendix' })
+    // (none past TeX's own spacing before the word, no number (a word, a letter alone), a number after another word on its line,
+    // a number a unit owns: the name's word alone)
+    const not = [page([
+      '9.', { dx: 30 }, { pt: 'n3.ref.s' }, 'References', { pt: 'n3.ref.e' }, '\n',
+      'See', { dx: 3 }, { pt: 'n4.ref.s' }, 'References', { pt: 'n4.ref.e' }, '\n',
+      'A', { dx: 5 }, { pt: 'n5.ref.s' }, 'References', { pt: 'n5.ref.e' }, '\n',
+      'Table', { dx: 3 }, '9', { dx: 5 }, { pt: 'n6.ref.s' }, 'References', { pt: 'n6.ref.e' }, '\n',
+      { pt: '0s' }, '3', { pt: '0e' }, { dx: 5 }, { pt: 'n7.ref.s' }, 'References', { pt: 'n7.ref.e' }, '\n',
+    ])]
+    expect(groupsOf(ownOf(not, { units: units('3') }), not)).toEqual({ n3: 'References', n4: 'References', n5: 'References', n6: 'References', n7: 'References', u0: '3' })
+    // (on a page of two columns, a number in the other column, however near: the name's word alone)
+    const two = [page([{ pt: 'c2-1' }, { dx: 286 }, '7', { dx: 6 }, { pt: 'n8.appendix.s' }, 'Appendix', { pt: 'n8.appendix.e' }])]
+    expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n8: 'Appendix' })
+  })
   it('gives a footnote\'s call after the last word that TeX gave no mark its raised mark right after the end mark (2610.35877v1\'s abstract)', () => {
     const pages = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]
     const mark = pages[0]!.glyphs[6]!
