@@ -7,7 +7,7 @@ import { layoutCut } from '../../src/fit/cut.ts'
 import type { FitBlock, FitParams, Tokens } from '../../src/fit/types.ts'
 import { layoutOf, linesOf, walkCase } from './fit-input.ts'
 import { isShare } from './round.ts'
-import { firstDifference, hasDerived, hasTap, ledger, sample } from './tap.ts'
+import { firstDifference, hasDerived, hasTap, inWordOf, ledger, sample, wordGlued } from './tap.ts'
 
 const RULES = [
   'U.admit',
@@ -37,6 +37,7 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at
       borrowed: 0,
       opened: 0,
       lastLines: 0,
+      glued: 0,
     }
     const seen = new Set<string>()
     for (const rule of RULES)
@@ -63,9 +64,21 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at
           if (got.layout.state.borrow) count.borrowed++
           if (got.layout.opened) count.opened++
           if (c.P.lastLines) count.lastLines++
+          // (a round whose tokens hold an item that continues its word: its lines' ends read to a millionth of a point, lane
+          // literal-fixes' rule moving a line's slack between its gaps and never its end, tap.ts wordGlued)
+          const lines = linesOf(got.layout)
+          let dl = firstDifference(lines, c.want.layoutLines, 'lines')
+          if (
+            dl &&
+            inWordOf(c.tokens as unknown[]) &&
+            !firstDifference(wordGlued(lines), wordGlued(c.want.layoutLines), 'lines')
+          ) {
+            dl = null
+            count.glued++
+          }
           const d =
             firstDifference(layoutOf(got.layout), c.want.layout, 'layout') ??
-            firstDifference(linesOf(got.layout), c.want.layoutLines, 'lines') ??
+            dl ??
             firstDifference(cut, c.want.cutTokens, 'cutTokens') ??
             firstDifference(c.tokens.length, c.want.tokens, 'tokens')
           if (d) differ.push(`${key}|${r}: ${d}`)
@@ -85,6 +98,9 @@ describe.skipIf(!hasTap || !hasDerived('rules'))('X.walk: replayed on the tap at
       borrowed: 19,
       opened: 1,
       lastLines: 11,
+      // (rounds whose lines' ends differ from today's at 1e-13 alone, lane literal-fixes' rule moving a line's slack between its
+      // gaps: tap.ts wordGlued)
+      glued: 7,
     })
   })
 })

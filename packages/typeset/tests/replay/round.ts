@@ -14,7 +14,7 @@ import type { FillLaid } from '../../src/shared/fill-page.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { cellBands } from '../../src/unit/params.ts'
 import { blockOfTap, num, type WalkCase } from './fit-input.ts'
-import { borrowsAt, firstDifference, ledger, ruledRoom } from './tap.ts'
+import { borrowsAt, firstDifference, inWordOf, ledger, ruledRoom, wordGlued } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
@@ -122,6 +122,16 @@ function stepsAfter(
   steps: string[],
 ): Chain {
   const mine = (step: string, by: string) => trace.slots.find((s) => s.step === step && s.by === by)?.value as Raw
+  // (a round whose tokens hold an item that continues its word: its lines' ends read to a millionth of a point, lane
+  // literal-fixes' rule moving a line's slack between its gaps and never its end (tap.ts wordGlued); counted where it decides)
+  const inWord = inWordOf(c.tokens as unknown[])
+  const glued = (a: unknown, b: unknown, label: string): string | null => {
+    const d = firstDifference(a, b, label)
+    if (!d || !inWord) return d
+    const g = firstDifference(wordGlued(a), wordGlued(b), label)
+    if (!g) steps.push(`${label} (no glue in a word)`)
+    return g
+  }
   const pick = (v: Raw | undefined, keys: string[]) => (v ? Object.fromEntries(keys.map((k) => [k, v[k]])) : v)
   /** a step's answer against its slot, by the fields the tap summarizes; whether it ran on both sides */
   const compare = (step: string, by: string, keys: string[], label: string): string | null => {
@@ -129,7 +139,7 @@ function stepsAfter(
       b = c.slot(by)
     if (!!a !== !!b) return `${by} ${a ? 'ran' : 'did not run'}, today's slot ${b ? 'is' : 'is not'} there`
     if (!a) return null
-    const d = firstDifference(pick(a, keys), pick(b, keys), label)
+    const d = glued(pick(a, keys), pick(b, keys), label)
     if (!d) steps.push(label)
     return d
   }
@@ -145,7 +155,7 @@ function stepsAfter(
     const over = ['overLayout', 'overLayoutLines']
     d =
       firstDifference(!!a5?.taken, !!b5?.taken, 'F5 taken') ??
-      (a5?.taken ? firstDifference(pick(a5, over), pick(b5, over), 'F5') : null)
+      (a5?.taken ? glued(pick(a5, over), pick(b5, over), 'F5') : null)
     if (d) return { at: 'F5', d, steps }
     steps.push(a5?.taken ? 'F5 taken' : 'F5')
   }
@@ -161,7 +171,7 @@ function stepsAfter(
     const shared = got.state === 'laid' ? (got.lay.runs ?? []).map((q) => q.tokens.filter(isShare).length) : []
     const laid = mine('F6', 'X.runs')?.laidRuns as { runs?: Raw[] } | null | undefined
     const runs = laid?.runs?.map((r, i) => ({ ...r, tokens: (r.tokens as number) - (shared[i] ?? 0) }))
-    d = firstDifference(
+    d = glued(
       laid ? { ...laid, runs } : null,
       (c.slot('X.runs')?.laidRuns as Raw | null | undefined) ?? null,
       'laidRuns',
@@ -190,7 +200,7 @@ function stepsAfter(
   }
   const out = c.slot('X.walk')
   if (!out) return { at: 'out', d: null, stopped: 'no X.walk slot (refused)', steps }
-  d = firstDifference(pick(mine('out', 'X.walk'), ['layout', 'lines']), pick(out, ['layout', 'lines']), 'out')
+  d = glued(pick(mine('out', 'X.walk'), ['layout', 'lines']), pick(out, ['layout', 'lines']), 'out')
   if (d) return { at: 'out', d, steps }
   steps.push('out')
   const l9 = c.slot('S.fill.leads')

@@ -32,6 +32,7 @@ import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
 import type { Metrics, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
+import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -93,6 +94,9 @@ export type GateL1 = {
     figures: Map<string, number>
     /** Laid.lit over the laid members: those lit, a laid line with no box on the right, the panes' entries apart */
     lit: { laid: number; lines: number; boxes: number; apart: number; empty: number }
+    /** I10, the sentence cover over every member lit (cover.ts): each piece drawn in exactly one sentence on each pane, the
+     *  panes' sentences the same */
+    cover: Cover
   }
 }
 
@@ -459,6 +463,10 @@ export function gateL1Pair(
       number,
       { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
     >
+    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
+     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
+     *  that says nothing */
+    accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -491,6 +499,7 @@ export function gateL1Pair(
             linkEx: new Map(),
             figures: new Map(),
             lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 },
+            cover: newCover(),
           },
         }
       : {}),
@@ -638,7 +647,7 @@ export function gateL1Pair(
     if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
-    if (!content) return null
+    if (!content || (o.accept && !o.accept(src, content))) return null
     // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
     const sentences = src.sentences ? doorSentences(row, source) : undefined
     return { content, ...(sentences ? { sentences } : {}) }
@@ -966,6 +975,7 @@ export function gateL1Pair(
         { linkFates },
       )
       out.entry.ms.push(performance.now() - t1)
+      coverOf(out.entry.cover, page, part as Part, metrics, pair)
       // (the links' fates, the dropped with an example each; the laid members' boxes on both panes)
       ;((part as Part).links ?? []).forEach((l, i) => {
         // (an annotation of a member's other page, which the part holds with its page: counted apart)
@@ -1076,6 +1086,7 @@ export function gateL1Pair(
       prev.elements.push(...elements)
     }
   }
+  if (out.entry) coverDone(out.entry.cover, pair)
   for (const u of L.units) {
     const x = dumped.get(u.ord)
     if (x)

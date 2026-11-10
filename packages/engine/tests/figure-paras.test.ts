@@ -1,4 +1,4 @@
-// A figure's paragraphs (src/locate/figure-paras.ts, F3, PDF-READER §18.27): lines of prose joined where the text goes on by a
+// A figure's paragraphs (src/locate/figure-paras.ts, F3, PDF-READER §18.28): lines of prose joined where the text goes on by a
 // fact (TeX's hyphen, a justified block, a ragged block of three lines or more), never two ragged lines alone, never across a
 // marker, a blank line, a change of face or edge, or two lines each led by ink of its own. Synthetic lines.
 import { describe, expect, it } from 'vitest'

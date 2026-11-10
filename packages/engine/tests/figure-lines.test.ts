@@ -1,4 +1,4 @@
-// A figure's texts as its printed lines tell them (src/locate/figure-lines.ts, PDF-READER §18.25): F0's lines, a line of code,
+// A figure's texts as its printed lines tell them (src/locate/figure-lines.ts, PDF-READER §18.26): F0's lines, a line of code,
 // and the relation reading of a crowded text's ink (the owner's reformulation of 2026-11-10 of the no-touch rule).
 import { describe, expect, it } from 'vitest'
 import { figureLinesOf } from '../src/locate/figure-lines.ts'

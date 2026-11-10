@@ -13,7 +13,10 @@
 // list of ids. Each statement names the unit of the candidate's that holds today's whole, where one does (`holder`): the parity
 // joins the two by it (lab/typeset/parity/join.mjs heldJoin)
 import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../../packages/typeset/tests/replay/l1.ts'
+import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
+import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
+import { identifiersIn } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
@@ -69,9 +72,23 @@ export const CAUSE = Object.freeze({
   // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
   // cause, keptWhyOf: accepted)
   pitch: 'kept as the original: set wholly in a face of one pitch',
+  // ((l), the coordinator's ruling of 2026-11-10, round 8 B5, and (l'), its extension the same day: today's ink unit whose every
+  // line one source unit of v2's holds (no other meets them), both read as the reader sees them (seenOf): each formula's span one
+  // placeholder (today's formula runs: its placeholders and the digits its ledger read as text inside or right beside them; v2's
+  // math elements, digits beside them alike), every other element and a label as their ink on arXiv's page prints them, v2's text
+  // through TeX's ligatures, letters case apart where today's glyphs are in a face of small capitals; today's then holding a letter
+  // and a contiguous stretch of v2's, white space aside: 2610.21377v1 pp. 34-43, which today's front end read off arXiv's ink
+  // after a `$…\)` and v2's reads as TeX's paragraphs: accepted)
+  seen: 'held whole by a source unit, read as arXiv prints it',
+  // ((k) for the identifier rule, the coordinator's ruling of 2026-11-10 on rebuild/literal-fixes (PDF-READER §18.25): what the
+  // prepare keeps whole as identifiers, the original's text, no translation missing: the candidate's figure text kept for one
+  // (the engine's `figure: identifier`, the dump's `keptBy: 'identifier'`), and today's unit of identifiers alone the candidate
+  // makes no unit of (a cell: the front end's identifiersIn holds its whole text) or holds in a kept block alone (a line of ink),
+  // stated with the same mark: accepted)
+  identifier: 'kept as the original: an identifier is never sent',
   // ((n), F0 (rebuild/fig-text): today's unit now wholly a stretch of a figure text a decoration holds (a frame, an underline or
   // a tone under it: the dump's `keptBy: 'decoration'`), kept as the original's ink with its decoration inside the translated
-  // text: accepted, the coordinator's ruling of 2026-11-10)
+  // text: accepted, the coordinator's ruling of 2026-11-10 on F0)
   decoration: 'kept as the original: a stretch a decoration holds, carried with it',
   // ((m), F1 (rebuild/fig-text): today's unit inside a formula of a figure, kept as the original: wholly a formula element of a
   // figure text (`keptBy: 'formula'` on the element), or held whole by a figure's line no word of which stands outside its
@@ -93,11 +110,28 @@ const UNMARKED = 'unlocated: marks'
 /** the reason a dump gives a unit of the candidate's set in a paragraph that sets a unit again (rebuild/author-lines-3's re-set
  *  paragraph: acmart's reference format one ink unit), which (i) reads too (the coordinator's ruling of 2026-11-10, round 8 B3) */
 const RESET = 'unlocated: set in a paragraph that sets a unit again'
-/** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, by
- *  the mark it writes (the dump's `keptBy: 'pitch'`, which the parity's ruling reads too), else null: a unit kept otherwise
- *  (a code environment's kept block, a crowded figure text) states none */
-export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : u?.keptBy === 'formula' ? CAUSE.formula : null)
+/** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, or
+ *  for an identifier, by the mark it writes (the dump's `keptBy`, 'pitch' or 'identifier', which the parity's rulings read too);
+ *  (m) where it keeps a figure's line of formulas alone (`keptBy: 'formula'`, F1); else null: a unit kept otherwise (a code
+ *  environment's kept block, a crowded figure text) states none */
+export const keptWhyOf = (u) =>
+  u?.keptBy === 'pitch'
+    ? CAUSE.pitch
+    : u?.keptBy === 'identifier'
+      ? CAUSE.identifier
+      : u?.keptBy === 'formula'
+        ? CAUSE.formula
+        : null
 
+/** (l'): TeX's ligatures of a text face's input, its font's ligature table (Knuth's cmr, and every text font after it): an em dash,
+ *  an en dash, the curly double and single quotes */
+const TEX_LIGATURES = [['---', '\u2014'], ['--', '\u2013'], ['``', '\u201c'], ["''", '\u201d'], ['`', '\u2018'], ["'", '\u2019']]
+const ligatured = (s) => TEX_LIGATURES.reduce((t, [a, b]) => t.replaceAll(a, b), s)
+/** (l): the elements of a source unit that are formulas (the dump's element kinds: an inline formula, a display) */
+const MATH_ELEMENTS = new Set(['math', 'display'])
+/** (l): a formula's span as one character, and an element that reads as nothing of today's */
+const FORMULA_MARK = '\ufffc'
+const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
@@ -107,6 +141,20 @@ const ADDRESS = /(?:\{[^{}@]+\}|[\p{L}\p{N}!#$%&'*+/=?^_`|~.-]+)@[\p{L}\p{N}-]+(
 export const addressesOnly = (s) => {
   const rest = s.replace(ADDRESS, '\u0000')
   return rest.includes('\u0000') && !/[\p{L}\p{N}]/u.test(rest)
+}
+
+/** a text of identifiers alone (the front end's identifiersIn: a token holding an underscore between two word characters, its
+ *  brackets with it): one identifier at least, no letter or digit outside them */
+export const identifiersOnly = (s) => {
+  let rest = '',
+    at = 0
+  const ids = identifiersIn(s)
+  for (const [a, b] of ids) {
+    rest += s.slice(at, a)
+    at = b
+  }
+  rest += s.slice(at)
+  return ids.length > 0 && !/[\p{L}\p{N}]/u.test(rest)
 }
 
 /** the trails among a candidate's elements (`[k, el]`, as locate's members and a part's members carry them: El.trail, its ink
@@ -129,8 +177,9 @@ export const trailsOf = (els) =>
  * each baseline unit the candidate does not make, in the baseline's order, `{ u, why, cause, holder }` (`cause` CAUSE's key, or
  * `content` for a content difference, `keptAt` for a kept block at its place; `holder` the id of the candidate's unit holding
  * it whole, held (f), by the block (b') or by the block's units (f'), the one whose glyph text is today's, or a names unit's
- * stand-in of its ledger class with today's characters in another order); one it has no
- * statement for (absent from the candidate) is left out
+ * stand-in of its ledger class with today's characters in another order; `keptBy` the prepare's mark of a unit kept by a
+ * rule, 'identifier', which the dump writes on the statement as on a unit of its own); one it has no statement for (absent
+ * from the candidate) is left out
  */
 export function statedOf(base, units, { trails = [], labels = new Map(), glyphs = () => null, displays: shown = [] } = {}) {
   const out = []
@@ -273,8 +322,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     b.x0 < a.x1 - ON &&
     Math.min(a.top, a.bottom) < Math.max(b.top, b.bottom) - ON &&
     Math.min(b.top, b.bottom) < Math.max(a.top, a.bottom) - ON
+  // (a unit's glyph text: its text pieces, each placeholder that is a text symbol its character (symbolText: `\_`, `\%`, `\&`,
+  // text whatever ink a dump states of it, as the front end reads it), any other its reading (readingOf: a tie, an address, an
+  // identifier) or an unread mark where its dump states ink of it, else nothing. The two dumps read alike so: the candidate's
+  // lists an element only with its ink, today's every placeholder its ledger looked for, `\%`, `\&`, `\_` and a `\code{…}`
+  // head with none of their own (the coordinator's ruling of 2026-11-10 on rebuild/literal-fixes: an element read as printed,
+  // one with no ink of its own as nothing))
   const glyphTextOf = (x) => {
-    const inked = new Set((x.elements ?? []).map((e) => e.k))
+    const inked = new Set((x.elements ?? []).filter((e) => e.segs?.length).map((e) => e.k))
     // (an element the unit keeps as the original's ink (`keptBy`, F0's: a run of one pitch, a stretch a decoration holds) reads
     // as its source, the characters it shows)
     const kept = new Set((x.elements ?? []).filter((e) => e.keptBy).map((e) => e.k))
@@ -286,9 +341,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
           : p.kind === 'ph'
             ? kept.has(p.k)
               ? (p.src ?? '')
-              : inked.has(p.k)
-                ? (readingOf(p.src ?? '') ?? '\ufffc')
-                : ''
+              : (symbolText(p.src ?? '') ?? (inked.has(p.k) ? (readingOf(p.src ?? '') ?? '\ufffc') : ''))
             : ''
     return s.replace(/\s+/g, '')
   }
@@ -319,6 +372,71 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         return p.includes(num) && !/[\p{L}\p{N}]/u.test(p.replace(num, ''))
       }
     return false
+  }
+  // ((l'): arXiv's glyphs of ink whose middle stands in one of the boxes (an element's segments, a label's), box by box, each in x
+  // order: what the reader sees printed there; null where the page is not read)
+  const printedIn = (boxes) => {
+    let s = ''
+    for (const k of boxes) {
+      const page = glyphs(k.page)
+      if (!page) return null
+      s += page
+        .filter((g) => !g.blank && (g.x0 + g.x1) / 2 >= k.x0 - ON && (g.x0 + g.x1) / 2 <= k.x1 + ON && g.y >= Math.min(k.top, k.bottom) - ON && g.y <= Math.max(k.top, k.bottom) + ON)
+        .sort((a, b) => a.x0 - b.x0)
+        .map((g) => g.u)
+        .join('')
+    }
+    return s
+  }
+  // ((l'): a unit as the reader sees it, white space aside: its label and every element as printed (an element TeX set no ink of
+  // reads as nothing), each formula's span one placeholder with the digits right beside it or between two (the upright digits
+  // today's ledger reads as text), the source's text through TeX's ligatures (`source`); a mark that reads as nothing of today's
+  // where an element's print cannot be read)
+  const seenOf = (n, isFormula, source) => {
+    const segs = new Map((n.elements ?? []).map((e) => [e.k, e.segs ?? []]))
+    let s = n.label?.length ? (printedIn(n.label) ?? UNREAD) : ''
+    for (const p of n.pieces ?? [])
+      s +=
+        p.kind === 'text'
+          ? source
+            ? ligatured(p.s)
+            : p.s
+          : p.kind !== 'ph'
+            ? ''
+            : isFormula(p)
+              ? FORMULA_MARK
+              : segs.has(p.k)
+                ? (printedIn(segs.get(p.k)) || readingOf(p.src ?? '')) ?? UNREAD
+                : ''
+    return s
+      .replace(/\s+/g, '')
+      .replace(new RegExp(`\\p{Nd}*${FORMULA_MARK}(?:\\p{Nd}*${FORMULA_MARK})*\\p{Nd}*`, 'gu'), FORMULA_MARK)
+  }
+  // ((l'): today's letters on arXiv's page every one in a face of small capitals (the engine's face fact, facts.ts classifyFont):
+  // their case is the face's, not the text's)
+  const inSmallCaps = (u) => {
+    const letters = []
+    for (const l of u.lines ?? []) {
+      const page = glyphs(l.page)
+      if (!page) return false
+      for (const g of page)
+        if (/\p{L}/u.test(g.u) && (g.x0 + g.x1) / 2 >= l.x0 - ON && (g.x0 + g.x1) / 2 <= l.x1 + ON && g.y >= Math.min(l.top, l.bottom) - ON && g.y <= Math.max(l.top, l.bottom) + ON)
+          letters.push(classifyFont(g.base ?? ''))
+    }
+    const text = letters.filter((f) => f.fam !== 'math')
+    return text.length > 0 && text.every((f) => f.caps)
+  }
+  const seenApart = (u, n) => {
+    const kinds = (x) => new Map((x.elements ?? []).map((e) => [e.k, e.kind]))
+    const ku = kinds(u),
+      kn = kinds(n)
+    let t = seenOf(u, (p) => !ku.has(p.k) || ku.get(p.k) === 'math', false)
+    let v = seenOf(n, (p) => MATH_ELEMENTS.has(kn.get(p.k)), true)
+    if (inSmallCaps(u)) {
+      t = t.toLowerCase()
+      v = v.toLowerCase()
+    }
+    return /\p{L}/u.test(t.replaceAll(FORMULA_MARK, '')) && v.includes(t)
   }
   const isBlock = (n) => !n.replaced && unitClass(n.kind) === 'names'
   // ((c'): a unit of the author block's, of any kind, standing for today's line after the name before's trail)
@@ -427,6 +545,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       t = glyphTextOf(u)
     return !!t && t !== h && arxivOn(at.flatMap((n) => n.lines ?? [])) === h && subsequence(t, h)
   }
+  // (a unit's text as the front end reads it for identifiers (latex-front.mjs keepRead): a placeholder its text symbol's
+  // character (`\_`, `\{`), any other no character of a word, a formula never an underscore (a bare `_` is TeX's subscript))
+  const typedOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (symbolText(p.src ?? '') ?? '\u0000') : '')).join('')
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')
   const keyOf = (why) => Object.keys(CAUSE).find((k) => CAUSE[k] === why) ?? 'content'
@@ -466,6 +587,14 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
       out.push({ u, why: `made on arXiv's page as ${mail.id.slice(0, 12)}: ${CAUSE.addresses}`, cause: 'addresses' })
       continue
     }
+    // ((k) for the identifier rule: a unit of today's whose text, as the front end reads it, is identifiers alone, every unit of
+    // the candidate's on its lines a kept block, no text of it sent, or none (a cell the front end makes no unit of; a line of
+    // ink the ledger keeps whole): before the block's own cause, as (F))
+    const named = identifiersOnly(typedOf(u))
+    if (named && u.lines?.length && u.lines.every((l) => units.every((n) => n.replaced || !n.pieces?.length || !boxesOf(n).some((k) => across(k, l))))) {
+      out.push({ u, why: CAUSE.identifier, cause: 'identifier', keptBy: 'identifier' })
+      continue
+    }
     // ((k) on elements and (n) before a stand-in: the element's unit stands for the words beside it as well)
     const keptEl = /^ink/.test(u.kind) ? keptElementOf(u) : null
     if (keptEl) {
@@ -499,9 +628,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         : partOf(u, holder)
           ? CAUSE.held
           : null
+    // (none of these: today's ink unit a source unit of v2's holds whole, both read as arXiv prints them (l'))
+    const apart =
+      !held && holder && /^ink/.test(u.kind) && !/^ink/.test(holder.kind) && holder.state === 'drawn' && seenApart(u, holder)
     // (none of these: the author block's units holding its line between them (f'); consecutive units holding its text (j))
-    const block = !c && !kept && !names && !part && !trailed && !held ? heldByBlockUnits(u) : null
-    const split = !c && !kept && !names && !part && !trailed && !held && !block ? splitOf(u) : null
+    const block = !c && !kept && !names && !part && !trailed && !held && !apart ? heldByBlockUnits(u) : null
+    const split = !c && !kept && !names && !part && !trailed && !held && !apart && !block ? splitOf(u) : null
     // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
     const how = c ? howOf(u, c) : null
     const standIn = how === CAUSE.another && standInHolds(u, c)
@@ -526,7 +658,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
             ? { by: trailed, cause: CAUSE.trail }
             : held
               ? { by: holder, cause: held, ...(held === CAUSE.held ? { holder } : {}) }
-              : block
+              : apart
+                ? { by: holder, cause: CAUSE.seen, holder }
+                : block
                 ? { by: block.holder ?? [...units].find((n) => !n.replaced && boxesOf(n).some((k) => across(k, u.lines[0]))), cause: CAUSE.heldBlock, ...(block.holder ? { holder: block.holder } : {}) }
                 : split
                   ? { by: split[0], cause: CAUSE.split }

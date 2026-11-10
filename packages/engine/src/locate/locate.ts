@@ -963,7 +963,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     return any
   }
   // (a figure's word set in another face inside a line of code is that line's: figure-lines.ts reads a line every word of which
-  // stands between glyphs of one pitch as code, kept whole (Rule 1's inside-a-line read on the line, PDF-READER §18.25:
+  // stands between glyphs of one pitch as code, kept whole (Rule 1's inside-a-line read on the line, PDF-READER §18.26:
   // 2411.13093v4 p19's "attractions" in Georgia inside its Consolas line); a figure text is kept here where it is set wholly in
   // such a face)
   const figureArtefact = (text: readonly number[], turned: readonly [number, number][]): boolean =>

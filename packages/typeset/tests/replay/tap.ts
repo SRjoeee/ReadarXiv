@@ -70,6 +70,29 @@ export function onPagesOf(pair: string, ords: ReadonlySet<number>): { pages: Set
   const pages = new Set(L.units.filter((u) => ords.has(u.ord)).flatMap(pagesOf))
   return { pages, units: new Set(L.units.filter((u) => pagesOf(u).some((p) => pages.has(p))).map((u) => u.ord)) }
 }
+/** whether a round's tokens hold an item that continues its word (B.tokens' pushText: `brk`, a piece after a break point inside a
+ *  word, a URL's after its `/`; `cont`, a run of one case of a word), where lane literal-fixes' rule (no glue inside a word:
+ *  breaker/break.mjs gapsOf, read by placeItems and the breaker's squeeze) spreads a line's slack or squeeze over fewer gaps
+ *  than today's did */
+export const inWordOf = (tokens: readonly unknown[]): boolean =>
+  tokens.some((t) => !!(t as { brk?: unknown }).brk || !!(t as { cont?: unknown }).cont)
+/** a step's summary as that rule reads it: each line summary's end (x0 + used, the trace's linesOf [3]) to a millionth of a
+ *  point, in every field named `lines` or `…layoutLines`/`…LayoutLines` and in a lines array itself; every other field as it is. The rule
+ *  moves a line's slack between its gaps, never the line's end: the same slack summed in another order differs from today's
+ *  at 1e-13 (7 of the 164 sampled rounds, every one of them so) */
+export function wordGlued(v: unknown, key = ''): unknown {
+  const line = (l: unknown) =>
+    Array.isArray(l) && typeof l[3] === 'number' ? [...l.slice(0, 3), Math.round(l[3] * 1e6) / 1e6, ...l.slice(4)] : l
+  if (Array.isArray(v)) return /ayoutLines$|^lines$/.test(key) || key === '' ? v.map(line) : v
+  if (v && typeof v === 'object' && !(v instanceof Map) && !(v instanceof Set))
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>).map(([k, x]) => [
+        k,
+        /ayoutLines$|^lines$/.test(k) && Array.isArray(x) ? x.map(line) : x,
+      ]),
+    )
+  return v
+}
 /** a token of today's as the mark-space ruling reads it */
 type SpacedToken = {
   space?: boolean

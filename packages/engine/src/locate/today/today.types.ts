@@ -137,6 +137,8 @@ export const EMAIL_ADDRESS = deps.EMAIL_ADDRESS as RegExp
 /** several addresses at one domain written once, a group of their local parts before it (the front end's, latex-front.mjs
  *  ADDRESS_GROUP) */
 export const ADDRESS_GROUP = deps.ADDRESS_GROUP as RegExp
+/** each identifier of a text, [start, end) code units (the front end's, latex-front.mjs identifiersIn) */
+export const identifiersIn = deps.identifiersIn as (s: string) => [number, number][]
 /** the letters a text is told by, without accents, lower case (stream.mjs spellOf) */
 export const spellOf = deps.spellOf as (s: string) => string
 /** each glyph's and box's region by the page's brackets (stream.mjs regionsOf): depth * 2 + 1 in a column's body */

@@ -1,4 +1,4 @@
-// A figure's paragraphs (F3, the owner's ruling of 2026-11-10, PDF-READER §18.27): its printed lines of prose (figure-lines.ts)
+// A figure's paragraphs (F3, the owner's ruling of 2026-11-10, PDF-READER §18.28): its printed lines of prose (figure-lines.ts)
 // read as the paragraphs they print, each one figure text laid as a body paragraph is. Facts of the lines alone, every measure
 // the figure reading's in the text's size (ALIGN_TOL) or a share of it named here. A paragraph is lines of one figure, one under
 // the other with no blank line between, in one face family, size, weight and fill, at one pitch, on one left edge (its first

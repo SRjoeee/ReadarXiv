@@ -332,7 +332,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
     // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A line every word
     // of which stands between glyphs of a face of one pitch is code, one figure text kept whole (figure-lines.ts, PDF-READER
-    // §18.25: Rule 1's inside-a-line read on the line). A word of its own line stays translated)
+    // §18.26: Rule 1's inside-a-line read on the line). A word of its own line stays translated)
     const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
     const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
     const A = docOf([
@@ -360,6 +360,42 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
+  it('keeps a figure text holding an identifier as the original, whatever its face: a figure text holds no element (2608.06701v1)', () => {
+    // (a token of word characters joined by underscores, `str_replace`, `w/o sol_pool_freq`, in a proportional face: sent, its words
+    // came back translated inside it, as 2608.25210v2's `llm_equal_human` did in a unit. A figure text is drawn whole, its text
+    // and no element: one that holds an identifier stays the original's. A figure text of words alone, a camelCase name, a lone
+    // underscore, is translated)
+    const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
+    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
+    const A = docOf([
+      {
+        lines: [
+          body('Body text of the paper set here'),
+          body('and more body text in that face'),
+          { text: '`CallbackBase.host_label(result)` in', y: 660, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'str_replace', y: 640, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'w/o sol_pool_freq', y: 620, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'Loss of camelCase', y: 600, form: true, font: 'ABCDEF+CMR10' },
+          { text: 'the _ mark', y: 580, form: true, font: 'ABCDEF+CMR10' },
+        ],
+      },
+    ])
+    const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
+    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.fixed])).toEqual([
+      ['`CallbackBase.host_label(result)` in', true],
+      ['str_replace', true],
+      ['w/o sol_pool_freq', true],
+      ['Loss of camelCase', false],
+      ['the _ mark', false],
+    ])
+    const why = new Map(figs.map((m) => [m.plain, L.units[m.unit]!.why]))
+    expect([why.get('str_replace'), why.get('w/o sol_pool_freq')]).toEqual(['figure: identifier', 'figure: identifier'])
+    // (no face of one pitch keeps it: it is no artefact of Rule 1's)
+    expect(figs.map((m) => !!L.units[m.unit]!.pitch)).toEqual([false, false, false, false, false])
+  })
+
   it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {
     // (2411.13093v4 p18, Figure 8: a prompt set as a justified paragraph in an included figure, its entries' first lines indented
     // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
@@ -381,7 +417,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const figs = L.members.filter((m) => m.figure)
-    // (F3, PDF-READER §18.27: the block is justified, its lines one paragraph, one figure text laid as a body paragraph is: no
+    // (F3, PDF-READER §18.28: the block is justified, its lines one paragraph, one figure text laid as a body paragraph is: no
     // own text for S.figures, justified, its four lines)
     expect(figs.map((m) => [m.plain, m.align, m.lines.length])).toEqual([[undefined, 'j', 4]])
     expect(L.units[figs[0]!.unit]!.content).toEqual([
@@ -677,7 +713,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // then "(Self-directed scope reduction)": TeX's line went on over the faces and made one figure text of them, a title,
     // translated with its path inside. Rule 1's run ends at the face of one pitch (the owner's ruling of 2026-11-10), and the
     // line's runs are one figure text again whose run of one pitch is an element, never sent, its ink moving with the
-    // translation (F0, the owner's ruling of 2026-11-10: figure-lines.ts, PDF-READER §18.25)
+    // translation (F0, the owner's ruling of 2026-11-10: figure-lines.ts, PDF-READER §18.26)
     const line = 'Action: Write /tmp/f_a.py (scope cut)'
     const at = 'a paragraph whose word'.length
     const path = [line.indexOf('/'), line.indexOf('py') + 2]
@@ -735,9 +771,14 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(unit.keptEls).toEqual([['1', 'pitch']])
     expect(fig!.els.get('1')).toHaveLength('/tmp/f_a.py'.length)
     expect(fig!.elements.find(([id]) => id === '1')?.[1]).toMatchObject({ kind: 'code', ink: [expect.any(Array)] })
-    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before, one text)
+    // (a paper whose body face is of one pitch: Rule 1 keeps nothing and F0 makes no element of the path, and TeX's line goes on
+    // as before, one text; that text holds an identifier, `f_a`, which keeps a figure text whole as the original's whatever its
+    // face (§18.25), not by Rule 1. Where F0 makes the path an element, above, the identifier is the element's ink and the line
+    // is translated round it)
     const T = locateWith('ABCDEF+CMTT10')
-    expect(T.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed])).toEqual([[line, false]])
+    expect(
+      T.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed, !!T.units[m.unit]!.pitch]),
+    ).toEqual([[line, true, false]])
   })
 
   it('reads a figure’s word by its spacing, not its sizes: a heading in faked small capitals one figure text, no script and no other label joined', () => {

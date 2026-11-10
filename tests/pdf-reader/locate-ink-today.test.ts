@@ -12,7 +12,7 @@ import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
 import { regionsOf } from '../../src/pdf-reader/engine/layout/stream.mjs'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
-import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
@@ -444,6 +444,38 @@ describe('today’s ink makers in the engine package', () => {
     // (one pattern for both readers: the front end's)
     expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
     expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
+  })
+  it('keep an identifier in an ink unit a run of its own, and a line of identifiers alone no unit, as the front end keeps one (2608.25210v2)', () => {
+    // (a token of word characters joined by underscores set in a text face, `llm_equal_human`: today's sent its words, which came
+    // back with its last part in Chinese. Kept, it is an element whose ink is the original's; a line of identifiers alone holds no text word, a
+    // kept block. The word's characters around it, its stop, are the text's; camelCase and a lone underscore are words)
+    const note = 'Ask llm_equal_human first, then `CallbackBase.host_label(result)`, conv5_x and _x and camelCase, e.g. this.'
+    const pg = pageOf([
+      { s: 'Journal of Tests', y: 760 },
+      { s: 'Body owned text', y: 700 },
+      { s: note, y: 688 },
+      { s: 'response_equal_human x86_64', y: 640 },
+    ], { points: [['bs1', 16], ['be1', 31 + note.length + 27]] })
+    type Made = { kind: string; pieces: { t: string; s?: string; src?: string }[] }
+    const one = (I: Impl) => {
+      const own = { glyphs: [pg.glyphs.map((_, k) => (k >= 16 && k < 31 ? 'u0' : null))], boxes: [[]] }
+      const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
+      return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.kind !== 'inkheads')
+    }
+    const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
+    expect(one(TODAY).map(said).join(' | ')).toContain('llm_equal_human')
+    expect(one(T as unknown as Impl).map(said)).toEqual([
+      ['Ask ', '<\\url{llm_equal_human}>', ' first, then `', '<\\url{CallbackBase.host_label(result)}>', '`, ', '<\\url{conv5_x}>', ' and _x and camelCase, e.g. this.'],
+    ])
+    // (one pattern for both readers: the front end's)
+    expect(T.identifiersIn.toString()).toBe(identifiersIn.toString())
+    // (the whole token, its edges' sentence punctuation aside, a bracket the token answers its own: lane literal-fixes, the
+    // coordinator's of 2026-11-10)
+    const ids = (s: string) => identifiersIn(s).map(([a, b]) => s.slice(a, b))
+    expect(ids('`CallbackBase.host_label(result)` in')).toEqual(['CallbackBase.host_label(result)'])
+    expect(ids('response_equal_human_example and response_equal_llm_example.')).toEqual(['response_equal_human_example', 'response_equal_llm_example'])
+    expect(ids('(see conv5_x). [sentence_1], "x86_64", {root_question}')).toEqual(['conv5_x', '[sentence_1]', 'x86_64', '{root_question}'])
+    expect(ids('e.g. camelCase __init__ _x x_ a _ b')).toEqual([])
   })
   it('keep a group of local parts before one domain one run, over its words, its faces and its line’s break, as the front end keeps one (2611.00342v1)', () => {
     // (a note "Contact: {…}@…" whose group is several words, and two lines that are addresses alone, a group broken after a

@@ -179,6 +179,78 @@ describe('a URL TeX set whole on one line, its crop the original’s ink', () =>
   })
 })
 
+describe('a URL TeX broke over lines, drawn as its text in a CJK line: no stretch at its break points', () => {
+  // (2608.25210v2 p17 with the references on: the line ending "https://www.databricks.com/blog/2023/04/18/introducing-ai-" set to the
+  // column's full measure, 1.9-2.7 pt after each "/": a CJK line spreads its slack over the gaps between its items, and a URL
+  // whose line ends are joins (lane url-join) is cut at its break points into items of one word. TeX's url package breaks a
+  // URL at a penalty, no glue (\Urlmuskip 0mu): nothing inside a word stretches)
+  const zh = rulesFor('zh')
+  const long = 'https://www.example.com/blog/2023/04/18/introducing-ai-functions-integrating-large-language-models.html'
+  const ref: Placed = {
+    ord: 4,
+    kind: 'reference',
+    text: idOf(5),
+    lead: 12,
+    style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    align: 'j',
+    lines: [
+      [1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10],
+      [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      [1, 0, 72, 200, 676, 683, 674, 72, 300, 0, 10],
+    ],
+    els: [
+      [
+        '1',
+        {
+          kind: 'other',
+          cmd: 'url',
+          literal: 1,
+          copy: long,
+          text: long,
+          style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+          ink: [
+            [1, 150, 686, 300, 695, 688],
+            [1, 72, 674, 200, 683, 676],
+          ],
+        },
+      ],
+    ],
+    room: { below: 20, next: 24, side: [72, 300] },
+  }
+  const rows: Rows = {
+    get: (k) =>
+      k === idOf(5)
+        ? {
+            id: idOf(5),
+            ok: true,
+            by: 'test',
+            content: [
+              { t: 'text', s: '介绍人工智能函数集成。' },
+              { t: 'el', id: '1' },
+              { t: 'text', s: '。访问于二零二五年六月。' },
+            ],
+          }
+        : undefined,
+    done: true,
+  }
+  it('sets the URL’s pieces on a line at their natural advances, the line’s slack in the gaps TeX has glue in', () => {
+    const laid = laidOf(layPage(partOf([[ref]]), rows, zh, metrics), 4)
+    expect(laid.state).toBe('laid')
+    const line = laid.lines.find((l) => l[3].some((it) => it.s?.startsWith('https://')))!
+    const items = line[3].filter((it) => typeof it.s === 'string' && 'x' in it) as {
+      s: string
+      x: number
+      size: number
+    }[]
+    const first = items.findIndex((it) => it.s.startsWith('https://'))
+    const url = items.slice(first)
+    expect(url.length).toBeGreaterThan(2)
+    // (each piece where the one before it ends: its advance, the metrics' half an em a character, and nothing more)
+    for (let n = 1; n < url.length; n++)
+      expect(url[n]!.x - url[n - 1]!.x).toBeCloseTo((url[n - 1]!.size * [...url[n - 1]!.s].length) / 2, 5)
+  })
+})
+
 describe('a head or a name and its follower on one line: each the original’s separation after the one before it', () => {
   // (a name the part binds to its follower, the follower's own label the joint TeX set between: "Figure 1: text")
   const name: Placed = {

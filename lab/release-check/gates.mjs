@@ -1,5 +1,5 @@
 // lab/release-check/gates.mjs: what `pnpm release-check` runs and how it reads each gate (design §4.9): the invariants I1 to
-// I9 and the migration's differential, the targets of §7, and every gate that exists, each as it exists: its command, the
+// I10 and the migration's differential, the targets of §7, and every gate that exists, each as it exists: its command, the
 // inputs it reads from outside the repository, the tier it first runs in, the invariants it holds and how its output is
 // read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
@@ -53,6 +53,11 @@ export const INVARIANTS = [
     id: 'I9',
     says: 'the box refuses each escape of the security suite, passes its canary and has no network',
     gap: 'the security suite has run under emulation only; three of its cases hold as written on native amd64 alone',
+  },
+  {
+    id: 'I10',
+    says: 'on both panes every piece drawn of a lit unit (its text, its elements, its label) is in exactly one of its sentences, and the panes have the same sentences',
+    gap: "counted over the corpus's laid pages with today's rows (`sentence-cover`: the typesetter's runner, its entry over the reading from the part) and the parity's pairs as the reader lays them (`display`); not over the website's own rows, which only staging holds",
   },
   {
     id: 'D',
@@ -128,6 +133,13 @@ export function typesetOf(text) {
   const out = {}
   const inv = /invariants over the laid members(?: \(page by page\))?: (\{[^}]*\})/.exec(text)
   if (inv) Object.assign(out, JSON.parse(inv[1]))
+  // (I10, the sentence cover: the typesetter's runner with --entry --reading=part, the parity's v2 lay; counted only over
+  // pieces: a run whose entry laid nothing states "0 pieces; 0 faults", no count)
+  const cover = /^I10, the sentence cover \(cover\.ts\): (?:\d+ member-pages lit, )?(\d+) pieces; (\d+) faults/m.exec(text)
+  if (cover) {
+    out.I10pieces = num(cover[1])
+    if (out.I10pieces > 0) out.I10 = num(cover[2])
+  }
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -367,11 +379,36 @@ export const GATES = [
     judge: (ctx, steps) => typesetJudge(steps),
   },
   {
+    id: 'sentence-cover',
+    title: "the sentence cover over this run's prepared parts: each page laid by the entry over the release's stored rows, the reading from the part (lab/typeset/gate-l1.mjs --entry --reading=part); every drawn piece in exactly one sentence on both panes",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I10'],
+    after: ['prepare'],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
+    // (the runner's own lay there is the reading from the part's, not typeset-parts' (today's reading): its dumps are not
+    // compared; the entry alone is read)
+    steps: ctx => [
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
+    ],
+    // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails)
+    judge: (ctx, steps) => {
+      const t = typesetOf(steps[0]?.text ?? '')
+      const counted = steps[0]?.exit === 0 && t.I10 != null
+      return { pass: counted && t.I10 === 0, numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs }, ...(counted ? { findings: { I10: { held: t.I10 === 0, count: t.I10 } } } : {}) }
+    },
+  },
+  {
     id: 'display',
     title: "display ≥ today: no page worse than today's, a difference only where nearer the original (lab/typeset/parity/: today's output and v2's drawn beside arXiv's page on 22 papers with the same rows, every difference judged against the original)",
     tier: 'full',
     stage: 'reader',
-    holds: ['I3'],
+    holds: ['I3', 'I10'],
     // (the maintainer's base threshold for the refactor: v2's display equal to or better than the production site's)
     cutover: true,
     after: ['prepare'],
@@ -402,7 +439,10 @@ export const GATES = [
       const inc = /^incomplete: (\d+)/m.exec(text)
       if (inc) numbers.incomplete = num(inc[1])
       for (const f of text.matchAll(/^ {2}([a-z-]+) +(\d+) pages worse \((\d+) differences\), (\d+) nearer/gm)) numbers[f[1]] = `${f[2]} pages worse, ${f[4]} nearer`
-      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
+      // (I10 over the pairs' Pages as the reader lays them: v2.mjs's count)
+      const I10 = typesetOf(steps[0]?.text ?? '').I10
+      if (I10 != null) numbers.I10 = I10
+      return { pass: steps.length === 3 && steps.every(s => s.exit === 0), numbers, ...(I10 != null ? { findings: { I10: { held: I10 === 0, count: I10 } } } : {}), note: `the sheet: ${join(ctx.work, 'display', 'sheet', 'index.html')}` }
     },
   },
   {

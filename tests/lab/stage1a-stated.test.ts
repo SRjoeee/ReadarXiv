@@ -463,6 +463,39 @@ describe("(F) and (f) for an address's placeholders: the replay reads a brace's 
     const mine = { ...on(unit(id('b'), 2, 'footnote', [text('Correspondence: '), ph('[first name]@example.com'), text('.')]), line), elements: [{ k: 1, kind: 'other', segs: [box(150, 280, 87.44, 94, 85)] }] }
     expect(said(statedOf([today], [mine]))).toEqual([[2, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
   })
+  it('reads an identifier placeholder as its characters, and today\'s `\\_` as an underscore (lane literal-fixes)', () => {
+    expect([readingOf('\\_'), readingOf('\\textunderscore')]).toEqual(['_', '_'])
+    expect(readingOf('llm\\_equal\\_human')).toBe('llm_equal_human')
+    expect(readingOf('[sentence\\_1]')).toBe('[sentence_1]')
+    expect(readingOf('\\{root\\_question\\}')).toBe('{root_question}')
+    expect(readingOf('CallbackBase.host\\_label(result)')).toBe('CallbackBase.host_label(result)')
+    for (const src of ['\\code{a\\_b}', '1994.', 'conv1', 'a\\_b c', 'jatin\\_x@']) expect(readingOf(src)).toBe(null)
+  })
+  it('states a unit whose words joined by `\\_` are now one identifier element held whole (f)', () => {
+    // (2608.25210v2 p3's prose: today's text pieces between `\_` placeholders, v2's one element as the source writes it)
+    const line = box(317.9, 559.7, 450, 459.6, 448)
+    // (today's `\_` pieces inked, as its dump states them: each underscore's glyph)
+    const today = { ...on(unit(id('a'), 55, 'para', [text('Ask llm'), ph('\\_'), text('equal'), ph('\\_'), text('human now.')]), line), elements: [1, 3].map((k) => ({ k, kind: 'macro', segs: [box(350 + 10 * k, 354 + 10 * k, 450, 459.6, 448)] })) }
+    const mine = { ...on(unit(id('b'), 55, 'para', [text('Ask '), ph('llm\\_equal\\_human'), text(' now.')]), line), elements: [{ k: 1, kind: 'code', segs: [box(340, 420, 450, 459.6, 448)] }] }
+    expect(said(statedOf([today], [mine]))).toEqual([[55, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+  it('reads a text symbol as its character whatever ink a dump states of it, any other placeholder with no ink of its own as nothing (f)', () => {
+    // (2608.25210v2 p6's shape: today's dump lists `\%`, `\_` and a `\code{…}` head among its elements with no ink of their own,
+    // the candidate's lists an element only with its ink; the unit's id moved with its identifier, now an element)
+    const line = box(72, 540, 450, 459.6, 448)
+    const today = {
+      ...on(unit(id('a'), 139, 'para', [ph('\\code{run\\_id}'), text(': we ran llm'), ph('\\_'), text('s, about 1'), ph('\\%'), text(' of them.')]), line),
+      elements: [0, 3, 5].map((k) => ({ k, kind: 'macro', segs: [] as Line[] })),
+    }
+    const mine = {
+      ...on(unit(id('b'), 126, 'para', [ph('\\code{run\\_id}'), text(': we ran '), ph('llm\\_s'), text(', about 1'), ph('\\%'), text(' of them.')]), line),
+      elements: [{ k: 2, kind: 'code', segs: [box(150, 180, 450, 459.6, 448)] }],
+    }
+    expect(said(statedOf([today], [mine]))).toEqual([[139, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    // (an element with ink of its own on both sides is read as before: a citation an unread mark on each)
+    const cite = (u: typeof mine, k: number) => ({ ...u, pieces: [...u.pieces, { k: 9, kind: 'ph', src: '\\cite{x}' }], elements: [...u.elements, { k: 9, kind: 'cite', segs: [box(500, 520, 450, 459.6, 448)] }].filter((e) => e.k !== k) })
+    expect(said(statedOf([cite(today, -1)], [cite(mine, -1)]))).toEqual([[139, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
   it("states a note of addresses alone a kept block of its kind holds as (F), before that block stands for it, its lines today's or not", () => {
     const today = on(unit(id('a'), 504, 'inknotes', [text('{ada, alan}@example.org')]), box(211.38, 383.89, 675.49, 681.6, 673.9))
     for (const b of [box(211.38, 383.83, 675.49, 681.6, 673.9), box(211.38, 383.89, 675.49, 681.6, 673.9)])
@@ -513,6 +546,78 @@ describe("(j) a unit split: its text one contiguous part of consecutive v2 units
     expect(statedOf(base, [head, { ...rest, ord: 3970 }, on(unit(id('d'), 3969, 'para', [text('x')]), box(72, 300, 300, 308, 298))])).toEqual([])
     const more = [on(unit(id('a'), 1906, 'inkorphan', [text('Agent Message: (Lenient Self-verification)')]), box(81.33, 284.69, 544.94, 551.16, 543.09))]
     expect(statedOf(more, [head, rest])).toEqual([])
+  })
+})
+
+describe("(l) today's ink unit a source unit of v2's now holds, its formulas read apart (the coordinator's ruling of 2026-11-10, round 8 B5)", () => {
+  // (2610.21377v1 pp. 34-43: today's front end lost TeX's math at a `$…\)` and read the pages off arXiv's ink; v2's reads them
+  // as TeX's paragraphs. Today's ink unit splits a formula into placeholders and the upright digits its ledger read as text,
+  // v2's unit holds it as one math element: each formula's span one placeholder on both sides, the rest exactly today's)
+  // (today's placeholders each an element of its ink, as the dumps state an ink unit's formulas)
+  const today = (pieces: DumpPiece[]) => {
+    const u = on(unit(id('a'), 472, 'inkorphan', pieces), box(173.4, 384.7, 607.12, 611.8, 604))
+    u.elements = pieces.flatMap((p, k) => (p.kind === 'ph' ? [{ k, kind: 'math', segs: [] }] : []))
+    return [u]
+  }
+  const source = (pieces: DumpPiece[], math: number[]) => {
+    const n = { ...on(unit(id('b'), 215, 'para', pieces), box(59.53, 537.43, 607.12, 615, 600)), state: 'drawn' }
+    n.elements = math.map((k) => ({ k, kind: 'math', segs: [] }))
+    return n
+  }
+  const v2 = source(
+    [text('Hence '), ph('$\\pi=0$'), text(' on '), ph('$[a,b]$'), text('. By symmetry, also '), ph('$\\pi=0$'), text(' on '), ph('$(0,1)$'), text('. We conclude.')],
+    [1, 3, 5, 7],
+  )
+  const why = `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.seen}`
+  it('states it held, today\'s formula runs and their digits one placeholder, its text a contiguous stretch of v2\'s', () => {
+    const base = today([text('. By symmetry, also '), ph('$π=$'), text(' 0 on '), ph('$($'), text('0'), ph('$,$'), text(' 1'), ph('$)$'), text('.')])
+    expect(said(statedOf(base, [v2]))).toEqual([[472, why]])
+  })
+  it('states nothing where a word differs, today\'s text has a hole v2 fills, or the holder is no source unit', () => {
+    expect(statedOf(today([text('. By symmetry, too '), ph('$π=$'), text(' 0 on')]), [v2])).toEqual([])
+    expect(statedOf(today([text('Hence '), ph('$π=$'), text(' 0 on. By symmetry')]), [v2])).toEqual([])
+    expect(statedOf(today([text('. By symmetry, also '), ph('$π=$'), text(' 0 on')]), [{ ...v2, kind: 'inkfigures' }])).toEqual([])
+  })
+  it('states nothing for a unit of formulas alone: no text of today\'s to read', () => {
+    expect(statedOf(today([ph('$π=$'), text(' 0')]), [v2])).toEqual([])
+  })
+})
+
+describe("(l') what the reader sees: v2's elements and label as their ink prints them, TeX's ligatures, small capitals by their face (round 8 B5)", () => {
+  // (2610.21377v1: "Proposition 2.6" a \cref, "4.7" a heading's label, "state--adjoint", the headings' small capitals: each read
+  // on both sides as arXiv prints it)
+  const ink = (s: string, x: number, y: number, base = 'LinLibertineT') =>
+    [...s].map((u, i) => ({ ...glyph(u, x + 5 * i, x + 5 * i + 5, y, 10), base }))
+  const today = (pieces: DumpPiece[], at: Line) => {
+    const u = on(unit(id('a'), 465, 'inkorphan', pieces), at)
+    u.elements = pieces.flatMap((p, k) => (p.kind === 'ph' ? [{ k, kind: 'math', segs: [] }] : []))
+    return [u]
+  }
+  const source = (kind: string, pieces: DumpPiece[], els: { k: number; kind: string; segs: Line[] }[], at: Line) => {
+    const n = { ...on(unit(id('b'), 215, kind, pieces), at), state: 'drawn' }
+    n.elements = els
+    return n
+  }
+  const why = `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.seen}`
+  it('reads a reference of v2\'s by its ink, the formulas apart', () => {
+    const at = box(60, 400, 600, 608, 598)
+    const v2 = source('para', [text('as in '), ph('\\cref{p}'), text(' we have '), ph('$x$'), text(' here.')], [{ k: 1, kind: 'ref', segs: [box(90, 165, 600, 607, 599)] }, { k: 3, kind: 'math', segs: [] }], at)
+    const glyphs = () => ink('Proposition2.6', 90, 600)
+    expect(said(statedOf(today([text('as in Proposition 2.6 we have '), ph('$x$'), text(' here.')], at), [v2], { glyphs }))).toEqual([[465, why]])
+    expect(statedOf(today([text('as in Lemma 3.1 we have '), ph('$x$'), text(' here.')], at), [v2], { glyphs })).toEqual([])
+  })
+  it("reads v2's label by its ink, and its text through TeX's ligatures", () => {
+    const at = box(60, 400, 600, 608, 598)
+    const head = { ...source('heading', [text("The state--adjoint pair, ``dual'' and Baire's---all")], [], at), label: [{ kind: 'number', ...box(60, 75, 600, 607, 599) }] }
+    const glyphs = () => ink('4.7', 60, 600)
+    expect(said(statedOf(today([text('4.7 The state–adjoint pair, “dual” and Baire’s—all')], at), [head], { glyphs }))).toEqual([[465, why]])
+  })
+  it('compares letters case apart only where today\'s glyphs are in a face of small capitals', () => {
+    const at = box(60, 400, 600, 608, 598)
+    const head = source('heading', [text('Proof of Proposition')], [], at)
+    const set = (base: string) => () => ink('proofofproposition', 60, 600, base)
+    expect(said(statedOf(today([text('proof of proposition')], at), [head], { glyphs: set('CMCSC10') }))).toEqual([[465, why]])
+    expect(statedOf(today([text('proof of proposition')], at), [head], { glyphs: set('CMR10') })).toEqual([])
   })
 })
 
@@ -653,19 +758,60 @@ describe("(k) a unit the prepare keeps for its text set wholly in a face of one 
   })
 })
 
-const ACCEPTANCE = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
+describe("(k) an identifier is never sent: what the prepare keeps whole as identifiers (the coordinator's ruling of 2026-11-10)", () => {
+  // (lane literal-fixes, PDF-READER §18.25: a token holding an underscore between two word characters is no prose. A figure text
+  // holding one is kept whole (the engine's `figure: identifier`, the dump's `keptBy: 'identifier'`); a cell of identifiers alone
+  // is no unit (the front end's identifiersIn holds its whole text, no letter left to send); a line of ink of identifiers alone
+  // is a kept block. Each is the original's text, no translation missing: the mark goes with the cause)
+  const cause = (stated: { u: { ord: number }; why: string; keptBy?: string }[]) => stated.map(({ u, why, keptBy }) => [u.ord, why, keptBy])
+  it("states the cause of a unit marked kept by the identifier rule, the candidate's own", () => {
+    expect(keptWhyOf({ id: id('a'), keptBy: 'identifier', state: 'laid', why: 'unwrapped' })).toBe(CAUSE.identifier)
+    expect(keptWhyOf({ id: id('a'), state: 'laid', why: 'unwrapped' })).toBe(null)
+  })
+  it('states a cell of identifiers alone, which the candidate makes no unit of, as kept by the rule, the mark with it', () => {
+    // (today's text pieces between `\_` placeholders, as today's front end cut them; brackets and separators with them)
+    const cells = [
+      [text('response'), ph('\\_'), text('equal'), ph('\\_'), text('human')],
+      [text('[sentence'), ph('\\_'), text('1], [sentence'), ph('\\_'), text('2]')],
+      [text('conv3'), ph('\\_'), text('x')],
+    ]
+    for (const pieces of cells) expect(cause(statedOf([unit(id('a'), 72, 'cell', pieces)], []))).toEqual([[72, CAUSE.identifier, 'identifier']])
+    // (and where the candidate's units on its line are kept blocks alone, no text of them sent)
+    const kept = { ...unit(id('b'), 9, 'inkorphan', []), kept: true as const }
+    expect(cause(statedOf([unit(id('a'), 72, 'cell', cells[0]!)], [kept]))).toEqual([[72, CAUSE.identifier, 'identifier']])
+  })
+  it("states a line of ink of identifiers alone a kept block holds as kept by the rule, before the block's own cause (2610.40394v1)", () => {
+    const line = box(72, 140, 600, 608, 598)
+    const today = on(unit(id('a'), 746, 'inkorphan', [text('main_text.md')]), line)
+    const kept = { ...on(unit(id('b'), 740, 'inkorphan', []), line), kept: true as const }
+    expect(cause(statedOf([today], [kept]))).toEqual([[746, CAUSE.identifier, 'identifier']])
+  })
+  it('states none where a word or a digit stands outside the identifiers, none holds one, or a unit the candidate sends holds it', () => {
+    for (const pieces of [[text('see response'), ph('\\_'), text('equal')], [text('a'), ph('\\_'), text('b 12')], [text('response equal')], [text('x'), ph('$_1$')]])
+      expect(statedOf([unit(id('a'), 72, 'cell', pieces)], [])).toEqual([])
+    const sent = { ...unit(id('b'), 9, 'para', [text('Ask '), ph('response\\_equal'), text(' now.')]), elements: [{ k: 1, kind: 'code', segs: [box(100, 180, 600, 608, 598)] }] }
+    // (today's `\\_` listed among its elements with no ink, as today's dumps list every one of them)
+    const today = { ...unit(id('a'), 72, 'cell', [text('response'), ph('\\_'), text('equal')]), elements: [{ k: 1, kind: 'macro', segs: [] }] }
+    expect(cause(statedOf([today], [sent]))).toEqual([
+      [72, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`, undefined],
+    ])
+  })
+})
+
+const ACCEPTANCE ='/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
     (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) =>
       new RegExp(e.match).test(cause),
     )
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split, CAUSE.arxivText, CAUSE.wrapped])
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split, CAUSE.arxivText, CAUSE.wrapped, CAUSE.seen])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
-    // ((k): the candidate's own unit's cause, no statement's)
+    // ((k): the candidate's own unit's cause, no statement's; and an identifier's, the candidate's own or stated with its mark)
     expect(accepted(CAUSE.pitch)).toBe(true)
     // ((n), the coordinator's ruling of 2026-11-10 to lane fig-text: a stretch a decoration holds, kept with it)
     expect(accepted(CAUSE.decoration)).toBe(true)
+    expect(accepted(CAUSE.identifier)).toBe(true)
     expect(accepted('unwrapped')).toBe(false)
     expect(accepted('laid')).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)

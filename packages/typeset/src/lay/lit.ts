@@ -9,10 +9,17 @@
 //   (LATE), past that none; its lines' boxes (each line's ink across, its fonts' boxes up and down) cut at the starts' glyphs;
 //   its label where it is drawn anew and the babel name it is led by widening its first sentence's row (today's unitRuns: a
 //   label or a lead with no row of its own widens its unit's row);
-// - on the right, as drawn: its laid lines' tokens (D.sentences' tokenBox), each token's sentence its place in the translation
-//   (a text token's, an element's at its piece's, one of neither its neighbour's: words.mjs addUnitWords), the start the token
-//   of the sentence's first word; and the lines it keeps where they stand (a held line: its ink stays), in the sentence they
-//   stand in on A;
+// - on the right, as drawn: its laid lines' tokens (D.sentences' tokenBox), each in the sentence its start falls in (a text
+//   token's place in the translation, one of no place of its own its neighbour's: words.mjs addUnitWords), the sentence's
+//   start its first word's, from the opening brackets and quotes set against it; and the lines it keeps where they stand (a
+//   held line: its ink stays), in the sentence they stand in on A;
+// - an element, one piece on both panes, in one sentence on both (sentenceMap, the one place that decides it): the one its ink
+//   begins in on A, wherever the translation sets it, its crop or its text as drawn and its ink on A lit with it, the row it
+//   stands on widened over its ink (one TeX set past its line's text, an equation's number at the margin, stands in no line's
+//   box). A translator counts a mark at a cut with either sentence: Microsoft set its cut past "P²-MOPD", which begins the
+//   next sentence in the translation as in the source, and the left lit it from "P²-MOPD" on, the right with the sentence
+//   before (2611.03953v2 p2, the owner's report of 2026-11-10); 425 elements of the corpus's laid pages over today's rows lit
+//   with one sentence on one pane and another on the other (the sentence cover, packages/typeset/tests/replay/cover.ts);
 // - `own`: its displays (D.groups' shown), each a block of its own by its piece, the same boxes on both panes: lit alone where the
 //   pointer is over it, never with its member, whole or by sentence, and no row of its text (today's units.mjs displayBlockId:
 //   one hover id a display; the owner's reports of 2026-11-09, a sentence lit over its display on 2602.23285v2 p15, a paragraph
@@ -29,7 +36,7 @@
 import type { Box, Ink, Placed } from '@readarxiv/format'
 import { plainTracker, shown, type TextPiece } from '../breaker/text.ts'
 import { type GroupEl, groupsOff, type Shown } from '../emit/groups.ts'
-import { lineBoxes, onDisplay, tokenBox } from '../emit/sentences.ts'
+import { carriedOf, lineBoxes, onDisplay, tokenBox } from '../emit/sentences.ts'
 import type { Layout } from '../fit/types.ts'
 import type { Laid } from '../types.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -45,14 +52,24 @@ export const inkOfLine = (l: Line): Ink => [l[0], l[2], l[6], l[3], l[5], l[4]]
 
 /** `rows` with ink of the member's that has no row of its own: the row whose band holds its baseline widened over it, else a
  *  row of its own */
-function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
+export function widened(rows: Box[], ink: readonly Ink[], page: number): Box[] {
   const out = rows.map((b) => [...b] as Box)
   for (const k of ink) if (k[0] === page) widen(out, k)
   return out
 }
-/** one piece of ink into `rows`, in place: the row whose band holds its baseline widened over it, else a row of its own */
+/** how far apart across two extents stand (0 where they meet) */
+const apartAcross = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, a0 - b1, b0 - a1)
+/** one piece of ink into `rows`, in place: the row whose band holds its baseline widened over it (of two on one band, a run cut
+ *  by another sentence's, the nearer across), else a row of its own */
 function widen(rows: Box[], k: Ink) {
-  const r = rows.find((b) => b[1] <= k[5] && k[5] <= b[3])
+  let r: Box | undefined
+  for (const b of rows)
+    if (
+      b[1] <= k[5] &&
+      k[5] <= b[3] &&
+      (!r || apartAcross(b[0], b[2], k[1], k[3]) < apartAcross(r[0], r[2], k[1], k[3]))
+    )
+      r = b
   if (!r) rows.push([k[1], k[2], k[3], k[4]])
   else {
     r[0] = Math.min(r[0], k[1])
@@ -191,6 +208,58 @@ export function startsOnA(words: readonly (readonly [number, number, number])[],
 const sentenceAtLine = (starts: readonly At[], j: number, x0: number) =>
   starts.filter((a) => a[0] < j || (a[0] === j && a[1] <= x0)).length
 
+/** whether a member's line on A is a display's row: a KEPT line over the ink of one of its displays */
+function displayRowOf(m: Placed): (l: Line) => boolean {
+  const ink = (m.els ?? []).filter(([, e]) => e.kind === 'display').flatMap(([, e]) => e.ink)
+  return (l) =>
+    !!(l[9] & KEPT) &&
+    onDisplay(
+      ink.filter((k) => k[0] === l[0]).map((k) => ({ box: [k[1]!, k[2]!, k[3]!, k[4]!] as Box })),
+      l[2],
+      l[6],
+      l[3],
+      l[5],
+    )
+}
+
+/**
+ * Which sentence each piece of a member is in, decided once for both panes (the owner's rules of 2026-10-30: both panes light
+ * the same thing; a sentence lights all its pieces, text, elements, labels): the unit cut at its row's starts, half-open, each
+ * piece in the sentence its start falls in. On A a piece's start is where it begins on the page (`startsA`: a line of A from a
+ * start to the next); in the translation a token's first character's place (`startsT`); an element, one piece in both texts,
+ * the sentence its ink begins in on A (null for one with no ink there, a display, a block of its own: its place in the
+ * translation decides); a label the first
+ */
+type SentenceMap = {
+  n: number
+  ofPlace(place: number): number
+  ofElement(id: string): number | null
+}
+function sentenceMap(m: Placed, startsA: readonly At[], startsT: readonly number[]): SentenceMap {
+  const displayRow = displayRowOf(m)
+  const text = (l: Line) => !displayRow(l)
+  const els = new Map(m.els ?? [])
+  return {
+    n: startsA.length + 1,
+    ofPlace: (place) => startsT.filter((p) => p <= place).length,
+    ofElement(id) {
+      const e = els.get(id)
+      const k = e?.ink[0]
+      if (!e || !k || e.kind === 'display') return null
+      const s = standsInOnA(m, k[0], text, startsA, k)
+      return s >= 0 ? s : null
+    },
+  }
+}
+/** each element's ink on A on `page` (its displays' aside) widening its sentence's row on A (`rows`, by sentence), in place */
+function elementsOnA(m: Placed, page: number, map: SentenceMap, rows: Box[][]) {
+  for (const [id, e] of m.els ?? []) {
+    const s = e.kind === 'display' ? null : map.ofElement(id)
+    if (s === null) continue
+    for (const k of e.ink) if (k[0] === page) widen(rows[s]!, k)
+  }
+}
+
 /**
  * A member's lines on A on `page` cut into its sentences at `starts` (each line by its index in Placed.lines): sentence s from
  * its start (the unit's beginning for the first) to the next one's, the lines between whole; `extra` (a label drawn anew, the
@@ -285,82 +354,110 @@ function shownIndex(p: TextPiece, sh: string): number[] | null {
   return built === sh ? out : null
 }
 
-/** a token of a laid line on the page, its box, its place in the translation (-1 none of its own) and its end there */
-type Placed_ = { line: number; box: Box; place: number; end: number }
+/** a token of a laid line on the page, its box, its place in the translation (-1 none of its own), the element it draws (its
+ *  id: a crop of its ink or its text) and whether it is a label's crop */
+type Placed_ = { line: number; box: Box; place: number; el?: string; label?: true }
 /** the member's laid tokens on `page`, in its text's order, each with a place: its own (a text token's `at`), its piece's (an
  *  element drawn as a crop or as text), else the token's before it, else after it (words.mjs addUnitWords) */
-function tokensOn(L: Layout, page: number, pieceAt: readonly number[]): Placed_[] {
+function tokensOn(
+  L: Layout,
+  page: number,
+  pieceAt: readonly number[],
+  elOf: (k: number) => string | undefined,
+  self: number,
+): Placed_[] {
   const out: Placed_[] = []
   L.lines.forEach((line, j) => {
     if (line.page !== page) return
     for (const it of line.items) {
-      const t = it.t as { space?: boolean; at?: number; end?: number; k?: number; crop?: { k?: number | null } }
+      // (another member's label carried to this member's line: its owner's, lit with it)
+      const of = carriedOf(it)
+      if (of !== undefined && of !== self) continue
+      const t = it.t as { space?: boolean; at?: number; k?: number; crop?: { k?: number | null } }
       if (t.space) continue
       const b = tokenBox(it, line, L)
       if (!b) continue
       const k = t.crop ? t.crop.k : t.k
       const place = t.at ?? (Number.isInteger(k) ? (pieceAt[k as number] ?? -1) : -1)
-      out.push({ line: j, box: [b.l, b.bottom, b.r, b.top], place, end: t.at !== undefined ? (t.end ?? t.at + 1) : -1 })
+      const el = t.at === undefined && Number.isInteger(k) ? elOf(k as number) : undefined
+      // (a crop of no piece: its label's, emit/display.ts)
+      const label = !!t.crop && !Number.isInteger(t.crop.k)
+      out.push({
+        line: j,
+        box: [b.l, b.bottom, b.r, b.top],
+        place,
+        ...(el ? { el } : {}),
+        ...(label ? { label: true as const } : {}),
+      })
     }
   })
   for (let n = 1; n < out.length; n++) if (out[n]!.place < 0) out[n]!.place = out[n - 1]!.place
   for (let n = out.length - 2; n >= 0; n--) if (out[n]!.place < 0) out[n]!.place = out[n + 1]!.place
-  for (const t of out) if (t.end < 0) t.end = t.place + 1
   return out
 }
 
 /**
  * Where each sentence after the first begins in the translation's plain text: its start in the row (Row.sentences.tr) at its
- * first word or element (a letter, a digit or an element at or after it, before the next start), as the source's is found on
- * A at its first word or element (Placed.words). An element its translation begins a sentence with is that sentence's
- * (2611.03953v2 p5: "Three details of Equation (6) matter." came back with the reference first, "(6)" then "three details
+ * first word or element (a letter, a digit or an element at or after it, before the next start) and the opening marks set
+ * against it, as the source's is found on A at its first word or element (Placed.words). An element its translation begins a
+ * sentence with is that sentence's (2611.03953v2 p5: "Three details of Equation (6) matter." came back with the reference first, "(6)" then "three details
  * matter", the row's start at the reference; moved on to the first letter, it lit with the sentence before, the owner's report
  * of 2026-11-10). Null where one has none
  */
 function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: readonly number[]): number[] | null {
   const out: number[] = []
+  let floor = 0
   for (let j = 0; j < tr.length; j++) {
     const end = j + 1 < tr.length ? tr[j + 1]! : places.text.length
     let o = tr[j]!
     while (o < end && places.text[o] !== OBJ && !/[\p{L}\p{N}]/u.test(places.text[o]!)) o++
     if (o >= end) return null
+    // (from the opening brackets and quotes set against its first word, Unicode's Ps and Pi: "(Vier" begins its sentence at
+    // its bracket, as a word is placed on A, engine words.ts; a token is in the sentence its start falls in)
+    while (o > floor && /[\p{Ps}\p{Pi}]/u.test(places.text[o - 1]!)) o--
+    floor = o + 1
     const p = places.at(o)
     if (p < 0 || (out.length && p <= out.at(-1)!)) return null
     out.push(p)
   }
   return out
 }
-/** the sentence of a token whose text runs from its place to `end` in the translation's plain text: the starts it reaches,
- *  so that the token carrying a sentence's first word begins it, an opening bracket set against the word with it (today's
- *  words.mjs: a token's sentence is its word's) */
-const sentenceOf = (starts: readonly number[], end: number) => starts.filter((p) => p < end).length
 
 /**
- * The boxes of the laid tokens, one a line a sentence: its tokens on the line across, up and down, each running on to the
- * next sentence's start on the line (the space after a full stop is the sentence's before it, as today's shapes tile a row:
- * a pointer over it lights that sentence), the line's last one to its last token's end
+ * The boxes of the laid tokens, one a run of a sentence's tokens on a line: across them, the line's band up and down (its
+ * tokens' boxes together), each running on to the next run's start on the line (the space after a full stop is the sentence's
+ * before it, as today's shapes tile a row: a pointer over it lights that sentence), the line's last one to its last token's
+ * end. A sentence's tokens on a line are one run but where an element of another stands among them (one its translation set
+ * inside it): a run each side of it. The band whatever the run holds: a run of an element's crop alone took the crop's ink
+ * height, short of the line's (2602.23285v2-ja p13 t219, every toggle on: 554.7-562.1 in a band of 552.8-563.8)
  */
 function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number): Box[][] {
   const out: Box[][] = Array.from({ length: n }, () => [])
-  const at = new Map<string, Box>()
   const byLine = new Map<number, Box[]>()
+  let run: { s: number; line: number; box: Box } | null = null
   for (const t of tokens) {
-    const key = `${t.s}:${t.line}`
-    const b = at.get(key)
-    if (!b) {
-      const nb: Box = [...t.box]
-      at.set(key, nb)
-      out[t.s]!.push(nb)
-      byLine.set(t.line, [...(byLine.get(t.line) ?? []), nb])
-    } else {
+    if (run && run.s === t.s && run.line === t.line) {
+      const b = run.box
       b[0] = Math.min(b[0], t.box[0])
       b[1] = Math.min(b[1], t.box[1])
       b[2] = Math.max(b[2], t.box[2])
       b[3] = Math.max(b[3], t.box[3])
+      continue
+    }
+    run = { s: t.s, line: t.line, box: [...t.box] }
+    out[t.s]!.push(run.box)
+    byLine.set(t.line, [...(byLine.get(t.line) ?? []), run.box])
+  }
+  // (a line's runs in the text's order, left to right: each ends where the next begins, each the line's band up and down)
+  for (const boxes of byLine.values()) {
+    const bottom = Math.min(...boxes.map((b) => b[1])),
+      top = Math.max(...boxes.map((b) => b[3]))
+    for (const [k, b] of boxes.entries()) {
+      if (k + 1 < boxes.length) b[2] = boxes[k + 1]![0]
+      b[1] = bottom
+      b[3] = top
     }
   }
-  // (a line's sentences in the text's order, left to right: each ends where the next begins)
-  for (const boxes of byLine.values()) for (let k = 0; k + 1 < boxes.length; k++) boxes[k]![2] = boxes[k + 1]![0]
   return out
 }
 
@@ -398,18 +495,22 @@ export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
   const unique = starts?.filter((a, i) => !i || after(a, starts[i - 1]!))
   if (unique?.length) {
     const per = cutOnA(m, page, keep, unique, label)
+    elementsOnA(m, page, sentenceMap(m, unique, []), per)
     return { left: per, right: per, own }
   }
   const lines = m.lines.filter((l) => l[0] === page && keep(l)).map(boxOfLine)
-  const text = widened(lines, label, page)
-  return text.length ? { left: [text], right: [text], own } : { left: [], right: [], own }
+  const text = [widened(lines, label, page)]
+  elementsOnA(m, page, sentenceMap(m, [], []), text)
+  return text[0]!.length ? { left: text, right: text, own } : { left: [], right: [], own }
 }
 
 /**
  * A laid member's boxes on page `page`. `L` its layout; `off` its groups turned off on the page as the entry decides them (its
  * elements: 2, the ink it keeps shown follows it; a label drawn anew: 4); `kept` its elements kept where they stand by its
  * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it; `by` its row's sentences and the
- * pieces its reading laid (rowPieces), where its row has sentences
+ * pieces its reading laid (rowPieces), where its row has sentences; `carried` its label as drawn at the end of the name before
+ * (a label no line opens with, lay/flow.ts), on another member's line: lit with its first sentence on the right as on A, the
+ * label's owner one on both panes (the coordinator's ruling of 2026-11-11)
  */
 export function litLaid(
   m: Placed,
@@ -420,6 +521,7 @@ export function litLaid(
     kept: ReadonlySet<string>
     lead: Placed | null
     by?: { sentences?: Sentences | undefined; pieces: readonly V0Piece[] } | undefined
+    carried?: readonly Ink[]
   },
 ): Lit {
   const els: GroupEl[] = (m.els ?? []).map(([id, e]) => ({
@@ -447,15 +549,18 @@ export function litLaid(
     ...(relabelled && m.label ? [m.label.ink] : []),
     ...(o.lead?.lines[0] ? [inkOfLine(o.lead.lines[0])] : []),
   ]
-  const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown) : null
+  const carried = o.carried ?? []
+  const by = L && o.by ? bySentence(m, page, L, o.by, keep, extra, shown, carried) : null
   if (by) return by
   const held = mine.filter((l) => l[9] & KEPT).map(boxOfLine)
   // (the ink it keeps but its displays, on the row it stands on: a piece, a label, a character)
   const kept = shown.filter((x) => x.kind !== 'display').map((x) => inkOfShown(x, page))
-  const left = widened(mine.map(boxOfLine), [...extra, ...kept], page)
-  const right = widened([...(L ? lineBoxes(L, page) : []), ...held], kept, page)
+  const left = [widened(mine.map(boxOfLine), [...extra, ...kept], page)]
+  // (every element's ink on A, whether drawn elsewhere or kept: one TeX set past its line's text stands in no line's box)
+  elementsOnA(m, page, sentenceMap(m, [], []), left)
+  const right = widened([...(L ? lineBoxes(L, page, m.ord) : []), ...held], [...kept, ...carried], page)
   const own = ownOf(displays)
-  return left.length || right.length ? { left: [left], right: [right], own } : { left: [], right: [], own }
+  return left[0]!.length || right.length ? { left, right: [right], own } : { left: [], right: [], own }
 }
 
 /** its displays the page keeps, each a block of its own by its piece (Laid.lit's `own`) */
@@ -525,6 +630,7 @@ function bySentence(
   keep: (l: Line) => boolean,
   extra: readonly Ink[],
   shown: readonly Shown[],
+  carried: readonly Ink[],
 ): Lit | null {
   const src = by.sentences?.src ?? [],
     tr = by.sentences?.tr ?? []
@@ -540,19 +646,32 @@ function bySentence(
     rowA.map((a, j) => ({ a, p: rowP[j]! })),
   )
   if (!merged.length) return null
-  const starts = merged.map((x) => x.a),
-    plain = merged.map((x) => x.p)
-  const n = merged.length + 1
+  const starts = merged.map((x) => x.a)
+  const map = sentenceMap(
+    m,
+    starts,
+    merged.map((x) => x.p),
+  )
+  const n = map.n
   // (every sentence's first word drawn: a text token of it in the layout, on any of its pages)
   const found = new Set<number>()
   for (const line of L.lines)
     for (const it of line.items) {
-      const t = it.t as { at?: number; end?: number }
-      if (t.at !== undefined) found.add(sentenceOf(plain, t.end ?? t.at + 1))
+      const t = it.t as { at?: number }
+      if (t.at !== undefined) found.add(map.ofPlace(t.at))
     }
   for (let s = 0; s < n; s++) if (!found.has(s)) return null
   const left = cutOnA(m, page, keep, starts, extra)
-  const tokens = tokensOn(L, page, places.piece).map((t) => ({ ...t, s: sentenceOf(plain, t.end) }))
+  elementsOnA(m, page, map, left)
+  const elOf = (k: number) => {
+    const p = by.pieces[k]
+    return p && (p.t === 'ph' || p.t === 'nested') && p.k !== undefined ? String(p.k) : undefined
+  }
+  // (each token in the sentence its start falls in: a text token's place, an element's own sentence on A, a label's the first)
+  const tokens = tokensOn(L, page, places.piece, elOf, m.ord).map((t) => ({
+    ...t,
+    s: t.label ? 0 : ((t.el !== undefined ? map.ofElement(t.el) : null) ?? map.ofPlace(t.place)),
+  }))
   const right = rowsBySentence(tokens, n)
   // (a held line: its ink stays where it stands, in the sentence it stands in on A)
   m.lines.forEach((l, j) => {
@@ -561,35 +680,37 @@ function bySentence(
   // (the ink it keeps but its displays: on both panes with its sentence, the row it stands on widened over it)
   for (const x of shown) {
     if (x.kind === 'display') continue
-    const s =
-      x.kind === 'label'
-        ? 0
-        : x.kind === 'piece'
-          ? (() => {
-              const k = by.pieces.findIndex((p) => (p.t === 'ph' || p.t === 'nested') && p.k === x.k)
-              return k >= 0 ? sentenceOf(plain, places.piece[k]! + 1) : -1
-            })()
-          : besideOf(tokens, x.box)
+    const s = x.kind === 'label' ? 0 : x.kind === 'piece' ? (map.ofElement(String(x.k)) ?? -1) : besideOf(tokens, x.box)
     const k = inkOfShown(x, page)
-    const at = s >= 0 ? s : standsInOnA(m, page, keep, starts, k)
+    const at = s >= 0 ? s : Math.max(0, standsInOnA(m, page, keep, starts, k))
     widen(left[at]!, k)
     widen(right[at]!, k)
   }
+  // (its label carried to the end of the name before: lit with its first sentence, as on A)
+  for (const k of carried) widen(right[0]!, k)
   return { left, right, own: ownOf(shown) }
 }
 
-/** the sentence a piece of ink kept where it stands stands in on A: that of its member's line on the page whose band holds its
- *  baseline (else the nearest by baseline) at its start, as a held line's; the first where the page holds no line of it */
+/** the sentence a piece of ink stands in on A: that of its member's line on the page it stands on (TeX's measure for the line,
+ *  its column, or its own ink holding it across: a caption's last line, centred, states a measure narrower than its ink; then the band holding its baseline, else the nearest by baseline; then, of lines on one
+ *  baseline, the one whose ink is nearest across), at its start, as a held line's; -1 where the page holds no line of it. By
+ *  band alone, an element of a paragraph that runs on in the next column stood on the first column's line on its baseline
+ *  (2611.03953v2 p7), and one past a held line's ink on the held line (2610.21377v1 p39) */
 function standsInOnA(m: Placed, page: number, keep: (l: Line) => boolean, starts: readonly At[], k: Ink): number {
   let best = -1,
-    far = Number.POSITIVE_INFINITY
+    far: [number, number, number] | null = null
+  const mid = (k[1] + k[3]) / 2
   m.lines.forEach((l, j) => {
     if (l[0] !== page || !keep(l)) return
-    const d = l[6] <= k[5] && k[5] <= l[5] ? 0 : Math.abs(l[4] - k[5])
-    if (d < far) {
+    const d: [number, number, number] = [
+      Math.min(l[2], l[7]) <= mid && mid <= Math.max(l[3], l[8]) ? 0 : 1,
+      l[6] <= k[5] && k[5] <= l[5] ? 0 : Math.abs(l[4] - k[5]),
+      apartAcross(l[2], l[3], mid, mid),
+    ]
+    if (!far || d[0] < far[0] || (d[0] === far[0] && (d[1] < far[1] || (d[1] === far[1] && d[2] < far[2])))) {
       far = d
       best = j
     }
   })
-  return best < 0 ? 0 : sentenceAtLine(starts, best, k[1])
+  return best < 0 ? -1 : sentenceAtLine(starts, best, k[1])
 }

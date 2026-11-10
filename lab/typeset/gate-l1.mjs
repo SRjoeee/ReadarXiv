@@ -14,6 +14,8 @@ import { gateL1Pair } from '../../packages/typeset/tests/replay/gate-l1.ts'
 import { LAB, readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
 import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
 import { layered, servedMetrics } from './served-metrics.mjs'
+import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
+import { unitInOf } from '../../packages/translate/src/bundle.ts'
 
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
@@ -34,7 +36,44 @@ const READING = args.find(a => a.startsWith('--reading='))?.slice(10) ?? 'today'
 const SUBST = args.find(a => a.startsWith('--subst='))?.slice(8).split(',').filter(Boolean) ?? []
 // (--entry: each page laid again by design-a's layPage over its part and the rows, compared with the runner's lay, and timed)
 const ENTRY = args.includes('--entry')
-const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 } }
+// (the entry is laid over the door's rows, which the runner reads for the reading from the part alone: asked with today's
+// reading it laid nothing, and I10 counted no piece, "0 faults")
+if (ENTRY && READING !== 'part') {
+  console.error("gate-l1.mjs: --entry needs --reading=part (the entry is laid over the door's rows, read for that reading alone)")
+  process.exit(2)
+}
+const entry = { alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
+/** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
+ *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
+ *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
+ *  original's (given it, the entry hid the unit's text and drew nothing: three table cells of two pack pairs, I10's "right
+ *  missing sentence"). A row the rule's other clauses refuse (a span lost, emptied or set otherwise than the unit nests it; an
+ *  id, a span named by today's numbering; its length) the chain would ask again of the next translator; the door holds no
+ *  other reply of its unit and the row still says its translation: given as it is, as the parity lays it on both sides,
+ *  and counted by why (over the 123 pairs with round 8 B5's parts: 229 by a span, 6 by an id, 1 by its length) */
+const judged = new Map(), unsaid = []
+let judging = ''
+const accept = (unit, content) => {
+  const r = acceptReading(unitInOf(unit), content)
+  if (r.ok) return true
+  judged.set(r.why, (judged.get(r.why) ?? 0) + 1)
+  if (r.why !== 'empty') return true
+  unsaid.push(`${judging} ${unit.kind} ${unit.id.slice(0, 8)}`)
+  return false
+}
+/** I10's counts (cover.ts) over the pairs: each fault's count by key, its examples, each pair's faults */
+const addCover = (pair, c) => {
+  const C = entry.cover
+  C.members += c.members
+  C.pieces += c.pieces
+  let n = 0
+  for (const [k, v] of c.faults) {
+    C.faults.set(k, (C.faults.get(k) ?? 0) + v)
+    C.ex.set(k, [...(C.ex.get(k) ?? []), ...(c.ex.get(k) ?? [])].slice(0, 8))
+    n += v
+  }
+  if (n) C.byPair.set(pair, [...c.faults].map(([k, v]) => `${k} ${v}`).join(', '))
+}
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
@@ -67,12 +106,13 @@ for (const pair of pairs) {
   count.pairs++
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST, entry: ENTRY }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  judging = pair
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf }), reading: READING, substitute: SUBST, entry: ENTRY, accept }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
   pageMs.push(...g.ms)
-  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k] }
+  if (g.entry) { entry.alike += g.entry.alike; entry.differ += g.entry.differ; entry.ms.push(...g.entry.ms); for (const x of g.entry.ex) if (entry.ex.length < 8) entry.ex.push(`${pair} ${x}`); for (const [k, n] of g.entry.names) entry.names.set(k, (entry.names.get(k) ?? 0) + n); for (const [k, n] of g.entry.links) entry.links.set(k, (entry.links.get(k) ?? 0) + n); for (const [k, n] of g.entry.figures) entry.figures.set(k, (entry.figures.get(k) ?? 0) + n); for (const [k, xs] of g.entry.linkEx) entry.linkEx.set(k, [...(entry.linkEx.get(k) ?? []), ...xs].slice(0, 4)); for (const k of Object.keys(entry.lit)) entry.lit[k] += g.entry.lit[k]; addCover(pair, g.entry.cover) }
   adaptMs += g.adaptMs
   readMs += g.readMs ?? 0
   inv.laid += g.inv.laid
@@ -195,6 +235,16 @@ if (ENTRY) {
   console.log(`the entry's links (Page.links, lay/links.ts), by fate: ${[...entry.links].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}${entry.linkEx.has(k) ? ` (${entry.linkEx.get(k).join('; ')})` : ''}`).join(', ')}`)
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
+  const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
+  console.log(`the entry's rows that say nothing (the chain's 'empty', accept.ts), given as no row: ${unsaid.length}${unsaid.length ? `: ${unsaid.join(' | ')}` : ''}; held to its other clauses, given as they are: ${[...judged].filter(([k]) => k !== 'empty').map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
+  console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
+  for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
+  for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
+}
+// (an entry that laid nothing counted I10 over no piece: no count, the run fails)
+if (ENTRY && !entry.cover.pieces) {
+  console.log('the entry laid nothing: I10 not counted')
+  process.exitCode = 1
 }
 if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${selfDiffer.slice(0, 10).join('; ')}`)
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)

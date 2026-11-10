@@ -213,9 +213,13 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const mem = memberOf.get(i)
   if (mem) dumpOrds.push([ord, mem.ord])
   // (a unit kept for its text set wholly in a face of one pitch, the engine's `pitch`: `keptBy: 'pitch'`; a kept block of e-mail
-  // addresses alone, the engine's `address`: `keptBy: 'address'`; the parity reads both, join.mjs candidatePitch and
-  // candidateAddress. Never both: `pitch` marks source units and figure texts, `address` kept blocks)
-  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(u.pitch ? { keptBy: 'pitch' } : {}), ...(u.address ? { keptBy: 'address' } : {}), ...(u.formula ? { keptBy: 'formula' } : {}), text: textOfPieces(pieces), pieces }
+  // addresses alone, the engine's `address`: `keptBy: 'address'`; a figure text kept for an identifier it holds, the engine's
+  // `figure: identifier` (locate/ink.ts: figure texts hold no element): `keptBy: 'identifier'`; the parity reads all three,
+  // join.mjs candidateKept. Never two: `pitch` marks source units and figure texts set at one pitch, `address` kept blocks,
+  // `identifier` the other figure texts; a figure's line no word of which stands outside its formulas, kept whole, the engine's
+  // `formula` (F1, rebuild/fig-text): `keptBy: 'formula'`)
+  const keptBy = u.pitch ? 'pitch' : u.address ? 'address' : u.formula ? 'formula' : u.why === 'figure: identifier' ? 'identifier' : null
+  const base = { id: u.id, ord: ord++, kind: u.kind, ...(u.kept ? { kept: true } : {}), ...(keptBy ? { keptBy } : {}), text: textOfPieces(pieces), pieces }
   if (u.kind === 'name') { units.push({ ...base, state: 'unlaid', why: 'name: drawn by its own group, never laid as a unit' }); states.unlaid++; return }
   if (!mem || !mem.located) { units.push({ ...base, state: 'unlaid', why: mem?.cause?.startsWith('content difference') ? mem.cause : `unlocated: ${mem?.cause ?? u.why ?? 'no ink'}` }); states.unlaid++; return }
   const st = stateOf(mem, addOn)
@@ -227,7 +231,8 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const keptEl = new Map(u.keptEls ?? [])
   const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
   const label = mem.labelAt ? [{ kind: LABEL_KIND[mem.labelAt.kind] ?? 'number', page: mem.labelAt.ink[0], x0: mem.labelAt.ink[1], x1: mem.labelAt.ink[3], baseline: mem.labelAt.ink[5], top: mem.labelAt.ink[4], bottom: mem.labelAt.ink[2] }] : null
-  // (a unit kept for its text set wholly in a face of one pitch states (k), the differential's cause, before the bundle's why)
+  // (a unit kept for its text set wholly in a face of one pitch, or for an identifier, states (k), the differential's cause,
+  // before the bundle's why)
   const why = keptWhyOf(base) ?? st.why
   // (a figure's paragraph, F3: `para`, the evidence its lines are joined by, 'strong' or 'ragged': stage 1a and the parity read it)
   units.push({ ...base, state, ...(u.figure?.para ? { para: u.figure.para } : {}), ...(why ? { why } : {}), ...(lines.length ? { lines } : {}), ...(elements.length ? { elements } : {}), ...(label ? { label } : {}) })
@@ -254,9 +259,9 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const glyphs = (p) => pagesA?.[p - 1]?.page?.glyphs ?? null
   // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
   // (a statement of a unit the candidate makes, (i): on that unit, its own reason kept in `stated.was`)
-  for (const { u, why, cause, holder, own } of statedOf(base, units, { trails, labels, glyphs, displays: located?.displays ?? [] })) {
+  for (const { u, why, cause, holder, own, keptBy } of statedOf(base, units, { trails, labels, glyphs, displays: located?.displays ?? [] })) {
     if (own) { own.stated = { ord: u.ord, cause, ...(holder ? { holder } : {}), was: own.why }; own.why = why; continue }
-    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
+    units.push({ id: u.id, ord: ord++, kind: u.kind, ...(keptBy ? { keptBy } : {}), text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
     states.unlaid++
   }
 }

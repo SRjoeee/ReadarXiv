@@ -72,14 +72,14 @@ for (const f of readdirSync(join(RUN, 'prepare')).filter((f) => f.endsWith('.pre
     const pdf = pdfOf.get(f.slice(0, -'.prepare.json'.length))
     const pages = read && pdf && existsSync(pdf) ? await read(pdf) : null
     const glyphs = (p) => pages?.[p - 1] ?? null
-    for (const { u, why, cause, holder, own } of statedOf(base, units, { trails: trailsOf(els), labels, glyphs, displays: dump.displays ?? [] })) {
+    for (const { u, why, cause, holder, own, keptBy } of statedOf(base, units, { trails: trailsOf(els), labels, glyphs, displays: dump.displays ?? [] })) {
       if (own) {
         own.stated = { ord: u.ord, cause, ...(holder ? { holder } : {}), was: own.why }
         own.why = why
         stated++
         continue
       }
-      units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
+      units.push({ id: u.id, ord: ord++, kind: u.kind, ...(keptBy ? { keptBy } : {}), text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
       stated++
     }
   }

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
-import { coverageOf, measurePage, staleOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+import { coverageOf, measurePage, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
 import { rowLinesOf } from '../../packages/typeset/src/index.ts'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
@@ -912,6 +912,100 @@ describe("shown, figures: a unit the prepare keeps for its text set wholly in a 
   })
 })
 
+describe("a unit the prepare keeps by a rule's mark is the original's; one no row of the pair's can serve is unmeasured (the coordinator's rulings of 2026-11-10)", () => {
+  // (lane literal-fixes: a figure text kept for an identifier, its member marked `identifier`; a cell of identifiers alone, no
+  // unit of v2's, today's unit stated so, `keptToday`. And a unit whose text a rule changed (an identifier now an element), for
+  // which today's replies hold no row: v2.mjs's `noRow`, the members the pair's fixed rows hold none of. The original's text
+  // is no translation missing; what no row can serve is not measured, listed with its page and count, never worse)
+  type D = { flag: string; worse: boolean; nearer: string; ruling?: string; v2?: { value: unknown } }
+  const of = (flag: string) => (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === flag).map((d) => [d.worse, d.nearer])
+  const unit = (o: { identifier?: number[]; keptToday?: [number, string][]; noRow?: number[]; joined?: boolean; state?: string }) => {
+    const joined = o.joined !== false
+    const v2 = {
+      ...v2Of({
+        members: joined ? [{ ord: 11, state: o.state ?? 'none', lines: [] }] : [],
+        facts: joined ? [{ ord: 11, kind: 'para', align: 'l', style: { size: 9 }, lines: [] }] : [],
+        today: joined ? { 11: { today: 7 } } : {},
+      }),
+      ...(o.identifier ? { identifier: o.identifier } : {}),
+      ...(o.keptToday ? { keptToday: o.keptToday } : {}),
+      ...(o.noRow ? { noRow: o.noRow } : {}),
+    }
+    return measure(v2, rec({ today: { units: [{ id: 7, lines: [line(400)] }] } }))
+  }
+  it("a unit kept for an identifier, its member so marked or today's unit stated so: the ruling's, not worse", () => {
+    expect(of('shown')(unit({ identifier: [11] }))).toEqual([[false, 'ruling']])
+    expect(of('shown')(unit({ joined: false, keptToday: [[7, 'identifier']] }))).toEqual([[false, 'ruling']])
+    expect((unit({ identifier: [11] }).diffs as D[]).find((d) => d.flag === 'shown')?.ruling).toMatch(/identifier/)
+  })
+  it("a unit v2 leaves the original's for want of a row in the pair's rows: unmeasured, listed, never worse", () => {
+    const p = unit({ noRow: [11] })
+    expect(of('shown')(p)).toEqual([[false, 'unmeasured']])
+    expect(p.worse).toBe(0)
+  })
+  it('stays worse with a row (another state), another member or ord marked, or no member joined', () => {
+    expect(of('shown')(unit({ noRow: [11], state: 'unfit' }))).toEqual([[true, 'today']])
+    expect(of('shown')(unit({ noRow: [12] }))).toEqual([[true, 'today']])
+    expect(of('shown')(unit({ identifier: [12] }))).toEqual([[true, 'today']])
+    expect(of('shown')(unit({ joined: false, keptToday: [[8, 'identifier']] }))).toEqual([[true, 'today']])
+  })
+  const figFact = (ord: number, x0: number) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(x0, x0 + 40, 300, 8)] })
+  const prepFig = (ord: number, x0: number) => ({ ord, kind: 'figure', lines: [{ page: N, x0, x1: x0 + 40, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] })
+  const figs = (marks: { identifier?: number[]; pitch?: number[] }) => {
+    const v2 = { ...v2Of({ members: [{ ord: 50, state: 'none', lines: [] }, { ord: 51, state: 'laid', lines: [] }], facts: [figFact(50, 100), figFact(51, 200)] }), ...marks }
+    return measure(
+      v2,
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] }] },
+        v2: { units: [] },
+      }),
+      [prepFig(90, 100), prepFig(91, 200)],
+    )
+  }
+  it("figure texts fewer than today's by those v2's prepare kept by a mark, any mark: the ruling's", () => {
+    expect(of('figures')(figs({ identifier: [50, 51] }))).toEqual([[false, 'ruling']])
+    expect(of('figures')(figs({ identifier: [50], pitch: [51] }))).toEqual([[false, 'ruling']])
+    expect(of('figures')(figs({ identifier: [50] }))).toEqual([[true, 'today']])
+  })
+  it("a run-in's gap where its head is unmeasured is unmeasured too, never worse", () => {
+    const facts = [
+      { ord: 10, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 150, 700)] },
+      { ord: 11, kind: 'para', align: 'l', style: { size: 10 }, lines: [factLine(160, 250, 700)] },
+    ]
+    const members = [
+      { ord: 10, state: 'none', lines: [] },
+      { ord: 11, state: 'laid', lines: [], lit: { left: [], right: [], own: [] } },
+    ]
+    const page = (noRow?: number[]) =>
+      measure(
+        { ...v2Of({ members, facts, today: { 10: { today: 10 }, 11: { today: 11 } } }), ...(noRow ? { noRow } : {}) },
+        rec({
+          today: { units: [{ id: 10, lines: [drawnLine(72, 150, 700, 'x'.repeat(12))] }, { id: 11, lines: [drawnLine(160, 250, 700, 'x'.repeat(12))] }] },
+          v2: { units: [{ id: 11, lines: [drawnLine(152, 242, 700, 'x'.repeat(12))] }] },
+        }),
+        [],
+        { 11: 10 },
+      )
+    expect(of('gap')(page())).toEqual([[true, 'today']])
+    expect(of('gap')(page([10]))).toEqual([[false, 'unmeasured']])
+  })
+  it('the run states what it did not measure: each page with its units and their count, and the whole count', () => {
+    const p = (pair: string, page: number, diffs: object[]) => ({ pair, page, diffs })
+    const pages = [
+      p('a-zh', 4, [{ flag: 'shown', unit: 't72 cell', nearer: 'unmeasured', worse: false }, { flag: 'gap', unit: 't73 para after t72 cell', nearer: 'unmeasured', worse: false }, { flag: 'shown', unit: 't9 para', nearer: 'today', worse: true }]),
+      p('a-zh', 5, [{ flag: 'shown', unit: 't80 para', nearer: 'ruling', worse: false }]),
+      p('b-zh', 1, [{ flag: 'shown', unit: 't3 para', nearer: 'unmeasured', worse: false }]),
+    ]
+    expect(unmeasuredOf(pages)).toEqual({
+      units: 2,
+      pages: [
+        { pair: 'a-zh', page: 4, units: ['t72 cell'], judgements: 2 },
+        { pair: 'b-zh', page: 1, units: ['t3 para'], judgements: 1 },
+      ],
+    })
+  })
+})
+
 describe('figures: a figure text of v2’s that holds several of today’s, its text theirs in order, draws each of them (lane fig-text)', () => {
   // (2608.06701v1 p1: today's two groups "… retry viewing th" | "e file." a size change cut, v2's one figure text "… retry
   // viewing the file." (fig-smallcaps: a word joined across a size change; F0's lines and F3's paragraphs alike): join.mjs
@@ -936,5 +1030,113 @@ describe('figures: a figure text of v2’s that holds several of today’s, its 
   })
   it('without the join, one fewer: worse', () => {
     expect(of(run())).toEqual([[true, 'today']])
+  })
+})
+
+describe("F0's figure texts under the general rules: an element kept as the original's ink is the original's, a text no row serves unmeasured (the coordinator's ruling 1 on F0, 2026-11-10)", () => {
+  // (rebuild/fig-text F0: a figure's line whose run of one pitch is an element, or whose stretch a decoration holds; the dump marks
+  // each such element `keptBy` 'pitch' or 'decoration', v2.mjs writes their ink by member, `keptEls`. Today's row translated the
+  // stretch now an element, so the pair's fixed rows hold no row of the text: v2.mjs's `noRow`. 2608.06701v1 p1: "Action:" and
+  // its command, and seven names and phrases on tones)
+  type D = { flag: string; worse: boolean; nearer: string }
+  const of = (flag: string) => (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === flag).map((d) => [d.worse, d.nearer])
+  const figFact = (ord: number, x0: number) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(x0, x0 + 40, 300, 8)] })
+  const prepFig = (ord: number, x0: number) => ({ ord, kind: 'figure', lines: [{ page: N, x0, x1: x0 + 40, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] })
+  const figs = (noRow?: number[]) =>
+    measure(
+      {
+        ...v2Of({ members: [{ ord: 50, state: 'none', lines: [] }, { ord: 51, state: 'laid', lines: [] }], facts: [figFact(50, 100), figFact(51, 200)] }),
+        ...(noRow ? { noRow } : {}),
+      },
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] }] },
+        v2: { units: [{ id: 51, lines: [drawnLine(200, 240, 300, 'abcd', 8)] }] },
+      }),
+      [prepFig(90, 100), prepFig(91, 200)],
+    )
+  it("figure texts fewer than today's by those no row serves, left the original's: unmeasured, never worse", () => {
+    expect(of('figures')(figs([50]))).toEqual([[false, 'unmeasured']])
+    expect(figs([50]).worse).toBe(0)
+  })
+  it('stays worse without the mark, or where the member marked is laid', () => {
+    expect(of('figures')(figs())).toEqual([[true, 'today']])
+    expect(of('figures')(figs([51]))).toEqual([[true, 'today']])
+  })
+  it("counts every one of today's figure texts inside a text no row serves, however today cut it", () => {
+    // (2608.06701v1 p1: a name on a tone today drew in two pieces, v2's one text holding the tone as an element, left the
+    // original's for want of a row: both of today's pieces, the box join pairing one of them at most)
+    const facts = [{ ord: 50, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100, 185, 300, 8)] }, figFact(51, 200)]
+    const run = (noRow?: number[]) =>
+      measure(
+        {
+          ...v2Of({ members: [{ ord: 50, state: 'none', lines: [] }, { ord: 51, state: 'laid', lines: [] }], facts }),
+          ...(noRow ? { noRow } : {}),
+        },
+        rec({
+          today: {
+            figures: [
+              { id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] },
+              { id: 'f1', lines: [drawnLine(145, 185, 300, 'wxyz', 8)] },
+              { id: 'f2', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] },
+            ],
+          },
+          v2: { units: [{ id: 51, lines: [drawnLine(200, 240, 300, 'abcd', 8)] }] },
+        }),
+        [prepFig(90, 100), { ...prepFig(91, 145), lines: [{ page: N, x0: 145, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }, prepFig(92, 200)],
+      )
+    expect(of('figures')(run([50]))).toEqual([[false, 'unmeasured']])
+    expect(of('figures')(run())).toEqual([[true, 'today']])
+  })
+  // (style: a line "Action: view x.py", "Action:" bold, the command in a typewriter face; v2 draws "Action:"'s translation in
+  // bold and the command as its ink, which the drawn text's share leaves uncounted; today's share is the original's whole)
+  const styled = (keptEls?: [number, number[][]][]) => {
+    const facts = [{ ord: 60, kind: 'figure', align: 'l', style: { size: 10 }, lines: [factLine(100, 200, 300)] }]
+    const v2 = {
+      ...v2Of({ members: [{ ord: 60, state: 'laid', lines: [] }], facts, today: { 60: { today: 7 } } }),
+      ...(keptEls ? { keptEls } : {}),
+    }
+    const r = rec({
+      today: { units: [{ id: 7, lines: [{ ...drawnLine(100, 200, 300, 'x'.repeat(15)), bold: 7 }] }] },
+      v2: { units: [{ id: 60, lines: [{ ...drawnLine(100, 170, 300, 'x'.repeat(12)), bold: 12 }] }] },
+    })
+    const original = {
+      ...r.original,
+      fonts: ['ABCDEF+LMSans10-Bold', 'ABCDEF+LMMono10-Regular'],
+      runs: [
+        [100, 298, 140, 306, 300, 10, 0, 'Action:', false],
+        [145, 298, 200, 306, 300, 10, 1, 'view x.py', false],
+      ],
+    }
+    return measure(v2, { ...r, original })
+  }
+  it("reads the original's bold share without the ink an element of the text keeps: v2 not worse", () => {
+    expect(of('style')(styled([[60, [[N, 144, 297, 201, 307]]]]))).toEqual([[false, 'v2']])
+  })
+  it("and with no element marked, the original's whole: worse as before", () => {
+    expect(of('style')(styled())).toEqual([[true, 'today']])
+  })
+  // (the same for a figure text today drew as a group of its own, joined to v2's member by its box (fidelity.mjs judgeJoined):
+  // 2608.06701v1 p1's "Action:" and its command, v2's one text holding the command as an element)
+  const figStyled = (keptEls?: [number, number[][]][]) => {
+    const facts = [{ ord: 60, kind: 'figure', align: 'l', style: { size: 10 }, lines: [factLine(100, 200, 300)] }]
+    const v2 = { ...v2Of({ members: [{ ord: 60, state: 'laid', lines: [] }], facts }), ...(keptEls ? { keptEls } : {}) }
+    const r = rec({
+      today: { figures: [{ id: 'f0', lines: [{ ...drawnLine(100, 200, 300, 'x'.repeat(15)), bold: 7 }] }] },
+      v2: { units: [{ id: 60, lines: [{ ...drawnLine(100, 170, 300, 'x'.repeat(12)), bold: 12 }] }] },
+    })
+    const original = {
+      ...r.original,
+      fonts: ['ABCDEF+LMSans10-Bold', 'ABCDEF+LMMono10-Regular'],
+      runs: [
+        [100, 298, 140, 306, 300, 10, 0, 'Action:', false],
+        [145, 298, 200, 306, 300, 10, 1, 'view x.py', false],
+      ],
+    }
+    const prep90 = { ...prepFig(90, 100), lines: [{ page: N, x0: 100, x1: 200, baseline: 300, top: 308, bottom: 298, size: 10 }] }
+    return measure(v2, { ...r, original }, [prep90])
+  }
+  it("reads a figure text's original share without its kept element's glyphs alike", () => {
+    expect(of('style')(figStyled([[60, [[N, 144, 297, 201, 307]]]]))).toEqual([[false, 'v2']])
+    expect(of('style')(figStyled())).toEqual([[true, 'today']])
   })
 })

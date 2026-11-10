@@ -22,14 +22,27 @@ import { shown } from '../breaker/text.ts'
 import type { TextItem } from '../emit/display.ts'
 import { type FigureClass, type FigureRow, type FigureUnit, figures } from '../shared/figures.ts'
 import type { FaceId, Laid, Metrics, RuleParams, Rows, Unlaid } from '../types.ts'
-import type { PaperReading } from './read.ts'
+import { type PaperReading, tstyleOf } from './read.ts'
 
 const ANCHOR = { l: 'start', c: 'centre', r: 'end' } as const
 
 /** a figure text's row as S.figures reads it: its translation's text pieces (an element a space), each inside a group of a run
  *  of its in another face in that run's style, as its part states the group's (SpanAt.style: its family, weight and slant);
  *  none where it has none (a failed row's reason is the entry's, figuresOf) */
-function unitOf(row: Row | undefined, m: Placed): FigureUnit | undefined {
+/** a figure text's class (FigureClass) of a part's Style, its small capitals and design as tstyleOf reads them */
+function classOf(st: Placed['style'], designs: PaperReading['designs']): FigureClass {
+  const t = tstyleOf(st, designs)
+  return {
+    fam: st.role,
+    bold: !!st.bold,
+    italic: !!st.slant,
+    ...(t.caps ? { caps: true as const } : {}),
+    ...(t.design ? { design: t.design } : {}),
+    ...(st.fill !== undefined ? { fill: st.fill } : {}),
+  }
+}
+
+function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs']): FigureUnit | undefined {
   if (!row?.ok) return undefined
   const styles = new Map((m.spans ?? []).flatMap(([id, x]) => (x.style ? [[id, x.style] as const] : [])))
   const pieces: NonNullable<FigureUnit['pieces']>[number][] = []
@@ -39,12 +52,7 @@ function unitOf(row: Row | undefined, m: Placed): FigureUnit | undefined {
       else if (p.t === 'el') pieces.push({ t: 'text', s: ' ', ...(cls ? { cls } : {}) })
       else {
         const st = styles.get(p.id)
-        walk(
-          p.content,
-          st
-            ? { fam: st.role, bold: !!st.bold, italic: !!st.slant, ...(st.fill !== undefined ? { fill: st.fill } : {}) }
-            : cls,
-        )
+        walk(p.content, st ? classOf(st, designs) : cls)
       }
   }
   walk(row.content, undefined)
@@ -109,7 +117,7 @@ export function figuresOf(
         anchor: ANCHOR[m.align as keyof typeof ANCHOR],
         fill: m.style.fill ?? -1,
         font: m.style.design ?? '',
-        cls: { fam: m.style.role, bold: !!m.style.bold, italic: !!m.style.slant },
+        cls: (({ fill, ...c }) => c)(classOf(m.style, o.paper.designs)),
         set: setOf.get(m.ord) ?? `f${m.ord}`,
         before: run ? run[3] : side ? l[2] - side[0] : 0,
         after: run ? run[4] : side ? side[1] - l[3] : 0,
@@ -123,7 +131,7 @@ export function figuresOf(
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
-      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!)
+      return unitOf(typeof t === 'string' ? rows.get(t) : undefined, byOrd.get(id)!, o.paper.designs)
     },
     src: (id) =>
       shown({ t: 'text', s: byOrd.get(id)?.plain ?? '' })

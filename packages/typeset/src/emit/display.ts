@@ -227,6 +227,7 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           baseline: number
           text?: string
           k?: number
+          of?: number
           cut?: 1 | 2 | 3
           gap?: { box?: { x0: number; x1: number; top: number; bottom: number } } | null
         }
@@ -241,6 +242,8 @@ export function displayLines(L: Layout, page: number): DisplayLine[] {
           piece: c.k !== undefined ? String(c.k) : 'label',
           ...(c.cut ? { cut: c.cut } : {}),
           ...(own ? { ink: [[own.x0, own.bottom, own.x1, own.top]] } : {}),
+          // (a label carried to the end of the name before: its owner's, lay/flow.ts)
+          ...(typeof c.of === 'number' ? { of: c.of } : {}),
           w: it.w,
         })
         continue

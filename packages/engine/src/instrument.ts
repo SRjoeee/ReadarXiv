@@ -32,7 +32,7 @@ export interface InstrumentUnit {
   /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
-  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.25): a run of one pitch (`pitch`, F0),
+  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0),
    *  a formula (`formula`, F1) or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them
    *  by it; the bundle does not carry it */
   keptEls?: [string, 'pitch' | 'formula' | 'decoration'][]

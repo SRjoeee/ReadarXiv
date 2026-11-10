@@ -31,11 +31,15 @@ export type FigureRow = FitFigure & {
   descent: number
   fill: number
   font: string
-  /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`) */
+  /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`); its small
+   *  capitals and its design where its style reads them (lay/read.ts tstyleOf: a face of small capitals, the design of its
+   *  family), so that its runs are drawn in its face as a body unit's are (Codex on #634, ec222ba69) */
   cls?: {
     fam: 'serif' | 'sans' | 'mono' | 'math'
     bold: boolean
     italic: boolean
+    caps?: true
+    design?: string
     /** a group's fill where its style states one (0xRRGGBB, 0 black): TeX's line in a picture over two colours (2611.03178v1's
      *  label and the address after it in the link's colour); none: the figure text's own */
     fill?: number
@@ -234,15 +238,27 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
         fam,
         bold: cf.bold,
         italic: cf.italic,
-        caps: false,
-        design: i.designs[fam] ?? i.designs.serif,
+        caps: !!cf.caps,
+        design: cf.design ?? i.designs[fam] ?? i.designs.serif,
         ...(cf.fill !== undefined ? { fill: cf.fill } : {}),
       }
     }
     const st = styleOf(f.cls ?? fontClassOf(f.font))
     const own = new Map<FigureClass, TStyle>()
     const stAt = at.map((c) => (c ? (own.get(c) ?? own.set(c, styleOf(c)).get(c)!) : undefined))
-    const runs = figureRuns(text, (cls, s) => i.faceOf(s ?? st, cls), !!i.rules.cjkQuotes, stAt)
+    // (a CJK run in the face the fitter gave it before a label's small capitals and design were carried: the paper's design, no
+    // small capitals, which are no CJK face's; its fallbacks as they were)
+    const cjkOf = (c: TStyle): TStyle => ({
+      ...c,
+      caps: false,
+      design: i.designs[!c.fam || c.fam === 'math' ? 'serif' : c.fam] ?? i.designs.serif,
+    })
+    const runs = figureRuns(
+      text,
+      (cls, s) => i.faceOf(cls === 'cjk' ? cjkOf(s ?? st) : (s ?? st), cls),
+      !!i.rules.cjkQuotes,
+      stAt,
+    )
     const covered = cover(
       runs.map((r) => ({ s: r.s, face: r.face }) as Token),
       i.metrics,

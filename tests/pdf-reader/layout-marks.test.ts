@@ -3,7 +3,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
-import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { patch, startOf } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -70,6 +70,12 @@ describe('the classes', () => {
     for (const src of ['&', '#', '^', '_', '{', '}']) expect(classOf({ t: 'ph', src }), src).toBeNull()
     // an address kept as it is, ink of its own
     expect(classOf({ t: 'ph', src: 'jatin@us.ibm.com' })).toBe('macro')
+    // an identifier the front end keeps (latex-front.mjs keepIdentifiers): no command, TeX sets its characters as written, a code
+    // mark; an address with an underscore stays an address's
+    for (const src of ['llm\\_equal\\_human', '[sentence\\_1]', '\\{root\\_question\\}', 'CallbackBase.host\\_label(result)', 'run\\textunderscore id'])
+      expect(classOf({ t: 'ph', src }), src).toBe('code')
+    for (const src of ['first\\_last@x.org', '\\_', '\\code{a\\_b}', 'conv1'])
+      expect(classOf({ t: 'ph', src }), src).not.toBe('code')
     // a bibliography entry's number (latex-front.mjs keepNumbers): text of a digit and no letter, which reads nothing after it
     for (const src of ['1994.', '157--166,', '5(2):157--166', '(2017)', '10.1145/3786335.3813167']) expect(classOf({ t: 'ph', src }), src).toBe('number')
     for (const src of ['1994a', '\\natexlab{a}', '2$^{nd}$', '{2017}', '12~']) expect(classOf({ t: 'ph', src }), src).not.toBe('number')
@@ -258,6 +264,20 @@ describe('layoutMarking', () => {
     const row = unit('para', [ph('\\textbf{Model}'), ph('&'), text(' '), ph('\\SetCell[c=4]{c}'), text(' Slopes '), ph('&'), text(' '), ph('$x$'), ph('\\\\')])
     const { units: marked } = layoutMarking([row], MARK_CLASSES, { lines: false })
     expect(srcs(marked[0])).toEqual(['ph \\textbf{Model}', 'ph &', 'text', 'ph \\SetCell[c=4]{c}', 'text', 'ph &', 'text', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}', 'ph \\\\'])
+  })
+  it('an identifier gets both marks, a code mark’s, whatever follows it: a forced break, another element (2608.25210v2 p3, 2610.22195v1)', () => {
+    // (as a paper's macro it had its opening mark alone, its end told by the text after it: a forced break or another element
+    // after it told none, its glyphs were read as the unit's text and the unit was left unlocated, "text past its source". It
+    // reads nothing after it; one that ends in a text symbol, `\}`, after which TeX skips no space, keeps its closing mark too)
+    const { units: marked } = layoutMarking([unit('para', [text('A\n'), ph('\\{root\\_question\\}'), ph('\\\\[4pt]'), text('\n'), ph('llm\\_equal\\_human'), text(': Are '), ph('[sentence\\_1]'), ph('$x$')])], MARK_CLASSES, { lines: false })
+    // (its opening mark \axthpk's: in vertical mode, where a box's paragraph opens with it (2608.25210v2 p3's \mypython box,
+    // \small\ttfamily then `llm\_equal\_human`), \axtpma waits for the next mark, its closing one, and the element was empty;
+    // \axthpk begins the paragraph before a character as TeX would, and sets its point there)
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axthpk{p0.1a}', 'ph \\{root\\_question\\}', 'ph \\axtpm{p0.1b}', 'ph \\\\[4pt]', 'text', 'ph \\axthpk{p0.4a}', 'ph llm\\_equal\\_human', 'ph \\axtpm{p0.4b}', 'text', 'ph \\axthpk{p0.6a}', 'ph [sentence\\_1]', 'ph \\axtpm{p0.6b}', 'ph \\axtpmm{p0.7a}', 'ph $x$', 'ph \\axtpm{p0.7b}'])
+  })
+  it('an identifier opening a unit is its first word: the unit\'s start mark before it, no head passed over past it', () => {
+    expect(startOf([ph('\\noindent'), ph('llm\\_equal\\_human'), text(': Are')] as never)).toEqual([1, -1])
+    expect(headEnd([ph('\\noindent'), ph('llm\\_equal\\_human'), text(': Are')] as never, 0)).toBe(1)
   })
   it('the closing mark is left out after a control word, whose spaces TeX skips', () => {
     const { units: marked } = layoutMarking([unit('para', [text('A '), ph('\\footnotemark'), text(' and '), ph('\\bert{}'), text(' B '), ph('\\foo{x}\\bar'), text(' C')])], MARK_CLASSES, { lines: false })

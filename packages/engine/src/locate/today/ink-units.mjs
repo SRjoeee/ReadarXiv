@@ -1,7 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
 // marked COPY, nothing else but eight changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
-// placeholder stated, `glyphs.runs`; an e-mail address a kept run of its own, addressed, and a group of local parts before their
+// placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
 // domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
 // leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
@@ -36,7 +36,8 @@
 //      its source the run's characters; so is a run of scripts in whatever face, each glyph TeX set smaller than its line's text
 //      and off its baseline (a formula's digit in a text face, an affiliation's or a note's mark), a formula's (`math`), a run
 //      over a line's break one only where no script stands at the break; a word that is a web address is one in whatever face,
-//      and so is an e-mail address in a word, the word's characters around it the text's, and a group of local parts before
+//      and so is an e-mail address in a word, or an identifier (a token of word characters joined by underscores), the word's
+//      characters around it the text's, and a group of local parts before
 //      their one domain, every glyph of it whatever its face, over its words and the break of lines TeX set one after the other
 //      (a note of addresses alone is then no unit, a kept block that says so, `address`; a line of no text word, an address or a
 //      URL TeX broke onto a line of its own, is the next line of the unit its line before belongs to in one of TeX's paragraphs as
@@ -72,7 +73,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
 import { accentTexts } from './accents.mjs'
-import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
+import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
@@ -253,20 +254,30 @@ function scriptsOf(G, order) {
  *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). CHANGED: today's said it as text, in a colour group of its
  *  run where its ink has another colour, which no translation kept (2609.36054v2 p1's grey addresses drawn black, #28); kept, it is
  *  an element every reply brings back, its ink the original's. A word's text is its glyphs' (`ts`): an address that begins or
- *  ends inside a glyph's text takes that glyph whole */
+ *  ends inside a glyph's text takes that glyph whole. CHANGED too: so is an identifier in a word, a token holding two letters or
+ *  digits joined by underscores, whole but its edges' sentence punctuation (the front end's identifiersIn, as keepIdentifiers keeps one: `llm_equal_human` set in a text face, its
+ *  words sent, came back with its last part in Chinese), read on its glyphs' compatibility forms (NFKC: a ligature's glyph its letters, as a
+ *  figure's text reads it); an address first, so that one holding an underscore stays one address */
 const ADDRESSES = new RegExp(EMAIL_ADDRESS.source, 'g')
 function addressed(w) {
-  const found = [...w.text.matchAll(ADDRESSES)]
+  // (each glyph's first character in the word's text, and in its compatibility forms')
+  const starts = [], folded = w.ts.map(t => t.normalize('NFKC')), fstarts = []
+  let n = 0, fn = 0
+  w.ts.forEach((t, i) => { starts.push(n); n += t.length; fstarts.push(fn); fn += folded[i].length })
+  const glyphIn = (at, o) => { let i = 0; while (i + 1 < at.length && at[i + 1] <= o) i++; return i }
+  const found = [...w.text.matchAll(ADDRESSES)].map(m => [glyphIn(starts, m.index), glyphIn(starts, m.index + m[0].length - 1) + 1])
+  // (each identifier outside the addresses, its glyphs [a, b))
+  if (folded.some(t => t.includes('_')))
+    for (const [x, y] of identifiersIn(folded.join(''))) {
+      const a = glyphIn(fstarts, x), b = glyphIn(fstarts, y - 1) + 1
+      if (!found.some(([p, q]) => p < b && a < q)) found.push([a, b])
+    }
   if (!found.length) return [w]
-  const starts = []
-  let n = 0
-  for (const t of w.ts) { starts.push(n); n += t.length }
-  const glyphAt = o => { let i = 0; while (i + 1 < starts.length && starts[i + 1] <= o) i++; return i }
+  found.sort((x, y) => x[0] - y[0])
   const out = []
   const part = (a, b, fam) => { if (b > a) out.push({ gs: w.gs.slice(a, b), ts: w.ts.slice(a, b), text: w.ts.slice(a, b).join(''), fam }) }
   let from = 0
-  for (const m of found) {
-    const a = glyphAt(m.index), b = glyphAt(m.index + m[0].length - 1) + 1
+  for (const [a, b] of found) {
     if (a < from) continue
     part(from, a, 'text')
     part(a, b, 'mono')
