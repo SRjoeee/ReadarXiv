@@ -1054,6 +1054,12 @@ describe('an element’s text across a line TeX ended inside a word', () => {
     // (a hyphen after no letter is no word's: the line's end a space, as before)
     expect(textOf([...word('3 -', 270, 700), ...word('x', 72, 688)])).toBe('3 - x')
   })
+  it('keeps a hyphen with a digit on either side, joined across the line’s end: TeX hyphenates letters alone', () => {
+    // (2609.19644v1's included pages "128-|bit", "DeepSeek-|3.2"; production drew "DeepSeek- V3" on a sheet's pane)
+    const word = (s: string, x: number, y: number) => [...s].map((c, i) => g(c, x + 6 * i, y))
+    expect(textOf([...word('128-', 270, 700), ...word('bit', 72, 688)])).toBe('128-bit')
+    expect(textOf([...word('DeepSeek-', 240, 700), ...word('3.2', 72, 688)])).toBe('DeepSeek-3.2')
+  })
   it('keeps the hyphens the corpus showed are a word’s own: TeX hyphenates the first word after a space alone, to its minimums', () => {
     // (the stage 1a corpus, the parts' element texts: 2307.16209v1 p138 "arXiv:gr- qc/0511111", p140 "[hep- th]", p146
     // "imrn/article- pdf/2015/18/", 2608.06701v1 p5 "SWE- bench Pro"; each was taken for TeX's break and joined)

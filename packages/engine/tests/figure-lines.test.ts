@@ -769,6 +769,8 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     })
     // (written nowhere else: TeX's rules, its break)
     expect(end([gapped('in 2024 the per-'), gapped('timestep gate')])).toEqual({ t: 'br', end: 'drop' })
+    // (a digit beside the hyphen: TeX hyphenates letters alone, the author's hyphen, joined: 2609.19644v1's "128-|bit")
+    expect(end([gapped('in 2024 a 128-'), gapped('bit vector')])).toEqual({ t: 'br', end: 'join' })
   })
   it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", an item of a list (2411.13093v4 p19)', () => {
     // (each marker with the next item's, one under the other at one left edge: a list)

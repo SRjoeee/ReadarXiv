@@ -385,14 +385,20 @@ function stated(source: string, before: string, after: string): 'hyphen' | 'join
  * it (not `[hep-|th]`), and no word an explicit hyphen follows before the next space (its discretionary stops it, §899:
  * not `extreme-|mass-ratio`); never in a typewriter face (LaTeX sets their \hyphenchar to −1) nor in text it sets as written
  * (`literal`: a URL, a code mark). And a change of case across the hyphen is a compound's own hyphen, TeX's falling inside a
- * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
+ * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`); and a digit on either side
+ * of it is the author's, TeX hyphenating letters alone (`128-|bit`, `DeepSeek-|3.2`)
  */
 export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
   // (inside one word as written TeX set nothing where it broke the line: its text reads the line's end as its copy does)
   if (o.oneWord) return 'join'
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
-  if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'
+  if (!HYPHENS.has(h.u)) return 'space'
+  // (TeX hyphenates letters alone: a hyphen with a digit on either side, in the word, is the author's, joined: "128-|bit",
+  // "DeepSeek-|3.2", 2609.19644v1's included pages)
+  const p = gs[q - 2] as DocGlyph | undefined
+  if (/^\p{N}/u.test(g.u) || (p && /\p{N}$/u.test(p.u) && !lineChange(p, h) && !apart(p, h))) return 'join'
+  if (!/^\p{L}/u.test(g.u)) return 'space'
   // (the word before it on its line, and whether it is the first after a space: only non-letters between them)
   let before = ''
   let k = q - 2
