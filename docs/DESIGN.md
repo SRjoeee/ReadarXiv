@@ -1182,22 +1182,25 @@ only how it meets the rest of the extension.
   (of the forced units, 1.4 % with up to 3 markers in the busiest sentence, 12 % with 4 to 7), and the sentence lengths it
   reports were lost for 19 of 261 Chinese units. So the group stays on no wire, and a translator whose declared wire is the
   markers' (`Translator.wire`) is asked, in the unit's batch, for each such group's own text alone, its reference: a group of
-  text alone, not `must`, not around the whole unit, of two words or more (`groups.ts` referencesOf; a group holding an
-  element or another group travels as its pieces do). The chain reads the unit's reply as before, its stored reply the same
-  bytes, and places each group the reply did not bring back where the reply states its reference once in the group's place,
-  both normalised (NFKC, no white space beside a CJK character, a run of white space one space, the reference's ends trimmed
-  of punctuation and white space) and both ends of the place on the reply's word boundaries in the target language
-  (`Intl.Segmenter`, `word`; `placeReferences`); a reference that fails places nothing. `CHAIN_RULES` `references`: every
-  row is read again from its stored reply and no stored reply is asked again; the references are new requests. Over the 88
-  corpus papers' Chinese, of the 1,406 phrase groups of their running text (bold 252, italic 722, colour 280, small capitals 24,
-  a paper's style 128), 196 hold an element and are not asked; of the 1,142 asked (68 more are a span around the whole unit
-  beside elements that set nothing, or hold another group), 20 are placed by their own text and 583 by their reference
-  (bold 98, italic 301, colour 174, small capitals 7, other 3), none unplaced by it; 208 requests filled the units' replies and
-  the references. A read of 60 placed groups found 59 placed on their words; in 124 of the 583 the group's opening or closing
-  bracket or quote stays outside the span (the reference's trimmed ends), and once a bracket pair is split, "(⟦1) …⟧".
-  The rule asks a reference for 6,242 groups over the 88 (about 200,000 characters, 3.3 % of their wire): 4,673 of them are
-  bibliography entries' (BibTeX's brace groups, a venue's italics; translated under the References toggle), 1,569 the rest's
-  (about 38,000 characters, 0.6 %).
+  text alone, not `must`, not around the whole unit, of two words or more, outside a bibliography's entries (`groups.ts`
+  referencesOf; a group holding an element or another group travels as its pieces do; an entry's groups, a venue's italics and
+  the field markup of `.bbl` files, are sent only under the References toggle and were never measured: the coordinator's ruling
+  of 2026-11-11). The chain reads the unit's reply as before, its stored reply the same bytes, and places each group the reply
+  did not bring back where the reply states its reference once in the group's place, both normalised (NFKC, no white space
+  beside a CJK character, a run of white space one space, the reference's ends trimmed of punctuation and white space) and both
+  ends of the place on the reply's word boundaries in the target language (`Intl.Segmenter`, `word`; `placeReferences`); the
+  place then takes back the brackets and quotes the reference's ends were trimmed of where the reply sets them right beside it,
+  NFKC-equal, never half a pair where the group's own pair up (`withEnds`). A reference that fails places nothing.
+  `CHAIN_RULES` `references`: every row is read again from its stored reply and no stored reply is asked again; the
+  references are new requests. Over the 88 corpus papers' Chinese, of the 1,406 phrase groups of their running text (bold
+  252, italic 722, colour 280, small capitals 24, a paper's style 128), 196 hold an element and are not asked; of the 1,142
+  asked (68 more are a span around the whole unit beside elements that set nothing, or hold another group), 20 are placed by
+  their own text and 585 by their reference (bold 98, italic 303, colour 174, small capitals 7, other 3), none unplaced by it;
+  208 requests filled the units' replies and the references. A read of 60 placed groups found 59 placed on their words, the
+  one wrong a bracket pair split ("(1) Correcting behavioral drift." as "(⟦1) …⟧"), which the marks given back mend: of the 124
+  groups that open or close with a bracket or a quote, 118 hold them now (none before); 5 quotations whose reply sets its stop
+  inside the closing quote keep both quotes outside, paired, and one title the reply sets in other brackets. The references
+  asked over the 88: 1,569 groups (about 38,000 characters, 0.63 % of their wire).
 - **A bundle's unit reaches every translator one way** (lane unit-projection, 2026-11-09). A unit of `packages/format`
   (its pieces as the prepare writes them) is not the translator contract's: a nested unit (a footnote set inside a
   paragraph) is a piece of its own, and an element's TeX source, a group's open and close and a heading's depth only name

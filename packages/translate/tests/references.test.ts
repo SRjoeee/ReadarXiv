@@ -54,6 +54,36 @@ describe('placeReferences: a phrase group placed where the reply states its refe
       tx(' hier.'),
     ])
   })
+  it('gives the span back the opening and closing marks the reference was trimmed of, where the reply sets them right beside it', () => {
+    // (synthetic stand-ins of Microsoft's Chinese, 2026-11-11: 2608.06701v1's "(1) Correcting behavioral drift." placed as
+    // "（⟦1）…⟧", its bracket pair split, and 2610.19159v1's coloured "(Lenient Self-verification)" placed without its brackets)
+    const item = unit('i', [t('As found: '), span('2', 'bold', [t('(1) Correcting the drift.')]), t(' Then more.')])
+    expect(
+      placeReferences(item, [tx('如下：（1）纠正漂移。然后更多。')], refs({ 2: '(1) 纠正漂移。' }), 'zh-Hans'),
+    ).toEqual([tx('如下：'), sp('2', [tx('（1）纠正漂移')]), tx('。然后更多。')])
+    const quote = unit('q', [t('He said: '), span('2', 'italic', [t('"I really see the value"')]), t('.')])
+    expect(
+      placeReferences(quote, [tx('他说：“我真的看到了价值”。')], refs({ 2: '“我真的看到了价值”' }), 'zh-Hans'),
+    ).toEqual([tx('他说：'), sp('2', [tx('“我真的看到了价值”')]), tx('。')])
+    // (its marks alone, in their order from the words outward: the reference's stop inside its closing quote, the reply's after it)
+    expect(
+      placeReferences(quote, [tx('他说：“我真的看到了价值”。')], refs({ 2: '“我真的看到了价值。”' }), 'zh-Hans'),
+    ).toEqual([tx('他说：'), sp('2', [tx('“我真的看到了价值”')]), tx('。')])
+    // (none where the reply sets no such mark there, or sets it apart from the words)
+    expect(
+      placeReferences(quote, [tx('他说：我真的看到了价值。')], refs({ 2: '“我真的看到了价值”' }), 'zh-Hans'),
+    ).toEqual([tx('他说：'), sp('2', [tx('我真的看到了价值')]), tx('。')])
+    const tag = unit('t', [t('Step 9 '), span('2', 'colour', [t('(Lenient check)')])])
+    expect(placeReferences(tag, [tx('第9步 （ 宽容检查）')], refs({ 2: '（宽容检查）' }), 'zh-Hans')).toEqual([
+      tx('第9步 （ '),
+      sp('2', [tx('宽容检查')]),
+      tx('）'),
+    ])
+    // (and never half a pair: a reply that sets its stop before the closing quote gives back neither quote)
+    expect(
+      placeReferences(quote, [tx('他说：“我真的看到了价值。”')], refs({ 2: '“我真的看到了价值”' }), 'zh-Hans'),
+    ).toEqual([tx('他说：“'), sp('2', [tx('我真的看到了价值')]), tx('。”')])
+  })
   it("the owner's two bold leads: the first placed, the second not (its reply's word is not its reference's)", () => {
     // (the replies are synthetic stand-ins of Microsoft's Chinese, 2026-11-11, with the property that decides each: the first
     // states the lead's reference translation once, at a word's ends; the second translates "failure" otherwise in context
@@ -90,6 +120,14 @@ describe('referencesOf: the groups a reference is asked for', () => {
     ])
     expect(referencesOf(u).map((g) => g.id)).toEqual(['1'])
     expect(referencesOf(unit('w', [span('1', 'bold', [t('Whole bold heading')])]))).toEqual([])
+  })
+  it("none for a bibliography's entry, under the References toggle: its groups a venue's italics and BibTeX's braces", () => {
+    const entry = (kind: string) => ({
+      ...unit('e', [t('A. Author. '), span('1', 'italic', [t('Advances in Neural Systems')]), t(', 2020.')]),
+      kind,
+    })
+    expect(referencesOf(entry('para')).map((g) => g.id)).toEqual(['1'])
+    for (const kind of ['reference', 'refnames', 'inkreferences']) expect(referencesOf(entry(kind)), kind).toEqual([])
   })
 })
 
