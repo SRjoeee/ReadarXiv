@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
+import { pageGlyphsOf } from '../src/glyph.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { eachBetweenPaired, locate } from '../src/locate/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
@@ -2449,20 +2450,25 @@ describe('an element’s ink is what TeX set for it', () => {
     // source's lowercase letters drawn as capitals at 0.8 of the size. Its text was stated as PDF.js reads it, every letter a
     // capital, and its style `upper`: the typesetter drew it in full capitals at the run's size. An ink unit's rule (facts.ts
     // fakedCaps, `ink`): where every cased glyph is a capital, one at most SMALL_CAPS_SHARE of its full letters' size is a faked
-    // small capital, its source's letter lowercase. An acronym, every capital at one size, is none: "BERT")
+    // small capital, its source's lowercase letter. An acronym, every capital at one size, is none: "BERT". The page's glyphs as
+    // readPdf makes them (glyph.ts PageGlyph, its coordinates read by getters): a word space read between two words of it)
     const B = docOf([
       {
         lines: [
           { text: 'see ', x: 72, y: 700 },
           { text: 'LIVEPLAN', x: 96, y: 700 },
-          { text: ' and ', x: 144, y: 700 },
-          { text: 'BERT', x: 174, y: 700 },
-          { text: ' work', x: 198, y: 700 },
+          { text: 'SYS', x: 147, y: 700 },
+          { text: ' and ', x: 165, y: 700 },
+          { text: 'BERT', x: 195, y: 700 },
+          { text: ' work', x: 219, y: 700 },
         ],
       },
     ])
-    // (I, V, E and L, A, N of "LIVEPLAN" set at 8 pt, the rest at 10)
-    for (const k of [5, 6, 7, 9, 10, 11]) B.pages[0]!.glyphs[k]!.size = 8
+    // (I, V, E, L, A, N of "LIVEPLAN" and Y, S of "SYS" set at 8 pt, the rest at 10; the two words a word space apart, no
+    // glyph between them, as TeX sets a space)
+    const page = B.pages[0]!
+    for (const k of [5, 6, 7, 9, 10, 11, 13, 14]) page.glyphs[k]!.size = 8
+    page.glyphs = pageGlyphsOf(page.glyphs)
     const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
     const content = [text('see '), macro('1', '\\approach'), text(' and '), macro('3', '\\bert'), text(' work')]
     const ins = ownedBy(
@@ -2477,6 +2483,7 @@ describe('an element’s ink is what TeX set for it', () => {
         [
           [0, T, -1],
           [0, E, 1],
+          [0, E, 1],
           [0, T, -1],
           [0, E, 3],
           [0, T, -1],
@@ -2485,7 +2492,7 @@ describe('an element’s ink is what TeX set for it', () => {
     )
     const L = locate(ins, B, align(B, B))
     const live = elementOf(L, '1')
-    expect([live.text, live.style?.sc, live.style?.upper]).toEqual(['LivePlan', 0.8, undefined])
+    expect([live.text, live.style?.sc, live.style?.upper]).toEqual(['LivePlan Sys', 0.8, undefined])
     const bert = elementOf(L, '3')
     expect([bert.text, bert.style?.sc, bert.style?.upper]).toEqual(['BERT', undefined, 1])
   })

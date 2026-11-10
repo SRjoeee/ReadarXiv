@@ -306,10 +306,12 @@ export function fakedCaps<G extends StyleGlyph>(
  * alone tell: an acronym, every capital at one size, has none ("BERT"); nor has an element every capital of which is small,
  * which no full letter of its own measures (none of the 88)
  */
-export function elementCase<G extends StyleGlyph>(gs: readonly G[]): { glyphs: readonly G[]; ratio?: number } {
+export function elementCase<G extends DocGlyph>(gs: readonly G[]): { glyphs: readonly G[]; ratio?: number } {
   const caps = fakedCaps(gs, null, true)
   if (!caps.small.size || caps.ratio === undefined) return { glyphs: gs }
-  return { glyphs: gs.map((g) => (caps.small.has(g) ? { ...g, u: g.u.toLowerCase() } : g)), ratio: caps.ratio }
+  // (each a glyph of its own kind with its letter changed, glyph.ts glyphWith: a spread of a page's glyph holds none of its
+  // coordinates, and the text read off it no space)
+  return { glyphs: gs.map((g) => (caps.small.has(g) ? glyphWith(g, { u: g.u.toLowerCase() }) : g)), ratio: caps.ratio }
 }
 
 /** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
