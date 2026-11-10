@@ -3859,6 +3859,16 @@ word: drawn as the page's text so that it flows and breaks, its font state is Te
   (2610.22214v1, 5); LaTeX's bold "??" of an undefined reference (2610.19282v1, 2); a citation upright (2610.20581v1). Where
   the row is the source's, a group around an element is the run's style and its glyphs' alike: 1810.04805v2's bold `\bert`
   moves only where a translator's row loses its group.
+- **The parity** (B6's sheets, 22 pairs; the 12 pairs that move laid and drawn again). Its instrument first, alone on B6's own
+  pages: a drawn line's size is the size it was set at, its largest letter's (it was the median, and a CJK line holding a
+  macro in faked small capitals read their size), its extent its characters' advances on their baseline (an oblique run's
+  skew read a slanted CJK run's lean as a line past its column), and a raised run joins a line of its own column: 47 -> 46
+  worse by default, 57 -> 56 every toggle on, nothing newly worse. Then this rule: 46 -> 50 and 56 -> 59, every page newly
+  worse a paragraph of 2608.06701v1 one line shorter than today's because its elements are as narrow as on A (p4 t63, p5
+  t132, p7 t217, p9 t244, p11 t284; and with the references on, p11's t294, whose borrow ruling read t284's borrow, which
+  t284 no longer needs): accepted, the coordinator's ruling of 2026-11-11 ("an element is drawn at its own glyphs' width, the
+  paragraph ends one line sooner"). One `style` share moves on a page worse before (2610.20484v1 p6 t62: its "(8)", upright
+  on A on p7 of the theorem, is drawn on p6), a known weakness of a per-page share on a unit over a page break.
 - **Not this rule's.** An element drawn as a crop is the original's ink already, and a symbol drawn from its source keeps the
   math rule; the style of a translation's groups is the translator's side. An element every capital of which is small, no full
   letter of its own to measure them by, is drawn in capitals at the run's size (none of the 88). "LIVE-|PLAN" broken over two
