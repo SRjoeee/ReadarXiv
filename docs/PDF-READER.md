@@ -3814,6 +3814,53 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
   order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
+### 18.27 A theorem head is named from its parts as TeX set them (2026-11-11)
+
+The owner's batch 6 (2610.21312v1 p5 and p6): "Corollary VI.2", "Proposition VI.3", "Proposition VII.1" stayed the original's,
+where "Proposition V.2" two pages before was drawn in the target's word. The paper is IEEEtran with amsthm's
+`\newtheorem{theorem}{Theorem}[section]`: the counter is `\Roman{section}.\arabic{theorem}`. The engine read a head's parts by
+its glyphs' classes, one capital before a number's first dot and no more, so "Corollary VI.2 (" was name "CorollaryVI." and
+number "2"; and the typesetter joined the parts and read them again with today's pattern (tex-names.mjs headInTarget), which
+takes one capital before ".n" ("V.2") and a roman numeral with nothing after it: "VI.2" was neither, and nothing was drawn.
+
+- **The parts** (`packages/engine` locate/facts.ts `labelParts`). A head's number is the word after its label's last word
+  space, where that word is a number as LaTeX prints a counter (a digit in it, a roman numeral, a letter alone), as a float's
+  number is the word after its tie (\fnum@): amsthm sets `\thmname{#1}\thmnumber{ #2}`, a space between. From its first digit
+  or letter (a bracket before it is neither part's, "Eq. (3)"); where no such word stands, the digits at its end as before
+  ("Fig.S1"). Its name is the glyphs before, read as letters (Unicode's compatibility form: a ligature's glyph its letters,
+  2610.21765v1's "Deﬁnition" given as U+FB01, which no head name holds) with a space where TeX set its glue ("Key Lemma").
+- **The relabel** (`packages/typeset` unit/label.ts `headLabelInTarget`). The target's word for `Label.name` (the rules' head
+  names, else the paper's own name unit's), then `Label.num` and `Label.punct` as TeX printed them, a space before the
+  punctuation where it stands a fifth of its size apart. Today's pattern is gone. Only where the parts hold the label's every
+  glyph, the name first (`whole`, as a float's label): a swapped head (`\swapnumbers`, "3.2 Theorem"), or one with glyphs no
+  part holds, keeps the original's rather than lose its number.
+- **Over the 88** (r14's parts, every member of kind theorem or heading whose label begins with a name the paper declares or
+  the zh table holds; rootcause/batch6.md): 566 heads in 34 papers; relabelled before 521, after 529: the 5 of 2610.21312v1 and
+  the 3 of 2610.21765v1 (which today's production draws: its characters spell "Definition"). Not by this rule: 2610.21026v1's
+  seven "Assumption" (`\newtheorem{assumption}{\protect\assumptionname}`: a name printed through a macro is no name unit of the
+  paper's, and the table has none), and babel's "Proof." (the names path's, by design).
+
+### 18.28 etoolbox's conditionals are read as TeX's own (2026-11-11)
+
+The owner's batch 6 (2608.25210v2 p1): VLDB's "PVLDB Artifact Availability: …" paragraph stayed English. It is the false
+branch of `\ifdefempty{\vldbavailabilityurl}{}{…}`, and the role table did not know etoolbox's conditionals: the call was one
+placeholder, its branch of words no unit, and its glyphs fell to the unit before's last placeholder, an opening point read to
+the next point (own.mjs MR 4), the next unit's start, across TeX's paragraph end.
+
+- **The rule** (rules/arg-roles.mjs, source/latex-front.mjs `BRACE_CONDITIONALS`). etoolbox's `\ifdefempty`, `\ifdefvoid`,
+  `\ifdef`, `\ifundef`, `\ifdefstring`, `\ifcsdef`, `\ifcsundef`, `\ifcsempty`, `\ifcsvoid`, `\ifbool`, `\iftoggle`,
+  `\ifstrequal`, `\ifstrempty`, `\ifblank`, `\notblank` and ifthen's `\ifthenelse` take their branches as a macro's
+  arguments, no `\fi`. The role table states their test (a control sequence, a name, or code) and their two branches (the content
+  TeX sets one of). The walk reads the branches in a dry run as it reads TeX's own conditionals' (S4, `probeConditional`): the one
+  branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close (walked
+  both, an empty first branch's pair ended the unit's head between two of the command's arguments, and no start mark was
+  written); both of words, neither is the translator's, the call one placeholder (`ifUnknown`); neither, one placeholder as
+  before. Nothing is decided before the compile: a branch TeX does not set has no ink and stays as it is.
+- **Over the 88** (sources' calls in the document's text): `\ifdefempty` 1 (2608.25210v2), `\iftoggle` 1 (2610.37818v1's
+  acknowledgements, translated today as the ledger's ink units of orphan lines, now a heading and a paragraph of the source);
+  no other form with words in any paper's text; `\IfFileExists` (13 calls, 5 papers) was the role table's already. Two papers'
+  marked sources move.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
