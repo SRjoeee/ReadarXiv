@@ -756,7 +756,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       for (let u = 0; u < ins.units.length; u++) {
         const list = glyphsOf.get(u)
         if (!AUTHOR_KINDS.has(ins.units[u]!.kind) || ins.units[u]!.name !== undefined || !list?.length) continue
-        const from = paraEnds.findLast((e) => e <= (list[0] as number)) ?? Number.NEGATIVE_INFINITY
+        let from = Number.NEGATIVE_INFINITY
+        for (const e of paraEnds) if (e <= (list[0] as number)) from = e
         const to = paraEnds.find((e) => e > (list.at(-1) as number)) ?? Number.POSITIVE_INFINITY
         if (again.some((g) => g >= from && g < to)) released.add(u)
       }
