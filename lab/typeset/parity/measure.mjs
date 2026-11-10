@@ -22,6 +22,25 @@ import { pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { coverageOf, FLAGS, freshOf, measurePage, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 
+/** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
+const FRESH_CAUSE = {
+  'no-row': 'no stored row serves its unit',
+  'today-kept': "kept by today's name/code rule, sent by v2",
+  group: "a cell today's group decision kept (its reply not stored)",
+  unit: "its stored row answered another unit",
+}
+/** the sheet's look of a fresh unit (lane parity-fresh), written only where the run has one: a tint over its drawn lines on
+ *  v2's pane, its unjudged differences neutral */
+const FRESH_CSS = `
+<style>
+:root { --fresh: rgba(230, 160, 0, 0.28); --freshbg: #fff7e0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --freshbg: #3a3320; } }
+:root[data-theme="dark"] { --freshbg: #3a3320; }
+.diffs tr.fresh { background: var(--freshbg); }
+.panes .tint { position: relative; }
+.panes .tint i.fresh { position: absolute; background: var(--fresh); pointer-events: none; }
+.freshlist { margin: 0 0 6px; padding-left: 20px; font-size: 13px; }
+</style>`
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const WORK = arg('work')
 const OUT = arg('out')
@@ -267,24 +286,6 @@ for (const w of worst) console.log(`  ${w.pair} p${w.page} (${w.score}): ${Objec
 process.exitCode = verdict.pass ? 0 : 1
 
 
-/** the sheet's look of a fresh unit (lane parity-fresh), written only where the run has one: a tint over its drawn lines on
- *  v2's pane, its unjudged differences neutral */
-const FRESH_CAUSE = {
-  'no-row': 'no stored row serves its unit',
-  'today-kept': "kept by today's name/code rule, sent by v2",
-  group: "a cell today's group decision kept (its reply not stored)",
-  unit: "its stored row answered another unit",
-}
-const FRESH_CSS = `
-<style>
-:root { --fresh: rgba(230, 160, 0, 0.28); --freshbg: #fff7e0; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --freshbg: #3a3320; } }
-:root[data-theme="dark"] { --freshbg: #3a3320; }
-.diffs tr.fresh { background: var(--freshbg); }
-.panes .tint { position: relative; }
-.panes .tint i.fresh { position: absolute; background: var(--fresh); pointer-events: none; }
-.freshlist { margin: 0 0 6px; padding-left: 20px; font-size: 13px; }
-</style>`
 function esc(s) {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 }
@@ -331,7 +332,7 @@ function sheet(r) {
       const nums = p.error
         ? `<p class="err">${esc(p.error)}</p>`
         : `<p class="nums">laid: today ${m.laid?.today}, v2 ${m.laid?.v2} · links: original ${m.links?.original}, today ${m.links?.today}, v2 ${m.links?.v2} · borders: original ${m.borders?.original ?? '–'}, today ${m.borders?.today ?? '–'}, v2 ${m.borders?.v2 ?? '–'} · sentence boxes: today ${m.highlight?.today}, v2 ${m.highlight?.v2} · darkness: original text ${m.darkness?.originalText?.mean ?? m.darkness?.original?.mean ?? '–'}, today ${m.darkness?.today?.mean ?? '–'}, v2 ${m.darkness?.v2?.mean ?? '–'} · off arXiv's page outside the units: today ${m.diff?.outsideToday ?? '–'}, v2 ${m.diff?.outside ?? '–'} px</p>`
-      const tint = k === 'v' && p.fresh?.tint.length ? p.fresh.tint.map((b) => `<i class="fresh" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></i>`).join('') : ''
+      const tint = p.fresh?.tint.length ? p.fresh.tint.map((b) => `<i class="fresh" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></i>`).join('') : ''
       const img = (k, alt) => `<figure${k === 'v' && tint ? ' class="tinted"' : ''}><figcaption>${alt}${k === 'v' && p.fresh ? ` (${p.fresh.units.length} units with a fresh translation, tinted)` : ''}</figcaption>${k === 'v' && tint ? `<div class="tint"><img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">${tint}</div>` : `<img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">`}</figure>`
       const freshLi = (x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})${x.today ? `; today ${x.today.lines} lines, size ${x.today.size}` : '; today: not drawn'}</li>`
       const ruleKept = p.fresh?.said.filter((x) => x.cause === 'today-kept') ?? []
