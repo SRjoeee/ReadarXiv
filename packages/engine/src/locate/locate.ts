@@ -1319,11 +1319,14 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       // and its unit's text; a URL's or a code mark's text TeX sets as written, a hyphen a line of it ends in its own)
       // (a URL: a \url's, or a piece the instrument states sets one, PieceClass.url: a \urldef'd control sequence a macro shows)
       const isUrl = p.kind === 'url' || !!classOf.get(id)?.url
+      const literal = !!classOf.get(id)?.literal || isUrl || p.kind === 'code'
+      const copy0 = classOf.get(id)?.copy ?? ''
       const lineEnds = {
-        literal: !!classOf.get(id)?.literal || isUrl || p.kind === 'code',
-        // (a URL's text reads a line's end as its copy reads it, urlCopyOf: a join, no space where TeX broke it, lane url-join)
-        url: isUrl,
-        source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
+        literal,
+        // (one word as written, its line's ends joins as its copy reads them (facts.ts LineEndOptions.oneWord, lane url-join): a
+        // URL (urlCopyOf), or a literal mark whose copy, the source's reading, holds no white space)
+        oneWord: isUrl || (literal && copy0 !== '' && !/\s/u.test(copy0)),
+        source: [p0.t === 'el' ? p0.src : '', copy0, unitText].join('\n'),
       }
       const asText =
         TEXT_KINDS.has(p.kind) ||
