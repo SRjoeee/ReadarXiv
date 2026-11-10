@@ -3000,9 +3000,11 @@ function entriesLast(units) {
 }
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
- *  language. Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
+ *  language, and REVTeX's link with no address (\\href@noop {} {…}, its head's `\\@secondoftwo`: a journal part with no DOI,
+ *  a note; its content the text, with the groups it holds, nothing to link: the coordinator's step D of 2026-11-11, PDF-READER
+ *  §18.30). Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
  *  theirs, \\emph a pair */
-const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], ['bibfnamefont', 0], ['citenamefont', 0], ['enquote', 0], ['showarticletitle', 0], ['BIBforeignlanguage', 1]])
+const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], ['bibfnamefont', 0], ['citenamefont', 0], ['enquote', 0], ['showarticletitle', 0], ['BIBforeignlanguage', 1], ['href@noop', 1]])
 /** a \\bibinfo field that is no prose: kept as the paper has it, one placeholder */
 const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|primaryclass|eid|lccn|mrnumber|zbl)$/i
 /**

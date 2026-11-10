@@ -695,6 +695,32 @@ describe('what a command prints as characters is characters: \\enquote\'s quotat
   })
 })
 
+describe("a link with no address is its argument: REVTeX's \\href@noop {} {…} (the coordinator's step D, 2026-11-11)", () => {
+  // (the .bbl's head as REVTeX's apsrev4-2 writes it, \\href@noop setting its second argument as it stands; 2610.20030v1's entries)
+  const HEAD = '\\makeatletter\n\\providecommand \\enquote  [1]{``#1\'\'}%\n\\providecommand \\href@noop [0]{\\@secondoftwo}%\n\\providecommand \\bibinfo  [0]{\\@secondoftwo}%\n\\providecommand \\bibfield  [0]{\\@secondoftwo}%\n\\makeatother\n'
+  const bbl = (entry: string) => `\\documentclass{revtex4-2}\\begin{document}\nText.\n\\begin{thebibliography}{2}%\n${HEAD}\\bibitem [{A}]{a}\\BibitemOpen\n  ${entry}\\BibitemShut {NoStop}%\n\\end{thebibliography}\n\\end{document}`
+  const said = (u: Unit) => new TextDecoder().decode(Uint8Array.from([...textOf(u)].map(c => c.charCodeAt(0))))
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+  it('an entry\'s journal part is its text, its groups as they set it, and nothing to link: a pair that sets its argument alone', () => {
+    const entry = '\\bibfield  {author} {\\bibinfo {author} {\\bibfnamefont {D.~M.}\\ \\bibnamefont {Sussman}},\\ }\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}'
+    const p = project(bbl(entry))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference') as Unit
+    expect(u.pieces.some(x => x.t === 'ph' && (x.src ?? '').startsWith('\\href@noop'))).toBe(false)
+    expect(textOf(u)).toContain('SoftwareX')
+    const open = u.pieces.find(x => x.t === 'open' && (x.src ?? '').startsWith('\\href@noop')) as Unit['pieces'][number] & { sets?: number }
+    expect(open?.src).toBe('\\href@noop {} {')
+    expect(open?.sets).toBe(0)
+    // (\\textbf around its volume a group of its own still)
+    expect(u.pieces.some(x => x.t === 'open' && x.src === '\\textbf {')).toBe(true)
+    expect(source(p)).toContain(entry)
+  })
+  it('an entry that is a link with no address alone is a unit: 2610.20030v1\'s supplemental note, its quotation marks text', () => {
+    const p = project(bbl('\\href@noop {} {\\enquote {\\bibinfo {title} {See {S}upplemental {M}aterial at [url will be inserted by publisher] for {F}igures.}}\\ }'))
+    const u = (p.units as Unit[]).find(x => x.kind === 'reference')
+    expect(u && said(u).replace(/\s+/g, ' ').trim()).toBe('\u201cSee Supplemental Material at [url will be inserted by publisher] for Figures.\u201d')
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])
