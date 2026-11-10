@@ -198,7 +198,7 @@ describe('figure-lines: F0, a figure’s line of words and a run of one pitch', 
           { text: 'a.py', font: 'LMMono10-Regular' },
         ],
       ],
-      [[70, 696, 122, 709]],
+      [[70, 696, 128, 709]],
     )
     const [b] = figureLinesOf([badge.page], badge.fig, () => false, MONO)
     expect(b!.ks).toEqual([1, 2])
