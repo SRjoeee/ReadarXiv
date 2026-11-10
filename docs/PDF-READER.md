@@ -3587,10 +3587,59 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   and the dump states it the differential's cause (k), accepted (`stated.mjs` keptWhyOf); no other unit left the original's is
   read so.
 - **Not this rule's.** A box whose source unit is one block of a proportional line and a typewriter prompt (2608.25210v2 p3)
-  stays translated, its keys garbled; a cut at the box in the front end would keep it. A figure's name label in a proportional
+  stays translated, its keys garbled (its keys, `llm\_equal\_human`, are identifiers, kept since §18.23; its prose is still
+  sent); a cut at the box in the front end would keep it. A figure's name label in a proportional
   face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
   code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
   An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
+
+### 18.23 An identifier is never sent; nothing inside a word stretches (2026-11-10)
+
+On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back with its last part in Chinese, and its Table 2's
+`response_equal_human_example` the same; with the references on, p17's databricks URL was set to its column's full measure,
+1.9-2.7 pt after each "/". The owner's line (§18.21): a translation may be made or not, never garbled.
+
+- **An identifier is one element, the original's ink** (`latex-front.mjs` `identifiersIn`, `keepIdentifiers`; the engine's copy
+  in `locate/today/deps.mjs`, held equal by test). A token with no white space that holds two letters or digits joined by
+  underscores (snake_case), the whole token (`CallbackBase.host_label(result)`, `test_parser.py`, `--view_range`), its leading
+  and trailing sentence punctuation aside: a stop, a comma, a semicolon, a colon, a question or exclamation mark, a quote, and a
+  bracket at an edge that no bracket of its pair inside the token answers (`(see conv5_x)` loses the `)`; `[sentence_1]`,
+  `{root_question}`, `host_label(result)` keep theirs). Its syntax alone: no list, no camelCase, nothing dotted without an
+  underscore ("e.g." is prose; `__init__`, `_x`, `x _ y` are no identifier). The source reads a unit's pieces as TeX sets them
+  (`keepRead`, the address groups' reader made general: `\_` and `\textunderscore` an underscore, the spaces after a control word
+  none, a bare `_` TeX's subscript, which 2610.21377v1's formulas the walker read as text hold), each identifier one placeholder
+  as the paper writes it, after the addresses (an address holding an underscore stays one address); a unit left with fewer than
+  two letters is none (a table cell of an identifier alone). An ink unit keeps one in a word a kept run, as an e-mail address
+  (rule 4), and a line of identifiers alone is a kept block. A figure text holds no element (it is drawn whole, its text alone):
+  one that holds an identifier is kept whole, `figure: identifier`. The marked compile reads an identifier as text TeX sets as
+  written (`identifierSource`): class `code` (both its marks, the closing one after a text symbol too, `\}`: TeX skips no space
+  after a control symbol), its opening mark `\axthpk` (in vertical mode, where a box's paragraph opens with it, it begins the
+  paragraph before the identifier's first character as TeX would; `\axtpma` there waited for its own closing mark), and a unit's
+  or a line's first word (`headEnd`, `startOf`): as a paper's macro it had one mark, and 2608.25210v2 p3's and 2610.22195v1's
+  prompts were left unlocated, their glyphs read as text past their source.
+- **Over the 88** (stage 1a, lane literal-fixes, against round 8 B3's r11): 146 identifiers kept as elements in 14 papers'
+  source units (paragraphs 111, cells 18, captions 12, headings 2, references 2, a theorem 1), 114 table cells of identifiers
+  alone no unit now (2608.25210v2's Table 2, 2610.21924v1's feature names, 2610.22214v1's instance names, 1512.03385v1's
+  `conv2_x`), 2 lines of identifiers alone kept blocks (2610.40394v1), 29 figure texts kept on 5 papers (2608.06701v1's
+  trajectories 17, 2608.25210v2 6, 2610.21312v1, 2610.31506v1, 2610.42112v1 2 each); the marked source of 14 papers moved. No
+  formula is caught: a formula is a placeholder, a bare `_` TeX's subscript, and an ink script a glyph off its baseline (no
+  underscore). Stage 1a states today's unit held whole by its successor through the replay's reading of an identifier (`l1.ts`
+  readingOf: `\_` an underscore, an identifier placeholder its characters).
+- **No glue inside a word** (`breaker/break.mjs` `inWord`, `gapsOf`; `place.mjs`). A line not set as Latin text spreads its
+  slack, and its squeeze, over the gaps between its items, but none before an item that continues its word (`brk`: a piece after
+  a break point inside a word, a URL's after its `/`, `.`, `-`, a compound's after its hyphen; `cont`: a run of one case of a
+  word). TeX's url package breaks a URL at a penalty with no glue (`\Urlmuskip` 0mu), and TeX sets no glue inside any word. Since
+  §18.20 a URL TeX broke over lines is drawn as its text whole, cut at its own break points, and each gap inside it had taken a
+  share of a CJK line's slack. The replays of today's lay read a line's end to a millionth of a point where a round's tokens hold
+  such an item (the rule moves a line's slack between its gaps, never its end: 7 of 164 sampled rounds differed at 1e-13). Over
+  the 22 parity pairs, laid at r11's bundles with the breaker before and after, the items of 135 members move within their lines
+  (19 pairs; 179 with every switch on), no line count; three lines' ends, 2608.25210v2 p16 t427's URL line 558.66 -> 538.51.
+- **What the lost blue was** (2608.25210v2 p2/p3). p2's `\textcolor{blue}{[Question]}` and its two siblings are groups of text
+  alone, not `must`: the markers wire carries them on no wire (Microsoft moves an inline pair to the reply's end), and the reply
+  translates their words, so no counterpart is stated and the restore rule (`packages/translate` groups.ts, DESIGN §16) has
+  nothing to place them around; the tags wire's translators bring them back. p2's box is kept since §18.22, blue and all. p3's
+  `\textcolor{blue}{[sentence\_1]}` held a `\_` element, which the restore rule does not read; as an identifier, brackets and
+  all, it is one element now, its ink the original's blue.
 
 ## 19. The engine's contract
 
