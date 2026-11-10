@@ -586,7 +586,9 @@ export function judgeJoined(c, pairs, todays, what) {
       const s = ls.map((l) => l.size).sort((x, y) => x - y)
       return s[s.length >> 1]
     }
-    if (os) judge('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os) }, SIZE_STEP / 2)
+    // (the size the fit gives a text: `fresh` where v2 is laid with a fresh row of the member, verdict.mjs judgeText)
+    const jt = c.textJudge?.(ord) ?? judge
+    if (os) jt('size', nm, `${what}: size off the original's (share of it)`, r2(os), { value: r2(med(tl)), d: Math.abs(1 - med(tl) / os) }, { value: r2(med(vl)), d: Math.abs(1 - med(vl) / os) }, SIZE_STEP / 2)
     if (!a) continue
     for (const st of ['bold', 'italic']) {
       const share = (ls) => ls.reduce((s, l) => s + l[st], 0) / Math.max(1, ls.reduce((s, l) => s + l.n, 0))

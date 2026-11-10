@@ -827,10 +827,12 @@ export function gateL1Pair(
         for (const o of cells) tieHeld.add(o)
     }
   for (const o of tieHeld) if (adapted.has(o)) out.tieHeld.add(adapted.get(o)!.ord)
-  // (the entry's rows: each member's door row as the translation package's Result, by its unit's id)
-  let entryRows: Rows | null = null
+  // (the entry's rows: each member's door row as the translation package's Result, by its unit's id; `said`, the ids whose row
+  // is today's row of another unit said in v2's, which no translator gave v2's unit: lab/typeset/parity/fresh.mjs freshNeeds)
+  let entryRows: (Rows & { said(id: string): boolean }) | null = null
   if (out.entry && doors) {
     const byId = new Map<string, Row>(nameRows)
+    const said = new Set<string>()
     for (const [ord, x] of byOrd) {
       const u = unitOf.get(ord)
       const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
@@ -840,10 +842,17 @@ export function gateL1Pair(
       // (today's row names today's pieces: of a figure text whose runs L1's holds as groups, its one text; of a unit whose
       // kept runs v2 holds as elements, said in v2's unit; with the sentences today laid, where the unit is lit by sentence)
       const r = rowOf(ord, row, src)
-      if (r) byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), ...r })
+      if (!r) continue
+      byId.set(x.m.text, { id: x.m.text, ok: true, by: String(row[3]), ...r })
+      if (keptOf.has(ord) || todayUnitOf(src) !== src) said.add(x.m.text)
     }
     // (and the units the paper keeps as they are, as the reader's rows say them (reader.ts, Unit.kept): never translated)
-    entryRows = { get: (k) => byId.get(k), done: true, kept: (k) => bundle.units.get(k)?.kept === true }
+    entryRows = {
+      get: (k) => byId.get(k),
+      done: true,
+      kept: (k) => bundle.units.get(k)?.kept === true,
+      said: (k) => said.has(k),
+    }
   }
   for (const [pg, part] of [...bundle.parts].sort((a, b) => a[0] - b[0])) {
     out.pages++
