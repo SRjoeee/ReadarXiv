@@ -745,6 +745,27 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       [[2], 'B.'],
     ])
   })
+  it('reads a justified line’s spaces beside its inline formulas as its word spaces: TeX stretches them alike', () => {
+    // (each full line words and math letters by turns, every space beside a formula: no two words side by side; all of a
+    // line's spaces one stretch, 4 on the first and 5.25 on the second, both to 174; the last line as set)
+    const mixed = (words: string[], right: number) => {
+      const w = (t: string) => [...t].reduce((a, u) => a + 5 + (u.codePointAt(0)! % 3), 0)
+      const gap = (right - 72 - words.reduce((a, t) => a + w(t), 0)) / (words.length - 1)
+      let x = 72
+      return words.map((text, i) => {
+        const part = { text, font: i % 2 ? 'CMMI10' : 'NimbusRomNo9L-Regu', x, ...(i % 2 ? { run: false } : {}) }
+        x += w(text) + gap
+        return part
+      })
+    }
+    const a = mixed(['where', 'x', 'and', 'y', 'hold'], 174)
+    const b = mixed(['then', 'z', 'is', 'w', 'small'], 174)
+    const { page, fig } = pageOf([a, b, body('as before')])
+    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+    expect(rest).toEqual([])
+    expect(t!.ks).toEqual([0, 1, 2, 3, 4, 5, 6])
+    expect(t!.para).toEqual({ justified: true, by: 'strong' })
+  })
   it('reads two fragments of a justified line across its stretched space as one line of its paragraph; a gutter under a title never', () => {
     // (a justified block: its second line set in two runs 8 pt apart, past the run gap, the line over it with ink across that
     // gap: one line, the paragraph whole)

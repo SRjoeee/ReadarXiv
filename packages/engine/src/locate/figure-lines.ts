@@ -835,11 +835,13 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
       c.s += y.u
     } else cl.push({ gs: [g], x0: y.x0, x1: y.x1, text: roleOf.get(g) === 'T', s: y.u })
   }
-  // (its word spaces: between two clusters of text, the first ending in no punctuation (TeX widens a space after one); a line
-  // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap)
+  // (its word spaces: between two clusters at least one of which is text, an inline formula's space to the words beside it too
+  // (TeX stretches it as it stretches theirs; the spaces inside a formula are its own), the first ending in no punctuation (TeX
+  // widens a space after one); a line shows justification only where two of them or more are one (TeX stretches a line's
+  // spaces alike), never a tab's gap)
   const gaps: number[] = []
   for (let i = 1; i < cl.length; i++)
-    if (cl[i]!.text && cl[i - 1]!.text && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s))
+    if ((cl[i]!.text || cl[i - 1]!.text) && !/[.!?:;,]["')\]”’]*$/u.test(cl[i - 1]!.s))
       gaps.push(cl[i]!.x0 - cl[i - 1]!.x1)
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
   const bottom = Math.min(...main.map((g) => g.bottom)),
@@ -861,6 +863,8 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
     x1: l.x1,
     size,
     band: Math.max(heights[heights.length >> 1] ?? 0, BAND_EM * size),
+    top: Math.max(...read.gs.map((g) => glyphs[g]!.top)),
+    bottom: Math.min(...read.gs.map((g) => glyphs[g]!.bottom)),
     face,
     bold: letters.length > 0 && letters.every((g) => classifyFont(glyphs[g]!.font).bold),
     fill: most((g) => g.fill ?? 0),

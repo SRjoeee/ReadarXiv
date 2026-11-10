@@ -26,6 +26,9 @@ export interface ParaLine {
   /** the size most of its text letters stand at, and its band's height (its glyphs', DRAW_BAND's at least) */
   size: number
   band: number
+  /** its ink's top and bottom, every glyph of it (its formulas' and their scripts' too), PDF units */
+  top: number
+  bottom: number
   /** its text letters' face family (the PostScript name before its style), whether every one is bold, and their fill */
   face: string | null
   bold: boolean
@@ -54,25 +57,46 @@ const sameFace = (a: ParaLine, b: ParaLine) =>
   Math.abs(a.size - b.size) <= SIZE_TOL * Math.max(a.size, b.size) &&
   a.fill === b.fill
 
+/** a block's gaps, each its baselines' distance and its lines' ink clearance */
+type Gap = { pitch: number; clear: number }
+/**
+ * Whether a block's gaps are TeX's interline rule: each its \baselineskip (the block's one pitch, the smallest, within the
+ * tolerance) or, where the upper line's depth and the lower one's height would not fit in that, larger, the two lines then
+ * \lineskip apart: every such gap's ink clearance one value, and no larger than an unpushed gap's (a paragraph's \parskip is
+ * no \lineskip). Read off the lines' own ink; the pitch's tolerance alone
+ */
+function oneLead(gaps: readonly Gap[], tol: number): boolean {
+  const p0 = Math.min(...gaps.map((g) => g.pitch))
+  const pushed = gaps.filter((g) => g.pitch > p0 + tol)
+  if (!pushed.length) return true
+  const normal = gaps.filter((g) => g.pitch <= p0 + tol)
+  const c = pushed.map((g) => g.clear)
+  return (
+    Math.max(...c) - Math.min(...c) <= tol &&
+    (!normal.length || Math.max(...c) <= Math.min(...normal.map((g) => g.clear)) + tol)
+  )
+}
+
 /** two lines one under the other in one block: one face, no blank line between (the gap under the upper's band less than a
- *  band), the block's pitch and left edge kept; lines each led by ink of its own are entries, never one text */
+ *  band), the block's lead kept (oneLead) and its left edge; lines each led by ink of its own are entries, never one text */
 function geomJoin(
   a: ParaLine,
   b: ParaLine,
-  st: { pitch: number | null; edge: number | null },
+  st: { gaps: Gap[]; edge: number | null },
   blockLen: number,
-): { pitch: number; edge: number } | null {
+): { gaps: Gap[]; edge: number } | null {
   if (!sameFace(a, b)) return null
   if (a.leaders.size && b.leaders.size && ![...a.leaders].some((x) => b.leaders.has(x))) return null
   const tol = PARA_ALIGN_TOL * a.size
   const pitch = a.y - b.y
   if (!(pitch > 0 && pitch - a.band < a.band)) return null
-  if (st.pitch !== null && Math.abs(pitch - st.pitch) > tol) return null
+  const gaps = [...st.gaps, { pitch, clear: a.bottom - b.top }]
+  if (!oneLead(gaps, tol)) return null
   let edge = st.edge
   if (edge === null) edge = b.x0
   else if (Math.abs(b.x0 - edge) > tol) return null
   if (blockLen > 1 && Math.abs(a.x0 - edge) > tol) return null
-  return { pitch: st.pitch ?? pitch, edge }
+  return { gaps, edge }
 }
 
 /**
@@ -119,7 +143,7 @@ export function parasOf(lines: readonly ParaLine[], end: (a: number, b: number) 
       // (its block by geometry, read whole: what tells a justified block; then its paragraph to the first line the text does
       // not go on to, which starts its own)
       const block = [first]
-      let st: { pitch: number | null; edge: number | null } = { pitch: null, edge: null }
+      let st: { gaps: Gap[]; edge: number | null } = { gaps: [], edge: null }
       for (let a = first; next.has(a); ) {
         const b = next.get(a)!
         const j = geomJoin(lines[a]!, lines[b]!, st, block.length)
@@ -131,9 +155,18 @@ export function parasOf(lines: readonly ParaLine[], end: (a: number, b: number) 
       const size = lines[first]!.size
       const tol = PARA_ALIGN_TOL * size
       const R = Math.max(...block.map((i) => lines[i]!.x1))
+      // (justified: two full lines or more, each its spaces stretched alike, the stretch shown: their spaces differ between them,
+      // or from a short line's of the block, which TeX sets at its natural spacing (\parfillskip))
       const full = block.map((i) => lines[i]!).filter((l) => l.x1 >= R - tol && l.uniform)
       const spaces = full.map((l) => l.wordSpace ?? 0)
-      const justified = full.length >= 2 && Math.max(...spaces) - Math.min(...spaces) > tol
+      const natural = block
+        .map((i) => lines[i]!)
+        .filter((l) => l.x1 < R - tol && l.wordSpace !== null)
+        .map((l) => l.wordSpace!)
+      const justified =
+        full.length >= 2 &&
+        (Math.max(...spaces) - Math.min(...spaces) > tol ||
+          natural.some((n) => spaces.some((w) => Math.abs(w - n) > tol)))
       const cur = [first]
       const ev: Para['ev'] = []
       seen.add(first)
