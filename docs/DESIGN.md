@@ -1139,6 +1139,25 @@ only how it meets the rest of the extension.
   Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
   sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
   4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).
+- **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
+  group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
+  glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers
+  wire carries a `must` group alone, since a marker is a hard sentence boundary to Microsoft's endpoint and it moves a marker
+  pair inside a sentence to the reply's end, empty: of the inline style groups today's wire sent as markers, in the 22 parity
+  pairs' stored replies, bold 140 came back around their words and 166 moved, italic 104 and 709, `\textcolor` 0 and 36. So
+  2610.17024v1's `\textbf{(B1)}` and 2608.25210v2's `\textcolor{blue}{value}` came back plain, on staging as in production.
+  The chain reads every accepted reply, stored or fresh, from every translator and the runs floor, with each group it did not
+  bring back (absent, or an empty copy) placed around its own text where the translation states it: that text, compatibility-
+  equal (NFKC: a full-width parenthesis, U+FF08, is "("), white space aside, once in the translation as whole words (UAX #29's word
+  boundaries, `Intl.Segmenter`) in the place the reply holds around the group (its nearest group the reply brought back, else
+  the unit), and once in the source's same place, the group's alone (`packages/translate/src/groups.ts` placeGroups;
+  `CHAIN_RULES` `groups`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
+  name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
+  counterpart stated and stays plain (only a translator that keeps markup brings it back), as does one holding an element or
+  another group, or one whose text the translation or the source holds twice. No wire changes, no byte is sent; reading costs
+  11 µs a unit (34 µs a unit holding a group that is not `must`). Over the 88 corpus papers' stored replies read as the
+  markers wire would bring them, 665 groups in 75 papers get their style back (575 a face, 90 a colour), and 2,637 that draw
+  none of their own (a bibliography's fields, bare groups) go back around their words.
 - **A bundle's unit reaches every translator one way** (lane unit-projection, 2026-11-09). A unit of `packages/format`
   (its pieces as the prepare writes them) is not the translator contract's: a nested unit (a footnote set inside a
   paragraph) is a piece of its own, and an element's TeX source, a group's open and close and a heading's depth only name

@@ -89,7 +89,9 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   a device px off v2's (the first run's `pixels`, triage-1 P1).
 - **The rows**: the pair's door rows (`packages/typeset/tests/replay/rows.ts`: the release's stored rows), taken whole by
   today's door and handed to the entry as its Rows (gate-l1.ts `outOfDoor`): the same translation of every unit on both
-  sides. A unit whose kept runs v2's part holds as elements where today's held them otherwise (its addresses, today's text; an
+  sides. v2's side reads each as the translate package's chain reads a reply (`rows.mjs` readAsChain: a group the reply did
+  not bring back placed where the translation states it, `packages/translate/src/groups.ts`), as the reader is given its
+  rows; today's side draws today's reading of the same reply. A unit whose kept runs v2's part holds as elements where today's held them otherwise (its addresses, today's text; an
   ink unit's scripts TeX set in a text face, today's text or text and a placeholder: joined by its glyphs, below) is handed
   today's row said in v2's unit (`l1.ts` `keptRow`): the same text, each element where the translator kept what today's held
   for it, in their order and at one way of placing them alone, the groups today's unit had round them gone, the sentences

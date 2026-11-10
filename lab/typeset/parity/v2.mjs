@@ -25,6 +25,7 @@ const { typesetLay } = await import('../../../packages/reader/src/compose/typese
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
 const { candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
 const args = process.argv.slice(2)
@@ -94,7 +95,10 @@ for (const pair of pairs) {
     heldRows.laid = out.size
     return out
   }
-  globalThis.__parityLay = await typesetLay({
+  // (the rows as the chain reads a reply, rows.mjs: the door's stored replies, each group they did not bring back placed where
+  // the translation states it)
+  const units = l1Paper(paperOf(pair))?.units ?? new Map()
+  const lay = await typesetLay({
     served: {
       metrics,
       hyph: async (langs) => Object.fromEntries(langs.map((l) => [l, patterns(l)])),
@@ -103,6 +107,7 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
+  globalThis.__parityLay = (part, rows) => lay(part, readAsChain(rows, units))
   // (first without option (i): each pass's target and each member's line count on each page alone)
   const before = {},
     offTargets = {}
