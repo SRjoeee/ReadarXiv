@@ -49,7 +49,7 @@ export const CAUSE = Object.freeze({
   // that carries nothing its content (instrument.mjs passThroughOf), and the marks a command prints around its argument text
   // (latex-front.mjs wrapOf: \\enquote's quotation marks): the same unit, its id moved with its pieces, wherever either lays it
   // (its holder the candidate's unit))
-  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text',
+  characters: 'the same unit as v2 writes it: its escaped characters text, a group that carries nothing its content, the marks a command prints text, a link with no address its argument',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -186,6 +186,58 @@ function writtenAs(ps, drop, marked = new Set()) {
   }
   const re = new RegExp(`^${src}$`, 'u')
   return (x) => x === plain || re.test(x)
+}
+/** a TeX source as dump pieces, as the front end walks a call that sets its last argument: a command followed by groups an
+ *  opening (`\\cmd {a} {`) to the brace of its last, its content walked, a close; a bare group alike; a command with no group a
+ *  placeholder (its control word's trailing spaces with it); the rest text */
+function groupsOfSource(src) {
+  const out = []
+  const text = (s) => { if (!s) return; const l = out.at(-1); if (l?.kind === 'text') l.s += s; else out.push({ kind: 'text', s }) }
+  const end = (k) => { // the index past the group opening at k, or -1
+    let d = 0
+    for (let j = k; j < src.length; j++) {
+      if (src[j] === '\\') { j++; continue }
+      if (src[j] === '{') d++
+      else if (src[j] === '}' && --d === 0) return j + 1
+    }
+    return -1
+  }
+  const walk = (from, to) => {
+    let i = from, run = ''
+    while (i < to) {
+      const c = src[i]
+      if (c === '\\') {
+        const m = /^\\(?:([A-Za-z@]+)[ \t]*|[\s\S])/.exec(src.slice(i, to))
+        let k = i + m[0].length, last = -1
+        // (its groups: the last is its content)
+        for (let j = m[1] ? k : -1; j >= 0 && j < to; ) {
+          let q = j
+          while (q < to && /\s/.test(src[q])) q++
+          if (src[q] !== '{') break
+          const e = end(q)
+          if (e < 0 || e > to) break
+          last = q
+          j = k = e
+        }
+        text(run); run = ''
+        if (last < 0) { out.push({ kind: 'ph', src: src.slice(i, i + m[0].length) }); i += m[0].length; continue }
+        out.push({ kind: 'open', src: src.slice(i, last + 1) })
+        walk(last + 1, k - 1)
+        out.push({ kind: 'close', src: '}' })
+        i = k
+        continue
+      }
+      if (c === '{') {
+        const e = end(i)
+        if (e > 0 && e <= to) { text(run); run = ''; out.push({ kind: 'open', src: '{' }); walk(i + 1, e - 1); out.push({ kind: 'close', src: '}' }); i = e; continue }
+      }
+      run += c
+      i++
+    }
+    text(run)
+  }
+  walk(0, src.length)
+  return out
 }
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
 const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
@@ -643,7 +695,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return out
   }
   const charactersOf = (u) => {
-    const ps = u.pieces ?? []
+    // (today's placeholder of a link with no address, REVTeX's \\href@noop {} {…}, read as the front end now reads it: its
+    // groups, each command's opening to its last argument's brace, and what they hold: latex-front.mjs BIB_TEXT, step D)
+    const ps = (u.pieces ?? []).flatMap((p) => (p.kind === 'ph' && /^\\href@noop(?![A-Za-z@])/.test(p.src ?? '') ? groupsOfSource(p.src) : [p]))
     // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
     // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
     const groups = groupsIn(ps)

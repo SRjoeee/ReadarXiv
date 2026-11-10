@@ -909,6 +909,14 @@ describe("today's unit the candidate writes with a group that carries nothing as
     const v2 = { ...unit(id('b'), 33, 'reference', [text('Samira Abnar. 2020.')]), state: 'drawn' }
     expect(said(statedOf([today], [v2]))).toEqual([[33, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
   })
+  it('is that unit where today\'s placeholder is a link with no address v2 reads as its argument (\\href@noop, step D)', () => {
+    const today = unit(id('a'), 34, 'reference', [text('D. M. Sussman, '), ph('\\href@noop {} {\\bibfield  {journal} {\\bibinfo  {journal} {SoftwareX}\\ }\\textbf {\\bibinfo {volume} {6}},\\ \\bibinfo {pages} {16} (\\bibinfo {year} {2017})}')])
+    const v2 = { ...unit(id('b'), 34, 'reference', [text('D. M. Sussman, SoftwareX'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[34, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+    // (its words as today's: another word is another unit)
+    const other = { ...unit(id('c'), 34, 'reference', [text('D. M. Sussman, SoftwareY'), ph('\\ '), open('\\textbf {'), ph('6'), close(), text(','), ph('\\ '), ph('16'), text(' ('), ph('2017'), text(')')]), state: 'drawn' }
+    expect(String(said(statedOf([today], [other]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
   it('is that unit where v2 writes a command\'s pair as the quotation marks it prints (\\enquote, 2026-11-11)', () => {
     const today = unit(id('a'), 32, 'reference', [text('A. Allen (2019): '), open('\\enquote{'), text('Hicksian complementarity,'), close(), text(' Econometrica.')])
     const v2 = { ...unit(id('b'), 32, 'reference', [text('A. Allen (2019): \u201cHicksian complementarity,\u201d Econometrica.')]), state: 'drawn' }
