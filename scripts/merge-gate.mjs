@@ -261,7 +261,8 @@ export function simpleCommands(text) {
     } else if (c === '<' && text[i + 1] === '<' && text[i + 2] !== '<') {
       seen.redirected = true
       endWord()
-      const opened = heredocAt(text, i)
+      // the body comes after the line, by when the line may have gone on to other commands: it is kept for this one
+      const opened = { ...heredocAt(text, i), bodies, scripts }
       heredocs.push(opened)
       i = opened.next - 1
     } else if (c === '<' || c === '>' || (c === '&' && text[i + 1] === '>')) {
@@ -275,8 +276,8 @@ export function simpleCommands(text) {
     } else if (c === '\n' && heredocs.length > 0) {
       for (const opened of heredocs.splice(0)) {
         const { body, end } = bodyOf(text, i, opened)
-        bodies.push(body)
-        if (!opened.quoted) for (const script of substitutionsIn(body)) substitute(script)
+        opened.bodies.push(body)
+        if (!opened.quoted) opened.scripts.push(...substitutionsIn(body))
         i = end
       }
       seen.compound = true

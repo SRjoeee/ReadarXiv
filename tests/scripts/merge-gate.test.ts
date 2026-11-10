@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { decide, mergesIn, repositoryOf, simpleCommands, withinBudget } from '../../scripts/merge-gate.mjs'
 
 type Merge = { ref: string | null; repo: string | null; dirs: string[]; unreadable: boolean; plain: boolean; files?: string[] }
-type Command = { words: string[]; dynamic: boolean[]; scripts: string[]; before: string; after: string }
+type Command = { words: string[]; dynamic: boolean[]; scripts: string[]; bodies: string[]; before: string; after: string }
 type Answer = { decision: 'ask' | 'allow'; reason: string } | null
 
 const HERE = 'srjoeee/readarxiv'
@@ -145,6 +145,17 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).map(m => m.ref), text).toEqual(['411'])
     }
+    // a here-document's body is its opener's, whatever the line goes on to before the body starts (#635, Codex)
+    for (const text of [
+      "bash <<'EOF' | cat\ngh pr merge 411 --merge\nEOF",
+      "bash <<'EOF' && echo done\ngh pr merge 411\nEOF",
+      "cat <<A; sh <<'B'\nnothing here\nA\ngh pr merge 411\nB",
+      "bash <<EOF 2>&1 | tee log\ngh pr merge 411\nEOF",
+    ]) {
+      expect(merges(text).map(m => m.ref), text).toEqual(['411'])
+    }
+    expect(merges("cat <<'EOF' | cat; bash -c true\ngh pr merge 411\nEOF")).toEqual([])
+    expect(commandsOf("cat <<A | tr a b; bash <<'B'\nfirst\nA\nsecond\nB").map(c => c.bodies)).toEqual([['first\n'], [], ['second\n']])
     // (a here-string is data to anything that is no shell)
     expect(merges(`cat <<< 'gh pr merge 411'`)).toEqual([])
     expect(merges(`echo 'gh pr merge 411' | cat`)).toEqual([])
@@ -581,6 +592,7 @@ describe('against the shell itself', () => {
     'bash -ce "gh pr merge 5 -R o/r"; bash -euo pipefail -c "cd a && gh pr merge 6 -R o/r"',
     'bash <<< "gh pr merge 5 -R o/r"; echo "gh pr merge 6 -R o/r" | bash',
     'cat <(echo x) > /dev/null; gh pr merge 7 -R o/r',
+    "bash <<'EOF' | cat\ngh pr merge 4 -R o/r\nEOF",
     '(true; cd a; true); gh pr merge 5',
     '(cd a && gh pr merge 6); gh pr merge 7',
     'cd a && (cd b; gh pr merge 8) && gh pr merge 9',
