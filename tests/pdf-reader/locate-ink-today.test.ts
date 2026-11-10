@@ -409,7 +409,7 @@ describe('today’s ink makers in the engine package', () => {
     const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
     // (today's: every local part a word of the text)
     expect(one(TODAY).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
-    expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{alpha,beta-x,gamma@example.org}>']])
+    expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{{alpha,beta-x,gamma}@example.org}>']])
     // (one pattern for both readers: the front end's)
     expect(T.ADDRESS_GROUP.source).toBe(ADDRESS_GROUP.source)
     expect(T.ADDRESS_GROUP.flags).toBe(ADDRESS_GROUP.flags)

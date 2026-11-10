@@ -181,10 +181,19 @@ const MATH_SPECIAL = { $: '\\$', '{': '\\{', '}': '\\}', '\\': '\\backslash ' }
  *  characters, so a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) was `$$`,
  *  which every reader takes as a display (mt.mjs DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
  *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
-const phSource = (fam, text, sign = 0) => {
-  if (fam !== 'math') return sourceView(`\\url{${text.replace(/[\\{}]/g, '')}}`)
+const phSource = (fam, text, sign = 0, group = false) => {
+  // (CHANGED: a run that holds a group of addresses, groupedAddresses, keeps the group's braces, balanced by its syntax, as
+  // `\url{…}` holds balanced braces: its source the characters the page sets, `{ada,alan}@example.org`, where the stripped
+  // `ada,alan@example.org` read as one address of another local part)
+  if (fam !== 'math') return sourceView(`\\url{${group && balanced(text) ? text.replace(/\\/g, '') : text.replace(/[\\{}]/g, '')}}`)
   const t = text.replace(/[$\\{}]/g, c => MATH_SPECIAL[c])
   return sourceView(sign > 0 ? `$^{${t}}$` : sign < 0 ? `$_{${t}}$` : `$${t}$`)
+}
+/** whether a text's braces pair, each closing one after its opening one */
+const balanced = text => {
+  let depth = 0
+  for (const c of text) if ((depth += c === '{' ? 1 : c === '}' ? -1 : 0) < 0) return false
+  return depth === 0
 }
 /** a word's scripts' one sign (scriptsOf): raised (1) or lowered (-1) where every glyph of it is a script of that sign, else 0 */
 const signOf = w => (w.sc?.every(v => v === w.sc[0]) ? w.sc[0] : 0)
@@ -271,7 +280,7 @@ function addressed(w) {
  *  group TeX broke after a comma), a word's gap a space and a line's break white space. Today's read its local parts as the
  *  text's words, sent: 2611.00342v1 p1's two groups, braces in the symbol font's math face and the first broken over two lines,
  *  came back capitalised, the commas full-width ("{Jyeoj251, BMW5779, …", under the names toggle). Each line's words
- *  (`lineWords`) cut where a group begins or ends inside one */
+ *  (`lineWords`) cut where a group begins or ends inside one, each of its words `group` (phSource keeps its braces) */
 const GROUPS = new RegExp(ADDRESS_GROUP.source, 'g')
 function groupedAddresses(pages, lines, lineWords) {
   for (let i = 0; i < lines.length; ) {
@@ -301,10 +310,10 @@ function groupedAddresses(pages, lines, lineWords) {
         const inside = taken.has(`${li}|${wi}|${gi}`)
         let e = gi + 1
         while (e < w.gs.length && taken.has(`${li}|${wi}|${e}`) === inside) e++
-        out.push({ gs: w.gs.slice(gi, e), ts: w.ts.slice(gi, e), text: w.ts.slice(gi, e).join(''), fam: inside ? 'mono' : w.fam, ...(w.sc ? { sc: w.sc.slice(gi, e) } : {}) })
+        out.push({ gs: w.gs.slice(gi, e), ts: w.ts.slice(gi, e), text: w.ts.slice(gi, e).join(''), fam: inside ? 'mono' : w.fam, ...(inside ? { group: true } : {}), ...(w.sc ? { sc: w.sc.slice(gi, e) } : {}) })
         gi = e
       }
-      return out.length === 1 && out[0].fam === w.fam ? [w] : out
+      return out.length === 1 && out[0].fam === w.fam && !out[0].group ? [w] : out
     })))
   }
 }
@@ -599,14 +608,15 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
           if (lastPh && lastPh.open && lastPh.fam === w.fam && !broken) {
             lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; lastPh.tail = w.sc?.at(-1) ?? 0
             if (lastPh.sign !== signOf(w)) lastPh.sign = 0
-            pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src, lastPh.sign)
+            if (w.group) lastPh.group = true
+            pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src, lastPh.sign, lastPh.group)
             return
           }
           if (space) text += ' '
           flushText()
-          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0, sign: signOf(w) }
+          const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true, tail: w.sc?.at(-1) ?? 0, sign: signOf(w), group: !!w.group }
           phs.push(ph)
-          pieces.push({ t: 'ph', src: phSource(w.fam, w.text, ph.sign) })
+          pieces.push({ t: 'ph', src: phSource(w.fam, w.text, ph.sign, ph.group) })
           return
         }
         for (const p of phs) p.open = false

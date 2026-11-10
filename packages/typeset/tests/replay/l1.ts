@@ -89,8 +89,10 @@ export function todayPrepared(paper: string): Map<number, TodayPrepared> | null 
   return out
 }
 
-/** an address a unit holds as an element: the reading's `\url{…}` of an e-mail or web address, its ink kept as A's */
-const ADDRESS = /^\\url\{([^{}]*)\}$/
+/** an address a unit holds as an element: the reading's `\url{…}` of an e-mail or web address, its ink kept as A's; a group of
+ *  local parts before their domain with its braces, balanced, as `\url{…}` holds them (`\url{{ada,alan}@example.org}`, the
+ *  engine's ink-units.mjs phSource) */
+const ADDRESS = /^\\url\{((?:[^{}]|\{[^{}]*\})*)\}$/
 /** a formula's run an ink unit holds as an element, `$…$`, its TeX specials written as the commands that set them in a formula
  *  (packages/engine locate/today/ink-units.mjs MATH_SPECIAL), a run of scripts written as TeX writes one, `$^{…}$` or `$_{…}$` */
 const FORMULA = /^\$(?:[\^_]\{([\s\S]+)\}|([\s\S]+))\$$/

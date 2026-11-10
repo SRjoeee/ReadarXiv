@@ -354,6 +354,16 @@ describe("(f), a stand-in of today's kind: one v2 unit of its kind at its place 
     expect(said(statedOf(base, [title]))).toEqual([[3804, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
   })
 
+  it('reads a group of local parts now one element of the stand-in by its characters, braces too (2610.37668v1 t415)', () => {
+    // (today's "Contact information: {ada, alan}@example.org" as text; v2's the words and the group one kept run, its source the
+    // characters the page sets: held whole. Read without its braces, the element is another address, and the unit another reading)
+    const at = box(61.77, 258.02, 98.95, 104.96, 96.7)
+    const base = [on(unit(id('a'), 415, 'inkorphan', [text('Contact information: {ada, alan}@example.org')]), at)]
+    const standIn = (src: string) => [{ ...on(unit(id('b'), 415, 'inkorphan', [text('Contact information: '), ph(src)]), at), elements: [{ k: 1, kind: 'url', segs: [box(136.23, 258.02, 98.95, 104.96, 96.7)] }] }]
+    expect(said(statedOf(base, standIn('\\url{{ada,alan}@example.org}')))).toEqual([[415, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+    expect(said(statedOf(base, standIn('\\url{ada,alan@example.org}')))).toEqual([[415, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`]])
+  })
+
   it('states another reading where today holds a character the stand-in has not, or holds them in another order', () => {
     for (const s of ['(Self-directed scope reductions)', '(scope reduction Self-directed)'])
       expect(said(statedOf([on(unit(id('a'), 3804, 'inkfigures', [text(s)]), box(124.42, 284.69, 544.94, 551.16, 543.09))], [title]))).toEqual([
