@@ -198,16 +198,32 @@ for (const [pair, raw] of drawn) {
       tagFresh(p, v2, todayOf)
       const at = fr.pages.find((x) => x.page === p.page)
       const rec = raw.pages.find((r) => r.page === p.page)
-      if (!at) continue
       const r2 = (x) => (Number.isFinite(x) ? Math.round(x * 100) / 100 : null)
-      const said = at.units.map((key) => {
+      // (each size tie of the page holding a fresh unit: its other members' size as v2 drew them, against the original's, the
+      // median share, stated though not judged (the coordinator's ruling of 2026-11-11 on the tie rule))
+      const kindOf = new Map((v2.facts?.[p.page]?.members ?? []).map((m) => [m.ord, m.kind]))
+      const keyOf = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
+      const ties = (v2.facts?.[p.page]?.ties ?? [])
+        .filter((t) => t.some((o) => ords.has(o)))
+        .map((t) => {
+          const shares = t
+            .filter((o) => !ords.has(o))
+            .map((o) => p.units?.find((x) => x.key === keyOf(o))?.sides?.v2)
+            .filter((v) => v?.size && v?.osize)
+            .map((v) => v.size / v.osize)
+            .sort((a, b) => a - b)
+          return { kind: kindOf.get(t[0]) ?? null, members: t.length, fresh: t.filter((o) => ords.has(o)).length, drawn: shares.length, share: shares.length ? r2(shares[shares.length >> 1]) : null }
+        })
+        .filter((x) => x.drawn)
+      if (!at && !ties.length) continue
+      const said = (at?.units ?? []).map((key) => {
         const u = p.units?.find((x) => x.key === key)
         const v = u?.sides?.v2,
           t = u?.sides?.today
         const ord = at.ords[at.units.indexOf(key)]
         return { unit: key, kind: u?.kind ?? null, cause: v2.freshCause?.[ord] ?? 'no-row', lines: v?.lines ?? null, olines: v?.olines ?? null, size: r2(v?.size), osize: r2(v?.osize), today: t ? { lines: t.lines, size: r2(t.size) } : null }
       })
-      p.fresh = { units: at.units, causes: at.causes, said, tint: rec ? tintOf(rec, ords) : [] }
+      p.fresh = { units: at?.units ?? [], causes: at?.causes ?? {}, said, ...(ties.length ? { ties } : {}), tint: rec ? tintOf(rec, ords) : [] }
     }
   }
   pages.push(...mine)
@@ -333,11 +349,12 @@ function sheet(r) {
         ? `<p class="err">${esc(p.error)}</p>`
         : `<p class="nums">laid: today ${m.laid?.today}, v2 ${m.laid?.v2} · links: original ${m.links?.original}, today ${m.links?.today}, v2 ${m.links?.v2} · borders: original ${m.borders?.original ?? '–'}, today ${m.borders?.today ?? '–'}, v2 ${m.borders?.v2 ?? '–'} · sentence boxes: today ${m.highlight?.today}, v2 ${m.highlight?.v2} · darkness: original text ${m.darkness?.originalText?.mean ?? m.darkness?.original?.mean ?? '–'}, today ${m.darkness?.today?.mean ?? '–'}, v2 ${m.darkness?.v2?.mean ?? '–'} · off arXiv's page outside the units: today ${m.diff?.outsideToday ?? '–'}, v2 ${m.diff?.outside ?? '–'} px</p>`
       const tint = p.fresh?.tint.length ? p.fresh.tint.map((b) => `<i class="fresh" style="left:${b[0] * 100}%;top:${b[1] * 100}%;width:${b[2] * 100}%;height:${b[3] * 100}%"></i>`).join('') : ''
-      const img = (k, alt) => `<figure${k === 'v' && tint ? ' class="tinted"' : ''}><figcaption>${alt}${k === 'v' && p.fresh ? ` (${p.fresh.units.length} units with a fresh translation, tinted)` : ''}</figcaption>${k === 'v' && tint ? `<div class="tint"><img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">${tint}</div>` : `<img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">`}</figure>`
+      const img = (k, alt) => `<figure${k === 'v' && tint ? ' class="tinted"' : ''}><figcaption>${alt}${k === 'v' && p.fresh?.units.length ? ` (${p.fresh.units.length} units with a fresh translation, tinted)` : ''}</figcaption>${k === 'v' && tint ? `<div class="tint"><img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">${tint}</div>` : `<img loading="lazy" src="img/${id}-${k}.webp" alt="${esc(`${alt}, ${p.pair} page ${p.page}`)}">`}</figure>`
       const freshLi = (x) => `<li>${esc(x.unit)} ${esc(x.kind ?? '')}: ${x.lines ?? '–'} lines (original ${x.olines ?? '–'}), size ${x.size ?? '–'} (original ${x.osize ?? '–'}${x.size && x.osize ? `, ${Math.round((x.size / x.osize) * 100)} %` : ''})${x.today ? `; today ${x.today.lines} lines, size ${x.today.size}` : '; today: not drawn'}</li>`
       const ruleKept = p.fresh?.said.filter((x) => x.cause === 'today-kept') ?? []
+      const tieLi = (x) => `<li>${esc(x.kind ?? 'text')}s laid at one size with fresh ones: ${x.share} of the original's (the median of ${x.drawn} drawn), tied to ${x.fresh} fresh of ${x.members}</li>`
       const freshList = p.fresh
-        ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
+        ? `<p class="h">Drawn with a fresh translation (tinted; size and lines against the original's, not judged against today's):</p><ul class="freshlist">${p.fresh.said.filter((x) => x.cause !== 'today-kept').map(freshLi).join('')}${(p.fresh.ties ?? []).map(tieLi).join('')}</ul>${ruleKept.length ? `<p class="h">Kept by today's name/code rule, sent by v2: ${ruleKept.length}</p><ul class="freshlist">${ruleKept.map(freshLi).join('')}</ul>` : ''}`
         : ''
       const verdict = p.error ? '' : p.worse ? `<span class="v bad">worse than today: ${p.worse}</span>` : '<span class="v good">not worse than today</span>'
       return `<article class="card${p.worse ? ' flagged' : ''}" id="${esc(id)}"><h2>${esc(p.pair)} · page ${p.page} ${verdict}</h2>${nums}${freshList}${diffs}${shared}${fl ? `<div class="faults"><p class="h">Faults against the bounds (each side's, shared ones no verdict):</p>${fl}</div>` : ''}<div class="panes">${img('a', 'original')}${img('t', 'today')}${img('v', 'v2')}<figure class="diff"><figcaption>v2 against today (red v2's ink alone, blue today's)</figcaption><img loading="lazy" src="img/${id}-d.webp" alt="${esc(`difference, ${p.pair} page ${p.page}`)}"></figure></div></article>`
