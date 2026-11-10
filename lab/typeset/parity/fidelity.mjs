@@ -573,6 +573,9 @@ export function judgeJoined(c, pairs, todays, what) {
   const { rec, facts, V, keyOfPart, judge, NEAR } = c
   const runs = rec.original?.runs ?? null,
     fonts = rec.original?.fonts ?? []
+  // (the ink of the elements a member keeps as the original's, v2.mjs's `keptEls`: no characters of the text's share, as the
+  // drawn text leaves them uncounted (the coordinator's ruling 1 on F0, 2026-11-10; verdict.mjs's units alike))
+  const keptInk = new Map(c.v2?.keptEls ?? [])
   for (const [ord, gid] of pairs) {
     const m = facts.get(ord)
     const tl = (todays.get(gid)?.lines ?? []).filter((l) => l.n > 0),
@@ -582,6 +585,7 @@ export function judgeJoined(c, pairs, todays, what) {
       runs,
       fonts,
       m.lines.filter((l) => l[0] === c.n).map((l) => [l[2], Math.min(l[5], l[6]), l[3], Math.max(l[5], l[6])]),
+      (keptInk.get(ord) ?? []).filter((b) => b[0] === c.n).map((b) => b.slice(1)),
     )
     const os = a?.size ?? m.style?.size
     const nm = `p${ord} ${m.kind}`

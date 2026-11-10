@@ -708,9 +708,21 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     .filter((u) => figOrds.has(u.id) && u.lines.some((l) => l.n > 0) && (joinedV2[u.id]?.length ?? 0) > 1)
     .reduce((a, u) => a + joinedV2[u.id].length - 1, 0)
   const figVJ = figV + figJoined
-  // (and those no row of the pair's serves, left the original's (`unmeasured`): literal-fixes' rule, extended to F0's figure texts
-  // whose stretch is now an element, today's row having translated it: the coordinator's ruling 1 on F0, 2026-11-10)
-  const figUnmeasured = [...figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n).keys()].filter((o) => !pitch.has(o) && !identifier.has(o) && unmeasured(o)).length
+  // (and today's figure texts inside one no row of the pair's serves, left the original's (`unmeasured`): literal-fixes' rule,
+  // extended to F0's figure texts whose stretch is now an element, today's row having translated it (the coordinator's ruling
+  // 1 on F0, 2026-11-10). Each of today's drawn groups whose middle stands in such a member's lines on the page, however today
+  // cut it: the box join pairs one piece of a text today drew in two at most (2608.06701v1 p1's names on tones)
+  const unmeasuredSpans = [...figOrds]
+    .filter((o) => !pitch.has(o) && !identifier.has(o) && unmeasured(o))
+    .map((o) => spanOf((facts.get(o)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))))
+    .filter(Boolean)
+  const figUnmeasured = (rec.today.figures ?? []).filter((g) => {
+    const b = spanOf(g.lines.filter((l) => l.n > 0).map(band))
+    if (!b) return false
+    const x = (b.x0 + b.x1) / 2,
+      y = (b.y0 + b.y1) / 2
+    return unmeasuredSpans.some((s) => x >= s.x0 - 0.5 && x <= s.x1 + 0.5 && y >= s.y0 - 0.5 && y <= s.y1 + 0.5)
+  }).length
   if (figVJ < figT) {
     const ruled = figVJ >= figT - figKept.length
     const unm = !ruled && figVJ >= figT - figKept.length - figUnmeasured

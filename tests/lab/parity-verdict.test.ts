@@ -1062,6 +1062,31 @@ describe("F0's figure texts under the general rules: an element kept as the orig
     expect(of('figures')(figs())).toEqual([[true, 'today']])
     expect(of('figures')(figs([51]))).toEqual([[true, 'today']])
   })
+  it("counts every one of today's figure texts inside a text no row serves, however today cut it", () => {
+    // (2608.06701v1 p1: a name on a tone today drew in two pieces, v2's one text holding the tone as an element, left the
+    // original's for want of a row: both of today's pieces, the box join pairing one of them at most)
+    const facts = [{ ord: 50, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(100, 185, 300, 8)] }, figFact(51, 200)]
+    const run = (noRow?: number[]) =>
+      measure(
+        {
+          ...v2Of({ members: [{ ord: 50, state: 'none', lines: [] }, { ord: 51, state: 'laid', lines: [] }], facts }),
+          ...(noRow ? { noRow } : {}),
+        },
+        rec({
+          today: {
+            figures: [
+              { id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] },
+              { id: 'f1', lines: [drawnLine(145, 185, 300, 'wxyz', 8)] },
+              { id: 'f2', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] },
+            ],
+          },
+          v2: { units: [{ id: 51, lines: [drawnLine(200, 240, 300, 'abcd', 8)] }] },
+        }),
+        [prepFig(90, 100), { ...prepFig(91, 145), lines: [{ page: N, x0: 145, x1: 185, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] }, prepFig(92, 200)],
+      )
+    expect(of('figures')(run([50]))).toEqual([[false, 'unmeasured']])
+    expect(of('figures')(run())).toEqual([[true, 'today']])
+  })
   // (style: a line "Action: view x.py", "Action:" bold, the command in a typewriter face; v2 draws "Action:"'s translation in
   // bold and the command as its ink, which the drawn text's share leaves uncounted; today's share is the original's whole)
   const styled = (keptEls?: [number, number[][]][]) => {
@@ -1089,5 +1114,28 @@ describe("F0's figure texts under the general rules: an element kept as the orig
   })
   it("and with no element marked, the original's whole: worse as before", () => {
     expect(of('style')(styled())).toEqual([[true, 'today']])
+  })
+  // (the same for a figure text today drew as a group of its own, joined to v2's member by its box (fidelity.mjs judgeJoined):
+  // 2608.06701v1 p1's "Action:" and its command, v2's one text holding the command as an element)
+  const figStyled = (keptEls?: [number, number[][]][]) => {
+    const facts = [{ ord: 60, kind: 'figure', align: 'l', style: { size: 10 }, lines: [factLine(100, 200, 300)] }]
+    const v2 = { ...v2Of({ members: [{ ord: 60, state: 'laid', lines: [] }], facts }), ...(keptEls ? { keptEls } : {}) }
+    const r = rec({
+      today: { figures: [{ id: 'f0', lines: [{ ...drawnLine(100, 200, 300, 'x'.repeat(15)), bold: 7 }] }] },
+      v2: { units: [{ id: 60, lines: [{ ...drawnLine(100, 170, 300, 'x'.repeat(12)), bold: 12 }] }] },
+    })
+    const original = {
+      ...r.original,
+      fonts: ['ABCDEF+LMSans10-Bold', 'ABCDEF+LMMono10-Regular'],
+      runs: [
+        [100, 298, 140, 306, 300, 10, 0, 'Action:', false],
+        [145, 298, 200, 306, 300, 10, 1, 'view x.py', false],
+      ],
+    }
+    return measure(v2, { ...r, original }, [{ ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 200, baseline: 300, top: 308, bottom: 298, size: 10 }] }])
+  }
+  it("reads a figure text's original share without its kept element's glyphs alike", () => {
+    expect(of('style')(figStyled([[60, [[N, 144, 297, 201, 307]]]]))).toEqual([[false, 'v2']])
+    expect(of('style')(figStyled())).toEqual([[true, 'today']])
   })
 })
