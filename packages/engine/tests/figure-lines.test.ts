@@ -609,6 +609,46 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
     expect(t!.els.map((e) => e.kind)).toEqual(['math'])
     expect(t!.why).toBe('crowded')
   })
+  it('reads ink no line took standing on another line’s baseline as that line’s, never its formula’s (2609.19644v1 p11)', () => {
+    // (a table's group header over its rows: the number cells no unit, ink no line takes, stand on the row's baseline under the
+    // header's formula)
+    const T = 'NimbusRomNo9L-Regu'
+    const table = pageOf([
+      [
+        { text: 'train loss ', font: T },
+        { text: 'y', font: 'CMMI10', run: false },
+        { text: ' lower is better', font: T },
+      ],
+      [
+        { text: 'Epoch 0', font: T },
+        { text: '0.3844', font: 'CMR10', run: false, x: 134 },
+      ],
+    ])
+    const head = figureLinesOf([table.page], table.fig, () => false, null, new Set([T])).find((t) => t.ks.includes(0))
+    expect(head!.els.map((e) => e.kind)).toEqual(['math'])
+    expect(head!.why).toBeNull()
+  })
+  it('reads a caption’s last mark past its line’s run gap as that line’s, never the formula under it (2609.19644v1 p11)', () => {
+    // (a caption's last "(" 16 past its line's end, past the run gap: ink no line takes, over the next line's formula "d", the
+    // caption 11 over it at size 10 as 19644's 2.5 at 2.26)
+    const T = 'NimbusRomNo9L-Regu'
+    const caption = pageOf([
+      [
+        { text: 'Figure 5: QP scaling', font: T, dy: -3 },
+        { text: '(', font: 'CMR10', run: false, x: 196, dy: -3 },
+      ],
+      [
+        { text: 'time ', font: T, x: 170 },
+        { text: 'd', font: 'CMMI10', run: false, x: 198 },
+        { text: ' rises', font: T, x: 204 },
+      ],
+    ])
+    const line = figureLinesOf([caption.page], caption.fig, () => false, null, new Set([T])).find((t) =>
+      t.ks.includes(1),
+    )
+    expect(line!.els.map((e) => e.kind)).toEqual(['math'])
+    expect(line!.why).toBeNull()
+  })
   it('reads a mark set between two words, no space either side and no math face, as the words’: "Near−monopoly" (2610.11256v1 p17)', () => {
     // (a plot's labels set with the minus sign for their hyphen: each one text, translated; between two letters of a formula
     // it is the formula's: "x−y" kept)
