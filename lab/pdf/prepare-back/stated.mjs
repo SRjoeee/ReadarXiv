@@ -42,6 +42,11 @@ export const CAUSE = Object.freeze({
   // ((f): a unit of today's whose every line one unit of the candidate's holds and no other meets (its lines, its elements' boxes,
   // its label's), of any class, today's glyph text an in-order part of that unit's: accepted)
   held: 'held whole by another unit',
+  // ((o), the coordinator's ruling of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's TeX
+  // with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`, `\#`,
+  // `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character: the same unit, its id
+  // moved with its pieces, wherever either lays it (its holder the candidate's unit))
+  characters: 'the same unit, its escaped characters text',
   // ((f)'s holding by a kept block, no text of it sent (2608.06007v1's biblatex bibliography kept whole): no text to read, stated
   // apart, not accepted)
   heldKept: 'held whole by a kept block, no text of it sent',
@@ -122,6 +127,15 @@ const FORMULA_MARK = '\ufffc'
 const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
+/** a dump unit's TeX: its text and each other piece's source, white space as one space */
+const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
+/** the text symbols that are characters of v2's text (latex-front.mjs TEXT_CHARACTERS) */
+const TEXT_CHARACTERS = new Set(['\\%', '\\&', '\\#', '\\$', '\\{', '\\}', '\\textasciitilde', '\\textbar', '\\textless', '\\textgreater', '\\textbackslash'])
+/** a placeholder's source as that character (alone or before `{}`, its control word's trailing spaces aside), else null */
+const characterOf = (src) => {
+  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?[ \t]*$/.exec(src ?? '')
+  return m && TEXT_CHARACTERS.has(m[1]) ? symbolText(m[1]) : null
+}
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
  *  two labels or more (RFC 5322's dot-atom, its letters any script's) */
 const ADDRESS = /(?:\{[^{}@]+\}|[\p{L}\p{N}!#$%&'*+/=?^_`|~.-]+)@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+/gu
@@ -554,7 +568,42 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     seen.set(u.id, k + 1)
     return units.filter((n) => !n.replaced && n.id === u.id).sort((a, b) => a.ord - b.ord)[k] ?? null
   }
+  // ((o): today's TeX of a unit, each text symbol that is a character of v2's text its character (a control word's skipped
+  // spaces and a group around it alone with it, as TeX reads them), white space as one space; the candidate's unit of today's kind,
+  // not one of today's ids, writing it: the one at today's place first)
+  const charactersOf = (u) => {
+    const ps = u.pieces ?? []
+    let src = ''
+    let changed = false
+    for (let k = 0; k < ps.length; k++) {
+      const p = ps[k]
+      const sym = p.kind === 'ph' ? characterOf(p.src) : null
+      const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
+      if (group) {
+        src += characterOf(ps[k + 1].src)
+        changed = true
+        k += 2
+      } else if (sym !== null) {
+        src += sym
+        changed = true
+        // (TeX skips the spaces after a control word)
+        if (/^\\[A-Za-z]/.test(p.src) && ps[k + 1]?.kind === 'text') src += ps[++k].s.replace(/^[ \t]+/, '')
+      } else src += p.kind === 'text' ? p.s : (p.src ?? '')
+    }
+    if (!changed) return null
+    const want = src.replace(/\s+/g, ' ').trim()
+    const all = units.filter((n) => !n.replaced && n.kind === u.kind && !baseIds.has(n.id) && texOf(n) === want)
+    const L = u.lines?.[0]
+    return all.find((n) => L && n.lines?.[0] && meets(L, n.lines[0])) ?? all.sort((a, b) => a.ord - b.ord)[0] ?? null
+  }
   for (const u of base) {
+    if ((have.get(u.id) ?? 0) === 0 && !/^ink/.test(u.kind)) {
+      const n = charactersOf(u)
+      if (n) {
+        out.push({ u, why: `written as ${n.id.slice(0, 12)}: ${CAUSE.characters}`, cause: 'characters', holder: n.id })
+        continue
+      }
+    }
     if ((have.get(u.id) ?? 0) > 0) {
       have.set(u.id, have.get(u.id) - 1)
       const own = ownOf(u)

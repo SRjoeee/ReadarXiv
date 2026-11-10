@@ -3841,7 +3841,10 @@ term, 140 markers fewer.
   papers (`\%` 1,209, `\&` 270, `\#` 48, `\$` 26, `\{` and `\}` 20 each, `\textbar` 24, `\textasciitilde` 23, `\textless` 5,
   `\textgreater` 3, `\textbackslash` 1), and the 65 papers are the ones whose objects moved. Otherwise: nested units' piece ids
   and hashes, as their own units change; and three cells the name rule reads anew: 2610.21547v1's "ASR FedAvg (%)" (twice)
-  kept now, three name words, and 2610.21491v1's "MSE …%" no longer, four. Shown units 37,915 either way. The layout marks: such a character is text, so no mark stands
+  kept now, three name words, and 2610.21491v1's "MSE …%" no longer, four. Shown units 37,915 either way; against the baseline the
+  differential loses round 14's 11, 882 of today's units stated as the candidate's written as today's TeX with these characters
+  text (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`: the same unit, its id moved with its pieces, wherever either
+  lays it). The layout marks: such a character is text, so no mark stands
   around it, and a paper's macro glued to it is read as before a word (its ink ends where the text begins: 2610.21098v1's
   `\HarnessLimitShare{}\%`).
 

@@ -865,3 +865,25 @@ describe("(f) over (g): a stand-in that holds today's text whole, in order, a ru
     expect(stated.map((s: { holder?: string }) => s.holder)).toEqual([id('b'), id('b')])
   })
 })
+
+// (B of lane style-wire, the coordinator's ruling of 2026-11-11: `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's \textasciitilde,
+// \textbar, \textless, \textgreater, \textbackslash are characters of the candidate's text, so a unit holding one has a new id; it
+// is today's unit, written as today's TeX with each of those placeholders its character, wherever the two lay it)
+describe("today's unit the candidate writes with its escaped characters as text", () => {
+  it('is that unit, by its source, whatever line either lays it on', () => {
+    const today = unit(id('a'), 263, 'para', [text('Gain of 5'), ph('\\%'), text(' on R'), ph('\\&'), text('D, see '), ph('$x$'), text('.')], [72, 300, 646])
+    const v2 = { ...unit(id('b'), 140, 'para', [text('Gain of 5% on R&D, see '), ph('$x$'), text('.')], [72, 300, 634]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[263, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it("reads a control word's skipped space and a group around one alone as TeX does", () => {
+    const today = unit(id('a'), 5, 'reference', [text('See www.x.org/'), ph('\\textasciitilde'), text(' aeb and '), { kind: 'open', src: '{' }, ph('\\%'), { kind: 'close', src: '}' }, text(' more.')])
+    const v2 = { ...unit(id('b'), 5, 'reference', [text('See www.x.org/~aeb and % more.')]), state: 'drawn' }
+    expect(said(statedOf([today], [v2]))).toEqual([[5, `written as ${'b'.repeat(12)}: ${CAUSE.characters}`]])
+  })
+  it('is no such unit where anything else differs, or where today held none of those placeholders', () => {
+    const today = unit(id('a'), 7, 'para', [text('Gain of 5'), ph('\\%'), text(' here.')])
+    expect(String(said(statedOf([today], [{ ...unit(id('b'), 7, 'para', [text('Gain of 6% here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+    const plain = unit(id('c'), 8, 'para', [text('Plain words here.')])
+    expect(String(said(statedOf([plain], [{ ...unit(id('d'), 8, 'para', [text('Plain words here.')]), state: 'drawn' }]))[0]?.[1] ?? '')).not.toContain(CAUSE.characters)
+  })
+})
