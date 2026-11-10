@@ -1132,7 +1132,8 @@ describe("F0's figure texts under the general rules: an element kept as the orig
         [145, 298, 200, 306, 300, 10, 1, 'view x.py', false],
       ],
     }
-    return measure(v2, { ...r, original }, [{ ord: 90, kind: 'figure', lines: [{ page: N, x0: 100, x1: 200, baseline: 300, top: 308, bottom: 298, size: 10 }] }])
+    const prep90 = { ...prepFig(90, 100), lines: [{ page: N, x0: 100, x1: 200, baseline: 300, top: 308, bottom: 298, size: 10 }] }
+    return measure(v2, { ...r, original }, [prep90])
   }
   it("reads a figure text's original share without its kept element's glyphs alike", () => {
     expect(of('style')(figStyled([[60, [[N, 144, 297, 201, 307]]]]))).toEqual([[false, 'v2']])
