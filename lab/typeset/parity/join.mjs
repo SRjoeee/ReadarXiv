@@ -40,36 +40,39 @@ const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
 /** a paper's statements of today's units the candidate does not make (its dump's `replaced` units with `stated`), none where
  *  lab-data holds no dump of it or the run stated none so */
-export function candidateStated(paper) {
-  const f = join(L1_DUMPS, `${paper}.prepare.json`)
+export function candidateStated(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`)
   if (!existsSync(f)) return []
   return JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.replaced && u.stated)
 }
 /**
- * The members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22):
- * its dump's units marked `keptBy: 'pitch'` (lab/pdf/prepare-back/run.mjs, the engine's InstrumentUnit `pitch`), by the member
- * ords the run's located file joins their dump ords to (`dumpOrds`); none where lab-data holds no dump or located file of it.
- * The verdict reads no other unit v2 leaves the original's as kept by this rule (the owner's ruling of 2026-11-10)
+ * The members the candidate's prepare keeps by a rule's mark `by` (its dump's `keptBy`, lab/pdf/prepare-back/run.mjs): 'pitch',
+ * text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22, the engine's InstrumentUnit `pitch`); 'address', a kept
+ * block of e-mail addresses and their separators alone (the engine's `address`); 'identifier', a figure text kept for an
+ * identifier it holds (the engine's `figure: identifier`, PDF-READER §18.23). By the member ords the run's located file joins
+ * their dump ords to (`dumpOrds`); none where lab-data holds no dump or located file of it. The verdict reads no other unit v2
+ * leaves the original's as kept by a rule (the owner's and the coordinator's rulings of 2026-11-10)
  */
-export function candidatePitch(paper, dumps = L1_DUMPS) {
+export function candidateKept(paper, by, dumps = L1_DUMPS) {
   const f = join(dumps, `${paper}.prepare.json`),
     g = join(dumps, '..', 'located', `${paper}.json`)
   if (!existsSync(f) || !existsSync(g)) return []
-  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.keptBy === 'pitch').map((u) => u.ord))
+  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => !u.replaced && u.keptBy === by).map((u) => u.ord))
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
 }
+/** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
+export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
+/** the members the candidate's prepare keeps as a line of e-mail addresses (candidateKept's 'address') */
+export const candidateAddress = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'address', dumps)
 /**
- * The members the candidate's prepare keeps as a line of e-mail addresses (the coordinator's ruling of 2026-11-10): its dump's
- * units marked `keptBy: 'address'` (lab/pdf/prepare-back/run.mjs, the engine's InstrumentUnit `address`: a kept block of
- * addresses and their separators alone), by the member ords the run's located file joins their dump ords to (`dumpOrds`); none
- * where lab-data holds no dump or located file of it. The verdict reads no other unit v2 leaves the original's as kept so
+ * Today's units the candidate's prepare states kept by a rule's mark, `[today's ord, mark]`: a statement of its dump's (stage
+ * 1a's, stated.mjs) carrying `keptBy`, a unit of today's the candidate makes no unit of for the rule (a cell of identifiers
+ * alone, a line of ink of them a kept block holds); none where lab-data holds no dump of it
  */
-export function candidateAddress(paper, dumps = L1_DUMPS) {
-  const f = join(dumps, `${paper}.prepare.json`),
-    g = join(dumps, '..', 'located', `${paper}.json`)
-  if (!existsSync(f) || !existsSync(g)) return []
-  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.keptBy === 'address').map((u) => u.ord))
-  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
+export function candidateKeptToday(paper, dumps = L1_DUMPS) {
+  return candidateStated(paper, dumps)
+    .filter((u) => u.keptBy)
+    .map((u) => [u.stated.ord, u.keptBy])
 }
 /**
  * The members `members` (no id or glyphs joined them), each joined to the unit of today's (`free`, today's ords no member is

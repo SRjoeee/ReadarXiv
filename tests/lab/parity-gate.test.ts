@@ -654,3 +654,25 @@ describe("line-count: a unit a line shorter by the spaces beside a full-width ma
     expect(counts(page())).toEqual([['t36 para', true, 'today']])
   })
 })
+
+describe("groups: a cell kept by a rule's mark, or one no row can serve, holds no group's state (the coordinator's rulings of 2026-11-10)", () => {
+  // (2608.25210v2 Table 2: its cells of identifiers alone no unit of v2's, today's units stated so (`keptToday`); the others
+  // translated on both sides. The group is judged on the cells both sides could translate)
+  const cell = (ord: number, x0: number) => ({ ord, kind: 'cell', text: ['response', 'equal', 'human', 'example'][ord - 70], lines: [{ page: N, x0, x1: x0 + 20, baseline: 653, top: 660, bottom: 651, size: 9.96 }] })
+  const prep = [cell(70, 370), cell(71, 405), cell(72, 440), cell(73, 480)]
+  const groups = [{ group: '2:1', ids: [70, 71, 72, 73] }]
+  const drawn = (ids: number[]) => ids.map((id, i) => ({ id, lines: [drawnLine(370 + 35 * i, 390 + 35 * i, 653, '训练', 9.96)] }))
+  const page = (marks: object) => {
+    // (73 left the original's for want of a row, `none`)
+    const members = [...[70, 71, 72].map((o) => laid(o)), { ord: 73, state: 'none', lines: [] }]
+    const v2 = { ...v2Of({ members, facts: [], today: Object.fromEntries([70, 71, 72, 73].map((o) => [o, { today: o }])) }), ...marks }
+    return measure(v2, rec({ today: { units: drawn([70, 71, 72, 73]) }, v2: { units: drawn([70, 71]) } }), { prep, groups })
+  }
+  it('mixed on v2 only by the cells a mark keeps or no row serves: no difference', () => {
+    expect(of('groups')(page({ keptToday: [[72, 'identifier'], [73, 'identifier']] }))).toEqual([])
+    expect(of('groups')(page({ identifier: [72], noRow: [73] }))).toEqual([])
+  })
+  it('mixed by any other cell: worse, as before', () => {
+    expect(of('groups')(page({ keptToday: [[72, 'identifier']] }))).toMatchObject([{ unit: 'group 2:1', worse: true }])
+  })
+})

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { candidateAddress, candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidateKept, candidateKeptToday, candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -282,6 +282,33 @@ describe("the members the candidate's prepare keeps for their text set wholly in
       expect(candidatePitch('p1', join(run, 'prepare'))).toEqual([11, 40])
       writeFileSync(join(run, 'prepare', 'p2.prepare.json'), JSON.stringify({ units }))
       expect(candidatePitch('p2', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("what the candidate's prepare keeps by a rule's mark: its members, and today's units it states so (the coordinator's ruling of 2026-11-10)", () => {
+  // (lane literal-fixes: a figure text kept for an identifier, `keptBy: 'identifier'`, is a member of its own; a cell of
+  // identifiers alone is no unit of the candidate's, its statement of today's unit carrying the mark: today's ord, `stated.ord`)
+  it("are the members each mark names, and today's ords the statements so marked name; none where the run holds no file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-kept-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'para', text: 'a body paragraph' },
+        { ord: 1, kind: 'inkfigures', keptBy: 'identifier', text: 'niah_single_1' },
+        { ord: 2, kind: 'para', kept: true, keptBy: 'pitch', text: '{ "key": 1 }' },
+        { ord: 3, kind: 'cell', keptBy: 'identifier', text: 'llm_equal_human', state: 'unlaid', replaced: true, stated: { ord: 72, cause: 'identifier' } },
+        { ord: 4, kind: 'cell', text: 'x', state: 'unlaid', replaced: true, stated: { ord: 73, cause: 'held', holder: 'b' } },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12]] }))
+      expect(candidateKept('p1', 'identifier', join(run, 'prepare'))).toEqual([11])
+      expect(candidateKept('p1', 'pitch', join(run, 'prepare'))).toEqual([12])
+      expect(candidateKeptToday('p1', join(run, 'prepare'))).toEqual([[72, 'identifier']])
+      expect(candidateKeptToday('p9', join(run, 'prepare'))).toEqual([])
     } finally {
       rmSync(run, { recursive: true, force: true })
     }

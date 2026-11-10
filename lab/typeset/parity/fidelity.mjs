@@ -431,9 +431,11 @@ export function measureFidelity(c) {
     return st.every((x) => x === st[0]) ? st[0] : 'mixed'
   }
   for (const g of c.groups ?? []) {
+    // (a cell a rule's mark keeps, or one no row of the pair's serves, holds no state of the group's: `apart`, the coordinator's
+    // rulings of 2026-11-10)
     const cells = g.ids
       .map((id) => ({ id, u: prepByOrd.get(id) }))
-      .filter(({ u }) => u?.lines?.some((l) => l.page === n))
+      .filter(({ id, u }) => u?.lines?.some((l) => l.page === n) && !c.apart?.has(id))
       .map(({ id, u }) => ({ id, key: `t${id}`, src: u.text }))
     if (cells.length < 2) continue
     const t = groupState('today', T, cells),
