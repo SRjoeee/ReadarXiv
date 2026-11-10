@@ -275,8 +275,8 @@ export declare const RULE: RegExp
 export declare function regionsTex(codeEnvs: readonly string[] | null | undefined, bodies?: readonly string[] | null): string
 /** the label a reference element names (classOf's `ref` and `eqref`, one label, no page's), as the marked compile writes it; null
  *  for any other piece */
-export declare function refKeyOf(piece: { t: string; src?: string } | null | undefined): string | null
+export declare function refKeyOf(piece: unknown): string | null
 /** each label the paper's reference elements name, once, in the order its units name them */
-export declare function refKeysOf(units: readonly { pieces?: readonly { t: string; src?: string }[] }[]): string[]
+export declare function refKeysOf(units: readonly { pieces?: readonly unknown[] }[]): string[]
 /** what the marked compile asks TeX about each reference (AXT-REF, AXT-REFNAME at the document's end); '' for none */
 export declare function refsTex(keys: readonly string[]): string
