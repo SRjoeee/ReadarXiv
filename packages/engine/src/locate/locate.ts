@@ -1321,6 +1321,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const isUrl = p.kind === 'url' || !!classOf.get(id)?.url
       const lineEnds = {
         literal: !!classOf.get(id)?.literal || isUrl || p.kind === 'code',
+        // (a URL's text reads a line's end as its copy reads it, urlCopyOf: a join, no space where TeX broke it, lane url-join)
+        url: isUrl,
         source: [p0.t === 'el' ? p0.src : '', classOf.get(id)?.copy ?? '', unitText].join('\n'),
       }
       const asText =

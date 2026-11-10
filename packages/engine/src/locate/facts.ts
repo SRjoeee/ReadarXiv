@@ -316,6 +316,9 @@ export const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_
  *  `source` (the TeX the element and its unit are written in, where the word a line's end breaks may be stated) */
 export interface LineEndOptions {
   literal?: boolean
+  /** a URL (\url's, a piece the instrument states sets one): TeX's url package breaks it after one of its characters and sets
+   *  nothing there, as its copy reads it (urlCopyOf: a line change adds nothing and drops nothing), so a line's end in it is a join */
+  url?: boolean
   source?: string
 }
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -345,6 +348,8 @@ function stated(source: string, before: string, after: string): 'hyphen' | 'join
  * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
  */
 export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
+  // (inside a URL TeX set nothing where it broke the line: its text reads the line's end as its copy does)
+  if (o.url) return 'join'
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
   if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'
