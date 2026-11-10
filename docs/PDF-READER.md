@@ -3565,8 +3565,9 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   with its line where the ink right before and after it, in its page's order, stands on its baseline in a face of one pitch
   (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A figure's run, TeX's line in a picture
   too (which goes on over faces and colours, §19.12), goes into or out of no face of one pitch (`figure-text.mjs`, `fixed`):
-  2610.19159v1's transcript box titles set a path in typewriter between their words, and the path is a figure text of its own,
-  kept, the words before and after it translated. A paper whose body face is of one pitch keeps nothing for it, and its
+  2610.19159v1's transcript box titles set a path in typewriter between their words, and the path was a figure text of its own,
+  kept, the words before and after it translated; since §18.23 a level line's run of one pitch is an element of the line's one
+  text, and a turned run keeps this cut. A paper whose body face is of one pitch keeps nothing for it, and its
   figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
   paragraph naming a function in `\texttt`, a figure's title line with a path in it. Titles, captions, questions and answers
   set in a proportional face are translated.
@@ -3591,6 +3592,53 @@ rests on his line quoted there: a translation may be made or not, never garbled.
   face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
   code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
   An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
+
+### 18.23 A figure's line with a run of one pitch is one text; the ink about a figure text read by its relation to it (2026-11-10)
+
+The owner's line (§18.21) holds here too: a translation may be made or not, never garbled. §18.22 cut a figure's run at a face of
+one pitch, so a title and its path were two texts, the title's words translated alone and the path a text of its own; 2611.03178v1
+p1's "Project Page:" and its typewriter address the same. And today's no-touch rule kept a figure text whole as the original's
+wherever any ink met its band, a frame round a citation in a sentence as much as a curve through a label.
+
+- **F0** (`figure-lines.ts`). A figure's line is today's runs of one figure on one baseline (RUN_DY of the size), each within the
+  run gap (RUN_GAP) of the next; a chip's fill bridges the gap from its run of one pitch to the words beside it where the fill is
+  the narrowest box holding the run's end glyph, a line tall at most, and holds nothing of the words it faces (a row's band under
+  the whole line holds the badge's label too, 2610.19159v1 p53: no bridge). A line holding a run of one pitch and words of
+  another face is one figure text: each stretch of one pitch an element `code`, the original's ink, never sent, moved with the
+  translation, its fill with it; a mark alone in that face (a period, a bracket) the text's. A line every word of which stands
+  between glyphs of one pitch is code, kept whole (§18.22's inside-a-line, read on the line). Glyphs no run holds before the
+  first run are the text's where they abut it, an icon a word space before it none of it. A turned run keeps §18.22's cut.
+  Runs in no face of one pitch are never joined here: over the 91, joining runs that abut joined doubled copies, scripts and
+  formulas, and one page wrapped without its figures (stage 1a f0e); a bold label and its colon (2608.06701v1 p1's "Thought:")
+  is the paragraph reading's (F3).
+- **The relation reading** (the owner's reformulation of the no-touch rule, 2026-11-10: preserve each relation the text has with
+  the ink around it; facts only, tolerances in the text's size). `roomOf` records each item of ink a figure text's band meets, and
+  each tone painted before it under part of it (a fill of no stroke, an edge inside the text's extent: a highlight), which crowds
+  nothing as before. Each item: a glyph that doubles one of the text's (its character, its ink overlapping, within half the size)
+  is a copy, hidden with the text; a box inside an element's extent is the element's; a box holding a stretch of whole words (its
+  ink inside, a word space or a mark beside it), nothing else, is the stretch's decoration, and the stretch an element (`cite`
+  with a letter in it, `ref` without) carrying it; a tone so only where it is a line tall at most (a plot's shaded column under a
+  label's end is the plot's, 2610.21547v1 p14); pieces of fill under consecutive stretches, nothing of the text between them, are
+  one (a highlight set word by word, 2610.40576v1 p17, 2411.13093v4 p19); a closed shape holding the whole text is its container,
+  its room the inside (Room.over and Room.under, the set shrunk to stay under `over`); a flat stroke under two glyphs or more of
+  whole words an underline; anything else unrelated, and the text stays crowded, the original's. A tone that is none of these
+  stays ground; a tone under a text kept whole is nothing to it.
+- **Over the 91** (stage 1a f0f at a30b9c769, against round 8 B3's r11 on the 88; I6 the same, 2,855 objects): 48 figure texts
+  hold 56 runs of one pitch as elements, on 6 papers (2610.19159v1's titles and their paths, 2611.03178v1 p1's "Project Page:" and
+  its address, 2608.06701v1's actions, 2610.22197v1's labels, 2609.19644v1's `tzcnt`); 100 hold 155 decorations, on 4 papers
+  (2609.19644v1 p3's citations and references on their tones, 2608.06701v1 p1's names and phrases on theirs); 57 of today's runs
+  are taken into a text; 25 texts crowded today are freed (a copy drawn twice, 2610.22214v1's legend; a label in its box, 10
+  containers); none is newly left the original's. The differential: shown 38,116 -> 38,127; no new loss but four of 2610.22197v1's
+  eighteen units "lin2", which the differential pairs in their order (below).
+- **Stage 1a and the parity.** The dump marks each element so kept (`keptBy`: 'pitch', 'decoration'); today's unit now wholly
+  such an element is stated (k), kept as the original for its pitch (the accepted entry's words), or (n), carried with its
+  decoration (not accepted until ruled), the holding unit named; a kept element reads as its source in a unit's glyph text, so
+  the words beside it are held whole (f). The parity joins several of today's units to one figure text by the exact text, its
+  row theirs in order (`join.mjs` joinedPlan, gate-l1's `joined`).
+- **Not this section's.** Highlighted prose is kept as the original's with its tone (2608.06701v1 p1's green "I made a mistake in
+  the path; it should be": a decoration); the backticked names there are in the figure's Helvetica, kept by their tones, not by a
+  face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
+  order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
 ## 19. The engine's contract
 
