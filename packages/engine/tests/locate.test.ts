@@ -2444,6 +2444,52 @@ describe('an element’s ink is what TeX set for it', () => {
   const elementOf = (L: ReturnType<typeof locate>, id = '1') =>
     new Map(L.members.find((x) => x.unit === 0)!.elements).get(id)!
 
+  it('states a text macro’s faked small capitals by its own glyphs’ sizes: its text in TeX’s case, their share (El.style.sc)', () => {
+    // (2608.06701v1's `\approach`, "LIVEPLAN" on A: L and P at 9.96 pt, IVE and LAN at 7.97, Times's faked small capitals, its
+    // source's lowercase letters drawn as capitals at 0.8 of the size. Its text was stated as PDF.js reads it, every letter a
+    // capital, and its style `upper`: the typesetter drew it in full capitals at the run's size. An ink unit's rule (facts.ts
+    // fakedCaps, `ink`): where every cased glyph is a capital, one at most SMALL_CAPS_SHARE of its full letters' size is a faked
+    // small capital, its source's letter lowercase. An acronym, every capital at one size, is none: "BERT")
+    const B = docOf([
+      {
+        lines: [
+          { text: 'see ', x: 72, y: 700 },
+          { text: 'LIVEPLAN', x: 96, y: 700 },
+          { text: ' and ', x: 144, y: 700 },
+          { text: 'BERT', x: 174, y: 700 },
+          { text: ' work', x: 198, y: 700 },
+        ],
+      },
+    ])
+    // (I, V, E and L, A, N of "LIVEPLAN" set at 8 pt, the rest at 10)
+    for (const k of [5, 6, 7, 9, 10, 11]) B.pages[0]!.glyphs[k]!.size = 8
+    const macro = (id: string, src: string) => ({ t: 'el' as const, id, kind: 'macro', src })
+    const content = [text('see '), macro('1', '\\approach'), text(' and '), macro('3', '\\bert'), text(' work')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'umacro' }],
+          ['3', { cls: 'umacro' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    const live = elementOf(L, '1')
+    expect([live.text, live.style?.sc, live.style?.upper]).toEqual(['LivePlan', 0.8, undefined])
+    const bert = elementOf(L, '3')
+    expect([bert.text, bert.style?.sc, bert.style?.upper]).toEqual(['BERT', undefined, 1])
+  })
+
   it('states one box for an overline’s rule and its nucleus on their line: the rule TeX set over the glyph (math.md R1)', () => {
     // (2610.10069v1 p10's `$\vH=\overline{\vH}$`: TeX sets \overline's rule 3θ over its nucleus, 1.03 to 1.24 pt over the glyphs'
     // ink in the parts; joined to the element's glyphs only within 0.5 pt, it was an ink of its own on its own baseline, which the

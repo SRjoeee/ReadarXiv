@@ -38,6 +38,7 @@ import { TEXT_SYMBOLS } from '../source/tables.ts'
 import {
   bracketsOf,
   centredByBlock,
+  elementCase,
   fakedCaps,
   fillRunsOf,
   fixedFacesOf,
@@ -1575,9 +1576,13 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
         mem.asInk.add(id)
       }
       if (asText && level && gl.length && !gl.some((a) => gA(a).nu)) {
-        el.text = textOf(gl.map(gA), lineEnds)
+        // (in TeX's case: each faked small capital its source's lowercase letter, read off its own glyphs' sizes (facts.ts
+        // elementCase), which the part states with their share, El.style.sc (facts-pass), so that the typesetter draws it in
+        // small capitals as TeX set it)
+        const own = elementCase(gl.map(gA)).glyphs
+        el.text = textOf(own, lineEnds)
         // (its runs of one fill, where its glyphs hold more than one: a link's text coloured, its brackets black)
-        const runs = fillRunsOf(gl.map(gA), lineEnds)
+        const runs = fillRunsOf(own, lineEnds)
         if (runs) el.fills = runs
       }
       // (a text macro drawn as its ink for its scripts: its copy text its glyphs', where the source's reading has none (a paper's
