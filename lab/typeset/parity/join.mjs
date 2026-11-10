@@ -35,6 +35,10 @@ function ownIdOf(m, units) {
  *  the statement names its holder: a names unit's stand-in of its ledger class, today's characters in another order (its kind
  *  moved; the coordinator's ruling of 2026-11-10, round 8 B2b) */
 const HOLDS = new Set(['held', 'names', 'heldBlock', 'order'])
+/** the causes the joined join reads besides: today's unit now wholly an element of the holder that keeps it as the original's ink,
+ *  (k) on elements and (n) (stated.mjs's `pitch` and `decoration` with a holder, lane fig-text): one of the units the holder
+ *  holds in order, its text the element's */
+const JOINS = new Set([...HOLDS, 'pitch', 'decoration'])
 /** the folder of the candidate's prepare dumps, stage 1a's statements in them: AXT_L1_DUMPS, else the one beside the bundles
  *  (a stage 1a run's `<run>/prepare`, its bundles `<run>/bundles`) */
 export const L1_DUMPS = process.env.AXT_L1_DUMPS ?? join(L1_BUNDLES, '..', 'prepare')
@@ -179,18 +183,20 @@ export function joinedJoin(members, units, stated, free, prepared = null) {
   const open = new Set(free)
   const by = new Map()
   for (const s of stated)
-    if (HOLDS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
+    if (JOINS.has(s.stated.cause) && s.stated.holder && open.has(s.stated.ord)) {
       if (!by.has(s.stated.holder)) by.set(s.stated.holder, [])
       by.get(s.stated.holder).push(s.stated.ord)
     }
+  // (the holder a statement names is the candidate's unit, its own id: a member's unit's id, or the id today's unit of it would
+  // have (todayUnitOf: its kept runs read as text), each held by one member alone)
   const count = new Map()
-  for (const m of members) {
-    const id = ownIdOf(m, units)
-    if (id) count.set(id, (count.get(id) ?? 0) + 1)
-  }
+  for (const m of members)
+    for (const id of new Set([ownIdOf(m, units), typeof m.text === 'string' ? m.text : null]))
+      if (id) count.set(id, (count.get(id) ?? 0) + 1)
   const out = new Map()
   for (const m of members) {
-    const id = ownIdOf(m, units)
+    const own = ownIdOf(m, units)
+    const id = typeof m.text === 'string' && by.has(m.text) ? m.text : own
     const ts = id && count.get(id) === 1 ? (by.get(id) ?? []).sort((a, b) => a - b) : []
     if (ts.length < 2) continue
     const src = typeof m.text === 'string' ? units.get(m.text) : undefined
