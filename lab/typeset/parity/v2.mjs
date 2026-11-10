@@ -9,6 +9,11 @@
 // rule, join.mjs; never the runner's, whose stops leave a member the entry lays unrecorded), and
 // the facts of the part's members the measures read (kind, the TeX-stated alignment, the lines on A, the style, the text's
 // id) and the page's size ties. Lab-data only: the pages hold licensed papers' text. Heavy: run through heavy-slot.sh test.
+// A member no stored row serves, or whose stored row answered another unit than v2's, is laid with a fresh row (fresh.mjs: the
+// translate package's chain over Microsoft's keyless adapter, through lab-data's cache), recorded as `fresh`. --fresh=cache (the
+// default) reads the cache alone and names the rows it lacks; --fresh=off withholds every fresh row (the sheet as before this
+// lane); --fresh=fill asks the endpoint for the rows the cache lacks, slowly, records them and writes no page: its own step,
+// never a gate's.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { register } from 'node:module'
 import { join } from 'node:path'
@@ -28,11 +33,16 @@ const { candidateKept, candidateKeptElements, candidateKeptToday, candidateState
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
+const { FRESH_ROWS, freshNeeds, freshRowsOf, freshTranslator, withFresh } = await import('./fresh.mjs')
+const { doorRows } = await import('../../../packages/typeset/tests/replay/rows.ts')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
 if (!OUT) throw new Error('v2.mjs: --out=<dir> is required')
 const pairs = args.filter((a) => !a.startsWith('--'))
+/** the fresh rows: 'cache' (offline, the default), 'off' (none), 'fill' (the cache filled from the endpoint, no page laid) */
+const FRESH = args.find((a) => a.startsWith('--fresh='))?.slice(8) ?? 'cache'
+if (!['cache', 'off', 'fill'].includes(FRESH)) throw new Error(`v2.mjs: --fresh=${FRESH}: cache, off or fill`)
 /** the reader's toggles the pages are laid under: the defaults, or (--toggles=on) every switch of "What to translate" on (figure
  *  and table text, headers and footers, references, the author block: docs/PDF-READER.md §15), so that what a reader turns on
  *  is judged too */
@@ -120,12 +130,67 @@ for (const pair of pairs) {
   // (and each member the pair's fixed rows hold no row of, nor keep: its text a rule changed (an identifier now an element), so
   // that today's stored replies cannot say it; v2 leaves it the original's for want of one, which the verdict reads as
   // unmeasured, never worse, the coordinator's ruling of 2026-11-10. A member the prepare states a reason for has none to read)
+  // (lane parity-fresh: the members laid with a fresh row, found over the entry's rows of a first pass cut at its first page's
+  // lay (the rows are whole by then), then read from the cache through the chain, fresh.mjs. Each member of the paper's parts;
+  // a cell today's group decision kept (its door row `kept`, the reply not stored) among them, so that v2's own decision runs)
+  let fresh = null
+  const freshAt = { cause: {}, refused: [], missing: [], newer: [] }
+  if (FRESH !== 'off') {
+    const bundle0 = l1Paper(paperOf(pair))
+    const all = new Map()
+    for (const part of bundle0?.parts.values() ?? []) for (const flow of part.flows) for (const m of flow) if (!all.has(m.ord)) all.set(m.ord, m)
+    const joinedAll0 = todayJoin({ 0: { members: [...all.values()] } }, bundle0, ledger(pair).units, prepared0, stated)
+    const doors = doorRows(pair)
+    const decided = (m) => {
+      const t = joinedAll0[m.ord]?.today
+      return t !== undefined && doors?.get(t)?.[2] === 'kept'
+    }
+    // (today's prepare kept its unit, never sending it: a figure text of names or code, its figureUnits' isName/isCode)
+    const todayKept = (m) => {
+      const t = joinedAll0[m.ord]?.today
+      return t !== undefined && prepared0?.get(t)?.kept === true
+    }
+    let needs = new Map()
+    const CUT = Symbol('cut')
+    globalThis.__parityLay = (_part, rows) => {
+      if (rows) needs = freshNeeds([...all.values()], rows, units, { decided, todayKept })
+      throw CUT
+    }
+    const page0 = globalThis.__ckPage
+    globalThis.__ckPage = undefined
+    try {
+      gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held, joined })
+    } catch (e) {
+      if (e !== CUT) throw e
+    } finally {
+      globalThis.__ckPage = page0
+    }
+    const ids = [...new Set([...needs.values()].map((x) => x.id))]
+    const got = await freshRowsOf(
+      ids.map((id) => units.get(id)),
+      target,
+      { translator: freshTranslator(FRESH_ROWS, { fill: FRESH === 'fill' }) },
+    )
+    fresh = got.rows
+    for (const [ord, { id, cause }] of needs) {
+      const r = fresh.get(id)
+      if (r?.ok) freshAt.cause[ord] = cause
+      else if (r?.why.kind === 'unavailable') freshAt.missing.push(ord)
+      else freshAt.refused.push(ord)
+      if (!joinedAll0[ord]) freshAt.newer.push(ord)
+    }
+    const n = (c) => Object.values(freshAt.cause).filter((x) => x === c).length
+    console.log(`${pair}: fresh ${Object.keys(freshAt.cause).length} members (no row ${n('no-row')}, kept by today's name/code rule ${n('today-kept')}, a cell today's group kept ${n('group')}, another unit's row ${n('unit')}) of ${needs.size} asked in ${ids.length} units; refused ${freshAt.refused.length}; not in the cache ${freshAt.missing.length}; ${freshAt.newer.length} today never had${got.asked ? `; ${got.asked} wires asked of the endpoint` : ''}`)
+    if (FRESH === 'fill') continue
+  }
   const noRow = new Set()
-  globalThis.__parityLay = (part, rows) => {
+  globalThis.__parityLay = (part, rows0) => {
+    const rows = withFresh(rows0, fresh)
     if (rows)
       for (const flow of part.flows)
         for (const m of flow) if (typeof m.text === 'string' && !m.why && !rows.kept?.(m.text) && !rows.get(m.text)) noRow.add(m.ord)
-    return lay(part, readAsChain(rows, units))
+    // (a fresh row is the chain's own Result, its groups placed already: read as it is)
+    return lay(part, withFresh(readAsChain(rows0, units), fresh))
   }
   // (first without option (i): each pass's target and each member's line count on each page alone)
   const before = {},
@@ -271,6 +336,12 @@ for (const pair of pairs) {
     ...(keptEls.length ? { keptEls } : {}),
     ...(noRow.size ? { noRow: [...noRow].sort((a, b) => a - b) } : {}),
     ...(joinedAll.size ? { joined: Object.fromEntries(joinedAll) } : {}),
+    // (lane parity-fresh: the members laid with a fresh row and why, those the translator refused or the cache lacks (left as
+    // before: no row, or their stored row), and those sent that today never had a unit of)
+    ...(Object.keys(freshAt.cause).length ? { fresh: Object.keys(freshAt.cause).map(Number).sort((a, b) => a - b), freshCause: freshAt.cause } : {}),
+    ...(freshAt.refused.length ? { freshRefused: freshAt.refused.sort((a, b) => a - b) } : {}),
+    ...(freshAt.missing.length ? { freshMissing: freshAt.missing.sort((a, b) => a - b) } : {}),
+    ...(freshAt.newer.length ? { freshNew: freshAt.newer.sort((a, b) => a - b) } : {}),
     held: heldRows,
     threw: got.threw,
     laidPages: Object.keys(pages).length,
