@@ -41,6 +41,8 @@ export type Target = {
   url?: string
   name?: string
   single?: boolean
+  /** a word TeX set as written whose annotations name one target (lay/links.ts): one link over its whole drawing */
+  word?: boolean
   gap?: ReadonlySet<string> | null
   segs?: readonly (readonly number[])[] | null
   draw?: 'text' | 'crop' | 'pair' | 'whole' | null
@@ -450,6 +452,11 @@ function placeText(
     for (const c of annots) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
     return
   }
+  // (a word TeX set as written, its annotations one link split by TeX's line breaks: over the whole of what is drawn of it)
+  if (to.word) {
+    placeRanges([{ ds: 0, de: Dc.length - 1, annots: [...annots] }], Dc, lines, edge, band, records, tried)
+    return
+  }
   const dChars = Dc.map((e) => e.ch)
   const forms = { letters: normed(dChars, LETTER), ink: normed(dChars, INK) }
   const found: { c: Group['annots'][number]; ds: number; de: number }[] = []
@@ -516,6 +523,19 @@ function placeText(
       prev.annots.push(f.c)
     } else merged.push({ ds: f.ds, de: f.de, annots: [f.c] })
   }
+  placeRanges(merged, Dc, lines, edge, band, records, tried)
+}
+
+/** each range of a piece's drawn characters made a record on each page it is drawn on, its annotations the record's sources */
+function placeRanges(
+  merged: readonly { ds: number; de: number; annots: Group['annots'] }[],
+  Dc: readonly D[],
+  lines: readonly RunLine[],
+  edge: Edge,
+  band: Band,
+  records: Placed[],
+  tried: Tried[],
+) {
   for (const m of merged) {
     // (a range set over two pages, where the lines are a member's on its pages: a record on each, of what each page draws)
     const range = Dc.slice(m.ds, m.de + 1)

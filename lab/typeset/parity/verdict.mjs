@@ -869,6 +869,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const pastOf = (side) => [...borrowed[side]].filter(([, k]) => k > 0).map(([key]) => key)
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
+  urlJoinRuling(out, { v2, n, orig })
   headRuling(out, { v2, n, facts, orig })
   leadRuling(out, { v2, n, facts, orig })
   markSpaceRuling(out, { v2, n, orig })
@@ -1101,6 +1102,28 @@ export function pastRoomPass(pages, recount) {
   for (const p of pages) {
     budgetPastRoom(p, today, v2)
     recount(p)
+  }
+}
+
+/**
+ * A unit's line count v2 sets other than today's because the engine reads a line's end inside one word TeX set as written as a
+ * join (lane url-join, PDF-READER §18.20: a URL, or a literal mark whose copy text holds no white space; the coordinator's ruling
+ * of 2026-11-10 on 1810.04805v2-zh p14 t237, two broken URLs drawn whole and the paragraph a line shorter, 5 for today's 6, the
+ * original's 7, the line-count measure an instrument): the difference is the ruling's, not worse, only where the pair laid with
+ * those line ends read as spaces again (v2.mjs's lay over unjoin.mjs: `unjoined`, each line count on each page of a member holding
+ * such a word) sets today's count on the page. A count those joins do not explain, or a pair laid without that lay, is judged as
+ * any
+ */
+function urlJoinRuling(p, { v2, n, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const part = orig.get(d.unit.split(' ')[0])?.part
+    const unjoined = part === null || part === undefined ? undefined : v2.unjoined?.[n]?.[part]
+    if (unjoined === undefined || unjoined !== d.today?.value) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the coordinator's ruling of 2026-11-10 (lane url-join): a line's end inside a URL TeX broke is a join; the unit laid with those line ends read as spaces sets today's count"
   }
 }
 

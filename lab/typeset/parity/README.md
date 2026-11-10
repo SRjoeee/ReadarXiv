@@ -229,6 +229,17 @@ spaces put back sets today's count on the page: `v2.mjs` lays each pair first wi
 a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
 markSpaceRuling. A count those spaces do not explain is judged as any.
 
+The coordinator's ruling of 2026-11-10 (lane url-join): a line's end inside one word TeX set as written is a join (a URL, or a
+literal mark whose copy holds no white space; PDF-READER §18.20); where that sets a unit in fewer lines than today's
+(1810.04805v2-zh p14 t237, two broken URLs drawn whole: 5 lines for today's 6, the original's 7), the line count is an
+instrument. A `line-count` difference is the ruling's (`nearer` "ruling", never worse) only where the pair laid with those line
+ends read as spaces again sets today's count on the page: `v2.mjs` lays each pair once more with each such element's text (and
+its runs) as a stage 1a run without the rule read it, where the two differ by white space alone (`unjoin.mjs`; that run's
+bundles `AXT_PARITY_UNJOINED`, by default round 8 B1's in lab-data, `lanes/converge-7/r8b/bundles`), and records the line count
+on each page of each member that holds one (`unjoined`); `verdict.mjs` urlJoinRuling. A count those joins do not explain is
+judged as any. Where no unjoined bundle stands for a paper that holds such a word over lines, the ruling is not applied, and
+the log and the sheet say "url-join ruling not applied: no unjoined bundles" (v2.mjs's `notes`, the sheet's `notes`).
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the

@@ -357,9 +357,14 @@ export function linksOf(
         // forward only, takes them in their order on A whatever their targets (the same text twice, two works: each its own
         // occurrence, #631's review); where it does not (a part made before), the annotations of one target over their whole,
         // those of two or more targets none, not told apart)
-        if (is.every((i) => !!list[i]!.text))
+        // (a mark TeX set as written that the part reads as one word, its copy holding no white space (a URL, a DOI: the engine
+        // joins its lines, lane url-join), whose annotations name one target: TeX's line break split one link into an annotation
+        // a line, and the translation draws the word whole: one link over its whole drawing, `word`)
+        const word =
+          !!e?.literal && !!e.copy && !/\s/u.test(e.copy) && new Set(is.map((i) => key(list[i]!.to))).size === 1
+        if (word || is.every((i) => !!list[i]!.text))
           groups.push({
-            to: { k, draw: 'text', single: is.length === 1 },
+            to: { k, draw: 'text', single: is.length === 1, ...(word ? { word: true } : {}) },
             annots: is.map((i) => ({ ...annot(i), tier: tier(i) })),
           })
         else if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {

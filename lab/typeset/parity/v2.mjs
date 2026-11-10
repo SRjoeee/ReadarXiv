@@ -27,6 +27,7 @@ const { hyphFileOf } = await import('./inputs.mjs')
 const { candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
 const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
+const { partsIn, UNJOINED, unjoinedOf, withUnjoined } = await import('./unjoin.mjs')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -140,6 +141,28 @@ for (const pair of pairs) {
   heldRows.joined = 0
   const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
   for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
+  // (lane url-join: the pair laid once more with the line ends of each word TeX set as written read as spaces again, as a run
+  // without the rule read them (unjoin.mjs, AXT_PARITY_UNJOINED), its pages not kept nor its passes' targets: each line count on
+  // each page of a member holding one, `unjoined`, the counterfactual the verdict's urlJoinRuling reads, the coordinator's ruling
+  // of 2026-11-10. With no unjoined bundle of a paper holding such a word, said in the log and, through `notes`, on the sheet)
+  const unjoined = {}
+  const { words, missing } = unjoinedOf(l1Paper(paperOf(pair))?.parts ?? new Map(), partsIn(UNJOINED, paperOf(pair)))
+  if (missing) console.log(`${pair}: ${missing} (${join(UNJOINED, paperOf(pair))})`)
+  if (words.length) {
+    const ords = new Set(words.map((w) => w.ord))
+    const kept = { page: globalThis.__ckPage, fill: globalThis.__parityFill, held: { ...heldRows } }
+    globalThis.__ckPage = (p, pg, page) => {
+      if (p === pair) for (const m of page.members) if (m.page === pg && ords.has(m.ord)) (unjoined[pg] ??= {})[m.ord] = m.lines?.length ?? 0
+    }
+    globalThis.__parityFill = undefined
+    try {
+      withUnjoined(words, () => gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held }))
+    } finally {
+      globalThis.__ckPage = kept.page
+      globalThis.__parityFill = kept.fill
+      Object.assign(heldRows, kept.held)
+    }
+  }
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
   globalThis.__parityFill = undefined
@@ -192,7 +215,7 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, unjoined, ...(missing ? { notes: [missing] } : {}), held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
   console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)

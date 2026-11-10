@@ -914,9 +914,10 @@ const SPECS: readonly RuleSpec[] = [
     reads: [],
     file: 'emit/links.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a mark TeX set as written whose copy holds no white space (a URL, a DOI: the engine joins its lines, lane url-join, 2026-11-10) and whose annotations name one target is one link over its whole drawing (Target.word): TeX's line break split it into an annotation a line, and the translation draws the word whole, where the second line's part stood past DRIFT_BOUND in its run and was dropped (2610.40645v1-ja p38, p39; 2608.06701v1-zh p12). Today's split the word at the space its text held, and placed each part on its own run",
       replay:
-        "placeUnit against today's on every laid unit of the corpus (lab/typeset/replay-emit.mjs): 70,174 records over 14,359 units; matchUnit's tiers and pairs on hand-made cases (the baseline records no links)",
+        "placeUnit against today's on every laid unit of the corpus (lab/typeset/replay-emit.mjs): 70,174 records over 14,359 units; matchUnit's tiers and pairs on hand-made cases (the baseline records no links); tests/unit/entry-lit-links.test.ts",
       cases: 70174,
     },
   },

@@ -317,6 +317,11 @@ export const apart = (a: DocGlyph, b: DocGlyph) => b.x0 - a.x1 > TRACKING_SPACE_
  *  `source` (the TeX the element and its unit are written in, where the word a line's end breaks may be stated) */
 export interface LineEndOptions {
   literal?: boolean
+  /** one word as written, its line's ends joins: a URL (\url's, a piece the instrument states sets one), which TeX's url package
+   *  breaks after one of its characters with nothing set there, as its copy reads it (urlCopyOf: a line change adds nothing and
+   *  drops nothing); or a mark TeX sets as written (`literal`) whose copy text, the source's reading, holds no white space: a
+   *  break TeX set in it was no space (a DOI, an ISBN, an eprint a macro sets) */
+  oneWord?: boolean
   source?: string
 }
 const escapeRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -346,6 +351,8 @@ function stated(source: string, before: string, after: string): 'hyphen' | 'join
  * word: a capital after it (`Lee-|Thorp`), or capitals alone before it (`SWE-|bench`, `BERT-|based`)
  */
 export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 'space' | 'join' | 'drop' {
+  // (inside one word as written TeX set nothing where it broke the line: its text reads the line's end as its copy does)
+  if (o.oneWord) return 'join'
   const h = gs[q - 1] as DocGlyph
   const g = gs[q] as DocGlyph
   if (!HYPHENS.has(h.u) || !/^\p{L}/u.test(g.u)) return 'space'

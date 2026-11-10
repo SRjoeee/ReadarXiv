@@ -533,9 +533,63 @@ describe('locate states the facts on arXiv’s page', () => {
     const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 27 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
     const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
     expect(el.ink.length).toBe(2)
-    expect(el.text).toBe('https://a.io/lo/ ng/path')
+    // (its text too: the line's end TeX set inside it is a join, as its copy reads it (lane url-join, 2026-11-10: 301 URLs of
+    // the 88 drawn with a space where TeX broke them))
+    expect(el.text).toBe('https://a.io/lo/ng/path')
     expect(el.copy).toBe('https://a.io/lo/ng/path')
     expect(el.copy).not.toMatch(/\s/)
+  })
+  it('states a URL TeX broke after its "/" with no space in its text (1706.03762v7: https://github.com/ tensorflow/…)', () => {
+    // (the typesetter draws a URL over lines as its text, El.text: the space PDF.js reads at a line's end was drawn inside the
+    // URL. Its copy, urlCopyOf, never held one; the text is read by the same rule: a line's end inside a URL is a join)
+    const B = docOf([{ lines: ['is at https://github.com/', 'tensorflow/tensor2tensor.'] }])
+    const content: Piece[] = [
+      text('is at '),
+      { t: 'el', id: '1', kind: 'url', src: '\\url{https://github.com/tensorflow/tensor2tensor}' },
+      text('.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 6 && j < 49 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect([el.text, el.copy]).toEqual([
+      'https://github.com/tensorflow/tensor2tensor',
+      'https://github.com/tensorflow/tensor2tensor',
+    ])
+  })
+  it('states a literal mark its copy reads as one word with no space where TeX broke it (a DOI: 2610.19274v1’s)', () => {
+    // (a DOI a macro sets as written, broken after its "022-" (TeX's url-like break, no hyphen of its own): its copy, the source's
+    // reading, holds no space, so its line's end holds none; 9 such elements of the 88 kept the space after the URL rule alone)
+    const B = docOf([{ lines: ['doi 10.1007/s10489-022-', '03676-0 here.'] }])
+    const content: Piece[] = [
+      text('doi '),
+      { t: 'el', id: '1', kind: 'other', src: '\\doi{10.1007/s10489-022-03676-0}' },
+      text(' here.'),
+    ]
+    const u: InstrumentUnit = {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [['1', { cls: 'other', literal: true, copy: '10.1007/s10489-022-03676-0' }]],
+    }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 30 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('10.1007/s10489-022-03676-0')
+  })
+  it('keeps a code mark’s line end a space where its copy holds one (TeX broke it at a space)', () => {
+    // (\texttt{…} breaks at its spaces: a line's end inside it is the space TeX dropped there)
+    const B = docOf([{ lines: ['run make all', 'targets now.'] }])
+    const content: Piece[] = [
+      text('run '),
+      { t: 'el', id: '1', kind: 'code', src: '\\texttt{make all targets}' },
+      text(' now.'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, _n, j) => (j >= 4 && j < 19 ? [0, ROLE.element, 1] : [0, ROLE.text, -1]))
+    const el = new Map(locate(ins, B, align(B, B)).members[0]!.elements).get('1')!
+    expect(el.ink.length).toBe(2)
+    expect(el.text).toBe('make all targets')
   })
   it('states a URL’s copy text as its glyphs on the page, not the source’s reading of it (#630’s 30 URLs: "_1" read as a subscript)', () => {
     // (2609.26457v1's "…/3-540-44668-0_13": the instrument's copy, texToText2 over \url{…}, read "_1" as the subscript "₁"; the
