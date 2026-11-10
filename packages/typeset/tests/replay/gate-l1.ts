@@ -733,8 +733,8 @@ export function gateL1Pair(
       const content = jr
         ? jr.content
         : keptOf.has(ord)
-          ? (rowOf(ord, row, src)?.content ?? null)
-          : outOfDoor(row[1], source)
+          ? (rowOf(ord, row!, src)?.content ?? null)
+          : outOfDoor(row![1], source)
       if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
