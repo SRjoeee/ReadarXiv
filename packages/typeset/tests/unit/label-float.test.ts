@@ -132,6 +132,15 @@ describe('a caption’s label on a line of its own (Label with no line: IEEEtran
     expect(text).not.toMatch(/TABELLE/)
     expect(text).toMatch(/^Die Ergebnisse/)
   })
+  it('lights its row with the caption’s first sentence on the translation’s pane, as its label is on A', () => {
+    const [laid] = layPage(part(own('c')), rows, rules, metrics()).members
+    const row = laid!.lines.find(([y]) => y === 712)!
+    const mid = (row[1] + row[2]) / 2
+    const right = laid!.lit!.right[0]!
+    expect(
+      right.some(([x0, y0, x1, y1]) => x0 <= mid && mid <= x1 && Math.min(y0, y1) <= 713 && 713 <= Math.max(y0, y1)),
+    ).toBe(true)
+  })
   it('sets the row flush left or flush right as its own line was, never as its unit', () => {
     expect(laidLines(own('l')).find((l) => l.y === 712)!.x0).toBe(697)
     expect(laidLines(own('r')).find((l) => l.y === 712)!.x1).toBe(731)

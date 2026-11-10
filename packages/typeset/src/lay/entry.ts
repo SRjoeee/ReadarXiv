@@ -637,6 +637,21 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       }
     }
   }
+  // (each label on a line of its own drawn as a row of its own (labelRowOf), by its owner: lit with its first sentence on the
+  // right as its label's ink is on A, a carried label's way; its band a token's, tokenBand, over each run)
+  for (const [ord, [y, x0, x1, items]] of labelRows) {
+    const m = part.flows.flat().find((x) => x.ord === ord)
+    if (m?.label?.ink[0] !== page) continue
+    let top = y,
+      bottom = y
+    for (const it of items) {
+      if (!('face' in it)) continue
+      const b = tokenBand({ cls: CJK.test(it.s) ? 'cjk' : 'latin', face: { size: 1 } }, { f: it.size }, y)
+      top = Math.max(top, b.top, b.bottom)
+      bottom = Math.min(bottom, b.top, b.bottom)
+    }
+    carriedTo.set(ord, [...(carriedTo.get(ord) ?? []), [page, x0, bottom, x1, top, y]])
+  }
   // (each name drawn as a lead, by the member it leads: its ink on A lit with that member's)
   const leadOf = new Map<number, Placed>()
   for (const m of members) {
