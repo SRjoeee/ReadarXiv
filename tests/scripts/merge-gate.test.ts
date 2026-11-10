@@ -318,6 +318,26 @@ describe('mergesIn', () => {
     expect(merge('gh api --method PUT -H "Accept: x" repos/o/r/pulls/5/merge').ref).toBe('5')
     expect(merge('gh api -X "$METHOD" repos/o/r/pulls/5/merge').ref).toBe('5')
     expect(merges('gh api -X POST repos/o/r/pulls/5/merge')).toEqual([])
+    // an endpoint the shell composes (#635, Codex): a PUT to one that may end in `/merge` is a merge nobody can read
+    for (const text of [
+      'ENDPOINT=repos/SRjoeee/ReadarXiv/pulls/411/merge; gh api -X PUT "$ENDPOINT"',
+      'R=repos/o/r/pulls/8; gh api -X PUT $R/merge',
+      'gh api --method PUT "$(cat endpoint)" -f merge_method=merge',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
+      'gh api -X "$METHOD" "${BASE}/merge"',
+    ]) {
+      expect(merges(text).at(-1), text).toMatchObject({ unreadable: true, plain: false })
+    }
+    // where the words say it is none: the path ends otherwise, the word is an option's value, the request is no PUT
+    for (const text of [
+      'gh api -X PUT "$BASE/pulls/$n/update-branch"',
+      'gh api -X PUT repos/o/r/labels/bug -f name="$NAME" -H "X: $TOKEN"',
+      'gh api "$ENDPOINT"',
+      'gh api -X POST "$ENDPOINT"',
+      'R=repos/o/r/pulls/8/comments && gh api $R/4179074820/replies -f body="checked $n"',
+    ]) {
+      expect(merges(text), text).toEqual([])
+    }
   })
 
   it('names the files a GraphQL request takes its body from, and reads a body the command line itself holds (#635, Codex and Devin)', () => {
@@ -393,6 +413,7 @@ describe('decide', () => {
       'gh api graphql -f query="mutation { mergePullRequest(input: {}) { clientMutationId } }"',
       'gh api graphql --input merge.json',
       'gh api graphql --input missing.json',
+      'ENDPOINT=repos/SRjoeee/ReadarXiv/pulls/411/merge; gh api -X PUT "$ENDPOINT"',
       'env gh pr merge 603 --merge',
       'env GH_REPO=SRjoeee/ReadarXiv gh pr merge 411 --merge',
     ]) {

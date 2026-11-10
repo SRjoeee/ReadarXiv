@@ -395,12 +395,28 @@ function graphqlArguments(words, dynamic, first) {
  *  merged); a method the shell decides may be one. */
 function apiArguments(words, dynamic, first) {
   if (words.indexOf('graphql', first) >= 0) return graphqlArguments(words, dynamic, first)
-  const method = apiOptions(words, first).findLast(option => option.name === '--method')
+  const options = apiOptions(words, first)
+  const method = options.findLast(option => option.name === '--method')
   if (method === undefined || !(dynamic[method.at] || (method.value ?? '').toUpperCase() === 'PUT')) return null
   const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(word))
-  if (at < 0) return null
-  const [, owner, name, number] = MERGE_ENDPOINT.exec(words[at])
-  return { kind: 'api', ref: number, repo: PLACEHOLDER.test(owner) || PLACEHOLDER.test(name) ? null : `${owner}/${name}`, refAt: at, repoAt: at }
+  if (at >= 0) {
+    const [, owner, name, number] = MERGE_ENDPOINT.exec(words[at])
+    return { kind: 'api', ref: number, repo: PLACEHOLDER.test(owner) || PLACEHOLDER.test(name) ? null : `${owner}/${name}`, refAt: at, repoAt: at }
+  }
+  // no endpoint in sight, but one the shell composes (`"$ENDPOINT"`, `$R/merge`): a PUT to it is a merge nobody can
+  // read, unless the words after its last expansion end the path some other way. An option's value is no endpoint.
+  const values = new Set(options.map(option => option.at))
+  const composed = words.findIndex((word, k) => k >= first && dynamic[k] && !word.startsWith('-') && !values.has(k) && mayEndInMerge(word))
+  return composed < 0 ? null : { kind: 'api', ref: null, repo: null, refAt: composed, repoAt: composed, composed: true }
+}
+
+/** Whether a word the shell expands may come out ending in `/merge`: what stands after its last expansion is all the
+ *  line says of its end */
+function mayEndInMerge(word) {
+  const expansions = [...word.matchAll(/\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*|`[^`]*`/g)]
+  const last = expansions.at(-1)
+  const tail = last === undefined ? '' : word.slice(last.index + last[0].length)
+  return tail.length >= '/merge'.length ? tail.endsWith('/merge') : '/merge'.endsWith(tail)
 }
 
 /** The merge a `gh` at word `at` makes, or null: `gh pr merge` or `gh api`, past the flags that may stand before
@@ -688,6 +704,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               (needsDirectory && lostDirectory) ||
               (needsBranch && (wrapped || !context.branchKnown || context.loops + loops.length > 0)),
             plain: !viaApi && depth === 0 && i === 0 && !compound && !redirected && commands.length === 1 && !dynamic.some(Boolean),
+            ...(call.composed ? { composed: true } : {}),
           })
         }
       }
@@ -711,7 +728,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
   return merges
 }
 
-const named = merge => (merge.graphql ? 'a GraphQL mutation' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
+const named = merge => (merge.graphql ? 'a GraphQL mutation' : merge.composed ? 'a PUT to an endpoint the shell composes' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
 
 /** The gate's answer for a command line: `{ decision: 'ask' | 'allow', reason }`, or null for no answer.
  *  `lookup(merge)` returns `{ repo: 'owner/name', base, number }` for the pull request a merge names, or null when it
