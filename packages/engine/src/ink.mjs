@@ -20,10 +20,11 @@
 
 /** the operations read on a page at most; past it the page is capped (its reader gives it no ink). The corpus's busiest
  *  page holds 146,115 (2608.12606 page 5: 17,903 paths, each with its save, transform, colour, width and restore; the next
- *  102,052, and 6 pages of 2,793 more than 50,000); this is 20.5 times that. It bounds the walk, not the page: the walk
- *  sees a list PDF.js has built whole, and the list is the dearer. A painted path is some 580 bytes of it (`re f`; a
- *  plot's mix 150 an operation), so a page of paths fills the server's 768 MiB at some 1,300,000 of them, long before
- *  this (still 58 times the corpus's most, 22,381 paths a page), and 25,000 saves left open cost PDF.js's parse 19 s (it grows
+ *  102,052, and 6 pages of 2,793 more than 50,000); this is 20.5 times that. It bounds the walk, not the page: PDF.js
+ *  parses a page to its end whatever the walk. A list read whole (pageInk: the layout maker's readers) is the dearer: a
+ *  painted path is some 580 bytes of it (`re f`; a plot's mix 150 an operation), so a page of paths fills the server's 768
+ *  MiB at some 1,300,000 of them, long before this (still 58 times the corpus's most, 22,381 paths a page); one read in
+ *  PDF.js's pieces (inkReader: readPdf, the prepare's) is held a piece at a time. 25,000 saves left open cost PDF.js's parse 19 s (it grows
  *  with their square: 100,000, 299 s). The prepare's readers wait for a page's list however long it
  *  takes (oplist.mjs listOf): no clock decides what is read, and a parse that never ends is the run's deadline's */
 export const OPS_CAP = 3_000_000
@@ -383,11 +384,28 @@ export const FRONT_POINT = /^fm\d+$/
  * `shapes` false (with `turned`): no figure path's lines (`shapes` empty), every other reading as it is: a reader that reads none
  * of them (the front half's read of B, which only arXiv's page's figure texts would read)
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false, shapes: withShapes = true, names = null }) {
+export function pageInk(OPS, ops, commonObjs, options) {
+  const reader = inkReader(OPS, commonObjs, options)
+  reader.read(ops?.fnArray ?? [], ops?.argsArray ?? [])
+  return reader.end()
+}
+
+/**
+ * pageInk's walk as a reader of the list in pieces (`read(fnArray, argsArray)`, each piece after the one before, then `end()`, its
+ * answer: pageInk's own), so that no reader holds a page's whole list: PDF.js's worker sends a list in pieces of 1,000 operations
+ * (opstream.ts readOps), and a page of paths holds hundreds of thousands of them (2610.40394v1 page 23: 510,506 operations, 93 MiB
+ * held as one list). The walk is the same whatever the pieces: its state (the graphics state's stack, the text state, the guards,
+ * the steps) runs on from one piece to the next, OPS_CAP counts the operations of every piece read, and the clock (`msMax`) starts
+ * as the reader is made
+ */
+export function inkReader(OPS, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false, shapes: withShapes = true, names = null }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
-  const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
-  const n = Math.min(fnArray.length, OPS_CAP)
+  if (turn !== 0) {
+    const rotated = { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+    return { read() {}, end: () => rotated }
+  }
+  // (the operations of the pieces read so far, and those walked: OPS_CAP at most, the page capped past it)
+  let listed = 0, walked = 0
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], paraEnds = [], fronts = [], turnedOut = [], pictures = [], regionPoints = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
@@ -848,167 +866,178 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     else s.x += x * hs
   }
 
-  for (let j = 0; j < n && !stop; j++) {
-    step(1)
-    const fn = fnArray[j], a = argsArray[j] ?? []
-    switch (fn) {
-      case SAVE: push(); break
-      case RESTORE: pop(); break
-      case TRANSFORM: s.ctm = mul(s.ctm, matrixOf(a)); break
-      case LINE_WIDTH: s.lw = num(a[0]); break
-      // (the fill colour, every space PDF.js turns to RGB; a pattern's or a transparent one none)
-      case FILL_RGB: s.fill = fillOf(a); s.tile = false; break
-      // (`tile`: a tiling pattern's fill, PDF.js's ["TilingPattern", …], whose cells paint what is not read; a shading's is smooth)
-      case FILL_NONE: case FILL_N: s.fill = NO_FILL; s.tile = fn === FILL_N && a?.[0] === 'TilingPattern'; break
-      case GSTATE:
-        for (const e of Array.isArray(a[0]) ? a[0] : []) {
-          step(1)
-          if (stop) break
-          if (!Array.isArray(e)) continue
-          if (e[0] === 'LW') s.lw = num(e[1])
-          else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
-          else if (e[0] === 'ca') s.ca = alphaOf(e[1])
-          else if (e[0] === 'CA') s.CA = alphaOf(e[1])
-          // (PDF.js gives a blend mode as the canvas's operation, Normal and Compatible 'source-over', and a soft mask as whether one
-          // is set)
-          else if (e[0] === 'BM') s.bm = e[1] !== 'source-over'
-          else if (e[0] === 'SMask') s.sm = !!e[1]
+  /** the next piece of the list, walked on from the state the pieces before it left */
+  function read(fnArray, argsArray) {
+    listed += fnArray.length
+    for (let j = 0; j < fnArray.length && walked < OPS_CAP && !stop; j++, walked++) {
+      step(1)
+      const fn = fnArray[j], a = argsArray[j] ?? []
+      switch (fn) {
+        case SAVE: push(); break
+        case RESTORE: pop(); break
+        case TRANSFORM: s.ctm = mul(s.ctm, matrixOf(a)); break
+        case LINE_WIDTH: s.lw = num(a[0]); break
+        // (the fill colour, every space PDF.js turns to RGB; a pattern's or a transparent one none)
+        case FILL_RGB: s.fill = fillOf(a); s.tile = false; break
+        // (`tile`: a tiling pattern's fill, PDF.js's ["TilingPattern", …], whose cells paint what is not read; a shading's is smooth)
+        case FILL_NONE: case FILL_N: s.fill = NO_FILL; s.tile = fn === FILL_N && a?.[0] === 'TilingPattern'; break
+        case GSTATE:
+          for (const e of Array.isArray(a[0]) ? a[0] : []) {
+            step(1)
+            if (stop) break
+            if (!Array.isArray(e)) continue
+            if (e[0] === 'LW') s.lw = num(e[1])
+            else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
+            else if (e[0] === 'ca') s.ca = alphaOf(e[1])
+            else if (e[0] === 'CA') s.CA = alphaOf(e[1])
+            // (PDF.js gives a blend mode as the canvas's operation, Normal and Compatible 'source-over', and a soft mask as whether one
+            // is set)
+            else if (e[0] === 'BM') s.bm = e[1] !== 'source-over'
+            else if (e[0] === 'SMask') s.sm = !!e[1]
+          }
+          break
+        case BEGIN_TEXT: s.tm = IDENTITY; s.x = s.y = s.lx = s.ly = 0; break
+        case FONT: setFont(a[0], a[1]); break
+        case TEXT_MATRIX: s.tm = matrixOf(a[0] && typeof a[0] === 'object' ? a[0] : a); s.x = s.y = s.lx = s.ly = 0; break
+        case MOVE: moveText(a[0], a[1]); break
+        case LEADING_MOVE: s.leading = num(a[1]); moveText(a[0], a[1]); break
+        case LEADING: s.leading = -num(a[0]); break
+        case NEXT_LINE: moveText(0, s.leading); break
+        case CHAR_SPACING: s.cs = num(a[0]); break
+        case WORD_SPACING: s.ws = num(a[0]); break
+        case HSCALE: s.hs = num(a[0]) / 100; break
+        case RISE: s.rise = num(a[0]); break
+        case RENDER: s.tr = num(a[0]); break
+        case SHOW: case SHOW_SPACED: show(a[0]); break
+        // the evaluator gives these as nextLine, spacing and showText; read as the PDF operators, should a list hold them
+        case NEXT_SHOW: moveText(0, s.leading); show(a[0]); break
+        case NEXT_SPACING_SHOW: s.ws = num(a[0]); s.cs = num(a[1]); moveText(0, s.leading); show(a[2]); break
+        case FORM: {
+          push()
+          s.form++
+          s.formId = ++formSeq
+          if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
+          const bb = a[1]
+          if (bb && bb.length >= 4) { clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3])); if (!squareOf(s.ctm)) s.rclip = false }
+          break
         }
-        break
-      case BEGIN_TEXT: s.tm = IDENTITY; s.x = s.y = s.lx = s.ly = 0; break
-      case FONT: setFont(a[0], a[1]); break
-      case TEXT_MATRIX: s.tm = matrixOf(a[0] && typeof a[0] === 'object' ? a[0] : a); s.x = s.y = s.lx = s.ly = 0; break
-      case MOVE: moveText(a[0], a[1]); break
-      case LEADING_MOVE: s.leading = num(a[1]); moveText(a[0], a[1]); break
-      case LEADING: s.leading = -num(a[0]); break
-      case NEXT_LINE: moveText(0, s.leading); break
-      case CHAR_SPACING: s.cs = num(a[0]); break
-      case WORD_SPACING: s.ws = num(a[0]); break
-      case HSCALE: s.hs = num(a[0]) / 100; break
-      case RISE: s.rise = num(a[0]); break
-      case RENDER: s.tr = num(a[0]); break
-      case SHOW: case SHOW_SPACED: show(a[0]); break
-      // the evaluator gives these as nextLine, spacing and showText; read as the PDF operators, should a list hold them
-      case NEXT_SHOW: moveText(0, s.leading); show(a[0]); break
-      case NEXT_SPACING_SHOW: s.ws = num(a[0]); s.cs = num(a[1]); moveText(0, s.leading); show(a[2]); break
-      case FORM: {
-        push()
-        s.form++
-        s.formId = ++formSeq
-        if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
-        const bb = a[1]
-        if (bb && bb.length >= 4) { clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3])); if (!squareOf(s.ctm)) s.rclip = false }
-        break
-      }
-      case FORM_END: pop(); break
-      // (a transparency group is painted with the alpha constant in force, and its content begins at alpha 1: PDF 11.6.6)
-      case GROUP: {
-        const m = !!a?.[0]?.smask
-        maskGroups.push(m)
-        if (m) inMask++
-        push()
-        s.ga *= s.ca; s.ca = s.CA = 1
-        // (its blend mode and soft mask are the group's as a whole, its content's own Normal and none at its start, as its alpha)
-        s.gblend = s.gblend || s.bm || s.sm; s.bm = s.sm = false
-        // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
-        const bb = a?.[0]?.bbox
-        if (turned && bb && bb.length >= 4) {
-          const gm = a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm
-          const b = boxOf(gm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
-          s.gclip = b
-          if (!squareOf(gm)) s.rclip = false
+        case FORM_END: pop(); break
+        // (a transparency group is painted with the alpha constant in force, and its content begins at alpha 1: PDF 11.6.6)
+        case GROUP: {
+          const m = !!a?.[0]?.smask
+          maskGroups.push(m)
+          if (m) inMask++
+          push()
+          s.ga *= s.ca; s.ca = s.CA = 1
+          // (its blend mode and soft mask are the group's as a whole, its content's own Normal and none at its start, as its alpha)
+          s.gblend = s.gblend || s.bm || s.sm; s.bm = s.sm = false
+          // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
+          const bb = a?.[0]?.bbox
+          if (turned && bb && bb.length >= 4) {
+            const gm = a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm
+            const b = boxOf(gm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
+            s.gclip = b
+            if (!squareOf(gm)) s.rclip = false
+          }
+          break
         }
-        break
-      }
-      case GROUP_END: if (maskGroups.pop()) inMask--; pop(); break
-      case ANNOTATION: {
-        // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
-        inAnnotation++
-        push()
-        const rect = a[1]
-        s = fresh()
-        if (rect && rect.length >= 4) clipTo(IDENTITY, num(rect[0]), num(rect[1]), num(rect[2]), num(rect[3]))
-        s.ctm = mul(matrixOf(a[2]), matrixOf(a[3]))
-        break
-      }
-      case ANNOTATION_END: inAnnotation = Math.max(0, inAnnotation - 1); pop(); break
-      case CLIP: case EO_CLIP: s.pendingClip = true; break
-      // (glyphsOnly: the glyphs and the state they are placed by alone; paths, shadings and images place no glyph)
-      case PATH: {
-        if (glyphsOnly) { s.pendingClip = false; break }
-        const op = a[0], mm = a[2]
-        if (!inAnnotation && !inMask) pathAt++
-        const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
-        if (ok && PAINTS.has(op)) {
-          const e = STROKES.has(op) ? s.lw / 2 : 0
-          const had = boxes.length
-          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt, turned ? Math.max(FILLS.has(op) ? fillAlpha() : 0, STROKES.has(op) ? strokeAlpha() : 0) : 1)
-          // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
-          // (`shapesAll`: every path's, where the page's figures are not told by its own forms and pictures: arXiv's page, whose
-          // pictures' points are B's and whose included figures its producer may have flattened)
-          if (turned && withShapes && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
+        case GROUP_END: if (maskGroups.pop()) inMask--; pop(); break
+        case ANNOTATION: {
+          // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
+          inAnnotation++
+          push()
+          const rect = a[1]
+          s = fresh()
+          if (rect && rect.length >= 4) clipTo(IDENTITY, num(rect[0]), num(rect[1]), num(rect[2]), num(rect[3]))
+          s.ctm = mul(matrixOf(a[2]), matrixOf(a[3]))
+          break
         }
-        // a clip takes effect after the path is painted (the canvas's pendingClip)
-        if (s.pendingClip) {
-          if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]
-          // (the clip is kept as its box: a triangle's, a circle's or a turned rectangle's box is more than it shows)
-          if (ok && !rectPathOf(s.ctm, a[1]?.[0])) s.rclip = false
-          s.pendingClip = false
+        case ANNOTATION_END: inAnnotation = Math.max(0, inAnnotation - 1); pop(); break
+        case CLIP: case EO_CLIP: s.pendingClip = true; break
+        // (glyphsOnly: the glyphs and the state they are placed by alone; paths, shadings and images place no glyph)
+        case PATH: {
+          if (glyphsOnly) { s.pendingClip = false; break }
+          const op = a[0], mm = a[2]
+          if (!inAnnotation && !inMask) pathAt++
+          const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
+          if (ok && PAINTS.has(op)) {
+            const e = STROKES.has(op) ? s.lw / 2 : 0
+            const had = boxes.length
+            addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt, turned ? Math.max(FILLS.has(op) ? fillAlpha() : 0, STROKES.has(op) ? strokeAlpha() : 0) : 1)
+            // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
+            // (`shapesAll`: every path's, where the page's figures are not told by its own forms and pictures: arXiv's page, whose
+            // pictures' points are B's and whose included figures its producer may have flattened)
+            if (turned && withShapes && boxes.length > had && (shapesAll || s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
+          }
+          // a clip takes effect after the path is painted (the canvas's pendingClip)
+          if (s.pendingClip) {
+            if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]
+            // (the clip is kept as its box: a triangle's, a circle's or a turned rectangle's box is more than it shows)
+            if (ok && !rectPathOf(s.ctm, a[1]?.[0])) s.rclip = false
+            s.pendingClip = false
+          }
+          break
         }
-        break
-      }
-      case SHADING:
-        if (glyphsOnly) break
-        // painted over the clip in force; with none, the page's background, left out (a clip not known: the page capped)
-        if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2, fillAlpha())
-        break
-      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3, fillAlpha()); break
-      case IMAGE_REPEAT: case MASK_REPEAT: {
-        if (glyphsOnly) break
-        // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
-        const mask = fn === MASK_REPEAT
-        const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
-        const at = a[mask ? 5 : 3]
-        if (!at || !(at.length >= 0)) break
-        for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3, fillAlpha())
-        break
-      }
-      case MASK_GROUP: case INLINE_GROUP: {
-        if (glyphsOnly) break
-        const group = fn === MASK_GROUP ? a[0] : a[1]
-        for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3, fillAlpha()) }
-        break
-      }
-      case INTENT: {
-        const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
-        const m = typeof name === 'string' ? POINT.exec(name) : null
-        // (a picture's points apart, `pictures`, a paragraph's, `paras`, and a paragraph's end, `paraEnds`: no mark of any unit's,
-        // never among the points the marks and the ownership read)
-        if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
-        // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
-        // well, where a code paragraph TeX broke over a page or a column ends and goes on)
-        else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
-        else if (m && FRONT_POINT.test(m[1])) fronts.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
-        else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
-        else if (m) {
-          (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
-          if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+        case SHADING:
+          if (glyphsOnly) break
+          // painted over the clip in force; with none, the page's background, left out (a clip not known: the page capped)
+          if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2, fillAlpha())
+          break
+        case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3, fillAlpha()); break
+        case IMAGE_REPEAT: case MASK_REPEAT: {
+          if (glyphsOnly) break
+          // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
+          const mask = fn === MASK_REPEAT
+          const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
+          const at = a[mask ? 5 : 3]
+          if (!at || !(at.length >= 0)) break
+          for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3, fillAlpha())
+          break
         }
-        break
+        case MASK_GROUP: case INLINE_GROUP: {
+          if (glyphsOnly) break
+          const group = fn === MASK_GROUP ? a[0] : a[1]
+          for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3, fillAlpha()) }
+          break
+        }
+        case INTENT: {
+          const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
+          const m = typeof name === 'string' ? POINT.exec(name) : null
+          // (a picture's points apart, `pictures`, a paragraph's, `paras`, and a paragraph's end, `paraEnds`: no mark of any unit's,
+          // never among the points the marks and the ownership read)
+          if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
+          // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
+          // well, where a code paragraph TeX broke over a page or a column ends and goes on)
+          else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+          else if (m && FRONT_POINT.test(m[1])) fronts.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+          else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
+          else if (m) {
+            (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+            if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+          }
+          break
+        }
+        default:
       }
-      default:
     }
   }
-  // (the merged boxes after the others, from `mergedAt` on, in the cells' order: rising, then across)
-  const mergedAt = tiles ? boxes.length / 4 : null
-  if (tiles) {
-    for (let o = 0; o < tiles.length; o += 4) {
-      if (Number.isNaN(tiles[o])) continue
-      boxes.push(tiles[o], tiles[o + 1], tiles[o + 2], tiles[o + 3])
-      if (indices) paths.push(MERGED)
+  /** the page's ink, once every piece is read (the same answer however often it is asked) */
+  let answer = null
+  function end() {
+    if (answer) return answer
+    // (the merged boxes after the others, from `mergedAt` on, in the cells' order: rising, then across)
+    const mergedAt = tiles ? boxes.length / 4 : null
+    if (tiles) {
+      for (let o = 0; o < tiles.length; o += 4) {
+        if (Number.isNaN(tiles[o])) continue
+        boxes.push(tiles[o], tiles[o + 1], tiles[o + 2], tiles[o + 3])
+        if (indices) paths.push(MERGED)
+      }
     }
+    answer = { glyphs, boxes, points, boxAt, paras, paraEnds, fronts, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: listed > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+    return answer
   }
-  return { glyphs, boxes, points, boxAt, paras, paraEnds, fronts, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { read, end }
 }
 
 /**
