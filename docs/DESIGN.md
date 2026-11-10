@@ -563,7 +563,10 @@ the sections below describe of the ported request layer (Read Frog's queues, ret
 per-call fallback service and its 60 s demotions, of the page's own resend, runs fallback and halving, and of the service
 inserting sentence markers, is the package's now, per unit: write, store read, requests cut by each translator's limits
 with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
-translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
+translator (50 % of 20, never the chain's last), halving only where an endpoint says a request is too large (a 413, or the
+words of its stated cap: Microsoft's plain-text 400) while any other refused request goes whole to the next translator and
+counts against its own as a failure of its endpoint does (a 400 to every request had been halved into 7 requests for an
+LLM's 4 units and 199 for Google's 100, #636), one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
 whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
 English between translated stretches (PDF-READER §18.21).

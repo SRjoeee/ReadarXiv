@@ -61,8 +61,10 @@ export const KEY_VERSION = 't1'
  *  original's, never its English between translated stretches), a span that is no edge keeping its head in a copy of itself:
  *  runs.ts; an element set after the unit's text given to no translator, put back after the translation: tailOf; a group a
  *  reply did not bring back placed around its own text where the translation states it: groups.ts; a word tied to a reference
- *  that abbreviates the item's name sent to every translator as that name: names.ts): a change to them is a change of every row */
-export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names'
+ *  that abbreviates the item's name sent to every translator as that name: names.ts; a request a translator refuses handed on
+ *  whole, halved only where its endpoint said it is too large, `pass-whole`, #636: a 400 read as every unit's refusal kept the
+ *  next translator's answers as rows): a change to them is a change of every row */
+export const CHAIN_RULES = 'chain/1|fall-through|reask|runs>=2-whole|runs-heads|after|groups|names|pass-whole'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
@@ -137,7 +139,7 @@ export async function identityOf(translators: readonly Translator[]): Promise<st
 /** what a request brings back for one waiter */
 type Answer =
   | { raw: string }
-  /** a lone unit the translator said its request could not take (`halve` down to one) */
+  /** a lone unit its translator's endpoint said is too large (a `too-large` request halved down to one) */
   | { refused: true }
   | { unavailable: true; retryAfterMs?: number; cooling?: boolean }
   | { off: UnconfiguredCode }
@@ -194,6 +196,9 @@ const UNCONFIGURED: Partial<Record<Fault['code'], UnconfiguredCode>> = {
 }
 /** the failures that are the endpoint's health, which the breaker counts (chain.ts ENGINE_FAILURES) */
 const HEALTH = new Set<Fault['code']>(['network', 'timeout', 'overload'])
+/** a request its translator refused whole for no reason of its size or the language (`pass`): the same at any size, so it is
+ *  this translator's, counted by the breaker as a failure of its endpoint is (a 400 to every request stops being asked) */
+const refusedWhole = (f: Fault): boolean => f.remedy === 'pass' && f.code !== 'too-large' && f.code !== 'unsupported'
 
 export function chainOf(ports: Ports = {}): Chain {
   const clock = ports.clock ?? realClock()
@@ -512,7 +517,11 @@ export function chainOf(ports: Ports = {}): Chain {
           tries: 2,
         })
       const health =
-        !fault || delivered.size > 0 ? true : fault.remedy === 'again' && HEALTH.has(fault.code) ? false : null
+        !fault || delivered.size > 0
+          ? true
+          : (fault.remedy === 'again' && HEALTH.has(fault.code)) || refusedWhole(fault)
+            ? false
+            : null
       record(lane, health)
       const coolMs = fault?.remedy === 'cool' ? Math.max(fault.retryAfterMs ?? DEFAULT_COOL_MS, MIN_COOL_MS) : undefined
       if (lease !== null && ports.gate) {
@@ -540,16 +549,6 @@ export function chainOf(ports: Ports = {}): Chain {
           for (const e of todo) answer(lane, e, { unavailable: true, retryAfterMs: coolMs as number, cooling: true })
           return
         }
-        case 'halve': {
-          if (todo.length === 1) {
-            answer(lane, todo[0] as Entry, { refused: true })
-            return
-          }
-          const h = todo.length >> 1
-          await run(lane, todo.slice(0, h))
-          await run(lane, todo.slice(h))
-          return
-        }
         case 'off': {
           const code = UNCONFIGURED[fault.code] ?? 'key-refused'
           offs.set(t, code)
@@ -558,6 +557,19 @@ export function chainOf(ports: Ports = {}): Chain {
           return
         }
         case 'pass': {
+          // (the one rule over a refused request, #636: only a size the endpoint stated is mended by a smaller request, so
+          // only then is it halved, down to the lone unit this translator refuses; any other refusal goes whole to the next
+          // translator: a 400 to every request was halved into 7 requests for 4 units, 199 for 100)
+          if (fault.code === 'too-large') {
+            if (todo.length === 1) {
+              answer(lane, todo[0] as Entry, { refused: true })
+              return
+            }
+            const h = todo.length >> 1
+            await run(lane, todo.slice(0, h))
+            await run(lane, todo.slice(h))
+            return
+          }
           const code = UNCONFIGURED[fault.code]
           for (const e of todo)
             answer(lane, e, fault.code === 'unsupported' && code ? { off: code } : { unavailable: true })

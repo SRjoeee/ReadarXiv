@@ -97,18 +97,37 @@ describe('the LLM translator', () => {
     expect(await faultOf(t)).toMatchObject({ remedy: 'off', code: 'no-key' })
     expect(doGenerate).not.toHaveBeenCalled()
   })
-  it("each failure as its remedy: a refused key off, a model the endpoint lacks off, a 429 cools with its Retry-After, a 400 halves, a 5xx again, a reply with no object again once", async () => {
+  it("each failure as its remedy: a refused key off, a model the endpoint lacks off, a 429 cools with its Retry-After, a 413 too large, a 400 passed whole, a 5xx again, a reply with no object again once", async () => {
     const statuses: number[] = []
     const run = (e: unknown) => faultOf(llmTranslator(SVC, { codeOf, model: modelThrowing(e), onStatus: s => statuses.push(s) }))
     expect(await run(apiError(401))).toMatchObject({ remedy: 'off', code: 'key-refused' })
     expect(await run(apiError(403))).toMatchObject({ remedy: 'off', code: 'key-refused' })
     expect(await run(apiError(404))).toMatchObject({ remedy: 'off', code: 'model' })
     expect(await run(apiError(429, 'slow', { 'retry-after': '7' }))).toMatchObject({ remedy: 'cool', code: 'rate' })
-    expect(await run(apiError(400))).toMatchObject({ remedy: 'halve' })
+    expect(await run(apiError(413))).toMatchObject({ remedy: 'pass', code: 'too-large' })
+    expect(await run(apiError(400))).toMatchObject({ remedy: 'pass', code: 'malformed' })
     expect(await run(apiError(502))).toMatchObject({ remedy: 'again', code: 'network' })
     expect(await run(Object.assign(new Error('no object'), { name: 'AI_NoObjectGeneratedError' }))).toMatchObject({ remedy: 'again', code: 'malformed' })
     expect(await run(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toMatchObject({ remedy: 'abort' })
-    expect(statuses).toEqual([401, 403, 404, 429, 400, 502])
+    expect(statuses).toEqual([401, 403, 404, 429, 413, 400, 502])
+  })
+  it('an endpoint that answers 400 to every request is asked once and the request handed on whole (#636: 7 requests, 11 alone)', async () => {
+    const units = [0, 1, 2, 3].map(i => ({ id: `u${i}`, content: [{ t: 'text' as const, s: `Sentence number ${i} of a paragraph.` }] }))
+    const drain = async (it: AsyncIterable<Result>) => { const out: Result[] = []; for await (const r of it) out.push(r); return out }
+    let calls = 0
+    const model = new MockLanguageModelV4({ doGenerate: async () => { calls++; throw apiError(400) } })
+    const fallback: Translator = {
+      identity: 'fallback:0', digest: 'd', context: false, limits: LLM_LIMITS, supports: async () => true,
+      write: u => JSON.stringify(u.content), read: (_u, raw) => ({ content: JSON.parse(raw) }),
+      async *send(wires) { for (const [i, w] of wires.entries()) yield [i, w] as const },
+    }
+    const rs = await drain(chainOf().translate(units, 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model }), fallback] }))
+    expect(calls).toBe(1)
+    expect(rs.every(r => r.ok && r.by === 'fallback:0')).toBe(true)
+    calls = 0
+    const alone = await drain(chainOf().translate(units, 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model })] }))
+    expect(calls).toBe(1)
+    expect(alone.map(r => (r.ok ? 'ok' : r.why.kind))).toEqual(['unavailable', 'unavailable', 'unavailable', 'unavailable'])
   })
 })
 

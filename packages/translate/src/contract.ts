@@ -209,9 +209,10 @@ export type Remedy =
   | 'again'
   /** the endpoint asks for a pause (429): it cools for every call for `retryAfterMs`; the request moves on now */
   | 'cool'
-  /** a unit of the request caused it (over a cap the endpoint states): the request is halved; a lone unit is refused */
-  | 'halve'
-  /** this translator cannot serve this request: the next one */
+  /** this translator cannot serve this request. The chain's one rule over it (#636): where the endpoint said the request is
+   *  larger than it takes (`too-large`), a smaller one can be served, so this translator is asked for each half, a lone unit
+   *  refused by it; any other refusal is the same at any size (a request shape, a parameter, a key the endpoint refuses), so
+   *  the request is handed on whole to the next translator, and counted against this one as a failure of its endpoint is */
   | 'pass'
   /** it cannot serve this configuration (no key, key refused, model not found, a gesture needed): off for its object */
   | 'off'
@@ -222,6 +223,9 @@ export type FaultCode =
   | 'timeout'
   | 'rate'
   | 'overload'
+  /** the endpoint said the request is larger than it takes: HTTP 413 (RFC 9110 §15.5.14), or the words of its own stated
+   *  cap. An adapter reports it only from such a reply, never from a bare 400 */
+  | 'too-large'
   | 'unsupported'
   | 'malformed'
   | 'no-key'

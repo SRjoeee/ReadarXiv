@@ -81,8 +81,8 @@ describe('the contract: one result per unit under every failure', () => {
       fakeTranslator({ identity: 'pass:0', script: () => ({ fault: new Fault('pass', 'malformed', 'bad') }) }),
     ],
     [
-      'halving',
-      fakeTranslator({ identity: 'halve:0', script: () => ({ fault: new Fault('halve', 'overload', 'too big') }) }),
+      'too large',
+      fakeTranslator({ identity: 'large:0', script: () => ({ fault: new Fault('pass', 'too-large', 'too big') }) }),
     ],
     ['hanging', fakeTranslator({ identity: 'hang:0', script: () => ({ hang: true }) })],
     ['short of units', fakeTranslator({ identity: 'short:0', script: () => ({ missing: [0, 2] }) })],
@@ -528,14 +528,14 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 2_000 } })
     expect(always.calls.length).toBe(3)
   })
-  it('halve: a request is halved down to the unit at fault, which this translator refuses', async () => {
+  it('too large: a request its endpoint says is too large is halved down to the unit at fault, which this translator refuses', async () => {
     const units = many(8)
     const bad = units[5] as UnitIn
     const picky = fakeTranslator({
       identity: 'picky:0',
       script: ({ wires }) =>
         wires.includes(JSON.stringify(bad.content))
-          ? { fault: new Fault('halve', 'overload', 'too large') }
+          ? { fault: new Fault('pass', 'too-large', 'too large') }
           : undefined,
     })
     const rs = await all(chainOf({ clock: fakeClock() }).translate(units, 'ja', { translators: [picky, echo()] }))
@@ -543,6 +543,49 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(byId(rs, bad.id)).toMatchObject({ ok: true, by: 'echo:0' })
     // 8 → its halves; the first half answers, the second is halved again, down to the unit at fault alone
     expect(picky.calls.map((c) => c.length)).toEqual([8, 4, 4, 2, 1, 1, 2])
+  })
+  it('pass: a request refused for no reason of its size is handed on whole, once, and told (#636: 100 units were 199 requests)', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      limits: { chars: 100_000 },
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const notes: Note[] = []
+    const units = many(100)
+    const rs = await all(
+      chainOf({ clock: fakeClock() }).translate(units, 'ja', {
+        translators: [refuser, echo()],
+        note: (n) => notes.push(n),
+      }),
+    )
+    expect(refuser.calls.map((c) => c.length)).toEqual([100])
+    expect(rs.every((r) => r.ok && r.by === 'echo:0')).toBe(true)
+    expect(
+      notes.filter((n) => n.kind === 'passed' && n.by === 'refuser:0' && n.why.kind === 'unavailable').length,
+    ).toBe(100)
+    // alone on the chain: one request, and every unit unavailable (the service's, not the unit's), no runs floor
+    const alone = fakeTranslator({
+      identity: 'alone:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const rs2 = await all(chainOf({ clock: fakeClock() }).translate(many(4), 'ja', { translators: [alone] }))
+    expect(alone.calls.length).toBe(1)
+    expect(rs2.map((r) => (r.ok ? 'ok' : r.why.kind))).toEqual([
+      'unavailable',
+      'unavailable',
+      'unavailable',
+      'unavailable',
+    ])
+  })
+  it('pass: a translator that refuses every request is counted by the breaker, and skipped once it opens', async () => {
+    const refuser = fakeTranslator({
+      identity: 'refuser:0',
+      script: () => ({ fault: new Fault('pass', 'malformed', '400') }),
+    })
+    const chain = chainOf({ clock: fakeClock() })
+    for (let k = 0; k < BREAKER.minOutcomes + 2; k++)
+      await all(chain.translate([unit(`c${k}`, [t(`Call ${k} has words.`)])], 'ja', { translators: [refuser, echo()] }))
+    expect(refuser.calls.length).toBe(BREAKER.minOutcomes)
   })
   it('pass: the next translator; off: unconfigured only when every translator is off', async () => {
     const pass = fakeTranslator({

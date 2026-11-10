@@ -108,7 +108,10 @@ function faultOf(e: unknown, apiKey: string, onStatus?: (status: number) => void
     // a model the endpoint does not have: nothing changes until the configuration does
     if (s === 404) return new Fault('off', 'model', what)
     if (s === 408) return new Fault('again', 'timeout', what)
-    if (s === 400 || s === 413) return new Fault('halve', 'malformed', what)
+    // a request the endpoint says is too large (413) goes in halves; a 400 is this request's shape (a parameter the endpoint
+    // does not take, a model name it reads otherwise), the same at any size: handed on whole (#636: 4 units were 7 requests)
+    if (s === 413) return new Fault('pass', 'too-large', what)
+    if (s === 400) return new Fault('pass', 'malformed', what)
     if (s >= 500) return new Fault('again', s === 503 ? 'overload' : 'network', what)
     return new Fault('pass', 'malformed', what)
   }
