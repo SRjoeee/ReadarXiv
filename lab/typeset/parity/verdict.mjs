@@ -115,13 +115,14 @@ export const FRESH_SAYS = 'the two sides drew different translations: today its 
 /**
  * The differences of page `p` that touch a unit v2 is laid with a fresh row of (v2.mjs's `fresh`), tagged `fresh: true` with
  * FRESH_SAYS beside their words, judged or not: a unit named by its key (t<today's ord>, else p<part ord>; `todayOf` part ord ->
- * today's ord), or a tie, a run-in, a line of several that holds one. Run once over a page every pass has added to
+ * today's ord), or a tie, a run-in, a line of several, a table's group (its `cells`) that holds one. Run once over a page every
+ * pass has added to
  */
 export function tagFresh(p, v2, todayOf) {
   const keys = new Set((v2.fresh ?? []).flatMap((o) => [todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`, `p${o}`]))
   if (!keys.size) return
   for (const d of p.diffs ?? []) {
-    if (d.fresh || !(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []).some((k) => keys.has(k))) continue
+    if (d.fresh || ![...(String(d.unit ?? '').match(/\b[tp]\d+\b/g) ?? []), ...(d.cells ?? [])].some((k) => keys.has(k))) continue
     d.fresh = true
     d.what = `${d.what} (${FRESH_SAYS})`
   }
@@ -309,7 +310,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   for (const [ord, line] of rows ?? []) if (facts.get(ord)?.lines[0]?.[0] === n) lineOf.set(keyOfPart(ord), line)
   const faults = { today: {}, v2: {} }
   const fault = (side, flag, what) => (faults[side][flag] ??= []).push(what)
-  const diff = (flag, unit, what, origV, t, v, worse, nearer) => out.diffs.push({ flag, unit, what, original: origV, today: t, v2: v, nearer, worse })
+  const diff = (flag, unit, what, origV, t, v, worse, nearer, more) => out.diffs.push({ flag, unit, what, original: origV, today: t, v2: v, nearer, worse, ...more })
   /** two distances from the original judged: the nearer side, past the floor `eps` (equal within it) */
   const judge = (flag, unit, what, origV, t, v, eps, fmt = r2) => {
     if (t.d === null || v.d === null || Math.abs(v.d - t.d) <= eps) return
@@ -760,7 +761,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     figurePairs: figureGroupsOf(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n),
     judge,
     // (the judge of a text-dependent measure of part member `ord`: fresh where v2 is laid with a fresh row of it)
-    ...(freshKeys.size ? { textJudge: (ord) => judgeText(keyOfPart(ord)) } : {}),
+    ...(freshKeys.size ? { textJudge: (ord) => judgeText(keyOfPart(ord)), freshKeys } : {}),
     diff,
     fault,
     inkOf,

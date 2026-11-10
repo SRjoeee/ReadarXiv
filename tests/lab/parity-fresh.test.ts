@@ -168,6 +168,12 @@ describe("a unit laid with a fresh row on the sheet: what follows from its text'
       expect(d.what).toContain(FRESH_SAYS)
     }
   })
+  it("a table's group holding a cell laid with a fresh row is tagged by its cells; one holding none is not", () => {
+    const g = (cells: string[]) => ({ flag: 'groups', unit: 'group g1', what: 'w', cells, worse: true, nearer: 'today' })
+    const p = { diffs: [g(['t7', 't9']), g(['t3', 't4'])] }
+    tagFresh(p, { fresh: [11] }, new Map([[11, 7]]))
+    expect(p.diffs.map((d: { fresh?: boolean }) => !!d.fresh)).toEqual([true, false])
+  })
   it('the run lists every page with its fresh units by cause, and the units v2 sends that today never had, drawn or not', () => {
     const v2 = { fresh: [11, 12, 30], freshCause: { 11: 'no-row', 12: 'unit', 30: 'no-row' }, freshNew: [30, 31], today: { 11: { today: 7 }, 12: { today: 8 } }, pages: { 3: { members: [{ ord: 11 }, { ord: 12 }] }, 4: { members: [{ ord: 30 }, { ord: 31 }] } }, facts: { 3: { members: [{ ord: 11, kind: 'para' }, { ord: 12, kind: 'figure' }] }, 4: { members: [{ ord: 30, kind: 'figure' }] } } }
     expect(freshOf('p-zh', v2)).toEqual({

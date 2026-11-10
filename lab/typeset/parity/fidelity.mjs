@@ -444,7 +444,9 @@ export function measureFidelity(c) {
     if (v === 'mixed') fault('v2', 'groups', `${g.group}: its cells part translated, part the original's`)
     // (a group both sides draw the same, kept on both or translated on both, is no difference; one drawn otherwise than today
     // decides is worse)
-    if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today')
+    // (a group holding a cell v2 is laid with a fresh row of names its cells, so that the difference is tagged: verdict.mjs tagFresh)
+    const named = c.freshKeys && cells.some(({ key }) => c.freshKeys.has(key)) ? { cells: cells.map(({ key }) => key) } : undefined
+    if (t !== v) diff('groups', `group ${g.group}`, "a table's grid group translated or kept whole, as today decides (the owner's ruling)", 'whole', { value: t, off: t === 'mixed' ? 1 : 0 }, { value: v, off: 1 }, true, 'today', named)
     // (a group today's decision kept whole reaches v2 as no rows: the stored rows hold no translation of its cells, so v2's own
     // decision is not exercised there and what v2 draws is today's decision. Recorded apart, as the ruling's are: never worse,
     // never nearer; a run over rows that hold the translator's answers for those cells exercises it)
