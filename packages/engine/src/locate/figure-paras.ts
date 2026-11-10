@@ -81,6 +81,11 @@ function oneLead(gaps: readonly Gap[], tol: number): boolean {
   return Math.max(...c) - Math.min(...c) <= tol
 }
 
+/** whether two lines are each led by ink of its own, no ink leading both: a legend's entries, each after its sample (a frame's
+ *  side leading both is no such ink) */
+export const ledApart = (a: ParaLine, b: ParaLine) =>
+  a.leaders.size > 0 && b.leaders.size > 0 && ![...a.leaders].some((x) => b.leaders.has(x))
+
 /** two lines one under the other in one block: one face, no blank line between (the gap under the upper's band less than a
  *  band), the block's lead kept (oneLead) and its left edge; lines each led by ink of its own are entries, never one text */
 function geomJoin(
@@ -90,7 +95,7 @@ function geomJoin(
   blockLen: number,
 ): { gaps: Gap[]; edge: number } | null {
   if (!sameFace(a, b)) return null
-  if (a.leaders.size && b.leaders.size && ![...a.leaders].some((x) => b.leaders.has(x))) return null
+  if (ledApart(a, b)) return null
   const tol = PARA_ALIGN_TOL * a.size
   const pitch = a.y - b.y
   if (!(pitch > 0 && pitch - a.band < a.band)) return null

@@ -403,6 +403,20 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     const [t] = figureLinesOf([page], fig, () => false, null).filter((x) => x.ks.length > 1)
     expect(t?.ks).toEqual([0, 1, 2, 3, 4])
   })
+  it('joins no legend a frame holds: its entries each led by a sample of its own, whatever their lengths (1512.03385v1 p5)', () => {
+    // (two entries of one length, their centres one: "plain-18" over "plain-81" (glyphsOf's widths by character), a line sample
+    // before each; the frame round them holds them alone, its samples a stroke within one line's band each)
+    const T = 'TimesNewRomanPSMT'
+    const { page, fig } = pageOf(
+      [[{ text: 'plain-18', font: T, x: 100 }], [{ text: 'plain-81', font: T, x: 100 }]],
+      [
+        [80, 702, 95, 703],
+        [80, 688, 95, 689],
+      ],
+    )
+    fig.holds = [{ p: 1, b: 9, ks: [0, 1], shape: rect(75, 680, 160, 712) }]
+    expect(figureLinesOf([page], fig, () => false, null).filter((t) => t.ks.length > 1)).toEqual([])
+  })
   it('reads a closed path’s inside by its interior: a glyph inside its box and outside it crowds nothing (2608.06701v1 p2)', () => {
     // (one line in the diamond, "yes" beside it: in the diamond's box, outside the diamond)
     const { page, fig } = pageOf([
