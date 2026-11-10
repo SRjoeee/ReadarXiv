@@ -1369,9 +1369,14 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(laid.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
     // (the four short translations on the paragraph's first line, each name one line, none left on the second)
     expect(laid.map((m) => m.lines.map((l) => l[0]))).toEqual([[700], [700], [700], [700]])
-    // (each from the one before's end, its comma before it at TeX's separation (2 pt): no hole)
+    // (each name's comma, a mark no line opens with, at the end of the name before, from its ink's end at TeX's separation (its
+    // crop from that end on A), and each name from the one before's ink end at TeX's separation, 8 pt, its comma between: no hole)
     const spans = laid.map((m) => [Math.min(...m.lines[0]![3].map((it) => it.x)), m.lines[0]![2]] as const)
-    for (let k = 1; k < 4; k++) expect(spans[k]![0]).toBeCloseTo(spans[k - 1]![1] + 2, 5)
+    for (let k = 1; k < 4; k++) {
+      const comma = laid[k - 1]!.lines[0]![3].at(-1)!
+      expect('src' in comma && comma.s).toBe(',')
+      expect(laid[k]!.lines[0]![3][0]!.x).toBeCloseTo(comma.x + 8, 5)
+    }
     // (the run centred on the paragraph's middle, 300)
     expect((spans[0]![0] + spans[3]![1]) / 2).toBeCloseTo(300, 5)
     // (translations a line does not hold: the last name goes on to the paragraph's next line whole, its comma closing the line
@@ -1395,13 +1400,36 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
       m.lines.filter((l) => l[0] === y).flatMap((l) => l[3].flatMap((it) => ('src' in it ? [] : [it.s])))
     expect(textOn(wide[3]!, y1)).toEqual([])
     expect(textOn(wide[3]!, y2).join('')).toBe('\u4e01'.repeat(25))
-    // (its comma on the first line, after the third name)
-    expect(wide[3]!.lines.find((l) => l[0] === y1)?.[3].some((it) => 'src' in it)).toBe(true)
+    // (its comma on the first line, after the third name, its last item)
+    const last1 = wide[2]!.lines.find((l) => l[0] === y1)?.[3].at(-1)
+    expect(last1 && 'src' in last1 && last1.s).toBe(',')
     const line2 = wide[3]!.lines.find((l) => l[0] === y2)!
     expect((line2[1] + line2[2]) / 2).toBeCloseTo(300, 0)
     // (a paragraph its run does not hold whole — ink of the page after its last member on its last line, which Room.side
     // states: 2608.16117v1 p1's places, another flow's places after them on that line — is no run: its lines would take
     // and lose its members' text beside what stays there; laid member by member, as before)
+    // (a mark no line opens with, by the breaker's own rule (UAX 14's IS, the target's line-start marks): the comma before a name
+    // the line no longer holds stays at the end of the line before, with the name before it, and never opens a line. Here the
+    // third name ends the first line at the room's end: its comma, the fourth's label, opened the second line, as
+    // 2611.00342v1's second line on staging (round 8 B3). Each comma once, at no line's start)
+    const tightRows = rowsOf(
+      [
+        row(long('\u7532')),
+        { ...row(long('\u4e59')), id: ids[0]! },
+        { ...row([{ t: 'text', s: '\u4e19'.repeat(38) }]), id: ids[1]! },
+        { ...row(long('\u4e01')), id: ids[2]! },
+      ],
+      true,
+    )
+    const tight = layPage({ ...part(a), flows: [[a, b, c, d]] }, tightRows, zh, inked).members
+    expect(tight.map((m) => m.state)).toEqual(['laid', 'laid', 'laid', 'laid'])
+    const commas = tight.flatMap((m) => m.lines.flatMap((l) => l[3].filter((it) => 'src' in it && it.s === ',')))
+    expect(commas.length).toBe(3)
+    for (const m of tight)
+      for (const l of m.lines) {
+        const first = l[3].reduce((p, q) => (q.x < p.x ? q : p))
+        expect('src' in first && first.s === ',').toBe(false)
+      }
     expect(rowLinesOf([[a, b, c, d]]).size).toBe(4)
     expect(rowLinesOf([[a, b, c, { ...d, room: { below: 20, side: [290, 400] } }]]).size).toBe(0)
   })

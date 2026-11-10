@@ -7,7 +7,7 @@
 // centred or flush right (RowLine), is laid as one run: its members run on as on any shared row, the run then placed as TeX
 // placed the line (layLine). A member is prepared from its part (L5-L7: the unit's rules, the tokens) by the adapter; the
 // composition reads nothing else.
-import { hangOf } from '../breaker/break.types.ts'
+import { hangOf, noLineStart } from '../breaker/break.types.ts'
 import type { FitBlock } from '../fit/types.ts'
 import type { FillLaid } from '../shared/fill-page.ts'
 import { relay } from '../shared/relay.ts'
@@ -28,6 +28,8 @@ export type FlowMember = Prepared & {
     ownLabel: readonly number[] | null
     /** a character of the page stays on the row between the member before's end and x (Placed.join kept) */
     keptBetween: (x: number) => boolean
+    /** where its text's first glyph stands on the row (its first line's start, the original's), its label before it */
+    x: number
     /** where the tokens are the member's own (the adapter's, lay/read.ts): its label's crop, set on the row's baseline as its first
      *  line's start where its label on the row goes with it (RUN:2215-2224), and its first line's head edge then (the label
      *  drawn: U.params' halfLead.head). Today's tokens handed in hold the crop already */
@@ -143,6 +145,27 @@ function layLine(
     const rs = m.rowStart!
     return Math.max(0, (rs.ownLabel ? rs.ownLabel[2]! : m.blocks[0]!.rects[0]![1]!) - rs.row.x1)
   }
+  // (a member's carried label that is a mark no line opens with, by the breaker's own rule (noLineStart: UAX 14's, the target's
+  // line-start marks), IJCAI's \and's comma: TeX set it after the name before, the line's break after it. It goes at the end of
+  // the member before, glued to its last token (its crop from that one's ink end on A to its own, TeX's separation before it
+  // held), so that the breaker keeps it with the group before it, as it keeps such a mark inside one text: where the line no
+  // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging (round 8
+  // B3): the tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
+  // then laid from TeX's separation after the mark, its own label no longer before it)
+  const marks = row.map((m, k) => {
+    const rs = m.rowStart,
+      t0 = m.tokens[0]
+    const text = t0?.crop?.text,
+      ch = typeof text === 'string' ? [...text][0] : undefined
+    if (k === 0 || !rs?.carried || !rs.ownLabel || !t0?.crop || !ch || !noLineStart(m.P)(ch)) return null
+    const x0 = Math.min(rs.row.x1, rs.ownLabel[2]! - 0.4),
+      x1 = rs.ownLabel[4]! + 0.4
+    const box = t0.crop.crop as [number, number, number, number]
+    return {
+      token: { ...t0, crop: { ...t0.crop, crop: [x0, box[1], x1, box[3]] }, cw: x1 - x0, glue: true } as typeof t0,
+      gap: Math.max(0, rs.x - x1),
+    }
+  })
   // (the room under the paragraph's last line a translation may borrow: its last member's, TeX's facts)
   const free = row.at(-1)!.blocks.at(-1)!.free
   // (a member's block: the paragraph's lines from TeX's `r`th on, each its room moved by `shift`, its first from `start`, on the
@@ -208,12 +231,14 @@ function layLine(
   // which closes the line before where the member goes on to the next. A CJK name holds no space: it goes on whole, where cut
   // between its characters by the fit, a name of three characters stood over two lines, two and one (2611.00342v1's "Woohyeon Kwon" on staging); one longer than a line is cut by the breaker as before)
   const tokensOf = (m: FlowMember, k: number) => {
-    const t = m.tokens
-    const lead = k > 0 && m.rowStart?.carried && t[0]?.crop ? 1 : 0
+    const own = marks[k] ? m.tokens.slice(1) : m.tokens,
+      next = marks[k + 1]?.token
+    const t = next ? [...own, next] : own
+    const lead = k > 0 && !marks[k] && m.rowStart?.carried && t[0]?.crop ? 1 : 0
     return Object.assign(
       t.map((x, q) => (q <= lead || x.space || x.glue ? x : { ...x, glue: true })),
-      { base: (t as { base?: unknown }).base },
-    ) as typeof t
+      { base: (m.tokens as { base?: unknown }).base },
+    ) as typeof m.tokens
   }
   const lay = (shift: readonly number[]) => {
     const o: FlowLay[] = [],
@@ -224,27 +249,44 @@ function layLine(
     for (const [k, m] of row.entries()) {
       const r = k === 0 ? 0 : ys.length - 1
       const y = ys[r]
-      const b = blockOf(
-        m,
+      const tokens = tokensOf(m, k)
+      const layFrom = (from: number, start: number, startY: number | undefined) =>
+        layOne(
+          {
+            ...m,
+            ...(fixed ? { P: { ...m.P, ...fixed } } : {}),
+            tokens,
+            blocks: [blockOf(m, from, start, shift, startY)],
+            rowStart: undefined,
+            kept: null,
+            follower: null,
+            shareRow: { page: last.page, baseline: last.baseline, size: m.blocks[0]!.sizes[0] ?? m.s },
+          },
+          o[k - 1],
+          true,
+        )
+      let got = layFrom(
         r,
-        k === 0 ? x : x + gapOf(m),
-        shift,
+        k === 0 ? x : x + (marks[k] ? marks[k]!.gap : gapOf(m)),
         y !== undefined && Math.abs(y - R[r]!.baseline) >= 0.05 ? y : undefined,
       )
-      const got = layOne(
-        {
-          ...m,
-          ...(fixed ? { P: { ...m.P, ...fixed } } : {}),
-          tokens: tokensOf(m, k),
-          blocks: [b],
-          rowStart: undefined,
-          kept: null,
-          follower: null,
-          shareRow: { page: last.page, baseline: last.baseline, size: b.sizes[0]! },
-        },
-        o[k - 1],
-        true,
-      )
+      // (a member after the first opens on a line the members before it hold: its first word, which the breaker cuts by its
+      // characters where a line holds nothing yet, is never cut there; where the rest of the line does not hold it whole, the
+      // member goes on to the next line, as the mark it carried (above) made it go before. A CJK name of no space, its first
+      // word, stood cut over two lines)
+      const L0 = got.lay.state === 'laid' ? got.lay.lay.layout : null
+      if (k > 0 && L0 && L0.lines.length > 1 && Math.abs(L0.lines[0]!.baseline - ys[r]!) < 0.05 && r + 1 < R.length) {
+        const textOf = (t: { s?: string; crop?: { text?: unknown } }) =>
+          t.s ?? (typeof t.crop?.text === 'string' ? t.crop.text : '')
+        let word = ''
+        for (const t of tokens) {
+          if (t.space) break
+          word += textOf(t)
+        }
+        const held = L0.lines[0]!.items.map((it) => (it.t.space ? ' ' : textOf(it.t))).join('')
+        if (held.length < word.length && word.startsWith(held))
+          got = layFrom(r + 1, rooms[r + 1]![0] + shift[r + 1]!, undefined)
+      }
       if (got.lay.state !== 'laid') return null
       const L = got.lay.lay.layout
       if (!L.lines.length) return null
