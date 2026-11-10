@@ -131,6 +131,10 @@ if (tally && process.argv.includes('--review')) {
   mkdirSync(join(OUT, 'review'), { recursive: true })
   writeFileSync(join(OUT, 'review', `${id}.json`), `${JSON.stringify(reviewOf(ins, tally))}\n`)
 }
+// (A's pages as the back half read them, where it kept them; else read again once, as it reads them (rebuild/mem-back lets them
+// go once located): the proofs and the --baseline statement read them)
+let pagesAOnce = null
+const pagesAOf = async () => (pagesAOnce ??= tally?.pagesA ?? (await readArxiv({ getDocument, OPS }, arxivBytes, { ...docOpts, ...LITE })).pages)
 // ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
 // --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)
@@ -141,7 +145,7 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   W.set(arxivBytes)
   W.set(tally.addOn.bytes, arxivBytes.length)
   const tp = performance.now()
-  const pagesA = tally.pagesA ?? (await readArxiv({ getDocument, OPS }, arxivBytes, { ...docOpts, ...LITE })).pages
+  const pagesA = await pagesAOf()
   proofs = { glyphs: await proveGlyphs({ W, pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
   proofs.glyphs.ms = Math.round(performance.now() - tp)
   if (process.argv.includes('--pixels')) {
@@ -217,8 +221,9 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
   // (the number each unit's label states, Label.num, by its ord in the dump)
   const labels = new Map(dumpOrds.map(([o, m]) => [o, located?.members[m]?.labelAt?.num?.[0]]).filter(([, n]) => n))
-  // (arXiv's glyphs on each page, as the engine read A: (f') reads a line's glyphs of ink)
-  const glyphs = (p) => tally?.pagesA?.[p - 1]?.page?.glyphs ?? null
+  // (arXiv's glyphs on each page, as the back half read A: (f') reads a line's glyphs of ink)
+  const pagesA = ins ? await pagesAOf() : null
+  const glyphs = (p) => pagesA?.[p - 1]?.page?.glyphs ?? null
   // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
   for (const { u, why, cause, holder } of statedOf(base, units, { trails, labels, glyphs })) {
     units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })

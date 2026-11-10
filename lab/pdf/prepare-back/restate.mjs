@@ -3,7 +3,7 @@
 // made again (with the trails and labels its bundles' parts carry), numbered after the dump's own units as run.mjs numbers them, its counts
 // made again. For a change to how the statement reads (an acceptance ruling) measured on a run already made; the differential
 // then reads <out>. With --papers=<tsv> (a corpus list: each paper's id and the folder of its arxiv.pdf) arXiv's glyphs are read
-// as the engine reads A, for the causes that read a line's glyphs ((f'), stated.mjs); without, those are not stated.
+// as the back half reads A (readArxiv), for the causes that read a line's glyphs ((f'), stated.mjs); without, those are not stated.
 //   node --import tsx lab/pdf/prepare-back/restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>]
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -17,7 +17,7 @@ if (!BASELINE || !RUN || !OUT) {
   console.error('restate.mjs <baseline prepare dir> <run dir> <out dir> [--papers=<tsv>]')
   process.exit(2)
 }
-// (arXiv's PDF of each paper, and A's glyphs on each page as prepare reads them: readPdf with its options, run.mjs's)
+// (arXiv's PDF of each paper, and A's glyphs on each page as the back half reads them: readArxiv, run.mjs's)
 const pdfOf = new Map(
   (PAPERS ? readFileSync(PAPERS, 'utf8') : '')
     .split('\n')
@@ -29,12 +29,12 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const read = PAPERS
   ? await (async () => {
       const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-      const { readPdf } = await import(pathToFileURL(join(ROOT, 'packages/engine/src/read.ts')).href)
+      const { readArxiv } = await import(pathToFileURL(join(ROOT, 'packages/engine/src/prepare.ts')).href)
       const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfjs.mjs')).href)
       const NM = join(ROOT, 'node_modules/pdfjs-dist/')
       const docOpts = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
       return async (f) => {
-        const r = await readPdf({ getDocument, OPS }, new Uint8Array(readFileSync(f)), { options: { ...docOpts, ...LITE }, turned: true, mapped: true })
+        const r = await readArxiv({ getDocument, OPS }, new Uint8Array(readFileSync(f)), { ...docOpts, ...LITE })
         return r.pages.map((p) => p.page.glyphs)
       }
     })()
