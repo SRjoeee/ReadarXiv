@@ -80,6 +80,20 @@ describe('ownedOf', () => {
     expect(owned([url], { 'p0.1a': moved('.') })).toEqual({ 'p0.1a': ['../data', 0] })
   })
 
+  it('an opening point alone reads past an earlier unit\'s marks TeX set again inside its ink, to the text after it (MR 3\'s later occurrence; 2608.25210v2 p1)', () => {
+    // (the title, unit 0: its end mark alone where the class set it first; set again inside unit 9 through the paper's \vldbtitle,
+    // acmart's \shorttitle holding \title's argument with its marks, a pair. The opening point's next point was h0s, and the
+    // piece owned nothing: its title read as unit 9's text, more letters than its source writes)
+    const page = pageOf([{ at: 'h0e' }, 'Title', '\n', { at: '9s' }, 'Format: ', { at: 'p9.13a' }, { at: 'h0s' }, 'Bolt-on Title', { at: 'h0e' }, '. PVLDB, ', { at: 'p9.15a' }, '19', { at: 'p9.15b' }, ' more', { at: '9e' }])
+    expect(owned([page], { 'p9.13a': open('.pvldb,'), 'p9.15a': closed })).toEqual({ 'p9.13a': ['Bolt-onTitle', 0], 'p9.15a': ['19', 0] })
+    // (the author names' marks set again alike, several earlier units in a row: 1, 3 and the title)
+    const names = pageOf([{ at: '9s' }, 'Format: ', { at: 'p9.11a' }, { at: '1s' }, 'Ann Lee', { at: '1e' }, ', and ', { at: '3s' }, 'Bo Li', { at: '3e' }, '. ', { at: 'p9.13a' }, { at: 'h0s' }, 'Title', { at: 'h0e' }, '. PVLDB', { at: '9e' }])
+    expect(owned([names], { 'p9.11a': open('.'), 'p9.13a': open('.pvldb') })).toEqual({ 'p9.11a': ['AnnLee,andBoLi', 0], 'p9.13a': ['Title', 0] })
+    // (as before where the text after it is not found past them, and where the next mark is a later unit's start)
+    const lost = pageOf([{ at: '9s' }, 'Format: ', { at: 'p9.13a' }, { at: 'h0s' }, 'Title', { at: 'h0e' }, ' other words', { at: '9e' }])
+    expect(owned([lost], { 'p9.13a': open('.pvldb,') })).toEqual({ 'p9.13a': ['', 0] })
+  })
+
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {
     const page = pageOf(['one ', { at: 'p0.1a' }, { at: 'p0.1b' }, 'two ', { at: 'p0.3b' }, 'three ', { at: 'p0.3a' }, 'four'])
     expect(owned([page], { 'p0.1a': closed, 'p0.3a': closed })).toEqual({ 'p0.1a': ['', 0], 'p0.3a': 'marks out of order' })
