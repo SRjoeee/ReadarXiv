@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { pageGlyphsOf } from '../src/glyph.ts'
 import { bundle } from '../src/bundle/bundle.ts'
-import type { Doc } from '../src/doc.ts'
+import type { Doc, DocTurned } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.types.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { carry, spansOf } from '../src/locate/ink.ts'
@@ -36,6 +36,19 @@ function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][]): Instrum
     made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
   }
 }
+/** our final pass of a page arXiv's A sets: A's own ink, our compile including each figure as arXiv's does (its text has its
+ *  partners on B, no source unit's), each line no form shows owned by the units' first, or as `own` says (`own[p][line]`) */
+function finalOf(A: Doc, units: InstrumentUnit[], own?: number[][]): { B: Doc; ins: Instrument } {
+  const B = structuredClone(A)
+  const rows =
+    own ??
+    B.pages.map((pg) => {
+      const row: number[] = []
+      for (const g of pg.glyphs) row[g.n] = g.form ? -1 : 0
+      return row
+    })
+  return { B, ins: instrumentOf(B, units, rows) }
+}
 /** A's pages as pageInk would give them (read.ts `raw`): its glyphs, boxes and their kinds */
 const rawOf = (doc: Doc): PageInk[] =>
   doc.pages.map(
@@ -49,7 +62,7 @@ const rawOf = (doc: Doc): PageInk[] =>
         paras: [],
         paraEnds: [],
         regions: [],
-        turned: [],
+        turned: (pg.turned ?? []).map((t) => ({ ...t })),
         pictures: [],
         shapes: new Map(),
         figures: new Map(),
@@ -62,6 +75,28 @@ const rawOf = (doc: Doc): PageInk[] =>
         rotated: false,
       }) as unknown as PageInk,
   )
+/** a run set a quarter turned up the page from (x, y), each glyph 6 pt along it, after the page's `at` level glyphs (pageInk's
+ *  `turned`): a figure's y-axis title, arXiv's margin stamp */
+const turnedRun = (s: string, x: number, y: number, at: number, form: boolean): DocTurned[] =>
+  [...s].map((u, j) => ({
+    u,
+    code: u.codePointAt(0) as number,
+    base: 'NimbusRoman-Regular',
+    n: 9,
+    k: j,
+    at,
+    box: -1,
+    ox: x,
+    oy: y + 6 * j,
+    ex: x,
+    ey: y + 6 * j + 6,
+    ux: 0,
+    uy: 1,
+    size: 10,
+    ascent: 0.7,
+    descent: -0.2,
+    form,
+  }))
 /** B and A of one page spec: B with the marks' points, A (arXiv's) with none */
 function pair(spec: PageSpec): { B: Doc; A: Doc } {
   const { points: _, ...plain } = spec
@@ -287,7 +322,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       { text: 'call the model now', font: 'ABCDEF+CMR10' },
     ]
     const make = (body: string) => {
-      const B = docOf([{ lines: lines(body) }])
       const A = docOf([
         {
           lines: [
@@ -297,6 +331,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           ],
         },
       ])
+      const B = structuredClone(A)
       // (a roman face's characters each their own advance, as a proportional face sets them, the body's telling it for the
       // document; the typewriter's one)
       for (const D of [A, B])
@@ -334,7 +369,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
     // code. A word of its own line stays translated)
     const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
-    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
     const A = docOf([
       {
         lines: [
@@ -347,6 +381,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const B = structuredClone(A)
     for (const D of [A, B])
       for (const g of D.pages[0]!.glyphs)
         if (g.font.endsWith('CMR10') && !g.blank && !g.form)
@@ -373,7 +408,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // and no element: one that holds an identifier stays the original's. A figure text of words alone, a camelCase name, a lone
     // underscore, is translated)
     const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
-    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
     const A = docOf([
       {
         lines: [
@@ -387,6 +421,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const B = structuredClone(A)
     const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
     const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
     const figs = L.members.filter((m) => m.figure)
@@ -408,8 +443,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
     // was read set from its end: its translation laid flush against the box's right edge, its next line from the left. Lines
     // that share both edges, two at least, are a paragraph's measure: every line of it is set from its start)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -422,6 +455,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const figs = L.members.filter((m) => m.figure)
     expect(figs.map((m) => [m.plain, m.align])).toEqual([
@@ -436,8 +470,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (2411.13093v4 p18: lines 515, an entry's indented first line, and 527, a full line, set at 7.07 pt among the paragraph's
     // 7.06's. A column is of one size, and sizes keyed to the hundredth parted the two from their paragraph into a column of their
     // own, its end the most runs': both laid from the box's right edge. One size as runs join, within 1 % of the size before)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -451,6 +483,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
       ['The entry of the box indented here', 'l'],
@@ -466,8 +499,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // turned to be set from their start: 2608.04322v1 p3's axis labels "GSM8K" "MATH" "HellaSwag", 2610.10492v1's two "Population
     // mean", 1810.04805v2's "[SEP]"s. Two runs of one text share both edges and tell no measure; a paragraph's full lines are of
     // different texts, its other lines inside its measure)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -480,6 +511,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
       ['Population mean', 'r'],
@@ -493,8 +525,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // (2610.20808v1 p8's language codes "pt" "en" "es" "zh" "hi", as wide, share both edges; a shorter one starts inside them.
     // Lines of different texts as wide tell no measure: a justified paragraph's full lines are set to one width by the stretch of
     // their spaces, and these have none)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -507,6 +537,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
       ['deu', 'r'],
@@ -521,8 +552,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // the one more letters, the other more spaces, each word space as the face sets it (2.348 pt both, at 8.445 pt). A justified
     // paragraph's lines are stretched apart: 2411.13093v4 p18's full lines' word spaces run from 3.96 to 6.36 pt, its unjustified
     // lines' 3.90)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -534,6 +563,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         ],
       },
     ])
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
       ['History of General Mathematics', 'r'],
@@ -542,18 +572,18 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ])
   })
 
-  it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
-    const A = docOf([
-      {
-        lines: [
-          'a paragraph whose word',
-          { text: 'Loss', y: 640, form: true },
-          { text: 'continues on its last line', y: 600 },
-        ],
-      },
-    ])
+  it('makes a figure’s text inside its form a figure text, where B sets it too and no unit owns it', () => {
+    // (our final pass includes the figure as arXiv's compile does: its text has its partners on B, no source unit's)
+    const spec: PageSpec = {
+      lines: [
+        'a paragraph whose word',
+        { text: 'Loss', y: 640, form: true },
+        { text: 'continues on its last line', y: 600 },
+      ],
+    }
+    const B = docOf([spec])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
+    const A = docOf([spec])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     const content = [text('Loss')]
     expect(L.units[1]).toMatchObject({
@@ -583,12 +613,48 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.members[0]).toMatchObject({ located: true })
   })
 
+  it('leaves ink our compile never printed, on a page it sets, arXiv’s: no figure glyph and no unit, flat and turned (its stamp)', () => {
+    // (arXiv's margin stamp, "arXiv:2608.25210v2 [cs.DB] 28 Aug 2026" turned up page 1's left margin, which arXiv's newer pages
+    // show inside a form of arXiv's: no glyph of it has a partner on B, and the figure reading, reading A's own form flag, made it a
+    // figure text the reader sent and drew translated over the original (78 of the 88). On a page our compile sets, a glyph it
+    // never printed is no text the paper's TeX set: never a figure glyph, never a unit, never sent, erased or lit)
+    const lines = ['a paragraph whose word', 'continues on its last line']
+    const B = docOf([{ lines }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([{ lines: [...lines, { text: 'arXiv stamp in its form', x: 24, y: 400, form: true }] }])
+    const at = A.pages[0]!.glyphs.length
+    A.pages[0]!.turned = turnedRun('arXiv:2501.00001v1 [cs.CL]', 24, 200, at, true)
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.units.map((u) => u.kind)).toEqual(['para'])
+    expect(L.members.map((m) => m.unit)).toEqual([0])
+    expect(L.members[0]).toMatchObject({ located: true })
+    expect(L.figureGroups.size).toBe(0)
+    // (nor is a unit born of it: the glyphs B never printed on a page B sets are arXiv's ink)
+    expect(L.born.size).toBe(0)
+  })
+
+  it('reads a figure’s text on a page our compile sets none of as it reads it (a second file arXiv compiles, 2610.20030v1)', () => {
+    // (2610.20030v1's source names two top-level files (00README.json): arXiv compiles both and joins them, our compile is the
+    // first's, 8 pages. On pages 9 to 12, which our compile never makes, nothing tells who set the ink: the figure reading reads
+    // them as it did, its axis titles figure texts)
+    const lines = ['a paragraph whose word', 'continues on its last line']
+    const B = docOf([{ lines }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([{ lines }, { lines: [{ text: 'target area', y: 640, form: true }] }])
+    A.pages[1]!.turned = turnedRun('cell motility', 60, 400, A.pages[1]!.glyphs.length, true)
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(
+      L.members
+        .filter((m) => m.figure)
+        .map((m) => m.plain)
+        .sort(),
+    ).toEqual(['cell motility', 'target area'])
+  })
+
   it('states a figure text’s style runs: a lead-in its glyphs set in its family’s bold a group, `must`, its style its glyphs’', () => {
     // (2608.25210v2 p2's "Data Extraction Task: Extract all …": the lead-in in HelveticaNeue-Bold, the rest in HelveticaNeue, one
     // run of today's figure reading (a family's faces); read as one style, the majority's, it was regular, the lead-in's weight
     // lost, with no run of the figure text's to carry it through a translation)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
       {
         lines: [
@@ -601,6 +667,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const at = 'a paragraph whose word'.length
     for (const g of A.pages[0]!.glyphs.slice(at, at + 4))
       Object.assign(g, { font: 'ABCDEF+Helvetica-Bold', base: 'Helvetica-Bold' })
+    const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
     const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
     // (the group the translator is given, a run-in label at the figure text's head before its colon: `must` by the run-in rule,
     // so that the markers wire brings its style back; no source, so neither `open` nor `close`)
@@ -750,8 +817,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     // line's size and the rest of it smaller, abutting it on its baseline. The run cut at every size change: "S" | "YSTEM", the
     // rests translated alone, 'ORECASTING' -> ore casting. The owner's rule of 2026-11-10: glyphs on one baseline with no word
     // space between them are one word whatever their sizes, and a run goes on across such a change)
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     /** A with a figure's line of words, each glyph [character, size, raise], set left to right on one baseline: a glyph's advance
      *  0.6 of its size, a word space of 3.3 between words and no space glyph, as TeX sets them */
     const figuresOf = (words: [string, number, number?][][]) => {
@@ -785,6 +850,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
           x = x1
         }
       })
+      const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
       const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
       return L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.style.size, m.style.caps])
     }
@@ -820,8 +886,6 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
   })
 
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
-    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
-    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const figureOf = (fonts: string[]) => {
       const A = docOf([
         {
@@ -837,6 +901,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         const f = fonts[j] || 'Helvetica'
         Object.assign(g, { font: `ABCDEF+${f}`, base: f })
       })
+      const { B, ins } = finalOf(A, [unitOf('para', 'a paragraph whose word continues on its last line')])
       const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
       return { content: L.units[1]!.content, member: L.members[1]! }
     }

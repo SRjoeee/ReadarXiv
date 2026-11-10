@@ -658,3 +658,19 @@ export function align(inkB: Doc, inkA: Doc, o: AlignOptions = {}): Mapping {
 }
 
 export const hunkName = (code: number): HunkClass => HUNK_NAMES[code] ?? 'none'
+
+/** the pages of A our compile sets, by A's page: true where one of its glyphs, level or turned, has a partner on B. A page none of
+ *  whose glyphs has one is a page our compile never makes (2610.20030v1's pages 9 to 12, a second top-level file of its source
+ *  that arXiv compiles and joins to the first, our compile the first's alone): a fact of the mapping, never a share of glyphs */
+export function setPagesOf(m: Mapping): boolean[] {
+  const n = m.offA.length - 1
+  const out = new Array<boolean>(n).fill(false)
+  for (let i = 0; i < n; i++)
+    for (let a = m.offA[i] as number; a < (m.offA[i + 1] as number); a++)
+      if ((m.aToB[a] as number) >= 0) {
+        out[i] = true
+        break
+      }
+  for (const tp of m.turnedPage) for (const ap of tp) if (ap > 0) out[ap - 1] = true
+  return out
+}

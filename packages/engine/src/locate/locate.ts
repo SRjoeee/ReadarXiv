@@ -29,7 +29,7 @@ import {
   unitId,
 } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
-import { HUNK, hunkName } from '../align/align.ts'
+import { HUNK, hunkName, setPagesOf } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
@@ -993,8 +993,10 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   }
 
   // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
-  // those B never printed among them; each a member as an instrument's unit is, its ink A's own (`same`), its span on B its
-  // glyphs' partners' (a paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
+  // those B never printed among them but arXiv's ink (on a page our compile sets, a glyph it never printed: no figure glyph,
+  // none born); each a member as an instrument's unit is, its ink A's own (`same`), its span on B its glyphs' partners' (a
+  // paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
+  const setA = setPagesOf(m)
   if (o.pages) {
     const owned = (a: number) => {
       const c = claimedA[a] as number
@@ -1021,6 +1023,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       m,
       pageA,
       owned,
+      setA,
       classesOf: o.classesOf,
       ownerOf,
       artefact: figureArtefact,
@@ -1106,7 +1109,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
 
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
-  for (const b of bornOf(inkA, m, claimedA, pageA)) {
+  for (const b of bornOf(inkA, m, claimedA, pageA, setA)) {
     const mem = empty(-1, b.kind, unitId(b.kind, b.content))
     mem.located = true
     // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as today's figure units)
