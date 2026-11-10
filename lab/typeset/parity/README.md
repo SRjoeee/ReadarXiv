@@ -229,7 +229,7 @@ spaces put back sets today's count on the page: `v2.mjs` lays each pair first wi
 a lab global, its pages not kept) and records each member's line count on each page of that lay (`spaced`); `verdict.mjs`
 markSpaceRuling. A count those spaces do not explain is judged as any.
 
-The owner's ruling of 2026-11-10 (option C, PDF-READER §18.21): text set wholly in a face of one pitch, read off the PDF's
+The owner's ruling of 2026-11-10 (option C, PDF-READER §18.22): text set wholly in a face of one pitch, read off the PDF's
 glyphs (code, a prompt, JSON, an OCR card), is kept as the original's; translating or keeping are both fine, a garbled
 translation never. Such a unit is the original's text, no translation missing: a `shown` difference whose v2 member the
 candidate's prepare kept so, and a `figures` count fewer than today's by no more than today's groups joined (figuresMatched,

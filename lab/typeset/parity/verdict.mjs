@@ -962,7 +962,7 @@ function headRuling(p, { v2, n, facts, orig }) {
 
 /** what a unit or a figure text v2's prepare keeps for its text set wholly in a face of one pitch rests on (`shown`, `figures`) */
 const PITCH_RULING =
-  "the owner's ruling of 2026-11-10 (option C, PDF-READER §18.21): text set wholly in a face of one pitch (code, a prompt, JSON, an OCR card) is kept as the original's; translating or keeping are both fine, a garbled translation never: no translation missing"
+  "the owner's ruling of 2026-11-10 (option C, PDF-READER §18.22): text set wholly in a face of one pitch (code, a prompt, JSON, an OCR card) is kept as the original's; translating or keeping are both fine, a garbled translation never: no translation missing"
 /** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
 const NAMES_RULING =
   "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"

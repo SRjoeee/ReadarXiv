@@ -44,7 +44,7 @@ export function candidateStated(paper) {
   return JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.replaced && u.stated)
 }
 /**
- * The members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1, PDF-READER §18.21):
+ * The members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22):
  * its dump's units marked `keptBy: 'pitch'` (lab/pdf/prepare-back/run.mjs, the engine's InstrumentUnit `pitch`), by the member
  * ords the run's located file joins their dump ords to (`dumpOrds`); none where lab-data holds no dump or located file of it.
  * The verdict reads no other unit v2 leaves the original's as kept by this rule (the owner's ruling of 2026-11-10)
