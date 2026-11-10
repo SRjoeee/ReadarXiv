@@ -1,12 +1,13 @@
 // A figure's paragraphs (F3, the owner's ruling of 2026-11-10, PDF-READER §18.28): its printed lines of prose (figure-lines.ts)
 // read as the paragraphs they print, each one figure text laid as a body paragraph is. Facts of the lines alone, every measure
 // the figure reading's in the text's size (ALIGN_TOL) or a share of it named here. A paragraph is lines of one figure, one under
-// the other with no blank line between, in one face family, size, weight and fill, at one pitch, on one left edge (its first
-// line may stand in, an indent, or out, a hanging indent), whose text goes on from line to line by a fact of the text: TeX's
-// hyphen at a line's end, or a justified block, the line reaching its right edge. A line that opens with an item's enumerator (a
-// list's, figure-lines.ts listed) begins an item of its own. Ragged lines are joined by no guess from their shape: stacked legend
-// entries read so (lanes/fig-text/img/ragged); the lines a closed shape holds alone are F3's next step (the coordinator's
-// decisions of 2026-11-10 and 2026-11-11).
+// the other with no blank line between, in one face family, size, weight and fill, set by TeX's interline rule (its one pitch, or
+// a push \lineskip clear: oneLead), on one left edge (its first line may stand in, an indent, or out, a hanging indent), whose
+// text goes on from line to line by a fact of the text: TeX's hyphen at a line's end, or a justified block (its full lines'
+// spaces stretched: unlike between them, or unlike its short last line's natural ones), the line reaching its right edge. A
+// line that opens with an item's enumerator (a list's, figure-lines.ts listed) begins an item of its own. Ragged lines are
+// joined by no guess from their shape: stacked legend entries read so (lanes/fig-text/img/ragged); the lines a closed shape
+// holds alone are F3's next step (the coordinator's decisions of 2026-11-10 and 2026-11-11).
 
 /** how near two edges or two pitches are one, of the text's size (figure-text.mjs ALIGN_TOL) */
 export const PARA_ALIGN_TOL = 0.08
