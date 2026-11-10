@@ -3787,9 +3787,10 @@ word: drawn as the page's text so that it flows and breaks, its font state is Te
   formulas' `\_`, three displays', an `\eprint`). Small capitals: 131 elements, 2608.06701v1's `\approach` 102, `\lang` 14,
   `\graph` 14 (two broken over lines, "GRAPHEC-TORY" read "Graphectory" now: TeX's hyphen, the lowercase after it), and
   2010.11929v2's heading `\oursfull` "Vision Transformer". The typesetter's half, every page of the 88 laid with each unit's
-  own source as its row (lane el-facts' census, before and after, character by character): 166 renderings move, each to its
+  own source as its row (lane el-facts' census, before and after, character by character): 177 renderings move, each to its
   own glyphs' style and no other: a paper's macro its italic 85 times (2608.06701v1 58, 2608.06007v1 13, 1512.03385v1 12,
-  2608.28692v1 2), 2608.06701v1's `\approach` upright once in an italic caption, and 81 references and citations their own
+  2608.28692v1 2), 2608.06701v1's `\approach` upright once in an italic caption, 2609.20976v1's `\mice` 11 times in a face's
+  own small capitals (cm-super's SFCC1000 on A, drawn in the run's lowercase before), and 81 references and citations their own
   style: amsmath's `\eqref`, upright in an italic statement, 73 times in 13 papers; a list's numbers regular in a bold run
   (2610.22214v1, 5); LaTeX's bold "??" of an undefined reference (2610.19282v1, 2); a citation upright (2610.20581v1). Where
   the row is the source's, a group around an element is the run's style and its glyphs' alike: 1810.04805v2's bold `\bert`
