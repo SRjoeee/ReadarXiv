@@ -112,8 +112,10 @@ export interface PaperContext {
   abstract?: string
   terms?: readonly string[]
   section?: string
-  glossary?: readonly { readonly term: string; readonly translation: string }[]
+  glossary?: Glossary
 }
+/** The reader's term table: each term and the translation the reader wants for it */
+export type Glossary = readonly { readonly term: string; readonly translation: string }[]
 
 /** What the caller does next, never an HTTP cause */
 export type Why =
@@ -187,6 +189,10 @@ export interface Translator {
   readonly digest: string
   /** whether its replies depend on the paper's context: then the context's digest enters the store key */
   readonly context: boolean
+  /** where `context` is true: the entries of the call's glossary its reply to this wire depends on (the terms the wire's text
+   *  uses, which its request is sent), in the table's order. A wire's store key and a host's row hold these alone, so an
+   *  entry the unit does not use moves neither (#637); absent, the reply depends on the whole table */
+  glossaryOf?(wire: string, glossary: Glossary): Glossary
   readonly limits: Limits
   /** whether it serves the target; bounded by the adapter, and by the chain besides */
   supports(target: Lang): Promise<boolean>

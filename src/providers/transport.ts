@@ -5,7 +5,7 @@
 // so page translation and the settings page's connection test share one path (issue #42):
 // - createLocalTransport (this file), in the background;
 // - createMessageTransport (src/shared/transport.ts): every method a message, in content scripts and extension pages.
-import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
+import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, rowContextOf, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf, serviceRuns, type Service } from '@/config/services'
@@ -231,8 +231,10 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
   }
 
+  // (the context as the unit's answers depend on it: its glossary the entries the unit's wires use, #637; without a glossary
+  // the context itself, the key as before)
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(context)) : '-'}`
+    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
    *  own answer is one (the connection test's) */
@@ -249,6 +251,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
       const out = new Map<string, UnitResult>()
       // the rows first: a unit with one is answered by it, nothing asked
       const keys = rows ? call.units.map(u => rowKey(u, lang, context)) : []
+      const keyById = new Map(keys.map((k, i) => [(call.units[i] as UnitIn).id, k]))
       const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
       const todo: UnitIn[] = []
       call.units.forEach((u, i) => {
@@ -256,7 +259,6 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         if (row) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
         else todo.push(u)
       })
-      const byId = new Map(todo.map(u => [u.id, u]))
       const cached = call.units.length - todo.length
       const passed = new Map<string, Map<string, Why['kind'][]>>()
       let sent = 0
@@ -282,7 +284,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
             out.set(r.id, { ...r, ...e })
             if (rows && isRow(r, order, passed)) {
               const { id: _, ...row } = r
-              writes.push([rowKey(byId.get(r.id) as UnitIn, lang, context), JSON.stringify(row)])
+              writes.push([keyById.get(r.id) as string, JSON.stringify(row)])
             }
           } else out.set(r.id, { ...r, error: errorOf(r.why, r.why.kind === 'unconfigured' && r.why.code === 'key-refused' ? lastStatus : undefined) })
         }

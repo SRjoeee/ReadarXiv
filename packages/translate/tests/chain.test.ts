@@ -7,6 +7,7 @@ import {
   Fault,
   type Note,
   type OutPiece,
+  type PaperContext,
   type Piece,
   type Result,
   type Translator,
@@ -694,6 +695,42 @@ describe('the contract: the store', () => {
       keyOf(c, 'ja', 'w', { title: 'A', glossary: [{ term: 'x', translation: 'z' }] }),
     )
     expect(keyOf(echo(), 'ja', 'w', { title: 'A', section: 'Intro' })).toBe(keyOf(echo(), 'ja', 'w'))
+  })
+  it('a translator that says which glossary entries a wire uses (`glossaryOf`) keys each wire by those alone (#637)', async () => {
+    const reads = (wire: string, g: NonNullable<PaperContext['glossary']>) => g.filter((e) => wire.includes(e.term))
+    const c: Translator = { ...fakeTranslator({ identity: 'ctx:0', context: true }), glossaryOf: reads }
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    const lattice = { term: 'lattice', translation: 'Gitter' }
+    // a wire that uses no entry keys as a context with no glossary; one entry more it does not use moves nothing
+    expect(keyOf(c, 'de', 'no term here', { title: 'A', glossary: [kernel] })).toBe(
+      keyOf(c, 'de', 'no term here', { title: 'A' }),
+    )
+    expect(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel, lattice] })).toBe(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }),
+    )
+    // an entry it uses: its translation changed moves the key
+    expect(
+      keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [{ term: 'kernel', translation: 'Kernel' }] }),
+    ).not.toBe(keyOf(c, 'de', 'the kernel', { title: 'A', glossary: [kernel] }))
+    // through the chain and its store: an entry added that the unit does not use sends nothing; its own term changed asks again
+    const store = memoryStore()
+    const sent = fakeTranslator({ identity: 'ctx:1', context: true })
+    const t1: Translator = { ...sent, glossaryOf: reads }
+    const u = unit('k', [t('A kernel and nothing else.')])
+    const v = unit('n', [t('A sentence without any term.')])
+    const ask = (glossary: NonNullable<PaperContext['glossary']>) =>
+      all(
+        chainOf({ store, clock: fakeClock() }).translate([u, v], 'de', {
+          translators: [t1],
+          context: { title: 'T', glossary },
+        }),
+      )
+    await ask([kernel])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([kernel, lattice])
+    expect(sent.calls.flat().length).toBe(2)
+    await ask([{ term: 'kernel', translation: 'Kernel' }, lattice])
+    expect(sent.calls.flat()).toEqual([sent.write(u, 'de'), sent.write(v, 'de'), sent.write(u, 'de')])
   })
 })
 

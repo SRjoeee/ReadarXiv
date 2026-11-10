@@ -10,7 +10,10 @@ import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { unitOfWire } from '@/core/protector/units'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type LocalTransportDeps, type TranslateResponse } from '@/providers/transport'
+import { llmTranslator } from '@/providers/llm'
+import { MockLanguageModelV4 } from 'ai/test'
 
+const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } }
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 /** a map behind both stores' ports */
@@ -130,6 +133,33 @@ describe('the rows: a page opened again (stage 4b deliverable 4)', () => {
     const r = await (await harness({}, { fetch: again.fetch, chain: chainOf() }, stores).make()).translate({ units: [unit('a')], target: 'cmn' })
     expect(ids(r)).toEqual(['a:microsoft'])
     expect(again.sent.microsoft).toBe(1)
+  })
+  it("a row is keyed by the glossary entries its unit's wire uses: an entry added that it does not use reads it again, its own term's change asks again (#637)", async () => {
+    let asked: string[] = []
+    const model = new MockLanguageModelV4({
+      doGenerate: async o => {
+        const segments = [...JSON.stringify(o.prompt).matchAll(/\\"id\\":\\"(\d+)\\"/g)].map(m => ({ id: m[1] as string, text: 'Satz.' }))
+        asked.push(...segments.map(x => x.id))
+        return { content: [{ type: 'text', text: JSON.stringify({ segments }) }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] }
+      },
+    })
+    const stores = { answers: memory(), rows: memory() }
+    // no store of answers: only the rows keep a unit from being asked again
+    const h = harness({ provider: SVC.id, services: [SVC] }, { chain: chainOf(), llm: s => llmTranslator(s, { codeOf: () => 'deu', model }) }, stores)
+    const units = [plain('k', 'The kernel of a map.'), plain('n', 'A sentence without any term.')]
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    const ask = async (glossary: { term: string; translation: string }[]) => {
+      asked = []
+      const r = await (await h.make()).translate({ units, target: 'deu', context: { paperTitle: 'T', glossary } })
+      return { r, asked: asked.length }
+    }
+    expect((await ask([kernel])).asked).toBe(2)
+    const added = await ask([kernel, { term: 'lattice', translation: 'Gitter' }])
+    expect(added.asked).toBe(0)
+    expect(added.r.ok && added.r.cached).toBe(2)
+    const changed = await ask([{ term: 'kernel', translation: 'Kernel' }, { term: 'lattice', translation: 'Gitter' }])
+    expect(changed.asked).toBe(1)
+    expect(changed.r.ok && changed.r.cached).toBe(1)
   })
   it('a row is the chain\'s: another chain of translators, another target, or another unit reads none', async () => {
     const stores = { answers: memory(), rows: memory() }

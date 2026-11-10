@@ -6,12 +6,12 @@
 // adapter's to say (a Fault's remedy): only it knows that a 401 is a key refused and a 404 a model the endpoint lacks.
 import { APICallError, generateText, type LanguageModel, Output } from 'ai'
 import { z } from 'zod'
-import { Fault, type Lang, type Limits, type PaperContext, sha256Hex, tagsWire, type Translator } from '@readarxiv/translate'
+import { Fault, type Glossary, type Lang, type Limits, type PaperContext, sha256Hex, tagsWire, type Translator } from '@readarxiv/translate'
 import { isLoopback, serviceRuns, type Service } from '@/config/services'
 import { decodeText } from '@/core/protector/escape'
 import { TAG_RE } from '@/core/protector/tokens'
 import { redact } from '@/shared/diagnostics'
-import { createGlossaryMatcher } from './glossary'
+import { createGlossaryMatcher, type GlossaryMatcher } from './glossary'
 import { createModel } from './model'
 import { buildPrompts, PROMPT_VERSION } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
@@ -77,10 +77,13 @@ export interface LlmOptions {
 /** a wire's words, for the glossary: the tags taken out, the escapes read */
 const proseOf = (wire: string): string => decodeText(wire.replace(new RegExp(TAG_RE.source, 'g'), ' '))
 
-/** The context the prompt reads: the paper's, its section, and the glossary's terms the request's texts use */
-function contextOf(context: PaperContext | undefined, wires: readonly string[]): TranslateContext | undefined {
+/** The context the prompt reads: the paper's, its section, and the glossary's terms the request's texts use: the entries each
+ *  wire uses (`uses`, what its store key holds), their union in the table's order; never a term made of two wires' ends */
+function contextOf(context: PaperContext | undefined, wires: readonly string[], uses: (wire: string, glossary: Glossary) => Glossary): TranslateContext | undefined {
   if (!context) return undefined
-  const glossary = context.glossary?.length ? createGlossaryMatcher(context.glossary).match(wires.map(proseOf).join('\n')) : []
+  const table = context.glossary ?? []
+  const used = new Set(table.length ? wires.flatMap(w => uses(w, table)) : [])
+  const glossary = table.filter(g => used.has(g)).map(g => ({ term: g.term, translation: g.translation }))
   const out: TranslateContext = {
     ...(context.title ? { paperTitle: context.title } : {}),
     ...(context.abstract ? { abstract: context.abstract } : {}),
@@ -129,10 +132,22 @@ export function llmTranslator(service: Service, o: LlmOptions): Translator {
   const adapted = JSON.stringify(thinkingBodyFields(service.baseURL, 'enabled')) !== JSON.stringify(thinkingBodyFields(service.baseURL, 'disabled'))
   const identity = `llm:${sha256Hex(JSON.stringify([endpointIdentity(service.baseURL), service.model, PROMPT_VERSION, promptKey(o.prompts), adapted ? service.thinking : null])).slice(0, 16)}`
   const limits: Limits = { ...LLM_LIMITS, ...(isLoopback(service.baseURL) ? { inFlight: LOOPBACK_IN_FLIGHT } : {}) }
+  // a table's matcher compiled once for every wire of a call (one table object a call)
+  const matchers = new WeakMap<Glossary, GlossaryMatcher>()
+  const glossaryOf = (wire: string, glossary: Glossary): Glossary => {
+    let m = matchers.get(glossary)
+    if (!m) {
+      m = createGlossaryMatcher(glossary)
+      matchers.set(glossary, m)
+    }
+    // (the matcher gives the table's own entries back, in its order)
+    return m.match(proseOf(wire)) as Glossary
+  }
   return {
     identity,
     digest: tagsWire.digest,
     context: true,
+    glossaryOf,
     limits,
     // any language the model writes; a service without its key is off at its first request, before anything is sent
     supports: async () => true,
@@ -142,7 +157,7 @@ export function llmTranslator(service: Service, o: LlmOptions): Translator {
       if (!serviceRuns(service)) throw new Fault('off', 'no-key', 'llm: no API key configured')
       const model = o.model ?? createModel(service, o.fetch)
       const extraBody = thinkingBodyFields(service.baseURL, service.thinking ?? 'disabled')
-      const context = contextOf(call.context, wires)
+      const context = contextOf(call.context, wires, glossaryOf)
       const { system, prompt } = buildPrompts(
         {
           segments: wires.map((text, i) => ({ id: String(i), text })),

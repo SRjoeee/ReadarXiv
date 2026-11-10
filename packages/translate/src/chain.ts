@@ -8,6 +8,7 @@ import {
   type Chain,
   type Clock,
   Fault,
+  type Glossary,
   type Lang,
   type Note,
   type OutPiece,
@@ -120,9 +121,57 @@ const contextDigest = (context: PaperContext | undefined): string => {
     parts.push(context.section ?? null, context.glossary?.map((g) => [g.term, g.translation]) ?? null)
   return sha256Hex(JSON.stringify(parts))
 }
-/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->` */
+/** the context with its glossary these entries, or none where there are none (a unit that uses no entry keys as a call with
+ *  no glossary does) */
+const withGlossary = (context: PaperContext, glossary: Glossary): PaperContext => {
+  if (glossary.length) return { ...context, glossary }
+  const { glossary: _whole, ...rest } = context
+  return rest
+}
+/** the call's context as a reply of `t` to `wire` depends on it (#637): its glossary narrowed to the entries the translator
+ *  says the wire uses (`glossaryOf`); whole where it says nothing, or its answer throws */
+const contextOfWire = (t: Translator, wire: string, context: PaperContext | undefined): PaperContext | undefined => {
+  if (!context?.glossary || !t.glossaryOf) return context
+  try {
+    return withGlossary(context, t.glossaryOf(wire, context.glossary))
+  } catch {
+    return context
+  }
+}
+/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
+ *  as a reply to the wire depends on it */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
-  `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(context) : '-'}`
+  `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(contextOfWire(t, wire, context)) : '-'}`
+
+/** The context a host's row of `unit` is keyed by (#637): the call's, its glossary narrowed to the entries some translator
+ *  that reads the context uses for the unit as the chain sends it (names.ts, tailOf), in the table's order. A stretch of the
+ *  runs floor is a part of that text, so it uses no entry the unit does not. The call's context itself where it holds no
+ *  glossary (a row's key as before) or a translator says nothing of the entries it uses */
+export function rowContextOf(
+  translators: readonly Translator[],
+  unit: UnitIn,
+  target: Lang,
+  context: PaperContext | undefined,
+): PaperContext | undefined {
+  if (!context?.glossary?.length) return context
+  const named = namedOf(unit)?.unit ?? unit
+  const sent = tailOf(named)?.unit ?? named
+  const used = new Set<string>()
+  const entry = (g: Glossary[number]) => JSON.stringify([g.term, g.translation])
+  for (const t of translators) {
+    if (!t.context) continue
+    if (!t.glossaryOf) return context
+    try {
+      for (const g of t.glossaryOf(t.write(sent, target), context.glossary)) used.add(entry(g))
+    } catch {
+      return context
+    }
+  }
+  return withGlossary(
+    context,
+    context.glossary.filter((g) => used.has(entry(g))),
+  )
+}
 
 /** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
  *  the acceptance rule's digest, and the chain's own rules): it moves only when an outcome could */

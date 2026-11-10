@@ -3,7 +3,7 @@
 // as its remedy; the key goes to the service alone (#88 E3, E4)
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
-import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Translator, type UnitIn } from '@readarxiv/translate'
+import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Store, type Translator, type UnitIn } from '@readarxiv/translate'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { endpointIdentity, LLM_LIMITS, llmTranslator, withoutKey } from '@/providers/llm'
@@ -77,6 +77,39 @@ describe('the LLM translator', () => {
     expect(sent).not.toContain('tree -> Baum')
     expect(sent).toContain('Input and Output Protocol')
     expect(sent).toContain('<x id')
+  })
+  it("a stored answer is keyed by the glossary entries its own wire uses: an entry it does not use leaves it in reach, its own term's change asks again (#637)", async () => {
+    let calls = 0
+    const model = modelReturning(() => { calls++; return { segments: [{ id: '0', text: 'Ein Satz.' }] } })
+    const entries = new Map<string, string>()
+    const store: Store = { read: async ks => ks.map(k => entries.get(k) ?? null), write: async es => { for (const [k, v] of es) entries.set(k, v) } }
+    const chain = chainOf({ store })
+    const llm = llmTranslator(SVC, { codeOf, model })
+    const drain = async (it: AsyncIterable<Result>) => { for await (const _ of it); }
+    const ask = (u: UnitIn, glossary: { term: string; translation: string }[]) => drain(chain.translate([u], 'de', { translators: [llm], context: { title: 'T', glossary } }))
+    const none: UnitIn = { id: 'u', content: [{ t: 'text', s: 'A sentence without any term.' }] }
+    const kernel = { term: 'kernel', translation: 'Kern' }
+    await ask(none, [kernel])
+    await ask(none, [kernel, { term: 'lattice', translation: 'Gitter' }])
+    expect(calls).toBe(1)
+    // the key of a unit that uses no entry is the key with no glossary at all
+    await drain(chain.translate([none], 'de', { translators: [llm], context: { title: 'T' } }))
+    expect(calls).toBe(1)
+    const uses: UnitIn = { id: 'k', content: [{ t: 'text', s: 'The kernel of a map.' }] }
+    await ask(uses, [kernel])
+    await ask(uses, [kernel, { term: 'lattice', translation: 'Gitter' }])
+    expect(calls).toBe(2)
+    await ask(uses, [{ term: 'kernel', translation: 'Kernel' }])
+    expect(calls).toBe(3)
+  })
+  it("a request's prompt holds the union of the entries each of its wires uses, in the table's order: no entry made of two wires' ends", async () => {
+    let sent = ''
+    const model = modelReturning(() => ({ segments: [{ id: '0', text: 'a' }, { id: '1', text: 'b' }] }), o => { sent = JSON.stringify(o) })
+    const t = llmTranslator(SVC, { codeOf, model })
+    const glossary = [{ term: 'tree', translation: 'Baum' }, { term: 'neural network', translation: 'NN' }, { term: 'graph', translation: 'Graph-de' }]
+    await all(t.send(['A graph and a neural', 'network of a tree.'], { target: 'de', context: { glossary } }, new AbortController().signal))
+    expect(sent).toContain('tree -> Baum\\ngraph -> Graph-de')
+    expect(sent).not.toContain('neural network -> NN')
   })
   it('through the chain: a reply that loses an element is asked alone once more, then the next translator answers', async () => {
     let calls = 0
