@@ -3825,6 +3825,12 @@ inside "-(Φ-μ_c)TΛ(Φ-μ_c)", and full-width brackets and commas put into for
 among its stored rows. And a formula's script set apart from its base ("low" under r, "train" under D, "true" over θ) was a
 figure text of its own, translated as a word.
 
+- **What a figure keeps, and by what.** A figure's text is kept as the original's by how the paper set it (a face of one pitch,
+  §18.22; a formula's faces and characters, here; a decoration, §18.26) or by the figure's structure (a list's enumerators,
+  §18.28), never by what a word looks like: a name, a term or a label is sent as any figure text is, and how a word comes back
+  is the translator's (the owner's ruling of 2026-11-11: "never garbled" is of format, not of words; lab-data
+  llm-probe/notes.md, last section). Where F1 reads letters, it is to tell text from a formula: a line with no word of two
+  letters outside its formulas is a formula's; a mark between two words is the words'.
 - **F1** (`figure-lines.ts`). A glyph is a formula's by (1) its character, a mathematical one outside ASCII (a math symbol, a
   Greek letter, a mathematical alphanumeric, a letter of the letterlike block): a minus or plus-minus right before a digit is a
   number's sign, and a mark in no math face set between two words, no space either side, is the words' (2610.11256v1's plot sets
@@ -3837,6 +3843,14 @@ figure text of its own, translated as a word.
   size, within the run gap and beside a formula's glyph, is its script, read on its line. A line no word of which stands outside
   its formulas is kept whole (`figure: formula`), as today's runs of a math face are; else each formula is an element `math`,
   the original's ink, never sent, moved with the translation, and the words around it are one text.
+- **A formula is read whole before it moves.** An included page sets a display's main glyphs in math faces no run holds, and its
+  runs may be its scripts alone ("final", "base", "low"): a line now stands at the size and baseline most of its glyphs stand
+  at, the glyphs no run holds too, not its runs' alone (2609.19644v1 p59's equation (1) had been read as two lines at its
+  scripts' size, "scale" translated alone and the rest left in place). Scripts join their line inside the line reading, which
+  reads the lines and the glyphs no run holds again after each join (p60's "Σ_{i=1}^k", whose lower limit spans the gap between
+  the line's halves, had been read by neither half and left where it was as both moved). And where a formula element has ink no
+  line took over or under it (a fraction's other line, a limit past half the size), the element would move and that ink stay:
+  the text stays the original's, the relation reading's fallback.
 - **The wrap's proof reads a show as it draws.** An element cuts a show of the figure's form where its text and its element meet,
   and the split writes each chunk's codes and adjustments. The proof read the show otherwise in two ways, neither of which draws
   anything: a show opening with an empty string, whose codes (none) the split does not write (2610.20967v1 p2), and an adjustment
@@ -3844,26 +3858,36 @@ figure text of its own, translated as a word.
   2610.42112v1 p29). It refused the page's wrap with its figures, and every figure text of the page stayed the original's (49,
   45 and 114 texts; F0's voided run f0e on 2610.20967v1 p2 was this too). It now reads an empty string as nothing and a number at
   the split's precision (`wrap.mjs` elementsOf).
-- **Over the 91** (stage 1a f1b at 3b8f4575f against f1base at 67271cd39, F0 with round 8 B4; I6 the same). 138 lines are kept
-  whole for their formulas, on 13 papers, and 639 figure texts hold 781 formula elements, on 38 papers (the design's census:
-  about 150 lines and 39 papers). Of the base's 10,377 figure texts drawn translated, 9,205 are the same, 574 are joined into a
-  line across its formulas and translated, 168 are inside a line kept whole, 87 are wholly a formula element and 273 partly
-  (brackets, units and punctuation glued to a formula: "(0.1195s", "),"), 29 are scripts read on their base's line, and 41 are in
-  a line now crowded whole (below). Every text F1 stops translating was listed with the faces arXiv's PDF sets it in and read: the
+- **Over the 91** (stage 1a f1c at 51a36c654 against f1base at 67271cd39, F0 with round 8 B4; I6 the same). 135 lines are kept
+  whole for their formulas, on 13 papers, and 617 figure texts hold 774 formula elements, on 38 papers (the design's census:
+  about 150 lines and 39 papers). Of the base's 10,377 figure texts drawn translated, 9,189 are the same, 575 are joined into a
+  line across its formulas and translated, 165 are inside a line kept whole, 89 are wholly a formula element and 276 partly
+  (brackets, units and punctuation glued to a formula: "(0.1195s", "),"), 32 are scripts read on their base's line, and 51 are in
+  a line left the original's: 47 of 2609.19644v1 (below) and four formulas with ink off their line (a fraction "w_bh =
+  (1−ρ)/ρ · 1/h", 2610.35877v1 p3). Every text F1 stops translating was listed with the faces arXiv's PDF sets it in and read: the
   lone words are scripts (r_low, α_content, θ_true, x_opt, D_train, σ_ON, ξ_gw^Theory, 2609.20976v1's legend), operators ("Pr",
   "log10", "arg min") and units ("[kpc]", "Mpc]"); the one class of prose found, 2610.11256v1's six labels, is the mark between
   two words above.
 - **Stage 1a and the parity.** The dump marks a line kept whole (`keptBy: 'formula'`) and each formula element; today's unit
   inside one is stated (m), "kept as the original: inside a formula of a figure": the candidate's own kept line (49 over the 88)
   or, the holder named, today's unit now wholly a formula element or held by a kept line (30). The parity's joined join reads
-  (m) as it reads (k) on elements and (n).
+  (m) as it reads (k) on elements and (n). Over the 8 pairs F1 moves (default toggles; base f1base, head f1c, both laid by this
+  code), every page newly worse is the `figures` count alone: 41 figure texts on 12 pages no longer drawn translated, each a
+  line kept for its formulas or a text holding a formula element now, a unit today's stored rows do not serve; no other measure
+  is worse, and 41 of today's undrawn texts' highlight differences are gone. Every toggle on, the same: the 12 pages, 41 texts.
+- **Gates.** The speed check passes (every time within its spread, every work counter equal: it measures today's engine, which
+  F1 does not touch); the reader gate's page times are within the two runs' spread (p50 28.83 and 29.19 ms against 29.04 and
+  28.33, p99 149.73 and 149.81 against 154.46 and 144.49, 3,215 pages); the prepare's locate time is within the runs' spread
+  (91.3 s against 88.0 in the quieter twin run).
 - **Not this rule's.** An operator name set in the body's own face stays a word of the text (a CM paper's `\log`, 2610.20285v1
   p12's "log ⟦a_v0⟧"): its face is the source units' and no formula's own. A formula set in a text face with no mathematical
   character ("x = 3" in Helvetica) is text. Greek prose would read as formulas (no paper of the corpus is Greek). A line F1 joins
-  across its formulas is crowded whole where another line's ink meets its band: 40 lines of 2609.19644v1's included draft, which
-  today translated as sentence fragments between formulas, one run at a time, are English now, never fragments; their own
-  paragraph's lines and frames are F3's (§18.28). One script stands a word space from its base (2610.20507v1 p3's "GA" after τ):
-  it is text of its line, translated with it, and stage 1a states it absent.
+  across its formulas is crowded whole where another line's ink meets its band: 2609.19644v1's included pages, which today
+  translated as sentence fragments between formulas, one run at a time, keep 47 such lines English now, never fragments; their
+  own paragraph's lines and frames are F3's (§18.28). A word of a body's face set inside a display stays text, translated as
+  before (2609.19644v1 p61's `\text{Huber}` and, where CMR10 is the main paper's own face, its `\min`). One script stands a word
+  space from its base (2610.20507v1 p3's "GA" after τ): it is text of its line, translated with it, and stage 1a states it
+  absent.
 
 ## 19. The engine's contract
 
