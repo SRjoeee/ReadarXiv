@@ -344,8 +344,26 @@ function signed(gs: readonly number[], i: number, glyphs: readonly G[]): boolean
   return /^[−±∓]$/u.test(g.u) && !!h && /\p{N}/u.test(h.u) && h.x0 - g.x1 < SPACE_GAP * g.size
 }
 
+/** a mark of fact (1) alone, in no math face, set between two words inside its cluster (no word space either side): the words'
+ *  (a plot's hyphen set with the minus sign, "Near−monopoly", 2610.11256v1 p17; an arrow joining two words), no formula's. A word
+ *  here is two letters or more, none a formula's glyph: between a formula's letters ("x−y") the mark stays the formula's */
+function joining(gs: readonly number[], is: readonly number[], at: number, glyphs: readonly G[]): boolean {
+  if (classifyFont(glyphs[gs[is[at]!]!]!.font).fam === 'math') return false
+  const word = (step: 1 | -1) => {
+    let n = 0
+    for (let k = at + step; k >= 0 && k < is.length; k += step) {
+      const x = glyphs[gs[is[k]!]!]!
+      if (!LETTER.test(x.u) || mathGlyph(x)) break
+      n++
+    }
+    return n >= 2
+  }
+  return word(-1) && word(1)
+}
+
 /** a line's clusters: its glyphs (places in `gs`, its order) no word space apart (SPACE_GAP); each whether it holds a formula's
- *  glyph by facts (1) and (2), a number's sign none; whether every glyph of it is of one pitch; and the faces of its letters */
+ *  glyph by facts (1) and (2), a number's sign and a mark joining two words none; whether every glyph of it is of one pitch;
+ *  and the faces of its letters */
 interface Cluster {
   is: number[]
   x0: number
@@ -378,7 +396,9 @@ function clustersOf(gs: readonly number[], glyphs: readonly G[], pitch: (g: G) =
       })
   })
   for (const c of out) {
-    c.math = c.is.some((i) => mathGlyph(glyphs[gs[i]!]!) && !signed(gs, i, glyphs))
+    c.math = c.is.some(
+      (i, at) => mathGlyph(glyphs[gs[i]!]!) && !signed(gs, i, glyphs) && !joining(gs, c.is, at, glyphs),
+    )
     c.fixed = c.is.every((i) => pitch(glyphs[gs[i]!]!))
     for (const i of c.is) {
       const g = glyphs[gs[i]!]!
