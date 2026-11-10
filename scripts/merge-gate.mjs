@@ -507,6 +507,10 @@ const MOVES = new Set(['pushd', 'popd', 'source', '.', 'eval'])
 const RUNS_BUILTINS = new Set(['command', 'builtin', 'noglob', 'nocorrect', '-'])
 const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh'])
 const ASSIGNMENT = /^[A-Za-z_]\w*=/
+/** A word that is one variable, whole: `$n`, `${n}` */
+const VARIABLE = /^\$(?:(\w+)|\{(\w+)\})$/
+/** A command string that is nothing but what the shell expands: variables, substitutions */
+const HIDDEN = /^\s*(?:(?:\$\w+|\$\{[^}]*\}|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`)\s*)+$/
 /** An assignment that changes which repository `gh` works on: its own variables (`GH_REPO`, `GH_HOST`), and git's
  *  (`GIT_DIR`), whose remotes it reads */
 const REPOINTS = /^(?:GH|GIT)_\w*=/
@@ -569,6 +573,8 @@ const INERT = new Set([
   ...['gh', 'git', 'echo', 'sleep', 'true', 'false', ':', 'test', '[', '[[', 'break', 'continue', 'cd', 'exit', 'pwd'],
   ...['tail', 'head', 'cat', 'grep', 'rg', 'sed', 'awk', 'jq', 'tr', 'cut', 'sort', 'uniq', 'wc', 'tee', 'date', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'touch', 'basename', 'dirname'],
   ...['pnpm', 'npm', 'npx', 'node', 'curl', 'perl', 'python3', 'ps', 'df', 'du', 'base64', 'open', 'sysctl', 'find', 'xargs'],
+  // (a shell run as a program is a process of its own: what it assigns, it assigns to itself)
+  ...['bash', 'sh', 'zsh', 'dash', 'ksh'],
 ])
 /** A word that sets a variable, wherever it stands: `n=5`, `n+=5`, `n[1]=5` */
 const SETS = /^([A-Za-z_]\w*)(?:\[[^\]]*\])?\+?=/
@@ -745,6 +751,15 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
     // what a substitution runs is a command that ran, and it runs before the command it stands in: the branch, and
     // any file, may be another by the time that command reads them
     if (scripts.length > 0) context.branchKnown = false
+    // the values of a variable where the line leaves no doubt about them: inside the body of its own loop, that
+    // loop's, unless the body sets the name; anywhere else, what the line's one setting gave it; null otherwise, and
+    // when a value reads as a flag (it is then no pull request and no repository)
+    const valuesOf = name => {
+      if (line.opaque) return null
+      const own = loops.findLast(loop => loop.name === name)
+      const values = own !== undefined ? (own.sets.has(name) ? null : own.values) : line.settings.get(name) === 1 && Object.hasOwn(context.vars, name) ? context.vars[name] : null
+      return values ?? null
+    }
     let start = 0
     while (start < words.length && (RESERVED.has(words[start]) || ASSIGNMENT.test(words[start]))) start++
     for (let i = start; i < words.length; i++) {
@@ -772,14 +787,8 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       // decides it, every value the line gave that variable; null when the line does not say
       const said = (word, at) => {
         if (at < 0 || !dynamic[at]) return [word]
-        const variable = viaApi ? null : /^\$(?:(\w+)|\{(\w+)\})$/.exec(words[at])
-        const name = variable?.[1] ?? variable?.[2]
-        if (name === undefined || line.opaque) return null
-        // inside the body of its own loop: that loop's values, unless the body sets the name; anywhere else: the
-        // value the line's one setting gave it
-        const own = loops.findLast(loop => loop.name === name)
-        const values = own !== undefined ? (own.sets.has(name) ? null : own.values) : line.settings.get(name) === 1 && Object.hasOwn(context.vars, name) ? context.vars[name] : null
-        // (a value that reads as a flag is no pull request and no repository)
+        const variable = viaApi ? null : VARIABLE.exec(words[at])
+        const values = variable ? valuesOf(variable[1] ?? variable[2]) : null
         return values?.some(value => value.startsWith('-')) ? null : values
       }
       const refs = said(call.ref, call.refAt)
@@ -822,8 +831,19 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
       // that feed it are what the line shows of that (`echo '…' | bash`, `cat <<EOF | sh`)
       const piped = []
       for (let k = index; handed.reads && k > 0 && /^\|&?$/.test(commands[k].before); k--) piped.push(...commands[k - 1].words.slice(1), ...commands[k - 1].bodies)
+      // a string a shell is handed that is one expansion whole (`bash -c "$CMD"`, `eval "$(…)"`) is read at the
+      // variable's values where the line leaves no doubt about them, and is otherwise a command the line does not
+      // show: it may be a merge
+      const shown = []
+      for (const script of handed.scripts) {
+        const variable = VARIABLE.exec(script.trim())
+        const values = variable ? valuesOf(variable[1] ?? variable[2]) : null
+        if (values !== null) shown.push(...values)
+        else if (HIDDEN.test(script)) merges.push({ ref: null, repo: null, dirs: context.dirs, unreadable: true, plain: false, hidden: true })
+        else shown.push(script)
+      }
       for (const script of scripts) for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
-      for (const script of [...handed.scripts, ...piped]) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
+      for (const script of [...shown, ...piped]) for (const merge of mergesIn(script, there, depth + 1)) merges.push({ ...merge, plain: false })
     }
     learn(context, command)
     move(context, command, start)
@@ -831,7 +851,7 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
   return merges
 }
 
-const named = merge => (merge.graphql ? 'a GraphQL mutation' : merge.composed ? 'a PUT to an endpoint the line does not spell out' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
+const named = merge => (merge.hidden ? 'a command a shell is handed that the line does not show' : merge.graphql ? 'a GraphQL mutation' : merge.composed ? 'a PUT to an endpoint the line does not spell out' : merge.ref === null ? "the current branch's pull request" : `pull request ${merge.ref}`)
 
 /** The gate's answer for a command line: `{ decision: 'ask' | 'allow', reason }`, or null for no answer.
  *  `lookup(merge)` returns `{ repo: 'owner/name', base, number }` for the pull request a merge names, or null when it
@@ -846,6 +866,7 @@ export function decide(text, { lookup, read, here }) {
       if (bodies.some(body => body === null)) return { decision: 'ask', reason: `Merge gate: this GraphQL request takes its body from a file the gate cannot open (${merge.files.join(', ')}).` }
       if (!bodies.some(body => GRAPHQL_MERGE.test(body))) continue
     }
+    if (merge.hidden) return { decision: 'ask', reason: 'Merge gate: a shell is handed a command the line does not show; it may merge a pull request.' }
     if (merge.unreadable || merge.files !== undefined) return { decision: 'ask', reason: `Merge gate: this command merges a pull request the gate cannot read from its text (${named(merge)}).` }
     const found = lookup(merge)
     if (found === null) return { decision: 'ask', reason: `Merge gate: the base branch of ${named(merge)} could not be looked up.` }

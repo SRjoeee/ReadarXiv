@@ -139,6 +139,19 @@ describe('mergesIn', () => {
       expect(merges(text).map(m => m.ref), text).toEqual(['411'])
     }
     expect(merge('bash -c "gh pr mer\\\nge 411 \\\n  --merge"')).toMatchObject({ ref: '411', unreadable: false })
+    // a command kept in a variable and handed to a shell (#635, Codex): read at the variable's value where the line
+    // leaves no doubt about it, and otherwise a command the line does not show
+    expect(merges(`CMD='gh pr merge 411 --merge'; bash -c "$CMD"`).map(m => [m.ref, m.unreadable])).toEqual([['411', false]])
+    // (`eval` runs in this shell and may set anything, the variable it is handed included: nothing is read through it)
+    expect(merges(`CMD='gh pr merge 603 --merge'; eval "$CMD"`)).toMatchObject([{ unreadable: true }])
+    expect(merges(`CMD='gh pr merge 411'; bash <<< "\${CMD}"`).map(m => m.ref)).toEqual(['411'])
+    expect(merges(`CMD='pnpm test'; bash -c "$CMD"`)).toEqual([])
+    for (const text of ['bash -c "$CMD"', 'eval "$(some-tool env)"', 'sh -c "$(cat script)"', 'CMD=x; CMD=y; zsh -c $CMD', 'bash <<< "$CMD"', 'eval $A $B']) {
+      expect(merges(text), text).toMatchObject([{ unreadable: true, plain: false }])
+    }
+    // (a string with a word the shell decides in it is still a string the line shows)
+    expect(merges('bash -c "cd $DIR && pnpm test"')).toEqual([])
+    expect(merges(`bash -lc 'echo hi'`)).toEqual([])
     // the other ways a line hands a shell its commands on the standard input: a here-string (#635, Codex), a pipe
     for (const text of [
       `bash <<< 'gh pr merge 411 --merge'`,
@@ -550,6 +563,7 @@ describe('decide', () => {
       'gh api graphql --input merge.json',
       'gh api graphql --input missing.json',
       'ENDPOINT=repos/SRjoeee/ReadarXiv/pulls/411/merge; gh api -X PUT "$ENDPOINT"',
+      'bash -c "$CMD"',
       'env gh pr merge 603 --merge',
       'env GH_REPO=SRjoeee/ReadarXiv gh pr merge 411 --merge',
     ]) {
@@ -651,6 +665,8 @@ describe('against the shell itself', () => {
     '(true; cd a; true); gh pr merge 5',
     '(cd a && gh pr merge 6); gh pr merge 7',
     'cd a && (cd b; gh pr merge 8) && gh pr merge 9',
+    'CMD="gh pr merge 5 -R o/r"; bash -c "$CMD"',
+    'CMD="gh pr merge 6 -R o/r"; eval "$CMD"',
     'x=a; case $x in a) cd a;; b) cd b;; esac; gh pr merge 5',
     'if true; then\n  cd a\nfi\ngh pr merge 6',
     'for i in 1 2; do case $i in 1) continue;; esac; break; done; (cd a; true); gh pr merge 7',
