@@ -2123,6 +2123,37 @@ describe('an element drawn as the page’s text in the font state TeX set its gl
       ['LAN', 0.7],
     ])
   })
+  it('waits for an element’s own face as for a run’s: the page’s faces hold it, never a face the run alone needs', () => {
+    // (an element drawn in its own face is a face the page needs: the lay asks it of the metrics (B.cover over every token) and
+    // the page waits for it (Page.wait.faces), as for any run's, so the reader loads its slices before it measures and paints.
+    // Drawn in the run's face before, an element's own face was never asked)
+    const m = member({
+      els: [
+        ['1', el('Periodic Advisor', 100, { role: 'serif', size: 10, slant: 1, design: 'NimbusRomNo9L-ReguItal' })],
+      ],
+    })
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content: [
+        { t: 'text', s: 'Wir ' },
+        { t: 'el', id: '1' },
+        { t: 'text', s: ' hier' },
+      ],
+    }
+    const page = layPage(
+      part(m),
+      rowsOf([r], true),
+      rules,
+      metrics((face) => !/^italic /.test(face)),
+    )
+    // (each face with the characters it sets, once each: the element's own)
+    expect(page.wait.faces.map(([face, text]) => [/^italic /.test(face), text])).toEqual([
+      [true, [...new Set('Periodic Advisor')].join('')],
+    ])
+    expect(page.members.map((x) => x.state)).toEqual(['waiting'])
+  })
   it('draws it so in a small-capitals heading, at its own share; an acronym of full capitals at the run’s size', () => {
     const heading = (e: El) =>
       member({
