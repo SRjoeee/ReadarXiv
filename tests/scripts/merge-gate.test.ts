@@ -3,6 +3,10 @@
 // the ones it must ask about; and it sees every command, so the lines that only mention a merge are pinned too. The
 // review of #635 walked past the first version with a flag before the subcommand, a `cd`, a substitution inside
 // quotes and a request body in a file: each is a case here, so the next rewrite cannot lose one.
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { decide, mergesIn, repositoryOf, simpleCommands } from '../../scripts/merge-gate.mjs'
@@ -152,6 +156,7 @@ describe('mergesIn', () => {
       { ref: '411', repo: 'SRjoeee/ReadarXiv', dirs: [], unreadable: false, plain: false },
     ])
     expect(merge('R=SRjoeee/readarxiv-web; gh pr merge 77 --repo $R --merge')).toMatchObject({ ref: '77', repo: 'SRjoeee/readarxiv-web', unreadable: false })
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
     expect(merges('cd /w && for n in 603 411; do gh pr merge "${n}" --merge && echo m$n; sleep 6; done').map(m => [m.ref, m.dirs, m.unreadable])).toEqual([['603', ['/w'], false], ['411', ['/w'], false]])
     for (const text of [
       'for n in $(seq 1 3); do gh pr merge $n; done',
@@ -160,6 +165,7 @@ describe('mergesIn', () => {
       'n=603; read n; gh pr merge $n',
       'test -f pick && n=411; gh pr merge $n',
       'for n in 603 411; do gh pr merge "#$n"; done',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
       'for n in 603 411; do gh pr merge ${n:-5}; done',
       // a name every object answers to is still a variable nobody set
       'for n in 603; do gh pr merge $constructor; done',
@@ -167,6 +173,53 @@ describe('mergesIn', () => {
     ]) {
       expect(merges(text).at(-1)?.unreadable, text).toBe(true)
     }
+  })
+
+  it('takes a variable at its value only when the line sets it once and in sight (#635, Codex: a value set again in a branch)', () => {
+    for (const text of [
+      'N=603; if true; then N=411; fi; gh pr merge "$N" --merge',
+      'n=603; while sleep 1; do gh pr merge $n; n=411; done',
+      'n=603; n+=1; gh pr merge $n',
+      'n=603; export n=411; gh pr merge $n',
+      'n=603; f() { n=411; }; f; gh pr merge $n',
+      'n=603; read n < number; gh pr merge $n',
+      'n=603; unset n; gh pr merge $n',
+      'n=603; eval "$X"; gh pr merge $n',
+      'n=603; source ./pick.sh; gh pr merge $n',
+      'n=603; : $((n=411)); gh pr merge $n',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
+      'n=603; : ${n:=411}; gh pr merge $n',
+      'n=603; printf -v n 411; gh pr merge $n',
+      'for n in 603; do n=411; gh pr merge $n; done',
+      'for n in 603; do gh pr merge $n; n=411; done',
+      'for n in 603; do read n; gh pr merge $n; done',
+      'for n in 603; do for n in 411; do :; done; gh pr merge $n; done',
+      // a script of its own does not take the line's variables
+      'for n in 603 411; do echo "$(gh pr merge $n)"; done',
+    ]) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    expect(answer('N=603; if true; then N=411; fi; gh pr merge "$N" --merge')?.decision).toBe('ask')
+    // inside the body of its own loop a variable is one of that loop's values, whatever else the line does with the name:
+    // the check-then-merge pair of loops these sessions write, a loop inside a loop, a name used before
+    const refs = (text: string) => merges(text).map(m => [m.ref, m.unreadable])
+    expect(refs('for n in 603 411; do gh pr view $n; done; for n in 603 411; do gh pr merge $n --merge; done')).toEqual([['603', false], ['411', false]])
+    expect(refs('for n in 603; do for n in 411; do gh pr merge $n; done; done')).toEqual([['411', false]])
+    expect(refs('n=603; for n in 411; do gh pr merge $n; done')).toEqual([['411', false]])
+    expect(refs('for n in 603 411; do :; done; gh pr merge $n')).toEqual([['603', false], ['411', false]])
+    expect(refs('n=603; while sleep 9; do gh pr merge $n && break; done')).toEqual([['603', false]])
+  })
+
+  it('calls unreadable a merge in a loop whose branch or directory the loop itself may change', () => {
+    for (const text of [
+      'while sleep 1; do gh pr merge --merge; git checkout other; done',
+      'for b in a b; do git checkout $b; gh pr merge --merge; done',
+      'while sleep 1; do gh pr merge 603; cd ../other; done',
+      'for d in a b; do pushd $d; done; while true; do gh pr merge 603; done',
+    ]) {
+      expect(merges(text).at(-1)?.unreadable, text).toBe(true)
+    }
+    expect(merge('cd /w && while sleep 9; do gh pr merge 603 --merge && break; done')).toMatchObject({ dirs: ['/w'], unreadable: false })
   })
 
   it('calls unreadable a merge whose pull request the shell decides', () => {
@@ -184,11 +237,21 @@ describe('mergesIn', () => {
     expect(merges('gh api repos/SRjoeee/ReadarXiv/pulls/411/merge')).toEqual([])
     expect(merges('gh api repos/SRjoeee/ReadarXiv/pulls/411/comments -f body=x')).toEqual([])
     expect(merges('gh api -X PUT repos/SRjoeee/ReadarXiv/pulls/411/update-branch')).toEqual([])
+    // every way `gh api` takes an option's value: a word of its own, attached, in a cluster of short flags
+    expect(merge('gh api -iXPUT repos/o/r/pulls/5/merge')).toMatchObject({ ref: '5', repo: 'o/r' })
+    expect(merge('gh api --method PUT -H "Accept: x" repos/o/r/pulls/5/merge').ref).toBe('5')
+    expect(merge('gh api -X "$METHOD" repos/o/r/pulls/5/merge').ref).toBe('5')
+    expect(merges('gh api -X POST repos/o/r/pulls/5/merge')).toEqual([])
   })
 
   it('names the files a GraphQL request takes its body from, and reads a body the command line itself holds (#635, Codex and Devin)', () => {
     expect(merge('gh api graphql --input merge.json')).toMatchObject({ files: ['merge.json'], unreadable: false })
     expect(merge('gh api graphql -F query=@q.graphql -F id=1').files).toEqual(['q.graphql'])
+    // an option's value attached to its flag (#635, Codex)
+    expect(merge(`gh api graphql -fquery='mutation { mergePullRequest(input: {}) { clientMutationId } }'`).unreadable).toBe(true)
+    expect(merge('gh api graphql -Fquery=@q.graphql').files).toEqual(['q.graphql'])
+    expect(merge('gh api graphql --field=query=@q.graphql --input=body.json').files).toEqual(['q.graphql', 'body.json'])
+    expect(merges(`gh api graphql -fquery='query { viewer { login } }'`)).toEqual([])
     expect(merge(`Q='mutation { mergePullRequest(input: {}) { clientMutationId } }'; gh api graphql -f query="$Q"`).unreadable).toBe(true)
     expect(merge(`gh api graphql --input - <<'EOF'\n{"query":"mutation { mergePullRequest(input: {}) { clientMutationId } }"}\nEOF`).unreadable).toBe(true)
     expect(merges(`gh api graphql -f query='query($id: ID!) { node(id: $id) { id } }' -F id="$ID"`)).toEqual([])
@@ -293,6 +356,114 @@ describe('decide', () => {
   it('holds every pull request as its own, and allows none, while it does not know its own repository', () => {
     expect(answer('gh pr merge 77 -R SRjoeee/readarxiv-web --merge', null)?.decision).toBe('ask')
     expect(answer('gh pr merge 603 --merge', null)).toBeNull()
+  })
+})
+
+// The gate's reading of a line is a model of the shell, and a model is wrong where nobody looked: the second review of
+// #635 found a variable read at a value the shell had since replaced. So the lines below are handed to the shells
+// themselves, with a stand-in `gh` that writes down what it was called with and where; and wherever the gate says it
+// can read a line, every merge the shell made must be one the gate read, in the directory it read it in.
+describe('against the shell itself', () => {
+  const LINES = [
+    'for n in 603 411; do gh pr merge $n --merge; done',
+    'N=603; if true; then N=411; fi; gh pr merge "$N" --merge',
+    'for n in 603; do for n in 411; do gh pr merge $n; done; done',
+    'n=603; for n in 411; do gh pr merge $n; done',
+    'for n in 603 411; do :; done; gh pr merge $n',
+    'for n in 603 411; do gh pr view $n; done; for n in 603 411; do gh pr merge $n --merge; done',
+    'R=o/r; gh pr merge 77 --repo $R --merge',
+    'cd a && gh pr merge 5',
+    'cd a; cd ..; gh pr merge 5',
+    'false && cd a; gh pr merge 5',
+    'cd a && gh pr merge 5 && cd .. && gh pr merge 6',
+    'n=603; n=411 gh pr merge $n',
+    'for n in 1 2; do m=$n; gh pr merge $m; done',
+    'x=5; y=$x; gh pr merge $y',
+    'n=603; { n=411; }; gh pr merge $n',
+    'n=603; (n=411); gh pr merge $n',
+    'n=603; gh pr merge "$n" --merge; n=411',
+    'a=603 b=411; gh pr merge $a; gh pr merge $b',
+    'export n=603; gh pr merge $n',
+    'n=603; gh pr merge $n',
+    'for n in 603 411; do (gh pr merge $n); done',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
+    'for n in 603 411; do gh pr merge "${n}" --merge 2>&1 | tail -1; done',
+    'n=603; i=0; while [ $i -lt 2 ]; do gh pr merge $n; n=411; i=$((i+1)); done',
+    'n=603; f() { n=411; }; f; gh pr merge $n',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, not a template
+    'n=603; : ${n:=411}; gh pr merge $n',
+    'n=603; unset n; n=411; gh pr merge $n',
+    'for n in 603; do gh pr merge $n; n=411; gh pr merge $n; done',
+    'n=603; for m in 1 2; do gh pr merge $n; done',
+    'cd a && for n in 603 411; do gh pr merge $n --merge && echo m$n; sleep 6; done; git fetch',
+    'for d in a b; do cd $d; gh pr merge 5; cd ..; done',
+    'cd a; for n in 1 2; do gh pr merge $n; done; cd b; gh pr merge 9',
+    'test -d a && cd a; gh pr merge 5',
+    'test -d nope && cd a; gh pr merge 5',
+    'n=603; echo "$(n=411; gh pr merge $n)"; gh pr merge $n',
+    'bash -c "cd a && gh pr merge 5"; gh pr merge 6',
+    'gh -R o/r pr merge 7 --merge; gh pr -R o/r merge 8',
+    'for n in 603 411; do case $n in 603) continue;; esac; gh pr merge $n; done',
+    'n=603; if false; then gh pr merge $n; else gh pr merge 411; fi',
+    'for n in 603 411; do gh pr merge $n || break; done',
+    'n=603\ngh pr merge $n\n',
+    'for n in 603 411\ndo\n  gh pr merge $n --merge\ndone',
+  ]
+  /** The pull request a recorded `gh` call merged, or undefined when it was no merge */
+  const merged = (args: string) => {
+    const words = args.split(' ')
+    let i = 0
+    const flags = () => {
+      while (words[i]?.startsWith('-')) i += words[i] === '-R' || words[i] === '--repo' ? 2 : 1
+    }
+    flags()
+    if (words[i++] !== 'pr') return undefined
+    flags()
+    if (words[i++] !== 'merge') return undefined
+    flags()
+    return words[i] ?? null
+  }
+
+  it.each(['/bin/bash', '/bin/zsh'].filter(shell => existsSync(shell)))('reads every merge %s makes, where it makes it, or says it cannot read the line', shell => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'merge-gate-')))
+    try {
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      writeFileSync(join(bin, 'gh'), '#!/bin/sh\nprintf \'%s|%s\\n\' "$PWD" "$*" >> "$MERGE_GATE_LOG"\n')
+      for (const quiet of ['git', 'sleep']) writeFileSync(join(bin, quiet), '#!/bin/sh\nexit 0\n')
+      for (const name of ['gh', 'git', 'sleep']) chmodSync(join(bin, name), 0o755)
+      const log = join(root, 'log')
+      let read = 0
+      let made = 0
+      for (const line of LINES) {
+        const dir = join(root, 'work')
+        rmSync(dir, { recursive: true, force: true })
+        mkdirSync(join(dir, 'a', 'b'), { recursive: true })
+        mkdirSync(join(dir, 'b'))
+        writeFileSync(log, '')
+        try {
+          execFileSync(shell, ['-c', line], { cwd: dir, env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, MERGE_GATE_LOG: log }, timeout: 10_000, stdio: 'ignore' })
+        } catch {
+          // a line may end in a failing command; what it merged on the way is in the log
+        }
+        const ran = readFileSync(log, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map(entry => ({ cwd: entry.slice(0, entry.indexOf('|')), ref: merged(entry.slice(entry.indexOf('|') + 1)) }))
+          .filter(call => call.ref !== undefined)
+        const saw = merges(line)
+        if (saw.some(m => m.unreadable)) continue
+        read++
+        made += ran.length
+        const places = saw.map(m => `${m.dirs.reduce((at, to) => resolve(at, to), dir)}|${m.ref}`)
+        expect(ran.filter(call => !places.includes(`${call.cwd}|${call.ref}`)), `${shell} -c ${JSON.stringify(line)}`).toEqual([])
+      }
+      // the check is not empty: lines the gate read, and merges the shell made on them
+      expect(read).toBeGreaterThan(20)
+      expect(made).toBeGreaterThan(30)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

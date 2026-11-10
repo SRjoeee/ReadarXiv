@@ -16,17 +16,23 @@
 // assignment or holding an expansion is never allowed here, whatever its base.
 //
 // What it reads is the command line: a merge wherever it stands in it — after a `cd`, behind a wrapper, inside a
-// substitution, in the string or the here-document a shell is handed — with the pull request or the repository a
-// variable names when the line itself set that variable to literals (`for n in 5 6`, `R=owner/name`), and the
-// request body a GraphQL call names as a file. It does not follow the line into a program it runs (a script that
-// merges is that script's to answer for), and it sees shell commands only, not a merge another tool makes.
+// substitution, in the string or the here-document a shell is handed — and the request body a GraphQL call names as
+// a file. A pull request or a repository named by a variable is read at the variable's value only where the line
+// leaves no doubt about it: inside the body of its own `for n in 5 6`, when that body sets `n` nowhere, or when the
+// whole line sets the name once, to a literal (`R=owner/name`); a name set twice, in a branch or a loop's later
+// pass, or on a line that holds `eval` or arithmetic, is nobody's to read. It does not follow the line into a
+// program it runs (a script that merges is that script's to answer for), and it sees shell commands only, not a
+// merge another tool makes.
 //
 // The first version read less: it took `gh pr merge` only as three words in a row, resolved every merge in the
 // directory the command started in, and kept a substitution inside quotes as text. The review of #635 walked past
-// it four ways, and `tests/scripts/merge-gate.test.ts` now pins each. Measured on 2026-11-11 over the 15,797
-// distinct shell commands of this repository's recent sessions, which merge in chains and loops far more often than
-// plainly: it found their 424 merging commands, called none unreadable and no other command a merge; a scan takes
-// under a millisecond, the node process around it about 35.
+// it four ways; the second version followed the line in the order it is written, and the review found a variable
+// read at a value the shell had since replaced. `tests/scripts/merge-gate.test.ts` pins each, and hands a set of
+// lines to bash and zsh themselves, with a stand-in `gh`: where the gate says it can read a line, every merge the
+// shell made is one the gate read. Measured on 2026-11-11 over some 15,800 distinct shell commands of this
+// repository's recent sessions, which merge in chains and loops, almost never plainly: it found their 424 merging
+// commands, called none unreadable and no other command a merge; a scan takes under a millisecond, the node
+// process around it about 35.
 //
 // No shell parser: a small scanner splits the line into simple commands, honouring quotes, substitutions,
 // redirections and here-documents. Erring strict costs a prompt; erring loose would cost the rule.
@@ -327,6 +333,37 @@ const MERGE_ENDPOINT = /(?:^|\/)repos\/([^/]+)\/([^/]+)\/pulls\/([^/]+)\/merge\/
 const PLACEHOLDER = /^(?:\{\w+\}|:\w+)$/
 const GRAPHQL_MERGE = /mergePullRequest|enablePullRequestAutoMerge/
 
+/** `gh api`'s flags that take a value (gh 2.x, `gh api --help`): the short ones, and the long name of each */
+const API_SHORT = { f: '--raw-field', F: '--field', H: '--header', X: '--method', q: '--jq', t: '--template', p: '--preview' }
+const API_LONG = new Set([...Object.values(API_SHORT), '--input', '--hostname', '--cache'])
+
+/** The options of a `gh api` whose arguments start at `first` that take a value, each as its long name, its value
+ *  and the index of the word the value was read from. `-fquery=x`, `-f query=x`, `--raw-field=query=x` and
+ *  `--raw-field query=x` are one option, and a cluster of short flags ends at the first that takes a value. */
+function apiOptions(words, first) {
+  const options = []
+  for (let i = first; i < words.length; i++) {
+    const word = words[i]
+    if (word.startsWith('--')) {
+      const eq = word.indexOf('=')
+      const name = eq < 0 ? word : word.slice(0, eq)
+      if (!API_LONG.has(name)) continue
+      if (eq < 0) i++
+      options.push({ name, value: eq < 0 ? words[i] : word.slice(eq + 1), at: i })
+    } else if (word.startsWith('-')) {
+      for (let j = 1; j < word.length; j++) {
+        const name = API_SHORT[word[j]]
+        if (name === undefined) continue
+        const attached = word.slice(j + 1).replace(/^=/, '')
+        if (attached === '') i++
+        options.push({ name, value: attached === '' ? words[i] : attached, at: i })
+        break
+      }
+    }
+  }
+  return options
+}
+
 /** What a `gh api graphql` whose arguments start at `first` sends as its query: `literal`, an argument that holds a
  *  merge mutation; `unseen`, a query the arguments do not hold (an expansion, the standard input); `files`, the
  *  files a query or the whole body is read from. Null when every query is in sight and none merges. */
@@ -334,24 +371,17 @@ function graphqlArguments(words, dynamic, first) {
   let literal = false
   let unseen = false
   const files = []
-  for (let i = first; i < words.length; i++) {
-    const input = /^--input(?:=(.*))?$/.exec(words[i])
-    const field = input ? null : /^(-f|-F|--raw-field|--field)(?:=(.*))?$/.exec(words[i])
-    if (input) {
-      const at = input[1] === undefined ? ++i : i
-      const file = input[1] ?? words[at]
-      if (file === undefined) continue
-      if (dynamic[at] || file === '-') unseen = true
-      else files.push(file)
-    } else if (field) {
-      const at = field[2] === undefined ? ++i : i
-      const pair = field[2] ?? words[at] ?? ''
-      if (!pair.startsWith('query=')) continue
-      const value = pair.slice('query='.length)
-      const typed = field[1] === '-F' || field[1] === '--field'
-      if (dynamic[at] || (typed && value === '@-')) unseen = true
-      else if (typed && value.startsWith('@')) files.push(value.slice(1))
-      else if (GRAPHQL_MERGE.test(value)) literal = true
+  for (const { name, value, at } of apiOptions(words, first)) {
+    if (value === undefined) continue
+    if (name === '--input') {
+      if (dynamic[at] || value === '-') unseen = true
+      else files.push(value)
+    } else if ((name === '--raw-field' || name === '--field') && value.startsWith('query=')) {
+      const query = value.slice('query='.length)
+      const typed = name === '--field'
+      if (dynamic[at] || (typed && query === '@-')) unseen = true
+      else if (typed && query.startsWith('@')) files.push(query.slice(1))
+      else if (GRAPHQL_MERGE.test(query)) literal = true
     }
   }
   return literal || unseen || files.length > 0 ? { kind: 'graphql', literal, unseen, files } : null
@@ -359,22 +389,14 @@ function graphqlArguments(words, dynamic, first) {
 
 /** What follows `gh api` from the word at `first`, when it is the REST or the GraphQL way to merge a pull request;
  *  null otherwise. A request to the merge endpoint is a merge only as a PUT (a GET asks whether the pull request is
- *  merged). */
+ *  merged); a method the shell decides may be one. */
 function apiArguments(words, dynamic, first) {
   if (words.indexOf('graphql', first) >= 0) return graphqlArguments(words, dynamic, first)
-  let put = false
-  let endpoint = null
-  let at = -1
-  for (let i = first; i < words.length; i++) {
-    const method = /^(?:-X|--method)(?:=?(.+))?$/.exec(words[i])
-    if (method) put = (method[1] ?? words[++i] ?? '').toUpperCase() === 'PUT'
-    else if (endpoint === null) {
-      endpoint = MERGE_ENDPOINT.exec(words[i])
-      at = i
-    }
-  }
-  if (!put || endpoint === null) return null
-  const [, owner, name, number] = endpoint
+  const method = apiOptions(words, first).findLast(option => option.name === '--method')
+  if (method === undefined || !(dynamic[method.at] || (method.value ?? '').toUpperCase() === 'PUT')) return null
+  const at = words.findIndex((word, k) => k >= first && MERGE_ENDPOINT.test(word))
+  if (at < 0) return null
+  const [, owner, name, number] = MERGE_ENDPOINT.exec(words[at])
   return { kind: 'api', ref: number, repo: PLACEHOLDER.test(owner) || PLACEHOLDER.test(name) ? null : `${owner}/${name}`, refAt: at, repoAt: at }
 }
 
@@ -428,6 +450,67 @@ function shellStrings({ words, bodies }, start) {
   return []
 }
 
+/** Commands that set variables their words do not name */
+const OPAQUE = new Set(['eval', 'source', '.', 'let', 'mapfile', 'readarray', 'getopts', 'select', 'coproc', 'vared', 'trap'])
+const DECLARES = new Set(['export', 'local', 'declare', 'typeset', 'readonly', 'integer', 'float'])
+/** A word that sets a variable, wherever it stands: `n=5`, `n+=5`, `n[1]=5` */
+const SETS = /^([A-Za-z_]\w*)(?:\[[^\]]*\])?\+?=/
+
+/** How a command line sets its variables and moves, read over the whole line before any of it is followed, because
+ *  the order the shell runs it in is not the order it is written in (a loop's second pass, a branch not taken, a
+ *  function called later). `settings`: how many times each name is set anywhere on the line — an assignment in any
+ *  position, a loop's variable, a `read`, an `unset`, a declaration; `loopsOf`: command by command, the loops it
+ *  stands in, outermost first, each with the variable its `for` runs (null for a `while`), the literal values it
+ *  runs it over (null when the shell decides them) and the names its body sets; `opaque`: the line holds something that sets variables without naming them in a word (`eval`, a sourced
+ *  file, arithmetic, an expansion that assigns); `loopMoves`: a loop's body changes the directory.
+ *
+ *  A variable is taken at its value only where no order of execution can make the value another: inside the body
+ *  of its own `for`, when that body sets it nowhere; anywhere else, when the whole line sets it once; and never on
+ *  an opaque line. */
+/** The words a `for` at word `at` runs its variable over (`for n in 5 6`), or null when the shell decides any of them */
+function literalsOf(words, dynamic, at) {
+  return words[at + 2] === 'in' && words.length > at + 3 && !dynamic.slice(at + 3).some(Boolean) ? words.slice(at + 3) : null
+}
+
+function lineOf(commands, text) {
+  const settings = new Map()
+  const stack = []
+  const loopsOf = []
+  let header = null
+  const set = name => {
+    settings.set(name, (settings.get(name) ?? 0) + 1)
+    for (const loop of stack) loop.sets.add(name)
+  }
+  // (arithmetic, `$[…]`, and any `${…=…}`: bash's `${n:=5}`, zsh's `${n::=5}`)
+  let opaque = /\(\(|\$\[|\$\{[^}]*=/.test(text)
+  let loopMoves = false
+  for (const { words, dynamic } of commands) {
+    let start = 0
+    for (; start < words.length && RESERVED.has(words[start]); start++) {
+      if (words[start] === 'do') {
+        stack.push({ ...(header ?? { name: null, values: null }), sets: new Set() })
+        header = null
+      } else if (words[start] === 'done') stack.pop()
+      else if (words[start] === 'for' && words[start + 1] !== undefined) {
+        set(words[start + 1])
+        header = { name: words[start + 1], values: literalsOf(words, dynamic, start) }
+      }
+    }
+    loopsOf.push([...stack])
+    for (const word of words) {
+      const sets = SETS.exec(word)
+      if (sets) set(sets[1])
+    }
+    const head = words[start]
+    if (head === undefined) continue
+    if (head === 'read' || head === 'unset' || DECLARES.has(head)) words.slice(start + 1).filter(word => /^[A-Za-z_]\w*$/.test(word)).forEach(set)
+    // (a declaration with a flag may bind one name to another, `declare -n`: then a setting names the wrong variable)
+    if (OPAQUE.has(head) || (head === 'printf' && words.includes('-v')) || (DECLARES.has(head) && words.slice(start + 1).some(word => word.startsWith('-')))) opaque = true
+    if (stack.length > 0 && (head === 'cd' || MOVES.has(head))) loopMoves = true
+  }
+  return { settings, loopsOf, opaque, loopMoves }
+}
+
 /** What the variables hold after `command`, as far as its words say: the literals of `for n in 5 6` and of a plain
  *  `R=owner/name`, so that the merge of `$n` in such a loop is each of those merges; a variable set any other way
  *  (an expansion, `read`, an assignment the shell may skip) holds nothing the gate knows. */
@@ -435,8 +518,9 @@ function learn(context, { words, dynamic, before, after }) {
   const hold = (name, values) => {
     context.vars = { ...context.vars, [name]: values }
   }
-  if (words[0] === 'for' && words[2] === 'in' && /^[A-Za-z_]\w*$/.test(words[1] ?? '')) {
-    hold(words[1], words.length > 3 && !dynamic.slice(3).some(Boolean) ? words.slice(3) : null)
+  for (let at = 0; at < words.length && RESERVED.has(words[at]); at++) {
+    if (words[at] !== 'for' || words[at + 1] === undefined) continue
+    hold(words[at + 1], literalsOf(words, dynamic, at))
     return
   }
   const first = words[0] === 'export' || words[0] === 'local' || words[0] === 'declare' ? 1 : 0
@@ -474,18 +558,21 @@ function move(context, { words, dynamic, before, after }, start) {
 
 /** Every merge of a pull request a command line makes, its substitutions and the strings it hands a shell included.
  *  `ref` and `repo` as the command names them (null: the current branch's pull request, the current directory's
- *  repository), a variable the line itself set read as its value, one merge for each; `dirs`: the literal `cd`s that
+ *  repository), a variable whose value the line leaves no doubt about read as that value, one merge for each; `dirs`: the literal `cd`s that
  *  precede it, to resolve from where the line starts; `unreadable`: the line does not say which pull request (an
- *  expansion where it is named, a `GH_…` assignment, a directory or a branch lost on the way, a GraphQL mutation);
+ *  expansion where it is named, a `GH_…` assignment, a directory or a branch lost on the way or changed by the loop
+ *  it stands in, a GraphQL mutation);
  *  `plain`: the merge is the whole command line, written
  *  `gh … pr merge …` with nothing for the shell to expand; `files`, on a GraphQL request alone: the files its body is
  *  read from, which say whether it merges. */
-export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, vars: {} }, depth = 0) {
+export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKnown: true, conditionalDir: false, conditionalVars: false, loops: 0, vars: {} }, depth = 0) {
   const { commands, compound, redirected } = simpleCommands(text)
+  const line = lineOf(commands, text)
   const context = { ...inherited }
   const merges = []
-  for (const command of commands) {
+  for (const [index, command] of commands.entries()) {
     const { words, dynamic, scripts } = command
+    const loops = line.loopsOf[index]
     if (!CHAINED.test(command.before)) {
       // the `&&` chain a `cd` or an assignment was reached through has ended: whether it ran is not on the line
       if (context.conditionalDir) context.dirKnown = false
@@ -515,7 +602,12 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
         if (at < 0 || !dynamic[at]) return [word]
         const variable = viaApi ? null : /^\$(?:(\w+)|\{(\w+)\})$/.exec(words[at])
         const name = variable?.[1] ?? variable?.[2]
-        return name !== undefined && Object.hasOwn(context.vars, name) ? context.vars[name] : null
+        if (name === undefined || line.opaque) return null
+        // inside the body of its own loop: that loop's values, unless the body sets the name; anywhere else: the
+        // value the line's one setting gave it
+        const own = loops.findLast(loop => loop.name === name)
+        if (own !== undefined) return own.sets.has(name) ? null : own.values
+        return line.settings.get(name) === 1 && Object.hasOwn(context.vars, name) ? context.vars[name] : null
       }
       const refs = said(call.ref, call.refAt)
       const repos = said(call.repo, call.repoAt)
@@ -533,8 +625,8 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
               dynamic[i] ||
               assigned.some(a => a.startsWith('GH_')) ||
               (viaApi && !/^\d+$/.test(ref ?? '')) ||
-              (needsDirectory && !context.dirKnown) ||
-              (needsBranch && !context.branchKnown),
+              (needsDirectory && (!context.dirKnown || line.loopMoves)) ||
+              (needsBranch && (!context.branchKnown || context.loops + loops.length > 0)),
             plain: !viaApi && depth === 0 && i === 0 && !compound && !redirected && commands.length === 1 && !dynamic.some(Boolean),
           })
         }
@@ -543,8 +635,10 @@ export function mergesIn(text, inherited = { dirs: [], dirKnown: true, branchKno
     }
     if (depth < 4) {
       for (const script of [...scripts, ...shellStrings(command, start)]) {
-        // (a script runs where its command runs: inside whatever chain led here, so nothing it inherits is in doubt)
-        for (const merge of mergesIn(script, { ...context, conditionalDir: false, conditionalVars: false }, depth + 1)) merges.push({ ...merge, plain: false })
+        // (a script runs where its command runs: inside whatever chain led here, so the directory it inherits is not
+        // in doubt; the line's variables it does not take, their one setting being the line's to count, not its own)
+        const within = { ...context, conditionalDir: false, conditionalVars: false, dirKnown: context.dirKnown && !line.loopMoves, loops: context.loops + loops.length, vars: {} }
+        for (const merge of mergesIn(script, within, depth + 1)) merges.push({ ...merge, plain: false })
       }
     }
     learn(context, command)
