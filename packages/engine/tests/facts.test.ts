@@ -19,6 +19,7 @@ import {
   sourceEndMarks,
   styleOf,
   fillRunsOf,
+  fixedFacesOf,
   tailOf,
   textOf,
   urlCopyOf,
@@ -1187,5 +1188,32 @@ describe('an element’s text with each accent TeX set over its letter joined to
       ['Klö', 0xff],
       [')', 0],
     ])
+  })
+})
+
+describe('a face of one pitch (Rule 1)', () => {
+  it('reads one advance per font program of a face, within its unit, a thousandth of the size, its subsets each their own', () => {
+    // (2411.13093v4's Consolas: the subsets of p4's figure set 549 thousandths of their size, p9's and p19's 550; read as one
+    // advance for the face, its code boxes on p19 were translated while its bold's, all at 550, were kept)
+    const at = (u: string, x: number, advance: number, font: string, size = 10) =>
+      ({
+        ...g(u, x, 700, { base: font.replace(/^[A-Z]{6}\+/, ''), size }),
+        font,
+        x1: x + (advance * size) / 1000,
+      }) as DocGlyph
+    const glyphs = [
+      at('r', 72, 549, 'AAAAAA+Consolas'),
+      at('e', 80, 549, 'AAAAAA+Consolas', 8),
+      at('q', 88, 549.6, 'BBBBBB+Consolas', 9.5),
+      at('u', 96, 550.3, 'BBBBBB+Consolas', 4.8),
+      at('i', 72, 278, 'CCCCCC+Times'),
+      at('m', 80, 778, 'CCCCCC+Times'),
+      at('a', 72, 444, 'DDDDDD+Pair'),
+      at('e', 80, 444, 'DDDDDD+Pair'),
+      at('i', 88, 278, 'DDDDDD+Pair'),
+      at('a', 72, 444, 'EEEEEE+Solo'),
+      at('i', 80, 278, 'FFFFFF+Solo'),
+    ]
+    expect([...fixedFacesOf(glyphs)]).toEqual(['Consolas'])
   })
 })

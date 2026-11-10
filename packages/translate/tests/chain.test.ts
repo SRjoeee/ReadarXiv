@@ -352,6 +352,18 @@ describe('the contract: the runs floor', () => {
     const rs2 = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [nothing] }))
     expect(rs2[0]).toEqual({ id: 'r', ok: false, why: { kind: 'refused' } })
   })
+  it('refused where a stretch came back from no translator: a unit half translated is no translation, its original stays', async () => {
+    // (rebuild/mono-blocks, Rule 3, the owner's line: translating or keeping is fine, garbling never. A stretch every translator
+    // refused kept its English between translated ones, `runs:<id>` drawn as a translation: 2411.13093v4 p19's boxes, English
+    // and Chinese words interleaved)
+    const u = unit('h', [t('alpha words '), el('a'), t(' omega words')])
+    const onlyAlpha = fakeTranslator({
+      identity: 'alpha:0',
+      reply: (out) => (out.length === 1 && out[0]?.t === 'text' && out[0].s.startsWith('alpha') ? out : []),
+    })
+    const rs = await all(chainOf({ clock: fakeClock() }).translate([u], 'ja', { translators: [onlyAlpha] }))
+    expect(rs[0]).toEqual({ id: 'h', ok: false, why: { kind: 'refused' } })
+  })
 })
 
 describe('the contract: an element TeX sets after the unit’s text (`after`) is given to no translator', () => {

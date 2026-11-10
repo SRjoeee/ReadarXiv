@@ -21,10 +21,11 @@ const rec = (o: { today?: object; v2?: object; original?: number } = {}) => ({
   px: {},
 })
 /** v2.mjs's file of a pair: the page's members (Page) and the part's facts, the join to today's ords */
-const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; today?: Record<number, { today: number }> } = {}) => ({
+const v2Of = (o: { members?: object[]; facts?: object[]; ties?: number[][]; today?: Record<number, { today: number }>; pitch?: number[] } = {}) => ({
   pages: { [N]: { members: o.members ?? [], links: [] } },
   facts: { [N]: { members: o.facts ?? [], links: 0, ...(o.ties ? { ties: o.ties } : {}) } },
   today: o.today ?? {},
+  ...(o.pitch ? { pitch: o.pitch } : {}),
 })
 /** `prep`: today's prepare dump's units (the original's lines of today's units, its figure texts among them) */
 /** `led`: the part's run-ins, follower ord -> its leader's (a member the part joins to the one before it in its flow, or the
@@ -789,5 +790,48 @@ describe("shown: a unit of the author block v2 leaves the original's with the na
     expect(shown(page('inknames', 'on'))).toEqual([[true, 'today']])
     expect(shown(page('textnames'))).toEqual([[true, 'today']])
     expect(shown(page('inkorphan'))).toEqual([[true, 'today']])
+  })
+})
+
+describe("shown, figures: a unit the prepare keeps for its text set wholly in a face of one pitch is the original's (the owner's ruling of 2026-11-10)", () => {
+  // (2608.25210v2 p4's prompt boxes, set in a typewriter face: today translated them, keys and values garbled; v2's prepare keeps
+  // them as the paper has them, Rule 1 (PDF-READER §18.21). The owner: translating or keeping are both fine, a garbled
+  // translation never. The units it keeps are the ones the candidate's dump marks `keptBy: 'pitch'`, v2.mjs's `pitch`, by member
+  // ord: no other unit v2 leaves the original's is ruled so)
+  type D = { flag: string; worse: boolean; nearer: string; ruling?: string }
+  const of = (flag: string) => (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === flag).map((d) => [d.worse, d.nearer])
+  const unit = (pitch?: number[]) =>
+    measure(
+      v2Of({ members: [{ ord: 11, state: 'none', lines: [] }], facts: [{ ord: 11, kind: 'para', align: 'l', style: { size: 9 }, lines: [] }], today: { 11: { today: 7 } }, ...(pitch ? { pitch } : {}) }),
+      rec({ today: { units: [{ id: 7, lines: [line(400)] }] } }),
+    )
+  it("a unit today translates that v2's prepare kept so: the ruling's, not worse", () => {
+    expect(of('shown')(unit([11]))).toEqual([[false, 'ruling']])
+    expect((unit([11]).diffs as D[]).find((d) => d.flag === 'shown')?.ruling).toMatch(/one pitch/)
+  })
+  it('a unit not so kept, or no mark recorded: a translation missing, worse', () => {
+    expect(of('shown')(unit([12]))).toEqual([[true, 'today']])
+    expect(of('shown')(unit())).toEqual([[true, 'today']])
+  })
+  // (two figure texts today translates, each its own group over its original's box; v2's figure members on those boxes, 50 kept
+  // so by v2's prepare and 51 drawn translated, or not)
+  const figFact = (ord: number, x0: number) => ({ ord, kind: 'figure', align: 'l', style: { size: 8 }, lines: [factLine(x0, x0 + 40, 300, 8)] })
+  const prepFig = (ord: number, x0: number) => ({ ord, kind: 'figure', lines: [{ page: N, x0, x1: x0 + 40, baseline: 300, top: 306.4, bottom: 298.4, size: 8 }] })
+  const figs = (o: { pitch?: number[]; v2Draws51: boolean }) =>
+    measure(
+      v2Of({ members: [{ ord: 50, state: 'none', lines: [] }, { ord: 51, state: 'laid', lines: [] }], facts: [figFact(50, 100), figFact(51, 200)], ...(o.pitch ? { pitch: o.pitch } : {}) }),
+      rec({
+        today: { figures: [{ id: 'f0', lines: [drawnLine(100, 140, 300, 'wxyz', 8)] }, { id: 'f1', lines: [drawnLine(200, 240, 300, 'wxyz', 8)] }] },
+        v2: { units: o.v2Draws51 ? [{ id: 51, lines: [drawnLine(200, 240, 300, 'abcd', 8)] }] : [] },
+      }),
+      [prepFig(90, 100), prepFig(91, 200)],
+    )
+  it("figure texts fewer than today's by those v2's prepare kept so: the ruling's, not worse", () => {
+    expect(of('figures')(figs({ pitch: [50], v2Draws51: true }))).toEqual([[false, 'ruling']])
+  })
+  it('fewer by more than those: worse; none so kept, or another member marked: worse', () => {
+    expect(of('figures')(figs({ pitch: [50], v2Draws51: false }))).toEqual([[true, 'today']])
+    expect(of('figures')(figs({ v2Draws51: true }))).toEqual([[true, 'today']])
+    expect(of('figures')(figs({ pitch: [52], v2Draws51: true }))).toEqual([[true, 'today']])
   })
 })

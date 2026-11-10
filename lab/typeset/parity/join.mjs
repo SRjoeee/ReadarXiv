@@ -46,6 +46,19 @@ export function candidateStated(paper) {
   return JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.replaced && u.stated)
 }
 /**
+ * The members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22):
+ * its dump's units marked `keptBy: 'pitch'` (lab/pdf/prepare-back/run.mjs, the engine's InstrumentUnit `pitch`), by the member
+ * ords the run's located file joins their dump ords to (`dumpOrds`); none where lab-data holds no dump or located file of it.
+ * The verdict reads no other unit v2 leaves the original's as kept by this rule (the owner's ruling of 2026-11-10)
+ */
+export function candidatePitch(paper, dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`),
+    g = join(dumps, '..', 'located', `${paper}.json`)
+  if (!existsSync(f) || !existsSync(g)) return []
+  const ords = new Set(JSON.parse(readFileSync(f, 'utf8')).units.filter((u) => u.keptBy === 'pitch').map((u) => u.ord))
+  return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ords.has(d)).map(([, m]) => m)
+}
+/**
  * The members `members` (no id or glyphs joined them), each joined to the unit of today's (`free`, today's ords no member is
  * joined to) that stage 1a states its unit holds whole (`stated`: candidateStated's), the statement naming its unit as the
  * holder: one of today's for one member; where several members of one id hold as many of today's units, by their order, as

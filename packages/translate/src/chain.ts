@@ -839,7 +839,8 @@ export function chainOf(ports: Ports = {}): Chain {
     return { id: u.id, ok: false, why: { kind: 'unconfigured', code: off ?? c.offCodes[0] ?? 'no-language' } }
   }
 
-  /** the runs floor: each stretch through the whole chain as a unit of its own; null when it gives nothing to show */
+  /** the runs floor: each stretch through the whole chain as a unit of its own; null when it gives nothing to show, or not
+   *  every stretch */
   async function runsFloor(u: UnitIn, i: number, c: Call): Promise<Result | null> {
     const { parts, join } = runsOf(u)
     const asked = parts.map((p, k) => (p.send ? k : -1)).filter((k) => k >= 0)
@@ -859,6 +860,10 @@ export function chainOf(ports: Ports = {}): Chain {
       )
       return { id: u.id, ok: false, why: ms > 0 ? { kind: 'unavailable', retryAfterMs: ms } : { kind: 'unavailable' } }
     }
+    // (every stretch asked or none: a stretch every translator refused would keep its English between translated ones, a unit
+    // half translated, drawn as a translation (PDF-READER §18.21: translating or keeping is fine, garbling never);
+    // refused, the unit stays the original's)
+    if (outs.some((r) => !r.ok)) return null
     const tr: (string | null)[] = parts.map(() => null)
     const by = new Set<string>()
     outs.forEach((r, j) => {

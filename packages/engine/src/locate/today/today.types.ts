@@ -73,7 +73,13 @@ export const figureUnitsOf = fig.figureUnitsOf as (
   pages: readonly TodayPage[],
   own: { glyphs: (string | null)[][] },
   /** `done`, told each page once its figure texts are read: nothing of the reading reads that page's shapes again */
-  o?: { unitsPage?: number; unitsDoc?: number; done?: ((page: number) => void) | null },
+  o?: {
+    unitsPage?: number
+    unitsDoc?: number
+    done?: ((page: number) => void) | null
+    /** the faces the document sets at one pitch: a run goes into or out of none of them (Rule 1's fact, PDF-READER §18.22) */
+    fixed?: ReadonlySet<string> | null
+  },
 ) => TodayFigures
 export const figureGroup = fig.figureGroup as (k: number) => string
 export const ledgerOf = ledger.ledgerOf as (

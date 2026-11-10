@@ -275,6 +275,237 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(unit.id).toBe(unitId('inkorphan', unit.content))
   })
 
+  it('keeps a unit and a figure text TeX set wholly in a face of one pitch, where the paper’s body face is not one, always (Rule 1)', () => {
+    // (2411.13093v4 p18-19: an LLM prompt, JSON and OCR samples set in Consolas, inside included figures, and 2608.25210v2's prompt
+    // boxes in a typewriter face: translated, their keys and values came back garbled. What TeX or the figure's maker set wholly
+    // in a typewriter face is an artefact the paper shows exactly: kept as the original, as a code environment is. A line of
+    // prose holding a typewriter word is no artefact. The owner's ruling of 2026-11-10: the rule always applies, with no switch)
+    const lines = (body: string) => [
+      { text: 'Body text of the paper set here', font: body },
+      { text: 'and more body text in that face', font: body },
+      { text: '{ "ASR": null, "DET": [] }', font: 'ABCDEF+CMTT10' },
+      { text: 'call the model now', font: 'ABCDEF+CMR10' },
+    ]
+    const make = (body: string) => {
+      const B = docOf([{ lines: lines(body) }])
+      const A = docOf([
+        {
+          lines: [
+            ...lines(body),
+            { text: 'request = {', y: 640, form: true, font: 'ABCDEF+CMTT10' },
+            { text: 'Loss curve', y: 620, form: true, font: 'ABCDEF+CMR10' },
+          ],
+        },
+      ])
+      // (a roman face's characters each their own advance, as a proportional face sets them, the body's telling it for the
+      // document; the typewriter's one)
+      for (const D of [A, B])
+        for (const g of D.pages[0]!.glyphs)
+          if (g.font.endsWith('CMR10') && !g.blank && !g.form)
+            g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+      const units = [
+        unitOf('para', 'Body text of the paper set here and more body text in that face'),
+        unitOf('para', '{ "ASR": null, "DET": [] }'),
+        unitOf('para', 'call the model now'),
+      ]
+      return locate(instrumentOf(B, units, [[0, 0, 1, 2]]), A, align(B, A), { pages: rawOf(A) })
+    }
+    const L = make('ABCDEF+CMR10')
+    expect(L.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, true, false])
+    expect(L.members.filter((m) => m.unit >= 0 && m.unit < 3).map((m) => m.fixed)).toEqual([false, true, false])
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.fixed])).toEqual([
+      ['request = {', true],
+      ['Loss curve', false],
+    ])
+    expect(L.units[figs[0]!.unit]!.why).toBe('figure: code')
+    // (each unit so kept is marked as kept by this rule, `pitch`, and no other: what the lab's dump and the parity read)
+    expect(L.units.slice(0, 3).map((u) => !!u.pitch)).toEqual([false, true, false])
+    expect(figs.map((m) => !!L.units[m.unit]!.pitch)).toEqual([true, false])
+    // (a paper whose body face is a typewriter's keeps nothing for it: its whole text would stay untranslated)
+    const T = make('ABCDEF+CMTT10')
+    expect(T.units.slice(0, 3).map((u) => !!u.kept)).toEqual([false, false, false])
+    expect(T.members.filter((m) => m.figure).map((m) => m.fixed)).toEqual([false, false])
+  })
+
+  it('keeps a figure’s word set in another face inside a line of a face of one pitch, with its line, always (Rule 1)', () => {
+    // (2411.13093v4 p19's code boxes: `"ASR": "The number of the attractions.",` in Consolas but "attractions" in Georgia, and
+    // `["coin", "table", ...]` but "coin": the lines kept, each read a Chinese word between its English ones. A word whose
+    // glyphs right before and after it, in the page's order on its baseline, are of a face of one pitch stands inside a line of
+    // code. A word of its own line stays translated)
+    const body = (t: string) => ({ text: t, font: 'ABCDEF+CMR10' })
+    const B = docOf([{ lines: [body('Body text of the paper set here'), body('and more body text in that face')] }])
+    const A = docOf([
+      {
+        lines: [
+          body('Body text of the paper set here'),
+          body('and more body text in that face'),
+          { text: '"key": "count all the ', x: 72, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: 'harbours', x: 72 + 22 * 6, y: 640, form: true, font: 'ABCDEF+CMR10' },
+          { text: '.",', x: 72 + 30 * 6, y: 640, form: true, font: 'ABCDEF+CMTT10' },
+          { text: 'Loss curve', x: 72, y: 600, form: true, font: 'ABCDEF+CMR10' },
+        ],
+      },
+    ])
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.font.endsWith('CMR10') && !g.blank && !g.form)
+          g.x1 = g.x0 + (0.3 + ((g.u.codePointAt(0)! * 7) % 11) / 25) * g.size
+    const units = [unitOf('para', 'Body text of the paper set here and more body text in that face')]
+    const L = locate(instrumentOf(B, units, [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
+    const fixed = new Map(L.members.filter((m) => m.figure).map((m) => [m.plain, m.fixed]))
+    expect(fixed.get('"key": "count all the')).toBe(true)
+    expect(fixed.get('harbours')).toBe(true)
+    expect(fixed.get('Loss curve')).toBe(false)
+    const pitch = new Map(
+      L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, !!L.units[m.unit]!.pitch]),
+    )
+    expect([pitch.get('"key": "count all the'), pitch.get('harbours'), pitch.get('Loss curve')]).toEqual([
+      true,
+      true,
+      false,
+    ])
+  })
+
+  it('sets every line of a justified paragraph inside a figure from its start, an indented one too', () => {
+    // (2411.13093v4 p18, Figure 8: a prompt set as a justified paragraph in an included figure, its entries' first lines indented
+    // by hand. Each line a figure text, the indented one shares the paragraph's end with its full lines and not its start, and
+    // was read set from its end: its translation laid flush against the box's right edge, its next line from the left. Lines
+    // that share both edges, two at least, are a paragraph's measure: every line of it is set from its start)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'The entry of the box indented here', x: 96, y: 640, form: true },
+          { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
+          { text: 'set in one block of its prose', x: 72, y: 616, form: true, space: 15 },
+          { text: 'its last one', x: 72, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const figs = L.members.filter((m) => m.figure)
+    expect(figs.map((m) => [m.plain, m.align])).toEqual([
+      ['The entry of the box indented here', 'l'],
+      ['and its lines go on to the measure end', 'l'],
+      ['set in one block of its prose', 'l'],
+      ['its last one', 'l'],
+    ])
+  })
+
+  it('sets a paragraph’s lines from their start where the figure’s maker set two of them a hundredth of a point larger', () => {
+    // (2411.13093v4 p18: lines 515, an entry's indented first line, and 527, a full line, set at 7.07 pt among the paragraph's
+    // 7.06's. A column is of one size, and sizes keyed to the hundredth parted the two from their paragraph into a column of their
+    // own, its end the most runs': both laid from the box's right edge. One size as runs join, within 1 % of the size before)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'The entry of the box indented here', x: 96, y: 640, size: 10.02, form: true },
+          { text: 'and its lines go on to the measure end', x: 72, y: 628, form: true },
+          { text: 'set in one block of its prose', x: 72, y: 616, form: true, space: 15 },
+          { text: 'its lines set in one justified measure', x: 72, y: 604, size: 10.02, form: true },
+          { text: 'its last one', x: 72, y: 592, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['The entry of the box indented here', 'l'],
+      ['and its lines go on to the measure end', 'l'],
+      ['set in one block of its prose', 'l'],
+      ['its lines set in one justified measure', 'l'],
+      ['its last one', 'l'],
+    ])
+  })
+
+  it('keeps right-aligned labels set from their end where two of them, one text, share a start too', () => {
+    // (the 88's figures read under a looser measure, any two runs of an end column sharing a start: 1,175 labels of 27 papers
+    // turned to be set from their start: 2608.04322v1 p3's axis labels "GSM8K" "MATH" "HellaSwag", 2610.10492v1's two "Population
+    // mean", 1810.04805v2's "[SEP]"s. Two runs of one text share both edges and tell no measure; a paragraph's full lines are of
+    // different texts, its other lines inside its measure)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'Population mean', x: 210, y: 640, form: true },
+          { text: 'Accuracy', x: 252, y: 628, form: true },
+          { text: 'Population mean', x: 210, y: 616, form: true },
+          { text: 'Loss', x: 276, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['Population mean', 'r'],
+      ['Accuracy', 'r'],
+      ['Population mean', 'r'],
+      ['Loss', 'r'],
+    ])
+  })
+
+  it('keeps right-aligned labels set from their end where their glyphs are as wide, whatever their texts', () => {
+    // (2610.20808v1 p8's language codes "pt" "en" "es" "zh" "hi", as wide, share both edges; a shorter one starts inside them.
+    // Lines of different texts as wide tell no measure: a justified paragraph's full lines are set to one width by the stretch of
+    // their spaces, and these have none)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'deu', x: 282, y: 640, form: true },
+          { text: 'eng', x: 282, y: 628, form: true },
+          { text: 'spa', x: 282, y: 616, form: true },
+          { text: 'ja', x: 288, y: 604, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['deu', 'r'],
+      ['eng', 'r'],
+      ['spa', 'r'],
+      ['ja', 'r'],
+    ])
+  })
+
+  it('keeps right-aligned labels set from their end where two as wide hold other glyphs, their spaces as set', () => {
+    // (2610.40394v1 p18's bar chart: "Ordinary Differential Equations" and "History & General Mathematics" start and end together,
+    // the one more letters, the other more spaces, each word space as the face sets it (2.348 pt both, at 8.445 pt). A justified
+    // paragraph's lines are stretched apart: 2411.13093v4 p18's full lines' word spaces run from 3.96 to 6.36 pt, its unjustified
+    // lines' 3.90)
+    const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
+    const A = docOf([
+      {
+        lines: [
+          'a paragraph whose word',
+          { text: 'History of General Mathematics', x: 120, y: 640, form: true },
+          { text: 'Ordinary Differential Equation', x: 120, y: 628, form: true },
+          { text: 'Topology', x: 252, y: 616, form: true },
+          { text: 'continues on its last line', y: 560 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members.filter((m) => m.figure).map((m) => [m.plain, m.align])).toEqual([
+      ['History of General Mathematics', 'r'],
+      ['Ordinary Differential Equation', 'r'],
+      ['Topology', 'r'],
+    ])
+  })
+
   it('makes a figure’s text inside its form a figure text, where only A draws it', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
@@ -420,6 +651,61 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(fig.style).toMatchObject({ role: 'mono', fill: 0x315f9c })
     expect(fig.spanStyles).toEqual([['0', expect.objectContaining({ role: 'sans', bold: 1, fill: 0 })]])
     expect(fig.plain).toBe('Page: site.io')
+  })
+
+  it('ends TeX’s line in a picture where it goes into or out of a face of one pitch: a title’s path its own figure text, kept (Rule 1)', () => {
+    // (2610.19159v1's transcript box titles, pgf's: "Agent Action: Write" in a proportional face, the path written in typewriter,
+    // then "(Self-directed scope reduction)": TeX's line went on over the faces and made one figure text of them, a title,
+    // translated with its path inside. The owner's ruling of 2026-11-10 keeps text set in a face of one pitch: the line goes on
+    // over faces and colours, but not into or out of a face of one pitch, read off the glyphs as Rule 1 reads it)
+    const line = 'Action: Write /tmp/f_a.py (scope cut)'
+    const at = 'a paragraph whose word'.length
+    const path = [line.indexOf('/'), line.indexOf('py') + 2]
+    const docWith = (marks: boolean, body: string): Doc => {
+      const d = docOf([
+        {
+          lines: [
+            { text: 'a paragraph whose word', font: body },
+            { text: line, y: 640 },
+            { text: 'continues on its last line', y: 600, font: body },
+          ],
+        },
+      ])
+      const pg = d.pages[0]!
+      pg.glyphs.slice(at, at + line.length).forEach((g, j) => {
+        const f = j >= path[0]! && j < path[1]! ? 'LMMono10-Regular' : 'LMSans10-Bold'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f })
+      })
+      // (a proportional face's characters each their own advance; the typewriter's one)
+      for (const g of pg.glyphs)
+        if (!g.font.endsWith('Mono10-Regular') && !g.font.endsWith('CMTT10') && !g.blank)
+          g.x1 = g.x0 + (0.55 + (g.u.codePointAt(0)! % 3) * 0.05) * g.size
+      if (marks)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: at, box: 0 },
+            { name: 'ze', glyph: at + line.length, box: 0 },
+          ],
+        }
+      return d
+    }
+    const figuresOf = (body: string) => {
+      const B = docWith(true, body)
+      const A = docWith(false, body)
+      const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return L.members.filter((m) => m.figure && m.unit >= 0).map((m) => [m.plain, m.fixed, !!L.units[m.unit]!.pitch])
+    }
+    expect(figuresOf('ABCDEF+CMR10')).toEqual([
+      ['Action: Write', false, false],
+      ['/tmp/f_a.py', true, true],
+      ['(scope cut)', false, false],
+    ])
+    // (a paper whose body face is of one pitch: Rule 1 keeps nothing, and TeX's line goes on as before)
+    expect(figuresOf('ABCDEF+CMTT10')).toEqual([[line, false, false]])
   })
 
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {

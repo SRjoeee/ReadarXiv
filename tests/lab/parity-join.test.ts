@@ -4,9 +4,12 @@
 // the part's members of that id, as today's units of that id by their order (the baseline's rule); an ink unit's placement
 // whose text names the source unit it echoes (a contents line its heading, a note its source footnote: bundle.ts placedOf)
 // joined by the ink unit's own id, the format's unitId over its kind and the echoed content. Synthetic parts and units.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidatePitch, heldJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -232,5 +235,30 @@ describe("a member no id joined to today's unit stage 1a states its unit holds w
     expect([...heldJoin(free, part.units, [stated('held')], [98], prepared)]).toEqual([[107, { today: 98, same: true }]])
     const other = new Map([[98, { ...prepared.get(98)!, pieces: [{ kind: 'text', s: 'and' }] }]])
     expect([...heldJoin(free, part.units, [stated('held')], [98], other)]).toEqual([[107, { today: 98, same: false }]])
+  })
+})
+
+describe("the members the candidate's prepare keeps for their text set wholly in a face of one pitch (Rule 1)", () => {
+  // (stage 1a's run: its dump marks a unit so kept `keptBy: 'pitch'` (dump ords), and its located file joins each dump ord to
+  // its member's ord, `dumpOrds`; the parity reads the members by them, nothing else)
+  it("are the dump's units so marked, by their members' ords; none where the run holds no located file", () => {
+    const run = mkdtempSync(join(tmpdir(), 'axt-pitch-'))
+    try {
+      mkdirSync(join(run, 'prepare'))
+      mkdirSync(join(run, 'located'))
+      const units = [
+        { ord: 0, kind: 'para', text: 'a body paragraph' },
+        { ord: 1, kind: 'para', kept: true, keptBy: 'pitch', text: '{ "key": 1 }' },
+        { ord: 2, kind: 'code', kept: true, text: 'kept by its environment' },
+        { ord: 3, kind: 'inkfigures', keptBy: 'pitch', text: 'x = f(y)' },
+      ]
+      writeFileSync(join(run, 'prepare', 'p1.prepare.json'), JSON.stringify({ units }))
+      writeFileSync(join(run, 'located', 'p1.json'), JSON.stringify({ dumpOrds: [[0, 10], [1, 11], [2, 12], [3, 40]] }))
+      expect(candidatePitch('p1', join(run, 'prepare'))).toEqual([11, 40])
+      writeFileSync(join(run, 'prepare', 'p2.prepare.json'), JSON.stringify({ units }))
+      expect(candidatePitch('p2', join(run, 'prepare'))).toEqual([])
+    } finally {
+      rmSync(run, { recursive: true, force: true })
+    }
   })
 })

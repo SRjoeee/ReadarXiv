@@ -60,6 +60,10 @@ export const CAUSE = Object.freeze({
   // elements, which the join rule adds (ink-units.mjs: an address or a URL TeX broke onto a line of its own, 2610.22214v1's ACM
   // DOI): accepted)
   wrapped: 'held whole, with its wrapped no-word lines',
+  // ((k), 2026-11-10: a unit the prepare keeps for its text set wholly in a face of one pitch (Rule 1, PDF-READER §18.22: the
+  // engine's `pitch`, the dump's `keptBy: 'pitch'`), the original's text, no translation missing; the candidate's own unit's
+  // cause, keptWhyOf: accepted)
+  pitch: 'kept as the original: set wholly in a face of one pitch',
   another: 'another reading',
   // ((f): a unit the candidate does not make, every line of it inside a line the engine reads as a display's formula (a display
   // TeX's marked compile states, its text-mode glyphs read as text: locate's `displays`): the display's ink, kept with it — the
@@ -73,6 +77,11 @@ const LEDGER_OF_NAMES = new Set(['inknotes', 'inkorphan'])
 /** the reason a dump gives a unit the layout guard left unmarked (its marks taken out: locate finds none, run.mjs `unlocated:
  *  <cause>`), which (i) reads */
 const UNMARKED = 'unlocated: marks'
+/** (k): the cause a candidate's own unit states where the prepare keeps it for its text set wholly in a face of one pitch, by
+ *  the mark it writes (the dump's `keptBy: 'pitch'`, which the parity's ruling reads too), else null: a unit kept otherwise
+ *  (a code environment's kept block, a crowded figure text) states none */
+export const keptWhyOf = (u) => (u?.keptBy === 'pitch' ? CAUSE.pitch : null)
+
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of

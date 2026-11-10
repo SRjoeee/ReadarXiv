@@ -3469,6 +3469,81 @@ of 41 papers held a space their copy did not.
   today's count (the coordinator's ruling of 2026-11-10, `lab/typeset/parity/README.md`): back to 49 and 58, that page alone
   moved; of the 37 units over the 22 pairs that hold such a word, it is the one whose line count was worse.
 
+### 18.21 A figure's paragraph is set from its start; a half translation is never drawn; artefacts kept (2026-11-10)
+
+On staging (round 8, default toggles) 2411.13093v4 p18's Figure 8, a prompt in an included PDF set in Consolas, came back
+translated one line at a time, its JSON keys too ("DET" as "侦探组"), and each entry's indented first line laid against the box's
+right edge, the next line from the left. p19's Figure 9 the same: its code boxes, its OCR cards ("Frame y:" as "框架y:") and its
+speech notes translated line by line into fragments. The owner's line: 「重点都是翻译或者不翻译，其实都可以，但关键是不能乱翻」:
+translating or keeping are both fine; a garbled translation never is.
+
+- **A figure's paragraph is set from its start, its indented first line too.** Each line of a figure is a figure text, its anchor
+  its column's edge (§19.12). Two readings set p18's indented lines from their end. A justified paragraph's indented line shares
+  the paragraph's end column, not its start column, and the end column, holding more runs, won. Lines 515 and 527, set at
+  7.0736 pt among the paragraph's 7.0616, were also keyed apart (today's reading keyed a column's size to the hundredth), a
+  column of two.
+  A column's runs are now of one size as glyphs join a run, within 1 % of the size before. A paragraph's measure is an end column
+  and a start column whose full lines' word spaces were stretched to meet both (two that differ past ALIGN_TOL of their size;
+  a word space a gap past SPACE_GAP), the end column's other lines all starting inside it and the start column's all ending
+  inside it. Its lines are set from their start. p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified lines' 3.90.
+  Right-aligned labels have their spaces as their face sets them (2610.40394v1's bar-chart labels, 2.348 pt to the thousandth),
+  or none: no measure. Weaker readings were measured and dropped, over the 88 against r8: any two runs sharing both edges
+  (1,175 labels of 27 papers turned), two of different texts (175 of 5), two of different glyph widths (29 of 1).
+  Over the 88 now: 2 figure texts move (2610.22214v1 p1's "Model" and "Inference", centred over each other, 541.5 and
+  541.55, which the hundredth's key had parted), and 67 change the size set they are fitted in, on 7 pages of 4 papers.
+- **A translation half made is never drawn.** Every wire is judged by one rule (read, `accept`, `validSentences`); a reply that
+  fails is refused, the next translator asked, and a unit no translator gives stays the original's. The runs floor, the last
+  step, sends a refused unit's text stretches one by one; where a stretch came back from none, its English stood between
+  translated ones in a row stated ok (`runs:<id>`), drawn as a translation. The floor now gives every stretch or nothing
+  (`chain.ts` runsFloor). In 4,033 rows of 26 staging captures no row came from the floor and no marker or tag is left in
+  any text; the parity's 15,079 laid lines of 22 pairs hold none either.
+- **An artefact is kept**: text set wholly in a face of one pitch, the owner's ruling, §18.22.
+- **No rule draws the original where a lay is not clean.** The lay keeps a translation inside its own region by construction
+  and leaves one that cannot fit, shrunk to its floor, the original's (`unfit`); the part holds no page-wide ink, so nothing
+  compares a laid line with ink that stays. The parity's facts over its 344 pages (part A's final, round 8): no laid line
+  across a rule or over another unit's box (`cross` 0), one text over ink that stays (`over` 1, 25 device pixels of
+  2610.21880v1 p2's header cell), 139 lines past their room or column (`frame`; of the 111 it names, 1.16 to 12.55 pt, the
+  median 2.26; today's 145). The p19 garble was neither: it was the translation of fragments, which the artefact rule keeps. A
+  rule that drew those 139 as the original would hide readable translations and the defects the parity measures.
+
+### 18.22 Text set in a face of one pitch is kept as the original's (the owner's ruling, 2026-11-10)
+
+On §18.21's prototype the owner ruled 「同意你的建议 我们选 c」: option C, the anchor fix and this rule, always, with no toggle. It
+rests on his line quoted there: a translation may be made or not, never garbled.
+
+- **The rule** (`locate.ts`, `ink.ts`). A source unit or a figure text whose every glyph of ink is set in a face of one pitch is
+  kept as the paper has it, as a code environment's lines are (§19.7): its unit `kept`, its member `fixed`, a figure text's why
+  `figure: code`. That is code, a command, a prompt, JSON, an OCR card, an identifier. A figure's word in another face is kept
+  with its line where the ink right before and after it, in its page's order, stands on its baseline in a face of one pitch
+  (2411.13093v4 p19's "attractions" and "coin", set in Georgia inside Consolas JSON). A figure's run, TeX's line in a picture
+  too (which goes on over faces and colours, §19.12), goes into or out of no face of one pitch (`figure-text.mjs`, `fixed`):
+  2610.19159v1's transcript box titles set a path in typewriter between their words, and the path is a figure text of its own,
+  kept, the words before and after it translated. A paper whose body face is of one pitch keeps nothing for it, and its
+  figures' runs go on as before. A unit holding a word of another face stays translated, its typewriter run an element or a group: a
+  paragraph naming a function in `\texttt`, a figure's title line with a path in it. Titles, captions, questions and answers
+  set in a proportional face are translated.
+- **The facts it rests on** (`facts.ts` fixedFacesOf). A face is of one pitch where each font program of it (an embedded subset)
+  sets every character one advance at its size, within a thousandth (the PDF's widths are whole thousandths), and one of them
+  two distinct letters at least. Each program is read alone: 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and
+  p19. Neither the face's name, a macro's, nor the font's FixedPitch flag is read: producers state the flag wrong (p19's
+  Consolas subsets, 36 characters at 550 each, one flagged and one not; a CJK subset of one glyph and MSAM10 flagged). The body
+  face is the face most of the paper's source units' text glyphs are set in.
+- **Over the 88 and 2411.13093v4** (stage 1a, lane mono-rule). 40 source units are kept on 5 papers: 2608.06007v1's 23 cells
+  of API signatures, and prompts set with `\ttfamily` (2608.25210v2 6, 2610.11256v1 4, 2610.21098v1 1, 2610.22195v1 6), which
+  were translated while `\texttt` prompts were kept. 173 figure texts are kept on 8 papers (code, paths, identifiers such as
+  `lin2` and `Kitchen_In`, e-mail addresses, 2610.19159v1's 17 paths), and 129 on 2411.13093v4. Every face kept is a
+  typewriter's (Consolas, DejaVu Sans Mono, Nimbus Mono, Bera Sans Mono, Liberation Mono, Inconsolata, Computer Modern
+  Typewriter), but for the 3 words inside 2411.13093v4's code lines; no paper's body face is one of one pitch.
+- **The parity and stage 1a's differential** read a unit so kept as the original's text, no translation missing: the prepare
+  marks each (`pitch`; the lab's dump `keptBy: 'pitch'`), the parity's ruling reads the mark (`lab/typeset/parity/README.md`),
+  and the dump states it the differential's cause (k), accepted (`stated.mjs` keptWhyOf); no other unit left the original's is
+  read so.
+- **Not this rule's.** A box whose source unit is one block of a proportional line and a typewriter prompt (2608.25210v2 p3)
+  stays translated, its keys garbled; a cut at the box in the front end would keep it. A figure's name label in a proportional
+  face (2411.13093v4 p19's "DET", Georgia-Bold) is translated alone: today's rule that keeps a figure label that is a name or
+  code (`mt.mjs` isName, isCode: 1,910 of 8,962 figure labels, 49 papers, in the baseline's prepare of the 88) is not ported.
+  An algorithm in a wrapfigure (2608.27728v1 p3) is half translated: its text lines ink units, its kept blocks beside.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
@@ -4439,6 +4514,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   glyphs' ink), and every reader keeps its text as the paper has it: the figures' reading makes no unit of it, its runs counted
   under the caps as any (§19.12), and the ledger classes its line `code` whatever its face (`ledger.mjs` RULES' first), so that
   the ink units keep it (kept blocks), wherever it stands — a box TikZ draws (mdframed's `framemethod=tikz`), a float, a column.
+  Text set wholly in a face of one pitch outside such an environment is kept too, by its glyphs' advances (§18.22).
   It is a fact TeX decided, written once where every reader reads it: the one command model the layout file grows into (the
   architecture audit's §2), not a side channel of the prepare's. Measured against `next` 74d7f6a2: of 244 local sources 14 use a code environment, and the layout
   compile's files of the other 229 are byte for byte as before (their final passes too, 63 of the 77 papers run); over the 14,

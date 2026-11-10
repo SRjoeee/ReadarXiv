@@ -1,5 +1,7 @@
 // COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none): run by locate over arXiv's page (../ink.ts), held equal to today's by
+// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
+// justified paragraph set from its start (setsOf) and a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
+// fact): run by locate over arXiv's page (../ink.ts), held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
@@ -177,7 +179,7 @@ function inFrame(f, b) {
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
  */
-export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null } = {}) {
+export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null, fixed = null } = {}) {
   const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
@@ -192,6 +194,11 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // their own (CMMI10 against CMR10) and stay apart)
   const familyOf = name => faceOf(name).replace(/-.*$/u, '')
   const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // (CHANGED: a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
+  // sets at one pitch (facts.ts fixedFacesOf, read off the glyphs' advances, per font program), which locate gives where Rule 1
+  // keeps such text (PDF-READER §18.22). 2610.19159v1's transcript box titles, TeX's lines in pgf's pictures, set a path in
+  // typewriter between a title's words: one figure text, the path translated inside the title; its own figure text now, kept)
+  const pitchOf = name => !!fixed && fixed.has(faceOf(name))
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x, run) => run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
   const units = [], glyphMaps = [], turnedMaps = []
@@ -214,7 +221,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
         const tex = texLine(x, run)
-        const joins = (oneLine(x.font, run.font) || tex) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const joins = (oneLine(x.font, run.font) || tex) && pitchOf(x.font) === pitchOf(run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
@@ -373,12 +380,25 @@ function spanIn(u, b) {
  *  the page's own frame turned to it (`along`), and its point on the page (`x`, `y`) — its start (its first glyph's origin), end
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
- *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line) */
+ *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
+ *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: today's keyed it to the
+ *  hundredth, see there) */
 function edgesOf(r, gs) {
   const f = r.frame, s0 = f.ox * f.ux + f.oy * f.uy, len = Math.max(0, ...gs.map(x => along(f, x.ex, x.ey)))
   const at = s => ({ along: s0 + s, x: f.ox + f.ux * s, y: f.oy + f.uy * s })
   const square = Math.abs(f.ux) < 1e-3 || Math.abs(f.uy) < 1e-3
-  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null }
+  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null, space: spaceOf(f, gs, r.size) }
+}
+
+/** (CHANGED) a run's word space: the mean of the gaps between its glyphs past SPACE_GAP of its size, a word's; null where it has
+ *  none (one word) */
+function spaceOf(f, gs, size) {
+  let sum = 0, n = 0
+  for (let j = 1; j < gs.length; j++) {
+    const gap = along(f, gs[j].ox, gs[j].oy) - along(f, gs[j - 1].ex, gs[j - 1].ey)
+    if (gap > SPACE_GAP * size) { sum += gap; n++ }
+  }
+  return n ? sum / n : null
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
@@ -404,6 +424,20 @@ function setsOf(mine, evidence, stats) {
   if (mine.length < 2) return
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: today's keyed the size to the
+  // hundredth, and 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, made a column of their own)
+  {
+    const bySize = new Map()
+    evidence.forEach((e, i) => (bySize.get(e.key) ?? bySize.set(e.key, []).get(e.key)).push(i))
+    for (const [key, list] of bySize) {
+      const order = [...list].sort((a, b) => evidence[a].size - evidence[b].size)
+      let n = 0
+      order.forEach((i, j) => {
+        if (j && evidence[i].size - evidence[order[j - 1]].size > 0.01 * evidence[order[j - 1]].size) n++
+        evidence[i].key = `${key}:${n}`
+      })
+    }
+  }
   const byKey = new Map()
   evidence.forEach((e, i) => (byKey.get(e.key) ?? byKey.set(e.key, []).get(e.key)).push(i))
   const lines = EDGES.flatMap(edge => AXES.map(axis => ({ edge, axis, parent: new Int32Array(evidence.length).map((_, i) => i) })))
@@ -436,6 +470,39 @@ function setsOf(mine, evidence, stats) {
   // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
   // tick's label stays centred)
   const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
+  // (a paragraph's measure: an end column and a start column along the runs that hold lines in common (its full lines), their
+  // word spaces stretched apart to meet both (justified: two of them whose spaces differ past ALIGN_TOL of their size, the
+  // tolerance two edges are one by), the end column's other lines all starting inside it (an entry's first line, indented by
+  // hand) and the start column's all ending inside it (a paragraph's last line). Its lines were set each from its start, its end
+  // no edge a line was set from. Right-aligned labels that share a start too have their spaces as their face sets them, whatever
+  // their texts: one ("Population mean" twice, 2610.10492v1), none (2610.20808v1's "pt" "en" "es"), or one each, the one label
+  // more letters, the other more spaces (2610.40394v1's "Ordinary Differential Equations" and "History & General Mathematics",
+  // 2.348 pt both): no stretch, no measure. 2411.13093v4 p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified
+  // lines' 3.90. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end —
+  // 2411.13093v4 p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
+  const measured = new Map()
+  const isMeasure = (line, c) => {
+    if (line.axis !== 'along') return false
+    if (measured.has(c)) return measured.get(c)
+    const start = lines.find(l => l.edge === 'start' && l.axis === 'along')
+    const inEnd = []
+    for (let j = 0; j < evidence.length; j++) if (find(line.parent, j) === c) inEnd.push(j)
+    const byStart = new Map()
+    for (const j of inEnd) { const s = find(start.parent, j); (byStart.get(s) ?? byStart.set(s, []).get(s)).push(j) }
+    let yes = false
+    for (const [s, full] of byStart) {
+      if (full.length === inEnd.length) continue
+      const spaces = full.map(j => evidence[j].space).filter(x => x !== null)
+      if (!(spaces.length >= 2 && Math.max(...spaces) - Math.min(...spaces) > ALIGN_TOL * evidence[full[0]].size)) continue
+      const from = Math.max(...full.map(j => evidence[j].start.along)), to = Math.min(...full.map(j => evidence[j].end.along))
+      const indented = inEnd.every(j => find(start.parent, j) === s || evidence[j].start.along > from)
+      let short = true
+      for (let j = 0; j < evidence.length && short; j++) if (find(start.parent, j) === s && find(line.parent, j) !== c) short = evidence[j].end.along < to
+      if (indented && short) { yes = true; break }
+    }
+    measured.set(c, yes)
+    return yes
+  }
   const chosen = new Map()
   for (const { u } of mine) {
     const i = at.get(u)
@@ -444,8 +511,9 @@ function setsOf(mine, evidence, stats) {
       const c = find(line.parent, i), n = line.units.get(c) > 1 ? line.runs.get(c) : 0
       if (n < 2) continue
       const vote = line.votes.get(c)[line.edge]
-      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}` }
+      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}`, line, c }
     }
+    if (best?.edge === 'end' && isMeasure(best.line, best.c)) best.edge = 'start'
     if (best) chosen.set(u, best)
   }
   // (the sets: a column's units of one edge, and a key's units on one baseline)

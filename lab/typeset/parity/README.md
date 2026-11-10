@@ -240,6 +240,15 @@ on each page of each member that holds one (`unjoined`); `verdict.mjs` urlJoinRu
 judged as any. Where no unjoined bundle stands for a paper that holds such a word over lines, the ruling is not applied, and
 the log and the sheet say "url-join ruling not applied: no unjoined bundles" (v2.mjs's `notes`, the sheet's `notes`).
 
+The owner's ruling of 2026-11-10 (option C, PDF-READER §18.22): text set wholly in a face of one pitch, read off the PDF's
+glyphs (code, a prompt, JSON, an OCR card), is kept as the original's; translating or keeping are both fine, a garbled
+translation never. Such a unit is the original's text, no translation missing: a `shown` difference whose v2 member the
+candidate's prepare kept so, and a `figures` count fewer than today's by no more than today's groups joined (figuresMatched,
+by the original's box) to v2's figure members kept so, are the ruling's (`nearer` "ruling", never worse). The members are
+the ones the candidate's dump marks `keptBy: 'pitch'` (`lab/pdf/prepare-back/run.mjs`, the engine's `pitch`), joined to
+their ords by the run's `located/<paper>.json` `dumpOrds` (`join.mjs` candidatePitch; `v2.mjs` writes them, `pitch`); any
+other unit v2 leaves the original's is judged as before.
+
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
 paper's labels mixed, a page number off, ink not black) (a first line off both ways by 0.25 of the
