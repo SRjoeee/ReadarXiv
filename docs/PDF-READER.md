@@ -3814,6 +3814,37 @@ wherever any ink met its band, a frame round a citation in a sentence as much as
   face. Two of today's runs of one sentence in two faces stay two (F3). The differential pairs the units of one id in their
   order: where F0 takes some of many alike (2610.22197v1's 18 "lin2"), the pairing shifts onto others (stated, not a loss).
 
+### 18.27 A character TeX writes escaped is a character of the text (2026-11-11)
+
+`\%`, `\&`, `\#`, `\$` were placeholders: each went out as a marker, the original's ink drawn for it. Microsoft read a marker as
+a boundary inside the term it stood in: "R&D" came back as its "D", a verb, then "R&" (2610.21098v1), and a percent stood apart from
+its number. Sent both ways over 110 units of the 88 papers (90 in Chinese, 20 in Japanese, lane style-wire): as text none was
+refused and no sentence map lost, 131 of 134 percents came back glued as the paper sets them (3 written as words), every "R&D" one
+term, 140 markers fewer.
+
+- **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
+  `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
+  letter commands' path): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
+  with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
+  id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
+  an address read with such a character as TeX sets it is one placeholder as the paper writes it, as before (`keepRead`).
+- **A text `#` on the markers wire.** Microsoft gives back the entity `&#35;` as `#` (114 of 114 in Chinese, Japanese and German),
+  so the character goes bare, and a wire holding one is read as the HTML page reads a block that holds one (DESIGN §6.3): each
+  marker with its one `#`, no marker read without it, every other `#` the text's; a `#` right after a marker is refused (a doubled
+  closer or a moved `#`) unless the wire itself follows that marker with its text's `#` (`@b## of runs`, `@a# ## Root Goal`).
+  Today's wire (`mt.mjs`) read every reply as holding no `#` of its own and dropped each as a stray one; it now reads so too
+  (`TRANSLATE_VERSION`), as packages/translate's markers.ts does (`hashAfter`).
+- **The name rule reads "&" as mid-sentence** (`mt.mjs` isName): a capitalised word after "& " in the prose is a proper noun
+  there, a conjunction no sentence beginning after it. As a placeholder the `\&` stood in no text of the prose, and
+  2610.37818v1's "Tanks & Temples" cells were kept as the dataset's name; as its character they would have been sent.
+- **Measured** over the 88 papers' stage 1a against round 14's: 1,649 placeholders are characters now, in 851 units of 65
+  papers (`\%` 1,209, `\&` 270, `\#` 48, `\$` 26, `\{` and `\}` 20 each, `\textbar` 24, `\textasciitilde` 23, `\textless` 5,
+  `\textgreater` 3, `\textbackslash` 1), and the 65 papers are the ones whose objects moved. Otherwise: nested units' piece ids
+  and hashes, as their own units change; and three cells the name rule reads anew: 2610.21547v1's "ASR FedAvg (%)" (twice)
+  kept now, three name words, and 2610.21491v1's "MSE …%" no longer, four. Shown units 37,915 either way. The layout marks: such a character is text, so no mark stands
+  around it, and a paper's macro glued to it is read as before a word (its ink ends where the text begins: 2610.21098v1's
+  `\HarnessLimitShare{}\%`).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
