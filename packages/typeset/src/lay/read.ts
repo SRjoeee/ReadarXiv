@@ -555,14 +555,17 @@ export function readMember(i: ReadInput): ReadOut {
     unit: { kind: unit.kind, ...(unit.title ? { title: true } : {}), pieces },
     resolved,
     // (a group's run in the fill TeX set it in, El.colour or SpanAt.colour: a colour piece's the log's, today's tex.mjs
-    // colourOf; any other group's, a link's that hyperref colours, its glyphs' on A, today's measuredStyle `pieces`)
+    // colourOf; any other group's, a link's that hyperref colours, its glyphs' on A, today's measuredStyle `pieces`; a figure
+    // text's group, its run in another style than the text's own, in its style's fill, as S.figures draws it (F0's line, which
+    // this path lays: 2610.19159v1's dark title before its red tag, PDF-READER §18.26))
     colourOf: (k) => {
       const p = pieces[k]
+      const span = p?.t === 'open' ? spans.get(String(p.k)) : undefined
       const c =
         p?.t === 'ph' || p?.t === 'nested'
           ? els.get(String(p.k))?.colour
           : p?.t === 'open'
-            ? spans.get(String(p.k))?.colour
+            ? (span?.colour ?? (m.kind === 'figure' ? span?.style?.fill : undefined))
             : undefined
       return c ?? null
     },

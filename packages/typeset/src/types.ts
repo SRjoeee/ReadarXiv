@@ -146,8 +146,9 @@ export type Item =
   /** a crop; `cut` its edges cut from its element's ink between two glyphs (1 its left, 2 its right: a URL broken where TeX's
    *  url package breaks it), which the reader draws with no antialiased margin; `ink` its own ink, its piece's boxes on its
    *  line as the part states them (its page's PDF units; none where the part states none of its piece: lay/clips.ts), the
-   *  reader's to cut it by */
-  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[] }
+   *  reader's to cut it by; `of` the member whose label it is where another member's line draws it (a label no line opens with,
+   *  carried to the end of the name before, lay/flow.ts): lit, cut and counted as that member's */
+  | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[]; of?: number }
 
 /** one member on one page, as laid (design-a §1.2) */
 export type Laid = {

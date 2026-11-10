@@ -57,7 +57,7 @@ export const INVARIANTS = [
   {
     id: 'I10',
     says: 'on both panes every piece drawn of a lit unit (its text, its elements, its label) is in exactly one of its sentences, and the panes have the same sentences',
-    gap: "counted over the corpus's laid pages with today's rows (the typesetter's runner, --entry) and the parity's pairs as the reader lays them; not over the website's own rows, which only staging holds",
+    gap: "counted over the corpus's laid pages with today's rows (`sentence-cover`: the typesetter's runner, its entry over the reading from the part) and the parity's pairs as the reader lays them (`display`); not over the website's own rows, which only staging holds",
   },
   {
     id: 'D',
@@ -133,9 +133,13 @@ export function typesetOf(text) {
   const out = {}
   const inv = /invariants over the laid members(?: \(page by page\))?: (\{[^}]*\})/.exec(text)
   if (inv) Object.assign(out, JSON.parse(inv[1]))
-  // (I10, the sentence cover: the typesetter's runner with --entry, the parity's v2 lay)
-  const cover = /^I10, the sentence cover \(cover\.ts\): .*?(\d+) faults/m.exec(text)
-  if (cover) out.I10 = num(cover[1])
+  // (I10, the sentence cover: the typesetter's runner with --entry --reading=part, the parity's v2 lay; counted only over
+  // pieces: a run whose entry laid nothing states "0 pieces; 0 faults", no count)
+  const cover = /^I10, the sentence cover \(cover\.ts\): (?:\d+ member-pages lit, )?(\d+) pieces; (\d+) faults/m.exec(text)
+  if (cover) {
+    out.I10pieces = num(cover[1])
+    if (out.I10pieces > 0) out.I10 = num(cover[2])
+  }
   const lay = /a page's lay \(layPagePrepared[^)]*\), ms: p50 ([\d.]+), p90 ([\d.]+), p99 ([\d.]+), max ([\d.]+) over (\d+) pages/.exec(text)
   if (lay) Object.assign(out, { layP50: num(lay[1]), layP90: num(lay[2]), layP99: num(lay[3]), layMax: num(lay[4]), layPages: num(lay[5]) })
   const first = /^\{"pairs":.*\}$/m.exec(text)
@@ -357,10 +361,10 @@ export const GATES = [
   },
   {
     id: 'typeset-parts',
-    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs), each page laid again by the entry (the sentence cover), and the reader's differential",
+    title: "the typesetter over this run's prepared parts (lab/typeset/gate-l1.mjs) and the reader's differential",
     tier: 'full',
     stage: 'reader',
-    holds: ['D', 'I3', 'I4', 'I5', 'I10'],
+    holds: ['D', 'I3', 'I4', 'I5'],
     after: ['prepare'],
     needs: ctx => [
       exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
@@ -369,10 +373,35 @@ export const GATES = [
       exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
     steps: ctx => [
-      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', `--out=${join(ctx.work, 'typeset-parts')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'typeset-parts') },
       { cmd: ['node', lab(ctx, 'baseline/tools/diff.mjs'), lab(ctx, 'baseline'), join(ctx.work, 'typeset-parts'), '--scope=reader', `--json=${join(ctx.work, 'typeset-parts-diff.json')}`] },
     ],
     judge: (ctx, steps) => typesetJudge(steps),
+  },
+  {
+    id: 'sentence-cover',
+    title: "the sentence cover over this run's prepared parts: each page laid by the entry over the release's stored rows, the reading from the part (lab/typeset/gate-l1.mjs --entry --reading=part); every drawn piece in exactly one sentence on both panes",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I10'],
+    after: ['prepare'],
+    needs: ctx => [
+      exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
+      exists("the release sweep's cache (AXT_SWEEP_CACHE)", join(SWEEP_CACHE, 'papers')),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+    ],
+    // (the runner's own lay there is the reading from the part's, not typeset-parts' (today's reading): its dumps are not
+    // compared; the entry alone is read)
+    steps: ctx => [
+      { cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(ctx.work, 'sentence-cover')}`], slot: 'test', env: { AXT_L1_BUNDLES: join(ctx.work, 'prepare', 'bundles') }, fresh: join(ctx.work, 'sentence-cover') },
+    ],
+    // (counted over the pieces the entry drew: a run that laid nothing, or did not end whole, has no count and fails)
+    judge: (ctx, steps) => {
+      const t = typesetOf(steps[0]?.text ?? '')
+      const counted = steps[0]?.exit === 0 && t.I10 != null
+      return { pass: counted && t.I10 === 0, numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs }, ...(counted ? { findings: { I10: { held: t.I10 === 0, count: t.I10 } } } : {}) }
+    },
   },
   {
     id: 'display',
@@ -556,7 +585,7 @@ function typesetJudge(steps) {
   const d = steps[1] ? diffOf(steps[1].text) : {}
   return {
     pass: steps.every(s => s.exit === 0),
-    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, ...(t.I10 != null ? { I10: t.I10 } : {}), msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
-    findings: Object.fromEntries(['I3', 'I4', 'I5', 'I10'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
+    numbers: { ...d, I3: t.I3, I4: t.I4, I5: t.I5, msPerPage: t.msPerPage, layP50: t.layP50, layP90: t.layP90, layP99: t.layP99, layPages: t.layPages },
+    findings: Object.fromEntries(['I3', 'I4', 'I5'].filter(k => t[k] != null).map(k => [k, { held: t[k] === 0, count: t[k] }])),
   }
 }

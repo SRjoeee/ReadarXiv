@@ -32,6 +32,10 @@ export interface InstrumentUnit {
   /** kept for its text set wholly in a face of one pitch, or a figure's word inside such a line (Rule 1, PDF-READER §18.22):
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
+  /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0)
+   *  or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them by it; the bundle does not
+   *  carry it */
+  keptEls?: [string, 'pitch' | 'decoration'][]
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
    *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
   address?: true
@@ -64,6 +68,8 @@ export interface InstrumentUnit {
     before?: number
     after?: number
     under?: number
+    /** a container's edge over its baseline (figure-lines.ts: a closed shape round all of it), PDF units up from it */
+    over?: number
   }
   /** why the instrument gives it no ink of its own, where it gives none (the marks could not delimit it on B) */
   why?: string

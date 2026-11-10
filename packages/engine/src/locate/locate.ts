@@ -966,27 +966,12 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     }
     return any
   }
-  // (a figure's word set in another face inside a line of code: the ink glyphs right before and after it in its page's order
-  // stand on its baseline (ON_BASE) in a face of one pitch. 2411.13093v4 p19's code boxes set "attractions" and "coin" in
-  // Georgia inside their Consolas lines: translated alone, each line read a Chinese word between its kept English ones)
-  const nearInk = (a: number, step: 1 | -1): DocGlyph | null => {
-    for (let b = a + step; b >= 0 && b < NA && pageA[b] === pageA[a]; b += step) {
-      const g = gA(b)
-      if (isInk(g) && /\S/.test(g.u)) return g
-    }
-    return null
-  }
-  const insideCode = (text: readonly number[]): boolean => {
-    if (!artefacts || !text.length) return false
-    const first = gA(text[0]!)
-    const before = nearInk(text[0]!, -1)
-    const after = nearInk(text[text.length - 1]!, 1)
-    const onLine = (g: DocGlyph | null) =>
-      !!g && fixedFace(g.font) && Math.abs(g.y - first.y) <= ON_BASE * Math.max(g.size, first.size)
-    return onLine(before) && onLine(after)
-  }
+  // (a figure's word set in another face inside a line of code is that line's: figure-lines.ts reads a line every word of which
+  // stands between glyphs of one pitch as code, kept whole (Rule 1's inside-a-line read on the line, PDF-READER §18.26:
+  // 2411.13093v4 p19's "attractions" in Georgia inside its Consolas line); a figure text is kept here where it is set wholly in
+  // such a face)
   const figureArtefact = (text: readonly number[], turned: readonly [number, number][]): boolean =>
-    artefact(text, turned) || (!turned.length && insideCode(text))
+    artefact(text, turned)
   stats.artefacts = { units: 0, bodyFixed }
   for (const mem of members) {
     if (!mem.located || mem.fixed || mem.unit < 0 || mem.figure || mem.name !== undefined) continue
@@ -1051,7 +1036,8 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       mem.align = x.unit.align ?? 'j'
       // (a figure text's own text on A, which S.figures tells a translation that says nothing else by: Placed.plain; its groups'
       // text with the rest. Its runs in another face, each group's style its glyphs': the part's SpanAt.style)
-      if (x.unit.figure) mem.plain = sourceText(x.unit.content)
+      // (a figure text with an element, F0's line: none, and the paragraph path lays it, its elements carried as their ink)
+      if (x.unit.figure && !x.unit.content.some((q) => q.t === 'el')) mem.plain = sourceText(x.unit.content)
       if (x.spanStyles) mem.spanStyles = x.spanStyles
       members.push(mem)
       if (!x.text.length && !x.ph.length && !x.turned.length) {
@@ -2188,14 +2174,21 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       groups[ap - 1]!.turned[aj] = `${mem.ord}.${ap}.t`
       if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.t`)
     }
+    // (a figure text's elements' groups figures' too: the wrap writes them inside the form they are shown in, as their text's)
     for (const [id, l] of mem.els) {
       if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
-      for (const a of l) set(a, name(a, 'e'))
+      for (const a of l) {
+        set(a, name(a, 'e'))
+        if (mem.figure) figureGroups.add(name(a, 'e'))
+      }
     }
     for (const [ap, ai] of mem.textBoxes) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.t`
     for (const [id, l] of mem.elBoxes) {
       if ((pieces.get(id) as { kind?: string } | undefined)?.kind === 'display' || keptEl.has(id)) continue
-      for (const [ap, ai] of l) groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.e`
+      for (const [ap, ai] of l) {
+        groups[ap - 1]!.boxes[ai] = `${mem.ord}.${ap}.e`
+        if (mem.figure) figureGroups.add(`${mem.ord}.${ap}.e`)
+      }
     }
   }
 

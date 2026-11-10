@@ -116,9 +116,11 @@ describe("a gate's output, read as the gate states it", () => {
       'invariants over the laid members (page by page): {"laid":33371,"lines":9,"I3":78,"I4":0,"I5":0}; I3: x',
       'I10, the sentence cover (cover.ts): 64062 member-pages lit, 4783401 pieces; 491 faults:',
     ].join('\n')
-    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0, I10: 491 })
+    expect(typesetOf(text)).toMatchObject({ pairs: 123, msPerPage: 8.99, layP50: 7.77, layP90: 20.6, layP99: 32.8, layPages: 3213, I3: 78, I4: 0, I5: 0, I10: 491, I10pieces: 4783401 })
     // (the parity's v2 lay states it so too)
     expect(typesetOf('I10, the sentence cover (cover.ts): 100 pieces; 0 faults').I10).toBe(0)
+    // (an entry that laid nothing counted nothing: "0 faults" over 0 pieces is no count)
+    expect(typesetOf('I10, the sentence cover (cover.ts): 0 member-pages lit, 0 pieces; 0 faults').I10).toBeUndefined()
   })
 
   it("reads the corpus runner's log: a refused paper, a missing compile, a failure and the proofs' counts apart", () => {
@@ -193,6 +195,26 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toMatchObject({ pass: false, numbers: { compared: 2, disagree: 1 } })
   })
 
+  it('holds I10 by a gate of its own, the runner with the reading from the part, counted only where the entry laid pieces', () => {
+    const cover = gate('sentence-cover')
+    const ctx = ctxAt('/repo', '/work')
+    expect(cover.holds).toEqual(['I10'])
+    expect(cover.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/sentence-cover'])
+    // (typeset-parts, today's reading, lays no entry: it holds no I10 and asks for none)
+    expect(gate('typeset-parts').holds).not.toContain('I10')
+    expect(gate('typeset-parts').steps!(ctx)[0]?.cmd).not.toContain('--entry')
+    const said = (pieces: number, faults: number) =>
+      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults`
+    expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634 }, findings: { I10: { held: true, count: 0 } } })
+    expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
+    // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
+    const none = cover.judge!(ctx, [run(1, said(0, 0))])
+    expect(none.pass).toBe(false)
+    expect(none.findings).toBeUndefined()
+    expect(cover.judge!(ctx, [run(1, said(100, 0))]).findings).toBeUndefined()
+    // (the display gate reads the parity's lay of its pairs the same way)
+    expect(gate('display').judge!(ctx, [run(0, 'I10, the sentence cover (cover.ts): 599484 pieces; 2 faults: x'), run(0), run(0, 'parity: 9 pages of 1 pairs; 0 worse than today; missing none')]).findings).toEqual({ I10: { held: false, count: 2 } })
+  })
   it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, passing on its exit", () => {
     const text = [
       'parity: 365 pages of 22 pairs; 2 worse than today; missing 2303.11366v4-zh',

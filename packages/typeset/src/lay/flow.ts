@@ -151,7 +151,8 @@ function layLine(
   // held), so that the breaker keeps it with the group before it, as it keeps such a mark inside one text: where the line no
   // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging (round 8
   // B3): the tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
-  // then laid from TeX's separation after the mark, its own label no longer before it)
+  // then laid from TeX's separation after the mark, its own label no longer before it. The crop names its owner (`of`): the
+  // label stays the owner's, its group off on its page as where the owner draws it (entry.ts), so the comma is drawn once)
   const marks = row.map((m, k) => {
     const rs = m.rowStart,
       t0 = m.tokens[0]
@@ -162,7 +163,12 @@ function layLine(
       x1 = rs.ownLabel[4]! + 0.4
     const box = t0.crop.crop as [number, number, number, number]
     return {
-      token: { ...t0, crop: { ...t0.crop, crop: [x0, box[1], x1, box[3]] }, cw: x1 - x0, glue: true } as typeof t0,
+      token: {
+        ...t0,
+        crop: { ...t0.crop, crop: [x0, box[1], x1, box[3]], of: m.ord },
+        cw: x1 - x0,
+        glue: true,
+      } as typeof t0,
       gap: Math.max(0, rs.x - x1),
     }
   })

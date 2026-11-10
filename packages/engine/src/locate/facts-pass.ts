@@ -642,6 +642,7 @@ export function factsOf({
       else if (fig.y !== undefined) mem.run = [r2(fig.x), r2(fig.y), r2(fig.length), r2(fig.before), r2(fig.after)]
     }
     if (fig?.under !== undefined) mem.room.under = r2(fig.under)
+    if (fig?.over !== undefined) mem.room.over = r2(fig.over)
     if (unit?.cell) {
       // (the table's rules over and under it: no unit's ink. An underscore TeX draws as a rule on a baseline is its unit's, a
       // fraction's bar its element's: 1512.03385v1 p5's "conv2_x" read its own as the rule over it, 2610.21924v1 p21's cells
