@@ -1060,6 +1060,14 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       ['cite', [0]],
       ['cite', [1]],
     ])
+    // (lines so close that the second line's frame reaches into the first one's band: its middle on its own line, its own
+    // citation's still, 2609.19644v1 p3)
+    fig.met.set(4, { items: [boxMet(1, rect(136, 683, 153, 699))], under: null })
+    const [u] = figureLinesOf([page], fig, () => false, null)
+    expect(u!.els.map((e) => [e.kind, e.boxes])).toEqual([
+      ['cite', [0]],
+      ['cite', [1]],
+    ])
   })
   it('reads a paragraph’s line break as a word’s end: a framed stretch ending one line or starting the next is an element', () => {
     const { page, fig } = pageOf(
