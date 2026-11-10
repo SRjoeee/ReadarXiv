@@ -222,7 +222,10 @@ order.map(i => [allUnits[i], i]).forEach(([u, i]) => {
   const state = st.drawn ? 'drawn' : 'laid'
   states[state]++
   const lines = mem.lines.map(l => ({ page: l[0], x0: l[2], x1: l[3], baseline: l[4], top: l[5], bottom: l[6], size: mem.style.size }))
-  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
+  // (a figure text's element kept as the original's ink, the engine's `keptEls` (a run of one pitch, F0's; a stretch its decoration
+  // holds): `keptBy`, which the parity reads, join.mjs candidatePitch)
+  const keptEl = new Map(u.keptEls ?? [])
+  const elements = mem.elements.filter(([, el]) => el.ink.length).map(([k, el]) => ({ k: Number(k), kind: el.kind, flags: el.keep ? ['KEPT'] : [], ...(keptEl.has(k) ? { keptBy: keptEl.get(k) } : {}), segs: el.ink.map(x => ({ page: x[0], x0: x[1], x1: x[3], baseline: x[5], top: x[4], bottom: x[2] })) }))
   const label = mem.labelAt ? [{ kind: LABEL_KIND[mem.labelAt.kind] ?? 'number', page: mem.labelAt.ink[0], x0: mem.labelAt.ink[1], x1: mem.labelAt.ink[3], baseline: mem.labelAt.ink[5], top: mem.labelAt.ink[4], bottom: mem.labelAt.ink[2] }] : null
   // (a unit kept for its text set wholly in a face of one pitch states (k), the differential's cause, before the bundle's why)
   const why = keptWhyOf(base) ?? st.why

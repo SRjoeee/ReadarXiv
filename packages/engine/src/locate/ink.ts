@@ -591,6 +591,16 @@ function figureTextOf(
       kind: 'inkfigures',
       content,
       ...(classes.length ? { classes } : {}),
+      ...(classes.length
+        ? {
+            keptEls: classes.map(([id]): [string, 'pitch' | 'decoration'] => [
+              id,
+              (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
+                ? 'pitch'
+                : 'decoration',
+            ]),
+          }
+        : {}),
       figure: { set: -1 - t.ks[0]!, ...room },
       ...(f0.anchor ? { align: ALIGN_OF[f0.anchor as keyof typeof ALIGN_OF] } : {}),
       ...(t.why
