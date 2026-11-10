@@ -348,8 +348,12 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     expect(figureLinesOf([cut.page], cut.fig, () => false, null)).toEqual([])
   })
   it('reads tone pieces under consecutive stretches as one tone, a word space between them or not, their heights the words’ (2411.13093v4 p19)', () => {
-    // ("D. It is hidden": a box under each word, as tall as the word's own ink and a point round it, a word space between boxes)
-    const { page, fig } = pageOf([[{ text: 'D. It is hidden', font: 'Georgia' }]])
+    // ("D. It is hidden": a box under each word, as tall as the word's own ink and a point round it, a word space between boxes;
+    // the option before it under it, as Figure 9 lists them)
+    const { page, fig } = pageOf([
+      [{ text: 'D. It is hidden', font: 'Georgia' }],
+      [{ text: 'C. It is shown', font: 'Georgia' }],
+    ])
     const g = page.glyphs as Glyph[]
     const words: [number, number][] = [
       [0, 1],
@@ -369,10 +373,9 @@ describe('figure-lines: the relation reading of a crowded figure text’s ink (t
     })
     // (an item, F3: its marker "D." its label; the tone under the label and under every word of its text is its ground, no
     // word an element)
-    const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
-    expect(rest).toEqual([])
-    expect(t!.label.map((j) => g[j]!.u).join('')).toBe('D.')
-    expect([t!.els, t!.why]).toEqual([[], null])
+    const texts = figureLinesOf([page], fig, () => false, null)
+    expect(texts.map((x) => x.label.map((j) => g[j]!.u).join(''))).toEqual(['D.', 'C.'])
+    expect([texts[0]!.els, texts[0]!.why]).toEqual([[], null])
   })
   it('makes no element of a stretch a plot’s shading holds, a tone taller than the line (2610.21547v1 p14 "bound m = 1")', () => {
     const { page, fig } = pageOf([[{ text: 'bound m = 1', font: 'Times' }]])
@@ -663,13 +666,21 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     const two = pageOf([body('the quick brown fox jumps over'), body('lazy dogs')])
     expect(figureLinesOf([two.page], two.fig, () => false, null)).toEqual([])
   })
-  it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", a line alone (2411.13093v4 p19)', () => {
-    for (const marker of ['A.', 'c)', '(b)', '1.', '-']) {
-      const { page, fig } = pageOf([body(`${marker} 12:30 PM in the car`)])
-      const [t, ...rest] = figureLinesOf([page], fig, () => false, null)
+  it('makes an item’s marker its label, never its text: "A. 12:30 PM in the car", an item of a list (2411.13093v4 p19)', () => {
+    // (each marker with the next item's, one under the other at one left edge: a list)
+    for (const [marker, next] of [
+      ['A.', 'B.'],
+      ['c)', 'd)'],
+      ['(b)', '(c)'],
+      ['1.', '2.'],
+      ['-', '-'],
+    ]) {
+      const { page, fig } = pageOf([body(`${marker} 12:30 PM in the car`), body(`${next} 1:30 PM in the canteen`)])
+      const [t, u, ...rest] = figureLinesOf([page], fig, () => false, null)
       expect(rest).toEqual([])
       const G = page.glyphs as Glyph[]
       expect(t!.label.map((g) => G[g]!.u).join('')).toBe(marker)
+      expect(u!.label.map((g) => G[g]!.u).join('')).toBe(next)
       expect(t!.order).toHaveLength(1)
       const text = t!.order[0] as { t: 'text'; glyphs: number[] }
       expect(text.glyphs.map((g) => G[g]!.u).join('')).toBe('12:30PMinthecar')
@@ -678,6 +689,17 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
     for (const text of ['An option in the car', 'e.g. in the car', '12.5 km from here', 'A.']) {
       const { page, fig } = pageOf([body(text)])
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
+    }
+  })
+  it('reads no label where no list stands: an initial opening a reference’s line, a bracket’s end (2609.19644v1 pp. 66, 70)', () => {
+    // ("S. Smith and P. Li. A title" alone; "64) and the rest" with no "63)" or "65)"; "A." and "C." are no list)
+    for (const lines of [
+      ['S. Smith and P. Li. A title'],
+      ['64) and the rest of it'],
+      ['A. the first one', 'C. the third one'],
+    ]) {
+      const { page, fig } = pageOf(lines.map(body))
+      expect(figureLinesOf([page], fig, () => false, null).flatMap((t) => t.label)).toEqual([])
     }
   })
   it('begins an item at each marker: an item of two lines one text with its label, the next item its own', () => {

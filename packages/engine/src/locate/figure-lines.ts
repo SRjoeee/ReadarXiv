@@ -215,6 +215,7 @@ export function figureLinesOf(
   for (const { p, glyphs, boxes, runOf, lines, loose } of built) {
     // ---- each line read: its glyphs' roles, M (a formula's), F (a face of one pitch) or T, in its order
     const reads = lines.map((l) => lineRead(l, glyphs, pitch, math))
+    listed(lines, reads, glyphs)
     // (the ink its runs met, each item once: a frame or a tone two runs of one text met is one, judged once)
     const itemsOf = (ks: readonly number[]) => {
       const seen = new Set<string>()
@@ -613,6 +614,41 @@ function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
     if (MARKER.test(m) && worded) marker = head
   }
   return { gs, pieces, kind: pieces.some((st) => st.r !== 'T') ? 'mixed' : 'plain', marker }
+}
+
+/**
+ * F3: an item's marker is one of a list: another line of its figure opens with a marker of its form at its left edge
+ * (PARA_ALIGN_TOL of the size), the next one or the one before ("A." and "B.", "(a)" and "(b)", "1." and "2."; a bullet or a
+ * dash the same). Where none does, the line opens with no marker: a name's initial opening a reference's wrapped line ("S.
+ * Smith", 2609.19644v1 p66), a bracket's end a line before opened ("64)", p70)
+ */
+function listed(lines: readonly Line[], reads: Read[], glyphs: readonly G[]): void {
+  const keyOf = (s: string) => {
+    const m = /^(\(?)(?:(\p{L})|(\p{N}{1,3}))([.)])$/u.exec(s)
+    if (!m) return { form: s, v: null as number | null }
+    const letter = m[2]
+    return {
+      form: `${m[1]}${letter ? (letter === letter.toUpperCase() ? 'A' : 'a') : '1'}${m[4]}`,
+      v: letter ? letter.codePointAt(0)! : Number(m[3]),
+    }
+  }
+  const ms = reads.map((r, i) =>
+    r.marker.length ? { i, ...keyOf(r.marker.map((g) => glyphs[g]!.u).join('')), x: glyphs[r.marker[0]!]!.x0 } : null,
+  )
+  for (const a of ms) {
+    if (!a) continue
+    const l = lines[a.i]!
+    const list = ms.some(
+      (b) =>
+        !!b &&
+        b !== a &&
+        lines[b.i]!.fig === l.fig &&
+        b.form === a.form &&
+        Math.abs(b.x - a.x) <= PARA_ALIGN_TOL * l.size &&
+        (a.v === null || (b.v !== null && Math.abs(b.v - a.v) === 1)),
+    )
+    if (!list) reads[a.i]!.marker = []
+  }
 }
 
 /** a read line's pieces into a text's order and elements: its text stretches, each run of one pitch an element `code`, each

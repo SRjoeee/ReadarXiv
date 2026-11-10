@@ -419,8 +419,9 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
   })
 
   it('makes an item’s marker in a figure its label, the original’s ink, its text the words after it (F3, 2411.13093v4 p19)', () => {
-    // (Figure 9's options: "A. 12:30 PM in the car" came back with its "A." read as a word. The marker is the item's label: its
-    // glyphs the member's label, never in its unit's text; the member laid by the paragraph path after its label)
+    // (Figure 9's options: "A. 12:30 PM in the car" came back with its "A." read as a word. The marker is the item's label, one
+    // of a list (the next option under it): its glyphs the member's label, never in its unit's text; the member laid by the
+    // paragraph path after its label)
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
     const A = docOf([
@@ -428,6 +429,7 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
         lines: [
           'a paragraph whose word',
           { text: 'A. 12:30 PM in the car', x: 96, y: 640, form: true },
+          { text: 'B. 12:30 PM in the canteen', x: 96, y: 628, form: true },
           { text: 'continues on its last line', y: 560 },
         ],
       },
