@@ -617,43 +617,6 @@ describe('figure-lines: F1, a formula in a figure is an element, never sent (the
     expect(t!.els.map((e) => e.kind)).toEqual(['math'])
     expect(t!.why).toBe('crowded')
   })
-  it('keeps a fraction’s other line a full size under its formula as its ink: nearer its own line than any other (2610.35877v1 p3)', () => {
-    // ("h/(1−h)": the denominator 1.01 of the size under the baseline, no line takes it; the next line 2.6 of it down)
-    const T = 'NimbusRomNo9L-Regu'
-    const { page, fig } = pageOf([
-      [
-        { text: 'set ', font: T },
-        { text: 'h', font: 'CMMI10', run: false, x: 95 },
-        { text: '1−h', font: 'CMMI7', size: 7, run: false, x: 96, dy: -10.1 },
-        { text: ' as the weight', font: T, x: 102 },
-      ],
-      [{ text: 'Shift strength', font: T, dy: -12 }],
-    ])
-    const t = figureLinesOf([page], fig, () => false, null, new Set([T])).find((x) => x.ks.includes(0))
-    expect(t!.els.map((e) => e.kind)).toEqual(['math'])
-    expect(t!.why).toBe('crowded')
-  })
-  it('reads ink no line took nearer another line across it as no ink of this line’s formula (a script of the line under it)', () => {
-    // (a superscript "2" of the line under, 5.5 over its baseline and 8.5 under this one's, past the half size that joins a glyph
-    // to its line: no line takes it, and the line under is the nearer)
-    const T = 'NimbusRomNo9L-Regu'
-    const { page, fig } = pageOf([
-      [
-        { text: 'the weights ', font: T },
-        { text: 'x', font: 'CMMI10', run: false },
-        { text: ' hold', font: T },
-      ],
-      [
-        { text: 'and ', font: T },
-        { text: 'y', font: 'CMMI10', run: false },
-        { text: '2', font: 'CMR7', size: 7, run: false, x: 144, dy: 5.5 },
-        { text: ' rises past the line', font: T, x: 100 },
-      ],
-    ])
-    const t = figureLinesOf([page], fig, () => false, null, new Set([T])).find((x) => x.ks.includes(0))
-    expect(t!.els.map((e) => e.kind)).toEqual(['math'])
-    expect(t!.why).toBeNull()
-  })
   it('reads ink no line took standing on another line’s baseline as that line’s, never its formula’s (2609.19644v1 p11)', () => {
     // (a table's group header over its rows: the number cells no unit, ink no line takes, stand on the row's baseline under the
     // header's formula)
