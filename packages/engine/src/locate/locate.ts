@@ -41,6 +41,7 @@ import {
   fakedCaps,
   fillRunsOf,
   fixedFacesOf,
+  joinAccents,
   type StyleGlyph,
   sourceText,
   styleOf,
@@ -1545,7 +1546,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const level =
         !(cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)) ||
         (!bx.length &&
-          groups.every((gs) => new Set(gs.filter((a) => /\S/.test(gA(a).u)).map((a) => r2(gA(a).y))).size <= 1) &&
+          groups.every((gs) => new Set(asRead(gs, gA).filter((g) => /\S/.test(g.u)).map((g) => r2(g.y))).size <= 1) &&
           (!!classOf.get(id)?.mark || standsAsDrawn(groups, ink, false, gA)))
       // (a symbol, drawn as its reading's character (El.sym) on the line's baseline, or raised where its reading raises it: only
       // where TeX's ink is that symbol so drawn, no Latin letter or digit among its glyphs (a symbol's reading holds none, its
@@ -2509,6 +2510,12 @@ function columnsAndMeasures(
 /** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
  *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
  *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
+/** a line's glyphs of an element as its text is read (facts.ts textOf): each spacing accent TeX set over its letter joined to it
+ *  (joinAccents), the accent no glyph of its own. TeX's \accent raises the accent over its letter by the letter's height less
+ *  the x-height, so `\v{c}`'s caron stands 0.05 pt over the line's baseline (2610.21312v1 p2's "(Marčenko and Pastur, 1967)"):
+ *  read glyph by glyph, an element holding one stood on two baselines and stated no text, drawn as one crop no line could break,
+ *  where the unit's own text reads the accent as its letter's. A script stays its own glyph: no accent is set over it */
+const asRead = (gs: readonly number[], gA: (a: number) => DocGlyph): readonly DocGlyph[] => joinAccents(gs.map(gA))
 /** whether an element's glyphs (by line, `groups`, read by `gA`, each line's with its ink's box on the line it stands on, `ink`,
  *  its baseline at 5) stand where its text is drawn: each glyph of a character on its line's baseline, as two baselines are
  *  told (ON_BASE: the line's stated to a hundredth, a glyph's as the PDF wrote it; TeX's positions fall on a half-hundredth
@@ -2521,8 +2528,7 @@ function standsAsDrawn(
   gA: (a: number) => DocGlyph,
 ): boolean {
   return groups.every((gs, q) =>
-    gs.every((a) => {
-      const g = gA(a)
+    asRead(gs, gA).every((g) => {
       if (!/\S/.test(g.u)) return true
       const base = (ink[q] as Ink)[5]
       return raised ? g.y > base + ON_BASE : Math.abs(g.y - base) <= ON_BASE

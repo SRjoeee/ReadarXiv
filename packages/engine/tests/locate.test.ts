@@ -2779,6 +2779,52 @@ describe('an element’s ink is what TeX set for it', () => {
     expect(elementOf(L, '6').text).toBe('5')
   })
 
+  it('states the text of an element whose letter TeX built from an accent over it, read with the accent joined, as a unit’s is', () => {
+    // (2610.21312v1 p2's `\citep{marchenko1967}`, "(Marčenko and Pastur, 1967)": `\v{c}` is TeX's \accent, the caron a glyph of
+    // its own set over the c and raised 0.05 pt off the line's baseline (the letter's height less the x-height). Read glyph by
+    // glyph its citation stood on two baselines, so it stated no text and was drawn as one crop 114 pt wide that no line could
+    // break; the unit's own text and an element's text read such an accent as its letter's (facts.ts joinAccents). Its siblings,
+    // with no accent, state theirs. A script's raise is still no text: the caron is no script, it is set over its letter)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'as in ', x: 72, y: 700 },
+          { text: '(Mar', x: 108, y: 700 },
+          { text: 'ˇ', x: 132, y: 700.05 },
+          { text: 'cenko and Pastur, 1967)', x: 132, y: 700 },
+          { text: ' and ', x: 270, y: 700 },
+          { text: '(Baik, 2005)', x: 300, y: 700 },
+          { text: ' now', x: 372, y: 700 },
+        ],
+      },
+    ])
+    const content = [text('as in '), el('1', '\\citep{m}'), text(' and '), el('3', '\\citep{b}'), text(' now')]
+    const ins = ownedBy(
+      B,
+      [
+        paraOf(content, [
+          ['1', { cls: 'cite' }],
+          ['3', { cls: 'cite' }],
+        ]),
+      ],
+      [
+        [
+          [0, T, -1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, E, 1],
+          [0, T, -1],
+          [0, E, 3],
+          [0, T, -1],
+        ],
+      ],
+    )
+    const L = locate(ins, B, align(B, B))
+    expect(elementOf(L).text).toBe('(Marčenko and Pastur, 1967)')
+    expect(elementOf(L).ink).toHaveLength(1)
+    expect(elementOf(L, '3').text).toBe('(Baik, 2005)')
+  })
+
   it('states a symbol drawn as its ink where TeX’s glyphs are not that symbol as drawn: a letter among them, or a raise its reading lacks', () => {
     // (2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred: the source's reading, which knows no `\vs`, is the symbol "*"
     // drawn on the baseline at the line's size (phClass2, `sym` without its raise), so the typesetter drew a full-size * and the
