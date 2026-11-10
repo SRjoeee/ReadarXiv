@@ -11,7 +11,7 @@ import { mountElement } from '../ui/render-hook'
 vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getURL: (path: string) => path } } }))
 
 import { Appearance, OWN_HIGHLIGHT_ID } from '@/entrypoints/options/sections/Appearance'
-import { O, S, setLocale } from '@/ui/strings'
+import { O, S, setLocale } from '@readarxiv/ui'
 
 /** The section over a configuration that follows its own writes, as the data layer's does */
 function Harness({ start, patches }: { start: Config; patches: Config[] }) {

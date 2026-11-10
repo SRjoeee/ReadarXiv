@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type DockPlacement, type FloatingButtonOptions, type FloatingButtonStrings, mountFloatingButton } from '@/core/floating/button'
 import { Settings as LucideSettings } from 'lucide'
 import { restore } from '@/core/renderer/page'
-import { tokenSheet } from '@/shared/tokens'
+import { tokenSheet } from '@readarxiv/ui'
 import { ruleOf, rules, sheet } from '../styles/css-rules'
 
 // The floating button on arXiv's pages (issue #169, DESIGN §4.0c, UI.md S-I-06): Read Frog's frame, resting and opening
@@ -191,6 +191,12 @@ describe('the floating button: what it is made of', () => {
     expect(variables.filter(name => !name.startsWith('--axt-'))).toEqual([])
     expect(attributes.filter(name => !name.startsWith('data-axt-'))).toEqual([])
     expect(q('.axt-fb-dock').style.getPropertyValue('--axt-unzoom')).toBe('0.8')
+  })
+
+  it('is not printed: a printed page shows the paper, not the button (#614)', () => {
+    const { root } = mount()
+    const all = rules(root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, ''))
+    expect(ruleOf(all, '.axt-fb-dock', ['@media print'])).toEqual({ display: 'none !important' })
   })
 
   it('its sheet carries no :has() (hard rule 9): what a selector would ask of the structure, a data-axt-* mark says', () => {
@@ -599,6 +605,13 @@ describe('the floating button: the control panel', () => {
     expect([m.q('.axt-fb-panel-box').hidden, m.q('.axt-fb-menu').hidden]).toEqual([true, false])
   })
 
+  it('closed from inside its frame, it gives the focus back to the control that opened it (#614)', () => {
+    const m = mount()
+    m.q('.axt-fb-panel').dispatchEvent(click())
+    fromFrame(m.q<HTMLIFrameElement>('.axt-fb-panel-box iframe'), { type: 'axt:panel-close' })
+    expect([m.q('.axt-fb-panel-box').hidden, m.root.activeElement]).toEqual([true, m.q('.axt-fb-panel')])
+  })
+
   it('opens on the host\'s word too, for a click on the main button that nothing could serve', () => {
     const { entry, q } = mount({ main: { kind: 'toggle', run: () => undefined } })
     entry.openPanel()
@@ -638,6 +651,24 @@ describe('the floating button: the close menu', () => {
     expect(root.activeElement).toBe(q('.axt-fb-hide-now'))
   })
 
+  it('keyboard focus holds the dock open: Escape out of the menu with the pointer gone leaves it open on the close control (#614)', () => {
+    vi.useFakeTimers()
+    const { q, dock, root } = mount()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    q('.axt-fb-options').dispatchEvent(click(0))
+    dock.dispatchEvent(new MouseEvent('mouseleave'))
+    q('.axt-fb-menu').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    vi.advanceTimersByTime(1000)
+    expect([q('.axt-fb-menu').hidden, root.activeElement, dock.dataset.axtExpanded]).toEqual([true, q('.axt-fb-options'), 'yes'])
+  })
+
+  it('focus leaving the close menu closes it: Tab out of an item (#614)', () => {
+    const { q } = mount()
+    q('.axt-fb-options').dispatchEvent(click(0))
+    q('.axt-fb-hide-now').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true, relatedTarget: q('.axt-fb-lock') }))
+    expect([q('.axt-fb-menu').hidden, q('.axt-fb-options').getAttribute('aria-expanded')]).toEqual([true, 'false'])
+  })
+
   it('"hide for now" and "don\'t show again" take the entry off the page and tell the host which', () => {
     const now = mount()
     now.q('.axt-fb-options').dispatchEvent(click())
@@ -665,7 +696,7 @@ describe('the floating button: its material (the redesign\'s design, §7)', () =
   /** the button's sheet as its shadow root holds it, comments out */
   const own = () => mount().root.querySelector('style')!.textContent!.replace(/\/\*[\s\S]*?\*\//g, '')
   /** the shared controls' rules, each role named as a shadow root on arXiv's pages names it */
-  const shared = rules(sheet('../../src/styles/controls.css'))
+  const shared = rules(sheet('../../packages/ui/src/controls.css'))
   const C = ['@layer components']
   const axt = (d: Record<string, string>) => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.replaceAll('var(--', 'var(--axt-')]))
   const pick = (d: Record<string, string>, keys: string[]) => Object.fromEntries(keys.map(k => [k, d[k]]))

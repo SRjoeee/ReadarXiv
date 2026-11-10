@@ -17,15 +17,16 @@ import { appearanceSheet } from '@/core/renderer/page'
 import { installFigureViewer, SPOT_CLASS, VIEWER_CLASS } from '@/core/viewer'
 import { enableDebug } from '@/entrypoints/content/debug'
 
-const STYLES = join(import.meta.dirname, '../../src/styles')
+/** the extension's sheets, and the kit's and the tokens' that moved into the interface package (packages/ui) */
+const STYLES = [join(import.meta.dirname, '../../src/styles'), join(import.meta.dirname, '../../packages/ui/src')]
 
 describe('the injected style sheets', () => {
-  const files = readdirSync(STYLES).filter(f => f.endsWith('.css')).sort()
+  const files = STYLES.flatMap(dir => readdirSync(dir).filter(f => f.endsWith('.css')).sort().map(f => join(dir, f)))
 
   it('carry no :has() outside comments', () => {
-    expect(files.length).toBeGreaterThan(0)
+    expect(files.length).toBeGreaterThan(2)
     for (const file of files) {
-      const rules = readFileSync(join(STYLES, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      const rules = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
       expect(rules, `${file} uses :has()`).not.toContain(':has(')
     }
   })
@@ -97,11 +98,14 @@ describe('the style sheets built in TypeScript', () => {
 // in `has-disabled:`
 describe('the PDF reader\'s style sheets', () => {
   const READER = join(import.meta.dirname, '../../src/entrypoints/pdf-reader/reader.css')
+  /** the reader's own sheet, which the page's imports (the chrome's, moved into packages/reader) */
+  const CHROME = join(import.meta.dirname, '../../packages/reader/src/chrome/reader.css')
   const ENGINE = join(import.meta.dirname, '../../src/pdf-reader/engine/view/engine.css')
   const sources = (path: string): string[] => (statSync(path).isDirectory() ? readdirSync(path, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? sources(join(path, e.name)) : /\.(tsx?|mjs)$/.test(e.name) ? [join(path, e.name)] : [])) : [path])
 
   it('carry no :has() outside comments', () => {
-    for (const file of [READER, ENGINE]) expect(readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), `${file} uses :has()`).not.toContain(':has(')
+    expect(readFileSync(READER, 'utf8')).toContain('@import "@readarxiv/reader/reader.css";')
+    for (const file of [READER, CHROME, ENGINE]) expect(readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), `${file} uses :has()`).not.toContain(':has(')
   })
 
   it('take Tailwind\'s utilities from the reader\'s own sources, which use no has- variant', () => {

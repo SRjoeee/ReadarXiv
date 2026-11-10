@@ -21,8 +21,8 @@
 import { checkBoxes } from '../layout/cell-rules.mjs'
 import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, mergeLayout, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
-import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '../layout/delta-wire.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '@readarxiv/engine'
+import { isMemoryError } from '@readarxiv/engine'
 import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
@@ -154,7 +154,7 @@ export const BASE_SOURCES = Object.freeze(['ours', 'arxiv'])
  *  the wire: a head without one reads as `full`), the delta's fallback. The delta's bounds and its replaced pages' list:
  *  layout/delta-wire.mjs */
 export { BASE_KINDS, DELTA_MAX_BYTES }
-export { DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '../layout/delta-wire.mjs'
+export { DELTA_MAX_SHARE, REPLACED_MAX, deltaSection, replacedWhy } from '@readarxiv/engine'
 /** why a head's base is arXiv's in a bundle of 8 (`base.why`): the paper's refusal, a code of LAYOUT_REFUSED, which every part
  *  with no layout says too */
 export const BASE_WHYS = LAYOUT_REFUSED

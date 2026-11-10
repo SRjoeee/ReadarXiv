@@ -30,8 +30,8 @@ vi.mock('@/pdf-reader/engine/layout/make.mjs', async importOriginal => {
     },
   }
 })
-vi.mock('@/pdf-reader/engine/layout/ink.mjs', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layout/ink.mjs')>()
+vi.mock('@readarxiv/engine', async importOriginal => {
+  const actual = await importOriginal<typeof import('@readarxiv/engine')>()
   return { ...actual, pageInk: (...a: Parameters<typeof actual.pageInk>) => { const r = actual.pageInk(...a); return inkCap.on ? { ...r, capped: true } : r } }
 })
 

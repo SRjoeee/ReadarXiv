@@ -22,7 +22,7 @@ export { LABEL_KINDS, LAYOUT, LAYOUT_CAP, LAYOUT_DEPTH, LAYOUT_VALUES, LayoutRef
 export { COORD_MAX, PAGES_MAX, PIECES_MAX, STRING_MAX, boundedJson, checkKeys, checkPages, checkViews, countValues, inView, isInteger, isNumber, isObject, isVersionToken, told, utf8Strict } from './layout/json.mjs'
 export { DISPLAY, FOLLOWERS, GLYPHS_PIECE, INK_BUDGET, INK_TEXT_MAX, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, MARKS_CAP, MARKS_DEPTH, MARKS_SCHEMA, MARKS_VALUES, MARK_CLASSES, MARK_NAME, OWNED_ALL, POINTS_TEX, PROBE_MAX, PROBE_SCHEMA, RULE, RULES_PIECE, TEXT_SYMBOLS, asSet, askedCommands, classOf, commandOf, encodeLayoutMarks, headEnd, inkSamples, inkSection, layoutMarking, layoutMarksOf, markProbeTex, marksFile, parseLayoutMarks, probeRow, probeSamples, probeTex, punctuationSection, readInkProbe, readInkTexts, readMarked, readMarkProbe, readProbe, switchedOf, symbolText } from './layout/marks.mjs'
 export { DEFAULT_RULES, WHOLE_RULES, fontName, makeLayout } from './layout/make.mjs'
-export { GLYPHS_PAGE, OPS_CAP } from './layout/ink.mjs'
+export { GLYPHS_PAGE, OPS_CAP } from '@readarxiv/engine'
 export { readArxivText } from './layout/arxiv.mjs'
 export { handoverOf, layoutMarksOfPaper, markedOfPaper } from './layout/paper.mjs'
 export type { FinalPass, OwnVerdict } from './layout/paper.mjs'
@@ -35,15 +35,16 @@ export { float32Outlines, LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWor
 export { REMOVAL } from './pipeline/versions.mjs'
 // the rules near a table's cells, which a part carries (layer2.mjs cellBands)
 export { checkBoxes, pageRules } from './layout/cell-rules.mjs'
-export { BYTES_MAX, COST, DecodeLimit, HELD_MAX, LexLimit, WALK_MAX, alignOf, lex, openRemover } from './layout/remove.mjs'
-export type { AlignFacts } from './layout/remove.mjs'
+export { BYTES_MAX, COST, DecodeLimit, HELD_MAX, LexLimit, WALK_MAX, alignOf, lex, openRemover } from '@readarxiv/engine'
+export type { AlignFacts } from '@readarxiv/engine'
 // our base as an incremental update over arXiv's PDF (the delta): built and proved in the maker child, its section read back, its why
 export { DELTA_DECODED_MAX, DELTA_HELD_MAX, DELTA_WORK_MAX, deltaOf, proveDelta } from './layout/delta.mjs'
-export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection, UNHIDDEN, WRAP_STATS, wrapWhy } from './layout/delta-wire.mjs'
+export { DELTA_OBJECTS_MAX, DELTA_WHYS, deltaSection, UNHIDDEN, WRAP_STATS, wrapWhy } from '@readarxiv/engine'
 // our final pass's pages wrapped by optional content, in the maker child before the delta (per-unit erasure)
-export { GROUPS_DOC, GROUPS_PAGE, SEQUENCES_PAGE, WRAP_WHYS, wrapFinal } from './layout/wrap.mjs'
+export { GROUPS_DOC, GROUPS_PAGE, SEQUENCES_PAGE, WRAP_WHYS } from '@readarxiv/engine'
+export { wrapFinal } from './layout/wrap-final.mjs'
 export type { Delta, DeltaRefusal, DeltaStats } from './layout/delta.mjs'
-export type { BaseKind, DeltaWhy, PageRanges } from './layout/delta-wire.mjs'
+export type { BaseKind, DeltaWhy, PageRanges } from '@readarxiv/engine'
 // the bundle's writer (the reader's parsers are the layer entry's)
 export { bundleUnitsOf, writeBundle } from './layer-proto/bundle.mjs'
 // BUNDLE 4: the writers of a paper's objects, the keys and the bounds (the readers are the layer entry's), and the memory-class errors every catch lets through
@@ -56,6 +57,6 @@ export type { Cut, CutEntry, CutOptions, LeftPageInput, WholePaper } from './lay
 export { DRAW_ARGS, DRAW_BYTES, DRAW_COORD, DRAW_DEST, DRAW_FALLBACK, DRAW_FONTS, DRAW_HELD_MAX, DRAW_ITEMS, DRAW_LINKS, DRAW_MAPPED, DRAW_MAPPED_CHAR, DRAW_NAME, DRAW_OVERLAID, DRAW_QUADS, DRAW_STRING, DRAW_STRINGS, DRAW_URL, DRAW_VALUES, DRAW_ZOOM, DrawRefusal, checkDraw, drawFontKey, drawInputsOf, wireOf } from './layer-proto/draw.mjs'
 export { drawDataOf } from './pipeline/draw-data.mjs'
 export type { Draw, DrawDest, DrawFont, DrawItem, DrawLink, DrawSource } from './layer-proto/draw.mjs'
-export { isMemoryError } from './pipeline/memory.mjs'
+export { isMemoryError } from '@readarxiv/engine'
 // the faces' coverage and metrics
 export { COVERAGE, COVERAGE_SOURCE, METRICS } from './rules/font-coverage.mjs'

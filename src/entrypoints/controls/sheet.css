@@ -1,5 +1,5 @@
 /* The controls sheet's own frame (a dev page): two halves, light and dark, each a column of specimens on the chrome.
-   Nothing here is a control's look — those are src/styles/controls.css's — only the room the specimens sit in */
+   Nothing here is a control's look — those are packages/ui/src/controls.css's — only the room the specimens sit in */
 body { margin: 0; background: var(--page); }
 .halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .half { display: flex; flex-direction: column; gap: 28px; min-width: 0; padding: 24px; background: var(--chrome); }

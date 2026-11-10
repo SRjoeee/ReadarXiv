@@ -1,8 +1,7 @@
-// The placeholder engine (DESIGN §6): serialize → translate → validate → rehydrate; a free engine, or a failed validation, goes through splitRuns / joinRuns.
+// The placeholder engine (DESIGN §6): serialize → translate (a unit of the chain, units.ts) → validate → rehydrate.
 export { VOID_DENSE_THRESHOLD, serialize, staleSlot, type ProtectedBlock } from './serialize'
 export { PlaceholderIntegrityError, expectationsFromText, validate, type IntegrityReason, type PlaceholderExpectations, type ValidationResult } from './validate'
 export { rehydrate } from './rehydrate'
-export { joinRuns, splitRuns, type RunItem, type RunLayout } from './runs'
 export { fromAlpha, toAlpha, tokenize, writeVoid, type Token, type WireFormat } from './tokens'
 export { decodeText, escapeText, unescapeText } from './escape'
 export { MARKER_RE, TAG_RE } from './tokens'

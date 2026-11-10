@@ -7,7 +7,7 @@
 // paints its own colours (layout/ink.mjs `ownColour`: its `fill` is only the fill it was shown in). One function for the maker's draw
 // (pipeline/draw-data.mjs, from the ink the maker reads) and the reader's page read live (layer-proto/run.mjs, from the page's own
 // operator list), so that a page reads alike either way. Pure; imports the ink's NO_FILL alone.
-import { NO_FILL } from './ink.mjs'
+import { NO_FILL } from '@readarxiv/engine'
 
 /** an item, or a character, whose fill is not told */
 export const UNKNOWN = -1

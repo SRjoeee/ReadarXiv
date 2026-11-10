@@ -8,13 +8,13 @@ import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
-import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
+import { GLYPHS_PAGE } from '@readarxiv/engine'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
 import { marksOf } from '@/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { settleWithClock } from './helpers/clock'
-import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { ALLOCATION_FAILED } from '@readarxiv/engine'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —
@@ -168,7 +168,8 @@ describe('layoutMarking', () => {
     const { units: marked, mark } = layoutMarking(units, MARK_CLASSES, { lines: false })
     expect(srcs(marked[0])).toEqual(['ph \\cline{1-2}', 'text', 'ph \\axtpmm{p0.2a}', 'ph $x$', 'ph \\axtpm{p0.2b}'])
     expect(srcs(marked[1])).toEqual(['ph \\mc{2}{x}', 'text'])
-    expect(srcs(marked[2])).toEqual(['ph \\noindent', 'ph \\para{Head}', 'text', 'ph \\axtpma{p2.3a}', 'ph \\cite{a}', 'ph \\axtpm{p2.3b}'])
+    // (a paper's macro at the head, passed over, has its head point: \\axthpk, which no table row reaches)
+    expect(srcs(marked[2])).toEqual(['ph \\noindent', 'ph \\axthpk{p2.1a}', 'ph \\para{Head}', 'text', 'ph \\axtpma{p2.3a}', 'ph \\cite{a}', 'ph \\axtpm{p2.3b}'])
     expect(srcs(marked[3])).toEqual(['ph \\axtpmm{p3.0a}', 'ph $x$', 'ph \\axtpm{p3.0b}', 'text'])
     expect(srcs(marked[4])).toEqual(['ph \\axtpma{p4.0a}', 'ph \\bert', 'text'])
     expect(srcs(marked[5])).toEqual(srcs(units[5]))
@@ -183,6 +184,35 @@ describe('layoutMarking', () => {
       const opening = [...out.matchAll(/\\axtpm[am]\{[^}]*\}/g)]
       for (const o of opening) expect(o.index >= at || o.index + o[0].length === at, `${i}: ${out}`).toBe(true)
     }
+  })
+  it('states a paper\'s macro\'s span where it has no mark of its own: at a unit\'s head \\axthpk, after its last text \\axttg', () => {
+    // (1810.04805v2's `\\bert is conceptually simple`: \\bert at the head, passed over, its ink before the start mark; its
+    // opening point \\axthpk, the start mark its closing one. 2610.19159v1's `Tool Output\\trajectoryMark{}}`: glued to the
+    // word before, after the end mark; \\axttg, a point after the group it stands in. None in a cell, where a mark before the
+    // head would stand before \\multicolumn's \\omit, none for a macro TeX said sets no ink, none past a prefix)
+    const units = [
+      unit('para', [ph('\\bert'), text(' is conceptually simple.')]),
+      unit('para', [text('Tool Output'), ph('\\trajectoryMark{}')]),
+      unit('cell', [ph('\\mc{2}{x}'), text(' cell')]),
+      unit('para', [ph('\\none'), text(' word and'), ph('\\none')]),
+      unit('heading', [ph('\\sys'), text(' Showcases')]),
+      // (none between two of the paper's pieces where the first may read the second: a .bbl's `\\urldef\\tempurl\\url{…}`, whose
+      // \\urldef defines the next token, 2608.25210v2; a head macro after `\\pagestyle{…}`)
+      unit('reference', [text('Title. Volume'), ph('\\showISSN{1}'), ph('\\urldef'), ph('\\tempurl')]),
+      unit('para', [ph('\\pagestyle{x}'), text('\n'), ph('\\bert'), text(' is.')]),
+    ]
+    const { units: marked, mark } = layoutMarking(units, MARK_CLASSES, { lines: false, inkless: ['\\none'] })
+    expect(srcs(marked[0])).toEqual(['ph \\axthpk{p0.0a}', 'ph \\bert', 'text'])
+    expect(srcs(marked[1])).toEqual(['text', 'ph \\axttg{p1.1g}', 'ph \\trajectoryMark{}'])
+    expect(srcs(marked[2])).toEqual(['ph \\mc{2}{x}', 'text'])
+    expect(srcs(marked[3])).toEqual(srcs(units[3]))
+    expect(srcs(marked[4])).toEqual(['ph \\axthpk{p4.0a}', 'ph \\sys', 'text'])
+    expect(srcs(marked[5])).toEqual(['text', 'ph \\axttg{p5.1g}', 'ph \\showISSN{1}', 'ph \\urldef', 'ph \\tempurl'])
+    expect(srcs(marked[6])).toEqual(['ph \\axthpk{p6.0a}', 'ph \\pagestyle{x}', 'text', 'ph \\bert', 'text'])
+    // (as patch writes them: the head's point before the start mark, the trailing one after the end mark)
+    const write = (u: SourceUnit) => new TextDecoder().decode(patch({ main: 'main.tex', units: [u], files: new Map([['main.tex', 'x'.repeat(10)]]) } as never, new Map(), { mark: v => mark(v) }).get('main.tex'))
+    expect(write(nth(marked, 0))).toContain('\\axthpk{p0.0a}\\bert \\leavevmode\\axtmark{0s}is')
+    expect(write(nth(marked, 1))).toContain('Tool Output\\axtend{1e}\\axttg{p1.1g}\\trajectoryMark{}')
   })
   it('marks nothing between a prefix and the command it applies to: \\protect\\eqref is marked as one, before its \\protect', () => {
     // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures); before
@@ -603,10 +633,10 @@ describe('LAYOUT_TEX', () => {
   })
 
   it('\\axt@unmark: the regex is the one that never reaches across a group, built from UNMARK_CS', () => {
-    expect(UNMARK_CS).toEqual(['axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtnma', 'axtnmb'])
+    expect(UNMARK_CS).toEqual(['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'])
     expect(new Set(UNMARK_CS).size).toBe(UNMARK_CS.length)
     // `\c[^BE]` tests the next item only and `*` repeats it: any run of tokens but a brace, so a match ends at its own argument
-    expect(LAYOUT_TEX).toContain('\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpmm|axtpm|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}')
+    expect(LAYOUT_TEX).toContain('\\regex_const:Nn\\c__axt_marks_regex{\\c{axtpma|axtpmm|axtpm|axthpk|axttg|axthmark|axtnma|axtnmb}\\cB.\\c[^BE].*\\cE.}')
     expect(LAYOUT_TEX).toContain('\\cB.\\c[^BE].*\\cE.}')
     expect(LAYOUT_TEX).not.toContain('.*?')
     expect(LAYOUT_TEX.split('\\regex_const:Nn\\c__axt_marks_regex').length).toBe(2)

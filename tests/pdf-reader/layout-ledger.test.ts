@@ -1,7 +1,7 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type LedgerPage, ledgerOf, ledgerSummary, ORPHAN_LINES_MAX, orphanRows } from '@/pdf-reader/engine/layout/ledger.mjs'
-import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
+import { pageInk } from '@readarxiv/engine'
 import { CLASS_CODE, CLASS_IDS, CLASSES, classesOn, shownTranslated, TOGGLE_DEFAULTS, TOGGLES, UNIT_CLASS, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 // The content classes and the ledger of our final pass (docs/route/orphan-text.md, stage 1): every glyph one class, by TeX's

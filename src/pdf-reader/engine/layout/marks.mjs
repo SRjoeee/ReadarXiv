@@ -21,9 +21,9 @@ import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
-import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from '@readarxiv/engine'
 import { listOf, orNull } from './oplist.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
@@ -827,6 +827,17 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   last ink, its trailing glue, penalties and kerns put back after it, and on an empty list nothing: after a display,
  *   where TeX resumes the paragraph, a mark would open a line of its own where the paragraph ends, and TeX's skip of the
  *   space after a display must see past it, which it does, everything that decides so expanding.
+ * - **\axthpk{name}, before a paper's macro at a unit's head** (layoutMarking: the head patch passes over, before the start mark,
+ *   whose ink TeX sets there with no mark of its own): its opening point, the start mark its closing one. In horizontal mode it is
+ *   \axtpma's (in a box or a cell, on its empty list too: no paragraph resumes there after a display). In vertical mode it waits
+ *   for nothing and opens nothing: where TeX's own expansion of the macro, once, begins with a character (`\bert` = `BERT\xspace`),
+ *   that character would begin the paragraph, so \leavevmode begins it first (\everypar's material is set as it was) and the
+ *   point is set before the character; any other beginning (a declaration, \par, a group, a robust command) sets none, and the
+ *   head stays unstated. The expansion is TeX's, the tokens it reads after are those it would read
+ * - **\axttg{name}, after a unit's end mark, before a paper's macro the unit ends with that has no mark of its own** (glued to the
+ *   unit's last word, right after it, so that the end mark is all that stands between): the end mark its opening point, and a point after the group the macro stands in (\aftergroup, a macro of its
+ *   own a name), where nothing reads it: the macro's output and whatever TeX sets before that group ends stand between the two, so
+ *   that no glyph between them states that the macro set none. Set in horizontal mode only, as \axtpm
  * - **The italic correction.** Where a mark is set against a letter that has one, an empty \vadjust after the mark says
  *   so, and \/ and LaTeX's \@@italiccorr add that letter's correction, measured when the mark was set, where they find
  *   it: TeX adds none after a whatsit, and cite.sty's [super] (\unskip then \/), \textup's left correction (\eqref),
@@ -976,9 +987,9 @@ export const NAMES_TEX = [
 ].join('')
 
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
- *  can carry (\axtpma, \axtpmm, \axtpm, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
+ *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift */
-export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtnma', 'axtnmb']
+export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb']
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
  *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
@@ -1113,18 +1124,24 @@ export const LAYOUT_TEX = [
   '\\def\\axt@pmn{\\ifhmode\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmv\\fi}',
   '\\protected\\def\\axt@pmm{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@pmn\\fi}',
   '\\protected\\def\\axt@pm#1{\\ifaxt@off\\else\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1}\\fi\\fi\\fi}',
+  '\\def\\axt@hpkd{\\let\\axt@hgo\\relax\\ifcat\\noexpand\\axt@ht a\\let\\axt@hgo\\axt@hpkg\\fi\\ifcat\\noexpand\\axt@ht 0\\let\\axt@hgo\\axt@hpkg\\fi\\axt@hgo}\\def\\axt@hpkg{\\leavevmode\\axt@put{\\axt@hn}}',
+  '\\def\\axt@hpkv#1{\\def\\axt@hn{#1}\\expandafter\\futurelet\\expandafter\\axt@ht\\expandafter\\axt@hpkd}\\def\\axt@hpkh{\\ifinner\\expandafter\\axt@pmd\\else\\expandafter\\axt@pmc\\fi}',
+  '\\def\\axt@hpkb{\\ifhmode\\expandafter\\axt@hpkh\\else\\expandafter\\axt@hpkv\\fi}\\protected\\def\\axt@hpk{\\ifaxt@off\\expandafter\\@gobble\\else\\expandafter\\axt@hpkb\\fi}',
+  '\\protected\\def\\axt@gp#1{\\ifaxt@off\\else\\expandafter\\gdef\\csname axt@gp@#1\\endcsname{\\axt@pm{#1}}\\expandafter\\aftergroup\\csname axt@gp@#1\\endcsname\\fi}',
   '\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}\\ifhmode\\relax\\axt@holdtrue\\axt@put{#1}\\axt@holdfalse\\fi\\fi}',
   '\\protected\\def\\axt@colour#1{\\ifaxt@off\\else\\ifdefined\\current@color\\message{^^JAXT-COLOUR #1 \\current@color^^J}\\fi\\fi\\ignorespaces}',
   '\\def\\axtpma{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pma\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpmm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pmm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtpm{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@pm\\else\\expandafter\\@gobble\\fi}',
+  '\\def\\axthpk{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hpk\\else\\expandafter\\@gobble\\fi}',
+  '\\def\\axttg{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@gp\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axthmark{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@hm\\else\\expandafter\\@gobble\\fi}',
   '\\def\\axtcolour{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@colour\\else\\expandafter\\@gobble\\fi}',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@starttoc/before}{\\global\\axt@offtrue}\\AddToHook{cmd/@starttoc/after}{\\global\\axt@offfalse}\\AddToHook{cmd/@outputpage/before}{\\axt@offtrue}',
   '\\AddToHook{package/gettitlestring/after}{\\let\\axt@title@of\\GetTitleString\\long\\def\\GetTitleString#1{\\def\\axt@title{#1}\\axt@unmark\\axt@title\\expandafter\\axt@title@of\\expandafter{\\axt@title}}}',
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
-  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthpk\\@gobble\\let\\axttg\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
+  '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hpk\\axt@gp\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
   BACKREF_TEX,
   UNMARK_TEX,
   NAMES_TEX,
@@ -1423,6 +1440,10 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     const movedAt = new Map()
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
     const verbatim = []
+    /** the paper's macros this unit sets with no mark of their own, by index (none TeX said sets no ink): those passed over that
+     *  nothing before them reads (at its head they get a head point) and those glued to the word before them (right after its last
+     *  text they get the point after their group; below) */
+    const bare = new Set()
     const out = u.pieces.map((p, k) => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
       // (backref's list after an entry, no byte of the source: the name of its marks, which LAYOUT_TEX's hook sets around the list
@@ -1447,8 +1468,13 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // are robust and the probe's box sets none so)
       const pairSaid = lead ? null : aheadSaid(u.pieces, k)
       const ahead = !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
-      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead) ? classOf(p) : null
-      if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
+      // (`reads`: the piece before this one may read what follows it, so that nothing of ours may stand between them)
+      const reads = LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead
+      const cls = passed && !passed.has(k) && !reads ? classOf(p) : null
+      if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) {
+        if (!cls && passed?.has(k) && !reads && on.has('macro') && classOf(p) === 'macro' && !none.has(p.src)) bare.add(k)
+        return [piece]
+      }
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
@@ -1459,7 +1485,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // author line English). Not past a prefix, which \\axt@boxy would see in the command's place
       // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
       const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
-      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src) && !(BOXY.test(p.src) && !prefixed)) return [piece]
+      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src) && !(BOXY.test(p.src) && !prefixed)) { bare.add(k); return [piece] }
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
@@ -1504,6 +1530,24 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (!prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null) || out[k - 1].length !== 1 || out[k].length < 2 || out[k][0] === u.pieces[k]) continue
       out[k - 1] = [out[k][0], ...out[k - 1]]
       out[k] = out[k].slice(1)
+    }
+    // (a paper's macro with no mark of its own at the unit's head, before its start mark, where TeX sets its ink: \\axthpk, its
+    // opening point, the start mark its closing one; one after the unit's last text, after its end mark (glued to the word
+    // before it): \\axttg, the end mark its opening point and a point after the group it stands in its closing one. Neither where a
+    // prefix stands before it, nor in a front unit's robust marks (an end there may be another copy's), nor where the unit has no
+    // text, so no end mark. Neither in a cell nor in a unit that holds an alignment's tab: a mark at the head would stand before the
+    // \\omit or \\noalign TeX looks for at an entry's or a row's start (\\multicolumn's: "Misplaced \\omit"), and a group's end
+    // there is an entry's, after which the point would open the next one)
+    if (own(u) && bare.size && u.kind !== 'cell' && !u.pieces.some(p => p.t === 'ph' && p.src === '&')) {
+      const head = headEnd(u.pieces, 0)
+      const lastText = u.pieces.findLastIndex(p => p.t === 'text' && /[^ \t\r\n]/.test(p.s))
+      for (const k of bare) {
+        if (out[k].length !== 1 || (k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null))) continue
+        if (k < head) out[k] = [{ t: 'ph', src: `${lead}\\axthpk{p${i}.${k}a}` }, ...out[k]]
+        // (right after the last text alone: the end mark stands between the two, nothing of the paper's — `\\urldef\\tempurl`,
+        // whose first defines the next token, 2608.25210v2's .bbl)
+        else if (!lead && k === lastText + 1) out[k] = [{ t: 'ph', src: `\\axttg{p${i}.${k}g}` }, ...out[k]]
+      }
     }
     copies[i].pieces = out.flat()
   })

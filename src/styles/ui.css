@@ -1,11 +1,11 @@
 /* The Tailwind entry for the extension's own pages — the popup, the settings page, the gallery and the controls sheet
-   (the redesign's design, §2.2): the tokens generated from src/shared/tokens.ts, the controls the pages share, the
+   (the redesign's design, §2.2): the tokens generated from packages/ui/src/tokens.ts, the controls the pages share, the
    roles as Tailwind's colours and shadows, and the pages' base. @theme must sit at the top level, never inside a media
    query (Tailwind v4), so the utilities name the variables through @theme inline and only the variables change with
    the theme */
 @import "tailwindcss";
-@import "./tokens.css";
-@import "./controls.css";
+@import "@readarxiv/ui/tokens.css";
+@import "@readarxiv/ui/controls.css";
 
 /* the roles as Tailwind's colours and shadows, for the pages' own layouts (the redesign's design, §2.2), under the
    reader's names (reader.css), the hairline `line` as the reader's sheet names it */

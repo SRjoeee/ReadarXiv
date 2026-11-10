@@ -5,7 +5,7 @@ import {
   languageOfTag,
 } from '@/config/languages'
 
-// The language table is ported from @read-frog/definitions@0.4.4; guarded here are the consistency between the tables and our own conversion functions
+// The language table is generated (scripts/languages.ts, UI.md §6's naming policy); guarded here are the consistency between the tables and our own conversion functions
 describe('languages', () => {
   it('180 codes (Read Frog\'s 179 and Standard Malay), the key sets of the three name tables exactly equal; the BCP-47 table is a subset', () => {
     expect(LANG_CODES).toHaveLength(180)
@@ -19,8 +19,8 @@ describe('languages', () => {
   })
 
   it('the prompt gets the English name; an unknown code comes back as it is', () => {
-    expect(englishName('cmn')).toBe('Simplified Mandarin Chinese')
-    expect(englishName('cmn-Hant')).toBe('Traditional Mandarin Chinese')
+    expect(englishName('cmn')).toBe('Simplified Chinese')
+    expect(englishName('cmn-Hant')).toBe('Traditional Chinese')
     expect(englishName('jpn')).toBe('Japanese')
     expect(englishName('klingon')).toBe('klingon')
   })

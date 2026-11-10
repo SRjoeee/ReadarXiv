@@ -1,0 +1,254 @@
+// The reading options (the reader's design, §6.1): the highlight and its colour, what to translate, the appearance and the
+// dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
+// window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
+// download, the settings and the way back; a host's own rows last (the website's interface language)
+import { type IconNode, Monitor, Moon, SlidersHorizontal, Sun } from 'lucide'
+import { useId, useRef } from 'react'
+import { Icon, O, Popover, R, radioKeys, S, Switch, usePopover, useTip } from '@readarxiv/ui'
+import { CLASSES, type Prefs } from '../prefs.ts'
+import { LanguageMenu } from './Menus.tsx'
+import type { ReaderController } from './model.ts'
+import { useParts } from './parts.tsx'
+import { useSettingsLock } from './settings-lock.ts'
+import { ToolbarButton } from './ToolbarButton.tsx'
+import { useReader } from './use-reader.ts'
+
+/** the system's first (the maintainer, 2026-09-26); as icons, equal whatever the interface's language, as the display
+ *  switch's are, their words in tooltips and to screen readers: a word per third ran off its thumb in English */
+const APPEARANCES = ['system', 'light', 'dark'] as const
+const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
+
+/** `bare`: the bar where neither side has anything to show (Toolbar.tsx BareBar): no row of a paper's (what leaves the bar in
+ *  a narrow window, the highlight and its colour, what to translate), the appearance, the dimming and the host's own last rows
+ *  kept (today's web ReadingOptions `lost`) */
+export function ReadingOptions({ controller, bare = false }: { controller: ReaderController; bare?: boolean }) {
+  // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
+  // its place, and the narrow window's download and way back in it are reachable at once
+  const { slots, defaults } = useParts()
+  const prefs = useReader(controller, (s) => s.prefs) ?? defaults
+  const lock = useSettingsLock(controller)
+  const pop = usePopover('dialog', 'options')
+  const radios = useRef<(HTMLButtonElement | null)[]>([])
+  const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
+  // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
+  const appearance = prefs.theme
+  const setAppearance = (a: (typeof APPEARANCES)[number]) => {
+    if (!lock.locked) controller.setPrefs({ theme: a })
+  }
+  return (
+    <>
+      <ToolbarButton label={R.options.name} anchor={pop.anchor} {...pop.trigger}>
+        <Icon node={SlidersHorizontal} />
+      </ToolbarButton>
+      <Popover {...pop.popover} role="dialog" label={R.options.name}>
+        {/* a paper's rows: none in the bare bar's options */}
+        {!bare && (
+          <>
+            {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26): the host's */}
+            {slots.afterOptions?.('options')}
+            {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
+            <div className="row narrow-only">
+              {S.rows.language}
+              <LanguageMenu controller={controller} name="options-language" />
+            </div>
+            {slots.beforeOptions?.('options')}
+            <div className="sep narrow-only" />
+            {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+            <label className="row">
+              {S.rows.highlight}
+              <Switch
+                label={S.rows.highlight}
+                checked={prefs.highlight.on}
+                disabled={lock.locked}
+                why={lock.why}
+                onChange={(on) => controller.setPrefs({ highlight: { on } })}
+              />
+            </label>
+            <div className="row">
+              {R.options.color}
+              <span className="flex gap-2">
+                {prefs.bands.map((h) => (
+                  <Swatch
+                    key={h.id}
+                    name={h.name ?? (O.reading.builtInHighlights as Record<string, string>)[h.id] ?? h.id}
+                    color={h.colour || 'var(--axt-green)'}
+                    chosen={h.id === prefs.highlight.band}
+                    locked={lock.locked}
+                    why={lock.why}
+                    onPick={() => controller.setPrefs({ highlight: { band: h.id } })}
+                  />
+                ))}
+              </span>
+            </div>
+            <div className="sep" />
+            <ClassToggles controller={controller} prefs={prefs} lock={lock} />
+            <div className="sep" />
+          </>
+        )}
+        <div className="row">
+          {R.options.appearance}
+          <div
+            role="radiogroup"
+            aria-label={R.options.appearance}
+            className="seg small icons"
+            style={{ '--i': APPEARANCES.indexOf(appearance) } as React.CSSProperties}
+            onKeyDown={radioKeys(
+              APPEARANCES,
+              appearance,
+              () => true,
+              setAppearance,
+              (i) => radios.current[i]?.focus(),
+            )}
+          >
+            <span className="thumb" aria-hidden="true" />
+            {APPEARANCES.map((a, i) => (
+              <AppearanceSegment
+                key={a}
+                name={names[a]}
+                glyph={GLYPHS[a]}
+                checked={a === appearance}
+                locked={lock.locked}
+                why={lock.why}
+                onPick={() => setAppearance(a)}
+                buttonRef={(el) => {
+                  radios.current[i] = el
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
+        <label className="row">
+          {R.options.dim}
+          <Switch
+            label={R.options.dim}
+            checked={prefs.dim}
+            disabled={lock.locked}
+            why={lock.why}
+            onChange={(on) => controller.setPrefs({ dim: on })}
+          />
+        </label>
+        {/* the host's own last rows (the website's interface language) */}
+        {slots.options}
+      </Popover>
+    </>
+  )
+}
+
+/**
+ * What to translate (S-R-27; docs/PDF-READER.md §9.1, docs/route/orphan-text.md §8.7): the parts of a paper beside its body a
+ * reader shows translated or as the original — the text in figures and in tables, the running heads and feet, the references,
+ * the author block under the title (its names, affiliations and e-mail line) —, each translated once whatever they are, so that a toggle shows or hides what was made
+ * and never translates again (the layer opened again over the same documents and rows: session/host.ts follows the setting as
+ * it lands, from here or the settings page). The website's group, in the same words and order: its heading a row of the panel
+ * in the second ink, naming the rows under it, each a switch's row in the panel's own pattern
+ */
+function ClassToggles({
+  controller,
+  prefs,
+  lock,
+}: {
+  controller: ReaderController
+  prefs: Prefs
+  lock: ReturnType<typeof useSettingsLock>
+}) {
+  const head = useId()
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: the popover's rows named by the heading row above them; a fieldset's legend lays out as no row of the panel
+    <div role="group" aria-labelledby={head} data-axt-classes="">
+      <div id={head} className="row text-ink-2">
+        {R.classes.name}
+      </div>
+      {CLASSES.map((t) => (
+        // biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through
+        <label key={t} className="row" data-axt-class={t}>
+          {R.classes[t]}
+          <Switch
+            label={R.classes[t]}
+            checked={prefs.classes[t]}
+            disabled={lock.locked}
+            why={lock.why}
+            onChange={(on) => controller.setPrefs({ classes: { [t]: on } })}
+          />
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function AppearanceSegment({
+  name,
+  glyph,
+  checked,
+  locked,
+  why,
+  onPick,
+  buttonRef,
+}: {
+  name: string
+  glyph: IconNode
+  checked: boolean
+  locked: boolean
+  why: string | undefined
+  onPick: () => void
+  buttonRef: (el: HTMLButtonElement | null) => void
+}) {
+  const { props, tip } = useTip(name, why)
+  return (
+    <>
+      {/* biome-ignore lint/a11y/useSemanticElements: an ARIA radio drawn as a segment (the design, §6.1), as the display switch's; its keys are the group's */}
+      <button
+        ref={buttonRef}
+        type="button"
+        role="radio"
+        aria-checked={checked}
+        aria-disabled={locked || undefined}
+        aria-label={name}
+        aria-description={why}
+        tabIndex={checked ? 0 : -1}
+        onClick={locked ? undefined : onPick}
+        {...props}
+      >
+        <Icon node={glyph} />
+      </button>
+      {tip}
+    </>
+  )
+}
+
+/** a highlight colour: greyed out of reach, with the reason in its tooltip beside its name (S-R-21) */
+function Swatch({
+  name,
+  color,
+  chosen,
+  locked,
+  why,
+  onPick,
+}: {
+  name: string
+  color: string
+  chosen: boolean
+  locked: boolean
+  why: string | undefined
+  onPick: () => void
+}) {
+  const { props, tip } = useTip(name, why)
+  return (
+    <>
+      <button
+        type="button"
+        data-swatch
+        aria-label={name}
+        aria-description={why}
+        aria-pressed={chosen}
+        aria-disabled={locked || undefined}
+        className="swatch"
+        style={{ background: color }}
+        onClick={locked ? undefined : onPick}
+        {...(why ? { ...props, style: { background: color, ...props.style } } : {})}
+      />
+      {why && tip}
+    </>
+  )
+}

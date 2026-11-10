@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
-import { TranslationCache, createCacheDb } from '@/cache/store'
+import { createTranslateDb, createTranslateStore } from '@/cache/translate-store'
 import { type HandlerDeps, createHandlers, sweepAtStart } from '@/entrypoints/background/handlers'
-import { ProviderError } from '@/providers/types'
 import { DEFAULT_FLOATING_ENTRY } from '@/shared/entry-settings'
 import type { AxtMessage, AxtMessageType, AxtResponse, MessageSender } from '@/shared/messages'
 
@@ -42,14 +41,16 @@ function harness(over: Partial<HandlerDeps> = {}) {
   return { deps, send, lines }
 }
 
-const CALL = { scope: 's1', paper: '2401.00001v1', segments: [] } as unknown as AxtMessage<'axt:translate'>
+const CALL = { scope: 's1', target: 'cmn', units: [] } as unknown as AxtMessage<'axt:translate'>
+/** a test's one unit, answered */
+const answered = (by: string) => ({ ok: true, results: [{ id: 'sample', ok: true, content: [{ t: 'text', s: 'a sample' }], by, engine: by }], cached: 0 })
 /** One of the reader's services, as the settings page stores it before its connection test */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
 
 describe('the background\'s handlers', () => {
   describe('axt:translate', () => {
     it('goes to the chain the session is bound to, for the sender\'s tab', async () => {
-      const translate = vi.fn(async () => ({ ok: true, result: { segments: [], provider: 'p' }, cached: 0 }))
+      const translate = vi.fn(async () => answered('p'))
       const forCall = vi.fn(async () => ({ translate }))
       const { send } = harness({ router: { forCall } as unknown as HandlerDeps['router'] })
       await expect(send({ ...CALL, type: 'axt:translate' })).resolves.toMatchObject({ ok: true })
@@ -58,12 +59,12 @@ describe('the background\'s handlers', () => {
     })
 
     it('a chain that cannot be built is answered as a failure of its kind, and the log gets the kind without the message', async () => {
-      const forCall = vi.fn(async () => { throw new ProviderError('auth', 'key sk-secret refused') })
+      const forCall = vi.fn(async () => { throw new Error('key sk-secret refused') })
       const { send, lines } = harness({ router: { forCall } as unknown as HandlerDeps['router'] })
-      await expect(send({ ...CALL, type: 'axt:translate' })).resolves.toEqual({ ok: false, error: expect.objectContaining({ kind: 'auth', message: 'key sk-secret refused' }) })
+      await expect(send({ ...CALL, type: 'axt:translate' })).resolves.toEqual({ ok: false, error: expect.objectContaining({ kind: 'unknown', message: 'key sk-secret refused' }) })
       expect(lines).toHaveLength(1)
       expect(lines[0]?.[0]).toBe('background')
-      expect(lines[0]?.[1]).toContain('auth')
+      expect(lines[0]?.[1]).toContain('unknown')
       expect(lines[0]?.[1]).not.toContain('sk-secret')
     })
 
@@ -71,7 +72,7 @@ describe('the background\'s handlers', () => {
       const answering = (answer: unknown) => ({ router: { forCall: vi.fn(async () => ({ translate: vi.fn(async () => answer) })) } as unknown as HandlerDeps['router'] })
       const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
       const named = { ...CALL, type: 'axt:translate' as const, providerId: 'svc-abcd1234' }
-      const good = { ok: true, result: { segments: [], provider: 'svc-abcd1234' }, cached: 0 }
+      const good = answered('svc-abcd1234')
 
       const cleared = health()
       await harness({ ...answering(good), health: cleared }).send(named)
@@ -80,7 +81,7 @@ describe('the background\'s handlers', () => {
 
       const refused = health()
       const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
-      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false, status: 401 } }), health: refused, getConfig: stored }).send(named)
+      await harness({ ...answering({ ok: false, error: { kind: 'auth', message: 'bad key', status: 401 } }), health: refused, getConfig: stored }).send(named)
       expect(refused.reject).toHaveBeenCalledWith('svc-abcd1234')
 
       const plain = health()
@@ -95,10 +96,10 @@ describe('the background\'s handlers', () => {
       const named = { ...CALL, type: 'axt:translate' as const, providerId: SVC.id }
       const withService = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
       for (const error of [
-        { kind: 'auth', message: 'forbidden', isolatable: false, status: 403 },
-        { kind: 'auth', message: 'no status', isolatable: false },
-        { kind: 'rate-limit', message: 'slow down', isolatable: false, status: 429 },
-        { kind: 'network', message: 'offline', isolatable: false },
+        { kind: 'auth', message: 'forbidden', status: 403 },
+        { kind: 'auth', message: 'no status' },
+        { kind: 'rate-limit', message: 'slow down', status: 429 },
+        { kind: 'network', message: 'offline' },
       ]) {
         const health = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
         const answer = await harness({ ...answering(error), health, getConfig: withService }).send(named)
@@ -107,7 +108,7 @@ describe('the background\'s handlers', () => {
         expect(answer).toEqual({ ok: false, error })
       }
       const gone = { reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) }
-      await harness({ ...answering({ kind: 'auth', message: 'bad key', isolatable: false, status: 401 }), health: gone, getConfig: vi.fn(async () => DEFAULT_CONFIG) }).send(named)
+      await harness({ ...answering({ kind: 'auth', message: 'bad key', status: 401 }), health: gone, getConfig: vi.fn(async () => DEFAULT_CONFIG) }).send(named)
       expect(gone.reject).not.toHaveBeenCalled()
     })
 
@@ -116,7 +117,7 @@ describe('the background\'s handlers', () => {
       const health = () => ({ reject: vi.fn(async () => undefined), clear: vi.fn(async () => true) })
       const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
       const tested = (candidate: typeof SVC) => ({ ...CALL, type: 'axt:translate' as const, providerId: SVC.id, candidate })
-      const good = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
+      const good = answered(SVC.id)
 
       // the stored key and address, another model: the stored key answered
       const same = health()
@@ -131,7 +132,7 @@ describe('the background\'s handlers', () => {
       // a refusal, of the stored key or another: nothing marked, nothing cleared, the answer as it came
       for (const candidate of [SVC, { ...SVC, apiKey: 'sk-new' }]) {
         const failed = health()
-        const error = { kind: 'auth', message: 'bad key', isolatable: false, status: 401 }
+        const error = { kind: 'auth', message: 'bad key', status: 401 }
         const answer = await harness({ ...answering({ ok: false, error }), health: failed, getConfig: stored }).send(tested(candidate))
         expect([failed.reject.mock.calls.length, failed.clear.mock.calls.length]).toEqual([0, 0])
         expect(answer).toEqual({ ok: false, error })
@@ -143,8 +144,8 @@ describe('the background\'s handlers', () => {
       const refusing = () => ({ reject: vi.fn(async () => { throw new Error('storage refused') }), clear: vi.fn(async () => { throw new Error('storage refused') }) })
       const stored = vi.fn(async () => ({ ...DEFAULT_CONFIG, services: [SVC] }))
       const named = { ...CALL, type: 'axt:translate' as const, providerId: SVC.id }
-      const good = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
-      const refusal = { ok: false, error: { kind: 'auth', message: 'bad key', isolatable: false, status: 401 } }
+      const good = answered(SVC.id)
+      const refusal = { ok: false, error: { kind: 'auth', message: 'bad key', status: 401 } }
 
       // a success whose clear fails, the stored service's and a candidate's with the stored key: still a success
       const cleared = harness({ ...answering(good), health: refusing(), getConfig: stored })
@@ -325,16 +326,20 @@ describe('the background\'s handlers', () => {
 })
 
 describe('the worker\'s start (#88 E6)', () => {
-  it('deletes the cache\'s expired entries: the rows a key version left behind go once they expire, though no key reaches them', async () => {
-    const cache = new TranslationCache({ db: createCacheDb(`axt-sweep-${Math.random()}`, { indexedDB, IDBKeyRange }) })
+  it("deletes the stores' expired entries: what a version step or a chain no longer reaches goes once it expires", async () => {
+    let now = Date.now()
+    const store = createTranslateStore({ db: createTranslateDb(`axt-sweep-${Math.random()}`, { indexedDB, IDBKeyRange }), now: () => now })
     const DAY = 24 * 60 * 60 * 1000
-    await cache.set('v-old|orphan', 'an old key\'s translation', '2401.00418', Date.now() - 31 * DAY)
-    await cache.set('v-new|live', 'a translation read today', '2401.00418')
+    now -= 31 * DAY
+    await store.answers.write([['t1|old|orphan', 'an old answer']])
+    now += 31 * DAY
+    await store.answers.write([['t1|new|live', 'an answer read today']])
     const lines: string[] = []
-    await sweepAtStart({ cache, diagnostics: { record: (_src: string, line: string) => void lines.push(line) } as unknown as HandlerDeps['diagnostics'] })
-    expect(await cache.db.entries.get('v-old|orphan')).toBeUndefined()
-    expect(await cache.db.entries.get('v-new|live')).toBeDefined()
-    expect(await cache.stats()).toMatchObject({ entries: 1 })
+    await sweepAtStart({ cache: store, diagnostics: { record: (_src: string, line: string) => void lines.push(line) } as unknown as HandlerDeps['diagnostics'] })
+    expect(await store.answers.read(['t1|old|orphan', 't1|new|live'])).toEqual([null, 'an answer read today'])
+    // the count is the rows' (S-O-70's passages); the sweep's work shows in the bytes, one answer's worth left
+    expect((await store.stats()).bytes).toBeGreaterThan(0)
+    expect((await store.stats()).entries).toBe(0)
     expect(lines).toEqual([])
   })
 

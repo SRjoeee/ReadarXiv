@@ -689,8 +689,10 @@ describe('nothing is inserted inside a call or between a subscript and its opera
     expect(units(p)).toEqual([['para', 'Before it.'], ['para', 'title body words here.'], ['para', 'more words here.'], ['para', 'and the words of it.'], ['para', 'We use Name words after it, and Name words too.']])
     for (const text of marked(p)) {
       for (const call of ['\\strangechapter{7}X', '\\strangechapter{$\\infty$}\\Title', '\\plain{3}Y', '\\lead{Name}Z', '\\sys{Name} words']) expect(text).toContain(call)
-      expect(text).toContain('\\axtlines{3}\\plain{3}Y')
+      // (the layout compile's head point, \\axthpk, stands before the whole call: none of ours between the call and the token it takes)
+      expect(text.replace(/\\axthpk\{[^{}]*\}/g, '')).toContain('\\axtlines{3}\\plain{3}Y')
     }
+    expect(marked(p)[1]).toContain('\\axthpk{p3.0a}\\plain{3}Y')
   })
 
   it('a macro whose last command is an operand of the one before it, which TeX does not run (\\string\\section, \\let\\saved\\section), is read as before', () => {

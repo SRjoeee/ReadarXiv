@@ -3,6 +3,7 @@ import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
+import { readerAssets } from '@readarxiv/reader/vite'
 import { defineConfig } from 'wxt'
 import { readBuildRef } from './scripts/build-ref.mjs'
 import { licenceFiles, noteBundledPackages } from './scripts/third-party-notices.mjs'
@@ -65,6 +66,20 @@ function apiOf(mode: string): string {
   return api
 }
 
+/**
+ * Which reader the PDF page runs (stage 5a): `today`, the build's default, today's session (the engine's reading view, its run on
+ * our server's v1 layer, today's typesetter) under the reader package's chrome; `v2`, the reader package whole (`openReader`
+ * with the extension's Host, our server's v2 bundle, `engine.lay` the seam lane L3's `layPage` fills), which also takes the
+ * package's PDF.js data files. `AXT_READER=v2 pnpm build` makes the other one, so the e2e scripts run both side by side. Today's
+ * goes once the typesetter passes its gate (the stage's deletion list)
+ */
+const READERS = ['today', 'v2'] as const
+function readerPath(): (typeof READERS)[number] {
+  const named = process.env.AXT_READER ?? 'today'
+  if (!(READERS as readonly string[]).includes(named)) throw new Error(`AXT_READER names ${named}: ${READERS.join(' or ')}`)
+  return named as (typeof READERS)[number]
+}
+
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -73,7 +88,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production') } }),
+  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages(), ...(readerPath() === 'v2' ? [readerAssets()] : [])], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production'), __AXT_READER__: JSON.stringify(readerPath()) } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return
@@ -117,7 +132,7 @@ export default defineConfig({
     // The two strings Chrome itself shows — the extensions page, the store listing and the shortcuts
     // page — come from public/_locales, because only the browser reads them and only it can pick a
     // language for them. Everything inside our own pages follows the reader's own choice instead
-    // (src/locales, UI.md §6)
+    // (packages/ui/src/locales, UI.md §6)
     default_locale: 'en',
     description: '__MSG_description__',
     // contextMenus: the translate toggle in the context menu (issue #146) — it registers a menu item, not access to

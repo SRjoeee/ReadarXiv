@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- The language menus call some languages by the names most people know them by, in English, in Chinese and in each language's own words (about a hundred names change; a language you chose stays chosen). Underneath, the PDF reader, the translation and the settings were rebuilt, and nothing else you see changes, but for one thing: the translations this computer kept from earlier versions are let go once, so a page you translated before is translated again the first time you open it after the update.
 - Fixed: in the PDF reader, a box or a second paragraph that a paper sets inside a paragraph's own text, such as a prompt in a frame under a list item or a funding note under "Submitted to the editors", is translated on its own lines, as the original sets it. A box's translation had started on the line above it and run over its frame.
 - Fixed: in the PDF reader, a figure's label written on a box over the plot, such as an annotation's or a node's, is translated where a grid line or other ink runs under the box. The box hides that ink, but the label was kept in English as if the ink crossed its words.
 - Fixed: in the PDF reader, text a paper keeps in a command of its own and prints once, such as a keyword list after its "Keywords:" label, is translated, and so is a bibliography printed that way when references are shown. The label was translated and the list after it stayed in English.

@@ -1,0 +1,393 @@
+// The toolbar (the reader's design, §6.1): the chrome's own controls, and a host's in the places its slots name (the
+// extension's service, download, settings and way back: tests/pdf-reader/host-slots.test.ts)
+import { act, createElement } from 'react'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { R, S, setLocale } from '@readarxiv/ui'
+import type { Slots } from '../../src/chrome/parts.tsx'
+import { Toolbar } from '../../src/chrome/Toolbar.tsx'
+import { stubPopovers } from '../popover-stub.ts'
+import { mountElement } from '../render-hook.ts'
+import { fakeController, PREFS } from './fake-controller.ts'
+import { NAMES, withParts } from './parts.ts'
+
+let restore = () => {}
+// the interface's words as the maintainer reads them: the controls are found by them
+beforeAll(() => setLocale('zh-CN'))
+beforeEach(() => {
+  restore = stubPopovers()
+})
+afterEach(() => {
+  restore()
+  document.body.innerHTML = ''
+})
+
+let onContents = () => {}
+const mount = (over = {}, slots: Slots = {}) => {
+  const fake = fakeController(over)
+  return mountElement(
+    withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), { slots }),
+  ).then((m) => ({ ...m, ...fake }))
+}
+const button = (c: HTMLElement, name: string) => c.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!
+/** a control's accessible name, as far as these controls need: the elements it is labelled by, else its aria-label */
+const nameOf = (el: Element) =>
+  el
+    .getAttribute('aria-labelledby')
+    ?.split(' ')
+    .map((id) => document.getElementById(id)?.textContent)
+    .join(' ') ?? el.getAttribute('aria-label')
+/** the button whose name holds these words */
+const named = (c: HTMLElement, words: string) =>
+  [...c.querySelectorAll<HTMLElement>('button')].find((b) => nameOf(b)?.includes(words))!
+
+describe("the toolbar (the reader's design, §6.1)", () => {
+  it('shows the title, and the id as a link to the abstract page in a new tab', async () => {
+    const { container } = await mount({ paper: { id: 'hep-th/9711200', title: 'Large N' } })
+    expect(container.querySelector('[data-title]')!.textContent).toBe('Large N')
+    const link = container.querySelector<HTMLAnchorElement>('a[data-arxiv]')!
+    expect([link.textContent, link.href, link.target]).toEqual([
+      'arXiv:hep-th/9711200',
+      'https://arxiv.org/abs/hep-th/9711200',
+      '_blank',
+    ])
+  })
+
+  it("the title is the page's heading, whole at every width (it is hidden to the eye below the lead's 320 px, not removed), and the id's link says what it does (P3-M12, P6)", async () => {
+    const { container, set } = await mount({ paper: { id: '2608.02163', title: 'From Simple QA to Deep Research' } })
+    const heads = [...container.querySelectorAll('h1')]
+    expect([
+      heads.length,
+      heads[0]?.textContent,
+      heads[0]?.hasAttribute('data-title'),
+      heads[0]?.closest('header') !== null,
+    ]).toEqual([1, 'From Simple QA to Deep Research', true, true])
+    // the paper's title in the paper's language, read in that voice whatever the interface's (WCAG 3.1.2)
+    expect(heads[0]?.getAttribute('lang')).toBe('en')
+    // the link\'s name starts with what is seen (WCAG 2.5.3) and ends with its purpose, which the tooltip alone told
+    const link = container.querySelector<HTMLElement>('a[data-arxiv]')!
+    expect(nameOf(link)).toBe(`arXiv:2608.02163 ${R.abstract}`)
+    expect(container.querySelector('a[data-arxiv] ~ .tip')?.getAttribute('aria-hidden')).toBe('true')
+    // no title known yet: the heading is the product\'s name, said and not drawn, as the tab says it
+    await act(async () => set({ paper: { id: '2608.02163', title: '' } }))
+    const bare = [...container.querySelectorAll('h1')]
+    expect([
+      bare.length,
+      bare[0]?.textContent,
+      bare[0]?.hasAttribute('data-title'),
+      bare[0]?.classList.contains('sr-only'),
+      bare[0]?.hasAttribute('lang'),
+    ]).toEqual([1, 'Read arXiv', false, true, false])
+  })
+
+  it('shows the id alone when no title is known (none in the PDF, the abstract page out of reach)', async () => {
+    const { container } = await mount({ paper: { id: '2608.02163', title: '' } })
+    expect(container.querySelector('[data-title]')).toBeNull()
+    expect(container.querySelector('a[data-arxiv]')!.textContent).toBe('arXiv:2608.02163')
+  })
+
+  it('passes the display chosen, and sync and swap, which act side by side only', async () => {
+    const { container, controller, set } = await mount()
+    button(container, '译文').click()
+    expect(controller.setDisplay).toHaveBeenCalledWith('translation')
+    button(container, '同步滚动').click()
+    expect(controller.setSync).toHaveBeenCalledWith(false)
+    button(container, '左右互换').click()
+    expect(controller.setPrefs.mock.calls).toEqual([[{ swapped: true }]])
+    await act(async () => set({ display: 'translation' }))
+    expect([
+      button(container, '同步滚动').getAttribute('aria-disabled'),
+      button(container, '左右互换').getAttribute('aria-disabled'),
+    ]).toEqual(['true', 'true'])
+  })
+
+  it("greys the sync until the sides can scroll together where the host's rule says so (the website's, L11's second round, gap 9); the extension's leaves it to the display", async () => {
+    const sync = (c: HTMLElement) => button(c, R.sync).getAttribute('aria-disabled')
+    const own = await mount({ syncAvailable: false })
+    expect(sync(own.container)).toBeNull()
+    document.body.innerHTML = ''
+    const fake = fakeController({ syncAvailable: false })
+    const { container } = await mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        sync: 'located',
+      }),
+    )
+    expect(sync(container)).toBe('true')
+    button(container, R.sync).click()
+    expect(fake.controller.setSync).not.toHaveBeenCalled()
+    await act(async () => fake.set({ syncAvailable: true }))
+    expect(sync(container)).toBeNull()
+  })
+
+  it("a refusal for now with nothing laid, where the host's rule shows the original alone (the website's, L11's second round, gap 8): the translated displays greyed; the extension's keeps them", async () => {
+    const translated = (c: HTMLElement) =>
+      [R.display.bilingual, R.display.translation].map((n) =>
+        c.querySelector(`[role="radio"][aria-label="${n}"]`)!.getAttribute('aria-disabled'),
+      )
+    const refused = { display: 'original' as const, unavailable: { why: 'busy' as const, retryAt: null } }
+    const own = await mount(refused)
+    expect(translated(own.container)).toEqual([null, null])
+    document.body.innerHTML = ''
+    const fake = fakeController(refused)
+    const { container } = await mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        refusal: 'original',
+      }),
+    )
+    expect(translated(container)).toEqual(['true', 'true'])
+    await act(async () => fake.set({ unavailable: null }))
+    expect(translated(container)).toEqual([null, null])
+  })
+
+  it('zooms by a tenth each way, and shows the scale', async () => {
+    const { container, controller } = await mount({ scale: 1.25 })
+    expect(named(container, '缩放比例').querySelector('[data-value]')!.textContent).toBe('125%')
+    button(container, '放大').click()
+    button(container, '缩小').click()
+    expect(controller.zoomBy.mock.calls).toEqual([[1.1], [1 / 1.1]])
+  })
+
+  it("holds the zoom's value in the width of its widest, so that 99 % → 100 % shifts nothing; the widest is hidden, and out of its name (better-typography)", async () => {
+    const { container } = await mount({ scale: 0.83 })
+    const zoom = named(container, '缩放比例')
+    const widest = zoom.querySelector('[data-widest]')!
+    expect([widest.textContent, widest.getAttribute('aria-hidden'), nameOf(zoom)]).toEqual([
+      '000%',
+      'true',
+      '83% 缩放比例',
+    ])
+  })
+
+  it('opens the contents from its lead', async () => {
+    let opened = 0
+    onContents = () => {
+      opened++
+    }
+    const { container } = await mount()
+    button(container, '目录').click()
+    expect(opened).toBe(1)
+    onContents = () => {}
+  })
+
+  it("is the page's banner, which needs no name, not a toolbar whose arrow keys it does not have (the interface review)", async () => {
+    const { container } = await mount()
+    const header = container.querySelector('header')!
+    expect([header.getAttribute('role'), header.hasAttribute('aria-label')]).toEqual([null, false])
+  })
+
+  it('names the zoom and language buttons by what they show, first, and their words, from what is on the page (WCAG 2.5.3; the interface review)', async () => {
+    const { container } = await mount({ scale: 1.25, prefs: { ...PREFS, target: 'de' } })
+    const names = ['缩放比例', '译为'].map((w) => named(container, w))
+    expect(names.map(nameOf)).toEqual(['125% 缩放比例', 'Deutsch 译为'])
+    // labelled by the text the button shows, not an aria-label drawn apart from it (better-accessibility)
+    expect(names.map((b) => b.hasAttribute('aria-label'))).toEqual([false, false])
+    // the whole value in the tooltip too, where a long name is cut short on the bar
+    expect(named(container, '译为').nextElementSibling!.textContent).toBe('译为Deutsch')
+  })
+
+  it("draws the host's own in the trail: before the reading options (the extension's service), and after them (its download, settings and way back), the bar's", async () => {
+    const slot = (at: string) => createElement('span', { 'data-slot': at })
+    const { container } = await mount(
+      {},
+      { beforeOptions: (at) => slot(`before-${at}`), afterOptions: (at) => slot(`after-${at}`) },
+    )
+    const trail = container.querySelector('[data-zone="trail"]')!
+    const order = [...trail.children]
+      .map((el) => el.getAttribute('data-slot') ?? (el.matches('button') ? nameOf(el) : null))
+      .filter((w) => w === R.options.name || w?.startsWith('before') || w?.startsWith('after'))
+    expect(order).toEqual(['before-bar', R.options.name, 'after-bar'])
+    // none: nothing of a host's drawn, the reading options the trail's last control
+    const { container: bare } = await mount()
+    expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
+  })
+
+  it("draws the host's own in the lead: first (the website's way home), and right after the title (its short link to arXiv)", async () => {
+    const slot = (at: string) => createElement('a', { 'data-slot': at, href: '#' }, at)
+    const { container } = await mount(
+      { paper: { id: '2401.00001v2', title: 'A paper' } },
+      { lead: slot('lead'), afterTitle: slot('after-title') },
+    )
+    const lead = container.querySelector('[data-zone="lead"]')!
+    const order = [...lead.children].map(
+      (el) => el.getAttribute('data-slot') ?? (el.matches('.paper-title') ? 'title' : nameOf(el)),
+    )
+    expect(order.filter((w) => w !== null && w !== R.contents)).toEqual(['lead', 'title', 'after-title'])
+    expect(order.indexOf('lead')).toBe(0)
+    expect(nameOf(lead.children[1]!)).toBe(R.contents)
+    // (the title's next sibling: a host's sheet shows its short link by `.paper-title + …`)
+    expect(lead.querySelector('.paper-title + [data-slot="after-title"]')).not.toBeNull()
+    // none: the lead is the chrome's alone, the contents' button first
+    const { container: bare } = await mount()
+    expect(bare.querySelectorAll('[data-slot]').length).toBe(0)
+    expect(nameOf(bare.querySelector('[data-zone="lead"]')!.firstElementChild!)).toBe(R.contents)
+  })
+
+  it('says whether the contents are open, and which region they are, as a disclosure does (the interface review)', async () => {
+    const { container } = await mount()
+    const toggle = button(container, '目录')
+    expect([
+      toggle.getAttribute('aria-expanded'),
+      toggle.getAttribute('aria-controls'),
+      toggle.hasAttribute('aria-pressed'),
+    ]).toEqual(['false', 'axt-contents', false])
+  })
+
+  it("tells assistive technology the zoom's shortcuts, which its tooltips alone showed (the interface review)", async () => {
+    const { container } = await mount()
+    expect(button(container, '缩小').getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+-$/)
+    expect(button(container, '放大').getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+=$/)
+  })
+
+  describe('the controls that need the settings (P3-M14, P3-M16, C3-2; S-R-21)', () => {
+    /** the tooltip of a button: its sibling popover, which the tip is */
+    const tipOf = (b: Element) => (b.nextElementSibling?.matches('.tip') ? b.nextElementSibling.textContent : null)
+    const needing = (c: HTMLElement) => [named(c, S.rows.language), button(c, R.swap)]
+
+    it('before the preferences land, the language menu stands in its place, greyed and opening nothing, so that the bar does not reflow as they come; no reason is told yet', async () => {
+      const { container, set } = await mount({ prefs: null })
+      for (const b of needing(container))
+        expect([b.getAttribute('aria-disabled'), b.hasAttribute('popovertarget')]).toEqual(['true', false])
+      // the reading options\' button holds its place too, and opens: the narrow window\'s download and way back are in it
+      expect(button(container, R.options.name).hasAttribute('popovertarget')).toBe(true)
+      expect(needing(container).map(tipOf)).toEqual([`${S.rows.language}${NAMES['zh-Hans']}`, R.swap])
+      // they come: the same buttons are in reach, with the reader\'s own values
+      await act(async () => set({ prefs: { ...PREFS, target: 'ja' } }))
+      expect(nameOf(named(container, S.rows.language))).toBe(`${NAMES.ja} ${S.rows.language}`)
+      for (const b of needing(container).slice(0, 1))
+        expect([b.hasAttribute('aria-disabled'), b.hasAttribute('popovertarget')]).toEqual([false, true])
+    })
+
+    it('settings that cannot be read grey them with the reason in their tooltips; the display, sync, zoom and the way out still work', async () => {
+      const { container, controller } = await mount({ settingsUnreadable: true })
+      for (const b of needing(container)) expect(b.getAttribute('aria-disabled'), nameOf(b) ?? '').toBe('true')
+      expect(needing(container).map(tipOf)).toEqual(
+        [S.rows.language, R.swap].map((words) => `${words}${R.status.unreadableHint}`),
+      )
+      // the tooltip is hidden from assistive technology, so the reason is its description too
+      expect(needing(container).map((b) => b.getAttribute('aria-description'))).toEqual([
+        R.status.unreadableHint,
+        R.status.unreadableHint,
+      ])
+      button(container, R.swap).click()
+      expect(controller.setPrefs).not.toHaveBeenCalled()
+      button(container, R.display.translation).click()
+      button(container, R.sync).click()
+      button(container, R.zoom.in).click()
+      expect([
+        controller.setDisplay.mock.calls.length,
+        controller.setSync.mock.calls.length,
+        controller.zoomBy.mock.calls.length,
+      ]).toEqual([1, 1, 1])
+      // (the settings page, the way to mend them, is the host's: the extension's link stays in reach, host-slots.test.ts)
+    })
+
+    it("swap is greyed for the display it does not act in with no reason told: the reason is the settings' only where they are it", async () => {
+      const { container } = await mount({ settingsUnreadable: true, display: 'translation' })
+      expect(tipOf(button(container, R.swap))).toBe(R.swap)
+    })
+  })
+})
+
+describe("the narrow window's rule, the host's (parts.tsx narrow; interfaces/host design-a §6)", () => {
+  const radios = (c: HTMLElement) =>
+    [...c.querySelectorAll<HTMLElement>('[role="radiogroup"].display [role="radio"]')].map((r) => [
+      r.getAttribute('aria-label'),
+      r.getAttribute('aria-checked'),
+      r.getAttribute('aria-disabled'),
+    ])
+  const narrowAt = (narrowRule?: 'told' | 'shown') => {
+    const fake = fakeController({ narrow: true, display: 'bilingual' })
+    return mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        ...(narrowRule ? { narrow: narrowRule } : {}),
+      }),
+    ).then((m) => ({ ...m, ...fake }))
+  }
+  it("the extension's, the default: side by side stays chosen in a narrow window (the capsule says it shows the translation alone)", async () => {
+    for (const rule of [undefined, 'told'] as const) {
+      const { container } = await narrowAt(rule)
+      expect(radios(container)).toEqual([
+        [R.display.original, 'false', null],
+        [R.display.bilingual, 'true', null],
+        [R.display.translation, 'false', null],
+      ])
+    }
+  })
+  it("the website's: the translation shown chosen and side by side greyed in a narrow window, the stored side by side kept for a wider one", async () => {
+    const { container, set, controller } = await narrowAt('shown')
+    expect(radios(container)).toEqual([
+      [R.display.original, 'false', null],
+      [R.display.bilingual, 'false', 'true'],
+      [R.display.translation, 'true', null],
+    ])
+    // (the translation chosen already: nothing written; side by side greyed: nothing either)
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.bilingual}"]`)!.click()
+    container.querySelector<HTMLElement>(`[role="radio"][aria-label="${R.display.translation}"]`)!.click()
+    expect(controller.setDisplay).not.toHaveBeenCalled()
+    await act(async () => set({ narrow: false }))
+    expect(radios(container)[1]).toEqual([R.display.bilingual, 'true', null])
+  })
+})
+
+describe("the bar where neither side has anything to show, by the host's rule (parts.tsx bar; L11 third round, gap 4)", () => {
+  /** the original could not be read, and the translation cannot be had now (its layer refused for now) */
+  const NOTHING = {
+    phase: 'failed' as const,
+    failures: { pdf: 'network' as const, service: null },
+    failure: 'network' as const,
+    unavailable: { why: 'unreachable' as const, retryAt: null },
+  }
+  const SLOTS: Slots = {
+    lead: createElement('a', { 'data-slot': 'lead', href: '#home' }, 'home'),
+    afterTitle: createElement('a', { 'data-slot': 'after-title' }, 'arXiv'),
+    beforeOptions: (at) => createElement('span', { 'data-slot': `before-${at}` }),
+    afterOptions: (at) => createElement('span', { 'data-slot': `after-${at}` }),
+    options: createElement('div', { className: 'row', 'data-slot': 'options' }, 'ui'),
+  }
+  const at = (over: object, bar?: 'whole' | 'bare') => {
+    const fake = fakeController({ ...NOTHING, ...over })
+    return mountElement(
+      withParts(createElement(Toolbar, { controller: fake.controller, contents: false, onContents }), {
+        slots: SLOTS,
+        ...(bar ? { bar } : {}),
+      }),
+    ).then((m) => ({ ...m, ...fake }))
+  }
+  /** what the bar draws, zone by zone: a host's slot by its name, the chrome's controls by their accessible names */
+  const zones = (c: HTMLElement) =>
+    Object.fromEntries(
+      [...c.querySelectorAll<HTMLElement>('header.bar > [data-zone]')].map((z) => [
+        z.dataset.zone,
+        [...z.querySelectorAll<HTMLElement>('[data-slot], button, [role="radiogroup"]')]
+          .filter((el) => !el.closest('[popover]'))
+          .map((el) => el.dataset.slot ?? el.getAttribute('aria-label')),
+      ]),
+    )
+  it("the website's: the lead's slot and the reading options alone, as its page for a paper arXiv does not have; no progress line", async () => {
+    const { container } = await at({}, 'bare')
+    expect(zones(container)).toEqual({ lead: ['lead'], centre: [], trail: [R.options.name] })
+    expect(container.querySelector('.progress-line')).toBeNull()
+    // the reading options without a paper's rows: the appearance, the dimming, the host's own last rows
+    const rows = [...container.querySelectorAll<HTMLElement>('[popover] > :is(.row, .sep, [data-slot])')].map(
+      (r) =>
+        r.dataset.slot ??
+        r.querySelector('[role="radiogroup"], [role="switch"]')?.getAttribute('aria-label') ??
+        r.className,
+    )
+    expect(rows).toEqual([R.options.appearance, R.options.dim, 'options'])
+  })
+  it("the whole bar wherever a side has something to show, and always by the extension's rule", async () => {
+    const whole = (c: HTMLElement) => zones(c).trail?.includes(R.zoom.in) && zones(c).lead?.includes(R.contents)
+    // (the extension's: no rule, or `whole`)
+    for (const bar of [undefined, 'whole'] as const) expect(whole((await at({}, bar)).container)).toBe(true)
+    // (the website's: the translation to be had, or there; the original read)
+    expect(whole((await at({ unavailable: null }, 'bare')).container)).toBe(true)
+    expect(whole((await at({ layer: { laid: 2, total: 9 } }, 'bare')).container)).toBe(true)
+    expect(
+      whole((await at({ failures: { pdf: null, service: null }, failure: null, phase: 'ready' }, 'bare')).container),
+    ).toBe(true)
+    // (and back once a retry reads the original)
+    const { container, set } = await at({}, 'bare')
+    await act(async () => set({ failures: { pdf: null, service: null }, failure: null, phase: 'ready' }))
+    expect(whole(container)).toBe(true)
+  })
+})

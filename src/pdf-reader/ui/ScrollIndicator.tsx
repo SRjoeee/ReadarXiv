@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/ScrollIndicator) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // A pane's scroll indicator (the reader's design, §6.5): the native scrollbar is off; on the pane's right edge a 14 px
 // track and a 4 px thumb whose place follows the scroll on the compositor (a scroll-driven animation, reader.css) and
 // whose length is set here, in the frame the pane's size or its pages' height changes — never on a scroll. Hidden at

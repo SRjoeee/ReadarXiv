@@ -5,7 +5,7 @@
 // only reads: nothing here compiles) side by side, pages in step (an old link's `layer` still opens the retired early
 // engine, layer-lab/layer.mjs); set the quick view's choices, and edit, save and load the layout rule set; keep notes. A
 // static server on 127.0.0.1 with the rules routes (rules-api.mjs) and nothing else: the page (page-files.mjs lists its files) and the
-// extension's tokens and controls it is drawn with (/styles/…, src/styles), the engine's modules as they are
+// extension's tokens and controls it is drawn with (/styles/…, packages/ui/src), the engine's modules as they are
 // (/src/pdf-reader/engine/… and /proto-engine/…, every import relative), PDF.js's pinned modern build from the
 // repository's node_modules (/pdfjs/…, by the page's import map), the role table's faces from the local font folder
 // (/fonts/<file>, data/fonts), TinyTeX's Latin Modern faces and hyphenation patterns (TEXMF_DIST) at /proto-fonts/ and
@@ -40,6 +40,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { geometryFile, PROTO_GEOMETRY } from '../spikes/layer-gate/ref.mjs'
 import { wrapOf } from '../spikes/layer-gate/wrap.mjs'
+import { packageFile, ZOD_PATH } from '../packages-route.mjs'
 import { isOwnHost } from './own-host.mjs'
 import { PAGE_FILES, unservedImports } from './page-files.mjs'
 import { createRulesApi, RULES_PATH } from './rules-api.mjs'
@@ -64,8 +65,8 @@ const PDFJS = resolve(REPO, 'node_modules/pdfjs-dist')
 const ZOD = resolve(REPO, 'node_modules/zod')
 const ENTRY = process.env.LAYER_ENTRY ? resolve(process.env.LAYER_ENTRY) : null
 const PORT = Number(process.argv.find(a => a.startsWith('--port='))?.slice(7) ?? 8093)
-/** the extension's style sheets the page is drawn with: its tokens (both themes) and its shared controls */
-const STYLES = resolve(REPO, 'src/styles')
+/** the extension's style sheets the page is drawn with: its tokens (both themes) and its shared controls, @readarxiv/ui's */
+const STYLES = resolve(REPO, 'packages/ui/src')
 const STYLE_FILES = new Set(['tokens.css', 'controls.css'])
 const FIXTURE_FILES = ['arxiv.pdf', 'base.pdf', 'layout.json', 'units.json', 'final.pdf', 'final.json', 'refusal.json', 'record.json']
 /** where each of a fixture's files is looked for, in order: the translation in the records first, a final in the finals
@@ -203,7 +204,9 @@ const server = createServer((req, res) => {
     // (and the engine's view sheet, view/engine.css, which the quick view is drawn with as the readers draw it)
     return sendFile(res, /\.(m?js|json)$/.test(r) || r === 'view/engine.css' ? under(ENGINE, r) : null)
   }
-  if (path.startsWith('/zod/')) return sendFile(res, /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
+  if (path.startsWith('/zod/')) return sendFile(res, ZOD_PATH.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
+  // (the workspace packages an engine module imports, TypeScript stripped: lab/pdf/packages-route.mjs)
+  if (path.startsWith('/packages/')) { const f = packageFile(REPO, path); return f ? send(res, 200, f.body, f.type) : send(res, 404, 'not found') }
   if (path.startsWith('/pdfjs/')) {
     const r = path.slice('/pdfjs/'.length)
     return sendFile(res, /^(build|cmaps|standard_fonts|wasm|iccs)\//.test(r) ? under(PDFJS, r) : null, 'max-age=3600')

@@ -4,6 +4,10 @@ import { WxtVitest } from 'wxt/testing/vitest-plugin'
 import { availableMemoryMB, workersFor } from './tests/pool'
 
 // WxtVitest: in-memory browser extension APIs, auto-imports, the @/ alias
+//
+// Two kinds of project. `extension` inherits everything set here and runs tests/. Each workspace package (packages/*) carries a
+// vitest.config.ts that names the environment its code needs (Node; happy-dom for reader and ui) and extends nothing, so no
+// extension plugin or setup file reaches a package's tests
 export default defineConfig({
   plugins: [WxtVitest()],
   test: {
@@ -50,5 +54,6 @@ export default defineConfig({
     // 13 here. `--expose-gc` is tests/setup/memory.test.ts's: it asks whether a parsed paper is really collected
     maxWorkers: workersFor({ cores: availableParallelism(), totalMemoryMB: availableMemoryMB(totalmem()) }),
     execArgv: ['--expose-gc', '--max-old-space-size=2048'],
+    projects: [{ extends: true, test: { name: 'extension' } }, 'packages/*/vitest.config.ts'],
   },
 })

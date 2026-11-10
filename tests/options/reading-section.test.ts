@@ -14,7 +14,7 @@ vi.mock('@/entrypoints/options/floating-entry', () => ({
 }))
 
 import { Reading } from '@/entrypoints/options/sections/Reading'
-import { O, R, S, setLocale } from '@/ui/strings'
+import { O, R, S, setLocale } from '@readarxiv/ui'
 
 function Harness({ start, patches }: { start: Config; patches: Config[] }) {
   const [config, setConfig] = useState(start)

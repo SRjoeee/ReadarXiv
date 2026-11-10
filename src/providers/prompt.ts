@@ -1,7 +1,7 @@
 // The LLM prompt (DESIGN §8.2). A change to the protocol block or to a built-in prompt's wording bumps
-// PROMPT_VERSION — it enters the cache key.
+// PROMPT_VERSION — it enters the LLM translator's identity (llm.ts), so its store keys and its rows.
 //
-// Two layers: the prompt library (prompt-library.ts, ported from Read Frog, swappable, customisable) answers “how to
+// Two layers: the prompt library (prompt-library.ts: swappable, customisable) answers “how to
 // translate”; the protocol block here answers “how to send and receive” — JSON segments + placeholder rules, appended
 // after any system prompt, beyond a custom prompt's reach. The protocol is ours (structured output + zod validation),
 // steadier than Read Frog's text delimiters, and stays.
@@ -14,7 +14,9 @@ import type { TranslateRequest } from './types'
 
 // 4: a custom template missing {{glossary}} gets the glossary appended — what actually goes to the model changed, and
 // without a bump the old cache would hit as before, the glossary as good as unset (Codex on #52)
-export const PROMPT_VERSION = '4'
+// 5: the target's English name is the English menu's, CLDR's common name under UI.md §6's naming policy (2026-11-07):
+// 24 of the 180 changed (Simplified Mandarin Chinese → Simplified Chinese, Standard Arabic → Arabic, …)
+export const PROMPT_VERSION = '5'
 
 /** The send / receive protocol: independent of the prompt library */
 export const PROTOCOL_BLOCK = [
@@ -42,7 +44,7 @@ export function buildPrompts(request: TranslateRequest, prompts: PromptsConfig =
   const template = selectPrompt(prompts)
   const context = request.context
   const values: Record<PromptToken, string> = {
-    // The English language name rather than the code (Read Frog's way): "zh-CN native translator" is worse than "Simplified Mandarin Chinese"
+    // The English language name rather than the code (Read Frog's way): "zh-CN native translator" is worse than "Simplified Chinese"
     targetLanguage: englishName(request.target),
     input: JSON.stringify(request.segments),
     paperTitle: resolvePromptReplacementValue(context?.paperTitle, NOT_AVAILABLE),

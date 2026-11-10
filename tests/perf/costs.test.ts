@@ -1,11 +1,11 @@
 // Three costs measured rather than argued about (2026-09-17): the lazy scheduler
-// observing a whole paper, the cache port writing a batch one record at a time, and the sentence highlight's
+// observing a whole paper, the answers store writing and reading a paper's worth in bulk, and the sentence highlight's
 // MutationObserver taking a pipeline burst. Readings, not assertions, are the product — they are recorded beside the
 // decisions they bear on (DESIGN §9, §10, §7.7) — so the tests are skipped unless asked for: AXT_MEASURE=1 pnpm vitest run tests/perf
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { TranslationCache, cachePortOf, createCacheDb } from '@/cache'
+import { createTranslateDb, createTranslateStore } from '@/cache/translate-store'
 import { type Block, extract, markBlocks } from '@/core/extractor'
 import { clearSentenceHighlights, startSentenceHighlight } from '@/core/renderer/highlight'
 import { DEFAULT_PRELOAD, createLazyScheduler } from '@/core/scheduler/lazy'
@@ -107,21 +107,22 @@ describe('costs', () => {
     expect(blocks.length).toBeGreaterThan(0)
   })
 
-  measure('cache port putMany, one set per record', async () => {
-    const cache = new TranslationCache({ db: createCacheDb(`axt-perf-${Date.now()}`) })
-    const port = cachePortOf(cache)
-    const entries = (n: number, tag: string) => Array.from({ length: n }, (_, i) => ({ key: `k-${tag}-${i}`, translation: `translation ${i} `.repeat(20), paper: '2312.17141' }))
+  measure('the answers store, a bulk write and a bulk read (one transaction each)', async () => {
+    const store = createTranslateStore({ db: createTranslateDb(`axt-perf-${Date.now()}`) })
+    const entries = (n: number, tag: string) => Array.from({ length: n }, (_, i): [string, string] => [`k-${tag}-${i}`, `translation ${i} `.repeat(20)])
     const lines: string[] = []
     for (const size of [1, 50, 200, 880]) {
-      const took = await timedAsync(() => port.putMany(entries(size, `b${size}`)))
+      const took = await timedAsync(() => store.answers.write(entries(size, `b${size}`)))
       lines.push(`${size} → ${ms(took)} (${(took / size).toFixed(2)} ms each)`)
     }
-    const again = await timedAsync(() => port.putMany(entries(200, 'b200')))
+    const again = await timedAsync(() => store.answers.write(entries(200, 'b200')))
     lines.push(`200 rewritten → ${ms(again)}`)
-    const read = await timedAsync(async () => { await port.getMany(entries(880, 'b880').map(e => e.key)) })
-    lines.push(`getMany 880 → ${ms(read)}`)
-    report(`cache putMany (fake-indexeddb): ${lines.join('; ')}`)
-    expect((await cache.stats()).entries).toBe(1131)
+    const read = await timedAsync(async () => { await store.answers.read(entries(880, 'b880').map(e => e[0])) })
+    lines.push(`read 880 → ${ms(read)}`)
+    report(`answers store (fake-indexeddb): ${lines.join('; ')}`)
+    // stats() counts the rows (S-O-70's passages); the answers written here show in the bytes
+    expect((await store.stats()).entries).toBe(0)
+    expect((await store.stats()).bytes).toBeGreaterThan(1131 * 20)
   })
 
   measure('sentence highlight MutationObserver taking a pipeline burst', () => {

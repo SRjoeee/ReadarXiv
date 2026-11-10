@@ -1,0 +1,19 @@
+{
+  "name": "@readarxiv/typeset",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "layFlow, rules, language data and painters: a translated unit laid into its room",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@readarxiv/format": "workspace:*",
+    "@readarxiv/text": "workspace:*"
+  }
+}

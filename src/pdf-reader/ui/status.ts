@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/ui/status) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The reader's states (the reader's design, §8) as what the capsule, the progress line and the card show: one anatomy,
 // an icon, one sentence, at most one action. Reading shows nothing; a translation on screen is never covered by a
 // failure's card. A capsule's sentence is its words in parts (capsule-words.ts): a count drawn in cells of its own, a

@@ -1,3 +1,4 @@
+// Kept at this path for the website's reader (readarxiv-web, @vendor/pdf-reader/controller) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 // The one boundary between the reader's engine and its interface (the reader's design, §11.3): the session's events
 // folded into a state the interface subscribes to, and the interface's commands passed on to the session. pdfslick's
 // per-viewer store, adopted: the engine's events drive the store, and nothing reads the viewers back. The session is the

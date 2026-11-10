@@ -7,6 +7,9 @@ node_modules
 stats.html
 stats-*.json
 
+# The workspace packages' incremental type-check state (tsc -b packages)
+*.tsbuildinfo
+
 # Tests
 coverage/
 tests/e2e/.profile*/
@@ -46,3 +49,7 @@ reference/
 
 # The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs): arXiv's papers and what is made from them, never committed
 /lab/pdf/out/gate-pack/
+
+# the reader package's offline harness: its build and its screenshots (packages/reader/e2e)
+packages/reader/e2e/.out/
+packages/reader/e2e/.shots/

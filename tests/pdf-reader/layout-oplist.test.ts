@@ -5,7 +5,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { giveUp, listOf, listWithin, orNull, within } from '@/pdf-reader/engine/layout/oplist.mjs'
 import { readAnnots } from '@/pdf-reader/engine/layer-proto/links.mjs'
-import { ALLOCATION_FAILED, isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
+import { ALLOCATION_FAILED, isMemoryError } from '@readarxiv/engine'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // A page's operator list as the prepare's readers ask it (layout/oplist.mjs listOf: however long it takes, no clock deciding what is

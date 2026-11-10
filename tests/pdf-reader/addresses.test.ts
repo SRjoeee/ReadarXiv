@@ -49,5 +49,7 @@ describe('paperOf: the paper an address names is an arXiv id or none (PDF-READER
       expect(paperOf(new URLSearchParams({ paper: value })), value).toBe('')
     }
     expect(paperOf(new URLSearchParams())).toBe('')
+    // with or without the live run asked for: the chrome is handed no paper, and its card says so (D1)
+    for (const query of ['live=1', 'live=1&paper=', 'live=1&paper=1706.03762/../../x']) expect(paperOf(new URLSearchParams(query)), query).toBe('')
   })
 })

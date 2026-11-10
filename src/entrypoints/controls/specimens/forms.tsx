@@ -2,11 +2,7 @@
 // disabled one; a radio group of services in a card, the arrows moving the choice past the one that cannot be had; and a
 // field opened in place under a text button
 import { useId, useRef, useState } from 'react'
-import { Button } from '@/ui/controls/Button'
-import { Field, TextInput } from '@/ui/controls/Field'
-import { Radio, radioKeys } from '@/ui/controls/radio'
-import { Reveal } from '@/ui/controls/Reveal'
-import { O, S } from '@/ui/strings'
+import { Button, Field, TextInput, Radio, radioKeys, Reveal, O, S } from '@readarxiv/ui'
 
 export function Forms() {
   const [service, setService] = useState('microsoft')

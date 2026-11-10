@@ -151,6 +151,21 @@ describe('placeholders, labels and names (MR 4–6)', () => {
   })
 })
 
+describe('a paper\'s macro at a unit\'s head, its point \\axthpk\'s (marks.mjs layoutMarking)', () => {
+  it('owns the glyphs between its point and the start as the piece\'s, what stands before its point as the label', () => {
+    // (1810.04805v2 p1's `\\bert is conceptually simple`: "BERT" between p3.0a and 3s, the piece's ink, no label's; a list item's
+    // "1." before the point the label, by TeX's point, not by a word's form)
+    const pages = [page([{ pt: '2e' }, '\n', { pt: 'p3.0a' }, 'BERT', { dx: 3 }, { pt: '3s' }, 'is simple', { pt: '3e' }, '\n', '1.', { dx: 3 }, { pt: 'p4.0a' }, 'BERT', { dx: 3 }, { pt: '4s' }, 'wins', { pt: '4e' }])]
+    const head = { t: 'ph', src: '\\bert' }
+    const us = [{ src: 'x' }, { src: 'x' }, { src: 'x' }, { kind: 'para', pieces: [head, { t: 'text', s: ' is simple' }] }, { kind: 'para', pieces: [head, { t: 'text', s: ' wins' }] }]
+    // (the marking's follows, as the adapter hands them: the opening alone reads to its next point, the start, and finds the text
+    // after it past that point, so claims nothing; the label's walk is what owns these glyphs)
+    const follows = followsOf(us as never, new Set(pages[0]!.points.map(x => x.name)))
+    const r = ownOf(pages, { units: us, follows })
+    expect(groupsOf(r, pages)).toMatchObject({ u3: 'is simple', 'u3.p': 'BERT', u4: 'wins', 'u4.p': 'BERT', 'u4.l': '1.' })
+  })
+})
+
 describe('a display its unit opens with, which the marking passes over (stream.mjs headInk)', () => {
   // (2501.14787v1 p24u193: \\[ vec f'(A)[dA] = … \\] after a blank line, then "In order to understand …"; no point of its own, its
   // ink between 192e and 193s in no group, made three kept blocks by the ink units, and lit with its unit's first sentence on the left)

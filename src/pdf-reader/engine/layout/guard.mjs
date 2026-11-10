@@ -11,7 +11,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../layer-proto/format.mjs'
-import { isMemoryError } from '../pipeline/memory.mjs'
+import { isMemoryError } from '@readarxiv/engine'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
 import { texErrors, unitsAtErrors } from '../pipeline/tex-errors.mjs'
 import { END_TEX } from '../pipeline/typeset/tex.mjs'

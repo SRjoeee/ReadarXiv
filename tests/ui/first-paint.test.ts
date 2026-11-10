@@ -5,7 +5,7 @@ import * as configStorage from '@/config/storage'
 import { setConfig } from '@/config/storage'
 import { applyLocale } from '@/ui/apply-locale'
 import { prepareFirstPaint } from '@/ui/first-paint'
-import { localeInUse } from '@/ui/strings'
+import { localeInUse } from '@readarxiv/ui'
 
 // The popup and the settings page set their language and their appearance before the first paint, and the paint waits
 // on it: one read of the settings serves both (the redesign's design, §3; UI.md §6)

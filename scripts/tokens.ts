@@ -1,6 +1,6 @@
-// Writes src/styles/tokens.css from src/shared/tokens.ts: `pnpm tokens`. tests/shared/tokens.test.ts fails while the
-// committed sheet and the source differ
+// Writes packages/ui/src/tokens.css from packages/ui/src/tokens.ts: `pnpm tokens`. packages/ui/tests/tokens.test.ts fails
+// while the committed sheet and the source differ
 import { writeFileSync } from 'node:fs'
-import { tokenSheet } from '../src/shared/tokens'
+import { tokenSheet } from '../packages/ui/src/tokens.ts'
 
-writeFileSync(new URL('../src/styles/tokens.css', import.meta.url), tokenSheet('page'))
+writeFileSync(new URL('../packages/ui/src/tokens.css', import.meta.url), tokenSheet('page'))

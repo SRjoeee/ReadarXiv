@@ -1,6 +1,6 @@
 // A menu's item as the surfaces' data layers build it — the service list (service-items.ts) and the reader's language
 // list — before a menu draws it: the popup's view model and the reader's menus map it onto the shared MenuList's rows
-// (@/ui/controls/MenuList). Moved from the old src/ui/Menu.tsx, retired with the redesign (its design, §2.3)
+// (@readarxiv/ui's MenuList). Moved from the old src/ui/Menu.tsx, retired with the redesign (its design, §2.3)
 import type { CSSProperties } from 'react'
 
 export interface MenuItem {

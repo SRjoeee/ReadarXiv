@@ -4,12 +4,8 @@ import { LETTER, collectText, squash } from '@/core/text'
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
 
 /**
- * Bumped on every behaviour change of a table or function; enters the cache key. 0.5.0: cells at any depth, units
- * inside a cell serialised by walking in (§5.3). 0.6.2: tags carrying an environment name became translatable, bare
- * identifiers (`(a)`, `(ii)`) stay protected — the classification changed meaning, and the old cache must not carry
- * over (Codex on #53). 0.10.1: `.ltx_nodisplay` is a void — the cached blocks had translated the hidden accessibility
- * descriptions along, and would keep serving them with the key unchanged. 0.10.2: an inline listing is a void
- * (`lstinline`) — its identifiers had gone to the engine as prose
+ * The rules version's last value. No key reads it (DESIGN §9: no version number since stage 4b); kept for the website's
+ * tests (readarxiv-web, @vendor/core/rules/latexml) until its cut-over. See tests/contract/website-imports.test.ts.
  */
 export const RULES_VERSION = '0.11.0'
 
@@ -407,6 +403,28 @@ export const FIGURE_SELECTORS = {
  * bracketed note at the end of a sentence it ends in `)` and makes no false boundary
  */
 export const ANNOTATION_SELECTOR = '.ltx_note, .ltx_note_mark, .ltx_note_type'
+
+/**
+ * What a placeholder's element is to a sentence cutter (the translator contract's element kind, @readarxiv/translate
+ * `ElKind`): a footnote's mark belongs to the sentence before it, a cross-reference reads as a number, a formula as a
+ * word, a break as a space. A citation is `other`, read as a word: it may be a sentence's subject (`\citet`, the
+ * reason it is no annotation above)
+ */
+/** A numbering label (a section's, an item's, an equation's `ltx_tag`): to a sentence cutter a word, never its number and
+ *  stop, which would make `2.1.` a sentence of its own in a heading */
+export function isNumberingLabel(node: Node): boolean {
+  return node.nodeType === 1 && (node as Element).matches('.ltx_tag')
+}
+
+export function elementKindOf(node: Node | undefined): 'note-mark' | 'ref' | 'math' | 'break' | 'other' {
+  if (node?.nodeType !== 1) return 'other'
+  const el = node as Element
+  if (el.matches(ANNOTATION_SELECTOR)) return 'note-mark'
+  if (el.matches('.ltx_ref') && !el.closest('.ltx_cite')) return 'ref'
+  if (el.matches('math, .ltx_Math')) return 'math'
+  if (el.matches('br')) return 'break'
+  return 'other'
+}
 
 export const NOTE = {
   root: '.ltx_note',

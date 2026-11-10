@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_LOCALE_NAME as OWN } from '@/config/languages'
-import { LOCALES } from '@/locales'
-import { spacedAfterCjk, spacedBeforeCjk, spacedWithinCjk } from '@/locales/spacing'
+import { LOCALES, spacedAfterCjk, spacedBeforeCjk, spacedWithinCjk } from '@readarxiv/ui'
 
 /** every string a pack's R holds, by its path; a function is called with a sample */
 function strings(value: unknown, path = 'R'): [string, string][] {

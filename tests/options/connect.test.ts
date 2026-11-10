@@ -22,7 +22,8 @@ vi.mock('@/entrypoints/options/permissions', () => ({
 
 import { connectService } from '@/entrypoints/options/connect'
 import { listModels } from '@/entrypoints/options/models'
-import { O, reasonText, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
+import { reasonText } from '@/ui/strings'
 
 const SVC: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'Mine', baseURL: 'https://api.example.com/v1', apiKey: 'sk-new', model: 'x/y', thinking: 'disabled' }
 
@@ -33,19 +34,26 @@ describe('connectService (§6.3)', () => {
   })
 
   it('carries the service whole, named, and answers with the time it took', async () => {
-    wire.answer = { ok: true, result: { segments: [], provider: SVC.id }, cached: 0 }
+    wire.answer = { ok: true, results: [{ id: 'sample', ok: true, content: [{ t: 'text', s: 'a sample' }], by: 'llm:0' }], cached: 0 }
     const res = await connectService(SVC, 'cmn')
     expect(res.ok).toBe(true)
-    expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate', providerId: SVC.id, candidate: SVC })])
-    expect((wire.sent[0] as { cache?: unknown }).cache).toBeUndefined()
+    expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate', providerId: SVC.id, candidate: SVC, target: 'cmn' })])
+    // the sample is a unit: two elements and a styled word, on the tags wire of the reader's service
+    expect((wire.sent[0] as { units: { content: { t: string }[] }[] }).units[0]?.content.map(p => p.t)).toEqual(['text', 'el', 'text', 'span', 'text', 'el', 'text'])
   })
 
   it('a refused key names its reason and the key field, and asks for nothing to be given back: the origin is the form\'s to let go (#299 F2c)', async () => {
-    wire.answer = { ok: false, error: { kind: 'auth', message: '401', isolatable: false } }
+    wire.answer = { ok: false, error: { kind: 'auth', message: '401' } }
     // the reader's own service: its refusal is its key's (#88 E5: a built-in's is not)
     expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth', SVC.id)) })
     expect(reasonText('auth', SVC.id)).not.toBe(reasonText('auth'))
     expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate' })])
+  })
+
+  it("an endpoint that does not keep the sample's placeholders fails in today's words for a malformed translation, no field at fault", async () => {
+    // the transport's answer for it (tests/providers/transport.test.ts: the runs floor's rebuild is not the endpoint's)
+    wire.answer = { ok: true, results: [{ id: 'sample', ok: false, why: { kind: 'refused' }, error: { kind: 'invalid-response', message: 'no translator rebuilt the placeholders of the source' } }], cached: 0 }
+    expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: null, reason: O.services.failed(reasonText('invalid-response', SVC.id)) })
   })
 
   it('a permission refused says so at the address, in today\'s words, and asks nothing of the endpoint', async () => {

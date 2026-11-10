@@ -1,0 +1,19 @@
+{
+  "name": "@readarxiv/translate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "GPL-3.0-only",
+  "description": "the translator contract, its adapters and the chain that falls back between them",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@readarxiv/text": "workspace:*"
+  }
+}

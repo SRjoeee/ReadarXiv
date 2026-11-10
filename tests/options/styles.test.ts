@@ -18,7 +18,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { id: 'test-extension', getU
 import { Appearance } from '@/entrypoints/options/sections/Appearance'
 import { UNDO_MS } from '@/entrypoints/options/ui/UndoRow'
 import { drafts } from '@/ui/drafts'
-import { O, setLocale } from '@/ui/strings'
+import { O, setLocale } from '@readarxiv/ui'
 
 function Harness({ start, patches }: { start: Config; patches: Config[] }) {
   const [config, setConfig] = useState(start)

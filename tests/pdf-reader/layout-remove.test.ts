@@ -40,7 +40,7 @@ function pdfBin(objects: (string | [string, string])[]): Uint8Array {
 
 // Untrusted input must never wedge the remover (Codex's review of PR A, finding 2): each case runs in a worker that is
 // stopped after a few seconds, so that a loop that fails to advance fails the test instead of hanging the suite
-const REMOVE_URL = pathToFileURL(join(process.cwd(), 'src/pdf-reader/engine/layout/remove.mjs')).href
+const REMOVE_URL = pathToFileURL(join(process.cwd(), 'packages/engine/src/remove.mjs')).href
 const PDFLIB_PATH = createRequire(join(process.cwd(), 'package.json')).resolve('@cantoo/pdf-lib')
 /** `body` (an async function's body over R, the remover's module, PL, pdf-lib, and data) run in a worker, at most `ms` */
 function bounded<T>(body: string, data: unknown, ms = 4000, heapMb?: number): Promise<T> {

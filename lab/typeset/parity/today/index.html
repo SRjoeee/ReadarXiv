@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>parity: today through the door</title>
+<link rel="stylesheet" href="/h/engine.css">
+<style>
+  html, body { margin: 0; background: #fff; }
+  #stage { position: absolute; left: 0; top: 0; }
+  /* the translated text alone: the copy and the links hidden, the page white; the figure texts too (v2 draws none yet: the
+     darkness of the two sides is read over the units' text alike) */
+  html[data-parity-text] .axt-layer-copy, html[data-parity-text] canvas.axt-original { visibility: hidden !important; }
+  html[data-parity-text] .axt-layer > svg g[data-f] { display: none !important; }
+  html[data-parity-text] .axt-links { display: none !important; }
+</style>
+<script type="importmap">{"imports":{"pdfjs-dist":"/pdfjs/build/pdf.mjs"}}</script>
+<script type="module" src="/h/entry.js"></script>
+</head>
+<body>
+<div id="stage"></div>
+</body>
+</html>

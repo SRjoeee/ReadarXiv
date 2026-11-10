@@ -1,46 +1,42 @@
-// Ported from reference/read-frog/src/utils/request/__tests__/cancellation.test.ts@9b44f82 (GPL-3.0), 2026-09-05, modified:
-// import path; 2026-09-12 (DESIGN §8.5) the prefix, TTL and size-cap cases are gone with the registry's rewrite — it no longer expires.
-import { describe, expect, it } from "vitest"
-import {
-  CancelledScopeRegistry,
-  isTranslationCancelledError,
-  TRANSLATION_CANCELLED_ERROR_NAME,
-  TranslationCancelledError,
-} from "@/providers/request/cancellation"
+// The registry of dead page sessions (DESIGN §4.5, §8.5): what the session router marks, every service reads; a mark is
+// there at once and for good, and it names one scope whole.
+import { describe, expect, it } from 'vitest'
+import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 
-describe("isTranslationCancelledError", () => {
-  it("recognizes a same-realm instance", () => {
-    expect(isTranslationCancelledError(new TranslationCancelledError("7:sess"))).toBe(true)
-  })
-
-  it("recognizes the messaging-boundary shape (plain Error carrying only the name)", () => {
-    // @webext-core/messaging re-creates background rejections on the content
-    // side via @aklinker1/zero-serialize-error as `Error(msg)` with `.name`
-    // copied — the prototype (and thus instanceof) is lost. Detection MUST be
-    // name-based; this pins that so a refactor to `instanceof` can't slip
-    // through green (#1881).
-    const crossBoundary = Object.assign(new Error("Translation request cancelled"), {
-      name: TRANSLATION_CANCELLED_ERROR_NAME,
-    })
-    expect(crossBoundary).not.toBeInstanceOf(TranslationCancelledError)
-    expect(isTranslationCancelledError(crossBoundary)).toBe(true)
-  })
-
-  it("rejects unrelated errors and non-errors", () => {
-    expect(isTranslationCancelledError(new Error("boom"))).toBe(false)
-    expect(isTranslationCancelledError({ name: TRANSLATION_CANCELLED_ERROR_NAME })).toBe(false)
-    expect(isTranslationCancelledError(undefined)).toBe(false)
-    expect(isTranslationCancelledError("cancelled")).toBe(false)
-  })
-})
-
-describe("cancelledScopeRegistry", () => {
-  it("remembers exact cancelled scopes", () => {
+describe('CancelledScopeRegistry', () => {
+  it('knows no scope until one is marked', () => {
     const registry = new CancelledScopeRegistry()
-    registry.markScope("7:session-a")
+    expect(registry.has('session-1')).toBe(false)
+    expect(registry.has('')).toBe(false)
+  })
 
-    expect(registry.has("7:session-a")).toBe(true)
-    expect(registry.has("7:session-b")).toBe(false)
-    expect(registry.has("8:session-a")).toBe(false)
+  it('reads a mark at once, with nothing awaited between', () => {
+    const registry = new CancelledScopeRegistry()
+    registry.markScope('session-1')
+    expect(registry.has('session-1')).toBe(true)
+  })
+
+  it('keeps a mark for good: later reads, a second mark and time change nothing', async () => {
+    const registry = new CancelledScopeRegistry()
+    registry.markScope('session-1')
+    registry.markScope('session-1')
+    await new Promise(resolve => setTimeout(resolve, 5))
+    expect(registry.has('session-1')).toBe(true)
+  })
+
+  it('matches a scope whole: neither a key it begins nor one that begins with it', () => {
+    const registry = new CancelledScopeRegistry()
+    registry.markScope('session-1')
+    expect(registry.has('session-10')).toBe(false)
+    expect(registry.has('session-')).toBe(false)
+    expect(registry.has('Session-1')).toBe(false)
+  })
+
+  it('keeps each registry to itself: two background lifetimes share no marks', () => {
+    const a = new CancelledScopeRegistry()
+    const b = new CancelledScopeRegistry()
+    a.markScope('session-1')
+    b.markScope('session-2')
+    expect([a.has('session-1'), a.has('session-2'), b.has('session-1'), b.has('session-2')]).toEqual([true, false, false, true])
   })
 })

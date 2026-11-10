@@ -14,6 +14,21 @@ importers:
       '@cantoo/pdf-lib':
         specifier: 2.11.1
         version: 2.11.1(html-entities@2.6.0)
+      '@readarxiv/engine':
+        specifier: workspace:*
+        version: link:packages/engine
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:packages/format
+      '@readarxiv/reader':
+        specifier: workspace:*
+        version: link:packages/reader
+      '@readarxiv/translate':
+        specifier: workspace:*
+        version: link:packages/translate
+      '@readarxiv/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       ai:
         specifier: ^7.0.91
         version: 7.0.91(zod@4.5.4)
@@ -96,6 +111,77 @@ importers:
       wxt:
         specifier: ^0.21.4
         version: 0.21.4(esbuild@0.28.2)(rolldown@1.2.15)(typescript@7.0.2)(vite@8.3.5(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
+
+  packages/engine:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/format:
+    dependencies:
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+
+  packages/reader:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+      '@readarxiv/typeset':
+        specifier: workspace:*
+        version: link:../typeset
+      '@readarxiv/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide:
+        specifier: 1.47.0
+        version: 1.47.0
+      pdfjs-dist:
+        specifier: 6.3.289
+        version: 6.3.289
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+
+  packages/text: {}
+
+  packages/translate:
+    dependencies:
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/typeset:
+    dependencies:
+      '@readarxiv/format':
+        specifier: workspace:*
+        version: link:../format
+      '@readarxiv/text':
+        specifier: workspace:*
+        version: link:../text
+
+  packages/ui:
+    dependencies:
+      lucide:
+        specifier: 1.47.0
+        version: 1.47.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
 
 packages:
 

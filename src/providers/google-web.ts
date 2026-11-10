@@ -3,10 +3,11 @@
 // many items per request (upstream sends one; the endpoint accepts an array — 150 items in 556 ms, DESIGN §8.3);
 // the preserveLineBreaks markers are dropped (we send placeholder-marked text in html format as is) and so is the
 // escapeText dependency (the protector already escapes).
+// Kept at this path for the website's Worker (readarxiv-web, @vendor/providers/google-web) until its cut-over; nothing in the extension imports it. See tests/contract/website-imports.test.ts.
 import { toBcp47 } from '@/config/languages'
+import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './compat/types'
 import { kindOfStatus } from './http-errors'
 import { attachRequestErrorMeta } from './request/retry-policy'
-import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'
 
 const ENDPOINT = 'https://translate-pa.googleapis.com/v1/translateHtml'

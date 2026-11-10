@@ -1,10 +1,11 @@
-// What the reader's session tells its controller (controller.ts reduce), and what the page gives it: the reading view's events
+// What the reader's session of today tells the chrome's controller (packages/reader chrome/model.ts reduce, through host/today.ts), and what the page gives it: the reading view's events
 // as the interface holds them (host.ts fromView), the run's on the layer (run.ts RunEvent), and the settings' own
 import type { Config } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
 import type { ProviderErrorKind } from '@/providers/types'
 import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from '../engine/view/outline'
+import type { ViewEvent } from '../engine/view.mjs'
 
 export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
@@ -67,4 +68,45 @@ export interface SessionHost {
   /** the page's own first read of the settings, bounded (ui/first-read.ts): the session starts on it at once; `null` when it
    *  did not answer in its time (the defaults then, not waited on again); absent, the session reads them itself */
   reading?: ConfigReading | null
+}
+
+/** the session's commands: the chrome's (packages/reader chrome/model.ts Session), with the settings written as a change of
+ *  the extension's configuration, which the host's adapter makes of the chrome's patch (host/today.ts) */
+export interface Session {
+  setDisplay(mode: EngineDisplay): void
+  setSyncMode(mode: 'same' | 'off'): void
+  zoomBy(factor: number): void
+  zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
+  goToPage(side: 'left' | 'right', page: number): void
+  patchSettings(change: (latest: Config) => Config): void
+  /** the translation's bytes, to save (Task 20 fills it); null while there are none */
+  pdfBytes(which: 'translation'): Promise<Uint8Array | null>
+  /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
+   *  through the reader (the whole file, for every reader, in case one asks to save it) */
+  openOriginal(): void
+  goToUnit(id: number): void
+  lead(which: 'left' | 'right'): void
+  retry(): void
+  setNarrow(on: boolean): void
+  pinch(which: 'left' | 'right', factor: number, origin: [number, number]): void
+}
+
+/** the reading view's event as the session's (the reader's design, §11.7): what the chrome's state is folded from. The
+ *  original opened is `opened` (ready in every display), a PDF that could not be opened its fetch failure; the paper's id is
+ *  the address's. None for what the chrome does not hold (the original dropped) */
+export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
+  switch (event.type) {
+    case 'loading': return event
+    case 'opened': return { type: 'opened' }
+    case 'failed': return { type: 'fail', event: 'fetch failed', text: `Could not fetch ${paper}'s PDF (${event.error})`, kind: 'network' }
+    case 'paper': return { type: 'paper', id: paper, title: event.title }
+    case 'page': return { type: 'page', side: event.side, page: event.page, pages: event.pages }
+    case 'scale': return { type: 'scale', scale: event.scale, zoom: event.zoom }
+    case 'display': return { type: 'display', mode: event.display }
+    case 'sync': return { type: 'sync', on: event.on }
+    case 'outline': return event
+    case 'heading': return event
+    case 'layer': return { type: 'layer', state: event.state, laid: event.laid, total: event.total, ...(event.original ? { original: event.original } : {}) }
+    default: return null
+  }
 }
