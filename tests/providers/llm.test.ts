@@ -4,6 +4,7 @@
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
 import { chainOf, Fault, type FetchInit, type FetchReply, type Result, type Store, type Translator, type UnitIn } from '@readarxiv/translate'
+import { fakeClock } from '@readarxiv/translate/testing'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { endpointIdentity, LLM_LIMITS, llmTranslator, withoutKey } from '@/providers/llm'
@@ -143,6 +144,16 @@ describe('the LLM translator', () => {
     expect(await run(Object.assign(new Error('no object'), { name: 'AI_NoObjectGeneratedError' }))).toMatchObject({ remedy: 'again', code: 'malformed' })
     expect(await run(Object.assign(new Error('aborted'), { name: 'AbortError' }))).toMatchObject({ remedy: 'abort' })
     expect(statuses).toEqual([401, 403, 404, 429, 413, 400, 502])
+  })
+  it("a 429's Retry-After of an hour does not hold a call: one request, no sleep, the unit told the hour (#638: 7,200,000 ms)", async () => {
+    const clock = fakeClock()
+    let calls = 0
+    const model = new MockLanguageModelV4({ doGenerate: async () => { calls++; throw apiError(429, 'slow', { 'retry-after': '3600' }) } })
+    const rs: Result[] = []
+    for await (const r of chainOf({ clock }).translate([{ id: 'u', content: [{ t: 'text', s: 'One sentence.' }] }], 'zh-Hans', { translators: [llmTranslator(SVC, { codeOf, model })] })) rs.push(r)
+    expect(rs).toEqual([{ id: 'u', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } }])
+    expect(calls).toBe(1)
+    expect(clock.now()).toBe(0)
   })
   it('an endpoint that answers 400 to every request is asked once and the request handed on whole (#636: 7 requests, 11 alone)', async () => {
     const units = [0, 1, 2, 3].map(i => ({ id: `u${i}`, content: [{ t: 'text' as const, s: `Sentence number ${i} of a paragraph.` }] }))

@@ -562,7 +562,10 @@ send it units (`axt:translate`: `{ units, target, context?, scope? }` → one re
 the sections below describe of the ported request layer (Read Frog's queues, retry policy and token bucket), of the
 per-call fallback service and its 60 s demotions, of the page's own resend, runs fallback and halving, and of the service
 inserting sentence markers, is the package's now, per unit: write, store read, requests cut by each translator's limits
-with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call, a breaker per
+with equal wires sent once, three attempts with backoff, a 429 cooling its translator for every call (the chain's last
+translator waits a cooldown or a gate's refusal out only within what the chain gives one request of it, its three tries of
+`callMs`; a longer pause is never slept, the unit answers unavailable with the time the endpoint named, which the host
+offers its retry by: a Retry-After of an hour, slept twice, had held a call two hours, #638), a breaker per
 translator (50 % of 20, never the chain's last), halving only where an endpoint says a request is too large (a 413, or the
 words of its stated cap: Microsoft's plain-text 400) while any other refused request goes whole to the next translator and
 counts against its own as a failure of its endpoint does (a 400 to every request had been halved into 7 requests for an

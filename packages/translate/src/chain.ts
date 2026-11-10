@@ -41,6 +41,13 @@ export const MIN_COOL_MS = 1_000
 export const DEFAULT_COOL_MS = 5_000
 /** how many times the chain's last translator waits a cooldown out before its unit is unavailable (chain.ts `waits < 2`) */
 export const LAST_WAITS = 2
+/** the longest the chain's last translator waits pauses out for one unit, in all (a 429's cooldown, a gate's refusal): what
+ *  the chain already gives one request of it, ATTEMPTS tries of its `callMs` (the LLM's 105 s, a web translator's 30 s). A
+ *  pause past it is no slower answer but the translator out for now: it is never slept, the translator is passed over as a
+ *  failed one is and the unit told the time named, which a host offers its retry by (#638: a Retry-After of an hour, slept
+ *  twice, held a call two hours, in an extension's background that is a service worker). The cooldown itself stays the
+ *  endpoint's: the translator is asked nothing until it ends */
+export const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
 /** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const
@@ -457,6 +464,7 @@ export function chainOf(ports: Ports = {}): Chain {
     let attempt = 1
     let todo = entries
     let gateWaits = 0
+    let gateWaited = 0
     const drop = (e: Entry) => {
       if (lane.byKey.get(e.key) === e) lane.byKey.delete(e.key)
     }
@@ -480,9 +488,11 @@ export function chainOf(ports: Ports = {}): Chain {
           void asked.then((late) => (late.ok ? gate.release(late.lease, 'none') : undefined)).catch(() => {})
         if (g && !g.ok) {
           gone.signal.removeEventListener('abort', cut)
-          if (last && gateWaits < LAST_WAITS) {
+          const wait = Math.max(50, g.retryInMs ?? 250)
+          if (last && gateWaits < LAST_WAITS && gateWaited + wait <= patienceOf(t)) {
             gateWaits++
-            await clock.sleep(Math.max(50, g.retryInMs ?? 250), gone.signal)
+            gateWaited += wait
+            await clock.sleep(wait, gone.signal)
             continue
           }
           for (const e of todo)
@@ -828,15 +838,17 @@ export function chainOf(ports: Ports = {}): Chain {
       }
       const w = { seq: c.seq, index: i, last, note: c.note }
       let a: Answer = { unavailable: true }
-      // (the chain's last translator waits a cooldown out, LAST_WAITS times at most; any other has been passed over above)
-      for (let waits = 0; ; ) {
+      // (the chain's last translator waits a cooldown out, LAST_WAITS times at most and within patienceOf in all; any other
+      // has been passed over above)
+      for (let waits = 0, waited = 0; ; ) {
         const ms = coolingMs(lane)
         if (last && ms > 0) {
-          if (waits >= LAST_WAITS) {
+          if (waits >= LAST_WAITS || waited + ms > patienceOf(t)) {
             a = { unavailable: true, retryAfterMs: ms, cooling: true }
             break
           }
           waits++
+          waited += ms
           await clock.sleep(ms, c.signal)
           if (c.signal.aborted) return aborted(u)
         }

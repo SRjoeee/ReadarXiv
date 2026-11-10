@@ -529,6 +529,39 @@ describe('DECISION "Faults": each remedy, on a fake clock', () => {
     expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 2_000 } })
     expect(always.calls.length).toBe(3)
   })
+  it('cool: the last translator waits only within what the chain gives one request of it (ATTEMPTS × callMs); a longer pause answers unavailable with its time, unslept (#638)', async () => {
+    // an hour: never slept, one request, the endpoint's time told (two sleeps of an hour held the call two hours)
+    const clock = fakeClock()
+    const hour = fakeTranslator({
+      identity: 'hour:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 3_600_000 }) }),
+    })
+    const rs = await all(chainOf({ clock }).translate([plain], 'ja', { translators: [hour] }))
+    expect(rs[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(hour.calls.length).toBe(1)
+    expect(clock.now()).toBe(0)
+    // 20 s within the 30 s a request of it is given (3 × 10 s): slept once; a second 20 s would pass the bound
+    const clock2 = fakeClock()
+    const slow = fakeTranslator({
+      identity: 'slow:0',
+      script: () => ({ fault: new Fault('cool', 'rate', '429', { retryAfterMs: 20_000 }) }),
+    })
+    const rs2 = await all(chainOf({ clock: clock2 }).translate([plain], 'ja', { translators: [slow] }))
+    expect(rs2[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 20_000 } })
+    expect(slow.calls.length).toBe(2)
+    expect(clock2.now()).toBe(20_000)
+    // a gate that refuses the last translator for an hour: not slept either, the unit told the hour
+    const clock3 = fakeClock()
+    const e = echo()
+    const gate = {
+      acquire: async () => ({ ok: false as const, retryInMs: 3_600_000 }),
+      release: async () => {},
+    }
+    const rs3 = await all(chainOf({ clock: clock3, gate }).translate([plain], 'ja', { translators: [e] }))
+    expect(rs3[0]).toEqual({ id: 'p', ok: false, why: { kind: 'unavailable', retryAfterMs: 3_600_000 } })
+    expect(clock3.now()).toBe(0)
+    expect(e.calls.length).toBe(0)
+  })
   it('too large: a request its endpoint says is too large is halved down to the unit at fault, which this translator refuses', async () => {
     const units = many(8)
     const bad = units[5] as UnitIn
