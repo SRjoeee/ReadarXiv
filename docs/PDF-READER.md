@@ -3242,6 +3242,26 @@ no page newly worse, `scripts` nearer v2 on three pages (t167 15 of 15 character
 the wire sends "Closed-Form Inverses" whole, its marker a space apart, and the mark is drawn raised (El.mark): no mark eats or
 splits a word there. The reading's own faults (`\vs` read as text) stay where TeX set no ink to tell them.
 
+### 18.19 A URL is one word where TeX broke it (2026-11-10)
+
+The engine read an element's text off its glyphs with a space at each line's end, as PDF.js reads one (`facts.ts` `lineEnd`), a
+URL's too, while its copy text (`urlCopyOf`, #633's review) already read TeX's url package as it sets a URL: it breaks after one of
+its characters and sets nothing there. The typesetter draws a URL over lines as its text (El.text), so 1706.03762v7's
+`https://github.com/tensorflow/tensor2tensor` was drawn with a space after `github.com/`; over the 88 papers' parts, 301 elements
+of 41 papers held a space their copy did not.
+
+- **A line's end inside a word TeX set as written is a join** (`LineEndOptions.oneWord`, `locate.ts`): a URL (`\url`'s piece, or
+  one the instrument states sets one), or a mark TeX sets as written (`literal`: a DOI, an ISBN, an eprint a macro sets) whose
+  copy, the source's reading, holds no white space. Its text and its runs of one fill read it so; a code mark whose copy holds a
+  space keeps the space TeX broke it at. Stage 1a over the 88 (no TeX change): 308 elements of 42 papers move, El.text and
+  El.fills alone, no unit; the restated dumps are round 8 B1's byte for byte.
+- **Its annotations are one link over the word** (`lay/links.ts`, `emit/links.ts` `Target.word`): TeX's line break split one
+  link into an annotation a line, each over its line's part; the translation draws the word whole, where the second part stood
+  deep in one run, past `DRIFT_BOUND`, and was dropped (three DOIs with every switch on: 2610.40645v1-ja p38, p39, 2608.06701v1-zh
+  p12). The annotations of one target over such a word are placed over the whole of what is drawn of it.
+- The parity against B1's final: 49 -> 50 by default, 58 -> 59 with every switch on, the one page each 1810.04805v2-zh p14 t237,
+  a paragraph of two broken URLs now drawn whole and set a line shorter than today's (5 for 6, the original's 7).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
