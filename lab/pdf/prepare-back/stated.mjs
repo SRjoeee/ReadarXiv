@@ -46,6 +46,9 @@ export const CAUSE = Object.freeze({
   // after the other, no glyph of ink between them: TeX's inter-word or inter-member space alone, read off arXiv's glyphs on the
   // line (2609.26457v1 t279: the name before's raised "1", then "and"): accepted)
   heldBlock: "held whole by the author block's units on its line",
+  // ((j), 2026-11-10: a unit whose glyph text is one contiguous part of consecutive units' of the candidate's, in their order,
+  // each on today's box (2610.19159v1 t1906: today's orphan line, v2's two figure texts on it): accepted)
+  split: 'split across consecutive units, its text theirs in order',
   another: 'another reading',
 })
 
@@ -145,8 +148,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     l.baseline <= Math.max(k.top, k.bottom)
   const howOf = (u, c) => {
     if (c.why?.startsWith('content difference')) return c.why
-    // (a running head's number of its phrase, which today's took for its folio: "5 of 21" for "of 21", ink-units.mjs phrased)
-    if (/^ink/.test(u.kind) && typeof c.text === 'string' && c.text !== u.text && c.text.replace(/^\d{1,4} | \d{1,4}$/, '') === u.text)
+    // (a running head's number of its phrase, which today's took for its folio: "5 of 21" for "of 21", ink-units.mjs phrased; a
+    // running head's alone, the coordinator's ruling of 2026-11-10: no figure text joined with its number)
+    if (u.kind === 'inkheads' && typeof c.text === 'string' && c.text !== u.text && c.text.replace(/^\d{1,4} | \d{1,4}$/, '') === u.text)
       return CAUSE.head
     const same = u.pieces.length === c.pieces.length && u.pieces.every((p, k) => p.kind === c.pieces[k].kind && chars(p) === chars(c.pieces[k]))
     if (same) return CAUSE.order
@@ -257,6 +261,26 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     const whole = [...all].filter((n) => glyphTextOf(n) === mine)
     return { holder: whole.length === 1 ? whole[0] : null }
   }
+  // ((f), its stand-in of today's kind at its place, 2026-11-10: every line of today's meets a box of it and its glyph text holds
+  // today's whole, in order (rebuild/run-on-kept's figure text not cut at a face or colour change, standing for one of today's
+  // pieces))
+  const standInHolds = (u, c) => {
+    if (!u.lines?.length || !u.lines.every((l) => boxesOf(c).some((k) => across(k, l)))) return false
+    const t = glyphTextOf(u)
+    return !!t && glyphTextOf(c).includes(t)
+  }
+  // ((j): the candidate's units meeting today's lines (by their boxes), two or more, consecutive in the dump's order, today's
+  // glyph text one contiguous part of their glyph texts joined in that order, every character of it)
+  const splitOf = (u) => {
+    if (!u.lines?.length) return null
+    const at = units.filter((n) => !n.replaced && u.lines.some((l) => boxesOf(n).some((k) => across(k, l)))).sort((a, b) => a.ord - b.ord)
+    if (at.length < 2) return null
+    const lo = at[0].ord,
+      hi = at.at(-1).ord
+    if (units.some((n) => !n.replaced && n.ord > lo && n.ord < hi && !at.includes(n))) return null
+    const t = glyphTextOf(u)
+    return t && at.map(glyphTextOf).join('').includes(t) ? at : null
+  }
   // (a unit's text as written, an address its element reads as itself: what (F) reads)
   const writtenOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : p.kind === 'ph' ? (readingOf(p.src ?? '') ?? '\ufffc') : '')).join('')
   const keyOf = (why) => Object.keys(CAUSE).find((k) => CAUSE[k] === why) ?? 'content'
@@ -289,10 +313,16 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
         : partOf(u, holder)
           ? CAUSE.held
           : null
-    // (none of these: the author block's units holding its line between them (f'))
+    // (none of these: the author block's units holding its line between them (f'); consecutive units holding its text (j))
     const block = !c && !kept && !names && !trailed && !held ? heldByBlockUnits(u) : null
+    const split = !c && !kept && !names && !trailed && !held && !block ? splitOf(u) : null
+    // (a stand-in of its kind that reads otherwise, holding today's whole text: held whole (f))
+    const how = c ? howOf(u, c) : null
+    const standIn = how === CAUSE.another && standInHolds(u, c)
     const said = c
-      ? { by: c, cause: howOf(u, c) }
+      ? standIn
+        ? { by: c, cause: CAUSE.held, holder: c }
+        : { by: c, cause: how }
       : kept
         ? null
         : names
@@ -303,7 +333,9 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
               ? { by: holder, cause: held, ...(held === CAUSE.held ? { holder } : {}) }
               : block
                 ? { by: block.holder ?? [...units].find((n) => !n.replaced && boxesOf(n).some((k) => across(k, u.lines[0]))), cause: CAUSE.heldBlock, ...(block.holder ? { holder: block.holder } : {}) }
-                : null
+                : split
+                  ? { by: split[0], cause: CAUSE.split }
+                  : null
     if (kept) out.push({ u, why: "kept on arXiv's page as the original's, no text of it sent", cause: 'keptAt' })
     else if (said)
       out.push({
