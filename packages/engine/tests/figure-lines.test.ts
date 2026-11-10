@@ -188,6 +188,20 @@ describe('figure-lines: F0, a figure’s line of words and a run of one pitch', 
       ],
     )
     expect(figureLinesOf([two.page], two.fig, () => false, MONO)).toEqual([])
+    // (a label on a badge of its own beside a title (2610.19159v1's "Step 284" by "Agent Action: Write"): no chip, no bridge; the
+    // title and its path one text, the badge's label its own)
+    const badge = pageOf(
+      [
+        [
+          { text: 'Step 284', font: 'SFNS' },
+          { text: 'Action: Write ', font: 'SFNS', x: 132 },
+          { text: 'a.py', font: 'LMMono10-Regular' },
+        ],
+      ],
+      [[70, 696, 122, 709]],
+    )
+    const [b] = figureLinesOf([badge.page], badge.fig, () => false, MONO)
+    expect(b!.ks).toEqual([1, 2])
   })
 })
 

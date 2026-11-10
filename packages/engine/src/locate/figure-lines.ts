@@ -111,26 +111,17 @@ export function figureLinesOf(
       lines.push(lineOf([k], gs, new Set(), glyphs, figOf(glyphs[gs[0]!]!)))
     }
     if (!lines.length) return
-    // (a run's extent with its ground's: a box holding its end glyph's band, a line tall at most; a chip's fill)
-    const groundOf = (l: Line): { x0: number; x1: number; ids: Set<number> } => {
-      let x0 = l.x0,
-        x1 = l.x1
-      const ids = new Set<number>()
-      const ends = [glyphs[l.gs[0]!]!, glyphs[l.gs.at(-1)!]!]
+    // (a run of one pitch's extent with its ground's: a box holding its end glyph's band, a line tall at most; a chip's fill)
+    const groundOf = (g: G, size: number): { x0: number; x1: number; id: number } | null => {
       for (let b = 0; b + 3 < boxes.length; b += 4) {
         const bx0 = Math.min(boxes[b]!, boxes[b + 2]!),
           bx1 = Math.max(boxes[b]!, boxes[b + 2]!)
         const by0 = Math.min(boxes[b + 1]!, boxes[b + 3]!),
           by1 = Math.max(boxes[b + 1]!, boxes[b + 3]!)
-        if (by1 - by0 <= 0 || by1 - by0 > 2 * BAND_EM * l.size) continue
-        for (const g of ends)
-          if (bx0 <= g.x0 && bx1 >= g.x1 && by0 <= g.bottom && by1 >= g.top) {
-            x0 = Math.min(x0, bx0)
-            x1 = Math.max(x1, bx1)
-            ids.add(b / 4)
-          }
+        if (by1 - by0 <= 0 || by1 - by0 > 2 * BAND_EM * size) continue
+        if (bx0 <= g.x0 && bx1 >= g.x1 && by0 <= g.bottom && by1 >= g.top) return { x0: bx0, x1: bx1, id: b / 4 }
       }
-      return { x0, x1, ids }
+      return null
     }
     // ---- lines: runs of one figure on one baseline, consecutive within the run gap (a run's ground's edges counting where the
     // other stands on none: two boxed labels are two), and the glyphs no run holds on the line nearest them within it
@@ -151,10 +142,16 @@ export function figureLinesOf(
           if (a.fig !== b.fig || Math.abs(a.y - b.y) > RUN_DY * size) continue
           let gap = Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1)
           if (gap > RUN_GAP * size) {
-            const ga = groundOf(a),
-              gb = groundOf(b)
-            if (ga.ids.size && gb.ids.size && ![...ga.ids].some((x) => gb.ids.has(x))) continue
-            gap = Math.max(ga.x0, gb.x0) - Math.min(ga.x1, gb.x1)
+            // (a chip's fill bridges its run of one pitch to the words beside it: the facing edges, each extended to the ground
+            // that holds its end glyph where that glyph is of one pitch; two edges on grounds of their own, two boxed labels; a
+            // label on a badge of its own is no chip)
+            const [l, r] = a.x0 <= b.x0 ? [a, b] : [b, a]
+            const le = glyphs[l.gs.at(-1)!]!,
+              re = glyphs[r.gs[0]!]!
+            const gl = pitch(le) ? groundOf(le, l.size) : null,
+              gr = pitch(re) ? groundOf(re, r.size) : null
+            if (gl && gr && gl.id !== gr.id) continue
+            gap = (gr ? gr.x0 : r.x0) - (gl ? gl.x1 : l.x1)
           }
           if (gap > RUN_GAP * size) continue
           lines[i] = lineOf([...a.ks, ...b.ks], [...a.gs, ...b.gs], new Set([...a.free, ...b.free]), glyphs, a.fig)
