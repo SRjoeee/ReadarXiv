@@ -27,7 +27,7 @@ export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '7b2ed382ba683b06de67712db375d680ad5beb6cbc6a1fa2e55ad2da10b555cb'
+export const GOOGLE_DIGEST = 'd4f61bc8d534ae4627dbef07d09e17d328046b28094ae4a549e0e491d27570fc'
 
 const startOf = (text: string, at: number): number => {
   let i = at

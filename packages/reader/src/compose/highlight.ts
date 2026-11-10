@@ -82,24 +82,41 @@ function pageBoxes(page: Page, side: Side, committed: boolean): Box[] {
 
 /**
  * Whether each of a shape's boxes (PDF units, y up), in the order given, stands apart from the one before it: another block
- * stands between them, a box of `others` that is none of the shape's whose middle is between the two and that meets them across
- * (their joint extent), the two at least the shorter one's height apart (room for a line: today's highlight.mjs interrupted,
- * which cuts a run there, its own display included). Never the first
+ * stands between them, a box of `others` that is none of the shape's whose middle is between the two and that stands in
+ * their column (meets `column` across: [x0, x1], the extent the shape's member spans on the page, its sentences' boxes and its
+ * displays', columnOf), the two at least the shorter one's height apart (room for a line). Today's highlight.mjs interrupted,
+ * which cuts a run there, its own display included: a block in the column between two rows, whatever their width (the owner's
+ * report of 2026-11-10 on 2610.17024v1 p9: two short rows either side of display (43), both left of its ink, were joined by a
+ * strip down the column's edge over its row while the rows on arXiv's page, longer, were cut). Never the first
  */
-export function apartRows(boxes: readonly Box[], others: readonly Box[]): boolean[] {
+export function apartRows(boxes: readonly Box[], others: readonly Box[], column: readonly [number, number]): boolean[] {
   const mine = new Set(boxes)
+  const [x0, x1] = column
   return boxes.map((below, i) => {
     const above = boxes[i - 1]
     if (!above) return false
     if (above[1] - below[3] < Math.min(above[3] - above[1], below[3] - below[1])) return false
-    const x0 = Math.min(above[0], below[0]),
-      x1 = Math.max(above[2], below[2])
     return others.some((o) => {
       if (mine.has(o)) return false
       const y = (o[1] + o[3]) / 2
       return y < above[1] && y > below[3] && Math.min(o[2], x1) > Math.max(o[0], x0)
     })
   })
+}
+/** the column a member's shapes stand in on a pane: the extent across of its every box there, its sentences' and its
+ *  displays' (Laid.lit's entries and `own`); null where it has none */
+export function columnOf(
+  per: readonly (readonly Box[])[],
+  own: readonly (readonly [string, readonly Box[]])[],
+): [number, number] | null {
+  let x0 = Number.POSITIVE_INFINITY,
+    x1 = Number.NEGATIVE_INFINITY
+  for (const boxes of [...per, ...own.map(([, b]) => b)])
+    for (const b of boxes) {
+      x0 = Math.min(x0, b[0])
+      x1 = Math.max(x1, b[2])
+    }
+  return x0 < x1 ? [x0, x1] : null
 }
 const areaOf = (bs: readonly Box[][]) =>
   bs.flat().reduce((a, b) => a + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0)
@@ -255,9 +272,16 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     return out
   }
   /** the rows of a shape in the page's CSS px at its scale now, in its own frame (a turned page's layer is turned with it):
-   *  padded beside and by half the leading above and below; with `others` (the page's boxes on the pane), each row apart from
-   *  the one above it where another block stands between them (apartRows: an outline of its own) */
-  function rowsOf(side: Side, n: number, boxes: Box[], lead: number, others?: readonly Box[]) {
+   *  padded beside and by half the leading above and below; with `cut` (the page's boxes on the pane and the column of the
+   *  shape's member), each row apart from the one above it where another block stands between them in that column (apartRows:
+   *  an outline of its own) */
+  function rowsOf(
+    side: Side,
+    n: number,
+    boxes: Box[],
+    lead: number,
+    cut?: { others: readonly Box[]; column: readonly [number, number] },
+  ) {
     const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
     const sorted = [...boxes].sort((p, q) => q[3] - p[3])
     const kept: Box[] = []
@@ -267,8 +291,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       kept.push(b)
       out.push({ x0: r.left - PAD, x1: r.left + r.width + PAD, y0: r.top, y1: r.top + r.height })
     }
-    if (others)
-      apartRows(kept, others).forEach((a, i) => {
+    if (cut)
+      apartRows(kept, cut.others, cut.column).forEach((a, i) => {
         if (a) (out[i] as (typeof out)[number]).apart = true
       })
     // (rows that overlap made to meet: one outline)
@@ -351,9 +375,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
             })
             layer.append(el)
           }
-        const others = dir || !shapes.length ? [] : pageBoxes(page, side, committed)
+        // (what stands between two of a shape's rows: the page's boxes on the pane, in the column its member spans there)
+        const mine = entriesOf(page, lit.id, side, committed)
+        const column = dir || !shapes.length ? null : columnOf(mine.per, mine.own)
+        const cut = column ? { others: pageBoxes(page, side, committed), column } : undefined
         for (const boxes of dir ? [] : shapes) {
-          const rows = rowsOf(side, n, boxes, lead, others)
+          const rows = rowsOf(side, n, boxes, lead, cut)
           if (!rows.length) continue
           const X0 = Math.min(...rows.map((r) => r.x0)),
             Y0 = Math.min(...rows.map((r) => r.y0))

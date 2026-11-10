@@ -1,7 +1,10 @@
 // S.overFollower (design-b §1.5, E26; the owner's ruling of 2026-11-03: a run-in head's room on its row): a unit whose last row
 // another unit's first continues on a shared line, that row the only line of its last block, nothing kept between the two,
-// and its fit clipped there: its last block run on to the end of the next unit's first line, as one line of the row, and laid
-// again; taken where it fits so. Ported from engine 065c1d973 run.mjs overFollower RUN:1763-1789. Its facts: the follower
+// and its fit clipped there, or shrunk to fit it: its last block run on to the end of the next unit's first line, as one line
+// of the row, and laid again; taken where it fits so, and, where its fit shrank it, only where it is set larger so (the row
+// before the size: TeX sets a run-in head on its paragraph's first line as wide as its text, and the size tie sets the
+// paragraph at the head's scale; 2611.03178v1-zh p16, a head shrunk to 0.85 in its own line and its paragraph with it).
+// Ported from engine 065c1d973 run.mjs overFollower RUN:1763-1789, its shrunk case added. Its facts: the follower
 // (the next member of its flow) and whether it will be laid (admitted, not laid yet: today's `f.refused`, `f.taken`), the
 // shared row (the follower's lead row, F.chains: lane L1's Placed.join), the follower's first line in the file (its page and
 // x1: lane L1's first Line of the follower), whether something is kept between the two (keptAfter: Placed.join's kept).
@@ -32,11 +35,12 @@ export type OverFollowerInput = {
 }
 export type OverFollower = { id: number; blocks: FitBlock[]; layout: Layout; tokens: Tokens } | null
 
-/** S.overFollower (RUN:1763 overFollower) */
+/** S.overFollower (RUN:1763 overFollower; shrunk too, the run-in head's row before its size) */
 export function overFollower(i: OverFollowerInput, layoutCut: Cut): OverFollower {
   const f = i.follower
   if (!f || i.kept || i.kind === 'cell') return null
-  if (!i.layout.clipped) return null
+  const shrunk = !i.layout.clipped && i.layout.scale < 1
+  if (!i.layout.clipped && !shrunk) return null
   if (!f.open) return null
   const row = f.row,
     fu = f.first
@@ -50,6 +54,6 @@ export function overFollower(i: OverFollowerInput, layoutCut: Cut): OverFollower
   if (!(x1 > b.x1 + 0.1)) return null
   const blocks = i.blocks.map((q, k) => (k === bi ? { ...q, x1 } : q))
   const laid = layoutCut(i.tokens, blocks, i.s, i.P)
-  if (laid.layout.clipped) return null
+  if (laid.layout.clipped || (shrunk && !(laid.layout.scale > i.layout.scale))) return null
   return { id: f.id, blocks, layout: laid.layout, tokens: laid.tokens }
 }

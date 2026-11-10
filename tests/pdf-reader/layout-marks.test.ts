@@ -545,6 +545,19 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     const samples = ['\\CompletionTokenCap{}', '\\texttt{max\\_tokens}', '\\dprime{}', '\\cap{}', '\\texttt{m\\_t}', '\\dot', '\\checkmark', '\\figref{a}', '\\cmark', '\\open']
     expect(readInkTexts(log, samples)).toEqual([['\\CompletionTokenCap{}', '1,024'], ['\\texttt{max\\_tokens}', 'max_tokens'], ['\\dprime{}', `d${INK_ANY}`], ['\\cap{}', `1${INK_ANY}024`]])
   })
+  it("readInkTexts: XeTeX's listing, a word of a font of its own one node, is the word's characters (2611.03178v1's \\system{})", () => {
+    // TeX Live 2025's XeTeX listings: \\newcommand{\\system}{\\textsc{CoworkOS}} in XCharter's small capitals through fontspec,
+    // one native word and the kerns after it; a word of two faces, two nodes; a word with a character of no text encoding's ASCII
+    // (XeTeX prints it as it is), and one of a math face, no answer
+    const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box104=', '\\hbox(7.224+0.16798)x52.164', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+    const log = [
+      ...listing(0, '.\\TU/XCharter(0)/m/sc/10.5 CoworkOS', '.\\kern 0.0', '.\\kern -0.0002', '.\\kern 0.0002'),
+      ...listing(1, '.\\TU/lmr/b/n/10 GPT', '.\\TU/lmr/m/n/10 -4o', '.\\glue 3.33 plus 1.66 minus 1.11', '.\\TU/lmr/m/n/10 mini'),
+      ...listing(2, '.\\TU/lmr/m/n/10 Ab', '.\\TU/lmr/m/n/10 café'),
+      ...listing(3, '.\\mathon', '.\\TU/latinmodern-math.otf(1)/m/n/10 ab', '.\\mathoff'),
+    ].join('\n')
+    expect(readInkTexts(log, ['\\system{}', '\\gpt', '\\cafe', '\\ab'])).toEqual([['\\system{}', 'CoworkOS'], ['\\gpt', 'GPT-4omini']])
+  })
   it('leadSamples: the placeholders at a unit\'s head the ink section does not ask about — inline code, a macro past INK_BUDGET —, asked last', () => {
     const paper = paperIn('\\begin{tabular}{ll}\nCap parameter & \\texttt{max\\_tokens} on Chat routes \\\\\nBudget & \\EpisodeTokenBudget{} tokens \\\\\n\\end{tabular}\n\nWe set \\texttt{inline} in prose.', '\\newcommand{\\EpisodeTokenBudget}{128{,}000}')
     const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
@@ -677,6 +690,18 @@ describe('LAYOUT_TEX', () => {
     expect(args.length).toBeGreaterThan(10)
     for (const arg of args) expect(MARK_NAME.test(arg), arg).toBe(true)
     for (const key of NAME_KEYS) expect(key, key).toMatch(/^[a-z]{1,16}$/)
+  })
+  it('LAYOUT_TEX sets a point where TeX begins a front matter environment, the author block\'s end (2610.20967v1)', () => {
+    // (`fm<n>`: armed at the environment's before hook from \begin{document} on, set at the start of the next paragraph TeX
+    // begins, never a node of the main vertical list, from which TeX takes nothing back and whose \lastskip \addvspace reads
+    // (1706.03762v7: "You can't use \unpenalty in vertical mode"); disarmed where \maketitle runs first: an abstract a class keeps
+    // for its title block)
+    for (const env of ['abstract', 'keywords', 'IEEEkeywords'])
+      expect(POINTS_TEX).toContain(`\\AddToHook{env/${env}/before}{\\axt@fmarm}`)
+    expect(POINTS_TEX).toContain('\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}')
+    expect(POINTS_TEX).toContain('\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}')
+    expect(POINTS_TEX).toContain('\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}')
+    expect(POINTS_TEX).not.toContain('\\axt@point{fm\\axt@fm}\\axt@vback')
   })
   it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
     // a rendering intent named after the destination, in each engine's literal; none in DVI

@@ -24,7 +24,9 @@ const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
 const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
 const { hyphFileOf } = await import('./inputs.mjs')
-const { todayJoin } = await import('./join.mjs')
+const { candidateStated, heldJoin, todayJoin } = await import('./join.mjs')
+const { readAsChain } = await import('./rows.mjs')
+const { fillTarget } = await import('../../../packages/typeset/src/shared/fill-target.ts')
 
 const args = process.argv.slice(2)
 const OUT = args.find((a) => a.startsWith('--out='))?.slice(6)
@@ -60,12 +62,43 @@ for (const pair of pairs) {
     if (p === pair)
       pages[pg] = { members: page.members.filter((m) => m.page === pg), links: page.links, wait: page.wait, ...(page.inks ? { inks: page.inks } : {}) }
   }
+  // (each fill pass's target, with each unit begun on the page, its fill leading and whether it borrows room under its lines (a
+  // state, or a run's, that took the borrow knob); and `before`, the pair laid first with option (i)'s line of slots.mjs skipped
+  // (hook.mjs): each page's target and each member's line count there, the owner's ruling of 2026-11-10's counterfactual, the
+  // page before (i) moved the borrowing paragraphs' fill leadings, which still vote. The verdict's leadRuling reads them. A
+  // page's pass is run again by each page laid after it, alike: the last kept)
+  const fills = {}
+  const targets = (into) => (pg, begun, continuing, P) => {
+    const borrows = (p) => (p.layout?.state?.borrow ?? 0) > 0 || (p.runs ?? []).some((q) => (q.layout?.state?.borrow ?? 0) > 0)
+    const voter = (p) => ({ kind: p.unit.kind, refused: p.refused, fillLead: p.fillLead, fitLines: p.fitLines ?? 0 })
+    const band = P.adaptiveFill?.band ?? 0
+    const told = fillTarget(begun.map(voter), continuing.map(voter), band)
+    into[pg] = { target: told?.target ?? null, band, units: Object.fromEntries(begun.map((p) => [p.id, [p.fillLead ?? null, borrows(p) ? 1 : 0]])) }
+  }
   // (the reader's lay of the pair, as openReader binds it once the head is read: its target the pair's, as render.mjs opens
   // the reader on it, its toggles TOGGLES's, its metrics the layered ones, its patterns the served ones)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
   if (!target) throw new Error(`v2.mjs: ${pair} names no target`)
   const metrics = metricsOf(pair)
-  globalThis.__parityLay = await typesetLay({
+  // (stage 1a's statements of today's units the candidate makes otherwise: a member no id joined is today's unit its own holds
+  // whole, join.mjs heldJoin; the lay is given today's row of it where the two units' contents are one, the coordinator's ruling
+  // of 2026-11-10, so that a unit whose kind moved, its id with it, is drawn translated as today's was)
+  const stated = candidateStated(paperOf(pair))
+  const prepared0 = todayPrepared(paperOf(pair))
+  const heldRows = { joined: 0, laid: 0 }
+  const held = (members, today) => {
+    const out = new Map()
+    for (const [ord, { today: t, same }] of heldJoin(members, l1Paper(paperOf(pair))?.units ?? new Map(), stated, today, prepared0)) {
+      heldRows.joined++
+      if (same) out.set(ord, t)
+    }
+    heldRows.laid = out.size
+    return out
+  }
+  // (the rows as the chain reads a reply, rows.mjs: the door's stored replies, each group they did not bring back placed where
+  // the translation states it)
+  const units = l1Paper(paperOf(pair))?.units ?? new Map()
+  const lay = await typesetLay({
     served: {
       metrics,
       hyph: async (langs) => Object.fromEntries(langs.map((l) => [l, patterns(l)])),
@@ -74,14 +107,47 @@ for (const pair of pairs) {
     target: () => target,
     classes: () => classes,
   })
-  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true })
+  globalThis.__parityLay = (part, rows) => lay(part, readAsChain(rows, units))
+  // (first without option (i): each pass's target and each member's line count on each page alone)
+  const before = {},
+    offTargets = {}
+  const keep = globalThis.__ckPage
+  globalThis.__ckPage = (p, pg, page) => {
+    if (p === pair) before[pg] = { lines: Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0])) }
+  }
+  globalThis.__parityFill = targets(offTargets)
+  globalThis.__parityNoOptionI = true
+  try {
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+  } finally {
+    globalThis.__parityNoOptionI = undefined
+  }
+  // (then with the spaces beside a full-width mark put back, hook.mjs: each member's line count on each page of that lay, its pages
+  // not kept, nor its passes' targets; the verdict's markSpaceRuling reads it, the coordinator's ruling of 2026-11-10)
+  globalThis.__parityFill = undefined
+  const spaced = {}
+  globalThis.__ckPage = (p, pg, page) => {
+    if (p === pair) spaced[pg] = Object.fromEntries(page.members.filter((m) => m.page === pg).map((m) => [m.ord, m.lines?.length ?? 0]))
+  }
+  globalThis.__parityMarkSpaces = true
+  try {
+    gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+  } finally {
+    globalThis.__parityMarkSpaces = undefined
+  }
+  globalThis.__ckPage = keep
+  globalThis.__parityFill = targets(fills)
+  heldRows.joined = 0
+  const got = gateL1Pair(pair, { metricsOf, reading: 'part', entry: true, held })
+  for (const [pg, f] of Object.entries(offTargets)) (before[pg] ??= { lines: {} }).target = f.target
   globalThis.__ckPage = undefined
   globalThis.__parityLay = undefined
+  globalThis.__parityFill = undefined
   // (the part's facts of every member with a line on a page, by page: what the measures read of the original)
   const bundle = l1Paper(paperOf(pair))
   // (each member of the entry's Pages joined to today's unit, laid or not: the part's and today's units', join.mjs; by the
   // glyphs too, where v2's unit holds as elements the addresses today's held as text, over today's prepare dump)
-  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair))) : {}
+  const today = bundle ? todayJoin(pages, bundle, ledger(pair).units, todayPrepared(paperOf(pair)), stated) : {}
   const facts = {}
   for (const [pg, part] of bundle?.parts ?? []) {
     const list = []
@@ -126,8 +192,8 @@ for (const pair of pairs) {
     const ties = (part.ties ?? []).filter((t) => t.rule === 'size').map((t) => t.ords)
     facts[pg] = { members: list, links: part.links?.length ?? 0, ties }
   }
-  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, threw: got.threw, laidPages: Object.keys(pages).length }
+  const out = { pair, paper: paperOf(pair), toggles: TOGGLES, pages, today, facts, fills, before, spaced, held: heldRows, threw: got.threw, laidPages: Object.keys(pages).length }
   writeFileSync(join(OUT, `${pair}.json`), `${JSON.stringify(out)}\n`)
   const laid = Object.values(pages).reduce((n, p) => n + p.members.filter((m) => m.state === 'laid').length, 0)
-  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms`)
+  console.log(`${pair}: ${Object.keys(pages).length} pages, ${laid} members laid, ${(performance.now() - t0).toFixed(0)} ms${heldRows.joined ? `; held: ${heldRows.joined} joined, ${heldRows.laid} given today's row` : ''}`)
 }

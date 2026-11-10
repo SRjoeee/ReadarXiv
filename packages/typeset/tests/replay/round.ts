@@ -14,12 +14,21 @@ import type { FillLaid } from '../../src/shared/fill-page.ts'
 import type { RuleParams } from '../../src/types.ts'
 import { cellBands } from '../../src/unit/params.ts'
 import { blockOfTap, num, type WalkCase } from './fit-input.ts'
-import { firstDifference, ledger, ruledRoom } from './tap.ts'
+import { borrowsAt, firstDifference, ledger, ruledRoom } from './tap.ts'
 import { paperOf, todayBundle } from './today.ts'
 
 type Raw = Record<string, unknown>
-/** `own`: the port's own lay of the round, where it laid it, whatever step differed (what a ruling's unit is filled from) */
-export type Chain = { at: string; d: string | null; stopped?: string; steps: string[]; lay?: FillLaid; own?: FillLaid }
+/** `own`: the port's own lay of the round, where it laid it, whatever step differed (what a ruling's unit is filled from);
+ *  `lead`: a round whose fill leadings option (i) moves (the owner's of 2026-11-10: tap.ts borrowsAt), its lay the ruling's */
+export type Chain = {
+  at: string
+  d: string | null
+  stopped?: string
+  steps: string[]
+  lay?: FillLaid
+  own?: FillLaid
+  lead?: true
+}
 
 /** the shared row the follower is laid from, as its F1 slot holds it (the follower's last round that has one) */
 const rowOf = (pair: string, follower: number) => {
@@ -146,13 +155,19 @@ function stepsAfter(
     if (got.state !== 'laid')
       return { at: 'out', d: null, stopped: 'left the original’s (X.further found none)', steps }
   } else if (p.kind !== 'cell') {
+    // (a run's tokens hold the frames' share's cut where the fit set the share's first line in that frame or later (pageCutsOf
+    // `share`, the owner's of 2026-11-10), a token today's did not hold and no lay but the page fill's reads: its run's tokens
+    // counted without it, the run recorded as the share's)
+    const shared = got.state === 'laid' ? (got.lay.runs ?? []).map((q) => q.tokens.filter(isShare).length) : []
+    const laid = mine('F6', 'X.runs')?.laidRuns as { runs?: Raw[] } | null | undefined
+    const runs = laid?.runs?.map((r, i) => ({ ...r, tokens: (r.tokens as number) - (shared[i] ?? 0) }))
     d = firstDifference(
-      mine('F6', 'X.runs')?.laidRuns ?? null,
+      laid ? { ...laid, runs } : null,
       (c.slot('X.runs')?.laidRuns as Raw | null | undefined) ?? null,
       'laidRuns',
     )
     if (d) return { at: 'F6', d, steps }
-    steps.push('F6 runs')
+    steps.push(shared.some((n) => n > 0) ? 'F6 runs (share)' : 'F6 runs')
   }
   const a7 = mine('F7', 'S.settle'),
     b7 = c.slot('S.settle')
@@ -181,7 +196,15 @@ function stepsAfter(
   const l9 = c.slot('S.fill.leads')
   if (!l9) return { at: 'L9', d: 'no S.fill.leads slot', steps }
   d = firstDifference(mine('L9', 'S.fill.leads'), l9, 'fillLeads')
+  // (a round that borrowed room under its lines: its fill leadings option (i)'s, the gap under it measured from the borrow's
+  // limit (the owner's of 2026-11-10, tap.ts borrowsAt), recorded as the ruling's, not compared)
+  if (d && borrowsAt(c.pair, c.ord, c.round)) {
+    steps.push('L9 (i)')
+    return { at: 'L9', d: null, steps, lay: got.state === 'laid' ? got.lay : undefined, lead: true }
+  }
   if (d) return { at: 'L9', d, steps }
   steps.push('L9')
   return { at: 'L9', d: null, steps, lay: got.state === 'laid' ? got.lay : undefined }
 }
+/** a cut of the frames' share alone (pageCutsOf `share`), a token today's tokens do not hold */
+export const isShare = (t: unknown): boolean => !!(t as { share?: boolean }).share

@@ -14,7 +14,7 @@ import { settleLayout } from './settle.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 import type { Band } from '../unit/params.ts'
-import type { FillRules } from './fill-leads.types.ts'
+import type { FillRules, FillShare } from './fill-leads.types.ts'
 import type { FillTarget, Voter } from './fill-target.ts'
 import type { Share } from './share.ts'
 
@@ -44,6 +44,8 @@ export type FillLaid = {
   lastLead?: number
   /** the layout S.fill.leads found at the unit's fill leading (FillLeads.laid) */
   fillLaid?: { state: FitState; lead: number | null; l: Layout }
+  /** its frames at a state that holds the frames' share (S.fill.leads frameShareOf) */
+  fillShare?: FillShare
   [more: string]: unknown
 }
 /** the run's rules the fill reads (P.adaptiveFill, the script, the size's step, the fill leadings') */
@@ -117,7 +119,7 @@ export function fillPage(
   // kept as it is drawn)
   const free = (p: FillLaid, st: FitState) => {
     const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st)
-    if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens))) return null
+    if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens, !!st.share))) return null
     settleLayout(p, l)
     return l
   }
@@ -160,15 +162,22 @@ export function fillPage(
     // the page's size with it, so that neither takes back the room its leading gave)
     // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
     // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
+    // (the frames' share (S.fill.leads frameShareOf) where every frame before the last holds its share at or above the page's
+    // band floor, target - band, today's rhythm rule: there each frame holds its share of the lines; else the fit's split, the
+    // share's cuts read by no lay. Lab option (i)'s frame share, bounded by the band (2026-11-09: a share that set two lines
+    // solid at a column's foot, 2610.37668v1-zh p17, read worse than the one line its fit left there))
+    const floor = r3(target - band),
+      sh = p.fillShare?.needs.every((v) => v !== null && v >= floor - 1e-9) ? p.fillShare : null
     const top = r3(target + band),
-      leads = p.fillLeads?.map((v) => (v === undefined ? v : Math.min(v, top))),
-      lead = p.lastLead !== undefined ? Math.min(p.lastLead, top) : leadOf(p)
+      leads = (sh ? sh.leads : p.fillLeads)?.map((v) => (v === undefined ? v : Math.min(v, top))),
+      lead = sh ? Math.min(sh.last, top) : p.lastLead !== undefined ? Math.min(p.lastLead, top) : leadOf(p)
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
     let st: FitState = {
       ...p.layout.state,
       box: 1,
       lead,
       ...(leads ? { leads: leads as number[] } : {}),
+      ...(sh ? { share: 1 } : {}),
     }
     // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
     const kept = p.fillLaid

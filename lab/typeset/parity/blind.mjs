@@ -346,9 +346,12 @@ export async function originalFacts(data) {
  *   after its label; hyperref raises the anchor a \baselineskip over it, so the line stands half its size or more under it, and
  *   the entry before's last line at the anchor's height is not it: 1512.03385v1 p9's entries set with no space between them),
  *   nearest by the two distances' sum: the other column's line at the anchor's height is a column away. And every unit standing
- *   on that unit's lines (each of its lines on one of them: its page, its baseline within half the line's height, within that
- *   unit's lines across): a line of TeX's paragraph is one entry's, and a reader that cut the entry draws its pieces there
- *   (2608.25210v2 p17: today's t518, the tail of [64] after its year on the entry's second line).
+ *   on those units' lines (each of its lines on one of them: its page, its baseline within half the line's height, inside that
+ *   line's column, the extent across of the anchored units' lines on the page that overlap it): a line of TeX's paragraph is
+ *   one entry's, and a reader that cut the entry draws its pieces there (2608.25210v2 p17: today's t518, the tail of [64] after
+ *   its year on the entry's second line). Not merely at its height: an entry crossing columns or pages has lines in both
+ *   columns, and a unit level with one of them in the other column is no piece of it (round 8's 1810.04805 p12 t195,
+ *   2608.06701 p11 t283, 2610.22065 p7's 114).
  * Returns {names: {today, part}: ord -> the names it holds, references: {today, part}: the ords, found: the names found}
  */
 export function keptFacts({ authors = [], cites = [], pages = [], today = [], part = [] }) {
@@ -398,17 +401,19 @@ export function keptFacts({ authors = [], cites = [], pages = [], today = [], pa
         }
       if (best) references[side].add(best.ord)
     }
+  // (a unit standing on an entry's lines is the entry's too, a reader that cut it drawing its pieces there: each of its lines on
+  // a line of an anchored unit (its page, its baseline) and inside that line's column, the bibliography's own extent there: the
+  // extent across of the anchored units' lines on the page that overlap it across. Not the entry's whole extent: an entry
+  // crossing columns or pages spans both columns, and a unit level with its line in the other column is no piece of it)
   for (const [side, units] of [['today', today], ['part', part]]) {
-    const entries = units.filter((u) => references[side].has(u.ord))
-    for (const u of units) {
-      if (references[side].has(u.ord) || !u.lines.length) continue
-      const onEntry = (l) =>
-        entries.some((e) => {
-          const lo = Math.min(...e.lines.map((x) => x.x0)), hi = Math.max(...e.lines.map((x) => x.x1))
-          return e.lines.some((x) => x.page === l.page && Math.abs(x.y - l.y) <= 0.5 * (x.size ?? x.top - x.bottom) && l.x0 >= lo - 0.5 && l.x1 <= hi + 0.5)
-        })
-      if (u.lines.every(onEntry)) references[side].add(u.ord)
-    }
+    const lines = units.filter((u) => references[side].has(u.ord)).flatMap((u) => u.lines)
+    const onEntry = (l) =>
+      lines.some((x) => {
+        if (x.page !== l.page || Math.abs(x.y - l.y) > 0.5 * (x.size ?? x.top - x.bottom)) return false
+        const column = lines.filter((o) => o.page === x.page && o.x0 < x.x1 && o.x1 > x.x0)
+        return l.x0 >= Math.min(...column.map((o) => o.x0)) - 0.5 && l.x1 <= Math.max(...column.map((o) => o.x1)) + 0.5
+      })
+    for (const u of units) if (!references[side].has(u.ord) && u.lines.length && u.lines.every(onEntry)) references[side].add(u.ord)
   }
   return { names, references, found }
 }

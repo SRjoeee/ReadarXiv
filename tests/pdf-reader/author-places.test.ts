@@ -57,6 +57,22 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     // place by its TeX)
     expect(places(open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ Department of Physics}'))).toEqual(['Department of Physics'])
   })
+  it('a command of the paper\'s that ends the paragraph inside an author block ends its row (IJCAI\'s \\affiliations and \\emails, 2611.00342v1)', () => {
+    // (ijcai26.sty, shipped with the paper, defines inside its \@maketitle `\def\affiliations{\egroup\vskip .05in\par\bgroup\rm}`
+    // and \emails alike: no argument, the names' paragraph ended and the places' begun. Read as text inside a row, the second
+    // place ran on through \emails into the e-mail rows, a unit TeX sets as two paragraphs, never located: English whatever the
+    // toggle)
+    const sty = `\\def\\@maketitle{{\\centering{\\LARGE\\@title\\par}{\\def\\affiliations{\\egroup\\vskip 0.05in\\par\\bgroup\\rm}%
+\\def\\emails{\\egroup\\vskip 0.05in\\par\\bgroup\\rm}\\bgroup\\bf\\@author\\egroup}\\par}}`
+    const main = `\\documentclass{article}\n\\usepackage{ijcaitest}\n\\title{A Title}\n\\author{\n  Ann Lee$^1$\n  \\and\n  Bo Wu$^{2}$\\thanks{Corresponding author.}\n  \\affiliations\n  $^1$Hanbat University, Korea\\\\\n  $^2$Korea Institute of Science, Korea\n  \\emails\n  \\{ann, bo\\}@example.com,\\\\\n  bo@example.org\n}\n\\begin{document}\n\\maketitle\nWords of the body.\n\\end{document}\n`
+    const p = openPaper(new Map([['main.tex', enc(main)], ['ijcaitest.sty', enc(sty)]]))
+    expect(names(p)).toEqual(['Ann Lee', 'Bo Wu'])
+    expect(places(p)).toEqual(['Hanbat University, Korea', 'Korea Institute of Science, Korea'])
+    expect(units(p).map(textOf).join('|')).not.toMatch(/example\.(com|org)/)
+    // (one the paper defines otherwise too, with an argument, is no row's end: its every definition must end the paragraph)
+    const other = openPaper(new Map([['main.tex', enc(main)], ['ijcaitest.sty', enc(`${sty}\n\\renewcommand{\\emails}[1]{#1}`)]]))
+    expect(places(other).join('|')).not.toBe('Hanbat University, Korea|Korea Institute of Science, Korea')
+  })
   it('an e-mail whose local part TeX escapes is one placeholder: `\\_` and the words it joins, never text (2608.11884, 2608.29778)', () => {
     const p = open('\\maketitle\nWords.', '\\author{Alice\\thanks{Equal contribution.} \\\\ School of X \\\\ Write to rgzhou@shmtu.edu.cn, goh\\_siong\\_thye@a-star.edu.sg or a\\_b@c.org.}')
     const all = units(p).flatMap(u => u.pieces)

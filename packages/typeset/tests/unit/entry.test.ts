@@ -341,6 +341,45 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const both = layPage(pt, rows, rules, metrics()).members
     expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
   })
+  it('lets a run-in head take its row before it shrinks: the head and its paragraph at their size (2611.03178v1-zh p16)', () => {
+    // (a bold head at 72-100 on the row of its paragraph, which TeX set from 105 on: its translation, eight characters, 40 wide
+    // at its size where its own line holds 28: the fit shrank it to 0.85 to fit there, and the size tie set its paragraph at
+    // that scale, a paragraph at 0.85 of the body among paragraphs at full size and a hole under it, where one character more
+    // clipped it and it ran on over its row at full size. TeX sets a run-in head on its paragraph's first line, as wide as its
+    // text: the row is the head's room before its size)
+    const idB = 'b'.repeat(64)
+    const head = member({
+      ord: 0,
+      kind: 'heading',
+      style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+      lines: [[1, 0, 72, 100, 700, 707, 698, 72, 300, 0, 10]],
+      room: { below: 0, next: 300, side: [72, 105] },
+    })
+    const para = member({
+      ord: 1,
+      text: idB,
+      join: [5],
+      lines: [
+        [1, 0, 105, 300, 700, 707, 698, 72, 300, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+        [1, 0, 72, 300, 676, 683, 674, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(head), flows: [[head, para]], ties: [{ rule: 'size', ords: [0, 1] }] }
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u673a\u5668\u5b66\u4e60\u7f16\u7801\u7801\u3002' }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(60) }]), id: idB },
+    ])
+    const laid = layPage(pt, rows, rulesFor('zh'), metrics()).members
+    expect(laid.map((m) => m.state)).toEqual(['laid', 'laid'])
+    expect(laid.map((m) => m.fit?.size)).toEqual([10, 10])
+    // (the head on its row past where its original ended, the paragraph's first line on the row after it)
+    const [hy, , hx1] = laid[0]!.lines[0]!
+    expect(hy).toBe(700)
+    expect(hx1).toBeGreaterThan(100)
+    const first = laid[1]!.lines.find(([y]) => y === 700)
+    expect(first?.[1]).toBeGreaterThanOrEqual(hx1 - 1e-6)
+  })
   it('caps a size tie’s members alike on every page it is laid for (PR #620 re-review: a member on pages 1-2, one on 2)', () => {
     // (the tie's sizes were read off the members with a line on the page asked for: on page 1 the second member was no voter,
     // and the first laid at 10, on page 2 at the second's 8.5)
@@ -716,6 +755,76 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     expect(p1.lines.map(([y]) => Math.round(y))).toEqual([580, 564, 548, 532])
     expect(p2.lines.length).toBe(2)
   })
+  // (a paragraph of ten original lines here and three on the next page whose translation, ten lines, fits at its own leading with
+  // a line borrowed under its last on the next page, seven here and three there, where TeX's share is 10 x 10/13 = 7.7, eight;
+  // two paragraphs over it on the page, their translations `chars` characters in four lines each, which sets the page's band)
+  const sharePage = (chars: number) => {
+    const zh = rulesFor('zh')
+    const lineAt = (page: number, y: number): Placed['lines'][number] => [
+      page,
+      0,
+      72,
+      300,
+      y,
+      y + 7,
+      y - 2,
+      72,
+      300,
+      0,
+      10,
+    ]
+    const [idA, idB] = ['b'.repeat(64), 'c'.repeat(64)]
+    const a = member({
+      ord: 0,
+      text: idA,
+      lines: [700, 688, 676, 664].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const b = member({
+      ord: 1,
+      text: idB,
+      lines: [640, 628, 616, 604].map((y) => lineAt(1, y)),
+      room: { below: 20, next: 24 },
+    })
+    const ys = Array.from({ length: 10 }, (_, k) => 580 - 12 * k)
+    const m = member({
+      ord: 2,
+      lines: [...ys.map((y) => lineAt(1, y)), lineAt(2, 700), lineAt(2, 688), lineAt(2, 676)],
+      room: {
+        below: 25,
+        next: 25,
+        runs: [
+          [9, 30, 1],
+          [12, 25, 300],
+        ],
+        sep: 12,
+      },
+    })
+    const rows = rowsOf([
+      row([{ t: 'text', s: '\u6587'.repeat(440) }]),
+      { ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]), id: idA },
+      { ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]), id: idB },
+    ])
+    const laid = (page: number) =>
+      layPage({ ...part(m), page, flows: [[a], [b], [m]] }, rows, zh, metrics()).members.find((x) => x.ord === 2)!
+    return [laid(1), laid(2)] as const
+  }
+  it('keeps each frame of a paragraph over a page break its share of the lines where that holds within the page’s band', () => {
+    // (2610.22065v1-zh p5/p6 t94: the frame here set tighter, to 1.29, holds the text before its cut, its column ending on
+    // TeX's last line, where the page's band reaches down that far: its neighbours spread to 1.33)
+    const [p1, p2] = sharePage(120)
+    expect([p1.state, p2.state]).toEqual(['laid', 'laid'])
+    expect([p1.lines.length, p2.lines.length]).toEqual([8, 2])
+    expect(p1.lines[0]![0]).toBe(580)
+    expect(p1.lines.at(-1)![0]).toBeGreaterThanOrEqual(472 - 1 - 0.05)
+  })
+  it('leaves the fit’s split where holding the share would set a frame under the page’s band: no frame solid', () => {
+    // (2610.37668v1-zh p17, 2610.21084v1-zh p1: the share set a column's foot solid, two lines at the original's pitch among
+    // paragraphs spread to 1.38-1.5, which read worse than the one line its fit left there; its neighbours here spread to 1.67)
+    const [p1, p2] = sharePage(80)
+    expect([p1.lines.length, p2.lines.length]).toEqual([7, 3])
+    expect(p1.lines[0]![0] - p1.lines[1]![0]).toBeGreaterThan(12.5)
+  })
   it('holds the gap under a paragraph to its own leading alone, never the next paragraph’s: one that nearly fills its block keeps its own', () => {
     // (the owner's ruling of 2026-11-08, chosen on the preview of two rules: a paragraph whose translation takes 7 lines of its 8
     // between two that take 2 of 4. The 2026-10-17 gap rule held the gap under it to the next paragraph's leading too and pulled
@@ -821,6 +930,50 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const pitch = (first[0]! - first[2]!) / 2
     expect(pitch).toBeGreaterThan(12)
     expect(first[2]! - 592).toBeGreaterThanOrEqual(pitch - 0.05)
+  })
+  // (a page of a column: paragraphs `units`, each [ord, kind, first baseline, original lines, characters of translation], 12 apart,
+  // the room under each TeX's (Room.runs: the next ink `below` under its last line, its text block's bottom far; Room.sep 15, a
+  // \parskip of 3)
+  const listPage = (units: [number, string, number, number, number][], next: number) => {
+    const zh = rulesFor('zh')
+    const at = (y: number): Placed['lines'][number] => [1, 0, 72, 300, y, y + 7, y - 2, 72, 300, 0, 10]
+    const ms = units.map(([ord, kind, y0, n], i) => {
+      const below = (units[i + 1]?.[2] ?? next) - (y0 - 12 * (n - 1))
+      return member({
+        ord,
+        kind,
+        text: String(ord).padStart(64, 'e'),
+        lines: Array.from({ length: n }, (_, k) => at(y0 - 12 * k)),
+        room: { below: -below, next: -below, runs: [[n - 1, -below, 300]], sep: 15 },
+      })
+    })
+    const rows = rowsOf(
+      units.map(([ord, , , , chars]) => ({
+        ...row([{ t: 'text', s: '\u6587'.repeat(chars) }]),
+        id: String(ord).padStart(64, 'e'),
+      })),
+      true,
+    )
+    return layPage({ ...part(ms[0]!), flows: [ms] }, rows, zh, metrics()).members
+  }
+  it('lets a paragraph that borrows the room under it fill it at its own leading, its gap measured from the borrow’s limit', () => {
+    // (option (i), shown to the owner before it is adopted: 1810.04805v2's references, an entry that needs all three of its
+    // lines set at the original's pitch among entries spread to 1.38; the room under it TeX's (the next entry 22 under its last
+    // line, its separation 15) was the borrow's, but the gap floor kept the original's whole skip under it at any looser leading)
+    const laid = listPage(
+      [
+        [1, 'para', 700, 4, 80],
+        [2, 'para', 640, 3, 130],
+        [3, 'para', 594, 4, 80],
+      ],
+      540,
+    )
+    const m = laid.find((x) => x.ord === 2)!
+    expect(m.lines.length).toBe(3)
+    const pitch = m.lines[0]![0] - m.lines[1]![0]
+    expect(pitch).toBeGreaterThan(13)
+    // (its last line no nearer the next than its own pitch and the \parskip: the borrow's limit at its leading)
+    expect(m.lines.at(-1)![0] - 594).toBeGreaterThanOrEqual(pitch + 3 - 0.05)
   })
   it('holds the gap under a paragraph’s one line at the top of the next column to its own leading: the paragraph under it starts lower', () => {
     // (the owner on staging, 2610.20967v1-zh p4: a paragraph spread over the foot of the left column ends in one line at the top

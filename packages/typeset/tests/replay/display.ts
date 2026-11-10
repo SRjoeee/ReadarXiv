@@ -200,14 +200,15 @@ export type DisplayResult = {
    *  today's fill letter-spaced, laid untracked by the ruling of 2026-11-08 (pass.ts trackedCells), whose size and lines' text
    *  are today's; and those on a page where today's held a paragraph's gap to the next one's leading that it lays otherwise
    *  (tap.ts flooredIn: the gap ruling of 2026-11-08); and those on a page of a unit a run of which the room ruling lays
-   *  otherwise that it lays otherwise (tap.ts roomUnderIn) */
-  ruled: { frames: number; cells: number; gap: number; room: number }
+   *  otherwise that it lays otherwise (tap.ts roomUnderIn); and those on a page of a unit whose fill leadings option (i) moves
+   *  (pass.ts laysOf `lead`: the owner's of 2026-11-10) that it lays otherwise */
+  ruled: { frames: number; cells: number; gap: number; room: number; lead: number }
 }
 
 /** D.display replayed on every laid unit of a pair's reader dump */
 export function displayReplay(pair: string): DisplayResult {
-  const { lays, differ: chains } = laysOf(pair)
-  passesOf(pair, lays)
+  const { lays, differ: chains, lead } = laysOf(pair)
+  passesOf(pair, lays, lead.moved)
   const off = pieceCrops(pair, lays)
   const v = viewsOf(paperOf(pair))
   // (a cell today's fill letter-spaced, untracked by the ruling of 2026-11-08: its lines' text today's, their extents not)
@@ -220,7 +221,7 @@ export function displayReplay(pair: string): DisplayResult {
     differ: [],
     unlaid: [],
     chains: [...chains, ...off],
-    ruled: { frames: 0, cells: 0, gap: 0, room: 0 },
+    ruled: { frames: 0, cells: 0, gap: 0, room: 0, lead: 0 },
   }
   const gap = flooredIn(pair)
   const room = roomUnderIn(pair)
@@ -241,6 +242,7 @@ export function displayReplay(pair: string): DisplayResult {
       )
       if (d && gap.units.has(u.ord)) out.ruled.gap++
       else if (d && room.units.has(u.ord)) out.ruled.room++
+      else if (d && lead.units.has(u.ord)) out.ruled.lead++
       else if (d) out.differ.push({ ord: u.ord, d })
       else out.ruled.cells++
       continue
@@ -249,6 +251,7 @@ export function displayReplay(pair: string): DisplayResult {
     if (d && framed(p)) out.ruled.frames++
     else if (d && gap.units.has(u.ord)) out.ruled.gap++
     else if (d && room.units.has(u.ord)) out.ruled.room++
+    else if (d && lead.units.has(u.ord)) out.ruled.lead++
     else if (d) out.differ.push({ ord: u.ord, d })
     else {
       out.equal++

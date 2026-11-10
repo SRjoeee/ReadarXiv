@@ -56,7 +56,7 @@ import { groupStyleOf as commandStyleOf, type InkInput, type InkStats, inkOf } f
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from './today/today.types.ts'
-import { bySentence, type Word, wordsOn } from './words.ts'
+import { bySentence, elementsOf, type Word, wordsOn } from './words.ts'
 
 /** where a located unit stands on A against B */
 export type Place = 'same' | 'shifted' | 'respaced' | 'rebroken'
@@ -193,6 +193,11 @@ export const HELD = -2
 /** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
+/** the kinds of the author block's units (latex-front.mjs AUTHOR_KINDS: its names and its places) */
+const AUTHOR_KINDS = new Set(['author', 'affiliation'])
+/** the kind of a member of the author block's units set away from the block under the title (author-block.ts): the text it is
+ *  there, of no toggle (the reader's and the content classes' tables name it nowhere: always translated) */
+export const TEXT_NAMES = 'textnames'
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
@@ -273,7 +278,10 @@ export interface LocateOptions {
   /** each A page's annotations as PDF.js gives them (getAnnotations), for the links */
   annotations?: (unknown[] | null)[]
   /** each A page as pageInk read it (read.ts `raw`): given, locate makes the units no source unit is on A (ink.ts) */
-  pages?: readonly (PageInk | null)[]
+  pages?: (PageInk | null)[]
+  /** the pages are locate's (prepareBack's, unless it keeps them): it lets each go (its entry null) once the ink step has read it,
+   *  and each page's shapes once its figure texts are read; untaken, it reads them and leaves them as they are */
+  take?: boolean
   /** what the front half reads of an ink unit's pieces (the adapter's classesOf) */
   classesOf?: InkInput['classesOf']
   /** keep the artefacts, units and figure texts set wholly in a face of one pitch (rebuild/mono-blocks, Rule 1): a prototype the
@@ -886,16 +894,38 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
       const b = m.aToB[a] as number
       return c >= 0 || c === HELD || (b >= 0 && (unitB[b] as number) >= 0)
     }
-    const { made, stats: st } = inkOf({
+    // (the source unit a glyph of A is: its member's claim, else its partner's owner on B)
+    const ownerOf = (a: number) => {
+      const c = claimedA[a] as number
+      if (c >= 0) return members[c]!.unit
+      const b = m.aToB[a] as number
+      return b >= 0 ? (unitB[b] as number) : -1
+    }
+    const {
+      made,
+      stats: st,
+      block,
+    } = inkOf({
       ins,
       inkA,
       raws: o.pages,
+      take: o.take === true,
       m,
       pageA,
       owned,
       classesOf: o.classesOf,
+      ownerOf,
       artefact: figureArtefact,
     })
+    // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
+    // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
+    // block keeps its kind; where no title is located, none is told apart)
+    if (block)
+      for (const mem of members) {
+        if (!mem.located || !AUTHOR_KINDS.has(mem.kind) || !mem.text.length) continue
+        if (!mem.text.some((a) => pageA[a] === block.page + 1 && block.within(a - (m.offA[block.page] as number))))
+          mem.kind = TEXT_NAMES
+      }
     for (const x of made) {
       const u = units.length
       units.push(x.unit)
@@ -1532,6 +1562,19 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
     })
     const text = [...mem.text].sort((x, y) => x - y)
     const words = wordsOn(content, text.map(gA), (i) => lineOf.get(text[i] as number) ?? -1, sourceText(content))
+    // (an element a sentence may begin with, where a row's start falls on it (its translator set it first in its sentence:
+    // "\method{} trains …", "\citet{x} proposes …"), placed at its ink's first box on A, its line and x0, as a word is; never a
+    // display (a block of its own) nor an element TeX set outside the unit's text (kept where it stands). Words alone, the left
+    // pane lit it with the sentence before, the start moved on past it: 556 of 2,148 starts of staging's rows, 2026-11-10)
+    const els = new Map(mem.elements)
+    for (const [o, id] of elementsOf(content)) {
+      const el = els.get(id)
+      const k = el?.ink[0]
+      if (!el || !k || el.kind === 'display' || el.keep) continue
+      const j = standsOn(mem.lines, k[0], k[2], k[4], k[5])
+      if (j >= 0) words.push([o, j, k[1]])
+    }
+    words.sort((a, b) => a[0] - b[0])
     if (words.length) mem.words = words
   }
   // (each A page's text frame as TeX shipped it, B's carried onto A by its partners)

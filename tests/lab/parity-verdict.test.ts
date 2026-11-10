@@ -770,3 +770,24 @@ describe("shown: a unit today draws on lines of the original that v2 draws trans
     expect(p.measures.within).toEqual(['t517 inknotes', 't518 inknotes'])
   })
 })
+
+describe("shown: a unit of the author block v2 leaves the original's with the names toggle off is the owner's ruling", () => {
+  // (2610.21106v1 p1's AND, 2610.22065v1 p1's t147 and t150: today translated them; v2's members are the block's, which the
+  // names toggle, off by default, keeps the original's: the owner's rulings of 2026-10-25 and 2026-11-09, PDF-READER §19.13)
+  const page = (kind: string, toggles?: 'on') => {
+    const v2 = {
+      ...v2Of({ members: [{ ord: 11, state: 'left', lines: [] }], facts: [{ ord: 11, kind, align: 'c', style: { size: 10 }, lines: [] }], today: { 11: { today: 7 } } }),
+      ...(toggles ? { toggles } : {}),
+    }
+    return measure(v2, rec({ today: { units: [{ id: 7, lines: [line(400)] }] } }))
+  }
+  const shown = (p: { diffs: { flag: string; worse: boolean; nearer: string }[] }) => p.diffs.filter((d) => d.flag === 'shown').map((d) => [d.worse, d.nearer])
+  it("is the ruling's, not worse, for the block's kinds under the default toggles", () => {
+    for (const k of ['inknames', 'author', 'affiliation']) expect(shown(page(k))).toEqual([[false, 'ruling']])
+  })
+  it('stays worse with every toggle on, and for a unit of another class (the block\'s data printed elsewhere: textnames)', () => {
+    expect(shown(page('inknames', 'on'))).toEqual([[true, 'today']])
+    expect(shown(page('textnames'))).toEqual([[true, 'today']])
+    expect(shown(page('inkorphan'))).toEqual([[true, 'today']])
+  })
+})

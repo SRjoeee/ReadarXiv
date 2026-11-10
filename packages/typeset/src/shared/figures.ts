@@ -32,7 +32,14 @@ export type FigureRow = FitFigure & {
   fill: number
   font: string
   /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`) */
-  cls?: { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean }
+  cls?: {
+    fam: 'serif' | 'sans' | 'mono' | 'math'
+    bold: boolean
+    italic: boolean
+    /** a group's fill where its style states one (0xRRGGBB, 0 black): TeX's line in a picture over two colours (2611.03178v1's
+     *  label and the address after it in the link's colour); none: the figure text's own */
+    fill?: number
+  }
   set: string
 }
 /** a figure text's family, weight and slant (FigureRow.cls) */
@@ -43,8 +50,8 @@ export type FigureUnit = {
   state: string
   pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
 }
-/** a run of a figure's translation in one face (figureRuns) */
-export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin' }
+/** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
+export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -119,7 +126,12 @@ export function figureRuns(
     if (last?.cls === cls && last.st === st) last.s += ch
     else runs.push({ cls, s: ch, st })
   }
-  return runs.map((r) => ({ s: r.s, face: r.st ? faceOf(r.cls, r.st) : faceOf(r.cls), cls: r.cls }))
+  return runs.map((r) => ({
+    s: r.s,
+    face: r.st ? faceOf(r.cls, r.st) : faceOf(r.cls),
+    cls: r.cls,
+    ...(typeof r.st?.fill === 'number' ? { fill: r.st.fill } : {}),
+  }))
 }
 /** a translation's pieces as one text, as the figure is drawn (a piece that is no text a space, white space one space, trimmed),
  *  and each of its characters' own style (by code point: its piece's, where it holds one; a space its white space's first) */
@@ -207,7 +219,14 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
     // (its style, and each of its groups' runs' where its translation holds them: a style a class, its faces the paper's design)
     const styleOf = (cf: FigureClass): TStyle => {
       const fam = cf.fam === 'math' ? 'serif' : cf.fam
-      return { fam, bold: cf.bold, italic: cf.italic, caps: false, design: i.designs[fam] ?? i.designs.serif }
+      return {
+        fam,
+        bold: cf.bold,
+        italic: cf.italic,
+        caps: false,
+        design: i.designs[fam] ?? i.designs.serif,
+        ...(cf.fill !== undefined ? { fill: cf.fill } : {}),
+      }
     }
     const st = styleOf(f.cls ?? fontClassOf(f.font))
     const own = new Map<FigureClass, TStyle>()

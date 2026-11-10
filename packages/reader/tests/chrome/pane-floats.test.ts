@@ -162,11 +162,13 @@ describe("a scroll indicator's thumb (§6.5)", () => {
         act(async () => {
           fake.set({ scale })
         })
-      // (a wheel with Ctrl; happy-dom's WheelEvent leaves `ctrlKey` out of its init)
-      const wheel = (ctrl: boolean) =>
+      // (a wheel with Ctrl, or with ⌘ and ⇧; happy-dom's WheelEvent leaves the modifier keys out of its init)
+      const wheel = (ctrl: boolean, keys: { metaKey?: boolean; shiftKey?: boolean } = {}) =>
         scroller.dispatchEvent(
-          Object.defineProperty(new WheelEvent('wheel', { deltaY: ctrl ? -2 : 40, bubbles: true }), 'ctrlKey', {
-            value: ctrl,
+          Object.defineProperties(new WheelEvent('wheel', { deltaY: ctrl ? -2 : 40, bubbles: true }), {
+            ctrlKey: { value: ctrl },
+            metaKey: { value: keys.metaKey ?? false },
+            shiftKey: { value: keys.shiftKey ?? false },
           }),
         )
       const key = (k: string, meta = false) =>
@@ -206,6 +208,12 @@ describe("a scroll indicator's thumb (§6.5)", () => {
       key('PageDown')
       scroll()
       states.push(["a key of the reader's", hidden()])
+      // a wheel with ⌘ held is the reader's scroll, never a zoom's: macOS's screenshot keys (⌘⇧4, ⌘⇧5) hold ⌘ while a scroll
+      // or its momentum runs (the owner's report, 2026-11-10)
+      await step(1.4)
+      wheel(false, { metaKey: true, shiftKey: true })
+      scroll()
+      states.push(['a wheel with ⌘ held', hidden()])
       expect(states).toEqual([
         ['at rest', false],
         ['the scale changed', true],
@@ -216,6 +224,7 @@ describe("a scroll indicator's thumb (§6.5)", () => {
         ['a wheel at once after a step', false],
         ['a zoom by the keys', true],
         ["a key of the reader's", false],
+        ['a wheel with ⌘ held', false],
       ])
     } finally {
       vi.unstubAllGlobals()

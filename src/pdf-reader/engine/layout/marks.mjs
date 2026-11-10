@@ -445,6 +445,10 @@ export const INK_ANY = '\uFFFC'
 /** a character node as TeX lists it, of a font of LaTeX's (its encoding, the rest of its name): the character as TeX prints it,
  *  and a ligature's characters */
 const CHAR_NODE = /^\.+\\([A-Za-z0-9]+)\/\S+ (\S|\^\^[0-9a-f]{2}|\^\^.)(?: \(ligature (\S{2,3})\))?$/
+/** XeTeX's listing of a word of a font of its own (fontspec's, the TU encoding): one node, its font and the word's characters as
+ *  TeX prints them, where pdfTeX and LuaTeX list a character a node (2611.03178v1's \\textsc{CoworkOS}: `\\TU/XCharter(0)/m/sc/10.5
+ *  CoworkOS`) */
+const WORD_NODE = /^\.+\\TU\/\S+ (\S{2,})$/
 /** the text encodings, whose letters and digits are ASCII's */
 const TEXT_ENCODING = new Set(['OT1', 'T1', 'LY1', 'TU'])
 /** the punctuation each text encoding sets as ASCII's character and TeX prints as it: every one's, and T1's and TU's more
@@ -458,7 +462,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
  * The text each sample sets, from the probe's log (inkSection): each sample whose box TeX listed in full with no error
  * between its rows, of characters with nothing else but nodes that set no ink between them (glue, kerns, penalties, a
  * formula's switches, boxes at any depth), as [source, text], the characters in TeX's order, at most INK_TEXT_MAX:
- * - a letter or a digit of a text font (OT1, T1, LY1, TU: those are ASCII's there), a ligature of them, and the punctuation
+ * - a letter or a digit of a text font (OT1, T1, LY1, TU: those are ASCII's there), a ligature of them, XeTeX's word of them
+ *   (WORD_NODE: one node a word, outside a formula; under XeLaTeX no macro's text was known, so that a paper's macro at a
+ *   unit's head kept no ink of its own, 2611.03178v1's \\system{} after each run-in head), and the punctuation
  *   the font sets as ASCII's (PUNCT_ALL; T1's and TU's PUNCT_WIDE): \\newcommand\\bert{BERT\\xspace}'s "BERT", a model's name
  *   with a subscript in small capitals "BERTBASE", 2610.21098v1's \\CompletionTokenCap{} = 1{,}024 "1,024", a cell's lead
  *   \\texttt{max\\_tokens} "max_tokens" (T1's underscore; OT1's is a rule: no answer);
@@ -496,6 +502,13 @@ export function readInkTexts(log, samples) {
       if (TEXT_ENCODING.has(enc) && (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch) || (ch.length === 1 && punct.includes(ch)))) text += lig ?? ch
       else if (math > 0 && !lig && enc === 'OML' && /^[A-Za-z0-9]$/.test(ch)) text += ch
       else if (math > 0) text += INK_ANY
+      else bad = true
+      continue
+    }
+    // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
+    const w = math === 0 ? WORD_NODE.exec(line) : null
+    if (w) {
+      if ([...w[1]].every(ch => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
       else bad = true
       continue
     }
@@ -940,6 +953,19 @@ export const POINTS_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
+  // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
+  // env:abstract, env:keywords, env:IEEEkeywords). A class may set the element's heading from a literal of its own, no babel name
+  // (spconf's "ABSTRACT", jmlr's "Abstract"), which the stream alone cannot tell from the author block's own last lines: the
+  // point is the block's end TeX states (packages/engine/src/locate/author-block.ts). Armed at the environment's before hook
+  // (LaTeX's env/<name>/before, run by \\begin before the environment's own code) and set at the start of the next paragraph TeX
+  // begins (para/begin), the element's heading or its text, as a babel name's start in vertical mode waits: never a node of the
+  // main vertical list, where \\lastskip, which \\addvspace reads, and the places to break would move, and from which TeX
+  // takes nothing back (1706.03762v7's \\begin{abstract} after a penalty already on the page: "You can't use \\unpenalty in
+  // vertical mode"). One the environment sets in a box it keeps (elsarticle's \\absbox) is set in that box, where its heading
+  // is; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is disarmed where \\maketitle
+  // runs first. From \\begin{document} on, a count kept in a macro, while the gate is on)
+  '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
   // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
   // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
   // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by

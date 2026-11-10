@@ -101,6 +101,9 @@ describe('the class’s tail (C20)', () => {
   it('reads the source’s end marks through ligatures, spaces and inkless elements', () => {
     expect(sourceEndMarks(p("as ``said''."))).toEqual(['”', '.'])
     expect(sourceEndMarks([...p('word.'), { t: 'el', id: '1', kind: 'other', src: '\\label{x}' }])).toEqual(['.'])
+    // (a forced break and a tie set no ink either, stated `break` and `space`)
+    expect(sourceEndMarks([...p('Ltd.'), { t: 'el', id: '1', kind: 'break', src: '\\\\' }])).toEqual(['.'])
+    expect(sourceEndMarks([...p('Inc.'), { t: 'el', id: '1', kind: 'space', src: '~' }])).toEqual(['.'])
     expect(sourceEndMarks([...p('cost'), { t: 'el', id: '1', kind: 'symbol', src: '\\%' }])).toBeNull()
   })
 })

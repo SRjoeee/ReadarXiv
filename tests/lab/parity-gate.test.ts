@@ -4,7 +4,7 @@
 // geometry of one of his cases.
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { measurePage, pastRoomPass } from '../../lab/typeset/parity/verdict.mjs'
+import { measurePage, pastRoomPass, recount, sharePass } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { frameOf, labelsPass, originalOf } from '../../lab/typeset/parity/fidelity.mjs'
 
@@ -21,10 +21,21 @@ const rec = (o: { today?: object; v2?: object; original?: object; px?: object } 
   v2: { committed: true, units: [], crops: [], links: 0, linksDrawn: 0, lit: [], ...o.v2 },
   px: { ...o.px },
 })
-const v2Of = (o: { members?: object[]; facts?: object[]; today?: Record<number, { today: number }> } = {}) => ({
-  pages: { [N]: { members: o.members ?? [], links: [] } },
+const v2Of = (
+  o: {
+    members?: object[]
+    facts?: object[]
+    today?: Record<number, { today: number }>
+    more?: Record<number, object[]>
+    fills?: object
+    spaced?: Record<number, number>
+  } = {},
+) => ({
+  pages: { [N]: { members: o.members ?? [], links: [] }, ...Object.fromEntries(Object.entries(o.more ?? {}).map(([pg, ms]) => [pg, { members: ms, links: [] }])) },
   facts: { [N]: { members: o.facts ?? [], links: 0 } },
   today: o.today ?? {},
+  ...(o.fills ? { fills: o.fills } : {}),
+  ...(o.spaced ? { spaced: { [N]: o.spaced } } : {}),
 })
 type Extra = { prep?: { ord: number }[]; pair?: string; frame?: object; groups?: object[]; keptByGroup?: Set<number>; folios?: Set<number>; ruled?: Set<number> }
 const measure = (v2: ReturnType<typeof v2Of>, r: ReturnType<typeof rec>, x: Extra = {}) =>
@@ -536,5 +547,80 @@ describe("anchor: a paragraph under another's last line alone at its column's to
   })
   it('the line over it no widow (two lines of its paragraph in that column): worse', () => {
     expect(anchors(page({ upper: [412, 400] }))).toEqual([['t85 para', true, 'today']])
+  })
+})
+
+describe("line-count: the owner's ruling of 2026-11-10 (option (i), the frames' share bounded by the band, the borrowers voting)", () => {
+  // (1512.03385v1-zh p7/p8 t153: TeX set 8 of its 10 lines on p7 and 2 on p8; v2's translation is 8 lines, 6 + 2, TeX's share
+  // (8 x 8/10 = 6.4, 6); today's 7 + 1. On p7 v2 is a line further from the original's 8 than today's 7)
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const counts = (p: { diffs: { flag: string }[] }) => (of('line-count')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
+  const laidN = (ord: number, k: number, y0 = 700, o: object = {}) => ({ ord, state: 'laid', lines: Array.from({ length: k }, (_, i) => [y0 - 15 * i, 72, 300, []]), lit: { left: [], right: [], own: [] }, ...o })
+  const drawnN = (k: number, y0 = 700) => Array.from({ length: k }, (_, i) => drawnLine(72, 300, y0 - 15 * i, 'x'.repeat(20)))
+  /** page N measured, and the paper's pass over it and page N + 1 as each side drew the unit there (`todayNext` lines today) */
+  const split = (onPage: number, next: number, todayOn = 7, todayNext = 1) => {
+    const facts = [{ ord: 153, kind: 'para', align: 'j', style: { size: 10 }, lines: [...Array.from({ length: 8 }, (_, i) => factLine(72, 300, 700 - 12 * i)), [N + 1, 0, 72, 300, 700, 708, 698, 48, 300, 0, 10], [N + 1, 0, 72, 300, 688, 696, 686, 48, 300, 0, 10]] }]
+    const v2 = v2Of({ members: [laidN(153, onPage)], facts, today: { 153: { today: 153 } }, more: { [N + 1]: [laidN(153, next)] } })
+    const p = measure(v2, sides(153, drawnN(todayOn), drawnN(onPage)))
+    const after = { diffs: [], units: [{ key: 't153', sides: { today: { lines: todayNext }, v2: { lines: next } } }] }
+    sharePass([p, after], recount)
+    return p
+  }
+  it("v2's lines on the page TeX's share of them, the same lines in all: the ruling's, not worse", () => {
+    expect(counts(split(6, 2))).toEqual([['t153 para', false, 'ruling']])
+  })
+  it('a count that is not the share, or the same share of more or fewer lines than today sets: judged, worse', () => {
+    expect(counts(split(5, 3))).toEqual([['t153 para', true, 'today']])
+    expect(counts(split(6, 2, 7, 2))).toEqual([['t153 para', true, 'today']])
+  })
+  // (2610.20484v1-zh p8 t85: the pass's target 1.45 with the paragraphs that borrow room voting the leadings option (i) gave them,
+  // 1.30 where the pair is laid without (i); t85, which does not borrow, its fill leading 1.6, set at the band's top over the
+  // target, 1.50, 12 lines where without (i) it set 13 at 1.35, as today's, and TeX 19)
+  const band = (o: { lead?: number; borrows?: number; before?: number; offLines?: number } = {}) => {
+    const facts = [{ ord: 85, kind: 'para', align: 'j', style: { size: 10 }, lines: Array.from({ length: 19 }, (_, i) => factLine(72, 300, 700 - 12 * i)) }]
+    const fills = { [N]: { target: 1.45, band: 0.05, units: { 85: [1.6, o.borrows ?? 0], 80: [1.3, 1] } } }
+    const v2 = {
+      ...v2Of({ members: [laidN(85, 12, 700, { fit: { size: 10, lead: o.lead ?? 1.5, track: 0, borrowed: 0 } })], facts, today: { 85: { today: 85 } }, fills }),
+      before: { [N]: { target: o.before ?? 1.3, lines: { 85: o.offLines ?? 13 } } },
+    }
+    return measure(v2, sides(85, drawnN(13), drawnN(12)))
+  }
+  it('a paragraph at the band over a target the borrowing paragraphs moved by (i), held otherwise at their leadings before: the ruling\'s', () => {
+    expect(counts(band())).toEqual([['t85 para', false, 'ruling']])
+  })
+  it('the target the same without (i), the paragraph borrowing itself, not at the band, or its count the same without (i): judged', () => {
+    expect(counts(band({ before: 1.45 }))).toEqual([['t85 para', true, 'today']])
+    expect(counts(band({ borrows: 1 }))).toEqual([['t85 para', true, 'today']])
+    expect(counts(band({ lead: 1.4 }))).toEqual([['t85 para', true, 'today']])
+    // (its line count the same without (i): the count not the band's (2610.40645v1-ja p32 t271, 5 lines at 1.19 and at 1.23))
+    expect(counts(band({ offLines: 12 }))).toEqual([['t85 para', true, 'today']])
+  })
+})
+
+describe("line-count: a unit a line shorter by the spaces beside a full-width mark (the coordinator's ruling of 2026-11-10)", () => {
+  // (2610.30034v1-zh p3 t36: B.tokens sets no space beside a full-width mark's blank side, xeCJK's rule, and the paragraph's text
+  // takes a line fewer than today's, the line it saves a lone character; the coordinator: "the parity's line-count measure is only
+  // an instrument, so I accept them". A count is the ruling's only where the pair laid with those spaces put back, v2.mjs's first
+  // lay, `spaced`, sets today's count on the page)
+  const ys = [700, 688, 676, 664]
+  const facts = [{ ord: 36, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)) }]
+  const laidAt = (ord: number, k: number) => ({ ord, state: 'laid', lines: ys.slice(0, k).map((y) => [y, 72, 300, []]), lit: { left: [], right: [], own: [] } })
+  const drawn = (k: number) => ys.slice(0, k).map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
+  /** the original's 4 lines, today's 3, v2's 2; `spaced`: v2's count with the spaces put back, none where not recorded */
+  const page = (spaced?: number) =>
+    measure(
+      v2Of({ members: [laidAt(36, 2)], facts, today: { 36: { today: 36 } }, ...(spaced === undefined ? {} : { spaced: { 36: spaced } }) }),
+      rec({ today: { units: [{ id: 36, lines: drawn(3) }] }, v2: { units: [{ id: 36, lines: drawn(2) }] } }),
+    )
+  type Diff = { unit: string; worse: boolean; nearer: string }
+  const counts = (p: ReturnType<typeof page>) => (of('line-count')(p) as unknown as Diff[]).map((d) => [d.unit, d.worse, d.nearer])
+  it("v2's count other than today's where the spaces put back give today's: the ruling's, not worse", () => {
+    expect(counts(page(3))).toEqual([['t36 para', false, 'ruling']])
+  })
+  it("the spaces put back giving v2's own count (the rule not its cause): worse", () => {
+    expect(counts(page(2))).toEqual([['t36 para', true, 'today']])
+  })
+  it('no lay with the spaces put back recorded: worse', () => {
+    expect(counts(page())).toEqual([['t36 para', true, 'today']])
   })
 })

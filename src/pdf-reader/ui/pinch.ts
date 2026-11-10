@@ -3,7 +3,10 @@
 // zooms both sides together about the pointer — PDF.js scales them by CSS while the fingers move and draws them once,
 // 400 ms after they stop. A trackpad's small deltas zoom continuously, a mouse notch a tenth. One call per frame, with the
 // frame's steps however small: the view carries what PDF.js's rounding to a hundredth leaves of each (reader-view.mjs
-// pinch). ⌘ and Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages
+// pinch). ⌘ and Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages.
+// Only Ctrl makes a wheel a zoom (a pinch, and a mouse's Ctrl-wheel). A wheel with ⌘ held is a scroll and never zooms:
+// macOS's screenshot keys (⌘⇧4, ⌘⇧5) hold ⌘ while a scroll or its momentum runs, and the page zoomed under them while ⌘ made
+// a wheel a zoom (the owner's report of 2026-11-10); nor is ⌘ with the wheel Chrome's own zoom on macOS
 import { type RefObject, useEffect } from 'react'
 import type { ReaderController, Side } from '../controller'
 
@@ -15,7 +18,7 @@ export function usePinch(controller: ReaderController, doc: RefObject<HTMLElemen
     if (!el) return
     let factor = 1, origin: [number, number] = [0, 0], side: Side = 'left', frame = 0
     const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
+      if (!e.ctrlKey) return
       const pane = (e.target as Element).closest<HTMLElement>('.pane')
       if (!pane) return
       e.preventDefault()

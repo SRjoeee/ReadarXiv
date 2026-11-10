@@ -3,7 +3,8 @@ import { google, readTagged } from '../../src/adapters/google.ts'
 import type { FetchInit, Piece } from '../../src/contract.ts'
 import { NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { GOOGLE_REPLIES, DISPLAY_ENDS, HEAD_STOP, LABEL_AFTER_BREAK, UNITS } from './fixtures.ts'
+import { el, span, t, unit } from '../pieces.ts'
+import { DISPLAY_ENDS, GOOGLE_REPLIES, HEAD_STOP, LABEL_AFTER_BREAK, SOURCE_LINES, UNITS } from './fixtures.ts'
 
 /** the endpoint giving each item back as its translation */
 export const googleEcho = (_url: string, init: FetchInit) => {
@@ -14,7 +15,7 @@ export const googleEcho = (_url: string, init: FetchInit) => {
 translatorSuite('google', {
   make: (fetch) => google({ fetch }),
   target: 'zh-Hans',
-  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS],
+  units: [...UNITS, HEAD_STOP, DISPLAY_ENDS, SOURCE_LINES],
   echo: googleEcho,
   replies: GOOGLE_REPLIES,
   faults: [
@@ -77,6 +78,78 @@ describe('google: sentences from boundary markers', () => {
     const r = readTagged(u, '设<x id="1"/>如<x id="2"/>所述。<x id="4"/><x id="4"/>更多内容见第<x id="3"/>节。')
     expect(r?.sentences).toBeUndefined()
     expect(r?.content.filter((p) => p.t === 'el').length).toBe(3)
+  })
+})
+
+// (the sentences a unit is asked in, as the source reader states them: a tie is an element of kind `other`, `\ref` one of
+// kind `ref`, `\cite` one of kind `cite`; the text the source's own, its line ends with it. 1512.03385v1's `Fig.~\ref{…}`
+// was translated alone as the fruit by Microsoft, whose own sentences cut there; this wire's cutter is the one asked here)
+describe('google: the sentences a unit is asked in, where a reference or a citation follows a full stop', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  /** the wire split at its boundary markers (ids past the unit's own elements and spans), each element `#` */
+  const asked = (content: Piece[]): string[] => {
+    const u = unit('u', content, true)
+    const own = (ps: readonly Piece[]): number =>
+      ps.reduce((n, p) => (p.t === 'el' ? n + 1 : p.t === 'span' ? n + 1 + own(p.content) : n), 0)
+    const n = own(content)
+    return g
+      .write(u, 'zh-Hans')
+      .replace(/<x id="(\d+)"\/>/g, (_, d: string) => (Number(d) > n ? '‖' : '#'))
+      .replace(/<\/?t(?: id="\d+")?>/g, '')
+      .split('‖')
+      .map((s) => s.trim())
+  }
+  it('an abbreviation’s stop before a reference ends no sentence', () => {
+    expect(
+      asked([
+        span('h', 'bold', [t('Analysis of Layer Responses.')], true),
+        t('\nFig.'),
+        el('tie', 'other'),
+        el('r', 'ref'),
+        t(' shows the standard deviations (std) of the layer responses. The responses are small.'),
+      ]),
+    ).toEqual([
+      'Analysis of Layer Responses.',
+      'Fig.## shows the standard deviations (std) of the layer responses.',
+      'The responses are small.',
+    ])
+    expect(
+      asked([t('We obtain Eq.'), el('tie', 'other'), t('('), el('r', 'ref'), t(') from the bound. It holds.')]),
+    ).toEqual(['We obtain Eq.#(#) from the bound.', 'It holds.'])
+    expect(
+      asked([t('As discussed in Sec.'), el('tie', 'other'), el('r', 'ref'), t(' below, it holds. The rest follows.')]),
+    ).toEqual(['As discussed in Sec.## below, it holds.', 'The rest follows.'])
+    expect(asked([t('As listed in Table'), el('tie', 'other'), el('r', 'ref'), t('. The rest follows.')])).toEqual([
+      'As listed in Table##.',
+      'The rest follows.',
+    ])
+  })
+  it('a citation after an abbreviation’s stop ends no sentence, tied or spaced', () => {
+    expect(
+      asked([t('Eiras et al.'), el('tie', 'other'), el('c', 'cite'), t(' further extended it. Then more.')]),
+    ).toEqual(['Eiras et al.## further extended it.', 'Then more.'])
+    expect(asked([t('Pham et al. '), el('c', 'cite'), t(' classify safety examples. Then more.')])).toEqual([
+      'Pham et al. # classify safety examples.',
+      'Then more.',
+    ])
+  })
+  it('a citation after a sentence’s stop and white space opens the next sentence', () => {
+    expect(asked([t('This is as shown. '), el('c', 'cite'), t(' reports that it fails. Then more.')])).toEqual([
+      'This is as shown.',
+      '# reports that it fails.',
+      'Then more.',
+    ])
+  })
+  it('a line end of the source is a space: no sentence ends there', () => {
+    expect(asked([t('We show the standard\ndeviations of the layer\nresponses.\nThe rest follows.')])).toEqual([
+      'We show the standard deviations of the layer responses.',
+      'The rest follows.',
+    ])
+  })
+  it('the fixture unit the digest holds it by: boundary markers before the citation and before the next sentence alone', () => {
+    expect(g.write(SOURCE_LINES, 'zh-Hans')).toBe(
+      'Sampling remains computationally expensive. <x id="2"/><x id="1"/> proposes a one-step sampler. <x id="3"/>Then we go on.',
+    )
   })
 })
 

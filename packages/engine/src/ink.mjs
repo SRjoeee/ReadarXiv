@@ -313,6 +313,10 @@ export const PARA_POINT = /^q\d+$/
  *  starts before it, its place among them where they stand at one glyph), read by the ink units' alignment alone
  *  (layout/ink-units.mjs alignOf) */
 export const PARA_END = /^qe\d+[cjlr]$/
+/** where TeX begins a front matter environment no author's (marks.mjs POINTS_TEX: `fm<n>`, set at the start of the paragraph
+ *  that begins it): kept apart (`fronts`), no mark of any unit's, so that no reader of the marks meets it among their points (an
+ *  opening alone read to the next point, own.mjs MR 3); the author block's end (locate/author-block.ts) */
+export const FRONT_POINT = /^fm\d+$/
 
 /**
  * A page's ink: { glyphs, boxes, points, boxAt, capped, timedOut, degraded, mergedAt, rotated }. `glyphs`: each glyph
@@ -363,13 +367,15 @@ export const PARA_END = /^qe\d+[cjlr]$/
  * `glyphsOnly` (the reader's live fills, layer-proto/run.mjs liveFillsOf): the glyphs alone, as a whole walk places them (their
  * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
+ * `names`: a Map the reader keeps across its pages, each font's name by its object, read once (PDF.js's FontInfo.name decodes a
+ * new string at every read): every glyph of a font holds one string. None given, one a page
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false, shapesAll = false, names = null }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], paraEnds = [], turnedOut = [], pictures = [], regionPoints = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], paraEnds = [], fronts = [], turnedOut = [], pictures = [], regionPoints = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
   // layer-proto/run.mjs), none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
@@ -538,6 +544,16 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
     s.clip = b ?? [0, 0, -1, -1]
   }
+  // (a font's name read once: PDF.js's FontInfo.name decodes a new string from the font's buffer at every read, so that each glyph
+  // held a string of its own, read three times. One string a font, across the reader's pages where it gives its own table
+  // (`names`, read.ts's: one a document); a font of no name its id, as before)
+  const fontNames = names ?? new Map()
+  const fontName = () => {
+    const f = s.font
+    let n = fontNames.get(f)
+    if (n === undefined) { const v = f?.name; n = typeof v === 'string' ? v : ''; fontNames.set(f, n) }
+    return n || s.fontId
+  }
   const setFont = (id, size) => {
     s.font = fontOf(id); s.fontId = String(id)
     const v = typeof size === 'number' ? size : Number.NaN
@@ -594,7 +610,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
-    const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
+    const name = fontName()
     // (its fill where its rendering mode paints one: 0, 2, 4 and 6 fill; 1 and 5 stroke alone; 3 and 7 paint nothing, above)
     const glyph = { u, x0: Math.min(ox, ex), x1: Math.max(ox, ex), y: oy, top: oy + ascent * sz, bottom: oy + descent * sz, size: sz, font: name, ix0: Math.min(ox, ex), ix1: Math.max(ox, ex), fill: s.tr & 1 ? NO_FILL : s.fill }
     // (its size along the line, as PDF.js's text content gives an item's (its transform's first column: the font size × the
@@ -649,7 +665,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (!(la > 0 && lu > 0) || ax * upy - ay * upx <= 0 || Math.abs(ax * upx + ay * upy) > TURN_SKEW * la * lu) return
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4], ey = M[1] * xb + M[3] * ty + M[5]
     const sz = s.size * lu
-    const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
+    const name = fontName()
     const o = outlineOf(g), has = o?.length === 4, none = Array.isArray(o) && o.length === 0
     const up = has ? o[3] : none ? 0 : ascent, down = has ? o[1] : none ? 0 : descent
     const t = { u: g.unicode, n: curShow, k: glyphAt, ox, oy, ex, ey, ux: ax / la, uy: ay / la, size: sz, ascent, descent, up, down, font: name, fill: s.tr & 1 ? NO_FILL : s.fill, box, at: glyphs.length, pt: pictures.length }
@@ -959,6 +975,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
         // well, where a code paragraph TeX broke over a page or a column ends and goes on)
         else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+        else if (m && FRONT_POINT.test(m[1])) fronts.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
         else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
         else if (m) {
           (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
@@ -978,7 +995,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, paraEnds, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, paraEnds, fronts, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /**

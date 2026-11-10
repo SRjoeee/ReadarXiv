@@ -40,6 +40,9 @@ export type FitState = {
   /** how much lower the unit's first block stands than TeX set it, the room the gap over it lacks where the paragraph over it
    *  cannot end higher (S.fill.page headOf), in the page fill's states alone */
   head?: number
+  /** a state that holds the frames' share (the cuts pageCutsOf marks `share` kept), the page fill's where that costs no frame a
+   *  leading under its page's band (S.fill.page) */
+  share?: number
 }
 /** the unit's parameters: the target's rules (resolveRules' params), U.params', and the call's measure and patterns */
 export type FitParams = {

@@ -455,6 +455,11 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // the line that holds it, so that its frame would get none, strand lays that line there whole. Reached in that frame or
     // later (the earlier one already full), or where that frame's first slot lies after a display the text has not passed
     // (the source sets the text before the display: the display's own break places it), nothing
+    // (a cut of the frames' share (pageCutsOf `share`): a break only at a state that holds the share, else nothing)
+    if (tokens[i].pageBreak !== undefined && tokens[i].share && !st.share) {
+      i++
+      continue
+    }
     if (tokens[i].pageBreak !== undefined) {
       const h = { pg: tokens[i].pageBreak, fr: tokens[i].frame ?? null, at: i, sent: false }
       i++

@@ -14,6 +14,7 @@ import type { Doc, DocPoint } from '../doc.ts'
 import type { PageInk } from '../ink.types.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { runIns } from '../marks/run-ins.ts'
+import { type AuthorBlock, authorBlockOf } from './author-block.ts'
 import {
   changeOf,
   faceKeyOf,
@@ -31,6 +32,7 @@ import {
   inkUnitsOf,
   keptUnitsOf,
   ledgerOf,
+  type TodayInkUnit,
   type TodayPage,
   type TodayPiece,
   type TodayUnit,
@@ -63,8 +65,10 @@ export interface Made {
 export interface InkInput {
   ins: Instrument
   inkA: Doc
-  /** A's pages as pageInk read them (read.ts `raw`), null for a page not read */
-  raws: readonly (PageInk | null)[]
+  /** A's pages as pageInk read them (read.ts `raw`), null for a page not read; with `take`, the ink step's own: each let go
+   *  (the array's entry null) once today's pages are made of it, and each page's shapes once its figure texts are read */
+  raws: (PageInk | null)[]
+  take?: boolean
   m: Mapping
   pageA: Int32Array
   /** whether a glyph of A (global) is a source unit's: its partner's owner on B, a located member's claim, a held glyph */
@@ -74,6 +78,9 @@ export interface InkInput {
   /** whether glyphs (A's, global; a figure text's turned ones by [page, index]) are an artefact: set wholly in a face of one
    *  pitch where the paper's body face is not one (locate.ts, rebuild/mono-blocks Rule 1); a figure text so set is kept */
   artefact?: ((text: readonly number[], turned: readonly [number, number][]) => boolean) | undefined
+  /** the source unit a glyph of A (global) is, -1 none: where it is given, the author block under the title is read
+   *  (author-block.ts) */
+  ownerOf?: ((a: number) => number) | undefined
 }
 
 export interface InkStats {
@@ -87,7 +94,7 @@ export interface InkStats {
 
 /** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
  *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
-export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
+export function inkOf(o: InkInput): { made: Made[]; stats: InkStats; block: AuthorBlock | null } {
   const { ins, inkA, m } = o
   const base = ins.units.length
   const carried = carry(ins.ink, inkA, m, o.pageA)
@@ -124,6 +131,14 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
     pageOf(pg.view, o.raws[i] ?? null, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
+  // (taken: a raw page is held from here by its today's page alone, which this step lets go at its end; and each page's shapes,
+  // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them, lane mem-back)
+  if (o.take) o.raws.fill(null)
+  const shapesRead = o.take
+    ? (p: number) => {
+        ;(pages[p] as { shapes: unknown }).shapes = new Map()
+      }
+    : null
   const own: { glyphs: (string | null)[][]; boxes: (string | null)[][] } = {
     glyphs: inkA.pages.map((pg, i) =>
       Array.from({ length: pg.glyphs.length }, (_, j): string | null =>
@@ -141,10 +156,52 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
   const units: TodayUnit[] = ins.units.map((u) =>
     u.kind === 'name' ? null : { kind: u.kind, pieces: flatOf(u.content) },
   )
+  // ---- the author block under the title (author-block.ts), read twice: before the figure texts, so that a framed title box's
+  // block is no figure's text (TeX drew it in the picture its title is in); and once the ink units are cut, from its first name
+  // (an ink unit rule 8 made of the names) on
+  const ownerOf = o.ownerOf
+  const blockOf = (named: ((i: number, j: number) => boolean) | null) =>
+    ownerOf
+      ? authorBlockOf(
+          pages.map((pg, i) => {
+            const gs = pg.glyphs as { pid?: number; form?: boolean; y: number; size: number }[]
+            const at = pg.boxAt as ArrayLike<number>
+            return {
+              n: gs.length,
+              owner: (j: number) => ownerOf((m.offA[i] as number) + j),
+              pid: (j: number) => gs[j]?.pid,
+              form: (j: number) => !!gs[j]?.form,
+              onLine: (j: number, k: number) => {
+                const G = gs[j]
+                const F = gs[k]
+                return !!G && !!F && Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)
+              },
+              graphicBefore: (j: number) => {
+                for (let x = j > 0 ? (at[j - 1] as number) : 0; x < (at[j] as number); x++)
+                  if (own.boxes[i]![x] === null) return true
+                return false
+              },
+              ...(named ? { named: (j: number) => named(i, j) } : {}),
+              ends: carried[i]!.fronts.map((x) => x.glyph),
+            }
+          }),
+          ins.units,
+        )
+      : null
+  const framed = blockOf(null)
 
   // ---- today's sequence (pipeline/instrument.mjs, wrapFinal's): the figure texts of what no unit owns, the ledger with them
   // owned, the ink units, their claims, then the kept blocks of what is left
-  const fig = figureUnitsOf(pages, own)
+  // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box)
+  const fig = figureUnitsOf(
+    pages,
+    {
+      glyphs: own.glyphs.map((row, i) =>
+        framed?.page === i ? row.map((x, g) => x ?? (framed.has(g) ? 'b' : null)) : row,
+      ),
+    },
+    { done: shapesRead },
+  )
   const ledgerOwn = own.glyphs.map((row, i) => {
     const f = fig.glyphs[i]
     if (!f?.size) return row
@@ -154,6 +211,11 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
   })
   const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units })
   const ink = inkUnitsOf(pages, ledger, { units, from: base })
+  const namedAt = new Set<string>()
+  for (const u of ink)
+    if (u.kind === 'inknames') for (const [p, g] of [...u.glyphs.text, ...u.glyphs.ph]) namedAt.add(`${p - 1}|${g}`)
+  const block = blockOf((i, j) => namedAt.has(`${i}|${j}`))
+  if (block) nameBlock(ink, ledger, (p, g) => block.page === p - 1 && block.has(g))
   const boxesBefore = own.boxes.map((row) => [...row])
   claimInk(own, ink, pages)
   const kept = keptUnitsOf(
@@ -338,6 +400,43 @@ export function inkOf(o: InkInput): { made: Made[]; stats: InkStats } {
       glyphs: made.reduce((n, x) => n + x.text.length + x.ph.length, 0),
       code: made.filter((x) => x.unit.why === 'figure: code').length,
     },
+    block,
+  }
+}
+
+/** the kinds of the ink units the author block takes: today's ledger's notes and orphans, and its names (rule 8) */
+const BLOCK_TAKES = new Set(['inknotes', 'inkorphan', 'inknames'])
+/**
+ * The ink units of the author block under the title its names, and none elsewhere (the owner's ruling of 2026-11-09: the names
+ * toggle governs the block under the title, whole, and nothing else). Inside it, an ink unit all of whose glyphs are the
+ * block's ink is of the names (`inknames`), a note's or an orphan's of today's ledger as much as one rule 8 named; outside it, one
+ * rule 8 named for an author unit's words or an echo of one (acmart's reference format, a running line printed from the same data)
+ * is its ledger line's class again, the text it is
+ */
+function nameBlock(
+  ink: TodayInkUnit[],
+  ledger: { lines: unknown[] },
+  inBlock: (page: number, g: number) => boolean,
+): void {
+  const lineCls = new Map<string, string>()
+  for (const l of ledger.lines as { page: number; cls: string; gs: number[] }[])
+    for (const g of l.gs) lineCls.set(`${l.page}|${g}`, l.cls)
+  for (const u of ink) {
+    if (!BLOCK_TAKES.has(u.kind)) continue
+    const gs = [...u.glyphs.text, ...u.glyphs.ph]
+    const inside = gs.length > 0 && gs.every(([p, g]) => inBlock(p, g))
+    let cls = u.cls
+    if (inside) cls = 'names'
+    else if (u.cls === 'names') {
+      const first = u.glyphs.text[0] ?? u.glyphs.ph[0]
+      const was = first ? lineCls.get(`${first[0]}|${first[1]}`) : undefined
+      cls = was === 'notes' ? 'notes' : 'orphan'
+    }
+    if (cls === u.cls) continue
+    const kind = cls === 'names' ? 'inknames' : cls === 'notes' ? 'inknotes' : 'inkorphan'
+    u.cls = cls
+    u.kind = kind
+    u.rows.unit[1] = kind
   }
 }
 
@@ -389,7 +488,13 @@ function figureRuns(
   s: string,
   { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
 ): { content: Piece[]; styles: [string, Style][] } {
-  const base = styleKeyOf(glyphStyleOf(own))
+  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.mjs texLine: the link's
+  // colour of an address after its label), whose group states its fill where it is not the text's, black included; a figure text
+  // a plotting program sets is of one fill, as its run was)
+  const fillKey = (f: number | undefined) => (f !== undefined && f > 0 ? f : 0)
+  const ownStyle = glyphStyleOf(own)
+  const baseFill = fillKey(ownStyle.fill)
+  const base = `${styleKeyOf(ownStyle)}|${baseFill}`
   const chars = [...s]
   const SPACE = /\s/u
   // (each character's glyph: its glyphs' text, white space aside, as today's textOf strings it)
@@ -406,7 +511,9 @@ function figureRuns(
     glyphOf.push(left > 0 ? q - 1 : null)
     left--
   }
-  const keyOf = glyphOf.map((g) => (g === null ? null : faceKeyOf(stream[g]!.style.base)))
+  const keyOf = glyphOf.map((g) =>
+    g === null ? null : `${faceKeyOf(stream[g]!.style.base)}|${fillKey(stream[g]!.style.fill)}`,
+  )
   if (!keyOf.some((x) => x !== null && x !== base)) return { content: [{ t: 'text', s }], styles: [] }
   // (a space the run's on both sides of it, else its own style's)
   const key = keyOf.map((x, i) => {
@@ -426,12 +533,18 @@ function figureRuns(
     if (key[i] === base) content.push({ t: 'text', s: run })
     else {
       const id = String(content.length)
-      content.push({ t: 'span', id, style: changeOf(key[i] as string, base), content: [{ t: 'text', s: run }] })
+      content.push({
+        t: 'span',
+        id,
+        style: changeOf(key[i] as string, base) || 'colour',
+        content: [{ t: 'text', s: run }],
+      })
       // (its style its own glyphs', at their size as locate reads a unit's: the median along the line)
       const gs = [...new Set(glyphOf.slice(i, j).filter((g): g is number => g !== null))].map((g) => stream[g]!.style)
       const { upper: _upper, ...st } = glyphStyleOf(gs)
       void _upper
-      styles.push([id, { ...st, size: unitSize(gs) ?? st.size }])
+      const fill = Number((key[i] as string).split('|')[3])
+      styles.push([id, { ...st, size: unitSize(gs) ?? st.size, ...(fill !== baseFill ? { fill } : {}) }])
     }
     i = j
   }
@@ -445,13 +558,22 @@ interface Carried {
   paraEnds: (DocPoint & { point: number; para: number })[]
   regions: { kind: string; from: number; to: number }[]
   pictures: DocPoint[]
+  /** where TeX begins a front matter environment no author's (DocMarks `fronts`) */
+  fronts: DocPoint[]
 }
 
 /** B's marks carried onto A's pages: a mark that stands before B glyph n stands before that glyph's partner on A (the first glyph
  *  of its page from n on that has one), else after the partner of the last one before n that has one; none where its page has
  *  no glyph with a partner. A paragraph end keeps the counts of its page's points and paragraph points before it */
 export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried[] {
-  const out: Carried[] = inkA.pages.map(() => ({ points: [], paras: [], paraEnds: [], regions: [], pictures: [] }))
+  const out: Carried[] = inkA.pages.map(() => ({
+    points: [],
+    paras: [],
+    paraEnds: [],
+    regions: [],
+    pictures: [],
+    fronts: [],
+  }))
   B.pages.forEach((pg, p) => {
     const n = pg.glyphs.length
     const o = m.offB[p] as number
@@ -550,6 +672,10 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
     for (const x of marks.pictures) {
       const w = put(x)
       if (w) out[w[0] - 1]!.pictures.push(w[1])
+    }
+    for (const x of marks.fronts ?? []) {
+      const w = put(x)
+      if (w) out[w[0] - 1]!.fronts.push(w[1])
     }
   })
   return out

@@ -30,10 +30,13 @@ export const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
 export const SAYS = /[\p{L}\p{N}]/u
 export const LETTER = /\p{L}/u
 
-/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a citation or a
- *  note's mark belongs to the sentence before it, a reference is a number, a formula a word, a break a space */
-export function standInOf(kind: string): 'annotation' | string | undefined {
-  if (kind === 'cite' || kind === 'note-mark' || kind === 'footnote') return 'annotation'
+/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a note's mark belongs
+ *  to the sentence before it; a citation too where it is set against it, else it opens the next (`… expensive. \citet{x}
+ *  proposes …`: the splitter reads where it stands, @readarxiv/text `citation`); a reference is a number, a formula a word, a
+ *  break a space */
+export function standInOf(kind: string): 'annotation' | 'citation' | string | undefined {
+  if (kind === 'cite') return 'citation'
+  if (kind === 'note-mark' || kind === 'footnote') return 'annotation'
   if (kind === 'ref' || kind === 'eqref') return '1'
   if (kind === 'math') return 'x'
   if (kind === 'break' || kind === 'space') return ' '

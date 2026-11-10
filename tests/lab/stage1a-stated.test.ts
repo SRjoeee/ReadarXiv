@@ -241,11 +241,167 @@ describe("(f) a unit held whole by another unit: one v2 unit holds every line of
     expect(said(statedOf(base, [kept]))).toEqual([[243, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`]])
   })
 
-  it('states nothing where two units meet its line, or where its text is not a part of the holder\'s', () => {
+  it('states no holding whole where two units meet its line (split (j), their texts today\'s), nor where its text is not a part of the holder\'s', () => {
     const base = [unit(id('a'), 1, 'inknotes', [text('Ada Lovelace')])]
     const two = [unit(id('b'), 1, 'para', [text('Ada')], [72, 150, 600]), unit(id('c'), 2, 'para', [text('Lovelace')], [160, 300, 600])]
-    expect(statedOf(base, two)).toEqual([])
+    expect(said(statedOf(base, two))).toEqual([[1, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.split}`]])
     expect(statedOf(base, [unit(id('b'), 1, 'para', [text('Ada Byron')])])).toEqual([])
+  })
+})
+
+/** a line's box as the dumps state it: its page, its extent across, its baseline and its ink's top and bottom */
+const box = (x0: number, x1: number, baseline: number, top: number, bottom: number): Line => ({ page: 1, x0, x1, baseline, top, bottom })
+/** a unit of the dumps' form on the given lines */
+const on = (u: ReturnType<typeof unit>, ...lines: Line[]) => ({ ...u, lines })
+/** one of arXiv's glyphs as the engine reads A (DocGlyph): its character, its advance across, its baseline and its ink */
+const glyph = (u: string, x0: number, x1: number, y: number, size: number) => ({ u, x0, x1, y, top: y + 0.7 * size, bottom: y - 0.2 * size, blank: !u.trim() })
+
+describe("(c') a line whose marks are the name before's trail, v2's line a unit of the author block of any kind", () => {
+  const trail = { page: 1, x0: 350.53, x1: 358.51, top: 642.6, bottom: 636.9, baseline: 637.04, text: '2' }
+  // (2610.18513v1 t651's shape: today's "2 and" an orphan, the "2" the name before's trail, v2's "and" now the block's inknames)
+  const base = [on(unit(id('a'), 651, 'inkorphan', [text('2 and')]), box(350.53, 381.26, 637.04, 642.6, 632.4))]
+  const before = on(unit(id('c'), 2, 'author', [text('Ada Lovelace'), ph('$^{2}$')]), box(280.47, 358.51, 632.7, 641, 630))
+  it('states it as its marks the trail where the stand-in is a unit of the author block, whatever its kind', () => {
+    const and = on(unit(id('b'), 651, 'inknames', [text('and')]), box(362.41, 381.26, 632.7, 640.9, 632.6))
+    expect(said(statedOf(base, [before, and], { trails: [trail] }))).toEqual([[651, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.trail}`]])
+  })
+
+  it('states nothing where the stand-in of another kind is no unit of the author block', () => {
+    const and = on(unit(id('b'), 651, 'para', [text('and')]), box(362.41, 381.26, 632.7, 640.9, 632.6))
+    expect(statedOf(base, [before, and], { trails: [trail] })).toEqual([])
+  })
+})
+
+describe("(f'') a unit of v2's meets today's line by their boxes, the glyphs' own height, not by their baselines", () => {
+  // (2610.20030v1 t91's shape: today's line begins with the name before's raised marks, and today's reading gave the line
+  // their baseline, 709.17; the line's body, its "and", stands at 705.55, which v2 states)
+  const base = [on(unit(id('a'), 91, 'inkorphan', [text('1, 2 and')]), box(324.29, 357.06, 709.17, 713.8, 705.44))]
+  const before = on(unit(id('c'), 3, 'author', [text('Ada Lovelace')]), box(265.62, 324.29, 705.55, 712.36, 703.63))
+  it('states one v2 unit whose box holds today\'s line as holding it whole, its baseline another', () => {
+    const and = on(unit(id('b'), 91, 'inknames', [text('1, 2 and')]), box(324.29, 357.06, 705.55, 713.8, 705.44))
+    expect(said(statedOf(base, [before, and]))).toEqual([[91, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+
+  it("reads two edges a hundredth or so apart as one edge: the name before's line ending where today's begins meets it not", () => {
+    // (2610.21765v1 t254: the author unit's line ends at 321.24, today's line begins at 321.2, two readings of one edge)
+    const edge = on(unit(id('c'), 3, 'author', [text('Ada Lovelace')]), box(265.62, 324.33, 705.55, 712.36, 703.63))
+    const and = on(unit(id('b'), 91, 'inknames', [text('1, 2 and')]), box(324.29, 357.06, 705.55, 713.8, 705.44))
+    expect(said(statedOf(base, [edge, and]))).toEqual([[91, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+
+  it('states no holding whole where two units\' boxes meet the line (split (j) by their texts), nor anything where no box overlaps it up and down', () => {
+    const wide = on(unit(id('c'), 3, 'author', [text('Ada Lovelace')]), box(265.62, 330, 705.55, 712.36, 703.63))
+    const and = on(unit(id('b'), 91, 'inknames', [text('1, 2 and')]), box(324.29, 357.06, 705.55, 713.8, 705.44))
+    expect(said(statedOf(base, [wide, and]))).toEqual([[91, `made on arXiv's page as ${'c'.repeat(12)}: ${CAUSE.split}`]])
+    const below = on(unit(id('b'), 91, 'inknames', [text('1, 2 and')]), box(324.29, 357.06, 690, 698, 688))
+    expect(statedOf(base, [before, below])).toEqual([])
+  })
+})
+
+describe("(f') a line held by the author block's units on it, in order, TeX's space between them", () => {
+  // (2609.26457v1 t279's shape: today's line from the name before's raised "1" to "and"; v2's author unit ends with the "1", its
+  // inknames "and" begins after the space TeX set)
+  const base = [on(unit(id('a'), 279, 'inkorphan', [text('and')]), box(359.42, 386.66, 683.79, 693.19, 683.69))]
+  const author = on(unit(id('c'), 4, 'author', [text('Ada Lovelace'), ph('$^{1}$')]), box(298.9, 363.85, 683.79, 693.19, 681.5))
+  const and = on(unit(id('b'), 279, 'inknames', [text('and')]), box(367.54, 386.66, 683.79, 691.5, 683.69))
+  const line = [
+    glyph('e', 352, 359.42, 683.79, 10.96),
+    glyph('1', 359.42, 363.85, 687.75, 7.97),
+    glyph(' ', 363.85, 367.54, 687.75, 7.97),
+    glyph('a', 367.54, 373.1, 683.79, 10.96),
+    glyph('n', 373.1, 380, 683.79, 10.96),
+    glyph('d', 380, 386.66, 683.79, 10.96),
+    glyph(' ', 386.66, 390.3, 683.79, 10.96),
+    glyph('A', 390.3, 398, 683.79, 10.96),
+  ]
+  const glyphs = (page: number) => (page === 1 ? line : null)
+  it("states it held by the block's units where each glyph of ink on today's line is one of theirs, in order", () => {
+    expect(said(statedOf(base, [author, and], { glyphs }))).toEqual([[279, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldBlock}`]])
+  })
+
+  it("states no holding by the block where a glyph of ink stands between them, one of them is no unit of the block's, or with no glyphs (split (j), by their texts, then)", () => {
+    const split = [[279, `made on arXiv's page as ${'c'.repeat(12)}: ${CAUSE.split}`]]
+    const inked = (page: number) => (page === 1 ? line.map((g) => (g.u === ' ' && g.x0 === 363.85 ? glyph(',', 363.85, 367.54, 683.79, 10.96) : g)) : null)
+    expect(said(statedOf(base, [author, and], { glyphs: inked }))).toEqual(split)
+    const para = on(unit(id('b'), 279, 'para', [text('and')]), box(367.54, 386.66, 683.79, 691.5, 683.69))
+    expect(said(statedOf(base, [author, para], { glyphs }))).toEqual(split)
+    expect(said(statedOf(base, [author, and]))).toEqual(split)
+    // (and nothing where the two hold a character today's does not have between today's: not one part of their text)
+    expect(statedOf([on(unit(id('a'), 279, 'inkorphan', [text('1and')]), box(359.42, 386.66, 683.79, 693.19, 683.69))], [author, and])).toEqual([])
+  })
+})
+
+describe('(F) a line of e-mail addresses held whole by a kept block', () => {
+  const kept = { ...on(unit(id('b'), 386, 'inkorphan', []), box(70.87, 348.82, 580.2, 588, 578)), kept: true as const }
+  const lineOf = (s: string) => [on(unit(id('a'), 405, 'inkfigures', [text(s)]), box(70.87, 200.88, 580.2, 588, 578))]
+  it('states it as a line of addresses kept whole where its text is e-mail addresses and their separators alone', () => {
+    for (const s of ['ada@example.org', 'ada@example.org, alan@cs.example.ac.uk;', '{ada, alan}@example.org'])
+      expect(said(statedOf(lineOf(s), [kept]))).toEqual([[405, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.addresses}`]])
+  })
+
+  it('states one with any other word as held by a kept block, not accepted', () => {
+    for (const s of ['Email: ada@example.org', 'ada at example.org', '1 ada@example.org'])
+      expect(said(statedOf(lineOf(s), [kept]))).toEqual([[405, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.heldKept}`]])
+  })
+})
+
+describe("(f), a stand-in of today's kind: one v2 unit of its kind at its place holding today's whole text in order", () => {
+  // (2610.19159v1 t3804's shape: a transcript box's title, today's two figure texts in two faces, rebuild/run-on-kept's one; the
+  // joined line stands for today's second piece, its text today's and more)
+  const title = on(unit(id('b'), 3804, 'inkfigures', [text('Agent Action: Write (Self-directed scope reduction)')]), box(81.33, 284.69, 544.94, 551.16, 543.09))
+  it('states it held whole by that unit', () => {
+    const base = [on(unit(id('a'), 3804, 'inkfigures', [text('(Self-directed scope reduction)')]), box(124.42, 284.69, 544.94, 551.16, 543.09))]
+    expect(said(statedOf(base, [title]))).toEqual([[3804, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`]])
+  })
+
+  it('states another reading where today holds a character the stand-in has not, or holds them in another order', () => {
+    for (const s of ['(Self-directed scope reductions)', '(scope reduction Self-directed)'])
+      expect(said(statedOf([on(unit(id('a'), 3804, 'inkfigures', [text(s)]), box(124.42, 284.69, 544.94, 551.16, 543.09))], [title]))).toEqual([
+        [3804, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`],
+      ])
+  })
+})
+
+describe("(j) a unit split: its text one contiguous part of consecutive v2 units' text, in reading order, each on its box", () => {
+  // (2610.19159v1 t1906's shape: today's orphan line, v2's two figure texts on it, one after the other)
+  const base = [on(unit(id('a'), 1906, 'inkorphan', [text('Agent Message (Lenient Self-verification)')]), box(81.33, 284.69, 544.94, 551.16, 543.09))]
+  const head = on(unit(id('b'), 3967, 'inkfigures', [text('Agent Message')]), box(81.33, 118.44, 544.94, 551.14, 543.1))
+  const rest = on(unit(id('c'), 3968, 'inkfigures', [text('(Lenient Self-verification)')]), box(124.42, 284.69, 544.94, 551.16, 543.09))
+  it('states it split where the units are consecutive and every character of today is theirs, in order', () => {
+    expect(said(statedOf(base, [head, rest]))).toEqual([[1906, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.split}`]])
+  })
+
+  it('states nothing where another unit stands between them in reading order, or a character of today is no one\'s', () => {
+    expect(statedOf(base, [head, { ...rest, ord: 3970 }, on(unit(id('d'), 3969, 'para', [text('x')]), box(72, 300, 300, 308, 298))])).toEqual([])
+    const more = [on(unit(id('a'), 1906, 'inkorphan', [text('Agent Message: (Lenient Self-verification)')]), box(81.33, 284.69, 544.94, 551.16, 543.09))]
+    expect(statedOf(more, [head, rest])).toEqual([])
+  })
+})
+
+describe("its head's number in its phrase: a running head's alone", () => {
+  it("states a running head whose number v2 reads in its phrase so, and no figure text joined with a number", () => {
+    const head = (kind: string) => [{ ...unit(id('a'), 3, kind, [text('of 21')]), text: 'of 21' }]
+    expect(said(statedOf(head('inkheads'), [{ ...unit(id('b'), 3, 'inkheads', [text('5 of 21')]), text: '5 of 21' }]))).toEqual([
+      [3, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.head}`],
+    ])
+    const fig = statedOf([{ ...unit(id('a'), 3, 'inkfigures', [text('Full')]), text: 'Full' }], [{ ...unit(id('b'), 3, 'inkfigures', [text('Full 200')]), text: 'Full 200' }])
+    expect(fig.map((s: { why: string }) => s.why)).not.toContain(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.head}`)
+  })
+})
+
+describe('what the parity reads of a statement: the unit of v2\'s that holds today\'s whole', () => {
+  it('names the holder of a unit held whole, by the block, and by the block\'s units (the one whose glyphs are today\'s), no other', () => {
+    const one = statedOf([unit(id('a'), 1, 'inkorphan', [text('x')])], [unit(id('b'), 1, 'inknotes', [text('x')])])
+    expect(one.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['held', id('b')]])
+    const names = statedOf([unit(id('a'), 161, 'inkorphan', [text('Ada Lovelace,')])], [unit(id('b'), 161, 'inknames', [text('Ada Lovelace,')])])
+    expect(names.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['names', id('b')]])
+    const trail = { page: 1, x0: 325.12, x1: 339.69, top: 598, bottom: 586, baseline: 588.37, text: '7,8,' }
+    const trailed = statedOf(
+      [unit(id('a'), 185, 'inkorphan', [text('7,8, and')], [325.12, 362.44, 588.37])],
+      [unit(id('b'), 185, 'inkorphan', [text('and')], [343.58, 362.44, 588.37])],
+      { trails: [trail] },
+    )
+    expect(trailed.map((s: { holder?: string; cause: string }) => [s.cause, s.holder])).toEqual([['trail', undefined]])
   })
 })
 
@@ -256,7 +412,7 @@ describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (la
       new RegExp(e.match).test(cause),
     )
   it('accepts the ruled causes, and neither another reading nor lines kept whole outside a display the engine states', () => {
-    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held])
+    for (const c of [CAUSE.scripts, CAUSE.names, CAUSE.trail, CAUSE.orderAsElement, CAUSE.display, CAUSE.held, CAUSE.heldBlock, CAUSE.addresses, CAUSE.split])
       expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${c}`)).toBe(true)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.another}`)).toBe(false)
     expect(accepted(`made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.kept}`)).toBe(false)

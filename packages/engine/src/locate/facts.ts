@@ -6,6 +6,7 @@
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
+import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
 // @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
 // back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
@@ -460,7 +461,7 @@ export function joinAccents(gs: readonly DocGlyph[]): readonly DocGlyph[] {
   if (!joined.size) return gs
   return gs.flatMap((g, i) => {
     const t = joined.get(i)
-    return t === undefined ? [g] : t ? [{ ...g, u: t }] : []
+    return t === undefined ? [g] : t ? [glyphWith(g, { u: t })] : []
   })
 }
 /** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
@@ -585,8 +586,9 @@ function textEndMarks(s: string): { marks: string[]; stopped: boolean } {
   }
   return { marks, stopped: false }
 }
-/** the element kinds that set no ink (today's phClass `zero`, `space`): passed over at a unit's end */
-const INKLESS_KINDS = new Set(['zero', 'space', 'other'])
+/** the element kinds that set no ink (today's phClass `zero`, `space`; the adapter's `space` a tie, `break` a forced line break):
+ *  passed over at a unit's end */
+const INKLESS_KINDS = new Set(['zero', 'space', 'break', 'other'])
 /** the marks a unit's source writes at its end, after its last letter, digit or element (today's sourceEndMarks L2:1608):
  *  null where a symbol element stands among them (its ink is among the page's marks there, as many as its source does not
  *  tell) */

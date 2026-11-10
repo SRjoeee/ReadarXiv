@@ -153,6 +153,34 @@ describe('Laid.lit by sentence', () => {
     const bracket = it.x + (it.size * [...it.s.slice(0, it.s.indexOf('(Vier'))].length) / 2
     expect(laid.lit.right[1]![0]![0]).toBeCloseTo(bracket, 6)
   })
+  it('begins a sentence as drawn at the element its translation begins it with, where the row starts it there', () => {
+    // (2611.03953v2 p5, the owner's report of 2026-11-10: "Three details of Equation (6) matter." came back with the reference
+    // first, its row's start at the reference; it lit with the sentence before, the start moved on to the first letter past the
+    // element)
+    const content: OutPiece[] = [
+      { t: 'text', s: 'Eins zwei drei. ' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' fünf sechs. Sieben acht neun.' },
+    ]
+    const at = 'Eins zwei drei. '.length
+    const r: Row = {
+      id,
+      ok: true,
+      by: 'test',
+      content,
+      sentences: { src: [15, 30], tr: [at, at + 1 + ' fünf sechs. '.length] },
+    }
+    const m = member({ align: 'l', els: [['5', { kind: 'ref', ink: [[1, 200, 698, 214, 707, 700]] }]] })
+    const laid = laidOf(m, r)
+    // (the element drawn as a crop of its ink, its piece the laid pieces' index: the line's one crop)
+    const line = laid.lines.find(([, , , its]) => its.some((x) => 'piece' in x))!
+    const crop = line[3].find((x) => 'piece' in x) as { x: number }
+    const y = line[0]
+    const covers = (bs: readonly Box[]) =>
+      bs.some((b) => b[0] <= crop.x + 1 && crop.x + 1 <= b[2] && b[1] <= y && y <= b[3])
+    expect(covers(laid.lit.right[1]!)).toBe(true)
+    expect(covers(laid.lit.right[0]!)).toBe(false)
+  })
   it('lights its kept ink with its sentence, on the row it stands on: a label with the first, an element the translation omits where it stands on A', () => {
     // (`own` holds the displays alone; an element no sentence of the translation places, kept where it stands, lights with the
     // sentence it stands in on A, as a held line does; on both panes the row it stands on widened over it)

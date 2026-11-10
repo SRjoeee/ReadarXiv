@@ -91,6 +91,8 @@ export type PageInk = {
   boxAt: number[]
   paras: InkPoint[]
   paraEnds?: (InkPoint & { point: number; para: number })[]
+  /** where TeX begins a front matter environment no author's (`fm<n>`, ink.mjs FRONT_POINT): the author block's end */
+  fronts?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
   shows?: number
@@ -123,6 +125,8 @@ export const pageInk = ink.pageInk as (
     turned?: boolean
     /** with `turned`: every painted path's lines (`shapes`), not a figure's alone */
     shapesAll?: boolean
+    /** the reader's own table across its pages, each font's name by its object: read once a document (none: once a page) */
+    names?: Map<unknown, string> | null
   },
 ) => PageInk
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its

@@ -311,15 +311,18 @@ function tokensOn(L: Layout, page: number, pieceAt: readonly number[]): Placed_[
 
 /**
  * Where each sentence after the first begins in the translation's plain text: its start in the row (Row.sentences.tr) at its
- * first word (a letter or a digit at or after it, before the next start), as the source's is found at its first word (today's
- * mt.mjs sentencesOf: a sentence starts at its first word). Null where one has none
+ * first word or element (a letter, a digit or an element at or after it, before the next start), as the source's is found on
+ * A at its first word or element (Placed.words). An element its translation begins a sentence with is that sentence's
+ * (2611.03953v2 p5: "Three details of Equation (6) matter." came back with the reference first, "(6)" then "three details
+ * matter", the row's start at the reference; moved on to the first letter, it lit with the sentence before, the owner's report
+ * of 2026-11-10). Null where one has none
  */
 function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: readonly number[]): number[] | null {
   const out: number[] = []
   for (let j = 0; j < tr.length; j++) {
     const end = j + 1 < tr.length ? tr[j + 1]! : places.text.length
     let o = tr[j]!
-    while (o < end && !/[\p{L}\p{N}]/u.test(places.text[o]!)) o++
+    while (o < end && places.text[o] !== OBJ && !/[\p{L}\p{N}]/u.test(places.text[o]!)) o++
     if (o >= end) return null
     const p = places.at(o)
     if (p < 0 || (out.length && p <= out.at(-1)!)) return null

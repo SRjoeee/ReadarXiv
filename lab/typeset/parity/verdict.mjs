@@ -6,7 +6,8 @@
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 import { bare, judgeJoined, joinedOf, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind } from './blind.mjs'
-import { paintedEntries } from './paint.mjs'
+import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
+import { litColumn, paintedEntries } from './paint.mjs'
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -595,7 +596,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       continue
     }
     const why = o?.part !== null && o?.part !== undefined ? (stateOf.get(o.part) ?? 'no member on the page') : "no member of v2's part joined to it"
-    diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, true, 'today')
+    // (a member of the author block's, under the default toggles: the names toggle, off, keeps the block the original's whole,
+    // whatever today translated of it, the ruling's: NAMES_RULING)
+    const ruled = v2.toggles !== 'on' && o?.part !== null && o?.part !== undefined && unitClass(facts.get(o.part)?.kind) === 'names'
+    diff('shown', `${key} ${o?.kind ?? ''}`.trim(), 'translated by today, left the original\'s by v2', null, { value: 'translated', off: null }, { value: why, off: null }, !ruled, ruled ? 'ruling' : 'today')
+    if (ruled) out.diffs.at(-1).ruling = NAMES_RULING
   }
   for (const key of V.keys()) if (key.startsWith('t') && !T.has(key)) gained++
   // (a label TeX set with a name word on a unit's first line, "Proposition 1 (": today's drawn in the target, v2's not, is a
@@ -772,11 +777,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // the pointer lights it (a sentence, or a unit lit whole), over another block: a display (the part's El of kind 'display' on
   // the page, its own unit's too: the original's ink, kept, the same on both panes and in both drawings), and on arXiv's page
   // another unit's line too (the same for both sides; as drawn, the neighbours each drawing sets differ, and a pad over a
-  // small one, a figure's tick label, is no fill): counted where the shape holds the block's middle, v2 worse where it fills
-  // more blocks than today. The owner's reports of 2026-11-09: one shape over display (11) and the lines either side of it on both panes
-  // (2602.23285v2 p15), a paragraph over both of its displays (2609.33403v1), where today lights a bar a row and no display;
-  // coverage judged it nearer. Today's shapes are its rectangles (its runs, cut at a display, tile their rows: lighting.mjs
-  // paints one outline a run); v2's paint.mjs paintedEntries, the reader's own rule)
+  // small one, a figure's tick label, is no fill): counted where the shape holds the block's middle, or bridges its row (a room
+  // the outline paints between two of its rows stands across the block's middle, the block in the column the member spans:
+  // the owner's report of 2026-11-10, 2610.17024v1 p9, a strip down the column's edge from a short row over display (43)'s row
+  // to the short row after it, which holds none of the display's ink), v2 worse where it fills more blocks than today. The
+  // owner's reports of 2026-11-09: one shape over display (11) and the lines either side of it on both panes (2602.23285v2
+  // p15), a paragraph over both of its displays (2609.33403v1), where today lights a bar a row and no display; coverage judged
+  // it nearer. Today's shapes are its rectangles (its runs, cut at a display, tile their rows: lighting.mjs paints one outline
+  // a run); v2's paint.mjs paintedEntries, the reader's own rule)
   const displaysHere = [...facts.values()].flatMap((m) =>
     (m.els ?? []).filter((e) => e[1] === 'display').flatMap((e) => e[2].map((b) => ({ ord: m.ord, box: [b[0], b[1], b[2], b[3]] }))),
   )
@@ -789,8 +797,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       y = (y0 + y1) / 2
     return rects.some((r) => r[0] <= x && x <= r[2] && r[1] <= y && y <= r[3])
   }
-  /** how many of `blocks` one of a side's shapes holds the middle of */
-  const filled = (shapes, blocks) => blocks.filter((b) => shapes.some((rects) => holdsMiddle(rects, b.box))).length
+  /** whether a room a shape paints between two of its rows that stand room for a line apart (paint.mjs: [x0, y0, x1, y1, 1])
+   *  stands across a block's row, the block in the member's column */
+  const bridges = (rects, [x0, y0, x1, y1], [c0, c1]) => {
+    const y = (y0 + y1) / 2
+    return Math.min(x1, c1) > Math.max(x0, c0) && rects.some((r) => r[4] === 1 && r[1] < y && y < r[3])
+  }
+  /** how many of `blocks` one of a side's shapes holds the middle of or bridges (a member's `column` on the pane; today's
+   *  shapes paint no room) */
+  const filled = (shapes, blocks, column = null) =>
+    blocks.filter((b) => shapes.some((rects) => holdsMiddle(rects, b.box) || (column && bridges(rects, b.box, column)))).length
   hl.fillsToday = 0
   hl.fillsV2 = 0
   for (const key of new Set([...todays, ...V.keys()])) {
@@ -803,14 +819,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
     const dv =
-      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA) +
-      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere)
+      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
+      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right'))
     hl.fillsToday += dt
     hl.fillsV2 += dv
-    if (dt) fault('today', 'highlight', `${name}: its highlight fills ${dt} other blocks (a display, another unit's line)`)
-    if (dv) fault('v2', 'highlight', `${name}: its highlight fills ${dv} other blocks (a display, another unit's line)`)
+    if (dt) fault('today', 'highlight', `${name}: its highlight fills or bridges ${dt} other blocks (a display, another unit's line)`)
+    if (dv) fault('v2', 'highlight', `${name}: its highlight fills or bridges ${dv} other blocks (a display, another unit's line)`)
     if (dv !== dt)
-      diff('highlight', name, "other blocks its highlight's shapes fill (a display, another unit's line: its middle held), both panes", 0, { value: dt, off: dt }, { value: dv, off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
+      diff('highlight', name, "other blocks its highlight's shapes fill or bridge (a display, another unit's line: its middle held, or its row crossed in the column), both panes", 0, { value: dt, off: dt }, { value: dv, off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
   }
   // (the highlight's granularity, apart from its coverage: a unit today pairs sentence by sentence paired so by v2, judged on
   // its boxes per sentence, sentences.mjs)
@@ -854,6 +870,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   out.pastRoom = { today: pastOf('today'), v2: pastOf('v2') }
   budgetPastRoom(out, new Set(out.pastRoom.today), new Set(out.pastRoom.v2))
   headRuling(out, { v2, n, facts, orig })
+  leadRuling(out, { v2, n, facts, orig })
+  markSpaceRuling(out, { v2, n, orig })
   recount(out)
   out.units = units
   return out
@@ -926,6 +944,132 @@ function headRuling(p, { v2, n, facts, orig }) {
       f.v2Says.splice(k, 1)
       f.v2--
     }
+  }
+}
+
+/** what a unit of the author block v2 leaves the original's under the default toggles rests on (`shown`) */
+const NAMES_RULING =
+  "the owner's rulings of 2026-10-25 and 2026-11-09 (PDF-READER §19.13): the names toggle, off by default, keeps the author block under the title the original's, whole, whatever today translated of it"
+/** what a line count leadRuling and sharePass read as the ruling's rests on: the owner's words of 2026-11-10 ("on the
+ *  references' leading, go ahead as you recommend"), and for TeX's share the ruling of 2026-10-30 it holds within the band */
+const SHARE_RULING =
+  "TeX's share of a paragraph's lines in each frame: the owner's ruling of 2026-10-30 (frames fill as TeX does, by the paragraph's height), the share kept where every frame before the last holds it within its page's band by the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\")"
+const BAND_RULING =
+  "the owner's ruling of 2026-11-10 (\"on the references' leading, go ahead as you recommend\"): the paragraphs that borrow room, the gap under them measured from the borrow's limit (option (i)), vote in the page's target, and a paragraph at the band's top moves with it"
+/**
+ * A line count on a page that the owner's rulings explain, the ruling's: not worse, nor v2's fault.
+ * (1) A paragraph over pages whose lines v2 splits otherwise than today, the same lines in all, its lines on this page TeX's
+ * share of them (shareOn: the typesetter's pageCutsOf, each frame's first line at its share of the lines, nearest, ties later):
+ * 1512.03385v1-zh p7 t153, 6 of 8 where TeX set 8 of 10 and today 7 + 1. Marked here (`share`), ruled by the paper's pass
+ * (sharePass), which counts each side's lines of it over its pages: where the totals differ, the count is the fit's, judged as
+ * any. (2) A paragraph that does not borrow, set at its page's band over a target the paragraphs that borrow room moved by
+ * voting the fill leadings option (i) gave them, its line count on the page other than the pair laid without (i) sets
+ * (v2.mjs `fills`, `before`): 2610.20484v1-zh p8 t85, 1.50 over a target of 1.45 where it was 1.30, 12 lines where it set 13
+ */
+function leadRuling(p, { v2, n, facts, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const o = orig.get(d.unit.split(' ')[0])
+    const q = o?.part !== null && o?.part !== undefined ? facts.get(o.part) : null
+    if (!q) continue
+    if (bandMoved(q.ord, v2, n)) {
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = BAND_RULING
+    } else if (shareOn(q, v2, n)) d.share = true
+  }
+}
+/** the paper's pass of leadRuling's (1): a line count marked `share` is the ruling's where each side sets as many lines of
+ *  its unit over the pages both drew it on, its split alone moved; the caller recounts */
+export function sharePass(pages, recount) {
+  const total = new Map()
+  for (const p of pages)
+    for (const u of p.units ?? []) {
+      const t = u.sides?.today?.lines,
+        v = u.sides?.v2?.lines
+      if (typeof t !== 'number' || typeof v !== 'number') continue
+      const a = total.get(u.key) ?? { today: 0, v2: 0 }
+      a.today += t
+      a.v2 += v
+      total.set(u.key, a)
+    }
+  for (const p of pages) {
+    for (const d of p.diffs) {
+      if (!d.share) continue
+      delete d.share
+      const a = total.get(d.unit.split(' ')[0])
+      if (!d.worse || !a || a.today !== a.v2) continue
+      d.worse = false
+      d.nearer = 'ruling'
+      d.ruling = SHARE_RULING
+    }
+    recount(p)
+  }
+}
+/** whether v2 lays on page `n` TeX's share of member `q`'s lines, `q` a paragraph over pages (its original lines on two or more):
+ *  its frames (the part's lines on one page whose columns meet), each one's first line at its share of v2's lines, the nearest
+ *  line, ties to the later, past the frame before's (breaker/cuts.mjs pageCutsOf over one run) */
+function shareOn(q, v2, n) {
+  const on = (pg) => (v2.pages[pg]?.members ?? []).filter((m) => m.ord === q.ord).reduce((a, m) => a + (m.lines?.length ?? 0), 0)
+  if (new Set(q.lines.map((l) => l[0])).size < 2) return false
+  const frames = []
+  for (const l of q.lines) {
+    const f = frames.at(-1)
+    if (f && f.page === l[0] && Math.min(f.x1, l[3]) > Math.max(f.x0, l[2])) {
+      f.lines++
+      f.x0 = Math.min(f.x0, l[2])
+      f.x1 = Math.max(f.x1, l[3])
+    } else frames.push({ page: l[0], x0: l[2], x1: l[3], lines: 1 })
+  }
+  const N = Object.keys(v2.pages).reduce((a, pg) => a + on(Number(pg)), 0),
+    T = q.lines.length
+  const cuts = [0]
+  let before = 0
+  for (let f = 1; f < frames.length; f++) {
+    before += frames[f - 1].lines
+    const want = (N * before) / T
+    let k = -1
+    for (let j = cuts.at(-1) + 1; j < N; j++) if (k < 0 || Math.abs(j - want) <= Math.abs(k - want)) k = j
+    if (k < 0) return false
+    cuts.push(k)
+  }
+  cuts.push(N)
+  return frames.reduce((a, f, i) => a + (f.page === n ? cuts[i + 1] - cuts[i] : 0), 0) === on(n)
+}
+/** whether member `ord`, which does not borrow, is set at its page's band over a target the paragraphs that borrow room moved
+ *  by option (i), and its line count on page `n` moved with it: its drawn leading the band's top over the pass's target (or its
+ *  own fill leading under it), another over the page's target before (i), and another line count there (v2.mjs `fills`, and
+ *  `before`: the pair laid without (i)) */
+function bandMoved(ord, v2, n) {
+  const [pg, f] = Object.entries(v2.fills ?? {}).find(([, x]) => x.units?.[ord]) ?? []
+  const was = v2.before?.[pg]?.target,
+    off = v2.before?.[n]?.lines?.[ord]
+  if (!f || typeof f.target !== 'number' || typeof was !== 'number' || Math.abs(f.target - was) < 1e-9) return false
+  const [lead, borrows] = f.units[ord]
+  const m = (v2.pages[n]?.members ?? []).find((x) => x.ord === ord)
+  const L = m?.fit?.lead
+  if (borrows || typeof lead !== 'number' || typeof L !== 'number' || typeof off !== 'number' || off === (m.lines?.length ?? 0)) return false
+  const at = (t) => Math.min(lead, Math.round((t + f.band) * 1000) / 1000)
+  return Math.abs(L - at(f.target)) < 0.005 && Math.abs(L - at(was)) > 0.005
+}
+
+/**
+ * A unit's line count v2 sets other than today's because B.tokens sets no space beside a full-width mark's blank side (the
+ * coordinator's ruling of 2026-11-10 on lane cjk-space's parity: xeCJK's rule; where it saves a line, the line held a lone
+ * fragment, and the line-count measure is an instrument): the difference is the ruling's, not worse, only where the pair laid
+ * with those spaces put back (v2.mjs's first lay, hook.mjs: `spaced`, each member's line count on each page) sets today's count
+ * on the page. A count those spaces do not explain, or a pair laid without that lay, is judged as any
+ */
+function markSpaceRuling(p, { v2, n, orig }) {
+  for (const d of p.diffs) {
+    if (!d.worse || d.flag !== 'line-count' || !d.unit) continue
+    const part = orig.get(d.unit.split(' ')[0])?.part
+    const spaced = part === null || part === undefined ? undefined : v2.spaced?.[n]?.[part]
+    if (spaced === undefined || spaced !== d.today?.value) continue
+    d.worse = false
+    d.nearer = 'ruling'
+    d.ruling =
+      "the coordinator's ruling of 2026-11-10: no space beside a full-width mark's blank side (xeCJK's rule); the unit laid with those spaces put back sets today's count"
   }
 }
 

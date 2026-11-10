@@ -598,6 +598,53 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(placed.plain).toBe('Task: list all the names')
   })
 
+  it('states a figure text’s runs by face and by fill: TeX’s line in a picture, a label and its address in the link’s colour, the label a group whose fill it states (2611.03178v1)', () => {
+    // (the class's tcolorbox, which pgf draws: "Page:" in \sffamily\bfseries, black, then \texttt's address in the link's colour,
+    // TeX's one line: one figure text, its own style the address's (most of its glyphs), the label a group in its face and its
+    // black, which its own style (the address's colour) would draw otherwise)
+    const at = 'a paragraph whose word'.length
+    const docWith = (marks: boolean): Doc => {
+      const d = docOf([
+        {
+          lines: [
+            'a paragraph whose word',
+            { text: 'Page: site.io', y: 640 },
+            { text: 'continues on its last line', y: 600 },
+          ],
+        },
+      ])
+      const pg = d.pages[0]!
+      pg.glyphs.slice(at, at + 13).forEach((g, j) => {
+        const f = j < 6 ? 'LMSans10-Bold' : 'LMMono10-Regular'
+        Object.assign(g, { font: `ABCDEF+${f}`, base: f, fill: j < 6 ? 0 : 0x315f9c })
+      })
+      if (marks)
+        pg.marks = {
+          paras: [],
+          paraEnds: [],
+          regions: [],
+          pictures: [
+            { name: 'zs', glyph: at, box: 0 },
+            { name: 'ze', glyph: at + 13, box: 0 },
+          ],
+        }
+      return d
+    }
+    const B = docWith(true)
+    const A = docWith(false)
+    const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, -1, 0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.units[1]!.kind).toBe('inkfigures')
+    expect(L.units[1]!.content).toEqual([
+      expect.objectContaining({ t: 'span', id: '0', style: 'sans-bold', content: [text('Page:')] }),
+      text(' site.io'),
+    ])
+    const fig = L.members[1]!
+    expect(fig.style).toMatchObject({ role: 'mono', fill: 0x315f9c })
+    expect(fig.spanStyles).toEqual([['0', expect.objectContaining({ role: 'sans', bold: 1, fill: 0 })]])
+    expect(fig.plain).toBe('Page: site.io')
+  })
+
   it('makes no group of a figure text set in one face, and a group of each run its glyphs set apart from its own style', () => {
     const B = docOf([{ lines: ['a paragraph whose word', 'continues on its last line'] }])
     const ins = instrumentOf(B, [unitOf('para', 'a paragraph whose word continues on its last line')], [[0, 0]])
@@ -899,6 +946,122 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(E.flows.find((f) => f.includes(1))).toEqual([1])
   })
 
+  it('makes the ink TeX sets in the author block under the title its names, whatever unit it echoes (2610.22065v1 p1)', () => {
+    // (acmart's \@mkauthors@iii overridden by the paper: its names, places and notes literal lines no unit is, set between the
+    // title and the abstract; an orphan's ink and a note's before. And a venue line before the title: not the block's)
+    const lines = [
+      'Venue line here',
+      'A Title',
+      'Ann Lee',
+      'Dept of Physics, Some University',
+      'Equal contribution',
+      'Abstract text here',
+      'Body text here',
+    ]
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', lines.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const ins = instrumentOf(B, units, [[-1, 0, 1, -1, -1, 2, 3]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    const block = made.filter((m) => /Dept|Equal/.test(textOf(m)))
+    expect(block.length).toBeGreaterThan(0)
+    expect(block.every((m) => m.kind === 'inknames')).toBe(true)
+    expect(made.find((m) => /Venue/.test(textOf(m)))!.kind).toBe('inkorphan')
+    expect(L.members[1]!.kind).toBe('author')
+  })
+
+  it('ends the author block where TeX begins the abstract environment, its literal heading no line of the block (2610.20967v1)', () => {
+    // (spconf's \abstract sets "ABSTRACT" itself, no babel name: the marked compile's point `fm<n>` at the start of the paragraph
+    // the environment begins, on B, kept apart from the marks' points (DocMarks `fronts`), carried onto A before the heading's
+    // first glyph)
+    const text = ['A Title', 'Ann Lee', 'Some University', 'ABSTRACT', 'Abstract text here', 'Body text here']
+    const at = (k: number) => text.slice(0, k).join('').length
+    // (the heading set apart under the block, as the environment's skip sets it)
+    const lines = text.map((t, i) => (i < 3 ? t : { text: t, y: 700 - 12 * i - 24 }))
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', text.join('').length],
+      ],
+    })
+    B.pages[0]!.marks = {
+      paras: [],
+      paraEnds: [],
+      regions: [],
+      pictures: [],
+      fronts: [{ name: 'fm1', glyph: at(3), box: 0 }],
+    }
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('para', 'Body text here'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, -1, -1, 2, 3]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const made = L.members.filter((m) => m.unit >= units.length)
+    const textOf = (m: (typeof made)[number]) =>
+      L.units[m.unit]!.content.map((p) => (p.t === 'text' ? p.s : '')).join('')
+    expect(made.find((m) => /University/.test(textOf(m)))!.kind).toBe('inknames')
+    expect(made.find((m) => /ABSTRACT/.test(textOf(m)))!.kind).not.toBe('inknames')
+  })
+
+  it('leaves what a class prints from the author data away from the block the text it is (acmart’s reference format)', () => {
+    // (2610.22065v1 p1: its \author units, set nowhere else, set in the reference format after the abstract, with "and" between
+    // two of them; and a name a class prints again there, no unit's, that echoes the block's own unit: neither the names toggle's)
+    const Y = 640
+    const lines = [
+      'A Title',
+      'Ann Lee',
+      'Abstract text here',
+      { text: 'Kechao Tang', x: 72, y: Y },
+      { text: 'and', x: 72 + 12 * 6, y: Y },
+      { text: 'Ru Huang', x: 72 + 16 * 6, y: Y },
+      { text: '2027. A Title', x: 72 + 25 * 6, y: Y },
+      { text: 'Ann Lee', x: 72, y: Y - 12 },
+    ]
+    const n = ['A Title', 'Ann Lee', 'Abstract text here', 'Kechao Tang', 'and', 'Ru Huang', '2027. A Title', 'Ann Lee']
+    const { B, A } = pair({
+      lines,
+      points: [
+        ['bs1', 0],
+        ['be1', n.join('').length],
+      ],
+    })
+    const title = { ...unitOf('heading', 'A Title'), title: true as const, front: true as const }
+    const units = [
+      title,
+      unitOf('author', 'Ann Lee'),
+      unitOf('abstract', 'Abstract text here'),
+      unitOf('author', 'Kechao Tang'),
+      unitOf('author', 'Ru Huang'),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 3, -1, 4, -1, -1]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    expect(L.members[1]!.kind).toBe('author')
+    expect(L.members[3]!.kind).toBe('textnames')
+    expect(L.members[4]!.kind).toBe('textnames')
+    const made = L.members.filter((m) => m.unit >= units.length)
+    expect(made.length).toBeGreaterThan(0)
+    expect(made.some((m) => m.kind === 'inknames')).toBe(false)
+  })
+
   it('reads a glyph as an included figure’s where its partner on B is one, A’s form flattened', () => {
     const B = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640, form: true }] }])
     const A = docOf([{ lines: ['a paragraph', { text: 'Loss', y: 640 }] }])
@@ -985,5 +1148,28 @@ describe('carry: B’s marks onto A’s stream', () => {
       { name: 'zs', glyph: 9, box: 0 },
       { name: 'ze', glyph: 9, box: 5 },
     ])
+  })
+})
+
+describe("locate takes A's raw pages (lane mem-back)", () => {
+  // (each page's figure paths, `shapes`, are read by its figure texts alone, and the raw pages by the ink step alone: locate lets
+  // a page's shapes go once its figure texts are read, and every raw page once the ink units are made, so that the rest of locate,
+  // the wrap and the bundle run without them: 61 MiB of shapes and 61 of raw glyphs on 2609.19644v1)
+  it('lets each raw page go once its ink is made, and makes what it made with them held', () => {
+    const { B, A } = pair({
+      lines: ['Running Title', 'Body text here'],
+      points: [
+        ['bs1', 13],
+        ['be1', 27],
+      ],
+    })
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const held = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const raws: (PageInk | null)[] = rawOf(A)
+    const taken = locate(ins, A, align(B, A), { pages: raws, take: true })
+    expect(raws).toEqual([null])
+    expect(taken.units).toEqual(held.units)
+    expect(taken.members).toEqual(held.members)
+    expect(taken.groups).toEqual(held.groups)
   })
 })

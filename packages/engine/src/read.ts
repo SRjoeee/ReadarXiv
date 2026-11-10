@@ -14,6 +14,7 @@
 // (private use, a replacement character, a control), is `nu`: its text is no reading of its glyph (2307.16209v1's newtx sum
 // sign, which PDF.js reads by its code as "Í"). The glyph's state rides through pageInk on the same tag.
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
+import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, type PageInk, pageInk } from './ink.types.ts'
 
 /** what the back half needs of PDF.js: its getDocument and its operator codes */
@@ -90,6 +91,10 @@ export async function readPdf<X = never>(
   })
   // (each font's map, read once a document: by its id in the page's common objects)
   const maps = new Map<string, Set<string> | null>()
+  // (each font's name, and its name with its subset's tag taken off, one string a document: every glyph of a font holds the one,
+  // pageInk's `names` and docPageOf's `bases`; read once a glyph, each held its own, 72 MiB of 2610.19159v1's two Docs, lane L9)
+  const names = new Map<unknown, string>()
+  const bases = new Map<string, string>()
   const pages: ReadPage<X>[] = []
   let info: Record<string, unknown> | null = null
   try {
@@ -122,10 +127,11 @@ export async function readPdf<X = never>(
         shapesAll: o.shapesAll ?? false,
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
+        names,
       })
       const annotations = o.annotations ? ((await page.getAnnotations?.().catch(() => [])) ?? []) : null
       const view = [...page.view] as [number, number, number, number]
-      pages.push({ ...docPageOf(ink, view, page.rotate ?? 0), extra, annotations })
+      pages.push({ ...docPageOf(ink, view, page.rotate ?? 0, bases), extra, annotations })
       page.cleanup()
     }
   } finally {
@@ -182,7 +188,17 @@ function docPageOf(
   ink: PageInk,
   view: [number, number, number, number],
   rotate: number,
+  bases: Map<string, string> = new Map(),
 ): { page: DocPage; raw: PageInk | null } {
+  /** a font's name with its subset's tag taken off, one string a font (the reader's table) */
+  const baseOf = (font: string): string => {
+    let b = bases.get(font)
+    if (b === undefined) {
+      b = font.replace(/^[A-Z]{6}\+/, '')
+      bases.set(font, b)
+    }
+    return b
+  }
   const unread = ink.rotated
     ? 'rotated'
     : ink.capped
@@ -192,38 +208,44 @@ function docPageOf(
         : ink.degraded
           ? 'degraded'
           : null
+  // (each glyph's coordinates in the page's one array, glyph.ts PageGlyph: a field of its own each was a heap number of 16 bytes)
+  const c = new Float64Array(unread ? 0 : 8 * ink.glyphs.length)
   const glyphs: DocGlyph[] = []
   for (const g of ink.glyphs) {
     const [u, code, nu] = split(g.u)
     g.u = u
     if (!/\S/.test(u)) g.blank = true
     else delete g.blank
+    if (unread) continue
     const font = String(g.font)
-    glyphs.push({
-      u,
-      code,
-      font,
-      base: font.replace(/^[A-Z]{6}\+/, ''),
-      x0: g.x0,
-      x1: g.x1,
-      y: g.y,
-      top: g.top,
-      bottom: g.bottom,
-      size: g.size,
-      ix0: g.ix0,
-      ix1: g.ix1,
-      n: g.n ?? -1,
-      k: g.k ?? -1,
-      form: !!g.form,
-      blank: !!g.blank,
-      fill: g.fill ?? -1,
-      fid: (g as { fid?: number }).fid,
-      pid: (g as { pid?: number }).pid,
-      clipped: g.clipped,
-      unseen: g.unseen,
-      ...(nu ? { nu: true as const } : {}),
-      ...((g as { along?: number }).along !== undefined ? { along: (g as { along?: number }).along } : {}),
-    })
+    const o = 8 * glyphs.length
+    c[o] = g.x0
+    c[o + 1] = g.x1
+    c[o + 2] = g.y
+    c[o + 3] = g.top
+    c[o + 4] = g.bottom
+    c[o + 5] = g.size
+    c[o + 6] = g.ix0
+    c[o + 7] = g.ix1
+    glyphs.push(
+      new PageGlyph(c, o, {
+        u,
+        code,
+        font,
+        base: baseOf(font),
+        n: g.n ?? -1,
+        k: g.k ?? -1,
+        form: !!g.form,
+        blank: !!g.blank,
+        fill: g.fill ?? -1,
+        fid: (g as { fid?: number }).fid,
+        pid: (g as { pid?: number }).pid,
+        clipped: g.clipped,
+        unseen: g.unseen,
+        ...(nu ? { nu: true as const } : {}),
+        ...((g as { along?: number }).along !== undefined ? { along: (g as { along?: number }).along } : {}),
+      }),
+    )
   }
   const turned: DocTurned[] = []
   for (const t of ink.turned ?? []) {
@@ -235,7 +257,7 @@ function docPageOf(
     turned.push({
       u,
       code,
-      base: font.replace(/^[A-Z]{6}\+/, ''),
+      base: baseOf(font),
       n: t.n,
       k: t.k,
       at: t.at,
@@ -285,6 +307,7 @@ function marksOf(ink: PageInk): { marks?: DocMarks } {
   const paraEnds = (ink.paraEnds ?? []).map((x) => ({ ...lower(x), point: x.point, para: x.para }))
   const regions = (ink.regions ?? []).map((r) => ({ kind: r.kind, from: r.from, to: r.to }))
   const pictures = (ink.pictures ?? []).map(lower)
-  if (!paras.length && !paraEnds.length && !regions.length && !pictures.length) return {}
-  return { marks: { paras, paraEnds, regions, pictures } }
+  const fronts = (ink.fronts ?? []).map(lower)
+  if (!paras.length && !paraEnds.length && !regions.length && !pictures.length && !fronts.length) return {}
+  return { marks: { paras, paraEnds, regions, pictures, ...(fronts.length ? { fronts } : {}) } }
 }

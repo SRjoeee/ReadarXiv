@@ -23,7 +23,14 @@
 // in the family's italic; no math face), size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and
 // `pid`, so that two figures side by side never make one label), on one baseline (within RUN_DY of their size across it), at
 // most RUN_GAP of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends
-// the run. A run is a unit when it spells a word (two letters together) in a face
+// the run. TeX's own text in a picture (a glyph of no form, between the picture's points: a TikZ node's, a tcolorbox's that pgf
+// draws) is TeX's line: once its run spells a word, a glyph of another face (no math face) or another colour goes on with it, so
+// that a label and the address TeX set after it in the link's colour are one unit, and a list of addresses with the commas between
+// them (2611.03178v1's abstract box: "Project Page:" and its address were two units, the address left the original's where TeX set
+// it, a hole after the label's translation); a symbol TeX set before the first word (an icon) is none of it, and the run after
+// it on its line is set from its start where no ink of a figure's tells its anchor: TeX's line runs on from there ("Demo
+// Gallery:", its icon wider than its neighbours' and its start off their column, was read centred and drawn an em in). A run is a unit when
+// it spells a word (two letters together) in a face
 // that is no math face, every glyph of it a character a reader can trust (UNREAD); its text the glyphs' Unicode (NFKC, so that
 // a ligature's glyph reads as its letters) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
@@ -169,7 +176,7 @@ function inFrame(f, b) {
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
  */
-export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
+export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC, done = null } = {}) {
   const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
@@ -184,6 +191,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // their own (CMMI10 against CMR10) and stay apart)
   const familyOf = name => faceOf(name).replace(/-.*$/u, '')
   const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
+  // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
+  const texLine = (x, run) => run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
   const units = [], glyphMaps = [], turnedMaps = []
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -195,14 +204,16 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
     const S = streamOf(pg, own?.glyphs?.[pi])
     const runs = []
-    let run = null
-    const close = () => { if (run?.gs.some(x => !x.blank)) runs.push(run); run = null }
+    // (`prev`: the run right before in the stream, nothing but white space between, which TeX's line may go on from)
+    let run = null, prev = null
+    const close = () => { if (run?.gs.some(x => !x.blank)) runs.push(run); if (run) prev = run; run = null }
     for (const x of S) {
       const figure = !x.owner && (x.form || x.picture > 0)
-      if (!figure) { close(); continue }
+      if (!figure) { close(); prev = null; continue }
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
-        const joins = oneLine(x.font, run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const tex = texLine(x, run)
+        const joins = (oneLine(x.font, run.font) || tex) && Math.abs(x.size - run.size) <= 0.01 * run.size && (x.fill === run.fill || tex) && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
@@ -211,8 +222,21 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       }
       if (!run) {
         if (x.blank) continue
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
+        // (TeX's line going on from the run before it on its line, which it did not join (a symbol before its first word, an icon;
+        // a formula): set from its start, as the line runs on from there)
+        const p = prev, pf = p?.frame
+        const led = !!p && !x.form && !p.form && x.picture > 0 && x.pid === p.pid && Math.abs(x.ux - pf.ux) < 1e-3 && Math.abs(x.uy - pf.uy) < 1e-3
+          && Math.abs(across(pf, x.ox, x.oy)) <= RUN_DY * p.size && along(pf, x.ox, x.oy) >= p.s1 - RUN_BACK * p.size && along(pf, x.ox, x.oy) - p.s1 <= RUN_GAP * p.size
+        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy }, word: false, last: null, led }
+        prev = null
       }
+      // (whether it spells a word yet: two letters together, no space between, as WORD reads its text)
+      if (!x.blank) {
+        const letter = /^\p{L}$/u.test((x.u ?? '').normalize('NFKC'))
+        const last = run.last
+        if (letter && last?.letter && along(run.frame, x.ox, x.oy) - last.s1 < SPACE_GAP * Math.max(x.size, last.size)) run.word = true
+        run.last = { letter, s1: along(run.frame, x.ex, x.ey), size: x.size }
+      } else run.last = null
       run.gs.push(x)
       if ((x.clipped || x.unseen) && !x.blank) run.clipped = true
       if (x.code && !x.blank) run.code = true
@@ -260,10 +284,11 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const k = units.length
       const u = { k, page: pi + 1, group: figureGroup(k), text, font: r.font, size: r.size, fill: r.fill, angle: angleOf(f), x: first.ox, y: first.oy, ux: f.ux, uy: f.uy, length: s1 - s0, ascent, descent, anchor: 'centre', form: r.form, why: null }
       const room = roomOf(pg, f, u, r.gs)
-      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, a level
-      // line on its column's edge, or centred in it, is set from there, as TeX set it (a heading a class sets in a boxed
-      // panel); else its middle; the unit's set below may take its column's edge over either)
-      u.anchor = room.told ? room.anchor : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
+      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, TeX's line
+      // going on from a run before it is set from its start, and a level line on its column's edge, or centred in it, is set from
+      // there, as TeX set it (a heading a class sets in a boxed panel); else its middle; the unit's set below may take its
+      // column's edge over either)
+      u.anchor = room.told ? room.anchor : r.led ? 'start' : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
       if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
       u.under = room.crowded ? null : room.under
       units.push(u)
@@ -276,6 +301,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
+    // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
+    done?.(pi)
   })
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
 }

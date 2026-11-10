@@ -14,7 +14,7 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { prepareBack, stateOf } from '@readarxiv/engine'
+import { prepareBack, readArxiv, stateOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { classesOf, instrumentOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { statedOf, trailsOf } from './stated.mjs'
@@ -107,7 +107,10 @@ if (!refusal) {
 const tIns = performance.now()
 if (ins) {
   const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
-  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, ...(process.env.AXT_ARTEFACTS === '1' ? { artefacts: true } : {}) })) {
+  // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
+  // and the review; the proofs read A's pages again, as the back half read them)
+  const keep = process.argv.includes('--claims') || process.argv.includes('--review')
+  for await (const x of prepareBack(ins, arxivBytes, { pdfjs: { getDocument, OPS }, pdfOptions: { ...docOpts, ...LITE }, PL, deflate, inflate, paper: paperRef, made: madeId, now: () => performance.now(), classesOf, keep, ...(process.env.AXT_ARTEFACTS === '1' ? { artefacts: true } : {}) })) {
     if (x.kind === 'tally') { tally = x; continue }
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })
@@ -128,6 +131,10 @@ if (tally && process.argv.includes('--review')) {
   mkdirSync(join(OUT, 'review'), { recursive: true })
   writeFileSync(join(OUT, 'review', `${id}.json`), `${JSON.stringify(reviewOf(ins, tally))}\n`)
 }
+// (A's pages as the back half read them, where it kept them; else read again once, as it reads them (rebuild/mem-back lets them
+// go once located): the proofs and the --baseline statement read them)
+let pagesAOnce = null
+const pagesAOf = async () => (pagesAOnce ??= tally?.pagesA ?? (await readArxiv({ getDocument, OPS }, arxivBytes, { ...docOpts, ...LITE })).pages)
 // ---- the add-on's proofs (--prove: PDF.js's, nothing moved and each group enclosing exactly its ink; --pixels: poppler's (with
 // --cairo its OFF renders by the Cairo backend, prove.mjs), all
 // ON is A and each kind OFF changes A only inside its ink)
@@ -138,11 +145,12 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   W.set(arxivBytes)
   W.set(tally.addOn.bytes, arxivBytes.length)
   const tp = performance.now()
-  proofs = { glyphs: await proveGlyphs({ W, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
+  const pagesA = await pagesAOf()
+  proofs = { glyphs: await proveGlyphs({ W, pagesA, located: tally.locatedAll, addOn: tally.addOn, pdfjs: { getDocument, OPS }, options: { ...docOpts, ...LITE } }) }
   proofs.glyphs.ms = Math.round(performance.now() - tp)
   if (process.argv.includes('--pixels')) {
     const tq = performance.now()
-    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA: tally.pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
+    proofs.pixels = await provePixels({ W, original: arxivBytes, pagesA, located: tally.locatedAll, addOn: tally.addOn, scratch: join(OUT, 'scratch', `${id}-${process.pid}`), PL, off: process.argv.includes('--cairo') ? 'cairo' : 'splash' })
     proofs.pixels.ms = Math.round(performance.now() - tq)
   }
 }
@@ -213,8 +221,12 @@ if (BASELINE && existsSync(join(BASELINE, `${id}.prepare.json`))) {
   const trails = located ? trailsOf(located.members.flatMap((m) => m.elements ?? [])) : []
   // (the number each unit's label states, Label.num, by its ord in the dump)
   const labels = new Map(dumpOrds.map(([o, m]) => [o, located?.members[m]?.labelAt?.num?.[0]]).filter(([, n]) => n))
-  for (const { u, why } of statedOf(base, units, { trails, labels })) {
-    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true })
+  // (arXiv's glyphs on each page, as the back half read A: (f') reads a line's glyphs of ink)
+  const pagesA = ins ? await pagesAOf() : null
+  const glyphs = (p) => pagesA?.[p - 1]?.page?.glyphs ?? null
+  // (each statement's cause, today's ord and the candidate's unit holding it whole: what the parity joins by, join.mjs heldJoin)
+  for (const { u, why, cause, holder } of statedOf(base, units, { trails, labels, glyphs })) {
+    units.push({ id: u.id, ord: ord++, kind: u.kind, text: u.text, pieces: u.pieces, state: 'unlaid', why, replaced: true, stated: { ord: u.ord, cause, ...(holder ? { holder } : {}) } })
     states.unlaid++
   }
 }

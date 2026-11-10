@@ -566,7 +566,7 @@ with equal wires sent once, three attempts with backoff, a 429 cooling its trans
 translator (50 % of 20, never the chain's last), halving where a request is wrong for its content, one acceptance rule,
 fall-through to the next translator per unit, one re-ask where a translator asks it (an LLM), the runs floor past the last,
 whole or not at all: where a stretch comes back from no translator the unit is refused and its original stays, never its
-English between translated stretches (PDF-READER §18.18).
+English between translated stretches (PDF-READER §18.21).
 An element its reader states TeX sets after the unit's text (`el.after`: the PDF's backref list of the pages citing a
 bibliography entry, PDF-READER §19.13) is given to no translator: the chain asks for the unit without it and puts it back
 after the translation, the white space it states before it, on every wire and the runs floor (`chain.ts` `tailOf`).
@@ -1024,6 +1024,22 @@ only how it meets the rest of the extension.
   lost 314 units against the frozen baseline where today's loses 3 and made 6,614 figure ticks and labels into units,
   for a saving (two compiles instead of three, TeX 15 % less at the median) that was the very final pass those figure
   texts need.
+  **What the back half holds** (2026-11-10, after 2609.19644v1 died of memory on staging). It reads arXiv's PDF whole
+  and aligns it with B whole, and holds past each step only what a later step reads: a page's glyph coordinates in the
+  page's one `Float64Array` (`glyph.ts` `PageGlyph`, read by getters; a field of its own each was a 16-byte heap number),
+  a font's name one string a document (pageInk's `names`, readPdf's bases); A's raw pages locate's alone (`take`: each
+  let go once the ink step has made today's page of it, its figure paths once its figure texts are read, figureUnitsOf's
+  `done`); the wrap reads each page's glyphs' (n, k) and facts (`wrapPageOf`) and keeps the section alone, A and it never
+  composed nor the whole hashed (wrapOf's `compose: false`); and read, align and locate run in a frame of their own
+  (`placedOf`), so that A's Doc is let go there and, unless `keep` (the lab's claims and review), B's, the instrument's
+  ink emptied. Measured natively on Linux (arm64, the box child's flags, its data limit as arm64 counts it: 1,024 MiB
+  and V8's 256 MiB code range, 1,280), the lowest data limit each paper prepared under three times of three:
+  2609.19644v1 (71 pages, a 26 MB source and PDF), which died under 1,280 as on staging, 1,120; 2610.40394v1 1,200;
+  2610.19159v1 (163 pages), which died at the 768 MiB heap cap, 1,240; 2610.42112v1 960 and 2610.37668v1 800 or less
+  (once each). Under a lower limit each dies first where the back half no longer holds anything of a document whole:
+  2609.19644v1 in the front half's adapter (instrumentOf, its own copies of B's glyphs), 2610.40394v1 reading A,
+  2610.19159v1 in locate. Every object of the 88 corpus papers and of 2609.19644v1 is the same (stage 1a and I6). What
+  the box itself holds through the back half (the source, its files, B's bytes) is the box's to let go.
 - **One set of settings** (§9). The service, the language, the prompt and the highlight are the extension's.
   `pdfReader` (v19) holds the reader's own; its appearance became the extension's `theme` at v20, and what it translates
   (`classes`, "What to translate") joined it at v21, in the place of the image switch, which is the HTML page's alone since. The
@@ -1125,6 +1141,25 @@ only how it meets the rest of the extension.
   Live (Microsoft, 4 of 2608.25210v2's heads, `lab/translate/live-html.ts`): kept with no stop, each head ran into the next
   sentence with no stop (「当前推断来源的方法不可靠 @b# 为了…」), and on no wire 3 of 4 came back with none; kept with the stop,
   4 of 4 came back a sentence of their own, the stop inside the group (「@a# 目前推断来源的方法并不可靠。@b#」).
+- **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
+  group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
+  glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers
+  wire carries a `must` group alone, since a marker is a hard sentence boundary to Microsoft's endpoint and it moves a marker
+  pair inside a sentence to the reply's end, empty: of the inline style groups today's wire sent as markers, in the 22 parity
+  pairs' stored replies, bold 140 came back around their words and 166 moved, italic 104 and 709, `\textcolor` 0 and 36. So
+  2610.17024v1's `\textbf{(B1)}` and 2608.25210v2's `\textcolor{blue}{value}` came back plain, on staging as in production.
+  The chain reads every accepted reply, stored or fresh, from every translator and the runs floor, with each group it did not
+  bring back (absent, or an empty copy) placed around its own text where the translation states it: that text, compatibility-
+  equal (NFKC: a full-width parenthesis, U+FF08, is "("), white space aside, once in the translation as whole words (UAX #29's word
+  boundaries, `Intl.Segmenter`) in the place the reply holds around the group (its nearest group the reply brought back, else
+  the unit), and once in the source's same place, the group's alone (`packages/translate/src/groups.ts` placeGroups;
+  `CHAIN_RULES` `groups`, so every row is read again from the stored replies, nothing asked again). A label, an identifier, a
+  name a translator writes as it is gets its style back on every engine; a group whose words were translated has no
+  counterpart stated and stays plain (only a translator that keeps markup brings it back), as does one holding an element or
+  another group, or one whose text the translation or the source holds twice. No wire changes, no byte is sent; reading costs
+  11 µs a unit (34 µs a unit holding a group that is not `must`). Over the 88 corpus papers' stored replies read as the
+  markers wire would bring them, 665 groups in 75 papers get their style back (575 a face, 90 a colour), and 2,637 that draw
+  none of their own (a bibliography's fields, bare groups) go back around their words.
 - **A bundle's unit reaches every translator one way** (lane unit-projection, 2026-11-09). A unit of `packages/format`
   (its pieces as the prepare writes them) is not the translator contract's: a nested unit (a footnote set inside a
   paragraph) is a piece of its own, and an element's TeX source, a group's open and close and a heading's depth only name
@@ -1141,6 +1176,56 @@ only how it meets the rest of the extension.
   word: a sentence ran on past it, or the mark opened the next sentence. Before, the extension's reader cast format's units,
   and both adapters threw on every unit that holds a nested unit, so translating here gave those units no translation
   (152 units of 36 of the 88 papers).
+- **The sentences a unit is asked in** (lane fig-cut, 2026-11-10). The tags wire asks Google and Chrome for the sentences the
+  shared cutter (`packages/text` `sentenceCuts`) finds, a boundary tag before each. The HTML page's splitter, which it
+  restates, cut a wire whose white space was already collapsed; the PDF's units carry their TeX source's own lines, and
+  Intl.Segmenter breaks at every line end (UAX #29 SB4), so every source line cut a sentence: 34,791 of the 88 corpus papers'
+  71,288 cuts, in 8,405 of 18,101 lit units, stood at a line end with no stop before it (`the upper bound⏎‖of Hardy's`), and
+  1512.03385v1's leading `\vspace` was a sentence of its own. The cutter now reads the text's white space as TeX reads a
+  paragraph's (and HTML its text): a run is one space, and only an empty line, TeX's `\par`, ends a sentence there. A
+  citation was read as an annotation of the sentence before it wherever it stood, and Intl.Segmenter never breaks before a
+  lower-case word, so `… expensive. \citet{x} proposes …` was one sentence. Microsoft's own boundaries over the stored rows,
+  at a citation after a stop and white space with a lower-case word after it: a sentence begins there 54 of 54 times after
+  a sentence's last word, 0 of 11 after an abbreviation's (`Pham et al. \cite{x} classify`). So a citation after a
+  sentence's stop and the space TeX sets after it, with a word in lower case after it, opens the next sentence (the kind's
+  stand-in `citation`); elsewhere it annotates the sentence it is set against, as before (`… holds.\cite{x} We …`, `…
+  Harness? \cite{x}, LRB = …`). Over the 88 papers' 18,101 lit units: 35,198 cuts at a line end gone, in 8,717 units of all
+  88 papers; 39 added, each a citation opening a sentence before its verb; one lost that the line end alone had made
+  (`… no history. 220⏎firm-runs per model.`, a number then lower case, which Intl.Segmenter continues). Against today's
+  cutter over the same units restated in today's pieces (`mt.mjs` `serializeTags`, `cutsOf`), the units asked in the same
+  sentences rise from 9,918 to 16,517 of 17,957 (paragraphs 8,609 of 8,733); most of the rest were references, where a tie
+  read as a word (the source reader stated it `other`, as it stated a forced break) and as a space in today's cutter, so
+  `R.~S.~Sutton` was cut after its initials. The source reader now states a tie `~` a `space` and a forced line break (`\\`,
+  `\\*`, `\\[…]`, `\newline`) a `break` (`pipeline/instrument.mjs` `elementKindOf`): TeX sets a tie as an interword space
+  whatever the space factor (the author's word that a stop before it ends no sentence) and a forced break as a line's end; the
+  contract's cutter reads each as a space. An element's kind enters no unit id (`unitId` reads its source); today's `classOf`
+  names neither, and the engine's port of it reads both as none (`locate/today/deps.mjs`), its end marks pass over both
+  (`facts.ts` `INKLESS_KINDS`). Over the 88 papers: 6,102 units of 87 papers state 16,088 ties and 310 breaks so; 1,160 lit
+  units' tags wires change; the units asked in today's sentences rise to 17,587 of 17,957 (references 3,538 of 3,780); one
+  markers wire changes (2307.16209v1: a display followed by `\\` and a capital now takes its stop, `displayEnds`' rule for an
+  element that reads as white space); no adapter changes, and a moved unit's row moves with it (its key holds the unit's
+  sha256). For the cutter's own two rules, Google's and Chrome's behaviour digest moves (a fixture unit of our own words with both shapes, `SOURCE_LINES`; no earlier one held
+  either), and with it the chain's identity, so a page's rows are made again from the answers store, whose key is the wire's
+  bytes: only a unit whose tags wire changed is asked again. Microsoft reports its own sentences, which this cutter does not
+  touch, and its digest stays.
+  **What Microsoft does after an abbreviation's stop** (1512.03385v1 p7: "Fig.~\ref{fig:std} shows" came back
+  「无花果。7 显示…」, the fruit). The request is `Analysis of Layer Responses. @c# Fig. @d# shows …`, today's wire and the markers wire
+  byte for byte, the tie and the reference one marker, the space after the stop the wire's own (a marker right after a full
+  stop is set apart); Microsoft's own sentence lengths cut `@c# Fig.` off, and it translated the word alone. Over every
+  stored Microsoft row, at a stop followed by a tie, an element and a lower-case word, Microsoft cuts after `Fig.` 86 of 121
+  times (the 35 kept inside brackets, `(see Fig. @h# a)`), `Figs.` 10 of 10, `Eqs.` 12 of 12, `no.` 45 of 45, and never after
+  `Eq.` (175), `Sec.` (37), `vol.` (61), `e.g.`, `i.e.`, `et al.`; with the number written as text, `Fig. 7 shows`, 0 of 8. So
+  it reads `Fig.` and `No.` as abbreviations only before a number, and a marker is none. The tie is TeX's own statement that
+  the stop ends no sentence (LaTeX's `~` and `\ ` after a non-final period, an interword space whatever the space factor),
+  and LaTeXML writes it as a no-break space, which the HTML page sends as it is (`Fig.&nbsp;@d#`, no space of the wire's).
+  Live (Microsoft, zh-Hans, 2026-11-10, `lab/translate/live-html.ts` today mode, 12 windows of today's wire where it had cut,
+  each in three forms, 4 requests): as sent, a sentence began after the stop in 12 of 12; with a no-break space (U+00A0) for
+  the wire's space the reply was byte for byte the same, text and sentence lengths, in 12 of 12 (it reads U+00A0 as a space and
+  gives none back); with no space none was cut, but the label came back in English in 12 of 12 (`Fig.@b#显示…`), §6.2's
+  `word.@a#`. Neither form is a fix: a rule of the wire stands only where it is the source's own fact, sent alike on every
+  wire and harming no engine (the owner's standing rule), and the no-break space helps none here. Both wires collapse a
+  source's own U+00A0 with the rest of its white space (JavaScript's `\s` holds it), and the cutter reads a stop before it as
+  before a space. The wire is unchanged; "Fig." before a reference stays Microsoft's to cut.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its

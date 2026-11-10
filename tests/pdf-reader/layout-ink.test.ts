@@ -22,6 +22,35 @@ const text = (font: string, size: number, tm: number[], ...shown: Op[]): Op[] =>
 const show = (...glyphs: unknown[]): Op => [OPS.showText, [glyphs]]
 const only = (gs: Glyph[], u: string) => { const x = gs.find(q => q.u === u); if (!x) throw new Error(`no glyph ${u}`); return x }
 
+describe('pageInk reads a font\'s name once', () => {
+  // (PDF.js's FontInfo.name decodes a new string from the font's buffer at every read: read once a glyph, each glyph of a page held
+  // a string of its own, 19.5 MiB of B's Doc on 2610.19159v1 (lane L9). Read once a font, and with the reader's `names` table once a
+  // document, every glyph of a font holds the one string: lane mem-back)
+  const counting = () => {
+    let reads = 0
+    const font = { fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.7, descent: -0.2, isType3Font: false, vertical: false, get name() { reads++; return `ABCDEF+${'CMR10'}` } }
+    return { font, reads: () => reads }
+  }
+  const page = (font: unknown) => ({ get: (id: string) => { if (id !== 'fc') throw new Error(`no object ${id}`); return font } })
+  const shown = text('fc', 10, [1, 0, 0, 1, 72, 700], show(g('a'), g('b'), g('c')), [OPS.setFont, ['fc', 10]], show(g('d'), g('e')))
+  it('once a page, every glyph its name', () => {
+    const c = counting()
+    const { glyphs } = pageInk(OPS, list(shown), page(c.font), { rotate: 0, indices: true })
+    expect(glyphs.map(x => x.font)).toEqual(Array(5).fill('ABCDEF+CMR10'))
+    expect(c.reads()).toBe(1)
+  })
+  it('once a document, the reader\'s table across its pages', () => {
+    const c = counting(), names = new Map()
+    for (let p = 0; p < 3; p++) pageInk(OPS, list(shown), page(c.font), { rotate: 0, indices: true, names })
+    expect(c.reads()).toBe(1)
+  })
+  it('a font of no name its id, as before', () => {
+    const none = { fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.7, descent: -0.2, isType3Font: false, vertical: false, name: '' }
+    const { glyphs } = pageInk(OPS, list(shown), page(none), { rotate: 0 })
+    expect(glyphs.map(x => x.font)).toEqual(Array(5).fill('fc'))
+  })
+})
+
 describe('pageInk', () => {
   it('a glyph is placed as the canvas places it', () => {
     const { glyphs, boxes, capped, rotated } = ink([[OPS.save, []], [OPS.transform, [2, 0, 0, 2, 0, 0]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A', 722), g('b', 556))), [OPS.restore, []]])

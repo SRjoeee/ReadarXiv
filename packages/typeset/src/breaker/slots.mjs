@@ -44,7 +44,12 @@ function floorOver(b, below, L, st, s) {
   // it, measure.mjs paraGapsOf: a NeurIPS \parskip of 5.5 pt under 11 is kept over the leading, where without it a gap of a
   // pitch and a skip equalled a leading of 1.5 and the paragraphs ran together)
   const p0 = b.pitch0 ?? 1.2 * s, skip = Math.min(Math.max(0, below - p0), p0)
-  const floor = b.B.at(-1) - below + L * p0 + skip
+  let floor = b.B.at(-1) - below + L * p0 + skip
+  // (a state that borrows room under it, TeX's (Room.runs, Room.sep): the gap measured from the borrow's limit, its foot,
+  // which stands TeX's separation over the next ink; at its own leading that much higher, the original's skip past the
+  // separation (a list's \itemsep, flush bottom's stretch) the borrow's. Lab option (i) of 2026-11-09, shown to the owner alone and with (iii):
+  // 1810.04805v2's references that need every line of theirs stood at the original's pitch among entries spread to 1.38)
+  if (b.B.at(-1) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)
   return floor > low + 1e-9 ? floor : null
 }
 /**
