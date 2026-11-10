@@ -20,7 +20,7 @@ glyphs as PDF.js's text content gives them, their PDF fonts) and the original's 
 today's prepare dump states them), never off v2's part where the two can differ (`fidelity.mjs`).
 
 ```
-node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [<pair>…]
+node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off] [<pair>…]
 ```
 
 `--toggles=on` lays and draws both readers with every switch of "What to translate" on (figure and table text, headers and
@@ -38,6 +38,7 @@ when a page is worse than today's, or when the run is not judged whole: the gate
 |---|---|---|
 | v2's lay | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --out=<work>/v2 <pair>…` | each page laid by the reader's own lay (`packages/reader/src/compose/typeset.ts` `typesetLay`: `layPage` under the rules, toggles and options the reader passes, nothing more) over the paper's part and the pair's door rows, the layered metrics and the served hyphenation patterns, driven page by page as `lab/typeset/checkpoint/laid.mjs --entry` drives the checkpoint's (gate-l1.ts; `hook.mjs` puts the reader's lay in place of gate-l1's own entry call) |
 | the drawing | `heavy-slot.sh e2e -- node lab/typeset/parity/render.mjs --work=<work> --out=<out> [--pages=<n>,…] <pair>…` | arXiv's page (PDF.js) and its glyphs' runs (its text content: each run's box, baseline, size and PDF font), today's (`today/entry.mjs`) and v2's (`v2page/main.ts`) drawn in one Chromium at PDF.js's scale 1, device scale 2; each side shot whole, with its translated text alone (its figure texts with it) and without its text (its copy, the original's ink it keeps, its crops); what each drew read back (`measure-dom.mjs`: each crop with its piece and its source on A) and its pixels read (`analyse.mjs` with `pixels.mjs`); the run's manifest `<work>/raw/run.json` |
+| the fresh rows' fill (its own step, never a gate's) | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --fresh=fill --out=<scratch> <pair>…` | the replies the cache lacks asked of Microsoft's keyless endpoint through the translate package's adapter, one request at a time, each recorded in `$AXT_LAB_DATA/refactor-2026-11/parity/fresh-rows/` (`AXT_PARITY_FRESH_ROWS`) under the chain's key; no page laid (below, "Fresh rows") |
 | the verdict | `AXT_L1_BUNDLES=<the bundles v2.mjs laid> node lab/typeset/parity/measure.mjs --work=<work> --out=<out> [<pair>…]` | the measures below (`verdict.mjs`, `fidelity.mjs`) over the run's own drawing, `parity.json` and `index.html`; it reads the part's joins and page numbers from the bundles, so it is told the same ones v2.mjs laid |
 
 On the maintainer's machine (shared with other lanes' jobs, 2026-11-08) the 22 pairs took 15 s to lay and 954 s to draw
@@ -97,7 +98,8 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   for it, in their order and at one way of placing them alone, the groups today's unit had round them gone, the sentences
   counted in v2's projection; where the row cannot be said so exactly, none (the unit stays the original's, and `shown`
   counts it). Both lay under the default toggles
-  (references and the author block the original's).
+  (references and the author block the original's). Where no stored row serves v2's unit, v2's side is laid with a fresh row,
+  the one a reader gets ("Fresh rows" below), and the sheet says so on every unit it touches.
 - **The original**: arXiv's PDF (its Info `/Author`, arXiv's metadata; its `cite.*` destinations, hyperref's: read by PDF.js in
   measure.mjs), arXiv's page (its pixels, its vertical rules read off them, its link annotations), the part's members
   (their lines on A, TeX's alignment, font state, labels and measure; `dir` for a turned text), else today's prepare dump
@@ -269,6 +271,40 @@ whose rows hold none, nor keep them, `noRow`), which v2 then leaves the original
 difference, a run-in's `gap` beside it and its cell's place in a grid group are listed as such (`nearer` "unmeasured"), never
 worse; the sheet lists every page with its unmeasured units and their count, and its summary states the whole count
 (`verdict.mjs` unmeasuredOf, the result's `unmeasured`).
+
+## Fresh rows: what a reader gets where no stored row serves v2's unit (lane parity-fresh, 2026-11-11)
+
+The stored rows are today's replies to today's units; they serve v2 only where v2 cuts a unit as today did. Where it does not
+(an identifier now an element, a bold run stated as a group, several of today's units joined, a unit today never had), the
+sheet drew v2 as the original's there, which no reader of the site sees: the owner read it as v2 forgetting to translate, and a
+real defect (arXiv's stamp sent for translation) stayed invisible. So v2.mjs lays such a member with a fresh row (`fresh.mjs`):
+the translate package's own chain (`chainOf`: the wire, the read, `accept`, the groups placed, the runs floor) over Microsoft's
+keyless adapter, production's default lane, through a cache in lab-data keyed by the chain's own key (`keyOf`: the translator's
+identity, the target, the wire's digest), every reply recorded, accepted or refused, so that each wire is asked once ever and
+every later sheet is drawn offline. Today's side keeps its stored rows. A member gets one where (the entry's rows, gate-l1.ts):
+no stored row serves its unit (`no-row`); its stored row is today's row of another unit said in v2's (`unit`: gate-l1's `said`,
+today's flat text of a figure text v2 holds a group in, a unit whose kept runs v2 holds as elements); or its cell's door row is
+today's group decision `kept` (`group`: today's layerRows stores such a cell with no pieces, so the stored rows hold no reply of
+it, and v2's own group decision runs on the fresh ones, the coordinator's ruling of 2026-11-11; a sweep keeping those pieces
+would make it like-for-like). A member the prepare gives a reason (`why`) or the paper keeps is sent nothing, as the reader
+sends it nothing.
+
+`--fresh=cache` (the default) reads the cache alone: a wire it lacks is never fetched, the unit left as before (no row, or its
+stored row), and the log names how many (`freshMissing`); `--fresh=fill` fills it, slowly, and lays nothing; `--fresh=off`
+withholds every fresh row, which gives the sheet byte for byte as before this lane. v2.mjs's file records `fresh` (the
+members laid with a fresh translation) with `freshCause`, `freshRefused` (the translator refused it: left as before),
+`freshMissing`, and `freshNew` (sent, but today had no unit of it: nothing of today's to compare, each v2's own decision to
+translate). `unmeasured` (`noRow`) then means only that neither a stored row nor a fresh one serves the unit.
+
+On the sheet a fresh unit is tinted on v2's pane and listed on its page with v2's size and line count against the original's,
+and the run lists every page with its fresh units and, apart, what v2 sends that today never had. Its measures, the
+coordinator's ruling of 2026-11-11: today and v2 draw two translations there, so a measure whose two distances follow from the
+length of the text drawn (`line-count`; `size`, a unit's, a size tie holding one, a figure text's or a name's; `stretch`; the
+highlight's sentence granularity: `verdict.mjs` FRESH_UNJUDGED) is listed `fresh`, never worse nor nearer; every other measure
+(anchor, align, gap, cross, turn, over, frame, block, elements, erased, pixels, weight, links, borders, ink, folio, lead,
+scripts, toggles, shown, labels, figures, groups, the highlight's coverage, and `style`, each side's share against the
+original's own) is judged as anywhere, and each difference that touches a fresh unit is tagged (`fresh`, its words saying the
+two sides drew different translations: `tagFresh`). A page worse through a judged measure of a fresh unit is v2's finding.
 
 Beside the verdict each side's faults against absolute bounds are measured (and for the measures above each side's own
 count: text over ink, lines past the frame or the block, elements drawn otherwise, glyphs shown in part, groups mixed, a
