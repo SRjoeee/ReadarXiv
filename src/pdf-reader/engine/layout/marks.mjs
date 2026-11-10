@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { BACKREF_LIST, calledAt, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
@@ -59,6 +59,11 @@ const URL = /^\\(?:url|href)(?![A-Za-z@])/
  *  a DOI written out, letters and all; none of TeX's special characters — no command, so it reads nothing after it and both its
  *  marks go */
 const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
+/** an identifier the front end keeps (latex-front.mjs identifierSource: `llm\_equal\_human`, `\{root\_question\}`): TeX sets its
+ *  characters as written, as a code mark's, its class `code`, both its marks. As a paper's macro (`macro`) it had its opening
+ *  mark alone, its end told by the text after it, and where a forced break or another element followed it (2608.25210v2 p3's
+ *  and 2610.22195v1's prompts) its glyphs were read as the unit's text, the unit left unlocated */
+const identifierPiece = identifierSource
 /** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
@@ -86,7 +91,7 @@ export function classOf(piece) {
   if (CITE.test(src)) return 'cite'
   if (EQREF.test(src)) return 'eqref'
   if (REF.test(src)) return 'ref'
-  if (CODE.test(src)) return 'code'
+  if (CODE.test(src) || identifierPiece(src)) return 'code'
   if (URL.test(src)) return 'url'
   if (FOOTNOTE_MARK.test(src)) return 'footnote'
   if (NUMBER.test(src)) return 'number'
@@ -1467,7 +1472,8 @@ export function headEnd(pieces, from = 0) {
       return w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src) ? k - 1 : k
     }
     if (p.t === 'open') continue
-    if (p.t === 'ph') { if (INLINE.test(p.src)) return k; continue }
+    // (an inline formula, and an identifier, text TeX sets as written (identifierPiece): the head's first word)
+    if (p.t === 'ph') { if (INLINE.test(p.src) || identifierPiece(p.src)) return k; continue }
     return k + 1
   }
   return pieces.length
@@ -1657,7 +1663,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
       const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
-      if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
+      // (an identifier that ends in a text symbol, `\}`, keeps its closing mark: TeX skips no space after a control symbol)
+      if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src) && !identifierPiece(p.src)) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
     // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)

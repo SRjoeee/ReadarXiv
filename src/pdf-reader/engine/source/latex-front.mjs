@@ -1560,6 +1560,15 @@ export function identifiersIn(s) {
   }
   return out
 }
+/** whether a placeholder's source is an identifier keepIdentifiers keeps: no command, no address, read as TeX sets it (a text
+ *  symbol its character, symbolText) one identifier whole. Text TeX sets as written: a unit's first word where it opens one
+ *  (startOf, marks.mjs headEnd), a code mark with both its marks (marks.mjs classOf) */
+export const identifierSource = src => {
+  if (typeof src !== 'string' || /^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return false
+  const t = src.replace(/\\(?:[A-Za-z@]+(?:\{\})?[ \t]*|[^A-Za-z@])/g, cs => symbolText(cs.trim()) ?? '\u0000')
+  const at = identifiersIn(t)
+  return at.length === 1 && at[0][0] === 0 && at[0][1] === t.length
+}
 /** each identifier (identifiersIn) one placeholder, written as the paper writes it, read over a unit's pieces as TeX sets them
  *  (keepRead: `llm\_equal\_human`, `run\textunderscore id`, `\{root\_question\}`). It is no prose: sent, its words came back
  *  translated inside it (2608.25210v2's `llm\_equal\_human`, its last part drawn as the Chinese word for "human"); kept, it is an
@@ -3551,7 +3560,8 @@ export function startOf(pieces) {
       if (pieces[q]?.t === 'text') { k = q - 1; continue }
       break
     }
-    if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
+    // (an inline formula or citation, and an identifier, text TeX sets as written (identifierSource): the first word)
+    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src))) { startAt = k; startCut = -1; break }
     if (p.t !== 'ph') break
   }
   return [startAt, startCut]
