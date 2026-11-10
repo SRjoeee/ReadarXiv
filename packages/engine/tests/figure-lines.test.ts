@@ -691,6 +691,25 @@ describe('figure-lines: F3, a figure’s paragraph is one text; an item’s mark
       expect(figureLinesOf([page], fig, () => false, null)).toEqual([])
     }
   })
+  it('reads the enumerators LaTeX’s list counters print: roman numerals, a number of any length, letters, bullets and dashes', () => {
+    // (\roman and \Roman's "ii." and "IV)", "(iii)"; \arabic's past 999; "i." an \alph's or a \roman's, either list)
+    for (const [marker, next] of [
+      ['ii.', 'iii.'],
+      ['IV)', 'V)'],
+      ['(iii)', '(iv)'],
+      ['1000.', '1001.'],
+      ['i.', 'ii.'],
+      ['i.', 'j.'],
+      ['•', '•'],
+    ]) {
+      const { page, fig } = pageOf([body(`${marker} the first item here`), body(`${next} the second item here`)])
+      const G = page.glyphs as Glyph[]
+      expect(figureLinesOf([page], fig, () => false, null).map((t) => t.label.map((g) => G[g]!.u).join(''))).toEqual([
+        marker,
+        next,
+      ])
+    }
+  })
   it('reads no label where no list stands: an initial opening a reference’s line, a bracket’s end (2609.19644v1 pp. 66, 70)', () => {
     // ("S. Smith and P. Li. A title" alone; "64) and the rest" with no "63)" or "65)"; "A." and "C." are no list)
     for (const lines of [

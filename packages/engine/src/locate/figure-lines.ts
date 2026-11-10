@@ -550,9 +550,19 @@ interface Read {
   marker: number[]
 }
 
-/** an item's marker, a cluster that spells no word: a dash or a bullet; or one letter or a number of three digits at most, a
- *  bracket before it or not, then a full stop or a closing bracket ("A.", "c)", "(b)", "1.") */
-const MARKER = /^(?:[\p{Pd}•◦‣⁃∙▪▫●○*]|\(?(?:\p{L}|\p{N}{1,3})[.)])$/u
+/** an item's marker, a cluster the enumerators LaTeX's list counters print: \arabic's number, \alph's or \Alph's letter,
+ *  \roman's or \Roman's numeral, a bracket before it or not, then a full stop or a closing bracket ("1.", "c)", "(b)", "iv)");
+ *  or itemize's bullet or dash, as other producers set them too. A list (`listed`) decides it is one */
+const MARKER = /^(?:[\p{Pd}•◦‣⁃∙▪▫●○*·∗]|\(?(?:\p{N}+|\p{L}|[ivxlcdm]+|[IVXLCDM]+)[.)])$/u
+/** a roman numeral as \roman prints one (lower case), and its value */
+const ROMAN = /^m{0,4}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/
+const ROMAN_DIGIT: Record<string, number> = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }
+const romanValue = (s: string) =>
+  [...s].reduce((t, ch, k) => {
+    const v = ROMAN_DIGIT[ch]!,
+      next = ROMAN_DIGIT[s[k + 1] ?? ''] ?? 0
+    return t + (v < next ? -v : v)
+  }, 0)
 /** a sentence's end, closing marks after it */
 const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["')\]\u201d\u2019]*$/u
 
@@ -618,22 +628,30 @@ function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
 
 /**
  * F3: an item's marker is one of a list: another line of its figure opens with a marker of its form at its left edge
- * (PARA_ALIGN_TOL of the size), the next one or the one before ("A." and "B.", "(a)" and "(b)", "1." and "2."; a bullet or a
- * dash the same). Where none does, the line opens with no marker: a name's initial opening a reference's wrapped line ("S.
- * Smith", 2609.19644v1 p66), a bracket's end a line before opened ("64)", p70)
+ * (PARA_ALIGN_TOL of the size), the next one or the one before ("A." and "B.", "(a)" and "(b)", "1." and "2.", "ii." and "iii.";
+ * a bullet or a dash the same). A letter that is a roman numeral too ("i.", "v)") is read both ways. Where no line does, the line
+ * opens with no marker and its mark goes with its text: a name's initial opening a reference's wrapped line ("S. Smith",
+ * 2609.19644v1 p66), a bracket's end a line before opened ("64)", p70), and a figure's one enumerated line alike
  */
 function listed(lines: readonly Line[], reads: Read[], glyphs: readonly G[]): void {
-  const keyOf = (s: string) => {
-    const m = /^(\(?)(?:(\p{L})|(\p{N}{1,3}))([.)])$/u.exec(s)
-    if (!m) return { form: s, v: null as number | null }
-    const letter = m[2]
-    return {
-      form: `${m[1]}${letter ? (letter === letter.toUpperCase() ? 'A' : 'a') : '1'}${m[4]}`,
-      v: letter ? letter.codePointAt(0)! : Number(m[3]),
-    }
+  /** the forms a marker is of, each with its value in its sequence (none for a bullet or a dash) */
+  const formsOf = (s: string): { form: string; v: number | null }[] => {
+    const m = /^(\(?)(.+)([.)])$/u.exec(s)
+    if (!m) return [{ form: s, v: null }]
+    const [, open, body, close] = m as unknown as [string, string, string, string]
+    if (/^\p{N}+$/u.test(body)) return [{ form: `${open}1${close}`, v: Number(body) }]
+    const out: { form: string; v: number | null }[] = []
+    const upper = body === body.toUpperCase()
+    if (/^\p{L}$/u.test(body)) out.push({ form: `${open}${upper ? 'A' : 'a'}${close}`, v: body.codePointAt(0)! })
+    const low = body.toLowerCase()
+    if ((upper || body === low) && ROMAN.test(low))
+      out.push({ form: `${open}${upper ? 'I' : 'i'}${close}`, v: romanValue(low) })
+    return out
   }
   const ms = reads.map((r, i) =>
-    r.marker.length ? { i, ...keyOf(r.marker.map((g) => glyphs[g]!.u).join('')), x: glyphs[r.marker[0]!]!.x0 } : null,
+    r.marker.length
+      ? { i, forms: formsOf(r.marker.map((g) => glyphs[g]!.u).join('')), x: glyphs[r.marker[0]!]!.x0 }
+      : null,
   )
   for (const a of ms) {
     if (!a) continue
@@ -643,9 +661,12 @@ function listed(lines: readonly Line[], reads: Read[], glyphs: readonly G[]): vo
         !!b &&
         b !== a &&
         lines[b.i]!.fig === l.fig &&
-        b.form === a.form &&
         Math.abs(b.x - a.x) <= PARA_ALIGN_TOL * l.size &&
-        (a.v === null || (b.v !== null && Math.abs(b.v - a.v) === 1)),
+        a.forms.some((fa) =>
+          b.forms.some(
+            (fb) => fb.form === fa.form && (fa.v === null || (fb.v !== null && Math.abs(fb.v - fa.v) === 1)),
+          ),
+        ),
     )
     if (!list) reads[a.i]!.marker = []
   }
