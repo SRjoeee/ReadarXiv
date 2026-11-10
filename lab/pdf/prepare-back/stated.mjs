@@ -213,7 +213,8 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     return CAUSE.another
   }
   // ((g): made on A and laid (its text arXiv's glyph text by its making), on today's lines one for one, today's glyph text a
-  // subsequence of its)
+  // subsequence of its; not a contiguous part of it, which is today's characters every one, held whole by a stand-in (f): F0's
+  // line holding today's words and its run of one pitch, 2608.06701v1 p1's "Action:")
   const onLines = (u, c, n) => n <= (c.lines?.length ?? 0) && u.lines.length === n && u.lines.every((l, i) => meets(l, c.lines[i]))
   const subsequence = (t, h) => {
     let i = 0
@@ -225,7 +226,7 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
     if (!onLines(u, c, c.lines?.length ?? 0)) return false
     const t = glyphTextOf(u),
       h = glyphTextOf(c)
-    return !!t && t !== h && subsequence(t, h)
+    return !!t && t !== h && !h.includes(t) && subsequence(t, h)
   }
   // ((h): today's lines its first ones, each line past them held by its elements alone, and its glyph text without those
   // elements today's)

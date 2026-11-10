@@ -698,3 +698,24 @@ describe("(k) on elements and (n): today's unit now wholly an element a figure t
     expect(said(statedOf([path], joined(undefined)))).not.toEqual([[346, CAUSE.pitch]])
   })
 })
+
+describe("(f) over (g): a stand-in that holds today's text whole, in order, a run of one pitch after it (F0's line)", () => {
+  // (2608.06701v1 p1: today's "Action:" and its command, two units; F0's one figure text on today's line, its command an element
+  // kept for its pitch. Today's text a contiguous part of the stand-in's: held whole by it, its holder named for the parity's
+  // joined join, never "another reading, now arXiv's text", which is characters our old compile did not set)
+  it('states today’s words held whole by the line, and its command kept for its pitch, both naming the line', () => {
+    const action = on(unit(id('a'), 343, 'inkfigures', [text('Action:')]), box(417.26, 435.6, 591.04, 595.03, 590.14))
+    const command = on(unit(id('c'), 344, 'inkfigures', [text('view x.py')]), box(438.05, 545.39, 591.04, 594.06, 590.14))
+    const line = {
+      ...on(unit(id('b'), 343, 'inkfigures', [text('Action: '), ph('view x.py')]), box(417.26, 545.39, 591.04, 595.03, 590.14)),
+      state: 'drawn',
+      elements: [{ k: 1, kind: 'code', keptBy: 'pitch', segs: [box(438.05, 545.39, 591.04, 594.06, 590.14)] }],
+    }
+    const stated = statedOf([action, command], [line])
+    expect(said(stated)).toEqual([
+      [343, `made on arXiv's page as ${'b'.repeat(12)}: ${CAUSE.held}`],
+      [344, CAUSE.pitch],
+    ])
+    expect(stated.map((s: { holder?: string }) => s.holder)).toEqual([id('b'), id('b')])
+  })
+})
