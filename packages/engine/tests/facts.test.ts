@@ -1216,4 +1216,29 @@ describe('a face of one pitch (Rule 1)', () => {
     ]
     expect([...fixedFacesOf(glyphs)]).toEqual(['Consolas'])
   })
+  it('reads no face of one pitch off letters a proportional face sets at one advance too: a narrow letter and a wider one, at one advance', () => {
+    // (Codex on #634, 7dcb71534: a figure's label "node" in Helvetica, its four letters 556 thousandths each, as Helvetica's
+    // lowercase n, o, d and e all are, beside Times body text: no typewriter's evidence, the label translated)
+    const at = (u: string, x: number, advance: number, font: string) =>
+      ({
+        ...g(u, x, 700, { base: font.replace(/^[A-Z]{6}\+/, ''), size: 10 }),
+        font,
+        x1: x + advance / 100,
+      }) as DocGlyph
+    const node = [
+      at('n', 72, 556, 'AAAAAA+Helvetica'),
+      at('o', 80, 556, 'AAAAAA+Helvetica'),
+      at('d', 88, 556, 'AAAAAA+Helvetica'),
+      at('e', 96, 556, 'AAAAAA+Helvetica'),
+    ]
+    const body = [at('i', 72, 278, 'BBBBBB+Times'), at('m', 80, 778, 'BBBBBB+Times')]
+    expect([...fixedFacesOf([...node, ...body])]).toEqual([])
+    // (a typewriter's narrow letter at the advance of its others: one pitch)
+    const tt = [
+      at('n', 72, 525, 'CCCCCC+Courier'),
+      at('i', 80, 525, 'CCCCCC+Courier'),
+      at('l', 88, 525, 'CCCCCC+Courier'),
+    ]
+    expect([...fixedFacesOf([...node, ...body, ...tt])]).toEqual(['Courier'])
+  })
 })
